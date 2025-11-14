@@ -1,0 +1,32 @@
+{
+  "name": "okta-unbound",
+  "version": "0.0.1",
+  "description": "Advanced Okta group and user management extension for administrators",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "watch": "node scripts/build.js --watch",
+    "package": "npm run build && node scripts/package.js",
+    "clean": "rm -rf dist/",
+    "dev": "npm run watch"
+  },
+  "keywords": [
+    "okta",
+    "chrome-extension",
+    "identity-management",
+    "user-management",
+    "admin-tools",
+    "iam"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/okta-unbound.git"
+  },
+  "devDependencies": {
+    "esbuild": "^0.19.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

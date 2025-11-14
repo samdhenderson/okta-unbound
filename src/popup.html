@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Okta Unbound</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Okta Unbound</h1>
+
+    <div class="section">
+      <h2>Current Group</h2>
+      <div id="groupInfo" class="info-box">
+        <p class="loading">Loading group information...</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Operations</h2>
+      <div class="operation-card">
+        <h3>Remove Deprovisioned Users</h3>
+        <p>Scan all group members and remove any users with "DEPROVISIONED" (Deactivated) status</p>
+        <button id="removeDeactivated" class="btn btn-primary">
+          Run Operation
+        </button>
+      </div>
+
+      <div class="operation-card">
+        <h3>Custom Filter</h3>
+        <label for="statusFilter">User Status:</label>
+        <select id="statusFilter" class="input">
+          <option value="DEPROVISIONED">DEPROVISIONED (Deactivated)</option>
+          <option value="SUSPENDED">SUSPENDED</option>
+          <option value="STAGED">STAGED</option>
+          <option value="PROVISIONED">PROVISIONED (Pending User Action)</option>
+          <option value="ACTIVE">ACTIVE</option>
+          <option value="RECOVERY">RECOVERY (Password Reset)</option>
+          <option value="LOCKED_OUT">LOCKED_OUT</option>
+          <option value="PASSWORD_EXPIRED">PASSWORD_EXPIRED</option>
+        </select>
+        <label for="action">Action:</label>
+        <select id="action" class="input">
+          <option value="remove">Remove from Group</option>
+          <option value="list">List Only</option>
+        </select>
+        <button id="customFilter" class="btn btn-primary">
+          Run Custom Filter
+        </button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Results</h2>
+      <div id="results" class="results-box">
+        <p class="muted">No operations run yet</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Progress</h2>
+      <div id="progress" class="progress-container">
+        <div class="progress-bar">
+          <div id="progressBar" class="progress-fill"></div>
+        </div>
+        <p id="progressText" class="progress-text">Ready</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
