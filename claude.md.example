@@ -1,0 +1,18 @@
+# Note about claude.md
+
+The `claude.md` file contains comprehensive development guidelines for this project.
+
+**For Contributors**: Please read `claude.md` to understand:
+- Code quality standards
+- API best practices  
+- Security requirements
+- Testing guidelines
+- Git workflow
+
+This file should NOT be committed to version control as it may contain
+project-specific context. It is included in `.gitignore`.
+
+For public documentation, see:
+- `CONTRIBUTING.md` - Contribution guidelines
+- `README.md` - Project overview
+- `docs/` - Technical documentation
