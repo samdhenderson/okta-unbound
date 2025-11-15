@@ -62,9 +62,11 @@ let pendingOperation = null;
 // Initialization
 // =======================
 document.addEventListener('DOMContentLoaded', async () => {
+  console.log('[Sidepanel] DOMContentLoaded - Initializing sidepanel');
   setupTabSwitching();
   setupModalHandlers();
   await initializeGroupContext();
+  console.log('[Sidepanel] Initialization complete');
 });
 
 // =======================
@@ -139,31 +141,46 @@ function executePendingOperation() {
 // =======================
 async function initializeGroupContext() {
   try {
+    console.log('[Sidepanel] Initializing group context...');
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     const tab = tabs[0];
+
+    console.log('[Sidepanel] Active tab:', {
+      id: tab?.id,
+      url: tab?.url,
+      title: tab?.title,
+      status: tab?.status
+    });
 
     if (!tab.url || !(
       tab.url.includes('okta.com') ||
       tab.url.includes('oktapreview.com') ||
       tab.url.includes('okta-emea.com')
     )) {
+      console.warn('[Sidepanel] Not on an Okta page');
       showConnectionError('Please navigate to an Okta page');
       return;
     }
 
     oktaDomain = new URL(tab.url).origin;
+    console.log('[Sidepanel] Okta domain detected:', oktaDomain);
 
+    console.log('[Sidepanel] Sending getGroupInfo message to tab', tab.id);
     const result = await chrome.tabs.sendMessage(tab.id, { action: 'getGroupInfo' });
+    console.log('[Sidepanel] Received response:', result);
 
     if (result.success) {
       currentGroupId = result.groupId;
       currentGroupName = result.groupName;
+      console.log('[Sidepanel] Group detected:', { id: currentGroupId, name: currentGroupName });
       displayGroupInfo(result);
       updateConnectionStatus('connected');
     } else {
+      console.error('[Sidepanel] Failed to get group info:', result.error);
       showConnectionError(result.error || 'Could not detect group page');
     }
   } catch (error) {
+    console.error('[Sidepanel] Error initializing:', error);
     showConnectionError('Error initializing: ' + error.message);
   }
 }
@@ -229,14 +246,23 @@ function addResult(message, type) {
 // =======================
 async function makeOktaRequest(endpoint, method, body) {
   method = method || 'GET';
+  console.log('[Sidepanel] Making Okta request:', { endpoint, method, hasBody: !!body });
+
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const tab = tabs[0];
+  console.log('[Sidepanel] Sending API request to tab:', tab.id);
 
   const response = await chrome.tabs.sendMessage(tab.id, {
     action: 'makeApiRequest',
     endpoint: endpoint,
     method: method,
     body: body
+  });
+
+  console.log('[Sidepanel] API response received:', {
+    success: response.success,
+    status: response.status,
+    hasData: !!response.data
   });
 
   return response;
