@@ -5,6 +5,48 @@ All notable changes to Okta Unbound will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2024-11-15
+
+### Added
+- Sidebar UI replacing popup for better screen real estate and organization
+- Tabbed navigation (Operations, Rule Inspector)
+- Confirmation modals for all operations with API cost estimates
+- API cost tooltips on hover (info icons next to operation buttons)
+- Rule Inspector feature - analyze all group rules in organization
+- Rule conflict detection - identify overlapping rule conditions
+- Rule statistics display (total, active, inactive, conflicts)
+- Rule search and filtering capability
+- Connection status indicator in header
+- Enhanced group info banner
+- Background service worker improvements for sidebar management
+- Notifications permission for non-Okta page warnings
+- sidePanel permission for Chrome Extension
+
+### Changed
+- Migrated from popup to sidebar panel UI
+- All operations now require user confirmation before execution
+- Updated button styles for better visual hierarchy
+- Improved error messaging and user feedback
+- Enhanced modular architecture with Rule Inspector module
+- Updated background.js to open sidebar on icon click
+
+### Technical
+- Created src/features/rules/inspector.js module
+- Created src/sidepanel.html, src/sidepanel.js, src/sidepanel.css
+- RuleInspector class with conflict detection algorithms
+- API cost estimation function for all operations
+- Modal system for confirmations
+- Tab switching system
+- Removed all emojis per coding standards
+
+### UI/UX
+- Modern gradient header with connection status
+- Sticky group info banner
+- Info icon tooltips showing API costs
+- Confirmation modals with API cost breakdown
+- Stats grid for rule metrics
+- Rule cards with status badges and condition display
+
 ## [0.1.0] - 2024-11-14
 
 ### Added
