@@ -4,25 +4,58 @@
 
 // Listen for messages from the popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  console.log('[Content] Received message:', {
+    action: request.action,
+    from: sender.id,
+    timestamp: new Date().toISOString()
+  });
+
   if (request.action === 'getGroupInfo') {
-    getGroupInfo().then(sendResponse);
+    console.log('[Content] Processing getGroupInfo request');
+    getGroupInfo().then(result => {
+      console.log('[Content] getGroupInfo result:', result);
+      sendResponse(result);
+    }).catch(error => {
+      console.error('[Content] getGroupInfo error:', error);
+      sendResponse({ success: false, error: error.message });
+    });
     return true;
   }
 
   if (request.action === 'makeApiRequest') {
-    makeApiRequest(request.endpoint, request.method, request.body).then(sendResponse);
+    console.log('[Content] Processing makeApiRequest:', request.endpoint);
+    makeApiRequest(request.endpoint, request.method, request.body).then(result => {
+      console.log('[Content] makeApiRequest result:', {
+        success: result.success,
+        status: result.status
+      });
+      sendResponse(result);
+    }).catch(error => {
+      console.error('[Content] makeApiRequest error:', error);
+      sendResponse({ success: false, error: error.message });
+    });
     return true;
   }
 
   if (request.action === 'exportGroupMembers') {
-    handleExportRequest(request).then(sendResponse);
+    console.log('[Content] Processing exportGroupMembers request');
+    handleExportRequest(request).then(sendResponse).catch(error => {
+      console.error('[Content] exportGroupMembers error:', error);
+      sendResponse({ success: false, error: error.message });
+    });
     return true;
   }
 
   if (request.action === 'fetchGroupRules') {
-    handleFetchRulesRequest(request).then(sendResponse);
+    console.log('[Content] Processing fetchGroupRules request');
+    handleFetchRulesRequest(request).then(sendResponse).catch(error => {
+      console.error('[Content] fetchGroupRules error:', error);
+      sendResponse({ success: false, error: error.message });
+    });
     return true;
   }
+
+  console.warn('[Content] Unknown action:', request.action);
 });
 
 // Handle export request
@@ -58,9 +91,13 @@ async function handleExportRequest(request) {
 async function getGroupInfo() {
   try {
     const url = window.location.href;
+    console.log('[Content] getGroupInfo - Current URL:', url);
+
     const groupId = extractGroupIdFromUrl(url);
+    console.log('[Content] Extracted groupId:', groupId);
 
     if (!groupId) {
+      console.warn('[Content] No groupId found in URL');
       return {
         success: false,
         error: 'Not on a group page. Please navigate to a specific group page.'
@@ -68,26 +105,33 @@ async function getGroupInfo() {
     }
 
     let groupName = extractGroupNameFromPage();
+    console.log('[Content] Extracted groupName from page:', groupName);
 
     // If we still don't have the name, try to fetch it via API
     if (!groupName) {
+      console.log('[Content] Fetching group name from API...');
       try {
         const groupData = await makeApiRequest(`/api/v1/groups/${groupId}`, 'GET');
         if (groupData.success && groupData.data.profile) {
           groupName = groupData.data.profile.name;
+          console.log('[Content] Fetched groupName from API:', groupName);
         }
       } catch (e) {
+        console.warn('[Content] Failed to fetch group name from API:', e);
         // Continue without name
       }
     }
 
-    return {
+    const result = {
       success: true,
       groupId: groupId,
       groupName: groupName || 'Unknown'
     };
+    console.log('[Content] getGroupInfo result:', result);
+    return result;
 
   } catch (error) {
+    console.error('[Content] getGroupInfo error:', error);
     return {
       success: false,
       error: error.message
@@ -127,12 +171,18 @@ function extractGroupNameFromPage() {
 
 // Make an authenticated API request using the existing Okta session
 async function makeApiRequest(endpoint, method = 'GET', body = null) {
+  console.log('[Content] makeApiRequest called:', { endpoint, method, hasBody: !!body });
   try {
     const url = window.location.origin + endpoint;
-    
+
     // Extract XSRF token from hidden span element in the page
     const xsrfTokenElement = document.getElementById('_xsrfToken');
     const xsrfToken = xsrfTokenElement ? xsrfTokenElement.textContent : '';
+    console.log('[Content] XSRF token check:', {
+      elementExists: !!xsrfTokenElement,
+      tokenLength: xsrfToken.length,
+      tokenPreview: xsrfToken ? xsrfToken.substring(0, 20) + '...' : 'none'
+    });
     
     const options = {
       method: method,
@@ -158,7 +208,7 @@ async function makeApiRequest(endpoint, method = 'GET', body = null) {
       // Content-Length is automatically set by the browser based on body
     }
     
-    console.log('Making Okta API request:', {
+    console.log('[Content] Making Okta API request:', {
       url: url,
       method: method,
       headers: options.headers,
@@ -167,10 +217,12 @@ async function makeApiRequest(endpoint, method = 'GET', body = null) {
       xsrfTokenFound: !!xsrfToken,
       xsrfTokenLength: xsrfToken.length
     });
-    
+
+    console.log('[Content] About to call fetch() - check Network tab now');
     const response = await fetch(url, options);
-    
-    console.log('Okta API response:', {
+    console.log('[Content] fetch() completed');
+
+    console.log('[Content] Okta API response:', {
       url: url,
       status: response.status,
       statusText: response.statusText,
@@ -291,8 +343,18 @@ function injectIndicator() {
 }
 
 // Initialize when content script loads
+console.log('[Content] Content script loaded', {
+  url: window.location.href,
+  readyState: document.readyState,
+  timestamp: new Date().toISOString()
+});
+
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', injectIndicator);
+  document.addEventListener('DOMContentLoaded', () => {
+    console.log('[Content] DOMContentLoaded fired');
+    injectIndicator();
+  });
 } else {
+  console.log('[Content] DOM already loaded, injecting indicator');
   injectIndicator();
 }
