@@ -4,11 +4,16 @@ const resultsBox = document.getElementById('results');
 const progressBar = document.getElementById('progressBar');
 const progressText = document.getElementById('progressText');
 const removeDeactivatedBtn = document.getElementById('removeDeactivated');
+const smartCleanupBtn = document.getElementById('smartCleanup');
 const customFilterBtn = document.getElementById('customFilter');
 const statusFilter = document.getElementById('statusFilter');
 const actionSelect = document.getElementById('action');
+const exportBtn = document.getElementById('exportBtn');
+const exportFormat = document.getElementById('exportFormat');
+const exportFilter = document.getElementById('exportFilter');
 
 let currentGroupId = null;
+let currentGroupName = null;
 let oktaDomain = null;
 
 // Initialize when popup opens
@@ -32,6 +37,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (result.success) {
       currentGroupId = result.groupId;
+      currentGroupName = result.groupName;
       displayGroupInfo(result);
     } else {
       showError(result.error || 'Could not detect group page');
@@ -54,7 +60,9 @@ function displayGroupInfo(info) {
 function showError(message) {
   groupInfo.innerHTML = `<p class="error">${message}</p>`;
   removeDeactivatedBtn.disabled = true;
+  smartCleanupBtn.disabled = true;
   customFilterBtn.disabled = true;
+  exportBtn.disabled = true;
 }
 
 // Update progress
@@ -398,5 +406,171 @@ customFilterBtn.addEventListener('click', async () => {
   } finally {
     removeDeactivatedBtn.disabled = false;
     customFilterBtn.disabled = false;
+  }
+});
+
+// Handle export members operation
+exportBtn.addEventListener('click', async () => {
+  if (!currentGroupId) {
+    addResult('No group detected', 'error');
+    return;
+  }
+
+  try {
+    const format = exportFormat.value;
+    const statusFilterValue = exportFilter.value;
+
+    removeDeactivatedBtn.disabled = true;
+    customFilterBtn.disabled = true;
+    exportBtn.disabled = true;
+
+    addResult(`Starting export: ${format.toUpperCase()} format${statusFilterValue ? ' (filtered by ' + statusFilterValue + ')' : ''}`, 'info');
+    updateProgress(0, 100, 'Preparing export...');
+
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+
+    const response = await chrome.tabs.sendMessage(tab.id, {
+      action: 'exportGroupMembers',
+      groupId: currentGroupId,
+      groupName: currentGroupName || 'group',
+      format: format,
+      statusFilter: statusFilterValue
+    });
+
+    if (response.success) {
+      addResult(`Export complete: ${response.count} members exported to ${format.toUpperCase()}`, 'success');
+      addResult('File downloaded to your default downloads folder', 'info');
+      updateProgress(100, 100, 'Export complete');
+    } else {
+      addResult(`Export failed: ${response.error || 'Unknown error'}`, 'error');
+      updateProgress(0, 100, 'Export failed');
+    }
+
+  } catch (error) {
+    addResult(`Error: ${error.message}`, 'error');
+    updateProgress(0, 100, 'Error occurred');
+  } finally {
+    removeDeactivatedBtn.disabled = false;
+    smartCleanupBtn.disabled = false;
+    customFilterBtn.disabled = false;
+    exportBtn.disabled = false;
+  }
+});
+
+// Handle smart cleanup operation (automation feature)
+smartCleanupBtn.addEventListener('click', async () => {
+  if (!currentGroupId) {
+    addResult('No group detected', 'error');
+    return;
+  }
+
+  try {
+    removeDeactivatedBtn.disabled = true;
+    smartCleanupBtn.disabled = true;
+    customFilterBtn.disabled = true;
+    exportBtn.disabled = true;
+
+    addResult('Starting Smart Cleanup: Removing DEPROVISIONED, SUSPENDED, and LOCKED_OUT users', 'info');
+
+    // Check group details first
+    addResult('Checking group type and permissions...', 'info');
+    const groupDetails = await getGroupDetails(currentGroupId);
+
+    if (groupDetails.success && groupDetails.data) {
+      const groupType = groupDetails.data.type;
+      addResult(`Group type: ${groupType}`, 'info');
+
+      if (groupType === 'APP_GROUP') {
+        addResult('WARNING: This is an APP_GROUP. Cannot modify membership via API.', 'error');
+        updateProgress(0, 100, 'Cannot modify APP_GROUP');
+        return;
+      }
+
+      if (groupType === 'BUILT_IN') {
+        addResult('WARNING: This is a BUILT_IN group. Membership modification may be restricted.', 'warning');
+      }
+    }
+
+    updateProgress(0, 100, 'Loading group members...');
+
+    // Get all members
+    const members = await getAllGroupMembers(currentGroupId);
+    addResult(`Found ${members.length} total members`, 'info');
+
+    // Filter inactive users
+    const inactiveStatuses = ['DEPROVISIONED', 'SUSPENDED', 'LOCKED_OUT'];
+    const inactiveUsers = members.filter(user => inactiveStatuses.includes(user.status));
+
+    addResult(`Found ${inactiveUsers.length} inactive users to remove`, 'warning');
+
+    if (inactiveUsers.length === 0) {
+      addResult('No inactive users to remove', 'success');
+      updateProgress(100, 100, 'Complete');
+      return;
+    }
+
+    // Show breakdown by status
+    const breakdown = {};
+    inactiveStatuses.forEach(status => {
+      const count = inactiveUsers.filter(u => u.status === status).length;
+      if (count > 0) {
+        breakdown[status] = count;
+        addResult(`- ${status}: ${count} users`, 'info');
+      }
+    });
+
+    // Remove each inactive user
+    let removed = 0;
+    let failed = 0;
+    let forbiddenCount = 0;
+
+    for (let i = 0; i < inactiveUsers.length; i++) {
+      const user = inactiveUsers[i];
+      updateProgress(i + 1, inactiveUsers.length, `Removing user ${i + 1} of ${inactiveUsers.length}`);
+
+      const result = await removeUserFromGroup(currentGroupId, user.id);
+
+      if (result.success) {
+        removed++;
+        addResult(`Removed: ${user.profile.login} (${user.status})`, 'success');
+      } else {
+        failed++;
+        if (result.status === 403) {
+          forbiddenCount++;
+          addResult(`403 Forbidden: ${user.profile.login} - ${result.error}`, 'error');
+
+          // Stop on first 403
+          if (forbiddenCount === 1) {
+            addResult(`Stopping after first 403 Forbidden to avoid log spam.`, 'warning');
+            addResult(`Remaining ${inactiveUsers.length - i - 1} users were not attempted.`, 'warning');
+            addResult(`This group likely has restrictions. Check group type, rules, and permissions.`, 'error');
+            break;
+          }
+        } else {
+          addResult(`Failed: ${user.profile.login} - ${result.error || 'Unknown error'}`, 'error');
+        }
+      }
+
+      // Rate limit protection
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    addResult(`Smart Cleanup complete: ${removed} removed, ${failed} failed`, removed > 0 ? 'success' : 'warning');
+
+    if (forbiddenCount > 0) {
+      addResult(`Stopped due to 403 Forbidden. Check group type, rules, and permissions before retrying.`, 'error');
+    }
+
+    updateProgress(100, 100, 'Complete');
+
+  } catch (error) {
+    addResult(`Error: ${error.message}`, 'error');
+    updateProgress(0, 100, 'Error occurred');
+  } finally {
+    removeDeactivatedBtn.disabled = false;
+    smartCleanupBtn.disabled = false;
+    customFilterBtn.disabled = false;
+    exportBtn.disabled = false;
   }
 });

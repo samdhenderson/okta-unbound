@@ -1,65 +1,69 @@
 // Content script that runs on Okta pages
 // This script can access the DOM and make authenticated requests
+// Core modules are loaded first by manifest.json: SessionManager, OktaApiClient, etc.
 
 // Listen for messages from the popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getGroupInfo') {
     getGroupInfo().then(sendResponse);
-    return true; // Keep message channel open for async response
+    return true;
   }
-  
+
   if (request.action === 'makeApiRequest') {
     makeApiRequest(request.endpoint, request.method, request.body).then(sendResponse);
     return true;
   }
+
+  if (request.action === 'exportGroupMembers') {
+    handleExportRequest(request).then(sendResponse);
+    return true;
+  }
 });
+
+// Handle export request
+async function handleExportRequest(request) {
+  try {
+    const { groupId, groupName, format, statusFilter } = request;
+
+    const apiClient = new OktaApiClient(SessionManager);
+    const exporter = new GroupExporter(apiClient, PaginationHelper, ExportFormatter);
+
+    const result = await exporter.exportGroupMembers(
+      groupId,
+      groupName.replace(/[^a-zA-Z0-9]/g, '_'),
+      format,
+      {
+        statusFilter: statusFilter || null,
+        onProgress: (progress) => {
+          console.log('Export progress:', progress);
+        }
+      }
+    );
+
+    return result;
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
 
 // Extract group information from the current page
 async function getGroupInfo() {
   try {
-    // Get group ID from URL
     const url = window.location.href;
-    let groupId = null;
-    let groupName = null;
-    
-    // Try to extract group ID from URL patterns
-    // Pattern 1: /admin/group/{groupId}
-    const match1 = url.match(/\/admin\/group\/([a-zA-Z0-9]+)/);
-    if (match1) {
-      groupId = match1[1];
-    }
-    
-    // Pattern 2: /groups/{groupId}
-    const match2 = url.match(/\/groups\/([a-zA-Z0-9]+)/);
-    if (match2) {
-      groupId = match2[1];
-    }
-    
+    const groupId = extractGroupIdFromUrl(url);
+
     if (!groupId) {
       return {
         success: false,
         error: 'Not on a group page. Please navigate to a specific group page.'
       };
     }
-    
-    // Try to get group name from the page
-    // This selector may need adjustment based on Okta's UI version
-    const nameSelectors = [
-      'h1[data-se="group-name"]',
-      '.group-profile-header h1',
-      '[data-se="group-detail-name"]',
-      'h1.okta-form-title',
-      '.content-container h1'
-    ];
-    
-    for (const selector of nameSelectors) {
-      const element = document.querySelector(selector);
-      if (element) {
-        groupName = element.textContent.trim();
-        break;
-      }
-    }
-    
+
+    let groupName = extractGroupNameFromPage();
+
     // If we still don't have the name, try to fetch it via API
     if (!groupName) {
       try {
@@ -71,19 +75,49 @@ async function getGroupInfo() {
         // Continue without name
       }
     }
-    
+
     return {
       success: true,
       groupId: groupId,
       groupName: groupName || 'Unknown'
     };
-    
+
   } catch (error) {
     return {
       success: false,
       error: error.message
     };
   }
+}
+
+// Helper functions using utility modules where available
+function extractGroupIdFromUrl(url) {
+  const match1 = url.match(/\/admin\/group\/([a-zA-Z0-9]+)/);
+  if (match1) return match1[1];
+
+  const match2 = url.match(/\/groups\/([a-zA-Z0-9]+)/);
+  if (match2) return match2[1];
+
+  return null;
+}
+
+function extractGroupNameFromPage() {
+  const nameSelectors = [
+    'h1[data-se="group-name"]',
+    '.group-profile-header h1',
+    '[data-se="group-detail-name"]',
+    'h1.okta-form-title',
+    '.content-container h1'
+  ];
+
+  for (const selector of nameSelectors) {
+    const element = document.querySelector(selector);
+    if (element) {
+      return element.textContent.trim();
+    }
+  }
+
+  return null;
 }
 
 // Make an authenticated API request using the existing Okta session

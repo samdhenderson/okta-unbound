@@ -28,6 +28,14 @@
       </div>
 
       <div class="operation-card">
+        <h3>Smart Cleanup (Automation)</h3>
+        <p>Automatically remove all inactive users: DEPROVISIONED, SUSPENDED, and LOCKED_OUT in one operation</p>
+        <button id="smartCleanup" class="btn btn-warning">
+          Run Smart Cleanup
+        </button>
+      </div>
+
+      <div class="operation-card">
         <h3>Custom Filter</h3>
         <label for="statusFilter">User Status:</label>
         <select id="statusFilter" class="input">
@@ -47,6 +55,27 @@
         </select>
         <button id="customFilter" class="btn btn-primary">
           Run Custom Filter
+        </button>
+      </div>
+
+      <div class="operation-card">
+        <h3>Export Group Members</h3>
+        <p>Export all members to CSV or JSON format</p>
+        <label for="exportFormat">Format:</label>
+        <select id="exportFormat" class="input">
+          <option value="csv">CSV</option>
+          <option value="json">JSON</option>
+        </select>
+        <label for="exportFilter">Filter by Status (Optional):</label>
+        <select id="exportFilter" class="input">
+          <option value="">All Users</option>
+          <option value="ACTIVE">ACTIVE Only</option>
+          <option value="DEPROVISIONED">DEPROVISIONED Only</option>
+          <option value="SUSPENDED">SUSPENDED Only</option>
+          <option value="STAGED">STAGED Only</option>
+        </select>
+        <button id="exportBtn" class="btn btn-success">
+          Export Members
         </button>
       </div>
     </div>

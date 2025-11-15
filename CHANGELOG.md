@@ -5,6 +5,37 @@ All notable changes to Okta Unbound will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0] - 2024-11-14
+
+### Added
+- Export group members to CSV format with automatic download
+- Export group members to JSON format with automatic download
+- Optional status filtering for exports (export only ACTIVE, DEPROVISIONED, etc.)
+- Smart Cleanup automation feature (removes DEPROVISIONED, SUSPENDED, and LOCKED_OUT users in one operation)
+- Modular code architecture with core utilities
+- API client module (OktaApiClient) for consistent API communication
+- Pagination helper module for reusable pagination logic
+- Session manager module for authentication token handling
+- Export formatter module with CSV and JSON support
+- Parser utilities for URL and data extraction
+- New button styles (btn-success for export, btn-warning for smart cleanup)
+- Downloads permission for file export functionality
+
+### Changed
+- Refactored codebase into modular structure
+- Created separate directories: core/api, core/auth, core/utils, features/export
+- Updated manifest.json to load modules in correct order
+- Improved code organization for better maintainability
+- Enhanced UI with new operation cards for export and smart cleanup
+
+### Technical
+- Export includes: Login, First Name, Last Name, Email, Status, Created Date, Last Login
+- Automatic filename generation with timestamps (okta-group-NAME-TIMESTAMP.csv/json)
+- CSV values properly escaped for commas, quotes, and newlines
+- JSON output with pretty printing (2-space indentation)
+- Smart Cleanup shows breakdown of users by status before removal
+- All new features maintain same safety checks (group type validation, 403 handling, rate limiting)
+
 ## [0.0.1] - 2024-11-14
 
 ### Initial Release
