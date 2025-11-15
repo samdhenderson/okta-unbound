@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import RuleCard from './RuleCard';
-import type { FormattedRule, RuleConflict } from '../../shared/types';
+import type { FormattedRule } from '../../shared/types';
 import { filterRules } from '../../shared/ruleUtils';
 
 interface RulesTabProps {

@@ -3,7 +3,7 @@
 **Advanced group and user management for Okta administrators**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](manifest.json)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](manifest.json)
 [![Chrome](https://img.shields.io/badge/chrome-extension-green.svg)](https://www.google.com/chrome/)
 
 ![Okta Unbound Features](assets/images/promo.png)
@@ -212,35 +212,105 @@ The extension requires these permissions:
 
 ## Development
 
+### Tech Stack
+
+- **Framework**: React 19 + TypeScript 5.9
+- **Build Tool**: Vite 7.2 with @crxjs/vite-plugin
+- **Extension**: Chrome Manifest V3
+- **Architecture**: Modern modular structure with React components and custom hooks
+
 ### File Structure
 ```
-okta-extension/
-├── manifest.json       # Extension configuration
-├── popup.html         # Extension popup UI
-├── popup.css          # Popup styles
-├── popup.js           # Popup logic and API orchestration
-├── content.js         # Content script (runs on Okta pages)
-├── background.js      # Background service worker
-├── icon16.png         # Extension icon (16x16)
-├── icon48.png         # Extension icon (48x48)
-├── icon128.png        # Extension icon (128x128)
-└── README.md          # This file
+okta-unbound/
+├── manifest.json           # Extension configuration (Manifest V3)
+├── vite.config.ts          # Vite build configuration
+├── tsconfig.json           # TypeScript configuration
+├── package.json            # Dependencies and scripts
+├── src/
+│   ├── background/         # Service worker
+│   │   └── index.ts        # Extension lifecycle, icon clicks
+│   ├── content/            # Content script (runs on Okta pages)
+│   │   └── index.ts        # API requests, DOM manipulation
+│   ├── shared/             # Shared utilities and types
+│   │   ├── types.ts        # TypeScript interfaces
+│   │   └── ruleUtils.ts    # Rule analysis and conflict detection
+│   └── sidepanel/          # React-based sidebar UI
+│       ├── App.tsx         # Main app component
+│       ├── main.tsx        # React entry point
+│       ├── index.html      # HTML template
+│       ├── styles.css      # All styling
+│       ├── components/     # React components
+│       │   ├── Header.tsx
+│       │   ├── GroupBanner.tsx
+│       │   ├── TabNavigation.tsx
+│       │   ├── OperationsTab.tsx
+│       │   ├── RulesTab.tsx
+│       │   ├── RuleCard.tsx
+│       │   └── ConfirmationModal.tsx
+│       └── hooks/          # Custom React hooks
+│           ├── useGroupContext.ts
+│           └── useOktaApi.ts
+├── assets/
+│   ├── icons/              # Extension icons
+│   └── images/             # Promo and screenshots
+└── dist/                   # Build output (generated)
 ```
 
-### Modifying the Extension
+### Build Commands
 
-To add new operations:
+```bash
+# Install dependencies
+npm install
 
-1. Add UI elements in `popup.html`
-2. Add event listeners in `popup.js`
-3. Use the `makeOktaRequest()` function to call Okta APIs
-4. Update the results display with `addResult()`
+# Development mode with hot reload
+npm run dev
 
-### Testing
-1. Make changes to the code
-2. Go to `chrome://extensions/`
-3. Click the refresh icon on the extension card
-4. Test on an Okta group page
+# Production build
+npm run build
+
+# Preview production build
+npm run preview
+
+# Clean build artifacts
+npm run clean
+```
+
+### Development Workflow
+
+1. **Install dependencies**: `npm install`
+2. **Start development mode**: `npm run dev`
+3. **Load extension in Chrome**:
+   - Navigate to `chrome://extensions/`
+   - Enable "Developer mode"
+   - Click "Load unpacked"
+   - Select the `dist/` folder
+4. **Make changes**: Edit source files in `src/`
+5. **Vite auto-rebuilds**: Changes are automatically rebuilt
+6. **Reload extension**: Click refresh icon in `chrome://extensions/`
+
+### Adding New Features
+
+**To add a new operation:**
+1. Add UI in `src/sidepanel/components/OperationsTab.tsx`
+2. Add API logic in `src/sidepanel/hooks/useOktaApi.ts`
+3. Add types in `src/shared/types.ts`
+4. Update message handling in `src/content/index.ts`
+
+**To add a new component:**
+1. Create component in `src/sidepanel/components/`
+2. Import and use in `App.tsx` or other components
+3. Add styles to `src/sidepanel/styles.css`
+
+### TypeScript
+
+The project is fully typed with TypeScript. Type definitions include:
+- User objects, statuses, and profiles
+- Group rules and conditions
+- Conflict detection data structures
+- API request/response types
+- Component props
+
+Run type checking: `npx tsc --noEmit`
 
 ## Security Considerations
 
@@ -309,7 +379,32 @@ Built with ❤️ by Okta administrators, for Okta administrators.
 
 ## Version History
 
-### v0.1.0 (Current)
+### v0.3.0 (Current - November 15, 2024)
+
+Major modernization release with React architecture and Rule Inspector.
+
+**New Features**:
+- **Rule Inspector**: Analyze all group rules in your organization
+- **Conflict Detection**: Automatic detection of overlapping rules with severity levels
+- **Modern Sidebar UI**: Tabbed navigation with Operations and Rules tabs
+- **Confirmation Modals**: All operations require confirmation before execution
+- **API Cost Transparency**: Hover tooltips show estimated API request counts
+
+**Technical Improvements**:
+- Complete migration to React 19 + TypeScript 5.9
+- Modern build system with Vite 7.2 and @crxjs/vite-plugin
+- Modular component architecture with custom React hooks
+- Full TypeScript type coverage
+- Shared utilities for rule analysis and conflict detection
+- Comprehensive debugging and logging
+
+**Architecture**:
+- Background service worker for extension lifecycle
+- Content script for authenticated Okta API calls
+- React-based sidebar panel with component library
+- Custom hooks for group context and API operations
+
+### v0.2.0
 
 Feature release with export functionality and automation improvements.
 
@@ -331,7 +426,7 @@ Feature release with export functionality and automation improvements.
 - Automatic filename generation with timestamps
 - Browser download to default downloads folder
 
-### v0.0.1 (Initial Release)
+### v0.1.0 (Initial Release)
 
 Initial public release of Okta Unbound with core group management features.
 

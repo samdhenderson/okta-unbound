@@ -88,6 +88,7 @@ export interface FormattedRule {
   id: string;
   name: string;
   status: 'ACTIVE' | 'INACTIVE';
+  type: string;
   condition: string;
   conditionExpression?: string;
   groupIds: string[];
@@ -113,7 +114,7 @@ export interface GroupInfo {
 }
 
 export interface MessageRequest {
-  action: 'getGroupInfo' | 'makeApiRequest' | 'exportGroupMembers' | 'fetchGroupRules';
+  action: 'getGroupInfo' | 'makeApiRequest' | 'exportGroupMembers' | 'fetchGroupRules' | 'activateRule' | 'deactivateRule';
   endpoint?: string;
   method?: string;
   body?: any;
@@ -121,6 +122,7 @@ export interface MessageRequest {
   groupName?: string;
   format?: 'csv' | 'json';
   statusFilter?: UserStatus | '';
+  ruleId?: string;
 }
 
 export interface MessageResponse<T = any> extends ApiResponse<T> {

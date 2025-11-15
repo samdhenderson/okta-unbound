@@ -42,7 +42,7 @@ const App: React.FC = () => {
       )}
       {activeTab === 'rules' && (
         <RulesTab
-          targetTabId={targetTabId}
+          targetTabId={targetTabId ?? undefined}
           currentGroupId={groupInfo?.groupId}
         />
       )}

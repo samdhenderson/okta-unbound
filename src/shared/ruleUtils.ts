@@ -114,6 +114,7 @@ export function formatRuleForDisplay(
     id: rule.id,
     name: rule.name,
     status: rule.status,
+    type: rule.type,
     condition: simpleCondition,
     conditionExpression: expression,
     groupIds,
