@@ -18,6 +18,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     handleExportRequest(request).then(sendResponse);
     return true;
   }
+
+  if (request.action === 'fetchGroupRules') {
+    handleFetchRulesRequest(request).then(sendResponse);
+    return true;
+  }
 });
 
 // Handle export request
@@ -226,6 +231,36 @@ async function makeApiRequest(endpoint, method = 'GET', body = null) {
   }
 }
 
+// Handle fetch rules request
+async function handleFetchRulesRequest(request) {
+  try {
+    const apiClient = new OktaApiClient(SessionManager);
+    const inspector = new RuleInspector(apiClient, PaginationHelper);
+
+    const result = await inspector.fetchAllRules(progress => {
+      console.log('Fetch rules progress:', progress);
+    });
+
+    if (result.success) {
+      const stats = inspector.getRuleStats();
+      const formattedRules = result.rules.map(rule => inspector.formatRuleForDisplay(rule));
+
+      return {
+        success: true,
+        rules: formattedRules,
+        stats: stats
+      };
+    } else {
+      return result;
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
 // Inject a visual indicator that the extension is active
 function injectIndicator() {
   const indicator = document.createElement('div');
@@ -244,7 +279,7 @@ function injectIndicator() {
     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   `;
-  indicator.textContent = '🔧 Okta Manager Active';
+  indicator.textContent = 'Okta Unbound Active';
   
   // Remove after 3 seconds
   document.body.appendChild(indicator);

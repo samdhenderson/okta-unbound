@@ -3,7 +3,7 @@
 **Advanced group and user management for Okta administrators**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](manifest.json)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](manifest.json)
 [![Chrome](https://img.shields.io/badge/chrome-extension-green.svg)](https://www.google.com/chrome/)
 
 ![Okta Unbound Features](assets/images/promo.png)
@@ -15,6 +15,18 @@
 ## ✨ Features
 
 ### Currently Available
+
+✅ **Sidebar UI**
+Modern sidebar interface with tabbed navigation for better organization and more screen space
+
+✅ **Confirmation Modals**
+All operations require confirmation with API cost estimates before execution
+
+✅ **API Cost Transparency**
+Hover tooltips and confirmation dialogs show estimated API request counts
+
+✅ **Rule Inspector (NEW)**
+Analyze all group rules in your organization, detect conflicts, and understand rule logic
 
 ✅ **One-Click User Cleanup**
 Remove deprovisioned (deactivated) users from groups instantly with a single click
@@ -45,24 +57,20 @@ Detects group types, permissions issues, and provides actionable error messages
 
 ### Coming Soon (Roadmap)
 
-🔜 **Discover Conflicting Group Rules**
-Identify and resolve rule overlaps and conflicts automatically
-
 🔜 **Trace User Memberships**
 Understand exactly why users are in specific groups with visual traces
-
-🔜 **Inventory All Rules**
-Comprehensive view of all group rules with powerful filters
 
 🔜 **Attribute-Based Deep Dive**
 Analyze and filter users by profile attributes across groups
 
-
 🔜 **Mirror App Users & Permissions**
 Sync application assignments across groups easily
 
+🔜 **Bulk Operations Across Groups**
+Run cleanup and management operations across multiple groups simultaneously
+
 🔜 **Improve Security Posture**
-Automated detection and removal of stale memberships
+Automated detection and removal of stale memberships with scheduled audits
 
 ## Supported User Statuses
 
