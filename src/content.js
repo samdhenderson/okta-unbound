@@ -171,12 +171,18 @@ function extractGroupNameFromPage() {
 
 // Make an authenticated API request using the existing Okta session
 async function makeApiRequest(endpoint, method = 'GET', body = null) {
+  console.log('[Content] makeApiRequest called:', { endpoint, method, hasBody: !!body });
   try {
     const url = window.location.origin + endpoint;
-    
+
     // Extract XSRF token from hidden span element in the page
     const xsrfTokenElement = document.getElementById('_xsrfToken');
     const xsrfToken = xsrfTokenElement ? xsrfTokenElement.textContent : '';
+    console.log('[Content] XSRF token check:', {
+      elementExists: !!xsrfTokenElement,
+      tokenLength: xsrfToken.length,
+      tokenPreview: xsrfToken ? xsrfToken.substring(0, 20) + '...' : 'none'
+    });
     
     const options = {
       method: method,
@@ -202,7 +208,7 @@ async function makeApiRequest(endpoint, method = 'GET', body = null) {
       // Content-Length is automatically set by the browser based on body
     }
     
-    console.log('Making Okta API request:', {
+    console.log('[Content] Making Okta API request:', {
       url: url,
       method: method,
       headers: options.headers,
@@ -211,10 +217,12 @@ async function makeApiRequest(endpoint, method = 'GET', body = null) {
       xsrfTokenFound: !!xsrfToken,
       xsrfTokenLength: xsrfToken.length
     });
-    
+
+    console.log('[Content] About to call fetch() - check Network tab now');
     const response = await fetch(url, options);
-    
-    console.log('Okta API response:', {
+    console.log('[Content] fetch() completed');
+
+    console.log('[Content] Okta API response:', {
       url: url,
       status: response.status,
       statusText: response.statusText,

@@ -57,6 +57,7 @@ let currentGroupId = null;
 let currentGroupName = null;
 let oktaDomain = null;
 let pendingOperation = null;
+let targetTabId = null; // Track which tab we're working with
 
 // =======================
 // Initialization
@@ -142,25 +143,42 @@ function executePendingOperation() {
 async function initializeGroupContext() {
   try {
     console.log('[Sidepanel] Initializing group context...');
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    const tab = tabs[0];
 
-    console.log('[Sidepanel] Active tab:', {
-      id: tab?.id,
-      url: tab?.url,
-      title: tab?.title,
-      status: tab?.status
-    });
+    // Get current window's tabs
+    const currentWindow = await chrome.windows.getCurrent();
+    console.log('[Sidepanel] Current window ID:', currentWindow.id);
 
-    if (!tab.url || !(
-      tab.url.includes('okta.com') ||
-      tab.url.includes('oktapreview.com') ||
-      tab.url.includes('okta-emea.com')
-    )) {
-      console.warn('[Sidepanel] Not on an Okta page');
+    const allTabsInWindow = await chrome.tabs.query({ windowId: currentWindow.id });
+    console.log('[Sidepanel] Tabs in current window:', allTabsInWindow.length);
+
+    // Find Okta tabs in current window
+    const oktaTabs = allTabsInWindow.filter(tab =>
+      tab.url && (
+        tab.url.includes('okta.com') ||
+        tab.url.includes('oktapreview.com') ||
+        tab.url.includes('okta-emea.com')
+      )
+    );
+    console.log('[Sidepanel] Okta tabs in window:', oktaTabs.length, oktaTabs.map(t => ({ id: t.id, url: t.url, active: t.active })));
+
+    if (oktaTabs.length === 0) {
+      console.warn('[Sidepanel] No Okta tabs found in current window');
       showConnectionError('Please navigate to an Okta page');
       return;
     }
+
+    // Prefer active Okta tab, otherwise use the first Okta tab found
+    let tab = oktaTabs.find(t => t.active) || oktaTabs[0];
+    console.log('[Sidepanel] Selected Okta tab:', {
+      id: tab.id,
+      url: tab.url,
+      title: tab.title,
+      status: tab.status,
+      active: tab.active
+    });
+
+    targetTabId = tab.id; // Store for future requests
+    console.log('[Sidepanel] Stored targetTabId:', targetTabId);
 
     oktaDomain = new URL(tab.url).origin;
     console.log('[Sidepanel] Okta domain detected:', oktaDomain);
@@ -230,15 +248,19 @@ function updateProgress(current, total, message) {
 
 function addResult(message, type) {
   type = type || 'info';
+  console.log('[Sidepanel] addResult called:', { message, type });
+
   const resultItem = document.createElement('div');
   resultItem.className = 'result-item result-' + type;
   resultItem.textContent = message;
 
   if (resultsBox.querySelector('.muted')) {
+    console.log('[Sidepanel] Clearing muted placeholder');
     resultsBox.innerHTML = '';
   }
 
   resultsBox.insertBefore(resultItem, resultsBox.firstChild);
+  console.log('[Sidepanel] Result added to DOM, resultsBox children count:', resultsBox.children.length);
 }
 
 // =======================
@@ -246,13 +268,19 @@ function addResult(message, type) {
 // =======================
 async function makeOktaRequest(endpoint, method, body) {
   method = method || 'GET';
-  console.log('[Sidepanel] Making Okta request:', { endpoint, method, hasBody: !!body });
+  console.log('[Sidepanel] Making Okta request:', { endpoint, method, hasBody: !!body, targetTabId });
 
-  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  const tab = tabs[0];
-  console.log('[Sidepanel] Sending API request to tab:', tab.id);
+  if (!targetTabId) {
+    console.error('[Sidepanel] No targetTabId set! Reinitializing...');
+    await initializeGroupContext();
+    if (!targetTabId) {
+      throw new Error('Could not determine target Okta tab');
+    }
+  }
 
-  const response = await chrome.tabs.sendMessage(tab.id, {
+  console.log('[Sidepanel] Sending API request to tab:', targetTabId);
+
+  const response = await chrome.tabs.sendMessage(targetTabId, {
     action: 'makeApiRequest',
     endpoint: endpoint,
     method: method,
@@ -273,13 +301,16 @@ async function getGroupDetails(groupId) {
 }
 
 async function getAllGroupMembers(groupId) {
+  console.log('[Sidepanel] getAllGroupMembers called for groupId:', groupId);
   let allMembers = [];
   let nextUrl = '/api/v1/groups/' + groupId + '/users?limit=200';
   let pageCount = 0;
 
   while (nextUrl) {
     pageCount++;
+    console.log('[Sidepanel] Fetching page', pageCount, 'from:', nextUrl);
     const response = await makeOktaRequest(nextUrl);
+    console.log('[Sidepanel] Page', pageCount, 'response:', response);
 
     if (!response.success) {
       throw new Error(response.error || 'Failed to fetch group members');
@@ -368,11 +399,16 @@ function estimateApiCost(operation, userCount) {
 
 // Remove Deprovisioned Users
 removeDeactivatedBtn.addEventListener('click', function() {
+  console.log('[Sidepanel] Remove Deactivated button clicked');
+  console.log('[Sidepanel] Current groupId:', currentGroupId);
+
   if (!currentGroupId) {
+    console.warn('[Sidepanel] No groupId, showing error');
     addResult('No group detected', 'error');
     return;
   }
 
+  console.log('[Sidepanel] Showing confirmation modal');
   showConfirmation(
     'Remove Deprovisioned Users',
     'This will scan all group members and remove users with DEPROVISIONED status. This action cannot be undone.',
@@ -383,8 +419,10 @@ removeDeactivatedBtn.addEventListener('click', function() {
 
 async function handleRemoveDeactivated() {
   try {
+    console.log('[Sidepanel] handleRemoveDeactivated - Starting');
     disableButtons(true);
     addResult('Starting operation: Remove deprovisioned users', 'info');
+    console.log('[Sidepanel] Added first result to UI');
 
     addResult('Checking group type and permissions...', 'info');
     const groupDetails = await getGroupDetails(currentGroupId);
@@ -629,8 +667,8 @@ async function handleExport(format, statusFilterValue) {
     disableButtons(true);
     addResult('Starting export: ' + format.toUpperCase() + ' format', 'info');
 
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    const response = await chrome.tabs.sendMessage(tabs[0].id, {
+    console.log('[Sidepanel] Exporting to tab:', targetTabId);
+    const response = await chrome.tabs.sendMessage(targetTabId, {
       action: 'exportGroupMembers',
       groupId: currentGroupId,
       groupName: currentGroupName || 'group',
@@ -668,8 +706,8 @@ async function handleFetchRules() {
     fetchRulesBtn.disabled = true;
     rulesContainer.innerHTML = '<p class="loading">Loading rules...</p>';
 
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    const response = await chrome.tabs.sendMessage(tabs[0].id, {
+    console.log('[Sidepanel] Fetching rules from tab:', targetTabId);
+    const response = await chrome.tabs.sendMessage(targetTabId, {
       action: 'fetchGroupRules'
     });
 
