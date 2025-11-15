@@ -46,6 +46,22 @@ chrome.runtime.onMessage.addListener(
         handleFetchGroupRules().then(sendResponse);
         return true;
 
+      case 'activateRule':
+        if (!request.ruleId) {
+          sendResponse({ success: false, error: 'Missing ruleId' });
+          return true;
+        }
+        handleActivateRule(request.ruleId).then(sendResponse);
+        return true;
+
+      case 'deactivateRule':
+        if (!request.ruleId) {
+          sendResponse({ success: false, error: 'Missing ruleId' });
+          return true;
+        }
+        handleDeactivateRule(request.ruleId).then(sendResponse);
+        return true;
+
       default:
         console.warn('[Content] Unknown action:', (request as any).action);
         sendResponse({ success: false, error: 'Unknown action' });
@@ -258,7 +274,7 @@ async function handleExportGroupMembers(request: MessageRequest): Promise<Messag
 }
 
 // ============================================================================
-// Rules Handler (Stub)
+// Rules Handlers
 // ============================================================================
 
 async function handleFetchGroupRules(): Promise<MessageResponse> {
@@ -271,24 +287,156 @@ async function handleFetchGroupRules(): Promise<MessageResponse> {
       return response;
     }
 
-    const rules = response.data || [];
+    const rules: any[] = response.data || [];
+    console.log('[Content] Fetched', rules.length, 'rules');
+
+    // Get current group ID if on a group page
+    const currentGroupId = extractGroupIdFromUrl(window.location.href);
+
+    // Calculate stats
+    const activeRules = rules.filter((r) => r.status === 'ACTIVE');
+    const inactiveRules = rules.filter((r) => r.status === 'INACTIVE');
+
+    // Detect conflicts (simple implementation in content script)
+    let conflictCount = 0;
+    const conflicts: any[] = [];
+
+    for (let i = 0; i < activeRules.length; i++) {
+      for (let j = i + 1; j < activeRules.length; j++) {
+        const rule1 = activeRules[i];
+        const rule2 = activeRules[j];
+
+        const groups1 = rule1.actions?.assignUserToGroups?.groupIds || [];
+        const groups2 = rule2.actions?.assignUserToGroups?.groupIds || [];
+        const sharedGroups = groups1.filter((g: string) => groups2.includes(g));
+
+        if (sharedGroups.length > 0) {
+          // Extract user attributes
+          const expr1 = rule1.conditions?.expression?.value || '';
+          const expr2 = rule2.conditions?.expression?.value || '';
+          const attrs1 = (expr1.match(/user\.(\w+)/g) || []).map((m: string) => m.replace('user.', ''));
+          const attrs2 = (expr2.match(/user\.(\w+)/g) || []).map((m: string) => m.replace('user.', ''));
+          const commonAttrs = attrs1.filter((a: string) => attrs2.includes(a));
+
+          if (commonAttrs.length > 0) {
+            conflictCount++;
+            conflicts.push({
+              rule1: { id: rule1.id, name: rule1.name },
+              rule2: { id: rule2.id, name: rule2.name },
+              reason: `Both rules use ${commonAttrs.join(', ')} and assign to ${sharedGroups.length} shared group(s)`,
+              severity: sharedGroups.length > 2 ? 'high' : sharedGroups.length > 1 ? 'medium' : 'low',
+              affectedGroups: sharedGroups,
+            });
+          }
+        }
+      }
+    }
+
+    // Format rules for display
+    const formattedRules = rules.map((rule) => {
+      const groupIds = rule.actions?.assignUserToGroups?.groupIds || [];
+      const expression = rule.conditions?.expression?.value || 'No condition specified';
+
+      // Extract user attributes
+      const attrs = (expression.match(/user\.(\w+)/g) || []).map((m: string) => m.replace('user.', ''));
+
+      // Simplify expression for display
+      const simpleCondition = expression
+        .replace(/user\./g, '')
+        .replace(/isMemberOfAnyGroup/g, 'is member of group')
+        .replace(/isMemberOfGroup/g, 'is member of group');
+
+      // Check if this rule affects the current group
+      const affectsCurrentGroup = currentGroupId ? groupIds.includes(currentGroupId) : false;
+
+      // Find conflicts involving this rule
+      const ruleConflicts = conflicts.filter(
+        (c) => c.rule1.id === rule.id || c.rule2.id === rule.id
+      );
+
+      return {
+        id: rule.id,
+        name: rule.name,
+        status: rule.status,
+        condition: simpleCondition,
+        conditionExpression: expression,
+        groupIds,
+        userAttributes: attrs,
+        created: rule.created,
+        lastUpdated: rule.lastUpdated,
+        affectsCurrentGroup,
+        conflicts: ruleConflicts,
+      };
+    });
+
     const stats = {
       total: rules.length,
-      active: rules.filter((r: any) => r.status === 'ACTIVE').length,
-      inactive: rules.filter((r: any) => r.status === 'INACTIVE').length,
-      conflicts: 0, // TODO: implement conflict detection
+      active: activeRules.length,
+      inactive: inactiveRules.length,
+      conflicts: conflictCount,
     };
+
+    console.log('[Content] Rule stats:', stats);
 
     return {
       success: true,
-      rules,
+      rules: formattedRules,
       stats,
+      conflicts,
     };
   } catch (error) {
     console.error('[Content] fetchGroupRules error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch rules',
+    };
+  }
+}
+
+async function handleActivateRule(ruleId: string): Promise<MessageResponse> {
+  console.log('[Content] Activating rule:', ruleId);
+
+  try {
+    const response = await handleMakeApiRequest(
+      `/api/v1/groups/rules/${ruleId}/lifecycle/activate`,
+      'POST'
+    );
+
+    if (response.success) {
+      console.log('[Content] Rule activated successfully');
+      return { success: true };
+    } else {
+      return response;
+    }
+  } catch (error) {
+    console.error('[Content] activateRule error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to activate rule',
+    };
+  }
+}
+
+async function handleDeactivateRule(ruleId: string): Promise<MessageResponse> {
+  console.log('[Content] Deactivating rule:', ruleId);
+
+  try {
+    const response = await handleMakeApiRequest(
+      `/api/v1/groups/rules/${ruleId}/lifecycle/deactivate`,
+      'POST'
+    );
+
+    if (response.success) {
+      console.log('[Content] Rule deactivated successfully');
+      return { success: true };
+    } else {
+      return response;
+    }
+  } catch (error) {
+    console.error('[Content] deactivateRule error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to deactivate rule',
     };
   }
 }

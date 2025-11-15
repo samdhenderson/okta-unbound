@@ -8,6 +8,9 @@ export interface OktaUser {
     email: string;
     firstName: string;
     lastName: string;
+    department?: string;
+    title?: string;
+    [key: string]: any;
   };
 }
 
@@ -32,13 +35,68 @@ export interface OktaGroup {
 
 export type GroupType = 'OKTA_GROUP' | 'APP_GROUP' | 'BUILT_IN';
 
+// Comprehensive Okta Group Rule types
 export interface OktaGroupRule {
   id: string;
   name: string;
   status: 'ACTIVE' | 'INACTIVE';
   type: string;
-  conditions?: any;
-  actions?: any;
+  created: string;
+  lastUpdated: string;
+  conditions?: RuleConditions;
+  actions?: RuleActions;
+  allGroupsValid?: boolean;
+}
+
+export interface RuleConditions {
+  people?: {
+    users?: {
+      exclude?: string[];
+    };
+    groups?: {
+      exclude?: string[];
+      include?: string[];
+    };
+  };
+  expression?: {
+    value: string;
+    type: string;
+  };
+}
+
+export interface RuleActions {
+  assignUserToGroups?: {
+    groupIds: string[];
+  };
+}
+
+export interface RuleConflict {
+  rule1: {
+    id: string;
+    name: string;
+  };
+  rule2: {
+    id: string;
+    name: string;
+  };
+  reason: string;
+  severity: 'high' | 'medium' | 'low';
+  affectedGroups: string[];
+}
+
+export interface FormattedRule {
+  id: string;
+  name: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  condition: string;
+  conditionExpression?: string;
+  groupIds: string[];
+  groupNames?: string[];
+  userAttributes: string[];
+  created: string;
+  lastUpdated: string;
+  affectsCurrentGroup?: boolean;
+  conflicts?: RuleConflict[];
 }
 
 export interface ApiResponse<T = any> {
@@ -67,8 +125,10 @@ export interface MessageRequest {
 
 export interface MessageResponse<T = any> extends ApiResponse<T> {
   count?: number;
-  rules?: any[];
+  rules?: OktaGroupRule[];
+  formattedRules?: FormattedRule[];
   stats?: RuleStats;
+  conflicts?: RuleConflict[];
 }
 
 export interface RuleStats {
@@ -76,6 +136,17 @@ export interface RuleStats {
   active: number;
   inactive: number;
   conflicts: number;
+}
+
+// API Cost Calculation types
+export interface ApiCostEstimate {
+  description: string;
+  totalRequests: number;
+  breakdown: {
+    fetch: number;
+    modify: number;
+  };
+  isExact: boolean;
 }
 
 export interface ProgressCallback {
