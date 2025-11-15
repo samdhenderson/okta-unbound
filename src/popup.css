@@ -138,9 +138,36 @@ h3 {
   transform: scale(0.98);
 }
 
+.btn-success {
+  background: #34c759;
+  color: white;
+}
+
+.btn-success:hover {
+  background: #2fb350;
+}
+
+.btn-success:active {
+  transform: scale(0.98);
+}
+
+.btn-warning {
+  background: #ff9500;
+  color: white;
+}
+
+.btn-warning:hover {
+  background: #e08600;
+}
+
+.btn-warning:active {
+  transform: scale(0.98);
+}
+
 .btn:disabled {
   background: #d2d2d7;
   cursor: not-allowed;
+  color: #86868b;
 }
 
 .results-box {

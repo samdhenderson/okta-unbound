@@ -3,7 +3,7 @@
 **Advanced group and user management for Okta administrators**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.0.1-blue.svg)](manifest.json)
+[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](manifest.json)
 [![Chrome](https://img.shields.io/badge/chrome-extension-green.svg)](https://www.google.com/chrome/)
 
 ![Okta Unbound Features](assets/images/promo.png)
@@ -19,8 +19,17 @@
 ✅ **One-Click User Cleanup**
 Remove deprovisioned (deactivated) users from groups instantly with a single click
 
+✅ **Smart Cleanup Automation**
+Automatically remove all inactive users (DEPROVISIONED, SUSPENDED, LOCKED_OUT) in one operation
+
+✅ **Export Group Members**
+Export member lists to CSV or JSON with optional status filtering
+
 ✅ **Custom Status Filtering**
 Filter and manage users by any Okta status - suspended, locked, staged, and more
+
+✅ **Modular Architecture**
+Clean, maintainable code structure with separated core utilities and feature modules
 
 ✅ **Handles Large Groups**
 Efficiently process groups with 10,000+ members using smart pagination
@@ -48,8 +57,6 @@ Comprehensive view of all group rules with powerful filters
 🔜 **Attribute-Based Deep Dive**
 Analyze and filter users by profile attributes across groups
 
-🔜 **Export Group Members**
-Export to CSV/JSON with analytics and custom field selection
 
 🔜 **Mirror App Users & Permissions**
 Sync application assignments across groups easily
@@ -294,7 +301,29 @@ Built with ❤️ by Okta administrators, for Okta administrators.
 
 ## Version History
 
-### v0.0.1 (Current - Initial Release)
+### v0.1.0 (Current)
+
+Feature release with export functionality and automation improvements.
+
+**New Features**:
+- Export group members to CSV or JSON formats
+- Optional status filtering for exports (e.g., export only ACTIVE users)
+- Smart Cleanup automation (removes DEPROVISIONED, SUSPENDED, and LOCKED_OUT users in one operation)
+- Modular architecture with core utilities (API client, pagination, authentication)
+- Separate feature modules for better code organization
+
+**Technical Improvements**:
+- Refactored codebase into modular structure
+- Created core/api, core/auth, core/utils, and features/export modules
+- Improved code maintainability and extensibility
+- Added downloads permission for export functionality
+
+**Files Include**:
+- Login, First Name, Last Name, Email, Status, Created Date, Last Login in exports
+- Automatic filename generation with timestamps
+- Browser download to default downloads folder
+
+### v0.0.1 (Initial Release)
 
 Initial public release of Okta Unbound with core group management features.
 

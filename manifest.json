@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Okta Unbound",
-  "version": "0.0.1",
-  "description": "Advanced Okta group and user management with bulk operations, user cleanup, and powerful filtering tools for administrators",
+  "version": "0.1.0",
+  "description": "Advanced Okta group and user management with bulk operations, user cleanup, CSV/JSON export, and automated cleanup tools for administrators",
   "permissions": [
     "activeTab",
     "scripting",
     "storage",
-    "contextMenus"
+    "contextMenus",
+    "downloads"
   ],
   "host_permissions": [
     "https://*.okta.com/*",
@@ -29,7 +30,15 @@
         "https://*.oktapreview.com/*",
         "https://*.okta-emea.com/*"
       ],
-      "js": ["src/content.js"]
+      "js": [
+        "src/core/auth/session.js",
+        "src/core/api/client.js",
+        "src/core/api/pagination.js",
+        "src/core/utils/parsers.js",
+        "src/features/export/formats.js",
+        "src/features/export/export.js",
+        "src/content.js"
+      ]
     }
   ],
   "background": {
