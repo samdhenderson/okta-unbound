@@ -10,7 +10,7 @@ type TabType = 'operations' | 'rules';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('operations');
-  const { groupInfo, connectionStatus, error, isLoading } = useGroupContext();
+  const { groupInfo, connectionStatus, targetTabId, error, isLoading } = useGroupContext();
 
   useEffect(() => {
     console.log('[App] Component mounted');
@@ -33,7 +33,13 @@ const App: React.FC = () => {
 
       <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
-      {activeTab === 'operations' && <OperationsTab groupId={groupInfo?.groupId} />}
+      {activeTab === 'operations' && (
+        <OperationsTab
+          groupId={groupInfo?.groupId}
+          groupName={groupInfo?.groupName}
+          targetTabId={targetTabId}
+        />
+      )}
       {activeTab === 'rules' && <RulesTab />}
     </div>
   );
