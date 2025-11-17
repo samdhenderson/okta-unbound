@@ -26,8 +26,6 @@ const OperationsTab: React.FC<OperationsTabProps> = ({ groupId, groupName, targe
   } | null>(null);
 
   // Form state
-  const [statusFilter, setStatusFilter] = useState<UserStatus>('DEPROVISIONED');
-  const [action, setAction] = useState<'list' | 'remove'>('remove');
   const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv');
   const [exportFilter, setExportFilter] = useState<UserStatus | ''>('');
 
@@ -74,32 +72,6 @@ const OperationsTab: React.FC<OperationsTabProps> = ({ groupId, groupName, targe
     );
   };
 
-  const handleSmartCleanup = () => {
-    showConfirmation(
-      'Smart Cleanup',
-      'This will remove all inactive users (DEPROVISIONED, SUSPENDED, LOCKED_OUT) in one operation. This action cannot be undone.',
-      'Fetch members: 1-5 requests\nRemove users: 1 per inactive user\nTotal: Varies',
-      () => {
-        closeModal();
-        if (groupId) api.smartCleanup(groupId);
-      }
-    );
-  };
-
-  const handleCustomFilter = () => {
-    showConfirmation(
-      'Custom Filter',
-      action === 'remove'
-        ? `This will remove all users with status: ${statusFilter}. This action cannot be undone.`
-        : `This will list all users with status: ${statusFilter}`,
-      'Fetch members: 1-5 requests\n' + (action === 'remove' ? 'Remove users: 1 per user' : 'List only (no modifications)'),
-      () => {
-        closeModal();
-        if (groupId) api.customFilter(groupId, statusFilter, action);
-      }
-    );
-  };
-
   const handleExport = () => {
     showConfirmation(
       'Export Group Members',
@@ -122,71 +94,18 @@ const OperationsTab: React.FC<OperationsTabProps> = ({ groupId, groupName, targe
     <div className="tab-content active">
       {/* Quick Actions */}
       <div className="section">
-        <h2>Quick Actions</h2>
+        <h2>Common Operations</h2>
 
         <div className="operation-card">
           <div className="operation-header">
-            <h3>Remove Deprovisioned</h3>
+            <h3>Remove Deprovisioned Users</h3>
             <span className="info-icon" data-tooltip="~1-5 fetch + 1 per removal">
               i
             </span>
           </div>
-          <p>Remove deactivated users from group</p>
+          <p>Remove deactivated users from this group</p>
           <button className="btn btn-primary" onClick={handleRemoveDeprovisioned} disabled={disabled}>
-            Run
-          </button>
-        </div>
-
-        <div className="operation-card">
-          <div className="operation-header">
-            <h3>Smart Cleanup</h3>
-            <span className="info-icon" data-tooltip="~1-5 fetch + 1 per inactive user">
-              i
-            </span>
-          </div>
-          <p>Remove all inactive users (deprovisioned, suspended, locked out)</p>
-          <button className="btn btn-warning" onClick={handleSmartCleanup} disabled={disabled}>
-            Run
-          </button>
-        </div>
-
-        <div className="operation-card">
-          <div className="operation-header">
-            <h3>Custom Filter</h3>
-            <span className="info-icon" data-tooltip="~1-5 fetch + 1 per removal">
-              i
-            </span>
-          </div>
-          <label htmlFor="statusFilter">Status:</label>
-          <select
-            id="statusFilter"
-            className="input"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as UserStatus)}
-            disabled={disabled}
-          >
-            <option value="DEPROVISIONED">DEPROVISIONED</option>
-            <option value="SUSPENDED">SUSPENDED</option>
-            <option value="STAGED">STAGED</option>
-            <option value="PROVISIONED">PROVISIONED</option>
-            <option value="ACTIVE">ACTIVE</option>
-            <option value="RECOVERY">RECOVERY</option>
-            <option value="LOCKED_OUT">LOCKED_OUT</option>
-            <option value="PASSWORD_EXPIRED">PASSWORD_EXPIRED</option>
-          </select>
-          <label htmlFor="action">Action:</label>
-          <select
-            id="action"
-            className="input"
-            value={action}
-            onChange={(e) => setAction(e.target.value as 'list' | 'remove')}
-            disabled={disabled}
-          >
-            <option value="remove">Remove</option>
-            <option value="list">List Only</option>
-          </select>
-          <button className="btn btn-primary" onClick={handleCustomFilter} disabled={disabled}>
-            Execute
+            Remove Deprovisioned
           </button>
         </div>
 

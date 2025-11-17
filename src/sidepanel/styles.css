@@ -107,6 +107,13 @@ body {
   z-index: 99;
 }
 
+.group-banner-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .group-name {
   font-size: 16px;
   font-weight: 600;
@@ -161,7 +168,7 @@ body {
 /* Tab Content */
 .tab-content {
   display: none;
-  padding: 16px;
+  padding: 20px;
 }
 
 .tab-content.active {
@@ -170,7 +177,7 @@ body {
 
 /* Section */
 .section {
-  margin-bottom: 20px;
+  margin-bottom: 28px;
 }
 
 .section h2 {
@@ -196,8 +203,8 @@ body {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  padding: 12px;
-  margin-bottom: 10px;
+  padding: 16px;
+  margin-bottom: 14px;
   transition: border-color 0.15s ease;
 }
 
@@ -774,7 +781,8 @@ body {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+  gap: 12px;
 }
 
 /* API Cost Indicator */
@@ -871,7 +879,7 @@ body {
 .rules-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 
 /* Updated Rule Card */
@@ -897,7 +905,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px;
+  padding: 14px 16px;
   cursor: pointer;
   user-select: none;
 }
@@ -999,7 +1007,7 @@ body {
 
 /* Rule Body (expanded content) */
 .rule-body {
-  padding: 0 12px 12px 12px;
+  padding: 0 16px 16px 16px;
   border-top: 1px solid var(--border-color);
 }
 

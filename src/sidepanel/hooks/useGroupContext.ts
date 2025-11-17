@@ -32,7 +32,7 @@ export function useGroupContext(): UseGroupContextReturn {
       const allTabsInWindow = await chrome.tabs.query({ windowId: currentWindow.id });
       console.log('[useGroupContext] Tabs in current window:', allTabsInWindow.length);
 
-      // Find Okta tabs
+      // Find Okta admin tabs (any Okta page)
       const oktaTabs = allTabsInWindow.filter(
         (tab) =>
           tab.url &&
@@ -48,7 +48,7 @@ export function useGroupContext(): UseGroupContextReturn {
       );
 
       if (oktaTabs.length === 0) {
-        throw new Error('Please navigate to an Okta page');
+        throw new Error('Please open an Okta admin page in this window');
       }
 
       // Prefer active Okta tab, otherwise use first
@@ -75,7 +75,11 @@ export function useGroupContext(): UseGroupContextReturn {
         setConnectionStatus('connected');
         setError(null);
       } else {
-        throw new Error(response.error || 'Could not detect group page');
+        // Connection successful, but not on a group page
+        setGroupInfo(null);
+        setConnectionStatus('connected');
+        setError(null);
+        console.log('[useGroupContext] Connected to Okta, but not on a group page');
       }
     } catch (err) {
       console.error('[useGroupContext] Error:', err);
@@ -90,6 +94,39 @@ export function useGroupContext(): UseGroupContextReturn {
 
   useEffect(() => {
     fetchGroupInfo();
+
+    // Listen for tab updates (when user navigates to different Okta pages)
+    const handleTabUpdate = (tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
+      // Only refetch if the URL changed and it's an Okta tab
+      if (changeInfo.url && tab.url &&
+          (tab.url.includes('okta.com') ||
+           tab.url.includes('oktapreview.com') ||
+           tab.url.includes('okta-emea.com'))) {
+        console.log('[useGroupContext] Okta tab URL changed, refetching group info');
+        fetchGroupInfo();
+      }
+    };
+
+    // Listen for new tabs being activated
+    const handleTabActivated = (activeInfo: chrome.tabs.TabActiveInfo) => {
+      chrome.tabs.get(activeInfo.tabId, (tab) => {
+        if (tab.url &&
+            (tab.url.includes('okta.com') ||
+             tab.url.includes('oktapreview.com') ||
+             tab.url.includes('okta-emea.com'))) {
+          console.log('[useGroupContext] Okta tab activated, refetching group info');
+          fetchGroupInfo();
+        }
+      });
+    };
+
+    chrome.tabs.onUpdated.addListener(handleTabUpdate);
+    chrome.tabs.onActivated.addListener(handleTabActivated);
+
+    return () => {
+      chrome.tabs.onUpdated.removeListener(handleTabUpdate);
+      chrome.tabs.onActivated.removeListener(handleTabActivated);
+    };
   }, []);
 
   return {

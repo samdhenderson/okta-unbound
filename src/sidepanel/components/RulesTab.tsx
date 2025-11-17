@@ -18,6 +18,47 @@ const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId }) => {
   const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0, conflicts: 0 });
   const [apiCost, setApiCost] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lastFetchTime, setLastFetchTime] = useState<string | null>(null);
+
+  // Load rules from chrome.storage on mount
+  useEffect(() => {
+    const loadPersistedRules = async () => {
+      try {
+        const result = await chrome.storage.local.get(['cachedRules', 'cachedRulesStats', 'cachedRulesTime']);
+        if (result.cachedRules && result.cachedRulesStats) {
+          console.log('[RulesTab] Loaded persisted rules from storage:', result.cachedRules.length);
+          setRules(result.cachedRules);
+          setStats(result.cachedRulesStats);
+          setLastFetchTime(result.cachedRulesTime || null);
+        }
+      } catch (err) {
+        console.error('[RulesTab] Failed to load persisted rules:', err);
+      }
+    };
+
+    loadPersistedRules();
+  }, []);
+
+  // Persist rules to chrome.storage whenever they change
+  useEffect(() => {
+    if (rules.length > 0) {
+      const persistRules = async () => {
+        try {
+          const fetchTime = new Date().toISOString();
+          await chrome.storage.local.set({
+            cachedRules: rules,
+            cachedRulesStats: stats,
+            cachedRulesTime: fetchTime,
+          });
+          console.log('[RulesTab] Persisted', rules.length, 'rules to storage');
+        } catch (err) {
+          console.error('[RulesTab] Failed to persist rules:', err);
+        }
+      };
+
+      persistRules();
+    }
+  }, [rules, stats]);
 
   const handleLoadRules = async () => {
     if (!targetTabId) {
@@ -44,6 +85,7 @@ const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId }) => {
       if (response.success) {
         setRules(response.rules || []);
         setStats(response.stats || { total: 0, active: 0, inactive: 0, conflicts: 0 });
+        setLastFetchTime(new Date().toISOString());
 
         // Calculate actual API cost based on response metadata
         // The content script makes 1 request for rules fetch
@@ -155,6 +197,16 @@ const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId }) => {
           <div className="api-cost-indicator">
             <span className="api-cost-label">API Requests:</span>
             <span className="api-cost-value">{apiCost}</span>
+          </div>
+        )}
+
+        {/* Last Fetch Time */}
+        {lastFetchTime && rules.length > 0 && (
+          <div className="api-cost-indicator" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
+            <span className="api-cost-label">Cached from:</span>
+            <span className="api-cost-value" style={{ color: 'var(--text-secondary)' }}>
+              {new Date(lastFetchTime).toLocaleString()}
+            </span>
           </div>
         )}
 
