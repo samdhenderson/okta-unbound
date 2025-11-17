@@ -6,9 +6,10 @@ interface RuleCardProps {
   rule: FormattedRule;
   onActivate?: (ruleId: string) => void;
   onDeactivate?: (ruleId: string) => void;
+  oktaOrigin?: string | null;
 }
 
-const RuleCard: React.FC<RuleCardProps> = ({ rule, onActivate, onDeactivate }) => {
+const RuleCard: React.FC<RuleCardProps> = ({ rule, onActivate, onDeactivate, oktaOrigin }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const statusColor = rule.status === 'ACTIVE' ? 'success' : 'inactive';
@@ -144,14 +145,16 @@ const RuleCard: React.FC<RuleCardProps> = ({ rule, onActivate, onDeactivate }) =
                 Activate Rule
               </button>
             )}
-            <a
-              href={`${window.location.origin}/admin/groups/rules/${rule.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-secondary btn-sm"
-            >
-              Edit in Okta →
-            </a>
+            {oktaOrigin && (
+              <a
+                href={`${oktaOrigin}/admin/groups/rules/${rule.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-secondary btn-sm"
+              >
+                Edit in Okta →
+              </a>
+            )}
           </div>
         </div>
       )}

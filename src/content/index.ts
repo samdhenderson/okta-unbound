@@ -86,6 +86,10 @@ chrome.runtime.onMessage.addListener(
         handleGetUserDetails(request.userId).then(sendResponse);
         return true;
 
+      case 'getOktaOrigin':
+        sendResponse({ success: true, data: window.location.origin });
+        return true;
+
       default:
         console.warn('[Content] Unknown action:', (request as any).action);
         sendResponse({ success: false, error: 'Unknown action' });

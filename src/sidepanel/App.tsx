@@ -5,13 +5,14 @@ import TabNavigation from './components/TabNavigation';
 import OperationsTab from './components/OperationsTab';
 import RulesTab from './components/RulesTab';
 import UsersTab from './components/UsersTab';
+import LoadingBar from './components/LoadingBar';
 import { useGroupContext } from './hooks/useGroupContext';
 
 type TabType = 'operations' | 'rules' | 'users';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('operations');
-  const { groupInfo, connectionStatus, targetTabId, error, isLoading } = useGroupContext();
+  const { groupInfo, connectionStatus, targetTabId, error, isLoading, oktaOrigin } = useGroupContext();
 
   useEffect(() => {
     console.log('[App] Component mounted');
@@ -45,6 +46,7 @@ const App: React.FC = () => {
         <RulesTab
           targetTabId={targetTabId}
           currentGroupId={groupInfo?.groupId}
+          oktaOrigin={oktaOrigin}
         />
       )}
       {activeTab === 'users' && (
@@ -53,6 +55,9 @@ const App: React.FC = () => {
           currentGroupId={groupInfo?.groupId}
         />
       )}
+
+      {/* Global Loading Bar - appears at bottom of all pages */}
+      <LoadingBar />
     </div>
   );
 };

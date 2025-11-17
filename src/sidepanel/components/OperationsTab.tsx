@@ -28,6 +28,8 @@ const OperationsTab: React.FC<OperationsTabProps> = ({ groupId, groupName, targe
   // Form state
   const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv');
   const [exportFilter, setExportFilter] = useState<UserStatus | ''>('');
+  const [customFilterStatus, setCustomFilterStatus] = useState<UserStatus>('ACTIVE');
+  const [customFilterAction, setCustomFilterAction] = useState<'list' | 'remove'>('list');
 
   const addResult = (message: string, type: Result['type'] = 'info') => {
     console.log('[OperationsTab] addResult:', { message, type });
@@ -88,6 +90,25 @@ const OperationsTab: React.FC<OperationsTabProps> = ({ groupId, groupName, targe
     );
   };
 
+  const handleCustomFilter = () => {
+    const actionText = customFilterAction === 'list' ? 'list' : 'remove';
+    showConfirmation(
+      `${customFilterAction === 'list' ? 'List' : 'Remove'} Users by Status`,
+      `This will ${actionText} all users with status: ${customFilterStatus}${
+        customFilterAction === 'remove' ? '. This action cannot be undone.' : ''
+      }`,
+      customFilterAction === 'list'
+        ? 'Fetch members: 1-5 requests (read-only)\nNo modifications made'
+        : 'Fetch members: 1-5 requests\nRemove users: 1 per user\nTotal: Varies',
+      () => {
+        closeModal();
+        if (groupId) {
+          api.customFilter(groupId, customFilterStatus, customFilterAction);
+        }
+      }
+    );
+  };
+
   const progressPercent = progress.total > 0 ? (progress.current / progress.total) * 100 : 0;
 
   return (
@@ -140,9 +161,57 @@ const OperationsTab: React.FC<OperationsTabProps> = ({ groupId, groupName, targe
             <option value="DEPROVISIONED">DEPROVISIONED Only</option>
             <option value="SUSPENDED">SUSPENDED Only</option>
             <option value="STAGED">STAGED Only</option>
+            <option value="PROVISIONED">PROVISIONED Only</option>
+            <option value="RECOVERY">RECOVERY Only</option>
+            <option value="LOCKED_OUT">LOCKED_OUT Only</option>
+            <option value="PASSWORD_EXPIRED">PASSWORD_EXPIRED Only</option>
           </select>
           <button className="btn btn-success" onClick={handleExport} disabled={disabled}>
             Export
+          </button>
+        </div>
+
+        <div className="operation-card">
+          <div className="operation-header">
+            <h3>List or Remove Users by Status</h3>
+            <span className="info-icon" data-tooltip="~1-5 fetch + 1 per removal">
+              i
+            </span>
+          </div>
+          <label htmlFor="customFilterAction">Action:</label>
+          <select
+            id="customFilterAction"
+            className="input"
+            value={customFilterAction}
+            onChange={(e) => setCustomFilterAction(e.target.value as 'list' | 'remove')}
+            disabled={disabled}
+          >
+            <option value="list">List Users</option>
+            <option value="remove">Remove Users</option>
+          </select>
+          <label htmlFor="customFilterStatus">Status:</label>
+          <select
+            id="customFilterStatus"
+            className="input"
+            value={customFilterStatus}
+            onChange={(e) => setCustomFilterStatus(e.target.value as UserStatus)}
+            disabled={disabled}
+          >
+            <option value="ACTIVE">ACTIVE</option>
+            <option value="DEPROVISIONED">DEPROVISIONED</option>
+            <option value="SUSPENDED">SUSPENDED</option>
+            <option value="STAGED">STAGED</option>
+            <option value="PROVISIONED">PROVISIONED</option>
+            <option value="RECOVERY">RECOVERY</option>
+            <option value="LOCKED_OUT">LOCKED_OUT</option>
+            <option value="PASSWORD_EXPIRED">PASSWORD_EXPIRED</option>
+          </select>
+          <button
+            className={`btn ${customFilterAction === 'remove' ? 'btn-primary' : 'btn-success'}`}
+            onClick={handleCustomFilter}
+            disabled={disabled}
+          >
+            {customFilterAction === 'list' ? 'List Users' : 'Remove Users'}
           </button>
         </div>
       </div>

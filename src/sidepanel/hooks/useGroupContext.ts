@@ -10,6 +10,7 @@ interface UseGroupContextReturn {
   error: string | null;
   isLoading: boolean;
   refetch: () => Promise<void>;
+  oktaOrigin: string | null;
 }
 
 export function useGroupContext(): UseGroupContextReturn {
@@ -18,6 +19,7 @@ export function useGroupContext(): UseGroupContextReturn {
   const [targetTabId, setTargetTabId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [oktaOrigin, setOktaOrigin] = useState<string | null>(null);
 
   const fetchGroupInfo = async () => {
     try {
@@ -61,6 +63,17 @@ export function useGroupContext(): UseGroupContextReturn {
       });
 
       setTargetTabId(tab.id!);
+
+      // Fetch Okta origin from the tab
+      console.log('[useGroupContext] Fetching Okta origin from tab', tab.id);
+      const originResponse: MessageResponse<string> = await chrome.tabs.sendMessage(tab.id!, {
+        action: 'getOktaOrigin',
+      });
+
+      if (originResponse.success && originResponse.data) {
+        setOktaOrigin(originResponse.data);
+        console.log('[useGroupContext] Okta origin:', originResponse.data);
+      }
 
       // Request group info from content script
       console.log('[useGroupContext] Sending getGroupInfo message to tab', tab.id);
@@ -136,5 +149,6 @@ export function useGroupContext(): UseGroupContextReturn {
     error,
     isLoading,
     refetch: fetchGroupInfo,
+    oktaOrigin,
   };
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { OktaUser, GroupMembership, OktaGroupRule } from '../../shared/types';
 
 interface UsersTabProps {
@@ -16,6 +16,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId }) => {
   const [allRules, setAllRules] = useState<OktaGroupRule[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [apiCost, setApiCost] = useState<number>(0);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleSearch = async () => {
     if (!targetTabId) {
@@ -140,6 +141,38 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId }) => {
     });
   };
 
+  // Live search with debouncing - trigger search as user types
+  useEffect(() => {
+    // Clear any existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Don't search if query is empty or too short
+    if (searchQuery.trim().length === 0) {
+      setSearchResults([]);
+      setError(null);
+      return;
+    }
+
+    // Don't search if query is too short (minimum 2 characters for efficiency)
+    if (searchQuery.trim().length < 2) {
+      return;
+    }
+
+    // Debounce the search - wait 600ms after user stops typing
+    debounceTimerRef.current = setTimeout(() => {
+      handleSearch();
+    }, 600);
+
+    // Cleanup function
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [searchQuery, targetTabId]);
+
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case 'ACTIVE':
@@ -187,18 +220,16 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId }) => {
             <input
               type="text"
               className="input"
-              placeholder="Search by email, name, or login (e.g., john.doe@example.com)"
+              placeholder="Type to search by email, name, or login (live search)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              disabled={isSearching}
             />
-            <button
-              className="btn btn-primary"
-              onClick={handleSearch}
-              disabled={isSearching || !searchQuery.trim()}
-            >
-              {isSearching ? 'Searching...' : 'Search'}
-            </button>
+            {isSearching && (
+              <div className="search-spinner">
+                <div className="spinner-small"></div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -377,7 +408,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId }) => {
         {/* Empty State */}
         {!isSearching && searchResults.length === 0 && !error && !selectedUser && (
           <div className="empty-state">
-            <p className="muted">Enter a user email, name, or login to search</p>
+            <p className="muted">Type at least 2 characters to search for users (live search)</p>
             <p className="muted-small">
               You can trace group memberships and understand why users are in specific groups
             </p>
