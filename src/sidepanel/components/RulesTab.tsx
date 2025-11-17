@@ -2,15 +2,17 @@ import React, { useState, useEffect } from 'react';
 import RuleCard from './RuleCard';
 import type { FormattedRule, RuleConflict } from '../../shared/types';
 import { filterRules } from '../../shared/ruleUtils';
+import { useProgress } from '../contexts/ProgressContext';
 
 interface RulesTabProps {
   targetTabId?: number;
   currentGroupId?: string;
+  oktaOrigin?: string | null;
 }
 
 type FilterType = 'all' | 'active' | 'conflicts' | 'current-group';
 
-const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId }) => {
+const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId, oktaOrigin }) => {
   const [rules, setRules] = useState<FormattedRule[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -19,6 +21,7 @@ const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId }) => {
   const [apiCost, setApiCost] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastFetchTime, setLastFetchTime] = useState<string | null>(null);
+  const { startProgress, updateProgress, completeProgress } = useProgress();
 
   // Load rules from chrome.storage on mount
   useEffect(() => {
@@ -73,6 +76,9 @@ const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId }) => {
     try {
       console.log('[RulesTab] Fetching rules from tab:', targetTabId);
 
+      // Start progress - we don't know total yet, so use indeterminate progress
+      startProgress('Loading group rules...', 1);
+
       // Track API requests made
       let apiRequestCount = 0;
 
@@ -83,6 +89,9 @@ const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId }) => {
       console.log('[RulesTab] Received response:', response);
 
       if (response.success) {
+        const rulesCount = response.rules?.length || 0;
+        updateProgress(1, 1, `Loaded ${rulesCount} rules successfully`);
+
         setRules(response.rules || []);
         setStats(response.stats || { total: 0, active: 0, inactive: 0, conflicts: 0 });
         setLastFetchTime(new Date().toISOString());
@@ -97,13 +106,20 @@ const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId }) => {
           stats: response.stats,
           apiCost: apiRequestCount
         });
+
+        // Complete progress after a short delay to show success message
+        setTimeout(() => {
+          completeProgress();
+        }, 1000);
       } else {
         setError(response.error || 'Failed to fetch rules');
         console.error('[RulesTab] Error fetching rules:', response.error);
+        completeProgress();
       }
     } catch (err: any) {
       setError(err.message || 'Failed to communicate with Okta tab');
       console.error('[RulesTab] Exception:', err);
+      completeProgress();
     } finally {
       setIsLoading(false);
     }
@@ -307,6 +323,7 @@ const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId }) => {
                   rule={rule}
                   onActivate={handleActivateRule}
                   onDeactivate={handleDeactivateRule}
+                  oktaOrigin={oktaOrigin}
                 />
               ))}
             </div>

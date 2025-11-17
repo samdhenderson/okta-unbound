@@ -48,6 +48,7 @@ body {
   flex-direction: column;
   height: 100vh;
   overflow-y: auto;
+  padding-bottom: 70px; /* Space for global loading bar */
 }
 
 /* Header */
@@ -485,6 +486,53 @@ body {
   font-size: 12px;
   color: var(--text-secondary);
   text-align: center;
+}
+
+/* Global Loading Bar - Persistent at bottom */
+.global-loading-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-color);
+  padding: 8px 12px;
+  z-index: 1000;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.global-progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.global-progress-message {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.global-progress-count {
+  color: var(--text-secondary);
+  font-family: monospace;
+}
+
+.global-progress-bar-container {
+  width: 100%;
+  height: 4px;
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.global-progress-bar-fill {
+  height: 100%;
+  background: var(--accent-primary);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+  width: 0%;
 }
 
 /* Rules Toolbar */
@@ -1214,6 +1262,32 @@ body {
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   margin-bottom: 12px;
+}
+
+.spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--bg-tertiary);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.search-spinner {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-input-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 @keyframes spin {

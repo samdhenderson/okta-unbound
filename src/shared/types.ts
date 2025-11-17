@@ -128,7 +128,7 @@ export interface GroupMembership {
 }
 
 export interface MessageRequest {
-  action: 'getGroupInfo' | 'makeApiRequest' | 'exportGroupMembers' | 'fetchGroupRules' | 'searchUsers' | 'getUserGroups' | 'getUserDetails';
+  action: 'getGroupInfo' | 'makeApiRequest' | 'exportGroupMembers' | 'fetchGroupRules' | 'searchUsers' | 'getUserGroups' | 'getUserDetails' | 'getOktaOrigin' | 'activateRule' | 'deactivateRule';
   endpoint?: string;
   method?: string;
   body?: any;
@@ -138,6 +138,7 @@ export interface MessageRequest {
   statusFilter?: UserStatus | '';
   query?: string;
   userId?: string;
+  ruleId?: string;
 }
 
 export interface MessageResponse<T = any> extends ApiResponse<T> {
