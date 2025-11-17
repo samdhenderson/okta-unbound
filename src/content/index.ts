@@ -62,6 +62,30 @@ chrome.runtime.onMessage.addListener(
         handleDeactivateRule(request.ruleId).then(sendResponse);
         return true;
 
+      case 'searchUsers':
+        if (!request.query) {
+          sendResponse({ success: false, error: 'Missing query' });
+          return true;
+        }
+        handleSearchUsers(request.query).then(sendResponse);
+        return true;
+
+      case 'getUserGroups':
+        if (!request.userId) {
+          sendResponse({ success: false, error: 'Missing userId' });
+          return true;
+        }
+        handleGetUserGroups(request.userId).then(sendResponse);
+        return true;
+
+      case 'getUserDetails':
+        if (!request.userId) {
+          sendResponse({ success: false, error: 'Missing userId' });
+          return true;
+        }
+        handleGetUserDetails(request.userId).then(sendResponse);
+        return true;
+
       default:
         console.warn('[Content] Unknown action:', (request as any).action);
         sendResponse({ success: false, error: 'Unknown action' });
@@ -466,6 +490,121 @@ async function handleDeactivateRule(ruleId: string): Promise<MessageResponse> {
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to deactivate rule',
+    };
+  }
+}
+
+// ============================================================================
+// User Search and Membership Handlers
+// ============================================================================
+
+async function handleSearchUsers(query: string): Promise<MessageResponse> {
+  console.log('[Content] Processing searchUsers request:', query);
+
+  try {
+    // Okta search API supports multiple search methods
+    // We'll search by email, login, firstName, or lastName
+    const searchParam = encodeURIComponent(query);
+
+    // Try searching with a filter for more accurate results
+    // This searches login, email, firstName, and lastName fields
+    const searchUrl = `/api/v1/users?search=${searchParam}&limit=20`;
+
+    console.log('[Content] Searching users with URL:', searchUrl);
+    const response = await handleMakeApiRequest(searchUrl, 'GET');
+
+    if (!response.success) {
+      return response;
+    }
+
+    const users: OktaUser[] = response.data || [];
+    console.log('[Content] Found', users.length, 'users');
+
+    return {
+      success: true,
+      data: users,
+      count: users.length,
+    };
+  } catch (error) {
+    console.error('[Content] searchUsers error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to search users',
+    };
+  }
+}
+
+async function handleGetUserGroups(userId: string): Promise<MessageResponse> {
+  console.log('[Content] Processing getUserGroups request for user:', userId);
+
+  try {
+    let allGroups: any[] = [];
+    let nextUrl: string | null = `/api/v1/users/${userId}/groups?limit=200`;
+
+    // Fetch all groups with pagination
+    while (nextUrl) {
+      const response = await handleMakeApiRequest(nextUrl, 'GET');
+
+      if (!response.success) {
+        return response;
+      }
+
+      allGroups = allGroups.concat(response.data || []);
+
+      // Parse next link from headers
+      nextUrl = null;
+      if (response.headers?.link) {
+        const links = response.headers.link.split(',');
+        for (const link of links) {
+          if (link.includes('rel="next"')) {
+            const match = link.match(/<([^>]+)>/);
+            if (match) {
+              const fullUrl = new URL(match[1]);
+              nextUrl = fullUrl.pathname + fullUrl.search;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    console.log('[Content] Found', allGroups.length, 'groups for user');
+
+    return {
+      success: true,
+      data: allGroups,
+      count: allGroups.length,
+    };
+  } catch (error) {
+    console.error('[Content] getUserGroups error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch user groups',
+    };
+  }
+}
+
+async function handleGetUserDetails(userId: string): Promise<MessageResponse> {
+  console.log('[Content] Processing getUserDetails request for user:', userId);
+
+  try {
+    const response = await handleMakeApiRequest(`/api/v1/users/${userId}`, 'GET');
+
+    if (!response.success) {
+      return response;
+    }
+
+    console.log('[Content] Retrieved user details');
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    console.error('[Content] getUserDetails error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch user details',
     };
   }
 }

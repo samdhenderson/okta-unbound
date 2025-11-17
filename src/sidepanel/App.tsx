@@ -4,9 +4,10 @@ import GroupBanner from './components/GroupBanner';
 import TabNavigation from './components/TabNavigation';
 import OperationsTab from './components/OperationsTab';
 import RulesTab from './components/RulesTab';
+import UsersTab from './components/UsersTab';
 import { useGroupContext } from './hooks/useGroupContext';
 
-type TabType = 'operations' | 'rules';
+type TabType = 'operations' | 'rules' | 'users';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('operations');
@@ -42,6 +43,12 @@ const App: React.FC = () => {
       )}
       {activeTab === 'rules' && (
         <RulesTab
+          targetTabId={targetTabId}
+          currentGroupId={groupInfo?.groupId}
+        />
+      )}
+      {activeTab === 'users' && (
+        <UsersTab
           targetTabId={targetTabId}
           currentGroupId={groupInfo?.groupId}
         />
