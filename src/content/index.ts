@@ -293,6 +293,31 @@ async function handleFetchGroupRules(): Promise<MessageResponse> {
     // Get current group ID if on a group page
     const currentGroupId = extractGroupIdFromUrl(window.location.href);
 
+    // Collect all unique group IDs from all rules
+    const allGroupIds = new Set<string>();
+    rules.forEach((rule) => {
+      const groupIds = rule.actions?.assignUserToGroups?.groupIds || [];
+      groupIds.forEach((id: string) => allGroupIds.add(id));
+    });
+
+    // Fetch group details for all group IDs
+    const groupNameMap = new Map<string, string>();
+    console.log('[Content] Fetching names for', allGroupIds.size, 'groups');
+
+    for (const groupId of allGroupIds) {
+      try {
+        const groupResponse = await handleMakeApiRequest(`/api/v1/groups/${groupId}`, 'GET');
+        if (groupResponse.success && groupResponse.data?.profile?.name) {
+          groupNameMap.set(groupId, groupResponse.data.profile.name);
+        }
+      } catch (err) {
+        console.warn('[Content] Failed to fetch group name for', groupId, err);
+        // Continue with other groups even if one fails
+      }
+    }
+
+    console.log('[Content] Successfully fetched', groupNameMap.size, 'group names');
+
     // Calculate stats
     const activeRules = rules.filter((r) => r.status === 'ACTIVE');
     const inactiveRules = rules.filter((r) => r.status === 'INACTIVE');
@@ -354,6 +379,9 @@ async function handleFetchGroupRules(): Promise<MessageResponse> {
         (c) => c.rule1.id === rule.id || c.rule2.id === rule.id
       );
 
+      // Map group IDs to their names
+      const groupNames = groupIds.map((id: string) => groupNameMap.get(id) || id);
+
       return {
         id: rule.id,
         name: rule.name,
@@ -361,6 +389,7 @@ async function handleFetchGroupRules(): Promise<MessageResponse> {
         condition: simpleCondition,
         conditionExpression: expression,
         groupIds,
+        groupNames,
         userAttributes: attrs,
         created: rule.created,
         lastUpdated: rule.lastUpdated,

@@ -12,8 +12,12 @@
   --text-secondary: #6c757d;
   --text-tertiary: #adb5bd;
   --border-color: #dee2e6;
-  --accent-primary: #495057;
-  --accent-hover: #343a40;
+  /* Okta Brand Colors */
+  --okta-blue: #007BBF;
+  --okta-blue-hover: #005a8f;
+  --okta-blue-light: #e6f4fa;
+  --accent-primary: #007BBF;
+  --accent-hover: #005a8f;
   --success-bg: #e7f5e9;
   --success-text: #1e4620;
   --success-border: #4a934e;
@@ -48,10 +52,10 @@ body {
 
 /* Header */
 .header {
-  background: var(--text-primary);
+  background: var(--okta-blue);
   color: white;
   padding: 16px 20px;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--okta-blue-hover);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -148,9 +152,10 @@ body {
 }
 
 .tab-button.active {
-  color: var(--text-primary);
-  border-bottom-color: var(--text-primary);
+  color: var(--okta-blue);
+  border-bottom-color: var(--okta-blue);
   background: transparent;
+  font-weight: 600;
 }
 
 /* Tab Content */
@@ -962,9 +967,10 @@ body {
 }
 
 .badge-primary {
-  background: var(--info-bg);
-  color: var(--info-text);
-  border: 1px solid var(--info-border);
+  background: var(--okta-blue-light);
+  color: var(--okta-blue);
+  border: 1px solid var(--okta-blue);
+  font-weight: 600;
 }
 
 .badge-warning {
@@ -1050,10 +1056,32 @@ body {
 }
 
 .tag-group {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border-color: var(--border-color);
+  background: var(--okta-blue-light);
+  color: var(--okta-blue);
+  border-color: var(--okta-blue);
+  font-size: 12px;
+  align-items: center;
+  gap: 4px;
+}
+
+.group-tag-wrapper {
+  display: inline-block;
+}
+
+.group-name {
+  font-weight: 600;
+}
+
+.group-id-subtle {
   font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 10px;
+  opacity: 0.7;
+  margin-left: 4px;
+}
+
+.group-id-mono {
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 11px;
 }
 
 /* Conflict Display */
