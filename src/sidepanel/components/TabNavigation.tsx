@@ -1,6 +1,6 @@
 import React from 'react';
 
-type TabType = 'operations' | 'rules';
+type TabType = 'operations' | 'rules' | 'users';
 
 interface TabNavigationProps {
   activeTab: TabType;
@@ -21,6 +21,12 @@ const TabNavigation: React.FC<TabNavigationProps> = ({ activeTab, onTabChange })
         onClick={() => onTabChange('rules')}
       >
         Rules
+      </button>
+      <button
+        className={`tab-button ${activeTab === 'users' ? 'active' : ''}`}
+        onClick={() => onTabChange('users')}
+      >
+        Users
       </button>
     </nav>
   );

@@ -112,8 +112,23 @@ export interface GroupInfo {
   groupName: string;
 }
 
+// User Membership Tracing types
+export interface UserMembershipTrace {
+  userId: string;
+  user: OktaUser;
+  groups: GroupMembership[];
+  totalGroups: number;
+}
+
+export interface GroupMembership {
+  group: OktaGroup;
+  membershipType: 'DIRECT' | 'RULE_BASED' | 'UNKNOWN';
+  rule?: OktaGroupRule;
+  addedDate?: string;
+}
+
 export interface MessageRequest {
-  action: 'getGroupInfo' | 'makeApiRequest' | 'exportGroupMembers' | 'fetchGroupRules';
+  action: 'getGroupInfo' | 'makeApiRequest' | 'exportGroupMembers' | 'fetchGroupRules' | 'searchUsers' | 'getUserGroups' | 'getUserDetails';
   endpoint?: string;
   method?: string;
   body?: any;
@@ -121,6 +136,8 @@ export interface MessageRequest {
   groupName?: string;
   format?: 'csv' | 'json';
   statusFilter?: UserStatus | '';
+  query?: string;
+  userId?: string;
 }
 
 export interface MessageResponse<T = any> extends ApiResponse<T> {

@@ -1213,3 +1213,372 @@ body {
     transform: rotate(360deg);
   }
 }
+
+/* ============================================================================
+   Users Tab Specific Styles
+   ============================================================================ */
+
+/* User Search Section */
+.user-search-section {
+  margin-bottom: 16px;
+}
+
+.search-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.search-input-group .input {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.search-input-group .btn {
+  width: auto;
+  white-space: nowrap;
+}
+
+/* User List */
+.user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.user-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.user-card.clickable {
+  cursor: pointer;
+}
+
+.user-card.clickable:hover {
+  border-color: var(--accent-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.user-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+  letter-spacing: -0.2px;
+}
+
+.user-email {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+
+.user-login {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.user-status {
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+/* Badge Styles */
+.badge {
+  display: inline-flex;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.badge-success {
+  background: var(--success-bg);
+  color: var(--success-text);
+  border: 1px solid var(--success-border);
+}
+
+.badge-error {
+  background: var(--error-bg);
+  color: var(--error-text);
+  border: 1px solid var(--error-border);
+}
+
+.badge-warning {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  border: 1px solid var(--warning-border);
+}
+
+.badge-info {
+  background: var(--info-bg);
+  color: var(--info-text);
+  border: 1px solid var(--info-border);
+}
+
+.badge-muted {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.badge-primary {
+  background: var(--okta-blue-light);
+  color: var(--okta-blue);
+  border: 1px solid var(--okta-blue);
+}
+
+/* Search Results */
+.search-results {
+  margin-top: 16px;
+}
+
+.results-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  letter-spacing: -0.2px;
+}
+
+/* Selected User Section */
+.selected-user-section {
+  margin-top: 16px;
+}
+
+.user-details-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.card-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.2px;
+}
+
+.btn-sm {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.user-details-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.detail-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  min-width: 90px;
+  flex-shrink: 0;
+}
+
+.detail-value {
+  font-size: 12px;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+/* Memberships Section */
+.memberships-section {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 14px;
+}
+
+.memberships-header {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  letter-spacing: -0.2px;
+}
+
+.memberships-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.membership-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 12px;
+  transition: all 0.15s ease;
+}
+
+.membership-card:hover {
+  border-color: var(--text-tertiary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.membership-card.current-group {
+  border-color: var(--okta-blue);
+  border-width: 2px;
+  background: var(--okta-blue-light);
+}
+
+.membership-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.membership-group-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.membership-badges {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.ml-2 {
+  margin-left: 8px;
+}
+
+.group-description {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.muted-small {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+/* Membership Rule Details */
+.membership-rule-details {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.rule-indicator {
+  font-size: 12px;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.rule-indicator strong {
+  color: var(--info-text);
+}
+
+.rule-condition {
+  background: var(--bg-secondary);
+  padding: 8px 10px;
+  border-radius: 4px;
+  margin-top: 6px;
+}
+
+.rule-condition strong {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.condition-code {
+  display: block;
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 11px;
+  color: var(--text-primary);
+  line-height: 1.5;
+  overflow-x: auto;
+  padding: 4px 0;
+}
+
+.membership-info {
+  margin-top: 8px;
+}
+
+.membership-info p {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Alert Styles */
+.alert {
+  padding: 10px 12px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  border: 1px solid;
+}
+
+.alert-error {
+  background: var(--error-bg);
+  color: var(--error-text);
+  border-color: var(--error-border);
+}
+
+.alert-warning {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  border-color: var(--warning-border);
+}
+
+.alert-success {
+  background: var(--success-bg);
+  color: var(--success-text);
+  border-color: var(--success-border);
+}
+
+.alert-info {
+  background: var(--info-bg);
+  color: var(--info-text);
+  border-color: var(--info-border);
+}
