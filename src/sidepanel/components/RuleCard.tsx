@@ -72,11 +72,25 @@ const RuleCard: React.FC<RuleCardProps> = ({ rule, onActivate, onDeactivate }) =
             <div className="rule-section">
               <div className="rule-section-label">THEN ADD TO GROUPS</div>
               <div className="rule-tags">
-                {rule.groupIds.map((groupId) => (
-                  <span key={groupId} className="tag tag-group">
-                    {rule.groupNames?.find((g) => g === groupId) || groupId.substring(0, 10)}
-                  </span>
-                ))}
+                {rule.groupIds.map((groupId, index) => {
+                  const groupName = rule.groupNames?.[index];
+                  const isNameDifferent = groupName && groupName !== groupId;
+
+                  return (
+                    <div key={groupId} className="group-tag-wrapper">
+                      <span className="tag tag-group">
+                        {isNameDifferent ? (
+                          <>
+                            <span className="group-name">{groupName}</span>
+                            <span className="group-id-subtle">({groupId.substring(0, 8)}...)</span>
+                          </>
+                        ) : (
+                          <span className="group-id-mono">{groupId}</span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
