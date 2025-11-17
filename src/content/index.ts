@@ -503,22 +503,47 @@ async function handleSearchUsers(query: string): Promise<MessageResponse> {
 
   try {
     // Okta search API supports multiple search methods
-    // We'll search by email, login, firstName, or lastName
-    const searchParam = encodeURIComponent(query);
+    const trimmedQuery = query.trim();
 
-    // Try searching with a filter for more accurate results
-    // This searches login, email, firstName, and lastName fields
-    const searchUrl = `/api/v1/users?search=${searchParam}&limit=20`;
+    // Try multiple search strategies
+    let users: OktaUser[] = [];
 
-    console.log('[Content] Searching users with URL:', searchUrl);
-    const response = await handleMakeApiRequest(searchUrl, 'GET');
+    // Strategy 1: Use 'q' parameter for flexible search (searches across multiple fields)
+    // This is more flexible than 'search' and works better for partial matches
+    const qParam = encodeURIComponent(trimmedQuery);
+    const qSearchUrl = `/api/v1/users?q=${qParam}&limit=20`;
 
-    if (!response.success) {
-      return response;
+    console.log('[Content] Searching users with q parameter:', qSearchUrl);
+    let response = await handleMakeApiRequest(qSearchUrl, 'GET');
+
+    if (response.success && response.data && response.data.length > 0) {
+      users = response.data;
+      console.log('[Content] Found', users.length, 'users with q search');
+    } else {
+      // Strategy 2: If 'q' doesn't work, try 'search' parameter (prefix search)
+      const searchParam = encodeURIComponent(trimmedQuery);
+      const searchUrl = `/api/v1/users?search=${searchParam}&limit=20`;
+
+      console.log('[Content] Trying search parameter:', searchUrl);
+      response = await handleMakeApiRequest(searchUrl, 'GET');
+
+      if (response.success && response.data) {
+        users = response.data;
+        console.log('[Content] Found', users.length, 'users with search parameter');
+      }
     }
 
-    const users: OktaUser[] = response.data || [];
-    console.log('[Content] Found', users.length, 'users');
+    // If still no results and query looks like an email, try filter
+    if (users.length === 0 && trimmedQuery.includes('@')) {
+      const filterUrl = `/api/v1/users?filter=profile.email eq "${trimmedQuery}"&limit=20`;
+      console.log('[Content] Trying email filter:', filterUrl);
+      response = await handleMakeApiRequest(filterUrl, 'GET');
+
+      if (response.success && response.data) {
+        users = response.data;
+        console.log('[Content] Found', users.length, 'users with email filter');
+      }
+    }
 
     return {
       success: true,
