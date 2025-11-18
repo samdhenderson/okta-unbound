@@ -3,6 +3,7 @@ import RuleCard from './RuleCard';
 import type { FormattedRule, RuleConflict } from '../../shared/types';
 import { filterRules } from '../../shared/ruleUtils';
 import { useProgress } from '../contexts/ProgressContext';
+import { logAction } from '../../shared/undoManager';
 
 interface RulesTabProps {
   targetTabId?: number;
@@ -130,12 +131,24 @@ const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId, oktaOr
 
     try {
       console.log('[RulesTab] Activating rule:', ruleId);
+
+      // Find the rule to get its name for undo logging
+      const rule = rules.find(r => r.id === ruleId);
+      const ruleName = rule?.name || 'Unknown Rule';
+
       const response = await chrome.tabs.sendMessage(targetTabId, {
         action: 'activateRule',
         ruleId,
       });
 
       if (response.success) {
+        // Log undo action
+        await logAction(`Activated rule: ${ruleName}`, {
+          type: 'ACTIVATE_RULE',
+          ruleId,
+          ruleName,
+        });
+
         // Reload rules to get updated status
         await handleLoadRules();
       } else {
@@ -152,12 +165,24 @@ const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId, oktaOr
 
     try {
       console.log('[RulesTab] Deactivating rule:', ruleId);
+
+      // Find the rule to get its name for undo logging
+      const rule = rules.find(r => r.id === ruleId);
+      const ruleName = rule?.name || 'Unknown Rule';
+
       const response = await chrome.tabs.sendMessage(targetTabId, {
         action: 'deactivateRule',
         ruleId,
       });
 
       if (response.success) {
+        // Log undo action
+        await logAction(`Deactivated rule: ${ruleName}`, {
+          type: 'DEACTIVATE_RULE',
+          ruleId,
+          ruleName,
+        });
+
         // Reload rules to get updated status
         await handleLoadRules();
       } else {

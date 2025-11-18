@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { MessageRequest, MessageResponse, OktaUser, UserStatus } from '../../shared/types';
+import { logAction } from '../../shared/undoManager';
 
 interface UseOktaApiOptions {
   targetTabId: number | null;
@@ -85,8 +86,25 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
   );
 
   const removeUserFromGroup = useCallback(
-    async (groupId: string, userId: string) => {
-      return makeApiRequest(`/api/v1/groups/${groupId}/users/${userId}`, 'DELETE');
+    async (groupId: string, groupName: string, user: OktaUser) => {
+      const result = await makeApiRequest(`/api/v1/groups/${groupId}/users/${user.id}`, 'DELETE');
+
+      // Log undo action if successful
+      if (result.success) {
+        await logAction(
+          `Removed ${user.profile.firstName} ${user.profile.lastName} from ${groupName}`,
+          {
+            type: 'REMOVE_USER_FROM_GROUP',
+            userId: user.id,
+            userEmail: user.profile.email,
+            userName: `${user.profile.firstName} ${user.profile.lastName}`,
+            groupId,
+            groupName,
+          }
+        );
+      }
+
+      return result;
     },
     [makeApiRequest]
   );
@@ -103,6 +121,8 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
           onResult?.('ERROR: Cannot modify APP_GROUP', 'error');
           return;
         }
+
+        const groupName = groupDetails.data?.profile?.name || 'Unknown Group';
 
         // Fetch all members
         const members = await getAllGroupMembers(groupId);
@@ -123,7 +143,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
           const user = deprovisionedUsers[i];
           onProgress?.(i + 1, deprovisionedUsers.length, `Removing user ${i + 1} of ${deprovisionedUsers.length}`);
 
-          const result = await removeUserFromGroup(groupId, user.id);
+          const result = await removeUserFromGroup(groupId, groupName, user);
 
           if (result.success) {
             removed++;
@@ -173,6 +193,8 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
           return;
         }
 
+        const groupName = groupDetails.data?.profile?.name || 'Unknown Group';
+
         // Fetch all members
         const members = await getAllGroupMembers(groupId);
         const inactiveStatuses: UserStatus[] = ['DEPROVISIONED', 'SUSPENDED', 'LOCKED_OUT'];
@@ -201,7 +223,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
           const user = inactiveUsers[i];
           onProgress?.(i + 1, inactiveUsers.length, `Removing user ${i + 1} of ${inactiveUsers.length}`);
 
-          const result = await removeUserFromGroup(groupId, user.id);
+          const result = await removeUserFromGroup(groupId, groupName, user);
 
           if (result.success) {
             removed++;
@@ -237,6 +259,10 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
         setIsLoading(true);
         onResult?.(`Starting: ${action === 'remove' ? 'Remove' : 'List'} users with status ${targetStatus}`, 'info');
 
+        // Get group name for undo logging
+        const groupDetails = await makeApiRequest(`/api/v1/groups/${groupId}`);
+        const groupName = groupDetails.data?.profile?.name || 'Unknown Group';
+
         const members = await getAllGroupMembers(groupId);
         const filteredUsers = members.filter((u) => u.status === targetStatus);
 
@@ -261,7 +287,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
             const user = filteredUsers[i];
             onProgress?.(i + 1, filteredUsers.length, `Removing user ${i + 1} of ${filteredUsers.length}`);
 
-            const result = await removeUserFromGroup(groupId, user.id);
+            const result = await removeUserFromGroup(groupId, groupName, user);
             if (result.success) {
               removed++;
               onResult?.(`Removed: ${user.profile.login}`, 'success');
@@ -280,7 +306,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
         onProgress?.(100, 100, 'Complete');
       }
     },
-    [getAllGroupMembers, removeUserFromGroup, onResult, onProgress]
+    [makeApiRequest, getAllGroupMembers, removeUserFromGroup, onResult, onProgress]
   );
 
   const exportMembers = useCallback(

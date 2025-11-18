@@ -124,18 +124,39 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId }) => {
     rules: OktaGroupRule[],
     user: OktaUser
   ): GroupMembership[] => {
+    console.log('[UsersTab] Analyzing memberships for user:', user.id);
+    console.log('[UsersTab] Total rules:', rules.length, 'Active rules:', rules.filter(r => r.status === 'ACTIVE').length);
+    console.log('[UsersTab] Total groups:', groups.length);
+
     return groups.map(group => {
-      // Find rules that assign users to this group
-      const matchingRule = rules.find(rule => {
+      // Find ACTIVE rules that assign users to this group
+      const matchingRules = rules.filter(rule => {
         if (rule.status !== 'ACTIVE') return false;
 
         const groupIds = rule.actions?.assignUserToGroups?.groupIds || [];
         return groupIds.includes(group.id);
       });
 
+      console.log(`[UsersTab] Group "${group.profile.name}": Found ${matchingRules.length} matching rules`);
+
+      // If multiple rules match, pick the first one
+      const matchingRule = matchingRules.length > 0 ? matchingRules[0] : undefined;
+
+      // Determine membership type
+      // Note: Okta doesn't provide a direct way to distinguish between direct and rule-based membership
+      // We use a heuristic: if an ACTIVE rule assigns to this group, assume it's rule-based
+      // This is generally accurate because Okta rules automatically manage memberships
+      const membershipType = matchingRule ? 'RULE_BASED' : 'DIRECT';
+
+      if (matchingRule) {
+        console.log(`[UsersTab] Group "${group.profile.name}": Identified as RULE_BASED (rule: ${matchingRule.name})`);
+      } else {
+        console.log(`[UsersTab] Group "${group.profile.name}": Identified as DIRECT`);
+      }
+
       return {
         group: group,
-        membershipType: matchingRule ? 'RULE_BASED' : 'DIRECT',
+        membershipType,
         rule: matchingRule,
       };
     });

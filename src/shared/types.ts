@@ -172,3 +172,6 @@ export interface ProgressCallback {
 }
 
 export type ResultType = 'info' | 'success' | 'warning' | 'error';
+
+// Re-export undo types for convenience
+export type { UndoAction, UndoActionMetadata, UndoHistory, UndoResult } from './undoTypes';
