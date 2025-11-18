@@ -1,6 +1,6 @@
 import React from 'react';
 
-type TabType = 'operations' | 'rules' | 'users';
+type TabType = 'operations' | 'rules' | 'users' | 'undo';
 
 interface TabNavigationProps {
   activeTab: TabType;
@@ -27,6 +27,12 @@ const TabNavigation: React.FC<TabNavigationProps> = ({ activeTab, onTabChange })
         onClick={() => onTabChange('users')}
       >
         Users
+      </button>
+      <button
+        className={`tab-button ${activeTab === 'undo' ? 'active' : ''}`}
+        onClick={() => onTabChange('undo')}
+      >
+        Undo
       </button>
     </nav>
   );

@@ -2,6 +2,7 @@
 // Runs on Okta pages and handles API requests with proper session authentication
 
 import type { MessageRequest, MessageResponse, OktaUser, GroupInfo, ApiResponse } from '../shared/types';
+import { getCacheEntry, setCacheEntry } from '../shared/cache';
 
 console.log('[Content] Content script loaded', {
   url: window.location.href,
@@ -328,23 +329,49 @@ async function handleFetchGroupRules(): Promise<MessageResponse> {
       groupIds.forEach((id: string) => allGroupIds.add(id));
     });
 
-    // Fetch group details for all group IDs
+    // Fetch group details for all group IDs in parallel (optimized)
     const groupNameMap = new Map<string, string>();
-    console.log('[Content] Fetching names for', allGroupIds.size, 'groups');
+    console.log('[Content] Fetching names for', allGroupIds.size, 'groups in parallel');
 
-    for (const groupId of allGroupIds) {
+    // Create an array of promises to fetch all groups in parallel with caching
+    const groupFetchPromises = Array.from(allGroupIds).map(async (groupId) => {
       try {
+        // Check cache first
+        const cacheKey = `group_name_${groupId}`;
+        const cachedName = await getCacheEntry<string>(cacheKey);
+
+        if (cachedName) {
+          console.log('[Content] Using cached name for group:', groupId);
+          return { groupId, name: cachedName };
+        }
+
+        // Fetch from API if not cached
         const groupResponse = await handleMakeApiRequest(`/api/v1/groups/${groupId}`, 'GET');
         if (groupResponse.success && groupResponse.data?.profile?.name) {
-          groupNameMap.set(groupId, groupResponse.data.profile.name);
+          const groupName = groupResponse.data.profile.name;
+
+          // Cache the result (5 minute TTL)
+          await setCacheEntry(cacheKey, groupName, { ttl: 5 * 60 * 1000 });
+
+          return { groupId, name: groupName };
         }
       } catch (err) {
         console.warn('[Content] Failed to fetch group name for', groupId, err);
-        // Continue with other groups even if one fails
       }
-    }
+      return null;
+    });
 
-    console.log('[Content] Successfully fetched', groupNameMap.size, 'group names');
+    // Wait for all group fetches to complete
+    const groupResults = await Promise.all(groupFetchPromises);
+
+    // Populate the map with successful results
+    groupResults.forEach((result) => {
+      if (result) {
+        groupNameMap.set(result.groupId, result.name);
+      }
+    });
+
+    console.log('[Content] Successfully fetched', groupNameMap.size, 'group names (parallel fetch with caching)');
 
     // Calculate stats
     const activeRules = rules.filter((r) => r.status === 'ACTIVE');

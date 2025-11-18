@@ -147,12 +147,13 @@ const RuleCard: React.FC<RuleCardProps> = ({ rule, onActivate, onDeactivate, okt
             )}
             {oktaOrigin && (
               <a
-                href={`${oktaOrigin}/admin/groups/rules/${rule.id}`}
+                href={`${oktaOrigin}/admin/groups#rules`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn btn-secondary btn-sm"
+                title="Open Rules page in Okta Admin Console (you can search for this rule by name)"
               >
-                Edit in Okta →
+                View in Okta →
               </a>
             )}
           </div>

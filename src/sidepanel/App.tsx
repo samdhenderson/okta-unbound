@@ -5,10 +5,11 @@ import TabNavigation from './components/TabNavigation';
 import OperationsTab from './components/OperationsTab';
 import RulesTab from './components/RulesTab';
 import UsersTab from './components/UsersTab';
+import UndoPanel from './components/UndoPanel';
 import LoadingBar from './components/LoadingBar';
 import { useGroupContext } from './hooks/useGroupContext';
 
-type TabType = 'operations' | 'rules' | 'users';
+type TabType = 'operations' | 'rules' | 'users' | 'undo';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('operations');
@@ -54,6 +55,21 @@ const App: React.FC = () => {
           targetTabId={targetTabId}
           currentGroupId={groupInfo?.groupId}
         />
+      )}
+      {activeTab === 'undo' && (
+        <div className="tab-content active">
+          <div className="section">
+            <div className="section-header">
+              <div>
+                <h2>Undo History</h2>
+                <p className="section-description">
+                  Reverse recent actions (up to 10)
+                </p>
+              </div>
+            </div>
+            <UndoPanel targetTabId={targetTabId} />
+          </div>
+        </div>
       )}
 
       {/* Global Loading Bar - appears at bottom of all pages */}
