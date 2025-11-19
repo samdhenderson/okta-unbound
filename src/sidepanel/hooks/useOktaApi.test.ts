@@ -340,13 +340,19 @@ describe('useOktaApi', () => {
         },
       ];
 
+      // Mock getCurrentUser
+      mockRuntimeSendMessage.mockResolvedValueOnce({
+        success: true,
+        data: { email: 'admin@example.com', id: 'admin1', profile: { email: 'admin@example.com' } },
+      });
+
       // Mock group details
       mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: { type: 'OKTA_GROUP', profile: { name: 'Test Group' } },
       });
 
-      // Mock getAllGroupMembers
+      // Mock getAllGroupMembers (single page)
       mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: mockUsers,
@@ -396,13 +402,19 @@ describe('useOktaApi', () => {
         },
       ];
 
+      // Mock getCurrentUser
+      mockRuntimeSendMessage.mockResolvedValueOnce({
+        success: true,
+        data: { email: 'admin@example.com', id: 'admin1', profile: { email: 'admin@example.com' } },
+      });
+
       // Mock group details
       mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: { type: 'OKTA_GROUP', profile: { name: 'Test Group' } },
       });
 
-      // Mock getAllGroupMembers
+      // Mock getAllGroupMembers (single page)
       mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: mockUsers,
@@ -433,10 +445,16 @@ describe('useOktaApi', () => {
       });
 
       // Should only attempt to remove one user due to 403 stopping
-      expect(mockRuntimeSendMessage).toHaveBeenCalledTimes(3); // group details + get members + 1 remove attempt
+      expect(mockRuntimeSendMessage).toHaveBeenCalledTimes(4); // getCurrentUser + group details + get members + 1 remove attempt
     });
 
     it('should not allow modification of APP_GROUP', async () => {
+      // Mock getCurrentUser
+      mockRuntimeSendMessage.mockResolvedValueOnce({
+        success: true,
+        data: { email: 'admin@example.com', id: 'admin1', profile: { email: 'admin@example.com' } },
+      });
+
       // Mock APP_GROUP
       mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
@@ -470,13 +488,19 @@ describe('useOktaApi', () => {
         },
       }));
 
+      // Mock getCurrentUser
+      mockRuntimeSendMessage.mockResolvedValueOnce({
+        success: true,
+        data: { email: 'admin@example.com', id: 'admin1', profile: { email: 'admin@example.com' } },
+      });
+
       // Mock group details
       mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: { type: 'OKTA_GROUP', profile: { name: 'Test Group' } },
       });
 
-      // Mock getAllGroupMembers
+      // Mock getAllGroupMembers (single page)
       mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: mockUsers,
@@ -505,7 +529,7 @@ describe('useOktaApi', () => {
 
       vi.useRealTimers();
 
-      expect(mockRuntimeSendMessage).toHaveBeenCalledTimes(5); // group + members + 3 removes
+      expect(mockRuntimeSendMessage).toHaveBeenCalledTimes(6); // getCurrentUser + group + members + 3 removes
     });
   });
 
@@ -554,13 +578,19 @@ describe('useOktaApi', () => {
         },
       ];
 
+      // Mock getCurrentUser
+      mockRuntimeSendMessage.mockResolvedValueOnce({
+        success: true,
+        data: { email: 'admin@example.com', id: 'admin1', profile: { email: 'admin@example.com' } },
+      });
+
       // Mock group details
       mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: { type: 'OKTA_GROUP', profile: { name: 'Test Group' } },
       });
 
-      // Mock getAllGroupMembers
+      // Mock getAllGroupMembers (single page)
       mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: mockUsers,
@@ -619,13 +649,19 @@ describe('useOktaApi', () => {
         },
       ];
 
+      // Mock getCurrentUser
+      mockRuntimeSendMessage.mockResolvedValueOnce({
+        success: true,
+        data: { email: 'admin@example.com', id: 'admin1', profile: { email: 'admin@example.com' } },
+      });
+
       // Mock group details
       mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: { type: 'OKTA_GROUP', profile: { name: 'Test Group' } },
       });
 
-      // Mock getAllGroupMembers
+      // Mock getAllGroupMembers (single page)
       mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: mockUsers,
@@ -662,13 +698,19 @@ describe('useOktaApi', () => {
         },
       ];
 
+      // Mock getCurrentUser
+      mockRuntimeSendMessage.mockResolvedValueOnce({
+        success: true,
+        data: { email: 'admin@example.com', id: 'admin1', profile: { email: 'admin@example.com' } },
+      });
+
       // Mock group details
       mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: { type: 'OKTA_GROUP', profile: { name: 'Test Group' } },
       });
 
-      // Mock getAllGroupMembers
+      // Mock getAllGroupMembers (single page)
       mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: mockUsers,
