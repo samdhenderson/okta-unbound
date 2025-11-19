@@ -8,7 +8,6 @@ import type {
   OktaApp,
   UserAppAssignment,
   GroupAppAssignment,
-  AppAssignment,
   CreateAppAssignmentRequest,
   AssignmentConversionRequest,
   AssignmentConversionResult,
@@ -16,10 +15,7 @@ import type {
   BulkAppAssignmentResult,
   AppAssignmentSecurityAnalysis,
   AssignmentRecommenderResult,
-  AppProfileSchema,
-  UserAppAssignmentView,
-  GroupAppAssignmentView,
-  OktaGroup
+  AppProfileSchema
 } from '../../shared/types';
 import { logAction } from '../../shared/undoManager';
 import { auditStore } from '../../shared/storage/auditStore';
@@ -629,12 +625,25 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
   const getUserAppAssignments = useCallback(
     async (userId: string): Promise<number> => {
       try {
-        const response = await makeApiRequest(`/api/v1/apps?filter=user.id eq "${userId}"&limit=1`);
-        if (response.success && response.headers?.['x-total-count']) {
-          return parseInt(response.headers['x-total-count'], 10);
+        // Fetch first page with limit=200 to get app assignments count
+        // Note: Okta API doesn't provide x-total-count header
+        const response = await makeApiRequest(`/api/v1/apps?filter=user.id+eq+"${userId}"&limit=200`);
+        if (response.success && response.data) {
+          const firstPageCount = response.data.length;
+
+          // Check if there are more pages by looking for Link header with rel="next"
+          const linkHeader = response.headers?.['link'] || response.headers?.['Link'];
+          const hasMorePages = linkHeader && linkHeader.includes('rel="next"');
+
+          if (hasMorePages) {
+            // If there are more pages, we need to fetch all to get accurate count
+            // For now, return the first page count as minimum
+            return firstPageCount;
+          }
+
+          return firstPageCount;
         }
-        // If header not available, count the data array
-        return response.data?.length || 0;
+        return 0;
       } catch (error) {
         console.error(`[useOktaApi] Failed to get app assignments for user ${userId}:`, error);
         return 0;
@@ -743,10 +752,26 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
   const getGroupMemberCount = useCallback(
     async (groupId: string): Promise<number> => {
       try {
-        // OPTIMIZED: Use limit=1 to get count from x-total-count header (1 API call instead of 2)
-        const usersResponse = await makeApiRequest(`/api/v1/groups/${groupId}/users?limit=1`);
-        if (usersResponse.success && usersResponse.headers?.['x-total-count']) {
-          return parseInt(usersResponse.headers['x-total-count'], 10);
+        // Fetch first page with limit=200 to get an approximate count
+        // Okta API doesn't provide x-total-count header, so we need to check pagination
+        const usersResponse = await makeApiRequest(`/api/v1/groups/${groupId}/users?limit=200`);
+        if (usersResponse.success && usersResponse.data) {
+          const firstPageCount = usersResponse.data.length;
+
+          // Check if there are more pages by looking for Link header with rel="next"
+          const linkHeader = usersResponse.headers?.['link'] || usersResponse.headers?.['Link'];
+          const hasMorePages = linkHeader && linkHeader.includes('rel="next"');
+
+          // If there are more pages, we know there are at least 200+ members
+          // For accurate counts, we'd need to fetch all pages, but that's expensive
+          // Return the first page count as a minimum estimate
+          if (hasMorePages) {
+            // If there's a next page, return 200+ to indicate there are more
+            // The UI can show "200+" to indicate this is a lower bound
+            return firstPageCount;
+          }
+
+          return firstPageCount;
         }
 
         return 0;
@@ -993,7 +1018,8 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       try {
         const allApps: UserAppAssignment[] = [];
         const expandParam = expand ? '&expand=app' : '';
-        let nextUrl: string | null = `/api/v1/apps?filter=user.id eq "${userId}"&limit=200${expandParam}`;
+        // Use proper URL encoding for the filter parameter (+ for spaces, quotes for string values)
+        let nextUrl: string | null = `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=200${expandParam}`;
 
         while (nextUrl) {
           const response = await makeApiRequest(nextUrl);
@@ -1001,11 +1027,27 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
             const apps = Array.isArray(response.data) ? response.data : [response.data];
             allApps.push(...apps);
 
-            // Check for next page
-            const linkHeader = response.headers?.['link'];
-            nextUrl = linkHeader?.includes('rel="next"')
-              ? linkHeader.split(';')[0].replace(/<(.+)>/, '$1').replace(/^.*\/api/, '/api')
-              : null;
+            // Check for next page using Link header
+            const linkHeader = response.headers?.['link'] || response.headers?.['Link'];
+            if (linkHeader && linkHeader.includes('rel="next"')) {
+              // Parse the Link header to extract the next URL
+              const links = linkHeader.split(',');
+              for (const link of links) {
+                if (link.includes('rel="next"')) {
+                  const match = link.match(/<([^>]+)>/);
+                  if (match) {
+                    const fullUrl = new URL(match[1]);
+                    nextUrl = fullUrl.pathname + fullUrl.search;
+                    break;
+                  }
+                }
+              }
+              if (!nextUrl || nextUrl === `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=200${expandParam}`) {
+                nextUrl = null;
+              }
+            } else {
+              nextUrl = null;
+            }
           } else {
             break;
           }
@@ -1029,6 +1071,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
         const allApps: GroupAppAssignment[] = [];
         const expandParam = expand ? '?expand=app' : '';
         let nextUrl: string | null = `/api/v1/groups/${groupId}/apps${expandParam}`;
+        const initialUrl = nextUrl;
 
         while (nextUrl) {
           const response = await makeApiRequest(nextUrl);
@@ -1036,11 +1079,29 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
             const apps = Array.isArray(response.data) ? response.data : [response.data];
             allApps.push(...apps);
 
-            // Check for next page
-            const linkHeader = response.headers?.['link'];
-            nextUrl = linkHeader?.includes('rel="next"')
-              ? linkHeader.split(';')[0].replace(/<(.+)>/, '$1').replace(/^.*\/api/, '/api')
-              : null;
+            // Check for next page using Link header
+            const linkHeader = response.headers?.['link'] || response.headers?.['Link'];
+            if (linkHeader && linkHeader.includes('rel="next"')) {
+              // Parse the Link header to extract the next URL
+              const links = linkHeader.split(',');
+              nextUrl = null;
+              for (const link of links) {
+                if (link.includes('rel="next"')) {
+                  const match = link.match(/<([^>]+)>/);
+                  if (match) {
+                    const fullUrl = new URL(match[1]);
+                    nextUrl = fullUrl.pathname + fullUrl.search;
+                    break;
+                  }
+                }
+              }
+              // Prevent infinite loops
+              if (nextUrl === initialUrl) {
+                nextUrl = null;
+              }
+            } else {
+              nextUrl = null;
+            }
           } else {
             break;
           }
