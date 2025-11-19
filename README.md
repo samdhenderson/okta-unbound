@@ -3,8 +3,10 @@
 **Advanced group and user management for Okta administrators**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](manifest.json)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](manifest.json)
 [![Chrome](https://img.shields.io/badge/chrome-extension-green.svg)](https://www.google.com/chrome/)
+[![CI](https://github.com/samdhenderson/okta-unbound/actions/workflows/ci.yml/badge.svg)](https://github.com/samdhenderson/okta-unbound/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/samdhenderson/okta-unbound/branch/main/graph/badge.svg)](https://codecov.io/gh/samdhenderson/okta-unbound)
 
 ![Okta Unbound Features](assets/images/promo.png)
 
@@ -237,10 +239,50 @@ To add new operations:
 4. Update the results display with `addResult()`
 
 ### Testing
+
+We maintain comprehensive test coverage using Vitest, React Testing Library, and MSW for API mocking.
+
+#### Running Tests
+
+```bash
+# Run tests in watch mode
+npm test
+
+# Run tests once with coverage
+npm run test:coverage
+
+# Run tests with UI
+npm run test:ui
+
+# Run specific test file
+npm test -- src/shared/ruleUtils.test.ts
+```
+
+#### Test Coverage
+
+Current coverage: **80%+** for critical paths including:
+- Utility functions (rule conflict detection, pagination, etc.)
+- React hooks (useOktaApi, useGroupContext)
+- Core business logic
+
+View detailed coverage reports after running `npm run test:coverage` in `coverage/index.html`.
+
+#### Pre-commit Hooks
+
+Husky automatically runs linting and affected tests before each commit:
+```bash
+git commit  # Automatically runs eslint --fix and vitest related
+```
+
+For more details, see [TESTING.md](./TESTING.md).
+
+### Manual Testing in Chrome
+
 1. Make changes to the code
-2. Go to `chrome://extensions/`
-3. Click the refresh icon on the extension card
-4. Test on an Okta group page
+2. Run `npm run build` to rebuild the extension
+3. Go to `chrome://extensions/`
+4. Click the refresh icon on the extension card
+5. Test on an Okta group page
 
 ## Security Considerations
 

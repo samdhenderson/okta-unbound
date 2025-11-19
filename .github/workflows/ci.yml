@@ -1,61 +1,127 @@
-# Continuous Integration Workflow
-# This workflow runs basic checks on pull requests and pushes
-
 name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: ['**']
   pull_request:
-    branches: [ main, develop ]
+    branches: ['**']
 
 jobs:
-  validate:
+  quality:
+    name: Code Quality
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '18'
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
 
-    - name: Validate manifest.json
-      run: |
-        echo "Validating manifest.json..."
-        node -e "JSON.parse(require('fs').readFileSync('manifest.json', 'utf8'))"
-        echo "✅ manifest.json is valid JSON"
+      - name: Install dependencies
+        run: npm ci
 
-    - name: Check required files exist
-      run: |
-        echo "Checking required files..."
-        test -f README.md || (echo "❌ README.md missing" && exit 1)
-        test -f LICENSE || (echo "❌ LICENSE missing" && exit 1)
-        test -f manifest.json || (echo "❌ manifest.json missing" && exit 1)
-        test -f src/popup.html || (echo "❌ src/popup.html missing" && exit 1)
-        test -f src/popup.js || (echo "❌ src/popup.js missing" && exit 1)
-        test -f src/popup.css || (echo "❌ src/popup.css missing" && exit 1)
-        test -f src/content.js || (echo "❌ src/content.js missing" && exit 1)
-        test -f src/background.js || (echo "❌ src/background.js missing" && exit 1)
-        echo "✅ All required files present"
+      - name: Run ESLint
+        run: npm run lint
 
-    - name: Check file structure
-      run: |
-        echo "Checking directory structure..."
-        test -d assets/icons || (echo "❌ assets/icons directory missing" && exit 1)
-        test -d src || (echo "❌ src directory missing" && exit 1)
-        test -d docs || (echo "❌ docs directory missing" && exit 1)
-        echo "✅ Directory structure valid"
+      - name: Run type check
+        run: npm run type-check
 
-    - name: Verify icon files
-      run: |
-        echo "Checking icon files..."
-        test -f assets/icons/icon16.png || (echo "❌ icon16.png missing" && exit 1)
-        test -f assets/icons/icon48.png || (echo "❌ icon48.png missing" && exit 1)
-        test -f assets/icons/icon128.png || (echo "❌ icon128.png missing" && exit 1)
-        echo "✅ All icon files present"
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
 
-    - name: Success
-      run: echo "🎉 All CI checks passed!"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests with coverage
+        run: npm run test:coverage
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-okta-unbound
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 30
+
+  build:
+    name: Build Extension
+    runs-on: ubuntu-latest
+    needs: [quality, test]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build extension
+        run: npm run build
+
+      - name: Verify build artifacts
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "Error: dist directory not found"
+            exit 1
+          fi
+          if [ ! -f "dist/manifest.json" ]; then
+            echo "Error: manifest.json not found in dist"
+            exit 1
+          fi
+          echo "Build artifacts verified successfully"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-build
+          path: dist/
+          retention-days: 30
+
+  all-checks:
+    name: All Checks Passed
+    runs-on: ubuntu-latest
+    needs: [quality, test, build]
+    if: always()
+
+    steps:
+      - name: Check all jobs
+        run: |
+          if [[ "${{ needs.quality.result }}" != "success" ]] || \
+             [[ "${{ needs.test.result }}" != "success" ]] || \
+             [[ "${{ needs.build.result }}" != "success" ]]; then
+            echo "One or more checks failed"
+            exit 1
+          fi
+          echo "All checks passed successfully!"
