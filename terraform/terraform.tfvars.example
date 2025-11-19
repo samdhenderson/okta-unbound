@@ -1,0 +1,7 @@
+# Example Terraform variables file
+# Copy this file to terraform.tfvars and fill in your actual values
+# DO NOT commit terraform.tfvars to version control!
+
+okta_org_name  = "dev-123456"        # Your Okta org name (from https://dev-123456.okta.com)
+okta_base_url  = "okta.com"          # Base URL: okta.com, oktapreview.com, or okta-emea.com
+okta_api_token = "your-api-token-here"  # Generate from Okta Admin Console > Security > API > Tokens
