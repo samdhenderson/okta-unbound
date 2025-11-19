@@ -10,6 +10,61 @@ interface RuleCardProps {
   isHighlighted?: boolean;
 }
 
+// Helper function to render condition expression with group name badges
+const renderConditionWithGroupBadges = (
+  expression: string,
+  groupIds: string[],
+  groupNames?: string[]
+): React.ReactNode => {
+  // Create a map of groupId -> groupName for quick lookup
+  const groupMap = new Map<string, string>();
+  groupIds.forEach((id, index) => {
+    const name = groupNames?.[index];
+    if (name && name !== id) {
+      groupMap.set(id, name);
+    }
+  });
+
+  // Find all group IDs in the expression (Okta group IDs are 20 characters alphanumeric)
+  const groupIdPattern = /\b00g[a-zA-Z0-9]{17}\b/g;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = groupIdPattern.exec(expression)) !== null) {
+    const groupId = match[0];
+    const groupName = groupMap.get(groupId);
+
+    // Add text before the group ID
+    if (match.index > lastIndex) {
+      parts.push(expression.substring(lastIndex, match.index));
+    }
+
+    // Add the group ID with badge if name exists
+    if (groupName) {
+      parts.push(
+        <React.Fragment key={`${groupId}-${match.index}`}>
+          <span className="group-id-in-condition">{groupId}</span>
+          <span className="group-badge-inline" title={`Group: ${groupName}`}>
+            {groupName}
+          </span>
+        </React.Fragment>
+      );
+    } else {
+      parts.push(groupId);
+    }
+
+    lastIndex = match.index + groupId.length;
+  }
+
+  // Add remaining text
+  if (lastIndex < expression.length) {
+    parts.push(expression.substring(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : expression;
+};
+
 const RuleCard: React.FC<RuleCardProps> = ({
   rule,
   onActivate,
@@ -64,7 +119,13 @@ const RuleCard: React.FC<RuleCardProps> = ({
           <div className="rule-section">
             <div className="rule-section-label">WHEN</div>
             <div className="rule-condition">
-              <code>{rule.conditionExpression || rule.condition}</code>
+              <code>
+                {renderConditionWithGroupBadges(
+                  rule.conditionExpression || rule.condition,
+                  rule.groupIds,
+                  rule.groupNames
+                )}
+              </code>
             </div>
           </div>
 
