@@ -18,6 +18,7 @@ const SELECTED_TAB_KEY = 'okta_unbound_selected_tab';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
   const { groupInfo, connectionStatus, targetTabId, error, isLoading, oktaOrigin } = useGroupContext();
 
   // Load saved tab preference on mount
@@ -33,6 +34,13 @@ const App: React.FC = () => {
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     chrome.storage.local.set({ [SELECTED_TAB_KEY]: tab });
+  };
+
+  // Navigate to a specific rule in the rules tab
+  const handleNavigateToRule = (ruleId: string) => {
+    setSelectedRuleId(ruleId);
+    setActiveTab('rules');
+    chrome.storage.local.set({ [SELECTED_TAB_KEY]: 'rules' });
   };
 
   useEffect(() => {
@@ -77,12 +85,15 @@ const App: React.FC = () => {
           targetTabId={targetTabId}
           currentGroupId={groupInfo?.groupId}
           oktaOrigin={oktaOrigin}
+          selectedRuleId={selectedRuleId}
+          onRuleSelected={() => setSelectedRuleId(null)}
         />
       )}
       {activeTab === 'users' && (
         <UsersTab
           targetTabId={targetTabId}
           currentGroupId={groupInfo?.groupId}
+          onNavigateToRule={handleNavigateToRule}
         />
       )}
       {activeTab === 'security' && (

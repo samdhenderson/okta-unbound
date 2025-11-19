@@ -5,16 +5,25 @@ import { filterRules } from '../../shared/ruleUtils';
 import { useProgress } from '../contexts/ProgressContext';
 import { logAction } from '../../shared/undoManager';
 import { auditStore } from '../../shared/storage/auditStore';
+import { RulesCache } from '../../shared/rulesCache';
 
 interface RulesTabProps {
   targetTabId?: number;
   currentGroupId?: string;
   oktaOrigin?: string | null;
+  selectedRuleId?: string | null;
+  onRuleSelected?: () => void;
 }
 
 type FilterType = 'all' | 'active' | 'conflicts' | 'current-group';
 
-const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId, oktaOrigin }) => {
+const RulesTab: React.FC<RulesTabProps> = ({
+  targetTabId,
+  currentGroupId,
+  oktaOrigin,
+  selectedRuleId,
+  onRuleSelected
+}) => {
   const [rules, setRules] = useState<FormattedRule[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,6 +53,25 @@ const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId, oktaOr
     loadPersistedRules();
   }, []);
 
+  // Handle selectedRuleId navigation
+  useEffect(() => {
+    if (selectedRuleId && rules.length > 0) {
+      console.log('[RulesTab] Navigating to rule:', selectedRuleId);
+
+      // Find the rule and scroll to it
+      const ruleElement = document.querySelector(`[data-rule-id="${selectedRuleId}"]`);
+      if (ruleElement) {
+        ruleElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Clear the selection after a delay
+        setTimeout(() => {
+          onRuleSelected?.();
+        }, 2000);
+      } else {
+        console.warn('[RulesTab] Rule not found in DOM:', selectedRuleId);
+      }
+    }
+  }, [selectedRuleId, rules, onRuleSelected]);
+
   // Persist rules to chrome.storage whenever they change
   useEffect(() => {
     if (rules.length > 0) {
@@ -65,7 +93,7 @@ const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId, oktaOr
     }
   }, [rules, stats]);
 
-  const handleLoadRules = async () => {
+  const handleLoadRules = async (force: boolean = false) => {
     if (!targetTabId) {
       setError('No Okta tab connected');
       return;
@@ -84,6 +112,22 @@ const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId, oktaOr
       // Track API requests made
       let apiRequestCount = 0;
 
+      // OPTIMIZED: Check global cache first (unless forced refresh)
+      if (!force) {
+        const cached = await RulesCache.get();
+        if (cached) {
+          console.log('[RulesTab] Using cached rules from global cache');
+          setRules(cached.rules);
+          setStats(cached.stats);
+          setLastFetchTime(new Date(cached.timestamp).toISOString());
+          setApiCost(0); // No API calls needed
+          updateProgress(1, 1, `Loaded ${cached.rules.length} rules from cache`);
+          setTimeout(() => completeProgress(), 500);
+          setIsLoading(false);
+          return;
+        }
+      }
+
       const response = await chrome.tabs.sendMessage(targetTabId, {
         action: 'fetchGroupRules',
       });
@@ -97,6 +141,14 @@ const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId, oktaOr
         setRules(response.rules || []);
         setStats(response.stats || { total: 0, active: 0, inactive: 0, conflicts: 0 });
         setLastFetchTime(new Date().toISOString());
+
+        // OPTIMIZED: Populate global cache for other components to use
+        await RulesCache.set(
+          response.rules || [],
+          [], // rawRules not available from formatted response
+          response.stats || { total: 0, active: 0, inactive: 0, conflicts: 0 },
+          response.conflicts || []
+        );
 
         // Calculate actual API cost based on response metadata
         // The content script makes 1 request for rules fetch
@@ -401,7 +453,7 @@ const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId, oktaOr
           </div>
           <button
             className="btn btn-primary"
-            onClick={handleLoadRules}
+            onClick={() => handleLoadRules(rules.length > 0)}
             disabled={isLoading}
           >
             {isLoading ? 'Loading...' : rules.length > 0 ? 'Refresh Rules' : 'Load Rules'}
@@ -518,13 +570,15 @@ const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId, oktaOr
           ) : (
             <div className="rules-list">
               {filteredRules.map((rule) => (
-                <RuleCard
-                  key={rule.id}
-                  rule={rule}
-                  onActivate={handleActivateRule}
-                  onDeactivate={handleDeactivateRule}
-                  oktaOrigin={oktaOrigin}
-                />
+                <div key={rule.id} data-rule-id={rule.id}>
+                  <RuleCard
+                    rule={rule}
+                    onActivate={handleActivateRule}
+                    onDeactivate={handleDeactivateRule}
+                    oktaOrigin={oktaOrigin}
+                    isHighlighted={selectedRuleId === rule.id}
+                  />
+                </div>
               ))}
             </div>
           )}

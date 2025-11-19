@@ -7,16 +7,30 @@ interface RuleCardProps {
   onActivate?: (ruleId: string) => void;
   onDeactivate?: (ruleId: string) => void;
   oktaOrigin?: string | null;
+  isHighlighted?: boolean;
 }
 
-const RuleCard: React.FC<RuleCardProps> = ({ rule, onActivate, onDeactivate, oktaOrigin }) => {
+const RuleCard: React.FC<RuleCardProps> = ({
+  rule,
+  onActivate,
+  onDeactivate,
+  oktaOrigin,
+  isHighlighted = false
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
+
+  // Auto-expand if highlighted
+  React.useEffect(() => {
+    if (isHighlighted) {
+      setIsExpanded(true);
+    }
+  }, [isHighlighted]);
 
   const statusColor = rule.status === 'ACTIVE' ? 'success' : 'inactive';
   const hasConflicts = rule.conflicts && rule.conflicts.length > 0;
 
   return (
-    <div className={`rule-card ${rule.affectsCurrentGroup ? 'affects-current' : ''}`}>
+    <div className={`rule-card ${rule.affectsCurrentGroup ? 'affects-current' : ''} ${isHighlighted ? 'highlighted-rule' : ''}`}>
       {/* Header */}
       <div className="rule-header" onClick={() => setIsExpanded(!isExpanded)}>
         <div className="rule-header-left">

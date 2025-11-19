@@ -944,6 +944,22 @@ body {
   border-width: 2px;
 }
 
+.rule-card.highlighted-rule {
+  border-color: var(--accent-primary);
+  border-width: 2px;
+  background: var(--okta-blue-light);
+  animation: highlight-pulse 1s ease-in-out 2;
+}
+
+@keyframes highlight-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(0, 123, 191, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(0, 123, 191, 0);
+  }
+}
+
 .rule-card:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }

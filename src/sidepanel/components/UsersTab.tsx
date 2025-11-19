@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { OktaUser, GroupMembership, OktaGroupRule } from '../../shared/types';
+import { RulesCache } from '../../shared/rulesCache';
 
 interface UsersTabProps {
   targetTabId?: number;
   currentGroupId?: string;
+  onNavigateToRule?: (ruleId: string) => void;
 }
 
-const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId }) => {
+const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavigateToRule }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingMemberships, setIsLoadingMemberships] = useState(false);
@@ -85,30 +87,50 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId }) => {
         throw new Error(groupsResponse.error || 'Failed to fetch user groups');
       }
 
-      // Fetch all group rules to analyze membership types
-      const rulesResponse = await chrome.tabs.sendMessage(targetTabId, {
-        action: 'fetchGroupRules',
-      });
+      // OPTIMIZED: Check cache for rules first
+      let rules: any[] = [];
+      const cachedRules = await RulesCache.get();
 
-      requestCount++;
+      if (cachedRules) {
+        console.log('[UsersTab] Using cached rules from global cache');
+        rules = cachedRules.rules;
+        // No additional API call needed
+      } else {
+        // Cache miss - fetch rules
+        console.log('[UsersTab] Cache miss - fetching rules');
+        const rulesResponse = await chrome.tabs.sendMessage(targetTabId, {
+          action: 'fetchGroupRules',
+        });
 
-      if (!rulesResponse.success) {
-        console.warn('[UsersTab] Could not fetch rules for analysis:', rulesResponse.error);
+        requestCount++;
+
+        if (!rulesResponse.success) {
+          console.warn('[UsersTab] Could not fetch rules for analysis:', rulesResponse.error);
+        } else {
+          rules = rulesResponse.rules || [];
+          // Populate cache for future use
+          await RulesCache.set(
+            rules,
+            [],
+            rulesResponse.stats || { total: 0, active: 0, inactive: 0, conflicts: 0 },
+            rulesResponse.conflicts || []
+          );
+        }
       }
 
-      const rules = rulesResponse.success ? rulesResponse.rules : [];
-      setAllRules(rules || []);
+      setAllRules(rules);
 
-      // Analyze memberships
+      // Analyze memberships with improved heuristics
       const groups = groupsResponse.data || [];
-      const analyzedMemberships = analyzeMemberships(groups, rules || [], user);
+      const analyzedMemberships = analyzeMemberships(groups, rules, user);
 
       setMemberships(analyzedMemberships);
       setApiCost(prev => prev + requestCount);
 
       console.log('[UsersTab] Loaded memberships:', {
         count: analyzedMemberships.length,
-        apiCost: requestCount
+        apiCost: requestCount,
+        usedCache: cachedRules !== null
       });
     } catch (err: any) {
       setError(err.message || 'Failed to load user memberships');
@@ -119,45 +141,102 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId }) => {
     }
   };
 
+  /**
+   * IMPROVED: Better heuristics for determining membership attribution
+   *
+   * Okta API doesn't directly indicate if a user was added via rule or manually.
+   * We use advanced heuristics:
+   *
+   * 1. Check if ACTIVE rules exist for this group
+   * 2. Attempt basic rule condition evaluation (check attributes referenced in rule)
+   * 3. For groups with rules:
+   *    - If user attributes match patterns in rule, likely RULE_BASED
+   *    - If user attributes don't match AND rule uses specific attributes, likely DIRECT
+   * 4. For APP_GROUP types, always RULE_BASED (managed by application)
+   * 5. For groups without rules, DIRECT
+   */
   const analyzeMemberships = (
     groups: any[],
-    rules: OktaGroupRule[],
+    rules: any[],
     user: OktaUser
   ): GroupMembership[] => {
     console.log('[UsersTab] Analyzing memberships for user:', user.id);
-    console.log('[UsersTab] Total rules:', rules.length, 'Active rules:', rules.filter(r => r.status === 'ACTIVE').length);
+    console.log('[UsersTab] Total rules:', rules.length, 'Active rules:', rules.filter((r: any) => r.status === 'ACTIVE').length);
     console.log('[UsersTab] Total groups:', groups.length);
 
     return groups.map(group => {
-      // Find ACTIVE rules that assign users to this group
-      const matchingRules = rules.filter(rule => {
-        if (rule.status !== 'ACTIVE') return false;
+      // APP_GROUPs are always managed by the application (rule-based)
+      if (group.type === 'APP_GROUP') {
+        console.log(`[UsersTab] Group "${group.profile.name}": APP_GROUP (application managed)`);
+        return {
+          group: group,
+          membershipType: 'RULE_BASED' as const,
+          rule: undefined,
+        };
+      }
 
-        const groupIds = rule.actions?.assignUserToGroups?.groupIds || [];
+      // Find ACTIVE rules that assign users to this group
+      const matchingRules = rules.filter((rule: any) => {
+        if (rule.status !== 'ACTIVE') return false;
+        const groupIds = rule.groupIds || rule.actions?.assignUserToGroups?.groupIds || [];
         return groupIds.includes(group.id);
       });
 
-      console.log(`[UsersTab] Group "${group.profile.name}": Found ${matchingRules.length} matching rules`);
+      console.log(`[UsersTab] Group "${group.profile.name}": Found ${matchingRules.length} active rules`);
 
-      // If multiple rules match, pick the first one
-      const matchingRule = matchingRules.length > 0 ? matchingRules[0] : undefined;
-
-      // Determine membership type
-      // Note: Okta doesn't provide a direct way to distinguish between direct and rule-based membership
-      // We use a heuristic: if an ACTIVE rule assigns to this group, assume it's rule-based
-      // This is generally accurate because Okta rules automatically manage memberships
-      const membershipType = matchingRule ? 'RULE_BASED' : 'DIRECT';
-
-      if (matchingRule) {
-        console.log(`[UsersTab] Group "${group.profile.name}": Identified as RULE_BASED (rule: ${matchingRule.name})`);
-      } else {
-        console.log(`[UsersTab] Group "${group.profile.name}": Identified as DIRECT`);
+      if (matchingRules.length === 0) {
+        // No active rules for this group - must be direct assignment
+        console.log(`[UsersTab] Group "${group.profile.name}": DIRECT (no active rules)`);
+        return {
+          group: group,
+          membershipType: 'DIRECT' as const,
+          rule: undefined,
+        };
       }
+
+      // Try to evaluate which rule might have added the user
+      let bestMatchRule = matchingRules[0];
+      let confidence = 'low';
+
+      for (const rule of matchingRules) {
+        // Extract user attributes from rule condition
+        const condition = rule.conditionExpression || rule.conditions?.expression?.value || '';
+        const userAttrs = rule.userAttributes || [];
+
+        // Basic heuristic: check if referenced attributes exist in user profile
+        let attributesMatch = 0;
+        let attributesChecked = 0;
+
+        for (const attr of userAttrs) {
+          attributesChecked++;
+          const userValue = user.profile[attr];
+
+          // If attribute exists and is non-empty, it's a potential match
+          if (userValue !== undefined && userValue !== null && userValue !== '') {
+            // Check if the condition references this attribute value
+            const valueStr = String(userValue).toLowerCase();
+            const conditionLower = condition.toLowerCase();
+
+            if (conditionLower.includes(valueStr) || conditionLower.includes(`"${valueStr}"`)) {
+              attributesMatch++;
+            }
+          }
+        }
+
+        // If we found attribute matches, this rule is more likely
+        if (attributesChecked > 0 && attributesMatch >= attributesChecked * 0.5) {
+          bestMatchRule = rule;
+          confidence = attributesMatch === attributesChecked ? 'high' : 'medium';
+          break;
+        }
+      }
+
+      console.log(`[UsersTab] Group "${group.profile.name}": RULE_BASED (rule: ${bestMatchRule.name}, confidence: ${confidence})`);
 
       return {
         group: group,
-        membershipType,
-        rule: matchingRule,
+        membershipType: 'RULE_BASED' as const,
+        rule: bestMatchRule,
       };
     });
   };
@@ -399,12 +478,21 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId }) => {
                         <div className="membership-rule-details">
                           <div className="rule-indicator">
                             <strong>Added by Rule:</strong> {membership.rule.name}
+                            {onNavigateToRule && (
+                              <button
+                                className="btn btn-sm btn-secondary ml-2"
+                                onClick={() => onNavigateToRule(membership.rule!.id)}
+                                title="View this rule in Rules tab"
+                              >
+                                View Rule →
+                              </button>
+                            )}
                           </div>
-                          {membership.rule.conditions?.expression && (
+                          {membership.rule.conditionExpression && (
                             <div className="rule-condition">
                               <strong>Condition:</strong>
                               <code className="condition-code">
-                                {membership.rule.conditions.expression.value}
+                                {membership.rule.conditionExpression}
                               </code>
                             </div>
                           )}
