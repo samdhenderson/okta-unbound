@@ -8,13 +8,14 @@ import RulesTab from './components/RulesTab';
 import UsersTab from './components/UsersTab';
 import SecurityTab from './components/SecurityTab';
 import GroupsTab from './components/GroupsTab';
+import AppsTab from './components/AppsTab';
 import UndoPanel from './components/UndoPanel';
 import LoadingBar from './components/LoadingBar';
 import SchedulerStatusBar from './components/SchedulerStatusBar';
 import { useGroupContext } from './hooks/useGroupContext';
 import { SchedulerProvider } from './contexts/SchedulerContext';
 
-type TabType = 'dashboard' | 'operations' | 'rules' | 'users' | 'security' | 'groups' | 'undo';
+type TabType = 'dashboard' | 'operations' | 'rules' | 'users' | 'security' | 'groups' | 'apps' | 'undo';
 
 const SELECTED_TAB_KEY = 'okta_unbound_selected_tab';
 
@@ -110,6 +111,13 @@ const App: React.FC = () => {
         <GroupsTab
           targetTabId={targetTabId ?? null}
           oktaOrigin={oktaOrigin ?? undefined}
+        />
+      )}
+      {activeTab === 'apps' && (
+        <AppsTab
+          groupId={groupInfo?.groupId}
+          groupName={groupInfo?.groupName}
+          targetTabId={targetTabId ?? null}
         />
       )}
       {activeTab === 'undo' && (

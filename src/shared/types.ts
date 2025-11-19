@@ -377,3 +377,379 @@ export interface GroupsCache {
 export interface CollectionsCache {
   collections: GroupCollection[];
 }
+
+// ========================================
+// App Assignment Types
+// ========================================
+
+export interface OktaApp {
+  id: string;
+  name: string;
+  label: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  created: string;
+  lastUpdated: string;
+  signOnMode?: string;
+  features?: string[];
+  settings?: {
+    app?: Record<string, any>;
+    notifications?: Record<string, any>;
+    signOn?: Record<string, any>;
+    [key: string]: any;
+  };
+  credentials?: {
+    scheme?: string;
+    userNameTemplate?: Record<string, any>;
+    [key: string]: any;
+  };
+  _links?: Record<string, any>;
+}
+
+// Base assignment interface with dynamic schema support
+export interface AppAssignment {
+  id: string;
+  appId: string;
+  status: 'ACTIVE' | 'INACTIVE' | 'DEPROVISIONED';
+  created: string;
+  lastUpdated: string;
+  statusChanged?: string;
+  // Scope indicates if this is a user or group assignment
+  scope: 'USER' | 'GROUP';
+  // Dynamic profile - can contain any app-specific attributes
+  profile?: Record<string, any>;
+  // Dynamic credentials - can vary by app
+  credentials?: {
+    scheme?: string;
+    userName?: string;
+    password?: string;
+    [key: string]: any;
+  };
+  // Embedded app details (when expanded)
+  _embedded?: {
+    app?: OktaApp;
+    user?: OktaUser;
+    group?: OktaGroup;
+  };
+  _links?: Record<string, any>;
+}
+
+export interface UserAppAssignment extends AppAssignment {
+  scope: 'USER';
+  userId?: string;
+  externalId?: string;
+  syncState?: 'DISABLED' | 'OUT_OF_SYNC' | 'SYNCING' | 'SYNCHRONIZED' | 'ERROR';
+  lastSync?: string;
+  passwordChanged?: string;
+}
+
+export interface GroupAppAssignment extends AppAssignment {
+  scope: 'GROUP';
+  groupId?: string;
+  priority: number; // Priority of the group assignment (lower = higher priority)
+  // Profile for group assignment may include default values for all members
+  profile?: Record<string, any>;
+}
+
+// Extended app info with assignment counts
+export interface AppWithAssignments extends OktaApp {
+  userAssignments?: number;
+  groupAssignments?: number;
+  totalAssignments?: number;
+}
+
+// For assignment creation/updates
+export interface CreateAppAssignmentRequest {
+  id?: string; // User ID or Group ID
+  scope?: 'USER' | 'GROUP';
+  profile?: Record<string, any>;
+  credentials?: {
+    userName?: string;
+    password?: string;
+    [key: string]: any;
+  };
+  priority?: number; // For group assignments
+}
+
+// User-to-Group Assignment Converter types
+export interface AssignmentConversionRequest {
+  userId: string;
+  targetGroupId: string;
+  appIds: string[]; // Apps to convert
+  removeUserAssignment: boolean; // Whether to remove original user assignment
+  mergeStrategy: 'preserve_user' | 'prefer_user' | 'prefer_default'; // How to handle profile differences
+}
+
+export interface AssignmentConversionResult {
+  appId: string;
+  appName: string;
+  success: boolean;
+  userAssignment?: UserAppAssignment;
+  groupAssignment?: GroupAppAssignment;
+  profileChanges?: ProfileComparison;
+  error?: string;
+  userAssignmentRemoved?: boolean;
+}
+
+export interface ProfileComparison {
+  userProfile: Record<string, any>;
+  groupProfile: Record<string, any>;
+  differences: ProfileDifference[];
+  credentialsHandled: boolean;
+}
+
+export interface ProfileDifference {
+  field: string;
+  userValue: any;
+  groupValue: any;
+  merged?: any; // The value that was actually used
+}
+
+// Bulk Group-to-App Assignment types
+export interface BulkAppAssignmentRequest {
+  groupIds: string[];
+  appIds: string[];
+  priority?: number;
+  profile?: Record<string, any>; // Default profile for all assignments
+  perAppProfiles?: Record<string, Record<string, any>>; // App-specific profiles
+}
+
+export interface BulkAppAssignmentResult {
+  totalOperations: number;
+  successful: number;
+  failed: number;
+  results: AppAssignmentOperationResult[];
+}
+
+export interface AppAssignmentOperationResult {
+  groupId: string;
+  groupName: string;
+  appId: string;
+  appName: string;
+  success: boolean;
+  assignment?: GroupAppAssignment;
+  error?: string;
+}
+
+// App Assignment Viewer types
+export interface UserAppAssignmentView {
+  userId: string;
+  userEmail: string;
+  userName: string;
+  apps: AppAssignmentDetail[];
+  totalApps: number;
+  directAssignments: number;
+  groupBasedAssignments: number;
+}
+
+export interface GroupAppAssignmentView {
+  groupId: string;
+  groupName: string;
+  apps: AppAssignmentDetail[];
+  totalApps: number;
+  assignmentsByPriority: Map<number, number>;
+}
+
+export interface AppAssignmentDetail {
+  app: OktaApp;
+  assignment: AppAssignment;
+  assignmentType: 'direct' | 'group' | 'rule';
+  sourceGroups?: GroupInfo[]; // For group-based assignments
+  profileSchema?: AppProfileSchema;
+  hasCustomProfile: boolean;
+  hasCredentials: boolean;
+}
+
+// Dynamic profile schema information
+export interface AppProfileSchema {
+  definitions?: Record<string, any>;
+  properties?: Record<string, AppProfileProperty>;
+  required?: string[];
+  type?: string;
+}
+
+export interface AppProfileProperty {
+  title?: string;
+  type?: string;
+  description?: string;
+  required?: boolean;
+  minLength?: number;
+  maxLength?: number;
+  enum?: any[];
+  format?: string;
+  permissions?: Array<{
+    principal: string;
+    action: string;
+  }>;
+  [key: string]: any;
+}
+
+// App Assignment Audit & Security Analysis types
+export interface AppAssignmentSecurityAnalysis {
+  groupId?: string;
+  userId?: string;
+  findings: AppSecurityFinding[];
+  overProvisionedUsers: OverProvisionedUser[];
+  orphanedAppAssignments: OrphanedAppAssignment[];
+  redundantAssignments: RedundantAssignment[];
+  assignmentTypeDistribution: AssignmentTypeDistribution;
+  totalAppsAnalyzed: number;
+  riskScore: number; // 0-100
+}
+
+export interface AppSecurityFinding {
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  category: 'over_provisioned' | 'orphaned' | 'redundant' | 'missing_group' | 'stale_credential';
+  title: string;
+  description: string;
+  affectedUsers: string[];
+  affectedApps: string[];
+  recommendation: string;
+}
+
+export interface OverProvisionedUser {
+  userId: string;
+  userEmail: string;
+  userName: string;
+  directAppAssignments: number;
+  groupBasedAppAssignments: number;
+  appsWithBothTypes: string[]; // Apps where user has both direct and group assignment
+  suggestedRemoval: string[]; // App IDs that should be removed (direct assignment)
+}
+
+export interface OrphanedAppAssignment {
+  userId: string;
+  userEmail: string;
+  userName: string;
+  userStatus: UserStatus;
+  appId: string;
+  appName: string;
+  assignment: UserAppAssignment;
+  reason: 'user_deprovisioned' | 'user_inactive' | 'no_group_membership' | 'never_used';
+  daysSinceLastUse?: number;
+  recommendRemoval: boolean;
+}
+
+export interface RedundantAssignment {
+  userId: string;
+  userEmail: string;
+  userName: string;
+  appId: string;
+  appName: string;
+  directAssignment: UserAppAssignment;
+  groupAssignments: Array<{
+    group: OktaGroup;
+    assignment: GroupAppAssignment;
+  }>;
+  profileDifferences: boolean;
+  credentialsDifferent: boolean;
+  recommendation: 'remove_direct' | 'remove_group' | 'keep_both';
+}
+
+export interface AssignmentTypeDistribution {
+  totalAssignments: number;
+  directAssignments: number;
+  groupAssignments: number;
+  ruleBasedAssignments: number;
+  percentageDirect: number;
+  percentageGroup: number;
+  percentageRule: number;
+}
+
+// App-to-Group Assignment Recommender types
+export interface AppAssignmentRecommendation {
+  appId: string;
+  appName: string;
+  currentDirectAssignments: number;
+  recommendedGroupAssignments: RecommendedGroupAssignment[];
+  coverageAnalysis: CoverageAnalysis;
+  estimatedReduction: number; // Percentage of direct assignments that could be replaced
+  implementationPriority: 'high' | 'medium' | 'low';
+}
+
+export interface RecommendedGroupAssignment {
+  group: OktaGroup;
+  matchingUsers: number;
+  percentageOfAppUsers: number;
+  confidence: number; // 0-100, based on how many app users are in this group
+  suggestedProfile?: Record<string, any>; // Recommended profile based on common user profiles
+  suggestedPriority: number;
+  rationale: string;
+}
+
+export interface CoverageAnalysis {
+  totalAppUsers: number;
+  usersCoveredByRecommendations: number;
+  percentageCovered: number;
+  usersStillNeedingDirectAssignment: string[];
+  groupOverlaps: Array<{
+    groups: string[];
+    userCount: number;
+  }>;
+}
+
+export interface AssignmentRecommenderResult {
+  recommendations: AppAssignmentRecommendation[];
+  overallStats: {
+    totalAppsAnalyzed: number;
+    totalDirectAssignments: number;
+    potentialGroupAssignments: number;
+    estimatedAssignmentReduction: number;
+    estimatedMaintenanceReduction: number; // Percentage
+  };
+  topRecommendations: AppAssignmentRecommendation[]; // Top 10 by priority
+}
+
+// Message actions - extend existing MessageRequest
+export type AppMessageAction =
+  | 'getUserApps'
+  | 'getGroupApps'
+  | 'getAppUsers'
+  | 'getAppGroups'
+  | 'getAppDetails'
+  | 'assignUserToApp'
+  | 'assignGroupToApp'
+  | 'removeUserFromApp'
+  | 'removeGroupFromApp'
+  | 'getUserAppAssignment'
+  | 'getGroupAppAssignment'
+  | 'updateUserAppAssignment'
+  | 'updateGroupAppAssignment'
+  | 'convertUserToGroupAssignment'
+  | 'bulkAssignGroupsToApps'
+  | 'analyzeAppSecurity'
+  | 'getAppAssignmentRecommendations'
+  | 'getAppSchema';
+
+// Extend MessageRequest to include app-related actions
+export interface AppMessageRequest extends MessageRequest {
+  action: MessageRequest['action'] | AppMessageAction;
+  appId?: string;
+  appIds?: string[];
+  assignmentData?: CreateAppAssignmentRequest;
+  conversionRequest?: AssignmentConversionRequest;
+  bulkAssignmentRequest?: BulkAppAssignmentRequest;
+  includeSchema?: boolean;
+  expand?: string; // For expanding related resources
+}
+
+// Audit log extensions for app operations
+export type AppAuditAction =
+  | 'assign_user_to_app'
+  | 'assign_group_to_app'
+  | 'remove_user_from_app'
+  | 'remove_group_from_app'
+  | 'convert_assignment'
+  | 'bulk_app_assignment'
+  | 'app_security_scan';
+
+export interface AppAuditLogEntry extends Omit<AuditLogEntry, 'action'> {
+  action: AuditLogEntry['action'] | AppAuditAction;
+  appId?: string;
+  appName?: string;
+  affectedApps?: string[]; // For bulk operations
+  conversionDetails?: {
+    sourceType: 'user' | 'group';
+    targetType: 'user' | 'group';
+    assignmentsConverted: number;
+  };
+}
