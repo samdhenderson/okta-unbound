@@ -1825,3 +1825,265 @@ body {
   background: var(--warning-border);
   color: white;
 }
+
+/* ============================================================================
+   Dashboard Styles
+   ============================================================================ */
+
+.dashboard-container {
+  padding: 20px;
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  gap: 12px;
+}
+
+.dashboard-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  letter-spacing: -0.3px;
+}
+
+.dashboard-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Dashboard Stats Grid */
+.dashboard-stats-grid {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  margin-bottom: 24px;
+}
+
+/* Dashboard Main Grid */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dashboard-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Dashboard Card */
+.dashboard-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 0.2s ease;
+}
+
+.dashboard-card:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.dashboard-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 14px;
+  letter-spacing: -0.2px;
+}
+
+/* Risk Gauge Styles */
+.risk-gauge-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.risk-gauge-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.risk-gauge-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.2px;
+}
+
+.risk-gauge-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 0;
+}
+
+.risk-gauge-circle {
+  width: 140px;
+  height: 140px;
+  border: 8px solid;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.risk-gauge-score {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+
+.risk-gauge-label {
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.risk-factors {
+  background: var(--bg-secondary);
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.risk-factors-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.risk-factors-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.risk-factor-item {
+  font-size: 12px;
+  color: var(--text-primary);
+  padding: 6px 0;
+  padding-left: 16px;
+  position: relative;
+  line-height: 1.4;
+}
+
+.risk-factor-item::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: var(--text-secondary);
+  font-weight: bold;
+}
+
+/* Quick Actions Card */
+.quick-actions-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.quick-actions-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.2px;
+}
+
+.quick-actions-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.quick-actions-buttons .btn {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Dashboard Empty State */
+.dashboard-empty-state {
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.dashboard-empty-state .empty-state h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.dashboard-empty-state .empty-state p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Dashboard Loading State */
+.dashboard-loading {
+  padding: 60px 20px;
+}
+
+.dashboard-error {
+  padding: 20px;
+}
+
+/* Responsive adjustments for narrow sidepanel */
+@media (max-width: 400px) {
+  .dashboard-stats-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .risk-gauge-circle {
+    width: 120px;
+    height: 120px;
+    border-width: 6px;
+  }
+
+  .risk-gauge-score {
+    font-size: 30px;
+  }
+
+  .risk-gauge-label {
+    font-size: 11px;
+  }
+}
+
+/* Loading skeleton for dashboard */
+.dashboard-skeleton {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

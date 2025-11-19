@@ -1,6 +1,6 @@
 import React from 'react';
 
-type TabType = 'operations' | 'rules' | 'users' | 'undo';
+type TabType = 'dashboard' | 'operations' | 'rules' | 'users' | 'undo';
 
 interface TabNavigationProps {
   activeTab: TabType;
@@ -10,6 +10,12 @@ interface TabNavigationProps {
 const TabNavigation: React.FC<TabNavigationProps> = ({ activeTab, onTabChange }) => {
   return (
     <nav className="tab-nav">
+      <button
+        className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`}
+        onClick={() => onTabChange('dashboard')}
+      >
+        Dashboard
+      </button>
       <button
         className={`tab-button ${activeTab === 'operations' ? 'active' : ''}`}
         onClick={() => onTabChange('operations')}
