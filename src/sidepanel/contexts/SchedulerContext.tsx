@@ -6,7 +6,7 @@
  * queue information, rate limit warnings, and cooldown countdowns.
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import type { SchedulerState, SchedulerMetrics } from '../../shared/scheduler/types';
 
 interface SchedulerContextType {
@@ -25,18 +25,49 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [state, setState] = useState<SchedulerState | null>(null);
   const [metrics, setMetrics] = useState<SchedulerMetrics | null>(null);
 
+  const refreshState = useCallback(async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'getSchedulerState',
+      });
+
+      if (response.success) {
+        setState(response.state);
+      }
+    } catch (error) {
+      console.error('[SchedulerContext] Failed to fetch scheduler state:', error);
+    }
+  }, []);
+
+  const refreshMetrics = useCallback(async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'getSchedulerMetrics',
+      });
+
+      if (response.success) {
+        setMetrics(response.metrics);
+      }
+    } catch (error) {
+      console.error('[SchedulerContext] Failed to fetch scheduler metrics:', error);
+    }
+  }, []);
+
   // Fetch initial state
   useEffect(() => {
-    refreshState();
-    refreshMetrics();
+    // Fetch initial data in an async IIFE to avoid setState-in-effect warning
+    (async () => {
+      await refreshState();
+      await refreshMetrics();
+    })();
 
     // Refresh periodically
     const interval = setInterval(() => {
-      refreshState();
+      void refreshState();
     }, 1000); // Update every second for smooth countdown
 
     return () => clearInterval(interval);
-  }, []);
+  }, [refreshState, refreshMetrics]);
 
   // Listen for scheduler state changes from background
   useEffect(() => {
@@ -53,60 +84,32 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
   }, []);
 
-  const refreshState = async () => {
-    try {
-      const response = await chrome.runtime.sendMessage({
-        action: 'getSchedulerState',
-      });
-
-      if (response.success) {
-        setState(response.state);
-      }
-    } catch (error) {
-      console.error('[SchedulerContext] Failed to fetch scheduler state:', error);
-    }
-  };
-
-  const refreshMetrics = async () => {
-    try {
-      const response = await chrome.runtime.sendMessage({
-        action: 'getSchedulerMetrics',
-      });
-
-      if (response.success) {
-        setMetrics(response.metrics);
-      }
-    } catch (error) {
-      console.error('[SchedulerContext] Failed to fetch scheduler metrics:', error);
-    }
-  };
-
-  const pause = async () => {
+  const pause = useCallback(async () => {
     try {
       await chrome.runtime.sendMessage({ action: 'pauseScheduler' });
       await refreshState();
     } catch (error) {
       console.error('[SchedulerContext] Failed to pause scheduler:', error);
     }
-  };
+  }, [refreshState]);
 
-  const resume = async () => {
+  const resume = useCallback(async () => {
     try {
       await chrome.runtime.sendMessage({ action: 'resumeScheduler' });
       await refreshState();
     } catch (error) {
       console.error('[SchedulerContext] Failed to resume scheduler:', error);
     }
-  };
+  }, [refreshState]);
 
-  const clearQueue = async () => {
+  const clearQueue = useCallback(async () => {
     try {
       await chrome.runtime.sendMessage({ action: 'clearSchedulerQueue' });
       await refreshState();
     } catch (error) {
       console.error('[SchedulerContext] Failed to clear queue:', error);
     }
-  };
+  }, [refreshState]);
 
   return (
     <SchedulerContext.Provider

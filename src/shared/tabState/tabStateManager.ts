@@ -21,7 +21,6 @@ import type {
   DashboardTabState,
   OperationsTabState,
   SecurityTabState,
-  UndoTabState,
   StatePersistOptions,
   StoredStateMetadata,
 } from './types';
@@ -99,6 +98,7 @@ export class TabStateManager {
       }
 
       // Remove metadata before returning
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { _metadata, ...state } = stored;
 
       console.log(`[TabStateManager] Loaded state for tab: ${tabName}`, {
@@ -224,7 +224,7 @@ export class TabStateManager {
 
     try {
       const result = await chrome.storage.local.get([storageKey]);
-      const stored = result[storageKey];
+      const stored = result[storageKey] as any;
 
       if (!stored || !stored._metadata) {
         return null;

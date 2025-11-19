@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import RuleCard from './RuleCard';
-import type { FormattedRule, RuleConflict, AuditLogEntry } from '../../shared/types';
+import type { FormattedRule, AuditLogEntry } from '../../shared/types';
 import { filterRules } from '../../shared/ruleUtils';
 import { useProgress } from '../contexts/ProgressContext';
 import { logAction } from '../../shared/undoManager';
@@ -579,7 +579,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
             </div>
           ) : rules.length === 0 ? (
             <div className="empty-state">
-              <p className="muted">Click "Load Rules" to analyze your Okta group rules</p>
+              <p className="muted">Click &ldquo;Load Rules&rdquo; to analyze your Okta group rules</p>
             </div>
           ) : filteredRules.length === 0 ? (
             <div className="empty-state">

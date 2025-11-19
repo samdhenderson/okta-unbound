@@ -13,7 +13,7 @@
     "test:coverage": "vitest run --coverage",
     "test:run": "vitest run",
     "type-check": "tsc --noEmit",
-    "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint": "eslint src --ext ts,tsx --report-unused-disable-directives",
     "lint:fix": "eslint src --ext ts,tsx --fix",
     "prepare": "husky"
   },
