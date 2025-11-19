@@ -1,8 +1,30 @@
 import { useState, useCallback } from 'react';
-import type { MessageRequest, MessageResponse, OktaUser, UserStatus, AuditLogEntry } from '../../shared/types';
+import type {
+  MessageRequest,
+  MessageResponse,
+  OktaUser,
+  UserStatus,
+  AuditLogEntry,
+  OktaApp,
+  UserAppAssignment,
+  GroupAppAssignment,
+  AppAssignment,
+  CreateAppAssignmentRequest,
+  AssignmentConversionRequest,
+  AssignmentConversionResult,
+  BulkAppAssignmentRequest,
+  BulkAppAssignmentResult,
+  AppAssignmentSecurityAnalysis,
+  AssignmentRecommenderResult,
+  AppProfileSchema,
+  UserAppAssignmentView,
+  GroupAppAssignmentView,
+  OktaGroup
+} from '../../shared/types';
 import { logAction } from '../../shared/undoManager';
 import { auditStore } from '../../shared/storage/auditStore';
 import { RulesCache } from '../../shared/rulesCache';
+import { analyzeAppSecurity, getAppAssignmentRecommendations } from './useAppAnalysis';
 
 interface UseOktaApiOptions {
   targetTabId: number | null;
@@ -959,6 +981,658 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
     [makeApiRequest, getAllGroupMembers]
   );
 
+  // ========================================
+  // App Assignment API Methods
+  // ========================================
+
+  /**
+   * Get all apps assigned to a user (with pagination)
+   */
+  const getUserApps = useCallback(
+    async (userId: string, expand?: boolean): Promise<UserAppAssignment[]> => {
+      try {
+        const allApps: UserAppAssignment[] = [];
+        const expandParam = expand ? '&expand=app' : '';
+        let nextUrl: string | null = `/api/v1/apps?filter=user.id eq "${userId}"&limit=200${expandParam}`;
+
+        while (nextUrl) {
+          const response = await makeApiRequest(nextUrl);
+          if (response.success && response.data) {
+            const apps = Array.isArray(response.data) ? response.data : [response.data];
+            allApps.push(...apps);
+
+            // Check for next page
+            const linkHeader = response.headers?.['link'];
+            nextUrl = linkHeader?.includes('rel="next"')
+              ? linkHeader.split(';')[0].replace(/<(.+)>/, '$1').replace(/^.*\/api/, '/api')
+              : null;
+          } else {
+            break;
+          }
+        }
+
+        return allApps;
+      } catch (error) {
+        console.error(`[useOktaApi] Failed to get apps for user ${userId}:`, error);
+        throw error;
+      }
+    },
+    [makeApiRequest]
+  );
+
+  /**
+   * Get all apps assigned to a group (with pagination)
+   */
+  const getGroupApps = useCallback(
+    async (groupId: string, expand?: boolean): Promise<GroupAppAssignment[]> => {
+      try {
+        const allApps: GroupAppAssignment[] = [];
+        const expandParam = expand ? '?expand=app' : '';
+        let nextUrl: string | null = `/api/v1/groups/${groupId}/apps${expandParam}`;
+
+        while (nextUrl) {
+          const response = await makeApiRequest(nextUrl);
+          if (response.success && response.data) {
+            const apps = Array.isArray(response.data) ? response.data : [response.data];
+            allApps.push(...apps);
+
+            // Check for next page
+            const linkHeader = response.headers?.['link'];
+            nextUrl = linkHeader?.includes('rel="next"')
+              ? linkHeader.split(';')[0].replace(/<(.+)>/, '$1').replace(/^.*\/api/, '/api')
+              : null;
+          } else {
+            break;
+          }
+        }
+
+        return allApps;
+      } catch (error) {
+        console.error(`[useOktaApi] Failed to get apps for group ${groupId}:`, error);
+        throw error;
+      }
+    },
+    [makeApiRequest]
+  );
+
+  /**
+   * Get a specific user's assignment to an app
+   */
+  const getUserAppAssignment = useCallback(
+    async (appId: string, userId: string): Promise<UserAppAssignment | null> => {
+      try {
+        const response = await makeApiRequest(`/api/v1/apps/${appId}/users/${userId}`);
+        if (response.success && response.data) {
+          return { ...response.data, scope: 'USER' as const };
+        }
+        return null;
+      } catch (error) {
+        console.error(`[useOktaApi] Failed to get user assignment for app ${appId}, user ${userId}:`, error);
+        return null;
+      }
+    },
+    [makeApiRequest]
+  );
+
+  /**
+   * Get a specific group's assignment to an app
+   */
+  const getGroupAppAssignment = useCallback(
+    async (appId: string, groupId: string): Promise<GroupAppAssignment | null> => {
+      try {
+        const response = await makeApiRequest(`/api/v1/apps/${appId}/groups/${groupId}`);
+        if (response.success && response.data) {
+          return { ...response.data, scope: 'GROUP' as const };
+        }
+        return null;
+      } catch (error) {
+        console.error(`[useOktaApi] Failed to get group assignment for app ${appId}, group ${groupId}:`, error);
+        return null;
+      }
+    },
+    [makeApiRequest]
+  );
+
+  /**
+   * Get app details including schema
+   */
+  const getAppDetails = useCallback(
+    async (appId: string, includeSchema: boolean = false): Promise<{ app: OktaApp; schema?: AppProfileSchema }> => {
+      try {
+        const appResponse = await makeApiRequest(`/api/v1/apps/${appId}`);
+        if (!appResponse.success || !appResponse.data) {
+          throw new Error('Failed to fetch app details');
+        }
+
+        const result: { app: OktaApp; schema?: AppProfileSchema } = {
+          app: appResponse.data,
+        };
+
+        if (includeSchema) {
+          const schemaResponse = await makeApiRequest(`/api/v1/meta/schemas/apps/${appId}/default`);
+          if (schemaResponse.success && schemaResponse.data) {
+            result.schema = schemaResponse.data;
+          }
+        }
+
+        return result;
+      } catch (error) {
+        console.error(`[useOktaApi] Failed to get app details for ${appId}:`, error);
+        throw error;
+      }
+    },
+    [makeApiRequest]
+  );
+
+  /**
+   * Assign a user to an app
+   */
+  const assignUserToApp = useCallback(
+    async (appId: string, userId: string, assignmentData?: CreateAppAssignmentRequest): Promise<UserAppAssignment> => {
+      try {
+        const body: any = {
+          id: userId,
+          scope: 'USER',
+          ...(assignmentData?.profile && { profile: assignmentData.profile }),
+          ...(assignmentData?.credentials && { credentials: assignmentData.credentials }),
+        };
+
+        const response = await makeApiRequest(`/api/v1/apps/${appId}/users`, 'POST', body);
+        if (!response.success || !response.data) {
+          throw new Error(response.error || 'Failed to assign user to app');
+        }
+
+        // Log to audit
+        const currentUser = await getCurrentUser();
+        const appDetails = await getAppDetails(appId);
+        await auditStore.addLog({
+          action: 'assign_user_to_app' as any,
+          groupId: 'N/A',
+          groupName: 'N/A',
+          performedBy: currentUser.email,
+          affectedUsers: [userId],
+          result: 'success',
+          details: {
+            usersSucceeded: 1,
+            usersFailed: 0,
+            apiRequestCount: 1,
+            durationMs: 0,
+          },
+          appId,
+          appName: appDetails.app.label,
+        } as any);
+
+        return { ...response.data, scope: 'USER' as const };
+      } catch (error) {
+        console.error(`[useOktaApi] Failed to assign user ${userId} to app ${appId}:`, error);
+        throw error;
+      }
+    },
+    [makeApiRequest, getCurrentUser, getAppDetails]
+  );
+
+  /**
+   * Assign a group to an app
+   */
+  const assignGroupToApp = useCallback(
+    async (appId: string, groupId: string, assignmentData?: CreateAppAssignmentRequest): Promise<GroupAppAssignment> => {
+      try {
+        const body: any = {
+          priority: assignmentData?.priority ?? 0,
+          ...(assignmentData?.profile && { profile: assignmentData.profile }),
+        };
+
+        const response = await makeApiRequest(`/api/v1/apps/${appId}/groups/${groupId}`, 'PUT', body);
+        if (!response.success || !response.data) {
+          throw new Error(response.error || 'Failed to assign group to app');
+        }
+
+        // Log to audit
+        const currentUser = await getCurrentUser();
+        const appDetails = await getAppDetails(appId);
+        const groupResponse = await makeApiRequest(`/api/v1/groups/${groupId}`);
+        await auditStore.addLog({
+          action: 'assign_group_to_app' as any,
+          groupId,
+          groupName: groupResponse.data?.profile?.name || groupId,
+          performedBy: currentUser.email,
+          affectedUsers: [],
+          result: 'success',
+          details: {
+            usersSucceeded: 0,
+            usersFailed: 0,
+            apiRequestCount: 1,
+            durationMs: 0,
+          },
+          appId,
+          appName: appDetails.app.label,
+        } as any);
+
+        return { ...response.data, scope: 'GROUP' as const };
+      } catch (error) {
+        console.error(`[useOktaApi] Failed to assign group ${groupId} to app ${appId}:`, error);
+        throw error;
+      }
+    },
+    [makeApiRequest, getCurrentUser, getAppDetails]
+  );
+
+  /**
+   * Remove a user from an app
+   */
+  const removeUserFromApp = useCallback(
+    async (appId: string, userId: string): Promise<boolean> => {
+      try {
+        const response = await makeApiRequest(`/api/v1/apps/${appId}/users/${userId}`, 'DELETE');
+        const success = response.success;
+
+        // Log to audit
+        const currentUser = await getCurrentUser();
+        const appDetails = await getAppDetails(appId);
+        await auditStore.addLog({
+          action: 'remove_user_from_app' as any,
+          groupId: 'N/A',
+          groupName: 'N/A',
+          performedBy: currentUser.email,
+          affectedUsers: [userId],
+          result: success ? 'success' : 'failed',
+          details: {
+            usersSucceeded: success ? 1 : 0,
+            usersFailed: success ? 0 : 1,
+            apiRequestCount: 1,
+            durationMs: 0,
+          },
+          appId,
+          appName: appDetails.app.label,
+        } as any);
+
+        return success;
+      } catch (error) {
+        console.error(`[useOktaApi] Failed to remove user ${userId} from app ${appId}:`, error);
+        throw error;
+      }
+    },
+    [makeApiRequest, getCurrentUser, getAppDetails]
+  );
+
+  /**
+   * Remove a group from an app
+   */
+  const removeGroupFromApp = useCallback(
+    async (appId: string, groupId: string): Promise<boolean> => {
+      try {
+        const response = await makeApiRequest(`/api/v1/apps/${appId}/groups/${groupId}`, 'DELETE');
+        const success = response.success;
+
+        // Log to audit
+        const currentUser = await getCurrentUser();
+        const appDetails = await getAppDetails(appId);
+        const groupResponse = await makeApiRequest(`/api/v1/groups/${groupId}`);
+        await auditStore.addLog({
+          action: 'remove_group_from_app' as any,
+          groupId,
+          groupName: groupResponse.data?.profile?.name || groupId,
+          performedBy: currentUser.email,
+          affectedUsers: [],
+          result: success ? 'success' : 'failed',
+          details: {
+            usersSucceeded: 0,
+            usersFailed: 0,
+            apiRequestCount: 1,
+            durationMs: 0,
+          },
+          appId,
+          appName: appDetails.app.label,
+        } as any);
+
+        return success;
+      } catch (error) {
+        console.error(`[useOktaApi] Failed to remove group ${groupId} from app ${appId}:`, error);
+        throw error;
+      }
+    },
+    [makeApiRequest, getCurrentUser, getAppDetails]
+  );
+
+  /**
+   * FEATURE 2: Convert user app assignments to group assignments
+   */
+  const convertUserToGroupAssignment = useCallback(
+    async (request: AssignmentConversionRequest): Promise<AssignmentConversionResult[]> => {
+      const results: AssignmentConversionResult[] = [];
+      const startTime = Date.now();
+      let successCount = 0;
+      let failCount = 0;
+
+      try {
+        onResult?.('Starting user-to-group assignment conversion...', 'info');
+
+        for (let i = 0; i < request.appIds.length; i++) {
+          const appId = request.appIds[i];
+          checkCancelled();
+
+          try {
+            // Get user's assignment to the app
+            const userAssignment = await getUserAppAssignment(appId, request.userId);
+            if (!userAssignment) {
+              results.push({
+                appId,
+                appName: 'Unknown',
+                success: false,
+                error: 'User not assigned to this app',
+              });
+              failCount++;
+              continue;
+            }
+
+            // Get app details for name
+            const appDetails = await getAppDetails(appId);
+
+            // Check if group assignment already exists
+            const existingGroupAssignment = await getGroupAppAssignment(appId, request.targetGroupId);
+
+            // Determine profile based on merge strategy
+            let mergedProfile: Record<string, any> | undefined;
+            const profileChanges: any = {
+              userProfile: userAssignment.profile || {},
+              groupProfile: existingGroupAssignment?.profile || {},
+              differences: [],
+              credentialsHandled: !!userAssignment.credentials,
+            };
+
+            if (userAssignment.profile || existingGroupAssignment?.profile) {
+              const userProfile = userAssignment.profile || {};
+              const groupProfile = existingGroupAssignment?.profile || {};
+
+              // Find differences
+              const allKeys = new Set([...Object.keys(userProfile), ...Object.keys(groupProfile)]);
+              allKeys.forEach((key) => {
+                if (userProfile[key] !== groupProfile[key]) {
+                  profileChanges.differences.push({
+                    field: key,
+                    userValue: userProfile[key],
+                    groupValue: groupProfile[key],
+                  });
+                }
+              });
+
+              // Apply merge strategy
+              switch (request.mergeStrategy) {
+                case 'preserve_user':
+                  // Keep existing group profile, don't modify
+                  mergedProfile = existingGroupAssignment?.profile;
+                  break;
+                case 'prefer_user':
+                  // Use user's profile values
+                  mergedProfile = { ...groupProfile, ...userProfile };
+                  break;
+                case 'prefer_default':
+                  // Use group profile or empty if new
+                  mergedProfile = groupProfile;
+                  break;
+              }
+            }
+
+            // Create or update group assignment
+            const groupAssignment = await assignGroupToApp(appId, request.targetGroupId, {
+              profile: mergedProfile,
+              priority: 0,
+            });
+
+            // Remove user assignment if requested
+            let userAssignmentRemoved = false;
+            if (request.removeUserAssignment) {
+              userAssignmentRemoved = await removeUserFromApp(appId, request.userId);
+            }
+
+            results.push({
+              appId,
+              appName: appDetails.app.label,
+              success: true,
+              userAssignment,
+              groupAssignment,
+              profileChanges,
+              userAssignmentRemoved,
+            });
+
+            successCount++;
+            onProgress?.(i + 1, request.appIds.length, `Converted ${appDetails.app.label}`);
+          } catch (error: any) {
+            results.push({
+              appId,
+              appName: 'Unknown',
+              success: false,
+              error: error.message || 'Unknown error',
+            });
+            failCount++;
+          }
+        }
+
+        // Log to audit
+        const currentUser = await getCurrentUser();
+        const groupResponse = await makeApiRequest(`/api/v1/groups/${request.targetGroupId}`);
+        await auditStore.addLog({
+          action: 'convert_assignment' as any,
+          groupId: request.targetGroupId,
+          groupName: groupResponse.data?.profile?.name || request.targetGroupId,
+          performedBy: currentUser.email,
+          affectedUsers: [request.userId],
+          result: failCount === 0 ? 'success' : successCount > 0 ? 'partial' : 'failed',
+          details: {
+            usersSucceeded: successCount,
+            usersFailed: failCount,
+            apiRequestCount: request.appIds.length * 3, // Approximate
+            durationMs: Date.now() - startTime,
+          },
+          conversionDetails: {
+            sourceType: 'user',
+            targetType: 'group',
+            assignmentsConverted: successCount,
+          },
+        } as any);
+
+        onResult?.(
+          `Conversion complete: ${successCount} succeeded, ${failCount} failed`,
+          failCount === 0 ? 'success' : successCount > 0 ? 'warning' : 'error'
+        );
+      } catch (error: any) {
+        onResult?.(`Conversion failed: ${error.message}`, 'error');
+        throw error;
+      }
+
+      return results;
+    },
+    [
+      getUserAppAssignment,
+      getGroupAppAssignment,
+      assignGroupToApp,
+      removeUserFromApp,
+      getAppDetails,
+      getCurrentUser,
+      makeApiRequest,
+      onResult,
+      onProgress,
+      checkCancelled,
+    ]
+  );
+
+  /**
+   * FEATURE 4: Bulk assign groups to apps
+   */
+  const bulkAssignGroupsToApps = useCallback(
+    async (request: BulkAppAssignmentRequest): Promise<BulkAppAssignmentResult> => {
+      const results: any[] = [];
+      const startTime = Date.now();
+      let successCount = 0;
+      let failCount = 0;
+      const totalOperations = request.groupIds.length * request.appIds.length;
+
+      try {
+        onResult?.(`Starting bulk assignment: ${totalOperations} total operations...`, 'info');
+
+        let current = 0;
+        for (const groupId of request.groupIds) {
+          checkCancelled();
+
+          // Get group details
+          const groupResponse = await makeApiRequest(`/api/v1/groups/${groupId}`);
+          const groupName = groupResponse.data?.profile?.name || groupId;
+
+          for (const appId of request.appIds) {
+            checkCancelled();
+            current++;
+
+            try {
+              // Get app details
+              const appDetails = await getAppDetails(appId);
+
+              // Determine profile: app-specific > default
+              const profile = request.perAppProfiles?.[appId] || request.profile;
+
+              // Assign group to app
+              const assignment = await assignGroupToApp(appId, groupId, {
+                profile,
+                priority: request.priority ?? 0,
+              });
+
+              results.push({
+                groupId,
+                groupName,
+                appId,
+                appName: appDetails.app.label,
+                success: true,
+                assignment,
+              });
+
+              successCount++;
+              onProgress?.(current, totalOperations, `Assigned ${groupName} to ${appDetails.app.label}`);
+            } catch (error: any) {
+              const appDetails = await getAppDetails(appId).catch(() => ({ app: { label: 'Unknown' } }));
+              results.push({
+                groupId,
+                groupName,
+                appId,
+                appName: appDetails.app.label,
+                success: false,
+                error: error.message || 'Unknown error',
+              });
+              failCount++;
+              onProgress?.(current, totalOperations, `Failed: ${groupName} to ${appDetails.app.label}`);
+            }
+          }
+        }
+
+        // Log to audit
+        const currentUser = await getCurrentUser();
+        await auditStore.addLog({
+          action: 'bulk_app_assignment' as any,
+          groupId: 'multiple',
+          groupName: `${request.groupIds.length} groups`,
+          performedBy: currentUser.email,
+          affectedUsers: [],
+          affectedApps: request.appIds,
+          result: failCount === 0 ? 'success' : successCount > 0 ? 'partial' : 'failed',
+          details: {
+            usersSucceeded: successCount,
+            usersFailed: failCount,
+            apiRequestCount: totalOperations,
+            durationMs: Date.now() - startTime,
+          },
+        } as any);
+
+        onResult?.(
+          `Bulk assignment complete: ${successCount}/${totalOperations} succeeded`,
+          failCount === 0 ? 'success' : successCount > 0 ? 'warning' : 'error'
+        );
+      } catch (error: any) {
+        onResult?.(`Bulk assignment failed: ${error.message}`, 'error');
+        throw error;
+      }
+
+      return {
+        totalOperations,
+        successful: successCount,
+        failed: failCount,
+        results,
+      };
+    },
+    [assignGroupToApp, getAppDetails, getCurrentUser, makeApiRequest, onResult, onProgress, checkCancelled]
+  );
+
+  /**
+   * FEATURE 3: App assignment security analysis wrapper
+   */
+  const analyzeAppAssignmentSecurity = useCallback(
+    async (userId?: string, groupId?: string): Promise<AppAssignmentSecurityAnalysis> => {
+      onResult?.('Starting app assignment security analysis...', 'info');
+      const startTime = Date.now();
+
+      try {
+        const analysis = await analyzeAppSecurity(
+          userId,
+          groupId,
+          getUserApps,
+          getGroupApps,
+          makeApiRequest,
+          getUserLastLogin
+        );
+
+        // Log to audit
+        const currentUser = await getCurrentUser();
+        await auditStore.addLog({
+          action: 'app_security_scan' as any,
+          groupId: groupId || 'N/A',
+          groupName: groupId ? 'Group Analysis' : 'User Analysis',
+          performedBy: currentUser.email,
+          affectedUsers: userId ? [userId] : [],
+          result: 'success',
+          details: {
+            usersSucceeded: 0,
+            usersFailed: 0,
+            apiRequestCount: analysis.totalAppsAnalyzed,
+            durationMs: Date.now() - startTime,
+          },
+        } as any);
+
+        onResult?.(
+          `Security analysis complete: ${analysis.findings.length} findings, risk score ${analysis.riskScore}/100`,
+          analysis.riskScore > 70 ? 'error' : analysis.riskScore > 40 ? 'warning' : 'success'
+        );
+
+        return analysis;
+      } catch (error: any) {
+        onResult?.(`Security analysis failed: ${error.message}`, 'error');
+        throw error;
+      }
+    },
+    [getUserApps, getGroupApps, makeApiRequest, getUserLastLogin, getCurrentUser, onResult]
+  );
+
+  /**
+   * FEATURE 5: App assignment recommender wrapper
+   */
+  const getAppAssignmentRecommender = useCallback(
+    async (appIds: string[]): Promise<AssignmentRecommenderResult> => {
+      onResult?.('Analyzing app assignments and generating recommendations...', 'info');
+
+      try {
+        const result = await getAppAssignmentRecommendations(appIds, getUserApps, getGroupApps, makeApiRequest);
+
+        onResult?.(
+          `Recommendations ready: Found ${result.recommendations.length} apps with optimization opportunities. ` +
+            `Potential ${result.overallStats.estimatedMaintenanceReduction.toFixed(0)}% reduction in direct assignments.`,
+          'success'
+        );
+
+        return result;
+      } catch (error: any) {
+        onResult?.(`Failed to generate recommendations: ${error.message}`, 'error');
+        throw error;
+      }
+    },
+    [getUserApps, getGroupApps, makeApiRequest, onResult]
+  );
+
   return {
     isLoading,
     isCancelled,
@@ -981,5 +1655,20 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
     findUserAcrossGroups,
     executeBulkOperation,
     compareGroups,
+    // App assignment operations
+    getUserApps,
+    getGroupApps,
+    getUserAppAssignment,
+    getGroupAppAssignment,
+    getAppDetails,
+    assignUserToApp,
+    assignGroupToApp,
+    removeUserFromApp,
+    removeGroupFromApp,
+    // App assignment features
+    convertUserToGroupAssignment,
+    bulkAssignGroupsToApps,
+    analyzeAppAssignmentSecurity,
+    getAppAssignmentRecommender,
   };
 }
