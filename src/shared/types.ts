@@ -193,3 +193,45 @@ export interface DashboardCache {
   timestamp: number;
   groupId: string;
 }
+
+// Audit Trail types for SOC2 compliance
+export interface AuditLogEntry {
+  id: string; // UUID
+  timestamp: Date;
+  action: 'remove_users' | 'add_users' | 'export' | 'activate_rule' | 'deactivate_rule';
+  groupId: string;
+  groupName: string;
+  performedBy: string; // Okta user email from session
+  affectedUsers: string[]; // User IDs (not emails for privacy)
+  result: 'success' | 'partial' | 'failed';
+  details: {
+    usersSucceeded: number;
+    usersFailed: number;
+    apiRequestCount: number;
+    durationMs: number;
+    errorMessages?: string[];
+  };
+}
+
+export interface AuditFilters {
+  groupId?: string;
+  action?: AuditLogEntry['action'];
+  startDate?: Date;
+  endDate?: Date;
+  result?: AuditLogEntry['result'];
+  performedBy?: string;
+}
+
+export interface AuditStats {
+  totalOperations: number;
+  operationsByType: Record<string, number>;
+  successRate: number;
+  totalUsersAffected: number;
+  totalApiRequests: number;
+  lastWeekOperations: number;
+}
+
+export interface AuditSettings {
+  enabled: boolean;
+  retentionDays: number; // 30, 60, 90, 180, 365
+}

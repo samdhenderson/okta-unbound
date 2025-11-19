@@ -70,6 +70,7 @@
   },
   "homepage": "https://github.com/yourusername/okta-unbound#readme",
   "dependencies": {
+    "idb": "^8.0.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "recharts": "^3.4.1"
