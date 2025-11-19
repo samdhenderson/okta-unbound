@@ -6,6 +6,7 @@ import type { OktaUser } from '../../shared/types';
 // Mock Chrome API
 const mockChrome = {
   tabs: {
+    get: vi.fn(),
     sendMessage: vi.fn(),
   },
   storage: {
@@ -68,6 +69,9 @@ describe('useGroupHealth', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Default mock implementation for chrome.tabs.get
+    mockChrome.tabs.get.mockImplementation((tabId) => Promise.resolve({ id: tabId, active: true }));
 
     // Default mock implementation for chrome.storage.local.get (no cache)
     mockChrome.storage.local.get.mockImplementation(() => Promise.resolve({}));

@@ -721,7 +721,7 @@ export type AppMessageAction =
   | 'getAppSchema';
 
 // Extend MessageRequest to include app-related actions
-export interface AppMessageRequest extends MessageRequest {
+export interface AppMessageRequest extends Omit<MessageRequest, 'action'> {
   action: MessageRequest['action'] | AppMessageAction;
   appId?: string;
   appIds?: string[];
