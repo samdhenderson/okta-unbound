@@ -128,7 +128,7 @@ export interface GroupMembership {
 }
 
 export interface MessageRequest {
-  action: 'getGroupInfo' | 'makeApiRequest' | 'exportGroupMembers' | 'fetchGroupRules' | 'searchUsers' | 'getUserGroups' | 'getUserDetails' | 'getOktaOrigin' | 'activateRule' | 'deactivateRule';
+  action: 'getGroupInfo' | 'makeApiRequest' | 'exportGroupMembers' | 'fetchGroupRules' | 'searchUsers' | 'getUserGroups' | 'getUserDetails' | 'getOktaOrigin' | 'activateRule' | 'deactivateRule' | 'getAllGroups' | 'exportMultiGroupMembers';
   endpoint?: string;
   method?: string;
   body?: any;
@@ -139,6 +139,7 @@ export interface MessageRequest {
   query?: string;
   userId?: string;
   ruleId?: string;
+  groupIds?: string[]; // For multi-group operations
 }
 
 export interface MessageResponse<T = any> extends ApiResponse<T> {
@@ -303,4 +304,75 @@ export interface SecurityScanCache {
 export interface OktaUserWithLastLogin extends OktaUser {
   lastLogin?: string | null;
   created?: string;
+}
+
+// Multi-Group Operations types
+export interface GroupSummary {
+  id: string;
+  name: string;
+  description?: string;
+  type: GroupType;
+  memberCount: number;
+  lastUpdated?: Date;
+  hasRules: boolean;
+  ruleCount: number;
+  healthScore?: number;
+  selected?: boolean; // for multi-select UI
+}
+
+export interface GroupCollection {
+  id: string;
+  name: string;
+  description: string;
+  groupIds: string[];
+  createdAt: Date;
+  lastUsed: Date;
+}
+
+export interface CrossGroupAnalysis {
+  totalGroups: number;
+  totalUniqueUsers: number;
+  usersInMultipleGroups: number;
+  groupOverlaps: GroupOverlap[];
+  userDistribution: Map<string, string[]>; // userId -> groupIds
+}
+
+export interface GroupOverlap {
+  group1: GroupSummary;
+  group2: GroupSummary;
+  sharedUsers: number;
+  uniqueToGroup1: number;
+  uniqueToGroup2: number;
+}
+
+export interface BulkOperation {
+  id: string;
+  type: 'remove_user' | 'add_user' | 'cleanup_inactive' | 'export_all' | 'security_scan';
+  targetGroups: string[];
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  progress: number;
+  results: BulkOperationResult[];
+  config?: any; // Operation-specific configuration
+}
+
+export interface BulkOperationResult {
+  groupId: string;
+  groupName: string;
+  status: 'success' | 'failed';
+  itemsProcessed: number;
+  errors?: string[];
+}
+
+export interface UserGroupMemberships {
+  user: OktaUser;
+  groups: GroupMembership[];
+}
+
+export interface GroupsCache {
+  groups: GroupSummary[];
+  timestamp: number;
+}
+
+export interface CollectionsCache {
+  collections: GroupCollection[];
 }

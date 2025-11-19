@@ -7,11 +7,12 @@ import OperationsTab from './components/OperationsTab';
 import RulesTab from './components/RulesTab';
 import UsersTab from './components/UsersTab';
 import SecurityTab from './components/SecurityTab';
+import GroupsTab from './components/GroupsTab';
 import UndoPanel from './components/UndoPanel';
 import LoadingBar from './components/LoadingBar';
 import { useGroupContext } from './hooks/useGroupContext';
 
-type TabType = 'dashboard' | 'operations' | 'rules' | 'users' | 'security' | 'undo';
+type TabType = 'dashboard' | 'operations' | 'rules' | 'users' | 'security' | 'groups' | 'undo';
 
 const SELECTED_TAB_KEY = 'okta_unbound_selected_tab';
 
@@ -89,6 +90,12 @@ const App: React.FC = () => {
           groupId={groupInfo?.groupId}
           groupName={groupInfo?.groupName}
           targetTabId={targetTabId}
+        />
+      )}
+      {activeTab === 'groups' && (
+        <GroupsTab
+          targetTabId={targetTabId}
+          oktaOrigin={oktaOrigin}
         />
       )}
       {activeTab === 'undo' && (
