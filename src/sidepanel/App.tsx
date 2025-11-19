@@ -85,16 +85,16 @@ const App: React.FC = () => {
       )}
       {activeTab === 'rules' && (
         <RulesTab
-          targetTabId={targetTabId}
+          targetTabId={targetTabId ?? undefined}
           currentGroupId={groupInfo?.groupId}
-          oktaOrigin={oktaOrigin}
+          oktaOrigin={oktaOrigin ?? undefined}
           selectedRuleId={selectedRuleId}
           onRuleSelected={() => setSelectedRuleId(null)}
         />
       )}
       {activeTab === 'users' && (
         <UsersTab
-          targetTabId={targetTabId}
+          targetTabId={targetTabId ?? undefined}
           currentGroupId={groupInfo?.groupId}
           onNavigateToRule={handleNavigateToRule}
         />
@@ -103,13 +103,13 @@ const App: React.FC = () => {
         <SecurityTab
           groupId={groupInfo?.groupId}
           groupName={groupInfo?.groupName}
-          targetTabId={targetTabId}
+          targetTabId={targetTabId ?? undefined}
         />
       )}
       {activeTab === 'groups' && (
         <GroupsTab
-          targetTabId={targetTabId}
-          oktaOrigin={oktaOrigin}
+          targetTabId={targetTabId ?? undefined}
+          oktaOrigin={oktaOrigin ?? undefined}
         />
       )}
       {activeTab === 'undo' && (
@@ -123,7 +123,7 @@ const App: React.FC = () => {
                 </p>
               </div>
             </div>
-            <UndoPanel targetTabId={targetTabId} />
+            <UndoPanel targetTabId={targetTabId ?? undefined} />
           </div>
         </div>
       )}

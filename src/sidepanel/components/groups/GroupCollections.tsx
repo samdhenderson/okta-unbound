@@ -150,7 +150,7 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
 
       {collections.length === 0 ? (
         <p className="empty-state">
-          No saved collections. Select groups and click "Save Selection" to create one.
+          No saved collections. Select groups and click &ldquo;Save Selection&rdquo; to create one.
         </p>
       ) : (
         <div className="collections-list">

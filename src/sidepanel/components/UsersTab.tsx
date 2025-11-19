@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { OktaUser, GroupMembership, OktaGroupRule } from '../../shared/types';
+import type { OktaUser, GroupMembership } from '../../shared/types';
 import { RulesCache } from '../../shared/rulesCache';
 
 interface UsersTabProps {
@@ -15,7 +15,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
   const [selectedUser, setSelectedUser] = useState<OktaUser | null>(null);
   const [searchResults, setSearchResults] = useState<OktaUser[]>([]);
   const [memberships, setMemberships] = useState<GroupMembership[]>([]);
-  const [allRules, setAllRules] = useState<OktaGroupRule[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [apiCost, setApiCost] = useState<number>(0);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -117,8 +116,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
           );
         }
       }
-
-      setAllRules(rules);
 
       // Analyze memberships with improved heuristics
       const groups = groupsResponse.data || [];
@@ -444,7 +441,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                 </div>
               ) : (
                 <div className="memberships-list">
-                  {memberships.map((membership, index) => (
+                  {memberships.map((membership) => (
                     <div
                       key={membership.group.id}
                       className={`membership-card ${

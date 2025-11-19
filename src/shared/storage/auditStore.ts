@@ -280,7 +280,8 @@ class AuditStore {
   async updateSettings(settings: AuditSettings): Promise<void> {
     try {
       const db = await this.getDB();
-      await db.put(SETTINGS_STORE, { ...settings, id: 'default' });
+      const storedSettings = { ...settings, id: 'default' as const };
+      await db.put(SETTINGS_STORE, storedSettings);
       console.log('[AuditStore] Updated settings:', settings);
     } catch (error) {
       console.error('[AuditStore] Failed to update settings:', error);
