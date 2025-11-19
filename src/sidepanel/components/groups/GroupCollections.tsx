@@ -22,7 +22,7 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
   useEffect(() => {
     chrome.storage.local.get([COLLECTIONS_KEY], (result) => {
       if (result[COLLECTIONS_KEY]) {
-        const stored = JSON.parse(result[COLLECTIONS_KEY]);
+        const stored = JSON.parse(result[COLLECTIONS_KEY] as string);
         // Convert date strings back to Date objects
         const parsed = stored.map((c: any) => ({
           ...c,
