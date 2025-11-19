@@ -415,15 +415,29 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       const affectedUserIds: string[] = [];
 
       try {
+        // Reset cancellation state and create new controller
+        setIsCancelled(false);
+        const controller = new AbortController();
+        setAbortController(controller);
+
         setIsLoading(true);
         onResult?.(`Starting: ${action === 'remove' ? 'Remove' : 'List'} users with status ${targetStatus}`, 'info');
 
         // Get current user for audit logging
         currentUser = await getCurrentUser();
 
-        // Get group name for undo logging
+        checkCancelled(); // Check if cancelled
+
+        // Check group type
         const groupDetails = await makeApiRequest(`/api/v1/groups/${groupId}`);
+        if (action === 'remove' && groupDetails.success && groupDetails.data?.type === 'APP_GROUP') {
+          onResult?.('ERROR: Cannot modify APP_GROUP', 'error');
+          return;
+        }
+
         groupName = groupDetails.data?.profile?.name || 'Unknown Group';
+
+        checkCancelled(); // Check if cancelled
 
         const members = await getAllGroupMembers(groupId);
         const filteredUsers = members.filter((u) => u.status === targetStatus);
@@ -445,6 +459,8 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
           onResult?.(`Listed ${filteredUsers.length} users`, 'success');
         } else {
           for (let i = 0; i < filteredUsers.length; i++) {
+            checkCancelled(); // Check if cancelled before each iteration
+
             const user = filteredUsers[i];
             affectedUserIds.push(user.id);
             onProgress?.(i + 1, filteredUsers.length, `Removing user ${i + 1} of ${filteredUsers.length}`);
@@ -457,7 +473,13 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
               failed++;
               const errorMsg = `Failed: ${user.profile.login} - ${result.error}`;
               errorMessages.push(errorMsg);
-              onResult?.(errorMsg, 'error');
+              if (result.status === 403) {
+                onResult?.(`403 Forbidden: ${user.profile.login} - ${result.error}`, 'error');
+                onResult?.('Stopping after first 403 error', 'warning');
+                break;
+              } else {
+                onResult?.(errorMsg, 'error');
+              }
             }
             await new Promise((resolve) => setTimeout(resolve, 100));
           }
@@ -466,9 +488,11 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       } catch (error) {
         const errorMsg = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
         errorMessages.push(errorMsg);
-        onResult?.(errorMsg, 'error');
+        onResult?.(errorMsg, error instanceof Error && error.message === 'Operation cancelled' ? 'warning' : 'error');
       } finally {
         setIsLoading(false);
+        setAbortController(null);
+        setIsCancelled(false);
         onProgress?.(100, 100, 'Complete');
 
         // Log to audit trail (fire-and-forget) - only for remove actions
@@ -496,7 +520,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
         }
       }
     },
-    [makeApiRequest, getAllGroupMembers, removeUserFromGroup, getCurrentUser, onResult, onProgress]
+    [makeApiRequest, getAllGroupMembers, removeUserFromGroup, getCurrentUser, onResult, onProgress, checkCancelled]
   );
 
   const exportMembers = useCallback(
