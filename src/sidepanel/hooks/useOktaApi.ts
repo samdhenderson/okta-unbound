@@ -542,6 +542,97 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
     [sendMessage, getCurrentUser, onResult]
   );
 
+  // Security Analysis API calls
+  const getUserLastLogin = useCallback(
+    async (userId: string): Promise<Date | null> => {
+      try {
+        const response = await makeApiRequest(`/api/v1/users/${userId}`);
+        if (response.success && response.data?.lastLogin) {
+          return new Date(response.data.lastLogin);
+        }
+        return null;
+      } catch (error) {
+        console.error(`[useOktaApi] Failed to get last login for user ${userId}:`, error);
+        return null;
+      }
+    },
+    [makeApiRequest]
+  );
+
+  const getUserAppAssignments = useCallback(
+    async (userId: string): Promise<number> => {
+      try {
+        const response = await makeApiRequest(`/api/v1/apps?filter=user.id eq "${userId}"&limit=1`);
+        if (response.success && response.headers?.['x-total-count']) {
+          return parseInt(response.headers['x-total-count'], 10);
+        }
+        // If header not available, count the data array
+        return response.data?.length || 0;
+      } catch (error) {
+        console.error(`[useOktaApi] Failed to get app assignments for user ${userId}:`, error);
+        return 0;
+      }
+    },
+    [makeApiRequest]
+  );
+
+  const batchGetUserDetails = useCallback(
+    async (userIds: string[], onProgress?: (current: number, total: number) => void): Promise<Map<string, any>> => {
+      const userDetailsMap = new Map<string, any>();
+      const batchSize = 10; // Process 10 users concurrently
+
+      for (let i = 0; i < userIds.length; i += batchSize) {
+        const batch = userIds.slice(i, i + batchSize);
+        const batchPromises = batch.map(async (userId) => {
+          try {
+            const response = await makeApiRequest(`/api/v1/users/${userId}`);
+            if (response.success && response.data) {
+              return { userId, data: response.data };
+            }
+            return { userId, data: null };
+          } catch (error) {
+            console.error(`[useOktaApi] Failed to fetch user ${userId}:`, error);
+            return { userId, data: null };
+          }
+        });
+
+        const results = await Promise.all(batchPromises);
+        results.forEach(({ userId, data }) => {
+          if (data) {
+            userDetailsMap.set(userId, data);
+          }
+        });
+
+        onProgress?.(Math.min(i + batchSize, userIds.length), userIds.length);
+
+        // Rate limiting - small delay between batches
+        if (i + batchSize < userIds.length) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+      }
+
+      return userDetailsMap;
+    },
+    [makeApiRequest]
+  );
+
+  const getUserGroupMemberships = useCallback(
+    async (userId: string): Promise<number> => {
+      try {
+        const response = await makeApiRequest(`/api/v1/users/${userId}/groups?limit=1`);
+        if (response.success && response.headers?.['x-total-count']) {
+          return parseInt(response.headers['x-total-count'], 10);
+        }
+        // If we can't get the count from headers, we'd need to paginate - return 0 for now
+        return 0;
+      } catch (error) {
+        console.error(`[useOktaApi] Failed to get group memberships for user ${userId}:`, error);
+        return 0;
+      }
+    },
+    [makeApiRequest]
+  );
+
   return {
     isLoading,
     makeApiRequest,
@@ -551,5 +642,9 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
     smartCleanup,
     customFilter,
     exportMembers,
+    getUserLastLogin,
+    getUserAppAssignments,
+    batchGetUserDetails,
+    getUserGroupMemberships,
   };
 }

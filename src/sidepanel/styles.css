@@ -2087,3 +2087,477 @@ body {
     opacity: 0.5;
   }
 }
+
+/* =====================================
+   Security Tab Styles
+   ===================================== */
+
+/* Security Subtabs */
+.security-subtabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0;
+}
+
+.subtab-button {
+  background: none;
+  border: none;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s ease;
+  margin-bottom: -1px;
+}
+
+.subtab-button:hover {
+  color: var(--accent-primary);
+  background: var(--bg-secondary);
+}
+
+.subtab-button.active {
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
+  font-weight: 600;
+}
+
+/* Security Score Card */
+.security-score-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+/* Security Finding Card */
+.security-finding-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+  transition: all 0.2s ease;
+}
+
+.security-finding-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.finding-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.finding-severity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.severity-icon {
+  font-size: 16px;
+}
+
+.finding-count {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.finding-body {
+  margin-bottom: 12px;
+}
+
+.finding-category {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.finding-description {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.finding-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Orphaned Accounts List */
+.orphaned-accounts-list {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.list-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.toolbar-left,
+.toolbar-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.filter-select,
+.sort-select {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 14px;
+  background: var(--bg-primary);
+  cursor: pointer;
+}
+
+.filter-select:hover,
+.sort-select:hover {
+  border-color: var(--accent-primary);
+}
+
+.accounts-summary,
+.memberships-summary {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.selected-count {
+  font-weight: 600;
+  color: var(--accent-primary);
+}
+
+/* Risk Groups */
+.risk-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.risk-group {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.risk-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border-left: 4px solid;
+  user-select: none;
+}
+
+.risk-group-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+}
+
+.expand-icon {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.risk-label {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.risk-count {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.risk-group-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.risk-group-body {
+  padding: 16px;
+}
+
+/* Accounts Table */
+.accounts-table,
+.memberships-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.accounts-table thead,
+.memberships-table thead {
+  background: var(--bg-secondary);
+}
+
+.accounts-table th,
+.memberships-table th {
+  text-align: left;
+  padding: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 2px solid var(--border-color);
+}
+
+.accounts-table td,
+.memberships-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.accounts-table tbody tr:hover,
+.memberships-table tbody tr:hover {
+  background: var(--bg-secondary);
+}
+
+.accounts-table tbody tr.review-required,
+.memberships-table tbody tr.review-required {
+  background: #fff4e6;
+}
+
+/* Source Badges */
+.source-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.source-badge.source-direct {
+  background: #e7f3ff;
+  color: #0066cc;
+}
+
+.source-badge.source-rule-based {
+  background: #e7f5e9;
+  color: #1e4620;
+}
+
+/* Matches Indicators */
+.matches-yes {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.matches-no {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+/* Recommendation Badges */
+.recommendation-review {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #fff4e6;
+  color: #6b4500;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.recommendation-ok {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #e7f5e9;
+  color: #1e4620;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* List Legend */
+.list-legend {
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+}
+
+.list-legend div {
+  margin-bottom: 8px;
+}
+
+.list-legend div:last-child {
+  margin-bottom: 0;
+}
+
+/* Info Box */
+.info-box {
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.info-box strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.info-box p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+/* Stale Memberships List */
+.stale-memberships-list {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+/* Scan Progress */
+.scan-progress {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent-primary);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+/* Findings Grid */
+.findings-grid {
+  margin-bottom: 24px;
+}
+
+.findings-view {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+/* Recommendations */
+.recommendations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recommendation-card {
+  transition: all 0.2s ease;
+}
+
+.recommendation-card:hover {
+  transform: translateX(4px);
+}
+
+.priority-badge {
+  white-space: nowrap;
+}
+
+/* Empty State for Security Tab */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.empty-state h3 {
+  font-size: 18px;
+  margin-bottom: 12px;
+  color: var(--text-primary);
+}
+
+.empty-state p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 0;
+}
+
+/* Button Size Variants */
+.btn-xs {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+/* Security Dashboard Widget */
+.security-widget {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.security-widget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.security-widget-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.security-widget-score {
+  font-size: 24px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 6px;
+}
+
+.security-widget-body {
+  margin-bottom: 12px;
+}
+
+.security-widget-stat {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--bg-secondary);
+}
+
+.security-widget-stat:last-child {
+  border-bottom: none;
+}
+
+.security-widget-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}

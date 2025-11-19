@@ -18,9 +18,24 @@
 
 ### Currently Available
 
-✅ **Dashboard Tab (NEW)**
+✅ **Security Posture Analysis (NEW)**
+Enterprise-grade security insights based on Okta ISPM best practices:
+- Automated detection of orphaned accounts (deprovisioned users still in groups)
+- Identify users who never logged in (30+ days old)
+- Flag inactive users (90+ days and 180+ days)
+- Stale membership analysis (90+ day review recommendations)
+- Security score calculation (0-100) with severity-based findings
+- Risk level classification (Critical, High, Medium, Low)
+- Bulk remediation with confirmation and progress tracking
+- Export security findings to CSV for reporting
+- Dashboard widget showing security status at-a-glance
+- Automatic scan caching for 24 hours
+- Performance-optimized batch API calls for large groups
+
+✅ **Dashboard Tab**
 Comprehensive at-a-glance insights with visual analytics:
 - Real-time group health metrics and risk scoring
+- Security posture widget with quick access to scan results
 - Interactive pie chart showing user status distribution
 - Membership source breakdown (direct vs rule-based)
 - Quick action buttons for common operations
@@ -94,9 +109,6 @@ Sync application assignments across groups easily
 
 🔜 **Bulk Operations Across Groups**
 Run cleanup and management operations across multiple groups simultaneously
-
-🔜 **Improve Security Posture**
-Automated detection and removal of stale memberships with scheduled audits
 
 ## Supported User Statuses
 

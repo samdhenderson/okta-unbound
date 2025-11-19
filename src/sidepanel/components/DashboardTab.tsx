@@ -6,6 +6,7 @@ import MembershipBarChart from './dashboard/MembershipBarChart';
 import RiskGauge from './dashboard/RiskGauge';
 import QuickActionsCard from './dashboard/QuickActionsCard';
 import AuditStatsCard from './dashboard/AuditStatsCard';
+import SecurityWidget from './dashboard/SecurityWidget';
 import AuditLogEntryComponent from './AuditLogEntry';
 import { auditStore } from '../../shared/storage/auditStore';
 import type { AuditLogEntry } from '../../shared/types';
@@ -14,7 +15,7 @@ interface DashboardTabProps {
   groupId: string | undefined;
   groupName: string | undefined;
   targetTabId: number | null;
-  onTabChange: (tab: 'operations' | 'rules' | 'users' | 'undo' | 'dashboard') => void;
+  onTabChange: (tab: 'operations' | 'rules' | 'users' | 'security' | 'undo' | 'dashboard') => void;
   oktaOrigin?: string | null;
 }
 
@@ -185,6 +186,11 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
             <div className="dashboard-card">
               <AuditStatsCard />
             </div>
+
+            {/* Security Widget */}
+            {groupId && (
+              <SecurityWidget groupId={groupId} onViewSecurity={() => onTabChange('security')} />
+            )}
           </div>
         </div>
 

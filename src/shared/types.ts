@@ -235,3 +235,72 @@ export interface AuditSettings {
   enabled: boolean;
   retentionDays: number; // 30, 60, 90, 180, 365
 }
+
+// Security Posture Analysis types
+export interface OrphanedAccount {
+  userId: string;
+  email: string;
+  status: UserStatus;
+  lastLogin: Date | null;
+  daysSinceLogin: number | null;
+  neverLoggedIn: boolean;
+  groupMemberships: number;
+  appAssignments: number;
+  orphanReason: 'never_logged_in' | 'inactive_90d' | 'inactive_180d' | 'no_apps' | 'deprovisioned_in_groups';
+  riskLevel: 'critical' | 'high' | 'medium' | 'low';
+  addedToGroupDate?: Date;
+  membershipSource: 'direct' | 'rule-based';
+  firstName: string;
+  lastName: string;
+}
+
+export interface StaleGroupMembership {
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  addedDate: Date | null;
+  daysInGroup: number | null;
+  source: 'direct' | 'rule-based';
+  lastAppUsage: Date | null;
+  shouldReview: boolean;
+  matchesRules: boolean; // Whether user still matches current group rules
+}
+
+export interface SecurityPosture {
+  overallScore: number; // 0-100
+  findings: SecurityFinding[];
+  recommendations: SecurityRecommendation[];
+  lastScanDate: Date;
+  groupId: string;
+  groupName: string;
+}
+
+export interface SecurityFinding {
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  category: 'orphaned_accounts' | 'stale_memberships' | 'rule_conflicts' | 'permission_anomalies';
+  count: number;
+  description: string;
+  affectedUsers?: string[];
+}
+
+export interface SecurityRecommendation {
+  title: string;
+  description: string;
+  priority: 'high' | 'medium' | 'low';
+  actionable: boolean;
+  relatedFinding?: string;
+}
+
+export interface SecurityScanCache {
+  posture: SecurityPosture;
+  orphanedAccounts: OrphanedAccount[];
+  staleMemberships: StaleGroupMembership[];
+  timestamp: number;
+  groupId: string;
+}
+
+export interface OktaUserWithLastLogin extends OktaUser {
+  lastLogin?: string | null;
+  created?: string;
+}
