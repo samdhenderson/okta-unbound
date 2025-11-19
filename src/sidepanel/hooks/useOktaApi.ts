@@ -683,8 +683,10 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
     async (onProgress?: (loaded: number, total: number) => void): Promise<any[]> => {
       const allGroups: any[] = [];
       let nextUrl: string | null = '/api/v1/groups?limit=200';
+      let pageCount = 0;
 
       while (nextUrl) {
+        pageCount++;
         const response = await makeApiRequest(nextUrl);
 
         if (!response.success) {

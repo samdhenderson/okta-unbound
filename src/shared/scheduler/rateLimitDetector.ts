@@ -170,6 +170,8 @@ export class RateLimitDetector {
    * Clean up expired rate limit entries
    */
   private cleanExpiredLimits(): void {
+    const now = Date.now();
+
     // Clean per-endpoint limits
     for (const [endpoint, info] of this.limits.entries()) {
       if (this.isExpired(info)) {

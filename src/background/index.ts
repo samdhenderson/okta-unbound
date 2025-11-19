@@ -45,7 +45,7 @@ setInterval(() => {
 // ============================================================================
 
 chrome.runtime.onMessage.addListener(
-  (request, _sender, sendResponse) => {
+  (request, sender, sendResponse) => {
     console.log('[Background] Received message:', request.action);
 
     switch (request.action) {

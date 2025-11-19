@@ -69,6 +69,7 @@ export function useUndoManager(): UseUndoManagerReturn {
       console.log('[useUndoManager] Performing undo for action:', action.id, action.type);
 
       let request: MessageRequest;
+      let reverseDescription: string;
 
       switch (action.type) {
         case 'REMOVE_USER_FROM_GROUP': {
@@ -83,6 +84,7 @@ export function useUndoManager(): UseUndoManagerReturn {
             endpoint: `/api/v1/groups/${metadata.groupId}/users/${metadata.userId}`,
             method: 'PUT',
           };
+          reverseDescription = `Re-added ${metadata.userName} to ${metadata.groupName}`;
           break;
         }
 
@@ -98,6 +100,7 @@ export function useUndoManager(): UseUndoManagerReturn {
             endpoint: `/api/v1/groups/${metadata.groupId}/users/${metadata.userId}`,
             method: 'DELETE',
           };
+          reverseDescription = `Removed ${metadata.userName} from ${metadata.groupName}`;
           break;
         }
 
@@ -112,6 +115,7 @@ export function useUndoManager(): UseUndoManagerReturn {
             action: 'deactivateRule',
             ruleId: metadata.ruleId,
           };
+          reverseDescription = `Deactivated rule: ${metadata.ruleName}`;
           break;
         }
 
@@ -126,6 +130,7 @@ export function useUndoManager(): UseUndoManagerReturn {
             action: 'activateRule',
             ruleId: metadata.ruleId,
           };
+          reverseDescription = `Activated rule: ${metadata.ruleName}`;
           break;
         }
 

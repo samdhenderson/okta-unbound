@@ -172,7 +172,7 @@ async function handleMakeApiRequest(
     if (contentType?.includes('application/json')) {
       try {
         data = await response.json();
-      } catch {
+      } catch (e) {
         console.warn('[Content] Failed to parse JSON response');
       }
     }
@@ -441,7 +441,6 @@ async function handleFetchGroupRules(): Promise<MessageResponse> {
         id: rule.id,
         name: rule.name,
         status: rule.status,
-        type: rule.type || 'group_rule',
         condition: simpleCondition,
         conditionExpression: expression,
         groupIds,

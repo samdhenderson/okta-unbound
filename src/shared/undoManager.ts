@@ -1,7 +1,7 @@
 // Undo Manager
 // Manages undo history and provides undo functionality
 
-import type { UndoAction, UndoActionMetadata, UndoHistory } from './undoTypes';
+import type { UndoAction, UndoActionMetadata, UndoHistory, UndoResult } from './undoTypes';
 
 const UNDO_STORAGE_KEY = 'undoHistory';
 const MAX_UNDO_SIZE = 10; // Maximum number of actions to keep

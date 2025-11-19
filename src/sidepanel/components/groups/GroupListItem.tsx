@@ -13,6 +13,7 @@ const GroupListItem: React.FC<GroupListItemProps> = ({
   group,
   selected,
   onToggleSelect,
+  onOpenInOkta,
   oktaOrigin,
 }) => {
   const [expanded, setExpanded] = useState(false);

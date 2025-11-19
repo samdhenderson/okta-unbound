@@ -19,12 +19,13 @@ const SchedulerStatusBar: React.FC = () => {
 
   // Update cooldown countdown
   useEffect(() => {
+    if (!state?.cooldownEndsAt) {
+      setCooldownRemaining(0);
+      return;
+    }
+
     const updateCountdown = () => {
-      if (!state?.cooldownEndsAt) {
-        setCooldownRemaining(0);
-        return;
-      }
-      const remaining = Math.max(0, state.cooldownEndsAt - Date.now());
+      const remaining = Math.max(0, state.cooldownEndsAt! - Date.now());
       setCooldownRemaining(remaining);
     };
 

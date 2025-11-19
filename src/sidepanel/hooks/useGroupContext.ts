@@ -132,7 +132,7 @@ export function useGroupContext(): UseGroupContextReturn {
     fetchGroupInfo();
 
     // Listen for tab updates (when user navigates to different Okta pages)
-    const handleTabUpdate = (_tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
+    const handleTabUpdate = (tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
       // Refetch immediately when URL changes on Okta tabs
       // This ensures we detect group page navigation instantly
       if (changeInfo.url && tab.url &&

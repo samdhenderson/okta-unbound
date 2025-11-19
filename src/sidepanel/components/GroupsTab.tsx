@@ -62,7 +62,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
     setError(null);
 
     try {
-      const allGroups = await api.getAllGroups((_loaded, _total) => {
+      const allGroups = await api.getAllGroups((loaded, total) => {
         // Progress callback
       });
 

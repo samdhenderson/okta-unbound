@@ -293,7 +293,7 @@ export class ApiScheduler {
   /**
    * Retry a failed request
    */
-  private async retryRequest(request: QueuedRequest, _error: any): Promise<void> {
+  private async retryRequest(request: QueuedRequest, error: any): Promise<void> {
     request.retryCount++;
     this.metrics.retriedRequests++;
 

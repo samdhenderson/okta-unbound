@@ -34,14 +34,6 @@ export default [
         document: 'readonly',
         Blob: 'readonly',
         crypto: 'readonly',
-        window: 'readonly',
-        fetch: 'readonly',
-        navigator: 'readonly',
-        AbortController: 'readonly',
-        RequestInit: 'readonly',
-        NodeJS: 'readonly',
-        alert: 'readonly',
-        confirm: 'readonly',
       },
     },
     plugins: {
@@ -57,7 +49,6 @@ export default [
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
       'react/react-in-jsx-scope': 'off',
-      'react/prop-types': 'off', // Using TypeScript for type checking
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'warn',
     },
