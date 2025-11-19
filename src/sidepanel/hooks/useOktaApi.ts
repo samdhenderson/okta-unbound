@@ -48,15 +48,27 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
   );
 
   const makeApiRequest = useCallback(
-    async (endpoint: string, method: string = 'GET', body?: any) => {
-      return sendMessage({
-        action: 'makeApiRequest',
+    async (endpoint: string, method: string = 'GET', body?: any, priority: 'high' | 'normal' | 'low' = 'normal') => {
+      if (!targetTabId) {
+        throw new Error('No target tab ID - not connected to Okta page');
+      }
+
+      console.log('[useOktaApi] Scheduling API request via background:', { endpoint, method, priority });
+
+      // Route through the background scheduler for rate limit control
+      const response = await chrome.runtime.sendMessage({
+        action: 'scheduleApiRequest',
         endpoint,
         method,
         body,
+        tabId: targetTabId,
+        priority,
       });
+
+      console.log('[useOktaApi] Received scheduled response:', response);
+      return response;
     },
-    [sendMessage]
+    [targetTabId]
   );
 
   // Get current user for audit logging

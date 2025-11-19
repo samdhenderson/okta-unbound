@@ -10,7 +10,9 @@ import SecurityTab from './components/SecurityTab';
 import GroupsTab from './components/GroupsTab';
 import UndoPanel from './components/UndoPanel';
 import LoadingBar from './components/LoadingBar';
+import SchedulerStatusBar from './components/SchedulerStatusBar';
 import { useGroupContext } from './hooks/useGroupContext';
+import { SchedulerProvider } from './contexts/SchedulerContext';
 
 type TabType = 'dashboard' | 'operations' | 'rules' | 'users' | 'security' | 'groups' | 'undo';
 
@@ -52,8 +54,9 @@ const App: React.FC = () => {
   }, [groupInfo, connectionStatus, error]);
 
   return (
-    <div className="sidebar-container">
-      <Header status={connectionStatus} />
+    <SchedulerProvider>
+      <div className="sidebar-container">
+        <Header status={connectionStatus} />
 
       <GroupBanner
         groupName={groupInfo?.groupName || 'Loading...'}
@@ -127,7 +130,11 @@ const App: React.FC = () => {
 
       {/* Global Loading Bar - appears at bottom of all pages */}
       <LoadingBar />
-    </div>
+
+        {/* Global Scheduler Status Bar */}
+        <SchedulerStatusBar />
+      </div>
+    </SchedulerProvider>
   );
 };
 

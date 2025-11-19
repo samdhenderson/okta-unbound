@@ -6,6 +6,8 @@ import { useProgress } from '../contexts/ProgressContext';
 import { logAction } from '../../shared/undoManager';
 import { auditStore } from '../../shared/storage/auditStore';
 import { RulesCache } from '../../shared/rulesCache';
+import { TabStateManager, saveRulesTabState } from '../../shared/tabState/tabStateManager';
+import type { RulesTabState } from '../../shared/tabState/types';
 
 interface RulesTabProps {
   targetTabId?: number;
@@ -34,23 +36,34 @@ const RulesTab: React.FC<RulesTabProps> = ({
   const [lastFetchTime, setLastFetchTime] = useState<string | null>(null);
   const { startProgress, updateProgress, completeProgress } = useProgress();
 
-  // Load rules from chrome.storage on mount
+  // Load rules and state from TabStateManager on mount
   useEffect(() => {
-    const loadPersistedRules = async () => {
+    const loadPersistedState = async () => {
       try {
-        const result = await chrome.storage.local.get(['cachedRules', 'cachedRulesStats', 'cachedRulesTime']);
-        if (result.cachedRules && result.cachedRulesStats) {
-          console.log('[RulesTab] Loaded persisted rules from storage:', result.cachedRules.length);
-          setRules(result.cachedRules);
-          setStats(result.cachedRulesStats);
-          setLastFetchTime(result.cachedRulesTime || null);
+        const savedState = await TabStateManager.loadTabState<RulesTabState>('rules');
+        if (savedState) {
+          console.log('[RulesTab] Loaded persisted state from TabStateManager');
+          if (savedState.cachedRules) setRules(savedState.cachedRules);
+          if (savedState.cachedStats) setStats(savedState.cachedStats);
+          if (savedState.lastFetchTime) setLastFetchTime(savedState.lastFetchTime);
+          if (savedState.searchQuery) setSearchQuery(savedState.searchQuery);
+          if (savedState.activeFilter) setActiveFilter(savedState.activeFilter);
+          if (savedState.scrollPosition) {
+            // Restore scroll position after a short delay
+            setTimeout(() => {
+              window.scrollTo(0, savedState.scrollPosition);
+            }, 100);
+          }
         }
       } catch (err) {
-        console.error('[RulesTab] Failed to load persisted rules:', err);
+        console.error('[RulesTab] Failed to load persisted state:', err);
       }
     };
 
-    loadPersistedRules();
+    loadPersistedState();
+
+    // Mark tab as visited
+    TabStateManager.markTabVisited('rules');
   }, []);
 
   // Handle selectedRuleId navigation
@@ -72,26 +85,31 @@ const RulesTab: React.FC<RulesTabProps> = ({
     }
   }, [selectedRuleId, rules, onRuleSelected]);
 
-  // Persist rules to chrome.storage whenever they change
+  // Persist rules and UI state whenever they change
   useEffect(() => {
     if (rules.length > 0) {
-      const persistRules = async () => {
-        try {
-          const fetchTime = new Date().toISOString();
-          await chrome.storage.local.set({
-            cachedRules: rules,
-            cachedRulesStats: stats,
-            cachedRulesTime: fetchTime,
-          });
-          console.log('[RulesTab] Persisted', rules.length, 'rules to storage');
-        } catch (err) {
-          console.error('[RulesTab] Failed to persist rules:', err);
-        }
-      };
-
-      persistRules();
+      saveRulesTabState({
+        cachedRules: rules,
+        cachedStats: stats,
+        lastFetchTime,
+        searchQuery,
+        activeFilter,
+        scrollPosition: window.scrollY,
+      }).catch((err) => {
+        console.error('[RulesTab] Failed to persist state:', err);
+      });
     }
-  }, [rules, stats]);
+  }, [rules, stats, lastFetchTime, searchQuery, activeFilter]);
+
+  // Persist scroll position periodically
+  useEffect(() => {
+    const handleScroll = () => {
+      TabStateManager.updateScrollPosition('rules', window.scrollY);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleLoadRules = async (force: boolean = false) => {
     if (!targetTabId) {
