@@ -21,9 +21,9 @@ export function useGroupContext(): UseGroupContextReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [oktaOrigin, setOktaOrigin] = useState<string | null>(null);
 
-  const fetchGroupInfo = async () => {
+  const fetchGroupInfo = async (retryCount = 0) => {
     try {
-      console.log('[useGroupContext] Fetching group info...');
+      console.log('[useGroupContext] Fetching group info... (attempt', retryCount + 1, ')');
       setIsLoading(true);
       setError(null);
 
@@ -64,42 +64,65 @@ export function useGroupContext(): UseGroupContextReturn {
 
       setTargetTabId(tab.id!);
 
-      // Fetch Okta origin from the tab
-      console.log('[useGroupContext] Fetching Okta origin from tab', tab.id);
-      const originResponse: MessageResponse<string> = await chrome.tabs.sendMessage(tab.id!, {
-        action: 'getOktaOrigin',
-      });
+      // Try to communicate with content script
+      try {
+        // Fetch Okta origin from the tab
+        console.log('[useGroupContext] Fetching Okta origin from tab', tab.id);
+        const originResponse: MessageResponse<string> = await chrome.tabs.sendMessage(tab.id!, {
+          action: 'getOktaOrigin',
+        });
 
-      if (originResponse.success && originResponse.data) {
-        setOktaOrigin(originResponse.data);
-        console.log('[useGroupContext] Okta origin:', originResponse.data);
-      }
+        if (originResponse.success && originResponse.data) {
+          setOktaOrigin(originResponse.data);
+          console.log('[useGroupContext] Okta origin:', originResponse.data);
+        }
 
-      // Request group info from content script
-      console.log('[useGroupContext] Sending getGroupInfo message to tab', tab.id);
-      const response: MessageResponse<GroupInfo> = await chrome.tabs.sendMessage(tab.id!, {
-        action: 'getGroupInfo',
-      });
+        // Request group info from content script
+        console.log('[useGroupContext] Sending getGroupInfo message to tab', tab.id);
+        const response: MessageResponse<GroupInfo> = await chrome.tabs.sendMessage(tab.id!, {
+          action: 'getGroupInfo',
+        });
 
-      console.log('[useGroupContext] Received response:', response);
+        console.log('[useGroupContext] Received response:', response);
 
-      if (response.success && response.data) {
-        setGroupInfo(response.data);
+        // Successfully connected to Okta admin instance
         setConnectionStatus('connected');
         setError(null);
-      } else {
-        // Connection successful, but not on a group page
-        setGroupInfo(null);
-        setConnectionStatus('connected');
-        setError(null);
-        console.log('[useGroupContext] Connected to Okta, but not on a group page');
+
+        if (response.success && response.data) {
+          // On a group page
+          setGroupInfo(response.data);
+          console.log('[useGroupContext] Connected to Okta and on group page:', response.data.groupName);
+        } else {
+          // On Okta admin but not on a group page
+          setGroupInfo(null);
+          console.log('[useGroupContext] Connected to Okta admin, but not on a group page');
+        }
+      } catch (messageErr) {
+        // Content script not responding - retry with exponential backoff
+        console.warn('[useGroupContext] Content script communication error:', messageErr);
+
+        if (retryCount < 3) {
+          const delay = Math.pow(2, retryCount) * 500; // 500ms, 1s, 2s
+          console.log(`[useGroupContext] Retrying in ${delay}ms...`);
+          setTimeout(() => fetchGroupInfo(retryCount + 1), delay);
+          return; // Don't finalize loading state yet
+        } else {
+          // After retries, still show as connected to admin but warn about communication
+          setConnectionStatus('connected');
+          setGroupInfo(null);
+          setError('Connected to Okta, but extension communication delayed');
+          console.warn('[useGroupContext] Max retries reached, showing as connected anyway');
+        }
       }
     } catch (err) {
+      // No Okta tabs found
       console.error('[useGroupContext] Error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMessage);
       setConnectionStatus('error');
       setGroupInfo(null);
+      setOktaOrigin(null);
     } finally {
       setIsLoading(false);
     }
@@ -110,12 +133,22 @@ export function useGroupContext(): UseGroupContextReturn {
 
     // Listen for tab updates (when user navigates to different Okta pages)
     const handleTabUpdate = (tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
-      // Only refetch if the URL changed and it's an Okta tab
+      // Refetch immediately when URL changes on Okta tabs
+      // This ensures we detect group page navigation instantly
       if (changeInfo.url && tab.url &&
           (tab.url.includes('okta.com') ||
            tab.url.includes('oktapreview.com') ||
            tab.url.includes('okta-emea.com'))) {
-        console.log('[useGroupContext] Okta tab URL changed, refetching group info');
+        console.log('[useGroupContext] Okta tab URL changed, refetching immediately');
+        fetchGroupInfo();
+      }
+
+      // Also refetch when page finishes loading (to catch any delayed navigation)
+      if (changeInfo.status === 'complete' && tab.url &&
+          (tab.url.includes('okta.com') ||
+           tab.url.includes('oktapreview.com') ||
+           tab.url.includes('okta-emea.com'))) {
+        console.log('[useGroupContext] Okta tab loaded, verifying group context');
         fetchGroupInfo();
       }
     };
