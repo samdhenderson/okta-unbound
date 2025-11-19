@@ -234,12 +234,24 @@ const OperationsTab: React.FC<OperationsTabProps> = ({ groupId, groupName, targe
 
       {/* Progress */}
       <div className="section">
-        <h2>Progress</h2>
+        <div className="section-header">
+          <h2>Progress</h2>
+          {api.isLoading && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={api.cancelOperation}
+              title="Cancel ongoing operation"
+            >
+              Cancel Operation
+            </button>
+          )}
+        </div>
         <div className="progress-container">
           <div className="progress-bar">
             <div className="progress-fill" style={{ width: `${progressPercent}%` }}></div>
           </div>
           <p className="progress-text">{progress.message}</p>
+          {api.isCancelled && <p className="progress-text text-warning">Cancelling...</p>}
         </div>
       </div>
 

@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import type { MessageRequest, MessageResponse, OktaUser, UserStatus, AuditLogEntry } from '../../shared/types';
 import { logAction } from '../../shared/undoManager';
 import { auditStore } from '../../shared/storage/auditStore';
+import { RulesCache } from '../../shared/rulesCache';
 
 interface UseOktaApiOptions {
   targetTabId: number | null;
@@ -11,6 +12,25 @@ interface UseOktaApiOptions {
 
 export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOptions) {
   const [isLoading, setIsLoading] = useState(false);
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const [isCancelled, setIsCancelled] = useState(false);
+
+  // Cancel ongoing operation
+  const cancelOperation = useCallback(() => {
+    console.log('[useOktaApi] Cancelling operation');
+    setIsCancelled(true);
+    if (abortController) {
+      abortController.abort();
+    }
+    onResult?.('Operation cancelled by user', 'warning');
+  }, [abortController, onResult]);
+
+  // Check if operation should be cancelled
+  const checkCancelled = useCallback(() => {
+    if (isCancelled) {
+      throw new Error('Operation cancelled');
+    }
+  }, [isCancelled]);
 
   const sendMessage = useCallback(
     async <T = any>(message: MessageRequest): Promise<MessageResponse<T>> => {
@@ -138,11 +158,18 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       const affectedUserIds: string[] = [];
 
       try {
+        // Reset cancellation state and create new controller
+        setIsCancelled(false);
+        const controller = new AbortController();
+        setAbortController(controller);
+
         setIsLoading(true);
         onResult?.('Starting: Remove deprovisioned users', 'info');
 
         // Get current user for audit logging
         currentUser = await getCurrentUser();
+
+        checkCancelled(); // Check if cancelled
 
         // Check group type
         const groupDetails = await makeApiRequest(`/api/v1/groups/${groupId}`);
@@ -152,6 +179,8 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
         }
 
         groupName = groupDetails.data?.profile?.name || 'Unknown Group';
+
+        checkCancelled(); // Check if cancelled
 
         // Fetch all members
         const members = await getAllGroupMembers(groupId);
@@ -166,6 +195,8 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
         // Remove each deprovisioned user
         for (let i = 0; i < deprovisionedUsers.length; i++) {
+          checkCancelled(); // Check if cancelled before each iteration
+
           const user = deprovisionedUsers[i];
           affectedUserIds.push(user.id);
           onProgress?.(i + 1, deprovisionedUsers.length, `Removing user ${i + 1} of ${deprovisionedUsers.length}`);
@@ -199,9 +230,11 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       } catch (error) {
         const errorMsg = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
         errorMessages.push(errorMsg);
-        onResult?.(errorMsg, 'error');
+        onResult?.(errorMsg, error instanceof Error && error.message === 'Operation cancelled' ? 'warning' : 'error');
       } finally {
         setIsLoading(false);
+        setAbortController(null);
+        setIsCancelled(false);
         onProgress?.(100, 100, 'Complete');
 
         // Log to audit trail (fire-and-forget)
@@ -229,7 +262,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
         }
       }
     },
-    [makeApiRequest, getAllGroupMembers, removeUserFromGroup, getCurrentUser, onResult, onProgress]
+    [makeApiRequest, getAllGroupMembers, removeUserFromGroup, getCurrentUser, onResult, onProgress, checkCancelled]
   );
 
   const smartCleanup = useCallback(
@@ -678,13 +711,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
   const getGroupMemberCount = useCallback(
     async (groupId: string): Promise<number> => {
       try {
-        // Try to get count from group details endpoint
-        const response = await makeApiRequest(`/api/v1/groups/${groupId}`);
-        if (response.success && response.data?._embedded?.stats?.membersCount !== undefined) {
-          return response.data._embedded.stats.membersCount;
-        }
-
-        // Fallback: get count from users endpoint with limit=1
+        // OPTIMIZED: Use limit=1 to get count from x-total-count header (1 API call instead of 2)
         const usersResponse = await makeApiRequest(`/api/v1/groups/${groupId}/users?limit=1`);
         if (usersResponse.success && usersResponse.headers?.['x-total-count']) {
           return parseInt(usersResponse.headers['x-total-count'], 10);
@@ -702,7 +729,15 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
   const getGroupRulesForGroup = useCallback(
     async (groupId: string): Promise<any[]> => {
       try {
-        // Fetch all group rules
+        // OPTIMIZED: Check cache first to avoid fetching all rules
+        const cachedRules = await RulesCache.getRulesForGroup(groupId);
+        if (cachedRules.length > 0 || await RulesCache.isFresh()) {
+          console.log(`[useOktaApi] Using cached rules for group ${groupId}:`, cachedRules.length);
+          return cachedRules;
+        }
+
+        // Cache miss - fetch all group rules
+        console.log(`[useOktaApi] Cache miss - fetching all rules for group ${groupId}`);
         const response = await makeApiRequest('/api/v1/groups/rules?limit=200');
         if (!response.success) {
           return [];
@@ -916,6 +951,8 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
   return {
     isLoading,
+    isCancelled,
+    cancelOperation,
     makeApiRequest,
     getAllGroupMembers,
     removeUserFromGroup,
