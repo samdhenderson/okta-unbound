@@ -31,6 +31,9 @@ export default [
         global: 'readonly',
         URL: 'readonly',
         __dirname: 'readonly',
+        document: 'readonly',
+        Blob: 'readonly',
+        crypto: 'readonly',
       },
     },
     plugins: {
