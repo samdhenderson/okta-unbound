@@ -1,4 +1,5 @@
 // Background service worker for Okta Unbound extension
+import { auditStore } from '../shared/storage/auditStore';
 
 console.log('[Background] Service worker started');
 
@@ -15,11 +16,17 @@ chrome.runtime.onInstalled.addListener((details) => {
       operationDelay: 100,
       defaultView: 'operations',
     });
+
+    // Set up audit log retention alarm (runs daily at midnight)
+    setupAuditRetentionAlarm();
   }
 
   if (details.reason === 'update') {
     const previousVersion = details.previousVersion;
     console.log(`[Background] Extension updated from ${previousVersion} to 0.3.0`);
+
+    // Ensure alarm is set up after update
+    setupAuditRetentionAlarm();
   }
 
   // Create context menu
@@ -68,6 +75,45 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 });
 
 // ============================================================================
+// Audit Log Retention
+// ============================================================================
+
+function setupAuditRetentionAlarm(): void {
+  // Create alarm to run daily at midnight
+  chrome.alarms.create('auditRetentionCleanup', {
+    periodInMinutes: 24 * 60, // Every 24 hours
+    when: getNextMidnight(),
+  });
+  console.log('[Background] Audit retention alarm created');
+}
+
+function getNextMidnight(): number {
+  const now = new Date();
+  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  return tomorrow.getTime();
+}
+
+// Listen for alarms
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === 'auditRetentionCleanup') {
+    console.log('[Background] Running audit retention cleanup...');
+
+    try {
+      // Get retention settings
+      const settings = await auditStore.getSettings();
+      const retentionDays = settings.retentionDays || 90;
+
+      // Clear old logs
+      await auditStore.clearOldLogs(retentionDays);
+
+      console.log(`[Background] Audit retention cleanup completed (${retentionDays} days retention)`);
+    } catch (error) {
+      console.error('[Background] Audit retention cleanup failed:', error);
+    }
+  }
+});
+
+// ============================================================================
 // Utility Functions
 // ============================================================================
 
@@ -78,3 +124,6 @@ function isOktaUrl(url: string): boolean {
     url.includes('okta-emea.com')
   );
 }
+
+// Initialize alarm on service worker start
+setupAuditRetentionAlarm();

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import RuleCard from './RuleCard';
-import type { FormattedRule, RuleConflict } from '../../shared/types';
+import type { FormattedRule, RuleConflict, AuditLogEntry } from '../../shared/types';
 import { filterRules } from '../../shared/ruleUtils';
 import { useProgress } from '../contexts/ProgressContext';
 import { logAction } from '../../shared/undoManager';
+import { auditStore } from '../../shared/storage/auditStore';
 
 interface RulesTabProps {
   targetTabId?: number;
@@ -129,12 +130,31 @@ const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId, oktaOr
   const handleActivateRule = async (ruleId: string) => {
     if (!targetTabId) return;
 
+    const startTime = Date.now();
+    let currentUserEmail = 'unknown@unknown.com';
+
     try {
       console.log('[RulesTab] Activating rule:', ruleId);
+
+      // Get current user for audit logging
+      try {
+        const userResponse = await chrome.tabs.sendMessage(targetTabId, {
+          action: 'makeApiRequest',
+          endpoint: '/api/v1/users/me',
+          method: 'GET',
+        });
+        if (userResponse.success && userResponse.data) {
+          currentUserEmail = userResponse.data.profile?.email || 'unknown@unknown.com';
+        }
+      } catch (err) {
+        console.error('[RulesTab] Failed to get current user:', err);
+      }
 
       // Find the rule to get its name for undo logging
       const rule = rules.find(r => r.id === ruleId);
       const ruleName = rule?.name || 'Unknown Rule';
+      const groupIds = rule?.groupIds || [];
+      const groupNames = rule?.groupNames || [];
 
       const response = await chrome.tabs.sendMessage(targetTabId, {
         action: 'activateRule',
@@ -149,26 +169,113 @@ const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId, oktaOr
           ruleName,
         });
 
+        // Log to audit trail (fire-and-forget)
+        const auditEntry: AuditLogEntry = {
+          id: crypto.randomUUID(),
+          timestamp: new Date(),
+          action: 'activate_rule',
+          groupId: groupIds[0] || 'multiple',
+          groupName: groupNames.length > 0 ? groupNames.join(', ') : ruleName,
+          performedBy: currentUserEmail,
+          affectedUsers: [],
+          result: 'success',
+          details: {
+            usersSucceeded: 0,
+            usersFailed: 0,
+            apiRequestCount: 1,
+            durationMs: Date.now() - startTime,
+          },
+        };
+        auditStore.logOperation(auditEntry).catch((err) => {
+          console.error('[RulesTab] Failed to log audit entry:', err);
+        });
+
         // Reload rules to get updated status
         await handleLoadRules();
       } else {
         setError(response.error || 'Failed to activate rule');
+
+        // Log failure to audit trail
+        const auditEntry: AuditLogEntry = {
+          id: crypto.randomUUID(),
+          timestamp: new Date(),
+          action: 'activate_rule',
+          groupId: groupIds[0] || 'multiple',
+          groupName: groupNames.length > 0 ? groupNames.join(', ') : ruleName,
+          performedBy: currentUserEmail,
+          affectedUsers: [],
+          result: 'failed',
+          details: {
+            usersSucceeded: 0,
+            usersFailed: 0,
+            apiRequestCount: 1,
+            durationMs: Date.now() - startTime,
+            errorMessages: [response.error || 'Unknown error'],
+          },
+        };
+        auditStore.logOperation(auditEntry).catch((err) => {
+          console.error('[RulesTab] Failed to log audit entry:', err);
+        });
       }
     } catch (err: any) {
       setError(err.message || 'Failed to activate rule');
       console.error('[RulesTab] Activation error:', err);
+
+      // Log error to audit trail
+      const rule = rules.find(r => r.id === ruleId);
+      const groupIds = rule?.groupIds || [];
+      const groupNames = rule?.groupNames || [];
+      const auditEntry: AuditLogEntry = {
+        id: crypto.randomUUID(),
+        timestamp: new Date(),
+        action: 'activate_rule',
+        groupId: groupIds[0] || 'unknown',
+        groupName: groupNames.length > 0 ? groupNames.join(', ') : 'Unknown',
+        performedBy: currentUserEmail,
+        affectedUsers: [],
+        result: 'failed',
+        details: {
+          usersSucceeded: 0,
+          usersFailed: 0,
+          apiRequestCount: 1,
+          durationMs: Date.now() - startTime,
+          errorMessages: [err.message || 'Unknown error'],
+        },
+      };
+      auditStore.logOperation(auditEntry).catch((e) => {
+        console.error('[RulesTab] Failed to log audit entry:', e);
+      });
     }
   };
 
   const handleDeactivateRule = async (ruleId: string) => {
     if (!targetTabId) return;
 
+    const startTime = Date.now();
+    let currentUserEmail = 'unknown@unknown.com';
+
     try {
       console.log('[RulesTab] Deactivating rule:', ruleId);
+
+      // Get current user for audit logging
+      try {
+        const userResponse = await chrome.tabs.sendMessage(targetTabId, {
+          action: 'makeApiRequest',
+          endpoint: '/api/v1/users/me',
+          method: 'GET',
+        });
+        if (userResponse.success && userResponse.data) {
+          currentUserEmail = userResponse.data.profile?.email || 'unknown@unknown.com';
+        }
+      } catch (err) {
+        console.error('[RulesTab] Failed to get current user:', err);
+      }
 
       // Find the rule to get its name for undo logging
       const rule = rules.find(r => r.id === ruleId);
       const ruleName = rule?.name || 'Unknown Rule';
+      const groupIds = rule?.groupIds || [];
+      const groupNames = rule?.groupNames || [];
 
       const response = await chrome.tabs.sendMessage(targetTabId, {
         action: 'deactivateRule',
@@ -183,14 +290,82 @@ const RulesTab: React.FC<RulesTabProps> = ({ targetTabId, currentGroupId, oktaOr
           ruleName,
         });
 
+        // Log to audit trail (fire-and-forget)
+        const auditEntry: AuditLogEntry = {
+          id: crypto.randomUUID(),
+          timestamp: new Date(),
+          action: 'deactivate_rule',
+          groupId: groupIds[0] || 'multiple',
+          groupName: groupNames.length > 0 ? groupNames.join(', ') : ruleName,
+          performedBy: currentUserEmail,
+          affectedUsers: [],
+          result: 'success',
+          details: {
+            usersSucceeded: 0,
+            usersFailed: 0,
+            apiRequestCount: 1,
+            durationMs: Date.now() - startTime,
+          },
+        };
+        auditStore.logOperation(auditEntry).catch((err) => {
+          console.error('[RulesTab] Failed to log audit entry:', err);
+        });
+
         // Reload rules to get updated status
         await handleLoadRules();
       } else {
         setError(response.error || 'Failed to deactivate rule');
+
+        // Log failure to audit trail
+        const auditEntry: AuditLogEntry = {
+          id: crypto.randomUUID(),
+          timestamp: new Date(),
+          action: 'deactivate_rule',
+          groupId: groupIds[0] || 'multiple',
+          groupName: groupNames.length > 0 ? groupNames.join(', ') : ruleName,
+          performedBy: currentUserEmail,
+          affectedUsers: [],
+          result: 'failed',
+          details: {
+            usersSucceeded: 0,
+            usersFailed: 0,
+            apiRequestCount: 1,
+            durationMs: Date.now() - startTime,
+            errorMessages: [response.error || 'Unknown error'],
+          },
+        };
+        auditStore.logOperation(auditEntry).catch((err) => {
+          console.error('[RulesTab] Failed to log audit entry:', err);
+        });
       }
     } catch (err: any) {
       setError(err.message || 'Failed to deactivate rule');
       console.error('[RulesTab] Deactivation error:', err);
+
+      // Log error to audit trail
+      const rule = rules.find(r => r.id === ruleId);
+      const groupIds = rule?.groupIds || [];
+      const groupNames = rule?.groupNames || [];
+      const auditEntry: AuditLogEntry = {
+        id: crypto.randomUUID(),
+        timestamp: new Date(),
+        action: 'deactivate_rule',
+        groupId: groupIds[0] || 'unknown',
+        groupName: groupNames.length > 0 ? groupNames.join(', ') : 'Unknown',
+        performedBy: currentUserEmail,
+        affectedUsers: [],
+        result: 'failed',
+        details: {
+          usersSucceeded: 0,
+          usersFailed: 0,
+          apiRequestCount: 1,
+          durationMs: Date.now() - startTime,
+          errorMessages: [err.message || 'Unknown error'],
+        },
+      };
+      auditStore.logOperation(auditEntry).catch((e) => {
+        console.error('[RulesTab] Failed to log audit entry:', e);
+      });
     }
   };
 

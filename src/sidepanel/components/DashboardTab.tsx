@@ -1,16 +1,21 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGroupHealth } from '../hooks/useGroupHealth';
 import QuickStatsCard from './dashboard/QuickStatsCard';
 import StatusPieChart from './dashboard/StatusPieChart';
 import MembershipBarChart from './dashboard/MembershipBarChart';
 import RiskGauge from './dashboard/RiskGauge';
 import QuickActionsCard from './dashboard/QuickActionsCard';
+import AuditStatsCard from './dashboard/AuditStatsCard';
+import AuditLogEntryComponent from './AuditLogEntry';
+import { auditStore } from '../../shared/storage/auditStore';
+import type { AuditLogEntry } from '../../shared/types';
 
 interface DashboardTabProps {
   groupId: string | undefined;
   groupName: string | undefined;
   targetTabId: number | null;
   onTabChange: (tab: 'operations' | 'rules' | 'users' | 'undo' | 'dashboard') => void;
+  oktaOrigin?: string | null;
 }
 
 const DashboardTab: React.FC<DashboardTabProps> = ({
@@ -18,8 +23,24 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
   groupName,
   targetTabId,
   onTabChange,
+  oktaOrigin,
 }) => {
   const { metrics, isLoading, error, refresh } = useGroupHealth({ groupId, targetTabId });
+  const [recentAuditLogs, setRecentAuditLogs] = useState<AuditLogEntry[]>([]);
+
+  // Load recent audit logs
+  useEffect(() => {
+    const loadRecentLogs = async () => {
+      try {
+        const logs = await auditStore.getHistory({}, 5); // Get last 5 logs
+        setRecentAuditLogs(logs);
+      } catch (error) {
+        console.error('[DashboardTab] Failed to load recent audit logs:', error);
+      }
+    };
+
+    loadRecentLogs();
+  }, []);
 
   if (!groupId || !targetTabId) {
     return (
@@ -159,8 +180,34 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
               <h3 className="dashboard-card-title">Membership Sources</h3>
               <MembershipBarChart membershipSources={metrics.membershipSources} />
             </div>
+
+            {/* Audit Trail Stats */}
+            <div className="dashboard-card">
+              <AuditStatsCard />
+            </div>
           </div>
         </div>
+
+        {/* Recent Audit Log Section */}
+        {recentAuditLogs.length > 0 && (
+          <div className="dashboard-card" style={{ marginTop: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 className="dashboard-card-title">Recent Activity</h3>
+              <button
+                className="btn btn-sm btn-secondary"
+                onClick={() => onTabChange('operations')}
+                style={{ fontSize: '12px', padding: '6px 12px' }}
+              >
+                View All
+              </button>
+            </div>
+            <div>
+              {recentAuditLogs.map((log) => (
+                <AuditLogEntryComponent key={log.id} entry={log} oktaOrigin={oktaOrigin} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
-import type { MessageRequest, MessageResponse, OktaUser, UserStatus } from '../../shared/types';
+import type { MessageRequest, MessageResponse, OktaUser, UserStatus, AuditLogEntry } from '../../shared/types';
 import { logAction } from '../../shared/undoManager';
+import { auditStore } from '../../shared/storage/auditStore';
 
 interface UseOktaApiOptions {
   targetTabId: number | null;
@@ -37,6 +38,23 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
     },
     [sendMessage]
   );
+
+  // Get current user for audit logging
+  const getCurrentUser = useCallback(async (): Promise<{ email: string; id: string }> => {
+    try {
+      const response = await makeApiRequest('/api/v1/users/me');
+      if (response.success && response.data) {
+        return {
+          email: response.data.profile?.email || 'unknown@unknown.com',
+          id: response.data.id || 'unknown',
+        };
+      }
+      return { email: 'unknown@unknown.com', id: 'unknown' };
+    } catch (error) {
+      console.error('[useOktaApi] Failed to get current user:', error);
+      return { email: 'unknown@unknown.com', id: 'unknown' };
+    }
+  }, [makeApiRequest]);
 
   const getAllGroupMembers = useCallback(
     async (groupId: string): Promise<OktaUser[]> => {
@@ -111,9 +129,20 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
   const removeDeprovisioned = useCallback(
     async (groupId: string) => {
+      const startTime = Date.now();
+      let currentUser: { email: string; id: string } | null = null;
+      let groupName = 'Unknown Group';
+      let removed = 0;
+      let failed = 0;
+      const errorMessages: string[] = [];
+      const affectedUserIds: string[] = [];
+
       try {
         setIsLoading(true);
         onResult?.('Starting: Remove deprovisioned users', 'info');
+
+        // Get current user for audit logging
+        currentUser = await getCurrentUser();
 
         // Check group type
         const groupDetails = await makeApiRequest(`/api/v1/groups/${groupId}`);
@@ -122,7 +151,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
           return;
         }
 
-        const groupName = groupDetails.data?.profile?.name || 'Unknown Group';
+        groupName = groupDetails.data?.profile?.name || 'Unknown Group';
 
         // Fetch all members
         const members = await getAllGroupMembers(groupId);
@@ -136,11 +165,9 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
         }
 
         // Remove each deprovisioned user
-        let removed = 0;
-        let failed = 0;
-
         for (let i = 0; i < deprovisionedUsers.length; i++) {
           const user = deprovisionedUsers[i];
+          affectedUserIds.push(user.id);
           onProgress?.(i + 1, deprovisionedUsers.length, `Removing user ${i + 1} of ${deprovisionedUsers.length}`);
 
           const result = await removeUserFromGroup(groupId, groupName, user);
@@ -153,12 +180,14 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
             );
           } else {
             failed++;
+            const errorMsg = `Failed: ${user.profile.login} - ${result.error}`;
+            errorMessages.push(errorMsg);
             if (result.status === 403) {
               onResult?.(`403 Forbidden: ${user.profile.login} - ${result.error}`, 'error');
               onResult?.('Stopping after first 403 error', 'warning');
               break;
             } else {
-              onResult?.(`Failed: ${user.profile.login} - ${result.error}`, 'error');
+              onResult?.(errorMsg, 'error');
             }
           }
 
@@ -168,23 +197,57 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
         onResult?.(`Complete: ${removed} removed, ${failed} failed`, removed > 0 ? 'success' : 'warning');
       } catch (error) {
-        onResult?.(
-          `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          'error'
-        );
+        const errorMsg = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        errorMessages.push(errorMsg);
+        onResult?.(errorMsg, 'error');
       } finally {
         setIsLoading(false);
         onProgress?.(100, 100, 'Complete');
+
+        // Log to audit trail (fire-and-forget)
+        if (currentUser && affectedUserIds.length > 0) {
+          const auditEntry: AuditLogEntry = {
+            id: crypto.randomUUID(),
+            timestamp: new Date(),
+            action: 'remove_users',
+            groupId,
+            groupName,
+            performedBy: currentUser.email,
+            affectedUsers: affectedUserIds,
+            result: failed === 0 ? 'success' : removed === 0 ? 'failed' : 'partial',
+            details: {
+              usersSucceeded: removed,
+              usersFailed: failed,
+              apiRequestCount: affectedUserIds.length,
+              durationMs: Date.now() - startTime,
+              errorMessages: errorMessages.length > 0 ? errorMessages : undefined,
+            },
+          };
+          auditStore.logOperation(auditEntry).catch((err) => {
+            console.error('[useOktaApi] Failed to log audit entry:', err);
+          });
+        }
       }
     },
-    [makeApiRequest, getAllGroupMembers, removeUserFromGroup, onResult, onProgress]
+    [makeApiRequest, getAllGroupMembers, removeUserFromGroup, getCurrentUser, onResult, onProgress]
   );
 
   const smartCleanup = useCallback(
     async (groupId: string) => {
+      const startTime = Date.now();
+      let currentUser: { email: string; id: string } | null = null;
+      let groupName = 'Unknown Group';
+      let removed = 0;
+      let failed = 0;
+      const errorMessages: string[] = [];
+      const affectedUserIds: string[] = [];
+
       try {
         setIsLoading(true);
         onResult?.('Starting: Smart Cleanup (remove all inactive users)', 'info');
+
+        // Get current user for audit logging
+        currentUser = await getCurrentUser();
 
         // Check group type
         const groupDetails = await makeApiRequest(`/api/v1/groups/${groupId}`);
@@ -193,7 +256,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
           return;
         }
 
-        const groupName = groupDetails.data?.profile?.name || 'Unknown Group';
+        groupName = groupDetails.data?.profile?.name || 'Unknown Group';
 
         // Fetch all members
         const members = await getAllGroupMembers(groupId);
@@ -216,11 +279,9 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
         });
 
         // Remove each inactive user
-        let removed = 0;
-        let failed = 0;
-
         for (let i = 0; i < inactiveUsers.length; i++) {
           const user = inactiveUsers[i];
+          affectedUserIds.push(user.id);
           onProgress?.(i + 1, inactiveUsers.length, `Removing user ${i + 1} of ${inactiveUsers.length}`);
 
           const result = await removeUserFromGroup(groupId, groupName, user);
@@ -230,9 +291,13 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
             onResult?.(`Removed: ${user.profile.login} (${user.status})`, 'success');
           } else {
             failed++;
+            const errorMsg = `Failed: ${user.profile.login} - ${result.error}`;
+            errorMessages.push(errorMsg);
             if (result.status === 403) {
               onResult?.('403 Forbidden - stopping', 'error');
               break;
+            } else {
+              onResult?.(errorMsg, 'error');
             }
           }
 
@@ -241,27 +306,61 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
         onResult?.(`Smart Cleanup complete: ${removed} removed, ${failed} failed`, 'success');
       } catch (error) {
-        onResult?.(
-          `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          'error'
-        );
+        const errorMsg = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        errorMessages.push(errorMsg);
+        onResult?.(errorMsg, 'error');
       } finally {
         setIsLoading(false);
         onProgress?.(100, 100, 'Complete');
+
+        // Log to audit trail (fire-and-forget)
+        if (currentUser && affectedUserIds.length > 0) {
+          const auditEntry: AuditLogEntry = {
+            id: crypto.randomUUID(),
+            timestamp: new Date(),
+            action: 'remove_users',
+            groupId,
+            groupName,
+            performedBy: currentUser.email,
+            affectedUsers: affectedUserIds,
+            result: failed === 0 ? 'success' : removed === 0 ? 'failed' : 'partial',
+            details: {
+              usersSucceeded: removed,
+              usersFailed: failed,
+              apiRequestCount: affectedUserIds.length,
+              durationMs: Date.now() - startTime,
+              errorMessages: errorMessages.length > 0 ? errorMessages : undefined,
+            },
+          };
+          auditStore.logOperation(auditEntry).catch((err) => {
+            console.error('[useOktaApi] Failed to log audit entry:', err);
+          });
+        }
       }
     },
-    [makeApiRequest, getAllGroupMembers, removeUserFromGroup, onResult, onProgress]
+    [makeApiRequest, getAllGroupMembers, removeUserFromGroup, getCurrentUser, onResult, onProgress]
   );
 
   const customFilter = useCallback(
     async (groupId: string, targetStatus: UserStatus, action: 'list' | 'remove') => {
+      const startTime = Date.now();
+      let currentUser: { email: string; id: string } | null = null;
+      let groupName = 'Unknown Group';
+      let removed = 0;
+      let failed = 0;
+      const errorMessages: string[] = [];
+      const affectedUserIds: string[] = [];
+
       try {
         setIsLoading(true);
         onResult?.(`Starting: ${action === 'remove' ? 'Remove' : 'List'} users with status ${targetStatus}`, 'info');
 
+        // Get current user for audit logging
+        currentUser = await getCurrentUser();
+
         // Get group name for undo logging
         const groupDetails = await makeApiRequest(`/api/v1/groups/${groupId}`);
-        const groupName = groupDetails.data?.profile?.name || 'Unknown Group';
+        groupName = groupDetails.data?.profile?.name || 'Unknown Group';
 
         const members = await getAllGroupMembers(groupId);
         const filteredUsers = members.filter((u) => u.status === targetStatus);
@@ -282,38 +381,72 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
           });
           onResult?.(`Listed ${filteredUsers.length} users`, 'success');
         } else {
-          let removed = 0;
           for (let i = 0; i < filteredUsers.length; i++) {
             const user = filteredUsers[i];
+            affectedUserIds.push(user.id);
             onProgress?.(i + 1, filteredUsers.length, `Removing user ${i + 1} of ${filteredUsers.length}`);
 
             const result = await removeUserFromGroup(groupId, groupName, user);
             if (result.success) {
               removed++;
               onResult?.(`Removed: ${user.profile.login}`, 'success');
+            } else {
+              failed++;
+              const errorMsg = `Failed: ${user.profile.login} - ${result.error}`;
+              errorMessages.push(errorMsg);
+              onResult?.(errorMsg, 'error');
             }
             await new Promise((resolve) => setTimeout(resolve, 100));
           }
           onResult?.(`Removed ${removed} users`, 'success');
         }
       } catch (error) {
-        onResult?.(
-          `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          'error'
-        );
+        const errorMsg = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        errorMessages.push(errorMsg);
+        onResult?.(errorMsg, 'error');
       } finally {
         setIsLoading(false);
         onProgress?.(100, 100, 'Complete');
+
+        // Log to audit trail (fire-and-forget) - only for remove actions
+        if (action === 'remove' && currentUser && affectedUserIds.length > 0) {
+          const auditEntry: AuditLogEntry = {
+            id: crypto.randomUUID(),
+            timestamp: new Date(),
+            action: 'remove_users',
+            groupId,
+            groupName,
+            performedBy: currentUser.email,
+            affectedUsers: affectedUserIds,
+            result: failed === 0 ? 'success' : removed === 0 ? 'failed' : 'partial',
+            details: {
+              usersSucceeded: removed,
+              usersFailed: failed,
+              apiRequestCount: affectedUserIds.length,
+              durationMs: Date.now() - startTime,
+              errorMessages: errorMessages.length > 0 ? errorMessages : undefined,
+            },
+          };
+          auditStore.logOperation(auditEntry).catch((err) => {
+            console.error('[useOktaApi] Failed to log audit entry:', err);
+          });
+        }
       }
     },
-    [makeApiRequest, getAllGroupMembers, removeUserFromGroup, onResult, onProgress]
+    [makeApiRequest, getAllGroupMembers, removeUserFromGroup, getCurrentUser, onResult, onProgress]
   );
 
   const exportMembers = useCallback(
     async (groupId: string, groupName: string, format: 'csv' | 'json', statusFilter?: UserStatus | '') => {
+      const startTime = Date.now();
+      let currentUser: { email: string; id: string } | null = null;
+
       try {
         setIsLoading(true);
         onResult?.(`Starting export: ${format.toUpperCase()} format`, 'info');
+
+        // Get current user for audit logging
+        currentUser = await getCurrentUser();
 
         const response = await sendMessage({
           action: 'exportGroupMembers',
@@ -325,19 +458,88 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
         if (response.success) {
           onResult?.(`Export complete: ${response.count} members exported`, 'success');
+
+          // Log to audit trail (fire-and-forget)
+          if (currentUser) {
+            const auditEntry: AuditLogEntry = {
+              id: crypto.randomUUID(),
+              timestamp: new Date(),
+              action: 'export',
+              groupId,
+              groupName,
+              performedBy: currentUser.email,
+              affectedUsers: [], // No users are modified in export
+              result: 'success',
+              details: {
+                usersSucceeded: response.count || 0,
+                usersFailed: 0,
+                apiRequestCount: 1,
+                durationMs: Date.now() - startTime,
+              },
+            };
+            auditStore.logOperation(auditEntry).catch((err) => {
+              console.error('[useOktaApi] Failed to log audit entry:', err);
+            });
+          }
         } else {
           onResult?.(`Export failed: ${response.error}`, 'error');
+
+          // Log failure to audit trail
+          if (currentUser) {
+            const auditEntry: AuditLogEntry = {
+              id: crypto.randomUUID(),
+              timestamp: new Date(),
+              action: 'export',
+              groupId,
+              groupName,
+              performedBy: currentUser.email,
+              affectedUsers: [],
+              result: 'failed',
+              details: {
+                usersSucceeded: 0,
+                usersFailed: 0,
+                apiRequestCount: 1,
+                durationMs: Date.now() - startTime,
+                errorMessages: [response.error || 'Unknown error'],
+              },
+            };
+            auditStore.logOperation(auditEntry).catch((err) => {
+              console.error('[useOktaApi] Failed to log audit entry:', err);
+            });
+          }
         }
       } catch (error) {
-        onResult?.(
-          `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          'error'
-        );
+        const errorMsg = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        onResult?.(errorMsg, 'error');
+
+        // Log error to audit trail
+        if (currentUser) {
+          const auditEntry: AuditLogEntry = {
+            id: crypto.randomUUID(),
+            timestamp: new Date(),
+            action: 'export',
+            groupId,
+            groupName,
+            performedBy: currentUser.email,
+            affectedUsers: [],
+            result: 'failed',
+            details: {
+              usersSucceeded: 0,
+              usersFailed: 0,
+              apiRequestCount: 1,
+              durationMs: Date.now() - startTime,
+              errorMessages: [errorMsg],
+            },
+          };
+          auditStore.logOperation(auditEntry).catch((err) => {
+            console.error('[useOktaApi] Failed to log audit entry:', err);
+          });
+        }
       } finally {
         setIsLoading(false);
       }
     },
-    [sendMessage, onResult]
+    [sendMessage, getCurrentUser, onResult]
   );
 
   return {

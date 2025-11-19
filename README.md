@@ -26,6 +26,18 @@ Comprehensive at-a-glance insights with visual analytics:
 - Quick action buttons for common operations
 - Automatic caching for fast performance (5-minute refresh)
 - Loads in under 5 seconds for groups with 1000+ users
+- Recent activity audit log view
+
+✅ **Audit Trail & Compliance (NEW)**
+Complete operation history for SOC2 compliance and accountability:
+- Persistent logging of all administrative actions
+- Track who performed what operation, when, and with what result
+- Detailed metrics including duration, API requests, and success/failure counts
+- Automatic retention policy (configurable: 30, 60, 90, 180, or 365 days)
+- Export audit logs to CSV for compliance reporting
+- Dashboard statistics showing operation trends and success rates
+- Privacy-conscious: stores user IDs instead of emails for PII protection
+- Fire-and-forget logging that never blocks operations
 
 ✅ **Sidebar UI**
 Modern sidebar interface with tabbed navigation for better organization and more screen space
@@ -200,9 +212,11 @@ The extension makes direct calls to the Okta API:
 
 ### Safety Features
 - Confirmation of group information before operations
-- Detailed logging of all actions
+- Comprehensive audit trail of all administrative actions
+- Persistent audit logs with configurable retention (default: 90 days)
+- Detailed logging of all actions with success/failure tracking
 - Error handling for failed operations
-- No data is stored outside your browser session
+- Audit data stored securely in browser IndexedDB (never leaves your device)
 
 ## Permissions Explained
 
@@ -308,7 +322,58 @@ For more details, see [TESTING.md](./TESTING.md).
 - This extension uses session-based auth only
 - All API calls are made in the context of your Okta permissions
 - No data is sent to external servers
-- All operations are logged locally in the extension popup
+- All operations are logged locally in browser IndexedDB
+
+## Compliance & Audit Trail
+
+### SOC2 Compliance Benefits
+
+Okta Unbound provides comprehensive audit logging to help meet SOC2 compliance requirements:
+
+**Audit Trail Features:**
+- **Who**: Captures the email of the admin who performed each action
+- **What**: Records the specific operation (remove users, activate rule, export, etc.)
+- **When**: Timestamps every operation with millisecond precision
+- **Where**: Logs the group ID and name for all operations
+- **Result**: Tracks success, partial success, or failure status
+- **Details**: Records user counts, API request counts, duration, and error messages
+
+**Answering Compliance Questions:**
+- "Who removed these users?" → Check audit log filtered by action
+- "When was the last cleanup performed?" → View operation history by date
+- "What changed in this group?" → Export audit log for analysis
+- "How many API requests were made?" → View detailed operation metrics
+
+**Data Retention:**
+- Configurable retention periods: 30, 60, 90, 180, or 365 days (default: 90 days)
+- Automatic cleanup of old logs via scheduled background job (runs daily)
+- Manual "Clear All Logs" option for GDPR compliance
+
+**Privacy & Security:**
+- User IDs stored instead of emails to reduce PII exposure
+- All data stored locally in browser IndexedDB (never transmitted externally)
+- Audit logging can be disabled via settings if not required
+- Export to CSV for external compliance systems
+
+**Viewing Audit Logs:**
+1. Navigate to the Dashboard tab to see recent activity and statistics
+2. Review audit stats card showing total operations, success rate, and trends
+3. Click on any log entry to see full details including affected users and errors
+4. Export audit logs to CSV using the export function
+
+**Example Audit Log Entry:**
+```
+Timestamp: 2025-01-15 10:30:45
+Action: Remove Users
+Performed By: admin@example.com
+Group: Engineering Team
+Result: Success
+Users Affected: 15
+Users Succeeded: 15
+Users Failed: 0
+Duration: 3.2s
+API Requests: 15
+```
 
 ## Okta API Documentation
 

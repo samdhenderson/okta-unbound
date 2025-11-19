@@ -60,6 +60,7 @@ const App: React.FC = () => {
           groupName={groupInfo?.groupName}
           targetTabId={targetTabId}
           onTabChange={handleTabChange}
+          oktaOrigin={oktaOrigin}
         />
       )}
       {activeTab === 'operations' && (
