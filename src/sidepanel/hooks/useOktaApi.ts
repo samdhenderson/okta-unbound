@@ -1230,7 +1230,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
         // Log to audit
         const currentUser = await getCurrentUser();
         const appDetails = await getAppDetails(appId);
-        await auditStore.addLog({
+        await auditStore.logOperation({
           action: 'assign_user_to_app' as any,
           groupId: 'N/A',
           groupName: 'N/A',
@@ -1276,7 +1276,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
         const currentUser = await getCurrentUser();
         const appDetails = await getAppDetails(appId);
         const groupResponse = await makeApiRequest(`/api/v1/groups/${groupId}`);
-        await auditStore.addLog({
+        await auditStore.logOperation({
           action: 'assign_group_to_app' as any,
           groupId,
           groupName: groupResponse.data?.profile?.name || groupId,
@@ -1314,7 +1314,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
         // Log to audit
         const currentUser = await getCurrentUser();
         const appDetails = await getAppDetails(appId);
-        await auditStore.addLog({
+        await auditStore.logOperation({
           action: 'remove_user_from_app' as any,
           groupId: 'N/A',
           groupName: 'N/A',
@@ -1353,7 +1353,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
         const currentUser = await getCurrentUser();
         const appDetails = await getAppDetails(appId);
         const groupResponse = await makeApiRequest(`/api/v1/groups/${groupId}`);
-        await auditStore.addLog({
+        await auditStore.logOperation({
           action: 'remove_group_from_app' as any,
           groupId,
           groupName: groupResponse.data?.profile?.name || groupId,
@@ -1496,7 +1496,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
         // Log to audit
         const currentUser = await getCurrentUser();
         const groupResponse = await makeApiRequest(`/api/v1/groups/${request.targetGroupId}`);
-        await auditStore.addLog({
+        await auditStore.logOperation({
           action: 'convert_assignment' as any,
           groupId: request.targetGroupId,
           groupName: groupResponse.data?.profile?.name || request.targetGroupId,
@@ -1609,7 +1609,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
         // Log to audit
         const currentUser = await getCurrentUser();
-        await auditStore.addLog({
+        await auditStore.logOperation({
           action: 'bulk_app_assignment' as any,
           groupId: 'multiple',
           groupName: `${request.groupIds.length} groups`,
@@ -1664,7 +1664,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
         // Log to audit
         const currentUser = await getCurrentUser();
-        await auditStore.addLog({
+        await auditStore.logOperation({
           action: 'app_security_scan' as any,
           groupId: groupId || 'N/A',
           groupName: groupId ? 'Group Analysis' : 'User Analysis',
@@ -1701,7 +1701,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       onResult?.('Analyzing app assignments and generating recommendations...', 'info');
 
       try {
-        const result = await getAppAssignmentRecommendations(appIds, getUserApps, getGroupApps, makeApiRequest);
+        const result = await getAppAssignmentRecommendations(appIds, makeApiRequest);
 
         onResult?.(
           `Recommendations ready: Found ${result.recommendations.length} apps with optimization opportunities. ` +

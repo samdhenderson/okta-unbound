@@ -24,7 +24,7 @@ export async function analyzeAppSecurity(
   getUserApps: (userId: string) => Promise<UserAppAssignment[]>,
   getGroupApps: (groupId: string) => Promise<GroupAppAssignment[]>,
   makeApiRequest: (endpoint: string, method?: string, body?: any, priority?: any) => Promise<any>,
-  _getUserLastLogin: (userId: string) => Promise<string | null>
+  _getUserLastLogin: (userId: string) => Promise<Date | null>
 ): Promise<AppAssignmentSecurityAnalysis> {
   const findings: AppSecurityFinding[] = [];
   const overProvisionedUsers: OverProvisionedUser[] = [];
@@ -244,8 +244,6 @@ export async function analyzeAppSecurity(
  */
 export async function getAppAssignmentRecommendations(
   appIds: string[],
-  getUserApps: (userId: string) => Promise<UserAppAssignment[]>,
-  getGroupApps: (groupId: string) => Promise<GroupAppAssignment[]>,
   makeApiRequest: (endpoint: string, method?: string, body?: any, priority?: any) => Promise<any>
 ): Promise<AssignmentRecommenderResult> {
   const recommendations: AppAssignmentRecommendation[] = [];
