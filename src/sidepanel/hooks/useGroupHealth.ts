@@ -14,6 +14,29 @@ export function useGroupHealth({ groupId, targetTabId }: UseGroupHealthOptions) 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Helper function to validate tab and send message safely
+  const sendMessageSafely = useCallback(async (tabId: number, message: any) => {
+    try {
+      // Check if tab exists first
+      const tab = await chrome.tabs.get(tabId);
+      if (!tab) {
+        throw new Error('Tab not found');
+      }
+
+      // Send message to content script
+      return await chrome.tabs.sendMessage(tabId, message);
+    } catch (err) {
+      // Handle connection errors gracefully
+      if (err instanceof Error && err.message.includes('Receiving end does not exist')) {
+        throw new Error('Connection lost. Please refresh the Okta page and try again.');
+      }
+      if (err instanceof Error && err.message.includes('Tab not found')) {
+        throw new Error('The Okta tab is no longer available. Please navigate to a group page.');
+      }
+      throw err;
+    }
+  }, []);
+
   const fetchGroupMembers = useCallback(async (): Promise<OktaUser[]> => {
     if (!targetTabId || !groupId) {
       throw new Error('Missing target tab ID or group ID');
@@ -23,7 +46,7 @@ export function useGroupHealth({ groupId, targetTabId }: UseGroupHealthOptions) 
     let nextUrl: string | null = `/api/v1/groups/${groupId}/users?limit=200`;
 
     while (nextUrl) {
-      const response: { success: boolean; data?: OktaUser[]; error?: string; headers?: { link?: string } } = await chrome.tabs.sendMessage(targetTabId, {
+      const response: { success: boolean; data?: OktaUser[]; error?: string; headers?: { link?: string } } = await sendMessageSafely(targetTabId, {
         action: 'makeApiRequest',
         endpoint: nextUrl,
         method: 'GET',
@@ -54,7 +77,7 @@ export function useGroupHealth({ groupId, targetTabId }: UseGroupHealthOptions) 
     }
 
     return allMembers;
-  }, [groupId, targetTabId]);
+  }, [groupId, targetTabId, sendMessageSafely]);
 
   const fetchGroupRules = useCallback(async (): Promise<number> => {
     if (!targetTabId || !groupId) {
@@ -62,7 +85,7 @@ export function useGroupHealth({ groupId, targetTabId }: UseGroupHealthOptions) 
     }
 
     try {
-      const response = await chrome.tabs.sendMessage(targetTabId, {
+      const response = await sendMessageSafely(targetTabId, {
         action: 'fetchGroupRules',
         groupId,
       });
@@ -72,10 +95,11 @@ export function useGroupHealth({ groupId, targetTabId }: UseGroupHealthOptions) 
         return response.formattedRules.filter((rule: any) => rule.affectsCurrentGroup).length;
       }
       return 0;
-    } catch {
+    } catch (err) {
+      console.warn('[useGroupHealth] Failed to fetch group rules:', err);
       return 0;
     }
-  }, [groupId, targetTabId]);
+  }, [groupId, targetTabId, sendMessageSafely]);
 
   const calculateMetrics = useCallback(
     async (members: OktaUser[]): Promise<GroupHealthMetrics> => {
