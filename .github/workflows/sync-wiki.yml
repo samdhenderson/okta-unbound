@@ -1,0 +1,64 @@
+name: Sync Wiki
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  sync-wiki:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout wiki repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync docs to wiki
+        run: |
+          # Remove old wiki content (except .git)
+          find wiki -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+
+          # Copy all docs files to wiki root
+          rsync -av --exclude='.git' docs/ wiki/
+
+          # List what was synced
+          echo "=== Files synced to wiki ==="
+          ls -la wiki/
+
+      - name: Commit and push to wiki
+        working-directory: wiki
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add .
+
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          git commit -m "Auto-sync from docs/ folder
+
+          Synced from commit: ${{ github.sha }}
+          Triggered by: ${{ github.actor }}"
+
+          git push origin master
+
+      - name: Summary
+        run: |
+          echo "✅ Wiki successfully synced!"
+          echo "📚 Documentation is now available at: https://github.com/${{ github.repository }}/wiki"
