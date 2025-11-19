@@ -325,8 +325,17 @@ async function handleFetchGroupRules(): Promise<MessageResponse> {
     // Collect all unique group IDs from all rules
     const allGroupIds = new Set<string>();
     rules.forEach((rule) => {
+      // Add target group IDs (groups users are assigned to)
       const groupIds = rule.actions?.assignUserToGroups?.groupIds || [];
       groupIds.forEach((id: string) => allGroupIds.add(id));
+
+      // Also extract and add group IDs from the condition expression
+      const expression = rule.conditions?.expression?.value || '';
+      const groupIdPattern = /\b00g[a-zA-Z0-9]{17}\b/g;
+      const matches = expression.match(groupIdPattern);
+      if (matches) {
+        matches.forEach((id: string) => allGroupIds.add(id));
+      }
     });
 
     // Fetch group details for all group IDs in parallel (optimized)
@@ -434,8 +443,19 @@ async function handleFetchGroupRules(): Promise<MessageResponse> {
         (c) => c.rule1.id === rule.id || c.rule2.id === rule.id
       );
 
-      // Map group IDs to their names
+      // Map group IDs to their names (for target groups)
       const groupNames = groupIds.map((id: string) => groupNameMap.get(id) || id);
+
+      // Extract group IDs from condition expression and create a map of ALL group IDs -> names
+      const conditionGroupIds = expression.match(/\b00g[a-zA-Z0-9]{17}\b/g) || [];
+      const allGroupIdsInRule = [...new Set([...groupIds, ...conditionGroupIds])];
+      const allGroupNamesMap: Record<string, string> = {};
+      allGroupIdsInRule.forEach((id) => {
+        const name = groupNameMap.get(id);
+        if (name) {
+          allGroupNamesMap[id] = name;
+        }
+      });
 
       return {
         id: rule.id,
@@ -446,6 +466,7 @@ async function handleFetchGroupRules(): Promise<MessageResponse> {
         conditionExpression: expression,
         groupIds,
         groupNames,
+        allGroupNamesMap, // New field: map of all group IDs (in condition and targets) to names
         userAttributes: attrs,
         created: rule.created,
         lastUpdated: rule.lastUpdated,

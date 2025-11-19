@@ -92,6 +92,7 @@ export interface FormattedRule {
   conditionExpression?: string;
   groupIds: string[];
   groupNames?: string[];
+  allGroupNamesMap?: Record<string, string>; // Map of all group IDs (in conditions and targets) to names
   userAttributes: string[];
   created: string;
   lastUpdated: string;
