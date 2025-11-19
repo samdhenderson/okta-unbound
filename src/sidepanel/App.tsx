@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import GroupBanner from './components/GroupBanner';
 import TabNavigation from './components/TabNavigation';
+import DashboardTab from './components/DashboardTab';
 import OperationsTab from './components/OperationsTab';
 import RulesTab from './components/RulesTab';
 import UsersTab from './components/UsersTab';
@@ -9,11 +10,28 @@ import UndoPanel from './components/UndoPanel';
 import LoadingBar from './components/LoadingBar';
 import { useGroupContext } from './hooks/useGroupContext';
 
-type TabType = 'operations' | 'rules' | 'users' | 'undo';
+type TabType = 'dashboard' | 'operations' | 'rules' | 'users' | 'undo';
+
+const SELECTED_TAB_KEY = 'okta_unbound_selected_tab';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabType>('operations');
+  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const { groupInfo, connectionStatus, targetTabId, error, isLoading, oktaOrigin } = useGroupContext();
+
+  // Load saved tab preference on mount
+  useEffect(() => {
+    chrome.storage.local.get([SELECTED_TAB_KEY], (result) => {
+      if (result[SELECTED_TAB_KEY]) {
+        setActiveTab(result[SELECTED_TAB_KEY] as TabType);
+      }
+    });
+  }, []);
+
+  // Save tab preference when it changes
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    chrome.storage.local.set({ [SELECTED_TAB_KEY]: tab });
+  };
 
   useEffect(() => {
     console.log('[App] Component mounted');
@@ -34,8 +52,16 @@ const App: React.FC = () => {
         error={error}
       />
 
-      <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+      <TabNavigation activeTab={activeTab} onTabChange={handleTabChange} />
 
+      {activeTab === 'dashboard' && (
+        <DashboardTab
+          groupId={groupInfo?.groupId}
+          groupName={groupInfo?.groupName}
+          targetTabId={targetTabId}
+          onTabChange={handleTabChange}
+        />
+      )}
       {activeTab === 'operations' && (
         <OperationsTab
           groupId={groupInfo?.groupId}

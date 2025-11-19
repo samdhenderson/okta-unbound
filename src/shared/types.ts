@@ -175,3 +175,21 @@ export type ResultType = 'info' | 'success' | 'warning' | 'error';
 
 // Re-export undo types for convenience
 export type { UndoAction, UndoActionMetadata, UndoHistory, UndoResult } from './undoTypes';
+
+// Dashboard types
+export interface GroupHealthMetrics {
+  totalUsers: number;
+  statusBreakdown: Record<UserStatus, number>;
+  membershipSources: { direct: number; ruleBased: number };
+  riskScore: number; // 0-100
+  riskFactors: string[];
+  lastCleanup: Date | null;
+  daysSinceCleanup: number | null;
+  trends: { membershipChange30d: number; newUsersThisWeek: number };
+}
+
+export interface DashboardCache {
+  metrics: GroupHealthMetrics;
+  timestamp: number;
+  groupId: string;
+}

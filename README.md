@@ -18,6 +18,15 @@
 
 ### Currently Available
 
+✅ **Dashboard Tab (NEW)**
+Comprehensive at-a-glance insights with visual analytics:
+- Real-time group health metrics and risk scoring
+- Interactive pie chart showing user status distribution
+- Membership source breakdown (direct vs rule-based)
+- Quick action buttons for common operations
+- Automatic caching for fast performance (5-minute refresh)
+- Loads in under 5 seconds for groups with 1000+ users
+
 ✅ **Sidebar UI**
 Modern sidebar interface with tabbed navigation for better organization and more screen space
 
@@ -27,7 +36,7 @@ All operations require confirmation with API cost estimates before execution
 ✅ **API Cost Transparency**
 Hover tooltips and confirmation dialogs show estimated API request counts
 
-✅ **Rule Inspector (NEW)**
+✅ **Rule Inspector**
 Analyze all group rules in your organization, detect conflicts, and understand rule logic
 
 ✅ **One-Click User Cleanup**
@@ -58,6 +67,9 @@ No API tokens required - uses your existing Okta browser session securely
 Detects group types, permissions issues, and provides actionable error messages
 
 ### Coming Soon (Roadmap)
+
+🔜 **Dashboard Enhancements**
+Historical trend tracking and membership change analytics
 
 🔜 **Trace User Memberships**
 Understand exactly why users are in specific groups with visual traces
@@ -130,15 +142,21 @@ Based on the official Okta API documentation:
    - Navigate to a specific group page (e.g., `https://your-domain.okta.com/admin/group/00g...`)
 
 2. **Open the Extension**
-   - Click the Okta Group Manager icon in your Chrome toolbar
-   - The extension will automatically detect the current group
+   - Click the Okta Unbound icon in your Chrome toolbar
+   - The extension will automatically detect the current group and load the Dashboard
 
-3. **Run Operations**
-   - Choose an operation:
-     - **Remove Deactivated Users**: One-click operation to remove all deactivated users
+3. **View Dashboard Insights**
+   - **Dashboard Tab** (default): See group health metrics, visualizations, and quick actions
+   - Review the health score to identify potential issues
+   - View status distribution and membership sources at a glance
+
+4. **Run Operations**
+   - Switch to the **Operations Tab** for bulk operations:
+     - **Smart Cleanup**: Remove all inactive users in one operation
      - **Custom Filter**: Select any user status and choose to list or remove
+   - Or use quick action buttons directly from the Dashboard
 
-4. **Monitor Progress**
+5. **Monitor Progress**
    - Watch the progress bar for operation status
    - View detailed logs in the Results section
 
