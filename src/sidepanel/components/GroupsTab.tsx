@@ -42,7 +42,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
     chrome.storage.local.get([GROUPS_CACHE_KEY], (result) => {
       if (result[GROUPS_CACHE_KEY]) {
         try {
-          const cached = JSON.parse(result[GROUPS_CACHE_KEY]);
+          const cached = JSON.parse(result[GROUPS_CACHE_KEY] as string);
           const age = Date.now() - cached.timestamp;
           if (age < CACHE_DURATION) {
             setGroups(cached.groups.map((g: any) => ({

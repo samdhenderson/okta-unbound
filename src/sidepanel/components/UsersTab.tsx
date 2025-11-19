@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { OktaUser, GroupMembership } from '../../shared/types';
 import { RulesCache } from '../../shared/rulesCache';
 
@@ -19,7 +19,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
   const [apiCost, setApiCost] = useState<number>(0);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const handleSearch = async () => {
+  const handleSearch = useCallback(async () => {
     if (!targetTabId) {
       setError('No Okta tab connected');
       return;
@@ -54,14 +54,15 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
         setError(response.error || 'Failed to search users');
         setSearchResults([]);
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to communicate with Okta tab');
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message || 'Failed to communicate with Okta tab');
       setSearchResults([]);
       console.error('[UsersTab] Search error:', err);
     } finally {
       setIsSearching(false);
     }
-  };
+  }, [targetTabId, searchQuery]);
 
   const handleSelectUser = async (user: OktaUser) => {
     if (!targetTabId) return;
@@ -268,7 +269,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [searchQuery, targetTabId]);
+  }, [searchQuery, targetTabId, handleSearch]);
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
@@ -485,11 +486,11 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                               </button>
                             )}
                           </div>
-                          {membership.rule.conditionExpression && (
+                          {membership.rule.conditions?.expression?.value && (
                             <div className="rule-condition">
                               <strong>Condition:</strong>
                               <code className="condition-code">
-                                {membership.rule.conditionExpression}
+                                {membership.rule.conditions.expression.value}
                               </code>
                             </div>
                           )}

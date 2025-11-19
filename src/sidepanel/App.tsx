@@ -103,12 +103,12 @@ const App: React.FC = () => {
         <SecurityTab
           groupId={groupInfo?.groupId}
           groupName={groupInfo?.groupName}
-          targetTabId={targetTabId ?? undefined}
+          targetTabId={targetTabId ?? null}
         />
       )}
       {activeTab === 'groups' && (
         <GroupsTab
-          targetTabId={targetTabId ?? undefined}
+          targetTabId={targetTabId ?? null}
           oktaOrigin={oktaOrigin ?? undefined}
         />
       )}

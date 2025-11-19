@@ -421,6 +421,7 @@ const SecurityTab: React.FC<SecurityTabProps> = ({ groupId, groupName, targetTab
       {/* Confirmation Modal */}
       {showRemoveModal && (
         <ConfirmationModal
+          isOpen={showRemoveModal}
           title="Confirm Bulk Removal"
           message={
             <div>
@@ -449,14 +450,12 @@ const SecurityTab: React.FC<SecurityTabProps> = ({ groupId, groupName, targetTab
               </p>
             </div>
           }
-          confirmText="Remove Users"
-          cancelText="Cancel"
+          apiCost={`${usersToRemove.length} API request(s) will be made`}
           onConfirm={confirmRemoveUsers}
           onCancel={() => {
             setShowRemoveModal(false);
             setUsersToRemove([]);
           }}
-          isDangerous
         />
       )}
     </div>

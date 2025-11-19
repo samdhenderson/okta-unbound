@@ -3,7 +3,7 @@ import React from 'react';
 interface ConfirmationModalProps {
   isOpen: boolean;
   title: string;
-  message: string;
+  message: React.ReactNode;
   apiCost: string;
   onConfirm: () => void;
   onCancel: () => void;

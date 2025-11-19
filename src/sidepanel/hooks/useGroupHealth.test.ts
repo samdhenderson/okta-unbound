@@ -76,7 +76,7 @@ describe('useGroupHealth', () => {
     mockChrome.storage.local.set.mockImplementation(() => Promise.resolve());
 
     // Default mock for API request (group members)
-    mockChrome.tabs.sendMessage.mockImplementation((tabId, message) => {
+    mockChrome.tabs.sendMessage.mockImplementation((_tabId, message) => {
       if (message.action === 'makeApiRequest') {
         return Promise.resolve({
           success: true,
@@ -115,7 +115,7 @@ describe('useGroupHealth', () => {
 
   it('should calculate risk score correctly for healthy group', async () => {
     // Mock only active users
-    mockChrome.tabs.sendMessage.mockImplementation((tabId, message) => {
+    mockChrome.tabs.sendMessage.mockImplementation((_tabId, message) => {
       if (message.action === 'makeApiRequest') {
         return Promise.resolve({
           success: true,
@@ -170,7 +170,7 @@ describe('useGroupHealth', () => {
       },
     ];
 
-    mockChrome.tabs.sendMessage.mockImplementation((tabId, message) => {
+    mockChrome.tabs.sendMessage.mockImplementation((_tabId, message) => {
       if (message.action === 'makeApiRequest') {
         return Promise.resolve({
           success: true,

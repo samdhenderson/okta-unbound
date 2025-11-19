@@ -8,7 +8,7 @@ afterEach(() => {
 });
 
 // Mock Chrome APIs
-global.chrome = {
+globalThis.chrome = {
   runtime: {
     sendMessage: vi.fn(),
     onMessage: {
@@ -43,4 +43,4 @@ global.chrome = {
 } as any;
 
 // Mock fetch globally
-global.fetch = vi.fn();
+globalThis.fetch = vi.fn();

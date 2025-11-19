@@ -4,10 +4,14 @@ import { useOktaApi } from './useOktaApi';
 import type { OktaUser, MessageResponse } from '../../shared/types';
 
 // Mock chrome APIs
-const mockSendMessage = vi.fn();
-global.chrome = {
+const mockRuntimeSendMessage = vi.fn();
+const mockTabsSendMessage = vi.fn();
+globalThis.chrome = {
+  runtime: {
+    sendMessage: mockRuntimeSendMessage,
+  },
   tabs: {
-    sendMessage: mockSendMessage,
+    sendMessage: mockTabsSendMessage,
   },
 } as any;
 
@@ -35,7 +39,7 @@ describe('useOktaApi', () => {
         success: true,
         data: { test: 'data' },
       };
-      mockSendMessage.mockResolvedValue(mockResponse);
+      mockRuntimeSendMessage.mockResolvedValue(mockResponse);
 
       const { result } = renderHook(() =>
         useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
@@ -45,11 +49,13 @@ describe('useOktaApi', () => {
         return result.current.makeApiRequest('/api/v1/test');
       });
 
-      expect(mockSendMessage).toHaveBeenCalledWith(targetTabId, {
-        action: 'makeApiRequest',
+      expect(mockRuntimeSendMessage).toHaveBeenCalledWith({
+        action: 'scheduleApiRequest',
         endpoint: '/api/v1/test',
         method: 'GET',
         body: undefined,
+        tabId: targetTabId,
+        priority: 'normal',
       });
       expect(response).toEqual(mockResponse);
     });
@@ -78,7 +84,7 @@ describe('useOktaApi', () => {
         },
       }));
 
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: page1Users,
         headers: {
@@ -86,7 +92,7 @@ describe('useOktaApi', () => {
         },
       });
 
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: [],
         headers: {},
@@ -101,7 +107,7 @@ describe('useOktaApi', () => {
       });
 
       expect(members).toHaveLength(200);
-      expect(mockSendMessage).toHaveBeenCalledTimes(2);
+      expect(mockRuntimeSendMessage).toHaveBeenCalledTimes(2);
       expect(mockOnResult).toHaveBeenCalledWith('Fetching page 1...', 'info');
       expect(mockOnResult).toHaveBeenCalledWith('Fetching page 2...', 'info');
     });
@@ -129,7 +135,7 @@ describe('useOktaApi', () => {
         },
       }];
 
-      mockSendMessage
+      mockRuntimeSendMessage
         .mockResolvedValueOnce({
           success: true,
           data: page1Users,
@@ -152,7 +158,7 @@ describe('useOktaApi', () => {
       });
 
       expect(members).toHaveLength(201);
-      expect(mockSendMessage).toHaveBeenCalledTimes(2);
+      expect(mockRuntimeSendMessage).toHaveBeenCalledTimes(2);
       expect(mockOnResult).toHaveBeenCalledWith(
         'Page 1: Loaded 200 members (Total: 200)',
         'info'
@@ -178,7 +184,7 @@ describe('useOktaApi', () => {
 
       // Mock 6 pages: 5 pages of 200 + 1 page of 50 = 1050 total
       for (let i = 0; i < 5; i++) {
-        mockSendMessage.mockResolvedValueOnce({
+        mockRuntimeSendMessage.mockResolvedValueOnce({
           success: true,
           data: createMockUsers(i * 200, 200),
           headers: {
@@ -187,7 +193,7 @@ describe('useOktaApi', () => {
         });
       }
 
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: createMockUsers(1000, 50),
         headers: {},
@@ -202,7 +208,7 @@ describe('useOktaApi', () => {
       });
 
       expect(members).toHaveLength(1050);
-      expect(mockSendMessage).toHaveBeenCalledTimes(6);
+      expect(mockRuntimeSendMessage).toHaveBeenCalledTimes(6);
     });
 
     it('should handle cursor-based pagination with various page sizes', async () => {
@@ -228,7 +234,7 @@ describe('useOktaApi', () => {
         },
       }));
 
-      mockSendMessage
+      mockRuntimeSendMessage
         .mockResolvedValueOnce({
           success: true,
           data: page1,
@@ -251,16 +257,18 @@ describe('useOktaApi', () => {
       });
 
       expect(members).toHaveLength(200);
-      expect(mockSendMessage).toHaveBeenCalledWith(targetTabId, {
-        action: 'makeApiRequest',
+      expect(mockRuntimeSendMessage).toHaveBeenCalledWith({
+        action: 'scheduleApiRequest',
         endpoint: '/api/v1/groups/group1/users?limit=200',
         method: 'GET',
         body: undefined,
+        tabId: targetTabId,
+        priority: 'normal',
       });
     });
 
     it('should throw error on failed pagination request', async () => {
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: false,
         error: 'Network error',
       });
@@ -286,7 +294,7 @@ describe('useOktaApi', () => {
         },
       }];
 
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: users,
         headers: {
@@ -303,7 +311,7 @@ describe('useOktaApi', () => {
       });
 
       expect(members).toHaveLength(1);
-      expect(mockSendMessage).toHaveBeenCalledTimes(1);
+      expect(mockRuntimeSendMessage).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -333,20 +341,20 @@ describe('useOktaApi', () => {
       ];
 
       // Mock group details
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: { type: 'OKTA_GROUP', profile: { name: 'Test Group' } },
       });
 
       // Mock getAllGroupMembers
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: mockUsers,
         headers: {},
       });
 
       // Mock remove user
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
       });
 
@@ -389,20 +397,20 @@ describe('useOktaApi', () => {
       ];
 
       // Mock group details
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: { type: 'OKTA_GROUP', profile: { name: 'Test Group' } },
       });
 
       // Mock getAllGroupMembers
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: mockUsers,
         headers: {},
       });
 
       // Mock 403 error on first remove
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: false,
         status: 403,
         error: 'Forbidden',
@@ -425,12 +433,12 @@ describe('useOktaApi', () => {
       });
 
       // Should only attempt to remove one user due to 403 stopping
-      expect(mockSendMessage).toHaveBeenCalledTimes(3); // group details + get members + 1 remove attempt
+      expect(mockRuntimeSendMessage).toHaveBeenCalledTimes(3); // group details + get members + 1 remove attempt
     });
 
     it('should not allow modification of APP_GROUP', async () => {
       // Mock APP_GROUP
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: { type: 'APP_GROUP', profile: { name: 'App Group' } },
       });
@@ -463,20 +471,20 @@ describe('useOktaApi', () => {
       }));
 
       // Mock group details
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: { type: 'OKTA_GROUP', profile: { name: 'Test Group' } },
       });
 
       // Mock getAllGroupMembers
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: mockUsers,
         headers: {},
       });
 
       // Mock successful removes
-      mockSendMessage.mockResolvedValue({ success: true });
+      mockRuntimeSendMessage.mockResolvedValue({ success: true });
 
       const { result } = renderHook(() =>
         useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
@@ -497,7 +505,7 @@ describe('useOktaApi', () => {
 
       vi.useRealTimers();
 
-      expect(mockSendMessage).toHaveBeenCalledTimes(5); // group + members + 3 removes
+      expect(mockRuntimeSendMessage).toHaveBeenCalledTimes(5); // group + members + 3 removes
     });
   });
 
@@ -547,20 +555,20 @@ describe('useOktaApi', () => {
       ];
 
       // Mock group details
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: { type: 'OKTA_GROUP', profile: { name: 'Test Group' } },
       });
 
       // Mock getAllGroupMembers
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: mockUsers,
         headers: {},
       });
 
       // Mock successful removes (3 times)
-      mockSendMessage.mockResolvedValue({ success: true });
+      mockRuntimeSendMessage.mockResolvedValue({ success: true });
 
       const { result } = renderHook(() =>
         useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
@@ -612,13 +620,13 @@ describe('useOktaApi', () => {
       ];
 
       // Mock group details
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: { type: 'OKTA_GROUP', profile: { name: 'Test Group' } },
       });
 
       // Mock getAllGroupMembers
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: mockUsers,
         headers: {},
@@ -655,20 +663,20 @@ describe('useOktaApi', () => {
       ];
 
       // Mock group details
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: { type: 'OKTA_GROUP', profile: { name: 'Test Group' } },
       });
 
       // Mock getAllGroupMembers
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
         data: mockUsers,
         headers: {},
       });
 
       // Mock successful remove
-      mockSendMessage.mockResolvedValueOnce({ success: true });
+      mockRuntimeSendMessage.mockResolvedValueOnce({ success: true });
 
       const { result } = renderHook(() =>
         useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
@@ -687,7 +695,13 @@ describe('useOktaApi', () => {
 
   describe('exportMembers', () => {
     it('should export members in CSV format', async () => {
-      mockSendMessage.mockResolvedValueOnce({
+      // Mock getCurrentUser
+      mockRuntimeSendMessage.mockResolvedValueOnce({
+        success: true,
+        data: { email: 'admin@example.com', id: 'admin1' },
+      });
+
+      mockTabsSendMessage.mockResolvedValueOnce({
         success: true,
         count: 150,
       });
@@ -701,7 +715,7 @@ describe('useOktaApi', () => {
       });
 
       await waitFor(() => {
-        expect(mockSendMessage).toHaveBeenCalledWith(targetTabId, {
+        expect(mockTabsSendMessage).toHaveBeenCalledWith(targetTabId, {
           action: 'exportGroupMembers',
           groupId: 'group1',
           groupName: 'Test Group',
@@ -713,7 +727,13 @@ describe('useOktaApi', () => {
     });
 
     it('should export members in JSON format with status filter', async () => {
-      mockSendMessage.mockResolvedValueOnce({
+      // Mock getCurrentUser
+      mockRuntimeSendMessage.mockResolvedValueOnce({
+        success: true,
+        data: { email: 'admin@example.com', id: 'admin1' },
+      });
+
+      mockTabsSendMessage.mockResolvedValueOnce({
         success: true,
         count: 50,
       });
@@ -727,7 +747,7 @@ describe('useOktaApi', () => {
       });
 
       await waitFor(() => {
-        expect(mockSendMessage).toHaveBeenCalledWith(targetTabId, {
+        expect(mockTabsSendMessage).toHaveBeenCalledWith(targetTabId, {
           action: 'exportGroupMembers',
           groupId: 'group1',
           groupName: 'Test Group',
@@ -738,7 +758,13 @@ describe('useOktaApi', () => {
     });
 
     it('should handle export errors', async () => {
-      mockSendMessage.mockResolvedValueOnce({
+      // Mock getCurrentUser
+      mockRuntimeSendMessage.mockResolvedValueOnce({
+        success: true,
+        data: { email: 'admin@example.com', id: 'admin1' },
+      });
+
+      mockTabsSendMessage.mockResolvedValueOnce({
         success: false,
         error: 'Export failed',
       });
@@ -759,7 +785,7 @@ describe('useOktaApi', () => {
 
   describe('Error Handling', () => {
     it('should handle network failures gracefully', async () => {
-      mockSendMessage.mockRejectedValueOnce(new Error('Network error'));
+      mockRuntimeSendMessage.mockRejectedValueOnce(new Error('Network error'));
 
       const { result } = renderHook(() =>
         useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
@@ -771,7 +797,7 @@ describe('useOktaApi', () => {
     });
 
     it('should handle 404 errors', async () => {
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: false,
         status: 404,
         error: 'Not found',
@@ -790,7 +816,7 @@ describe('useOktaApi', () => {
     });
 
     it('should handle 500 errors', async () => {
-      mockSendMessage.mockResolvedValueOnce({
+      mockRuntimeSendMessage.mockResolvedValueOnce({
         success: false,
         status: 500,
         error: 'Internal server error',

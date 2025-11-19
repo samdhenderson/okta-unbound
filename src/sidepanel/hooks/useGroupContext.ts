@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { GroupInfo, MessageResponse } from '../../shared/types';
 
 type ConnectionStatus = 'connecting' | 'connected' | 'error';
@@ -21,7 +21,7 @@ export function useGroupContext(): UseGroupContextReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [oktaOrigin, setOktaOrigin] = useState<string | null>(null);
 
-  const fetchGroupInfo = async (retryCount = 0) => {
+  const fetchGroupInfo = useCallback(async (retryCount = 0) => {
     try {
       console.log('[useGroupContext] Fetching group info... (attempt', retryCount + 1, ')');
       setIsLoading(true);
@@ -126,13 +126,13 @@ export function useGroupContext(): UseGroupContextReturn {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchGroupInfo();
 
     // Listen for tab updates (when user navigates to different Okta pages)
-    const handleTabUpdate = (_tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
+    const handleTabUpdate = (_tabId: number, changeInfo: { url?: string; status?: string }, tab: chrome.tabs.Tab) => {
       // Refetch immediately when URL changes on Okta tabs
       // This ensures we detect group page navigation instantly
       if (changeInfo.url && tab.url &&
@@ -154,7 +154,7 @@ export function useGroupContext(): UseGroupContextReturn {
     };
 
     // Listen for new tabs being activated
-    const handleTabActivated = (activeInfo: chrome.tabs.TabActiveInfo) => {
+    const handleTabActivated = (activeInfo: { tabId: number; windowId: number }) => {
       chrome.tabs.get(activeInfo.tabId, (tab) => {
         if (tab.url &&
             (tab.url.includes('okta.com') ||
@@ -173,7 +173,7 @@ export function useGroupContext(): UseGroupContextReturn {
       chrome.tabs.onUpdated.removeListener(handleTabUpdate);
       chrome.tabs.onActivated.removeListener(handleTabActivated);
     };
-  }, []);
+  }, [fetchGroupInfo]);
 
   return {
     groupInfo,
