@@ -633,6 +633,287 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
     [makeApiRequest]
   );
 
+  // Multi-Group Operations
+  const getAllGroups = useCallback(
+    async (onProgress?: (loaded: number, total: number) => void): Promise<any[]> => {
+      const allGroups: any[] = [];
+      let nextUrl: string | null = '/api/v1/groups?limit=200';
+      let pageCount = 0;
+
+      while (nextUrl) {
+        pageCount++;
+        const response = await makeApiRequest(nextUrl);
+
+        if (!response.success) {
+          throw new Error(response.error || 'Failed to fetch groups');
+        }
+
+        const pageGroups = response.data || [];
+        allGroups.push(...pageGroups);
+
+        onProgress?.(allGroups.length, allGroups.length);
+
+        // Parse next link from headers
+        nextUrl = null;
+        if (response.headers?.link) {
+          const links = response.headers.link.split(',');
+          for (const link of links) {
+            if (link.includes('rel="next"')) {
+              const match = link.match(/<([^>]+)>/);
+              if (match) {
+                const fullUrl = new URL(match[1]);
+                nextUrl = fullUrl.pathname + fullUrl.search;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      return allGroups;
+    },
+    [makeApiRequest]
+  );
+
+  const getGroupMemberCount = useCallback(
+    async (groupId: string): Promise<number> => {
+      try {
+        // Try to get count from group details endpoint
+        const response = await makeApiRequest(`/api/v1/groups/${groupId}`);
+        if (response.success && response.data?._embedded?.stats?.membersCount !== undefined) {
+          return response.data._embedded.stats.membersCount;
+        }
+
+        // Fallback: get count from users endpoint with limit=1
+        const usersResponse = await makeApiRequest(`/api/v1/groups/${groupId}/users?limit=1`);
+        if (usersResponse.success && usersResponse.headers?.['x-total-count']) {
+          return parseInt(usersResponse.headers['x-total-count'], 10);
+        }
+
+        return 0;
+      } catch (error) {
+        console.error(`[useOktaApi] Failed to get member count for group ${groupId}:`, error);
+        return 0;
+      }
+    },
+    [makeApiRequest]
+  );
+
+  const getGroupRulesForGroup = useCallback(
+    async (groupId: string): Promise<any[]> => {
+      try {
+        // Fetch all group rules
+        const response = await makeApiRequest('/api/v1/groups/rules?limit=200');
+        if (!response.success) {
+          return [];
+        }
+
+        const allRules = response.data || [];
+
+        // Filter rules that target this group
+        const groupRules = allRules.filter((rule: any) => {
+          const targetGroupIds = rule.actions?.assignUserToGroups?.groupIds || [];
+          return targetGroupIds.includes(groupId);
+        });
+
+        return groupRules;
+      } catch (error) {
+        console.error(`[useOktaApi] Failed to get rules for group ${groupId}:`, error);
+        return [];
+      }
+    },
+    [makeApiRequest]
+  );
+
+  const findUserAcrossGroups = useCallback(
+    async (query: string): Promise<any> => {
+      try {
+        // Search for user
+        const userResponse = await makeApiRequest(`/api/v1/users?q=${encodeURIComponent(query)}&limit=1`);
+        if (!userResponse.success || !userResponse.data || userResponse.data.length === 0) {
+          throw new Error('User not found');
+        }
+
+        const user = userResponse.data[0];
+
+        // Get all groups for user
+        let allGroups: any[] = [];
+        let nextUrl: string | null = `/api/v1/users/${user.id}/groups?limit=200`;
+
+        while (nextUrl) {
+          const groupsResponse = await makeApiRequest(nextUrl);
+          if (!groupsResponse.success) break;
+
+          allGroups = allGroups.concat(groupsResponse.data || []);
+
+          // Parse next link
+          nextUrl = null;
+          if (groupsResponse.headers?.link) {
+            const links = groupsResponse.headers.link.split(',');
+            for (const link of links) {
+              if (link.includes('rel="next"')) {
+                const match = link.match(/<([^>]+)>/);
+                if (match) {
+                  const fullUrl = new URL(match[1]);
+                  nextUrl = fullUrl.pathname + fullUrl.search;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        return {
+          user,
+          groups: allGroups,
+        };
+      } catch (error) {
+        throw new Error(`Failed to find user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    },
+    [makeApiRequest]
+  );
+
+  const executeBulkOperation = useCallback(
+    async (
+      operation: any,
+      onProgress?: (current: number, total: number, currentGroupName: string) => void
+    ): Promise<any[]> => {
+      const results: any[] = [];
+      const totalGroups = operation.targetGroups.length;
+
+      for (let i = 0; i < totalGroups; i++) {
+        const groupId = operation.targetGroups[i];
+
+        try {
+          // Get group name
+          const groupResponse = await makeApiRequest(`/api/v1/groups/${groupId}`);
+          const groupName = groupResponse.data?.profile?.name || groupId;
+
+          onProgress?.(i + 1, totalGroups, groupName);
+
+          let result: any = { groupId, groupName, status: 'success', itemsProcessed: 0 };
+
+          // Execute operation based on type
+          switch (operation.type) {
+            case 'cleanup_inactive': {
+              // Get all members
+              const members = await getAllGroupMembers(groupId);
+              const inactiveStatuses = ['DEPROVISIONED', 'SUSPENDED', 'LOCKED_OUT'];
+              const inactiveUsers = members.filter((u) => inactiveStatuses.includes(u.status));
+
+              result.itemsProcessed = inactiveUsers.length;
+
+              // Remove inactive users
+              for (const user of inactiveUsers) {
+                await removeUserFromGroup(groupId, groupName, user);
+                await new Promise((resolve) => setTimeout(resolve, 100));
+              }
+              break;
+            }
+
+            case 'export_all': {
+              const members = await getAllGroupMembers(groupId);
+              result.itemsProcessed = members.length;
+              result.members = members;
+              break;
+            }
+
+            case 'remove_user': {
+              if (operation.config?.userId) {
+                const removeResult = await makeApiRequest(
+                  `/api/v1/groups/${groupId}/users/${operation.config.userId}`,
+                  'DELETE'
+                );
+                result.status = removeResult.success ? 'success' : 'failed';
+                result.itemsProcessed = removeResult.success ? 1 : 0;
+                if (!removeResult.success) {
+                  result.errors = [removeResult.error || 'Unknown error'];
+                }
+              }
+              break;
+            }
+
+            default:
+              result.status = 'failed';
+              result.errors = [`Unknown operation type: ${operation.type}`];
+          }
+
+          results.push(result);
+        } catch (error) {
+          results.push({
+            groupId,
+            groupName: groupId,
+            status: 'failed',
+            itemsProcessed: 0,
+            errors: [error instanceof Error ? error.message : 'Unknown error'],
+          });
+        }
+
+        // Rate limiting between groups
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
+      return results;
+    },
+    [makeApiRequest, getAllGroupMembers, removeUserFromGroup]
+  );
+
+  const compareGroups = useCallback(
+    async (groupIds: string[]): Promise<any> => {
+      const groupData: any[] = [];
+
+      // Fetch members for each group
+      for (const groupId of groupIds) {
+        const groupResponse = await makeApiRequest(`/api/v1/groups/${groupId}`);
+        const members = await getAllGroupMembers(groupId);
+
+        groupData.push({
+          id: groupId,
+          name: groupResponse.data?.profile?.name || groupId,
+          type: groupResponse.data?.type,
+          members,
+          memberIds: new Set(members.map((m: any) => m.id)),
+        });
+      }
+
+      // Calculate overlaps
+      const overlaps: any[] = [];
+      for (let i = 0; i < groupData.length; i++) {
+        for (let j = i + 1; j < groupData.length; j++) {
+          const group1 = groupData[i];
+          const group2 = groupData[j];
+
+          const sharedUserIds = [...group1.memberIds].filter((id: string) => group2.memberIds.has(id));
+          const uniqueToGroup1 = group1.members.length - sharedUserIds.length;
+          const uniqueToGroup2 = group2.members.length - sharedUserIds.length;
+
+          overlaps.push({
+            group1: { id: group1.id, name: group1.name },
+            group2: { id: group2.id, name: group2.name },
+            sharedUsers: sharedUserIds.length,
+            uniqueToGroup1,
+            uniqueToGroup2,
+          });
+        }
+      }
+
+      // Calculate unique users across all groups
+      const allUserIds = new Set<string>();
+      groupData.forEach((g) => {
+        g.members.forEach((m: any) => allUserIds.add(m.id));
+      });
+
+      return {
+        totalGroups: groupData.length,
+        totalUniqueUsers: allUserIds.size,
+        groupData,
+        overlaps,
+      };
+    },
+    [makeApiRequest, getAllGroupMembers]
+  );
+
   return {
     isLoading,
     makeApiRequest,
@@ -646,5 +927,12 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
     getUserAppAssignments,
     batchGetUserDetails,
     getUserGroupMemberships,
+    // Multi-group operations
+    getAllGroups,
+    getGroupMemberCount,
+    getGroupRulesForGroup,
+    findUserAcrossGroups,
+    executeBulkOperation,
+    compareGroups,
   };
 }

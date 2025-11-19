@@ -93,6 +93,48 @@ No API tokens required - uses your existing Okta browser session securely
 ✅ **Smart Error Handling**
 Detects group types, permissions issues, and provides actionable error messages
 
+✅ **Multi-Group Operations (NEW)**
+Enterprise-scale bulk operations across multiple groups:
+- **Group Browser**: Load and browse all groups in your organization with search/filter
+  - Search by group name, description, or ID
+  - Filter by type (Okta Groups, App Groups, Built-in)
+  - Filter by size (<50, 50-200, 200-1000, 1000+ members)
+  - Sort by name, member count, or last updated
+  - Multi-select groups with checkboxes
+  - 30-minute intelligent caching for fast performance
+- **Group Collections**: Save frequently-used group sets for quick access
+  - Create named collections (e.g., "Sales Teams", "Engineering Groups")
+  - One-click loading of saved collections
+  - Update collections with current selection
+- **Cross-Group User Search**: Find users across all groups instantly
+  - Search by email, name, or user ID
+  - View all group memberships for any user
+  - Remove user from multiple groups at once
+  - Direct links to open user/group in Okta
+- **Bulk Operations**: Apply operations to multiple groups simultaneously
+  - Remove inactive users from all selected groups
+  - Export combined member list from multiple groups
+  - Remove specific user from multiple groups
+  - Run security scans across multiple groups
+  - Real-time progress tracking with per-group status
+  - Detailed results showing success/failure for each group
+  - Rate-limited to prevent API throttling
+- **Group Comparison**: Analyze overlaps and differences between groups
+  - Compare 2-5 groups side-by-side
+  - Interactive Venn diagram visualization (for 2 groups)
+  - View shared users and unique users per group
+  - Export comparison report to CSV
+  - Overlap analysis table showing intersection counts
+- **Multi-Group Export**: Deduplicated user export across groups
+  - Export unique users from multiple groups
+  - Shows all group memberships per user in single row
+  - CSV format with user details and group list
+- **Performance Optimizations**:
+  - Virtual scrolling for 200+ group lists
+  - Lazy loading of member counts
+  - Aggressive caching (groups: 30min, counts: 10min)
+  - Batch processing to respect rate limits
+
 ### Coming Soon (Roadmap)
 
 🔜 **Dashboard Enhancements**
@@ -106,9 +148,6 @@ Analyze and filter users by profile attributes across groups
 
 🔜 **Mirror App Users & Permissions**
 Sync application assignments across groups easily
-
-🔜 **Bulk Operations Across Groups**
-Run cleanup and management operations across multiple groups simultaneously
 
 ## Supported User Statuses
 
@@ -204,6 +243,87 @@ Based on the official Okta API documentation:
 5. Click "Run Custom Filter"
 6. View the list of suspended users in the results
 ```
+
+### Multi-Group Operations
+
+#### Cleaning Up 50 Groups at Once
+
+**Scenario**: You need to remove inactive users from all Sales-related groups.
+
+```
+1. Open the extension and click the "Groups" tab
+2. Click "Load All Groups" (loads all groups in ~10 seconds)
+3. Search for "Sales" in the search box
+4. Filter by size: "50-200 members" (optional)
+5. Click "Select All" to select all matching groups
+6. Optional: Click "Save Selection (15)" to create a "Sales Teams" collection
+7. Click the "Bulk Operations" view mode
+8. Select operation: "Remove Inactive Users"
+9. Click "Execute on 15 Groups"
+10. Confirm the operation
+11. Watch real-time progress as each group is processed
+12. Review results showing success/failure per group
+```
+
+**Result**: All 15 Sales groups cleaned up in ~2 minutes vs. 30+ minutes manually.
+
+#### Finding a User Across All Groups
+
+**Scenario**: A user left the company and you need to see all their group memberships.
+
+```
+1. Open the extension and click the "Groups" tab
+2. Click the "Find User" view mode
+3. Enter user email: "john.doe@company.com"
+4. Click "Search"
+5. View user's complete group membership list (shows all groups)
+6. Select specific groups to remove from (or click "Select All")
+7. Click "Remove from X Groups"
+8. Confirm the operation
+```
+
+**Result**: User removed from all groups in seconds vs. manually checking each group.
+
+#### Comparing Group Memberships
+
+**Scenario**: You want to understand the overlap between "Engineering" and "Product" groups.
+
+```
+1. Open the extension and click the "Groups" tab
+2. Click "Load All Groups"
+3. Search for and select "Engineering" group (checkbox)
+4. Search for and select "Product" group (checkbox)
+5. Click the "Compare Groups" view mode
+6. Click "Compare Groups"
+7. View the Venn diagram showing:
+   - Users unique to Engineering
+   - Users unique to Product
+   - Users in both groups
+8. Export comparison report to CSV for documentation
+```
+
+**Result**: Clear visualization of group overlaps for access governance.
+
+#### Using Group Collections
+
+**Scenario**: You frequently need to work with the same set of groups.
+
+```
+1. Open the extension and click the "Groups" tab
+2. Click "Load All Groups"
+3. Select your frequently-used groups (e.g., all Engineering teams)
+4. In the "Saved Collections" section, click "Save Selection (8)"
+5. Name it "Engineering Teams" with description "All engineering groups for weekly cleanup"
+6. Click "Create Collection"
+
+Next time:
+1. Open Groups tab
+2. In "Saved Collections", find "Engineering Teams"
+3. Click "Load" - instantly selects all 8 groups
+4. Run bulk operations on the collection
+```
+
+**Result**: Save 5+ minutes every time you need to work with the same groups.
 
 ## How It Works
 
