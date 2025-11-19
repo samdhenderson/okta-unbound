@@ -13,17 +13,12 @@ interface RuleCardProps {
 // Helper function to render condition expression with group name badges
 const renderConditionWithGroupBadges = (
   expression: string,
-  groupIds: string[],
-  groupNames?: string[]
+  allGroupNamesMap?: Record<string, string>
 ): React.ReactNode => {
-  // Create a map of groupId -> groupName for quick lookup
-  const groupMap = new Map<string, string>();
-  groupIds.forEach((id, index) => {
-    const name = groupNames?.[index];
-    if (name && name !== id) {
-      groupMap.set(id, name);
-    }
-  });
+  // If no group names map is provided, return expression as-is
+  if (!allGroupNamesMap || Object.keys(allGroupNamesMap).length === 0) {
+    return expression;
+  }
 
   // Find all group IDs in the expression (Okta group IDs are 20 characters alphanumeric)
   const groupIdPattern = /\b00g[a-zA-Z0-9]{17}\b/g;
@@ -33,7 +28,7 @@ const renderConditionWithGroupBadges = (
 
   while ((match = groupIdPattern.exec(expression)) !== null) {
     const groupId = match[0];
-    const groupName = groupMap.get(groupId);
+    const groupName = allGroupNamesMap[groupId];
 
     // Add text before the group ID
     if (match.index > lastIndex) {
@@ -41,7 +36,7 @@ const renderConditionWithGroupBadges = (
     }
 
     // Add the group ID with badge if name exists
-    if (groupName) {
+    if (groupName && groupName !== groupId) {
       parts.push(
         <React.Fragment key={`${groupId}-${match.index}`}>
           <span className="group-id-in-condition">{groupId}</span>
@@ -122,8 +117,7 @@ const RuleCard: React.FC<RuleCardProps> = ({
               <code>
                 {renderConditionWithGroupBadges(
                   rule.conditionExpression || rule.condition,
-                  rule.groupIds,
-                  rule.groupNames
+                  rule.allGroupNamesMap
                 )}
               </code>
             </div>
