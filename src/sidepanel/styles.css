@@ -507,45 +507,149 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  background: var(--bg-primary);
-  border-top: 1px solid var(--border-color);
-  padding: 8px 12px;
+  background: linear-gradient(to top, var(--bg-secondary), var(--bg-primary));
+  border-top: 2px solid var(--accent-primary);
+  padding: 12px 16px;
   z-index: 1000;
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.global-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.global-operation-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.global-progress-stats {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.global-progress-stats > span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: monospace;
+}
+
+.global-progress-stats svg {
+  opacity: 0.7;
+}
+
+.global-api-calls {
+  color: var(--text-warning) !important;
+}
+
+.global-elapsed-time {
+  color: var(--text-secondary) !important;
+}
+
+.global-remaining-time {
+  color: var(--text-success) !important;
+  font-style: italic;
 }
 
 .global-progress-info {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   font-size: 12px;
 }
 
 .global-progress-message {
   color: var(--text-primary);
   font-weight: 500;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 12px;
 }
 
 .global-progress-count {
   color: var(--text-secondary);
   font-family: monospace;
+  font-size: 11px;
+  background: var(--bg-tertiary);
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
 .global-progress-bar-container {
   width: 100%;
-  height: 4px;
+  height: 6px;
   background: var(--bg-tertiary);
-  border-radius: 2px;
+  border-radius: 3px;
   overflow: hidden;
+  position: relative;
 }
 
 .global-progress-bar-fill {
   height: 100%;
-  background: var(--accent-primary);
-  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent-primary), #4a90d9);
+  border-radius: 3px;
   transition: width 0.3s ease;
   width: 0%;
+  position: relative;
+}
+
+.global-progress-bar-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.2) 50%,
+    transparent 100%
+  );
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.global-progress-percentage {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-primary);
+  margin-top: 6px;
+  font-family: monospace;
 }
 
 /* Rules Toolbar */
@@ -2804,6 +2908,51 @@ body {
   padding: 2px 6px;
   border-radius: 4px;
   font-family: monospace;
+  font-size: 12px;
+}
+
+/* Push Group Styles */
+.group-list-item.push-group {
+  border-left: 3px solid var(--okta-blue);
+}
+
+.group-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.linked-groups-section {
+  margin-top: 8px;
+}
+
+.linked-groups-list {
+  list-style: none;
+  margin-top: 8px;
+  padding-left: 12px;
+}
+
+.linked-groups-list li {
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--border-color);
+}
+
+.linked-groups-list li:last-child {
+  border-bottom: none;
+}
+
+.linked-group-name {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.linked-group-app {
+  color: var(--okta-blue);
+  font-size: 12px;
+}
+
+.linked-group-members {
+  color: var(--text-secondary);
   font-size: 12px;
 }
 

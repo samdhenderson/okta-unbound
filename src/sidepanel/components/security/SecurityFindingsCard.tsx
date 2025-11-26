@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useCallback } from 'react';
 import type { SecurityFinding } from '../../../shared/types';
 
 interface SecurityFindingsCardProps {
@@ -6,7 +6,11 @@ interface SecurityFindingsCardProps {
   onViewDetails?: () => void;
 }
 
-const SecurityFindingsCard: React.FC<SecurityFindingsCardProps> = ({ finding, onViewDetails }) => {
+/**
+ * Memoized card component for displaying security findings.
+ * Uses React.memo to prevent unnecessary re-renders in lists.
+ */
+const SecurityFindingsCard: React.FC<SecurityFindingsCardProps> = memo(({ finding, onViewDetails }) => {
   const getSeverityColor = (severity: SecurityFinding['severity']): string => {
     switch (severity) {
       case 'critical':
@@ -74,6 +78,16 @@ const SecurityFindingsCard: React.FC<SecurityFindingsCardProps> = ({ finding, on
       )}
     </div>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison for memoization
+  return (
+    prevProps.finding.category === nextProps.finding.category &&
+    prevProps.finding.severity === nextProps.finding.severity &&
+    prevProps.finding.count === nextProps.finding.count &&
+    prevProps.finding.description === nextProps.finding.description
+  );
+});
+
+SecurityFindingsCard.displayName = 'SecurityFindingsCard';
 
 export default SecurityFindingsCard;

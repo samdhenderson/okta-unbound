@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { OktaUser, GroupMembership } from '../../shared/types';
 import { RulesCache } from '../../shared/rulesCache';
+import { useUserContext } from '../hooks/useUserContext';
 
 interface UsersTabProps {
   targetTabId?: number;
@@ -9,6 +10,7 @@ interface UsersTabProps {
 }
 
 const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavigateToRule }) => {
+  const { userInfo, isLoading: isLoadingUserContext } = useUserContext();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingMemberships, setIsLoadingMemberships] = useState(false);
@@ -18,6 +20,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
   const [error, setError] = useState<string | null>(null);
   const [apiCost, setApiCost] = useState<number>(0);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [hasAutoLoadedUser, setHasAutoLoadedUser] = useState<string | null>(null);
 
   const handleSearch = useCallback(async () => {
     if (!targetTabId) {
@@ -271,6 +274,88 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     };
   }, [searchQuery, targetTabId, handleSearch]);
 
+  // Auto-load detected user from page context
+  useEffect(() => {
+    if (!targetTabId || isLoadingUserContext) return;
+    if (!userInfo?.userId) {
+      // Not on a user page - reset auto-load state
+      if (hasAutoLoadedUser) {
+        setHasAutoLoadedUser(null);
+      }
+      return;
+    }
+
+    // Only auto-load if we haven't already loaded this user
+    if (hasAutoLoadedUser === userInfo.userId) return;
+
+    const autoLoadUser = async () => {
+      console.log('[UsersTab] Auto-loading detected user:', userInfo.userId);
+      setHasAutoLoadedUser(userInfo.userId);
+      setIsLoadingMemberships(true);
+      setError(null);
+      setSearchResults([]); // Clear search results when auto-loading
+      setSearchQuery(''); // Clear search query
+
+      try {
+        // First fetch user details
+        const userResponse = await chrome.tabs.sendMessage(targetTabId, {
+          action: 'getUserDetails',
+          userId: userInfo.userId,
+        });
+
+        if (!userResponse.success) {
+          throw new Error(userResponse.error || 'Failed to fetch user details');
+        }
+
+        const user: OktaUser = userResponse.data;
+        setSelectedUser(user);
+
+        // Then fetch groups (same logic as handleSelectUser)
+        const groupsResponse = await chrome.tabs.sendMessage(targetTabId, {
+          action: 'getUserGroups',
+          userId: user.id,
+        });
+
+        if (!groupsResponse.success) {
+          throw new Error(groupsResponse.error || 'Failed to fetch user groups');
+        }
+
+        // Check cache for rules
+        let rules: any[] = [];
+        const cachedRules = await RulesCache.get();
+
+        if (cachedRules) {
+          rules = cachedRules.rules;
+        } else {
+          const rulesResponse = await chrome.tabs.sendMessage(targetTabId, {
+            action: 'fetchGroupRules',
+          });
+          if (rulesResponse.success) {
+            rules = rulesResponse.rules || [];
+            await RulesCache.set(
+              rules,
+              [],
+              rulesResponse.stats || { total: 0, active: 0, inactive: 0, conflicts: 0 },
+              rulesResponse.conflicts || []
+            );
+          }
+        }
+
+        const groups = groupsResponse.data || [];
+        const analyzedMemberships = analyzeMemberships(groups, rules, user);
+        setMemberships(analyzedMemberships);
+      } catch (err: any) {
+        setError(err.message || 'Failed to load detected user');
+        setSelectedUser(null);
+        setMemberships([]);
+      } finally {
+        setIsLoadingMemberships(false);
+      }
+    };
+
+    autoLoadUser();
+  }, [userInfo?.userId, targetTabId, isLoadingUserContext, hasAutoLoadedUser]);
+
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case 'ACTIVE':
@@ -312,6 +397,40 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
           </div>
         </div>
 
+        {/* Detected User Banner */}
+        {userInfo && (
+          <div className="context-banner user-context-banner">
+            <div className="banner-content">
+              <span className="banner-icon">&#128100;</span>
+              <div className="banner-text">
+                <strong>Currently viewing:</strong> {userInfo.userName}
+                {userInfo.userEmail && (
+                  <span className="banner-detail"> ({userInfo.userEmail})</span>
+                )}
+                {userInfo.userStatus && (
+                  <span className={`badge badge-sm ml-2 ${
+                    userInfo.userStatus === 'ACTIVE' ? 'badge-success' :
+                    userInfo.userStatus === 'DEPROVISIONED' ? 'badge-error' : 'badge-warning'
+                  }`}>
+                    {userInfo.userStatus}
+                  </span>
+                )}
+              </div>
+            </div>
+            <button
+              className="btn btn-sm btn-secondary"
+              onClick={() => {
+                setSelectedUser(null);
+                setMemberships([]);
+                setHasAutoLoadedUser(null);
+              }}
+              title="Clear and search for a different user"
+            >
+              Search Other Users
+            </button>
+          </div>
+        )}
+
         {/* Search Section */}
         <div className="user-search-section">
           <div className="search-input-group">
@@ -321,7 +440,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
               placeholder="Type to search by email, name, or login (live search)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              disabled={isSearching}
             />
             {isSearching && (
               <div className="search-spinner">

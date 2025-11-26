@@ -1,5 +1,6 @@
 # Claude Code context files (do not commit)
-
+claude.md
+.claude/
 
 # Development
 node_modules/

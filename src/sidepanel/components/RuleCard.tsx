@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import type { FormattedRule } from '../../shared/types';
 import { timeAgo } from '../../shared/ruleUtils';
 
@@ -9,6 +9,11 @@ interface RuleCardProps {
   oktaOrigin?: string | null;
   isHighlighted?: boolean;
 }
+
+/**
+ * Memoized card component for displaying rule information.
+ * Uses React.memo to prevent unnecessary re-renders when list updates.
+ */
 
 // Helper function to render condition expression with group name badges
 const renderConditionWithGroupBadges = (
@@ -60,7 +65,7 @@ const renderConditionWithGroupBadges = (
   return parts.length > 0 ? parts : expression;
 };
 
-const RuleCard: React.FC<RuleCardProps> = ({
+const RuleCard: React.FC<RuleCardProps> = memo(({
   rule,
   onActivate,
   onDeactivate,
@@ -76,13 +81,25 @@ const RuleCard: React.FC<RuleCardProps> = ({
     }
   }, [isHighlighted]);
 
+  const toggleExpanded = useCallback(() => {
+    setIsExpanded(prev => !prev);
+  }, []);
+
+  const handleActivate = useCallback(() => {
+    onActivate?.(rule.id);
+  }, [onActivate, rule.id]);
+
+  const handleDeactivate = useCallback(() => {
+    onDeactivate?.(rule.id);
+  }, [onDeactivate, rule.id]);
+
   const statusColor = rule.status === 'ACTIVE' ? 'success' : 'inactive';
   const hasConflicts = rule.conflicts && rule.conflicts.length > 0;
 
   return (
     <div className={`rule-card ${rule.affectsCurrentGroup ? 'affects-current' : ''} ${isHighlighted ? 'highlighted-rule' : ''}`}>
       {/* Header */}
-      <div className="rule-header" onClick={() => setIsExpanded(!isExpanded)}>
+      <div className="rule-header" onClick={toggleExpanded}>
         <div className="rule-header-left">
           <span className={`rule-status-dot ${statusColor}`}></span>
           <div>
@@ -202,14 +219,14 @@ const RuleCard: React.FC<RuleCardProps> = ({
             {rule.status === 'ACTIVE' ? (
               <button
                 className="btn btn-secondary btn-sm"
-                onClick={() => onDeactivate?.(rule.id)}
+                onClick={handleDeactivate}
               >
                 Deactivate Rule
               </button>
             ) : (
               <button
                 className="btn btn-primary btn-sm"
-                onClick={() => onActivate?.(rule.id)}
+                onClick={handleActivate}
               >
                 Activate Rule
               </button>
@@ -230,6 +247,20 @@ const RuleCard: React.FC<RuleCardProps> = ({
       )}
     </div>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison for memoization
+  return (
+    prevProps.rule.id === nextProps.rule.id &&
+    prevProps.rule.name === nextProps.rule.name &&
+    prevProps.rule.status === nextProps.rule.status &&
+    prevProps.rule.condition === nextProps.rule.condition &&
+    prevProps.rule.affectsCurrentGroup === nextProps.rule.affectsCurrentGroup &&
+    prevProps.isHighlighted === nextProps.isHighlighted &&
+    prevProps.oktaOrigin === nextProps.oktaOrigin &&
+    (prevProps.rule.conflicts?.length || 0) === (nextProps.rule.conflicts?.length || 0)
+  );
+});
+
+RuleCard.displayName = 'RuleCard';
 
 export default RuleCard;

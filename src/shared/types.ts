@@ -113,6 +113,13 @@ export interface GroupInfo {
   groupName: string;
 }
 
+export interface UserInfo {
+  userId: string;
+  userName: string;
+  userEmail?: string;
+  userStatus?: UserStatus;
+}
+
 // User Membership Tracing types
 export interface UserMembershipTrace {
   userId: string;
@@ -129,7 +136,7 @@ export interface GroupMembership {
 }
 
 export interface MessageRequest {
-  action: 'getGroupInfo' | 'makeApiRequest' | 'exportGroupMembers' | 'fetchGroupRules' | 'searchUsers' | 'getUserGroups' | 'getUserDetails' | 'getOktaOrigin' | 'activateRule' | 'deactivateRule' | 'getAllGroups' | 'exportMultiGroupMembers';
+  action: 'getGroupInfo' | 'getUserInfo' | 'makeApiRequest' | 'exportGroupMembers' | 'fetchGroupRules' | 'searchUsers' | 'getUserGroups' | 'getUserDetails' | 'getOktaOrigin' | 'activateRule' | 'deactivateRule' | 'getAllGroups' | 'exportMultiGroupMembers';
   endpoint?: string;
   method?: string;
   body?: any;
@@ -319,6 +326,21 @@ export interface GroupSummary {
   ruleCount: number;
   healthScore?: number;
   selected?: boolean; // for multi-select UI
+  // Push group related fields
+  sourceAppId?: string; // For APP_GROUP: the source app ID
+  sourceAppName?: string; // For APP_GROUP: the source app name
+  linkedGroups?: LinkedGroup[]; // For merged display: linked OKTA/APP groups
+  isPushGroup?: boolean; // True if this OKTA_GROUP has linked APP_GROUPs
+}
+
+// Linked group info for push group merging
+export interface LinkedGroup {
+  id: string;
+  name: string;
+  type: GroupType;
+  sourceAppId?: string;
+  sourceAppName?: string;
+  memberCount: number;
 }
 
 export interface GroupCollection {

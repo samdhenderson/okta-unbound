@@ -1,7 +1,7 @@
 // Content script for Okta Unbound
 // Runs on Okta pages and handles API requests with proper session authentication
 
-import type { MessageRequest, MessageResponse, OktaUser, GroupInfo, ApiResponse } from '../shared/types';
+import type { MessageRequest, MessageResponse, OktaUser, GroupInfo, UserInfo, ApiResponse } from '../shared/types';
 import { getCacheEntry, setCacheEntry } from '../shared/cache';
 
 console.log('[Content] Content script loaded', {
@@ -25,6 +25,10 @@ chrome.runtime.onMessage.addListener(
     switch (request.action) {
       case 'getGroupInfo':
         handleGetGroupInfo().then(sendResponse);
+        return true;
+
+      case 'getUserInfo':
+        handleGetUserInfo().then(sendResponse);
         return true;
 
       case 'makeApiRequest':
@@ -251,6 +255,68 @@ async function handleGetGroupInfo(): Promise<MessageResponse<GroupInfo>> {
     };
   } catch (error) {
     console.error('[Content] getGroupInfo error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+// ============================================================================
+// User Info Handler
+// ============================================================================
+
+async function handleGetUserInfo(): Promise<MessageResponse<UserInfo>> {
+  console.log('[Content] Processing getUserInfo request');
+
+  try {
+    const url = window.location.href;
+    console.log('[Content] Current URL:', url);
+
+    const userId = extractUserIdFromUrl(url);
+    console.log('[Content] Extracted userId:', userId);
+
+    if (!userId) {
+      return {
+        success: false,
+        error: 'Not on a user page. Please navigate to a specific user page.',
+      };
+    }
+
+    let userName = extractUserNameFromPage();
+    let userEmail: string | undefined;
+    let userStatus: string | undefined;
+    console.log('[Content] Extracted userName from page:', userName);
+
+    // Fetch user details from API
+    console.log('[Content] Fetching user details from API...');
+    try {
+      const response = await handleMakeApiRequest(`/api/v1/users/${userId}`, 'GET');
+      if (response.success && response.data) {
+        const profile = response.data.profile || {};
+        userName = userName || `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || 'Unknown';
+        userEmail = profile.email;
+        userStatus = response.data.status;
+        console.log('[Content] Fetched user details from API:', { userName, userEmail, userStatus });
+      }
+    } catch (e) {
+      console.warn('[Content] Failed to fetch user details from API:', e);
+    }
+
+    const result: UserInfo = {
+      userId,
+      userName: userName || 'Unknown',
+      userEmail,
+      userStatus: userStatus as any,
+    };
+
+    console.log('[Content] getUserInfo result:', result);
+    return {
+      success: true,
+      data: result,
+    };
+  } catch (error) {
+    console.error('[Content] getUserInfo error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -711,6 +777,43 @@ function extractGroupNameFromPage(): string | null {
     'h1[data-se="group-name"]',
     '.group-profile-header h1',
     '[data-se="group-detail-name"]',
+    'h1.okta-form-title',
+    '.content-container h1',
+  ];
+
+  for (const selector of selectors) {
+    const element = document.querySelector(selector);
+    if (element) {
+      return element.textContent?.trim() || null;
+    }
+  }
+
+  return null;
+}
+
+function extractUserIdFromUrl(url: string): string | null {
+  // Match /admin/user/{userId} pattern
+  const match1 = url.match(/\/admin\/user\/([a-zA-Z0-9]+)/);
+  if (match1) return match1[1];
+
+  // Match /users/{userId} pattern
+  const match2 = url.match(/\/users\/([a-zA-Z0-9]+)/);
+  if (match2) return match2[1];
+
+  // Match /admin/users/{userId} pattern
+  const match3 = url.match(/\/admin\/users\/([a-zA-Z0-9]+)/);
+  if (match3) return match3[1];
+
+  return null;
+}
+
+function extractUserNameFromPage(): string | null {
+  const selectors = [
+    'h1[data-se="user-name"]',
+    '.user-profile-header h1',
+    '[data-se="user-detail-name"]',
+    '.user-header h1',
+    '.user-detail-header h1',
     'h1.okta-form-title',
     '.content-container h1',
   ];

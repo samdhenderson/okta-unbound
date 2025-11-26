@@ -1,7 +1,7 @@
 // Undo Manager
 // Manages undo history and provides undo functionality
 
-import type { UndoAction, UndoActionMetadata, UndoHistory } from './undoTypes';
+import type { UndoAction, UndoActionMetadata, UndoHistory, BulkRemoveUsersMetadata, BulkAddUsersMetadata, BulkUserInfo } from './undoTypes';
 
 const UNDO_STORAGE_KEY = 'undoHistory';
 const MAX_UNDO_SIZE = 10; // Maximum number of actions to keep
@@ -76,6 +76,99 @@ export async function logAction(
 }
 
 /**
+ * Logs a bulk remove users action to the undo history
+ * This is more efficient than logging individual actions for bulk operations
+ */
+export async function logBulkRemoveAction(
+  groupId: string,
+  groupName: string,
+  users: BulkUserInfo[],
+  operationType: 'deprovisioned' | 'inactive' | 'custom_status',
+  targetStatus?: string
+): Promise<UndoAction> {
+  const history = await getUndoHistory();
+
+  const description = operationType === 'deprovisioned'
+    ? `Removed ${users.length} deprovisioned user${users.length !== 1 ? 's' : ''} from ${groupName}`
+    : operationType === 'inactive'
+    ? `Removed ${users.length} inactive user${users.length !== 1 ? 's' : ''} from ${groupName}`
+    : `Removed ${users.length} ${targetStatus} user${users.length !== 1 ? 's' : ''} from ${groupName}`;
+
+  const metadata: BulkRemoveUsersMetadata = {
+    type: 'BULK_REMOVE_USERS_FROM_GROUP',
+    users,
+    groupId,
+    groupName,
+    operationType,
+    targetStatus,
+  };
+
+  const action: UndoAction = {
+    id: generateActionId(),
+    type: 'BULK_REMOVE_USERS_FROM_GROUP',
+    timestamp: Date.now(),
+    description,
+    metadata,
+    status: 'completed',
+  };
+
+  // Add to front of array (most recent first)
+  history.actions.unshift(action);
+
+  // Trim to max size
+  if (history.actions.length > history.maxSize) {
+    history.actions = history.actions.slice(0, history.maxSize);
+  }
+
+  await saveUndoHistory(history);
+  console.log('[UndoManager] Logged bulk action:', action.description);
+
+  return action;
+}
+
+/**
+ * Logs a bulk add users action to the undo history
+ */
+export async function logBulkAddAction(
+  groupId: string,
+  groupName: string,
+  users: BulkUserInfo[]
+): Promise<UndoAction> {
+  const history = await getUndoHistory();
+
+  const description = `Added ${users.length} user${users.length !== 1 ? 's' : ''} to ${groupName}`;
+
+  const metadata: BulkAddUsersMetadata = {
+    type: 'BULK_ADD_USERS_TO_GROUP',
+    users,
+    groupId,
+    groupName,
+  };
+
+  const action: UndoAction = {
+    id: generateActionId(),
+    type: 'BULK_ADD_USERS_TO_GROUP',
+    timestamp: Date.now(),
+    description,
+    metadata,
+    status: 'completed',
+  };
+
+  // Add to front of array (most recent first)
+  history.actions.unshift(action);
+
+  // Trim to max size
+  if (history.actions.length > history.maxSize) {
+    history.actions = history.actions.slice(0, history.maxSize);
+  }
+
+  await saveUndoHistory(history);
+  console.log('[UndoManager] Logged bulk add action:', action.description);
+
+  return action;
+}
+
+/**
  * Marks an action as undone
  */
 export async function markActionAsUndone(actionId: string): Promise<void> {
@@ -100,6 +193,20 @@ export async function markActionAsFailed(actionId: string): Promise<void> {
     action.status = 'failed';
     await saveUndoHistory(history);
     console.log('[UndoManager] Marked action as failed:', action.description);
+  }
+}
+
+/**
+ * Marks an action as partially undone (some operations succeeded, some failed)
+ */
+export async function markActionAsPartial(actionId: string): Promise<void> {
+  const history = await getUndoHistory();
+  const action = history.actions.find(a => a.id === actionId);
+
+  if (action) {
+    action.status = 'partial';
+    await saveUndoHistory(history);
+    console.log('[UndoManager] Marked action as partial:', action.description);
   }
 }
 

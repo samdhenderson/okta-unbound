@@ -3,8 +3,9 @@
 
 import React, { useState } from 'react';
 import type { UndoAction } from '../../shared/types';
+import type { BulkRemoveUsersMetadata, BulkAddUsersMetadata } from '../../shared/undoTypes';
 import { formatActionTime } from '../../shared/undoManager';
-import { useUndoManager } from '../hooks/useUndoManager';
+import { useUndoManager, BulkUndoProgress } from '../hooks/useUndoManager';
 
 interface UndoPanelProps {
   targetTabId?: number;
@@ -12,9 +13,10 @@ interface UndoPanelProps {
 }
 
 const UndoPanel: React.FC<UndoPanelProps> = ({ targetTabId, onUndoComplete }) => {
-  const { undoableActions, isLoading, error, performUndo, clearHistory } = useUndoManager();
+  const { undoableActions, isLoading, error, bulkProgress, performUndo, clearHistory } = useUndoManager();
   const [expandedActionId, setExpandedActionId] = useState<string | null>(null);
   const [undoingActionId, setUndoingActionId] = useState<string | null>(null);
+  const [localProgress, setLocalProgress] = useState<BulkUndoProgress | null>(null);
 
   const handleUndo = async (action: UndoAction) => {
     if (!targetTabId) {
@@ -22,23 +24,40 @@ const UndoPanel: React.FC<UndoPanelProps> = ({ targetTabId, onUndoComplete }) =>
       return;
     }
 
-    if (!confirm(`Are you sure you want to undo: ${action.description}?`)) {
+    // Custom confirmation for bulk operations
+    const isBulkAction = action.type === 'BULK_REMOVE_USERS_FROM_GROUP' || action.type === 'BULK_ADD_USERS_TO_GROUP';
+    let confirmMessage = `Are you sure you want to undo: ${action.description}?`;
+
+    if (isBulkAction) {
+      const metadata = action.metadata as BulkRemoveUsersMetadata | BulkAddUsersMetadata;
+      const userCount = metadata.users.length;
+      confirmMessage = action.type === 'BULK_REMOVE_USERS_FROM_GROUP'
+        ? `This will restore ${userCount} user${userCount !== 1 ? 's' : ''} to ${metadata.groupName}.\n\nAre you sure you want to proceed?`
+        : `This will remove ${userCount} user${userCount !== 1 ? 's' : ''} from ${metadata.groupName}.\n\nAre you sure you want to proceed?`;
+    }
+
+    if (!confirm(confirmMessage)) {
       return;
     }
 
     setUndoingActionId(action.id);
+    setLocalProgress(null);
 
     try {
-      const result = await performUndo(action, targetTabId);
+      const result = await performUndo(action, targetTabId, (progress) => {
+        setLocalProgress(progress);
+      });
 
       if (result.success) {
         alert(`Successfully undone: ${action.description}`);
         onUndoComplete?.();
       } else {
-        alert(`Failed to undo: ${result.error}`);
+        alert(`Undo completed with issues: ${result.error}`);
+        onUndoComplete?.();
       }
     } finally {
       setUndoingActionId(null);
+      setLocalProgress(null);
     }
   };
 
@@ -56,6 +75,10 @@ const UndoPanel: React.FC<UndoPanelProps> = ({ targetTabId, onUndoComplete }) =>
         return '👤➖';
       case 'ADD_USER_TO_GROUP':
         return '👤➕';
+      case 'BULK_REMOVE_USERS_FROM_GROUP':
+        return '👥➖';
+      case 'BULK_ADD_USERS_TO_GROUP':
+        return '👥➕';
       case 'ACTIVATE_RULE':
         return '✅';
       case 'DEACTIVATE_RULE':
@@ -65,12 +88,20 @@ const UndoPanel: React.FC<UndoPanelProps> = ({ targetTabId, onUndoComplete }) =>
     }
   };
 
-  const getActionTypeLabel = (type: UndoAction['type']): string => {
-    switch (type) {
+  const getActionTypeLabel = (action: UndoAction): string => {
+    switch (action.type) {
       case 'REMOVE_USER_FROM_GROUP':
         return 'User Removal';
       case 'ADD_USER_TO_GROUP':
         return 'User Addition';
+      case 'BULK_REMOVE_USERS_FROM_GROUP': {
+        const metadata = action.metadata as BulkRemoveUsersMetadata;
+        return `Bulk Removal (${metadata.users.length})`;
+      }
+      case 'BULK_ADD_USERS_TO_GROUP': {
+        const metadata = action.metadata as BulkAddUsersMetadata;
+        return `Bulk Addition (${metadata.users.length})`;
+      }
       case 'ACTIVATE_RULE':
         return 'Rule Activation';
       case 'DEACTIVATE_RULE':
@@ -125,6 +156,49 @@ const UndoPanel: React.FC<UndoPanelProps> = ({ targetTabId, onUndoComplete }) =>
               <span className="detail-label">Group ID:</span>
               <span className="detail-value metadata-id">{metadata.groupId}</span>
             </div>
+          </div>
+        );
+
+      case 'BULK_REMOVE_USERS_FROM_GROUP':
+      case 'BULK_ADD_USERS_TO_GROUP':
+        return (
+          <div className="action-details">
+            <div className="detail-row">
+              <span className="detail-label">Group:</span>
+              <span className="detail-value">{metadata.groupName}</span>
+            </div>
+            <div className="detail-row">
+              <span className="detail-label">Users affected:</span>
+              <span className="detail-value">{metadata.users.length}</span>
+            </div>
+            {metadata.type === 'BULK_REMOVE_USERS_FROM_GROUP' && metadata.operationType && (
+              <div className="detail-row">
+                <span className="detail-label">Operation:</span>
+                <span className="detail-value">
+                  {metadata.operationType === 'deprovisioned' ? 'Remove Deprovisioned' :
+                   metadata.operationType === 'inactive' ? 'Smart Cleanup (Inactive)' :
+                   `Custom Status (${metadata.targetStatus})`}
+                </span>
+              </div>
+            )}
+            <div className="detail-row">
+              <span className="detail-label">Group ID:</span>
+              <span className="detail-value metadata-id">{metadata.groupId}</span>
+            </div>
+            <details className="bulk-users-details">
+              <summary className="bulk-users-summary">
+                View all {metadata.users.length} users
+              </summary>
+              <div className="bulk-users-list">
+                {metadata.users.map((user, index) => (
+                  <div key={user.userId} className="bulk-user-item">
+                    <span className="bulk-user-number">{index + 1}.</span>
+                    <span className="bulk-user-name">{user.userName}</span>
+                    <span className="bulk-user-email muted-small">{user.userEmail}</span>
+                  </div>
+                ))}
+              </div>
+            </details>
           </div>
         );
 
@@ -195,7 +269,7 @@ const UndoPanel: React.FC<UndoPanelProps> = ({ targetTabId, onUndoComplete }) =>
                 <div className="action-text">
                   <div className="action-description">{action.description}</div>
                   <div className="action-meta">
-                    <span className="badge badge-muted">{getActionTypeLabel(action.type)}</span>
+                    <span className="badge badge-muted">{getActionTypeLabel(action)}</span>
                     <span className="action-time muted-small">{formatActionTime(action.timestamp)}</span>
                   </div>
                 </div>
@@ -210,6 +284,29 @@ const UndoPanel: React.FC<UndoPanelProps> = ({ targetTabId, onUndoComplete }) =>
                 {renderActionDetails(action)}
 
                 <div className="undo-action-footer">
+                  {/* Progress bar for bulk operations */}
+                  {undoingActionId === action.id && localProgress && (
+                    <div className="bulk-undo-progress">
+                      <div className="progress-bar">
+                        <div
+                          className="progress-fill"
+                          style={{ width: `${(localProgress.current / localProgress.total) * 100}%` }}
+                        />
+                      </div>
+                      <div className="progress-text">
+                        <span>Processing: {localProgress.current} / {localProgress.total}</span>
+                        {localProgress.currentUserName && (
+                          <span className="muted-small"> - {localProgress.currentUserName}</span>
+                        )}
+                      </div>
+                      <div className="progress-stats">
+                        <span className="progress-success">Succeeded: {localProgress.succeeded}</span>
+                        {localProgress.failed > 0 && (
+                          <span className="progress-failed">Failed: {localProgress.failed}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   <button
                     className="btn btn-warning btn-sm"
                     onClick={(e) => {
@@ -218,10 +315,16 @@ const UndoPanel: React.FC<UndoPanelProps> = ({ targetTabId, onUndoComplete }) =>
                     }}
                     disabled={isLoading || undoingActionId === action.id}
                   >
-                    {undoingActionId === action.id ? 'Undoing...' : 'Undo This Action'}
+                    {undoingActionId === action.id
+                      ? (localProgress ? `Undoing... ${localProgress.current}/${localProgress.total}` : 'Undoing...')
+                      : 'Undo This Action'}
                   </button>
                   <p className="undo-warning muted-small">
-                    This will reverse the action shown above
+                    {action.type === 'BULK_REMOVE_USERS_FROM_GROUP'
+                      ? `This will restore ${(action.metadata as BulkRemoveUsersMetadata).users.length} users to the group`
+                      : action.type === 'BULK_ADD_USERS_TO_GROUP'
+                      ? `This will remove ${(action.metadata as BulkAddUsersMetadata).users.length} users from the group`
+                      : 'This will reverse the action shown above'}
                   </p>
                 </div>
               </div>

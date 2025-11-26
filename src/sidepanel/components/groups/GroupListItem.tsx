@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import type { GroupSummary } from '../../../shared/types';
 
 interface GroupListItemProps {
@@ -9,7 +9,12 @@ interface GroupListItemProps {
   oktaOrigin?: string;
 }
 
-const GroupListItem: React.FC<GroupListItemProps> = ({
+/**
+ * Memoized list item component for displaying group information.
+ * Uses React.memo with custom comparison to prevent unnecessary re-renders
+ * when parent list updates but this item's data hasn't changed.
+ */
+const GroupListItem: React.FC<GroupListItemProps> = memo(({
   group,
   selected,
   onToggleSelect,
@@ -37,33 +42,66 @@ const GroupListItem: React.FC<GroupListItemProps> = ({
     return 'health-poor';
   };
 
-  const handleOpenInOkta = (e: React.MouseEvent) => {
+  const handleOpenInOkta = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     if (oktaOrigin) {
       window.open(`${oktaOrigin}/admin/group/${group.id}`, '_blank');
     }
-  };
+  }, [oktaOrigin, group.id]);
+
+  const handleToggle = useCallback(() => {
+    onToggleSelect(group.id);
+  }, [onToggleSelect, group.id]);
+
+  const toggleExpanded = useCallback(() => {
+    setExpanded(prev => !prev);
+  }, []);
+
+  // Calculate total member count including linked groups
+  const totalMemberCount = group.memberCount +
+    (group.linkedGroups?.reduce((sum, lg) => sum + lg.memberCount, 0) || 0);
 
   return (
-    <div className={`group-list-item ${selected ? 'selected' : ''}`}>
-      <div className="group-list-item-header" onClick={() => setExpanded(!expanded)}>
+    <div className={`group-list-item ${selected ? 'selected' : ''} ${group.isPushGroup ? 'push-group' : ''}`}>
+      <div className="group-list-item-header" onClick={toggleExpanded}>
         <div className="group-list-item-checkbox">
           <input
             type="checkbox"
             checked={selected}
-            onChange={() => onToggleSelect(group.id)}
+            onChange={handleToggle}
             onClick={(e) => e.stopPropagation()}
           />
         </div>
         <div className="group-list-item-content">
           <div className="group-list-item-title">
             <span className="group-name">{group.name}</span>
-            <span className={`badge ${getTypeBadgeClass(group.type)}`}>
-              {group.type.replace('_', ' ')}
-            </span>
+            <div className="group-badges">
+              <span className={`badge ${getTypeBadgeClass(group.type)}`}>
+                {group.type === 'OKTA_GROUP' ? 'OKTA' : group.type === 'APP_GROUP' ? 'APP' : group.type.replace('_', ' ')}
+              </span>
+              {group.isPushGroup && group.linkedGroups && group.linkedGroups.length > 0 && (
+                <>
+                  {group.linkedGroups.map((lg, idx) => (
+                    <span key={lg.id} className="badge badge-warning" title={`Linked to ${lg.sourceAppName || 'App'}`}>
+                      APP{lg.sourceAppName ? `: ${lg.sourceAppName}` : ''}
+                    </span>
+                  ))}
+                </>
+              )}
+              {group.type === 'APP_GROUP' && group.sourceAppName && (
+                <span className="badge badge-secondary" title="Source application">
+                  {group.sourceAppName}
+                </span>
+              )}
+            </div>
           </div>
           <div className="group-list-item-meta">
-            <span className="member-count">{group.memberCount} members</span>
+            <span className="member-count">
+              {group.isPushGroup && group.linkedGroups && group.linkedGroups.length > 0
+                ? `${group.memberCount} + ${group.linkedGroups.reduce((sum, lg) => sum + lg.memberCount, 0)} members`
+                : `${group.memberCount} members`
+              }
+            </span>
             {group.hasRules && (
               <span className="rule-count">{group.ruleCount} rule{group.ruleCount !== 1 ? 's' : ''}</span>
             )}
@@ -88,7 +126,7 @@ const GroupListItem: React.FC<GroupListItemProps> = ({
             className="btn-icon"
             onClick={(e) => {
               e.stopPropagation();
-              setExpanded(!expanded);
+              toggleExpanded();
             }}
             title={expanded ? 'Collapse' : 'Expand'}
           >
@@ -112,10 +150,46 @@ const GroupListItem: React.FC<GroupListItemProps> = ({
               <strong>Last Updated:</strong> {new Date(group.lastUpdated).toLocaleString()}
             </div>
           )}
+          {group.type === 'APP_GROUP' && group.sourceAppName && (
+            <div className="detail-row">
+              <strong>Source App:</strong> {group.sourceAppName}
+            </div>
+          )}
+          {group.isPushGroup && group.linkedGroups && group.linkedGroups.length > 0 && (
+            <div className="detail-row linked-groups-section">
+              <strong>Linked App Groups:</strong>
+              <ul className="linked-groups-list">
+                {group.linkedGroups.map(lg => (
+                  <li key={lg.id}>
+                    <span className="linked-group-name">{lg.name}</span>
+                    {lg.sourceAppName && (
+                      <span className="linked-group-app"> ({lg.sourceAppName})</span>
+                    )}
+                    <span className="linked-group-members"> - {lg.memberCount} members</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison - only re-render if these specific props change
+  return (
+    prevProps.group.id === nextProps.group.id &&
+    prevProps.group.name === nextProps.group.name &&
+    prevProps.group.memberCount === nextProps.group.memberCount &&
+    prevProps.group.type === nextProps.group.type &&
+    prevProps.group.isPushGroup === nextProps.group.isPushGroup &&
+    prevProps.group.hasRules === nextProps.group.hasRules &&
+    prevProps.group.ruleCount === nextProps.group.ruleCount &&
+    prevProps.selected === nextProps.selected &&
+    prevProps.oktaOrigin === nextProps.oktaOrigin
+  );
+});
+
+GroupListItem.displayName = 'GroupListItem';
 
 export default GroupListItem;

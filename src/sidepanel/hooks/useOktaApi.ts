@@ -17,7 +17,8 @@ import type {
   AssignmentRecommenderResult,
   AppProfileSchema
 } from '../../shared/types';
-import { logAction } from '../../shared/undoManager';
+import { logAction, logBulkRemoveAction } from '../../shared/undoManager';
+import type { BulkUserInfo } from '../../shared/undoTypes';
 import { auditStore } from '../../shared/storage/auditStore';
 import { RulesCache } from '../../shared/rulesCache';
 import { analyzeAppSecurity, getAppAssignmentRecommendations } from './useAppAnalysis';
@@ -25,7 +26,7 @@ import { analyzeAppSecurity, getAppAssignmentRecommendations } from './useAppAna
 interface UseOktaApiOptions {
   targetTabId: number | null;
   onResult?: (message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
-  onProgress?: (current: number, total: number, message: string) => void;
+  onProgress?: (current: number, total: number, message: string, apiCalls?: number) => void;
 }
 
 export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOptions) {
@@ -154,11 +155,11 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
   );
 
   const removeUserFromGroup = useCallback(
-    async (groupId: string, groupName: string, user: OktaUser) => {
+    async (groupId: string, groupName: string, user: OktaUser, skipUndoLog = false) => {
       const result = await makeApiRequest(`/api/v1/groups/${groupId}/users/${user.id}`, 'DELETE');
 
-      // Log undo action if successful
-      if (result.success) {
+      // Log undo action if successful (skip for bulk operations which log at the end)
+      if (result.success && !skipUndoLog) {
         await logAction(
           `Removed ${user.profile.firstName} ${user.profile.lastName} from ${groupName}`,
           {
@@ -184,8 +185,10 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       let groupName = 'Unknown Group';
       let removed = 0;
       let failed = 0;
+      let apiCallsMade = 0;
       const errorMessages: string[] = [];
       const affectedUserIds: string[] = [];
+      const removedUsers: BulkUserInfo[] = []; // Collect for bulk undo
 
       try {
         // Reset cancellation state and create new controller
@@ -195,14 +198,18 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
         setIsLoading(true);
         onResult?.('Starting: Remove deprovisioned users', 'info');
+        onProgress?.(0, 100, 'Fetching user info...', 0);
 
         // Get current user for audit logging
         currentUser = await getCurrentUser();
+        apiCallsMade++;
 
         checkCancelled(); // Check if cancelled
 
         // Check group type
+        onProgress?.(0, 100, 'Checking group type...', apiCallsMade);
         const groupDetails = await makeApiRequest(`/api/v1/groups/${groupId}`);
+        apiCallsMade++;
         if (groupDetails.success && groupDetails.data?.type === 'APP_GROUP') {
           onResult?.('ERROR: Cannot modify APP_GROUP', 'error');
           return;
@@ -212,9 +219,50 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
         checkCancelled(); // Check if cancelled
 
-        // Fetch all members
-        const members = await getAllGroupMembers(groupId);
-        const deprovisionedUsers = members.filter((u) => u.status === 'DEPROVISIONED');
+        // Fetch all members with progress tracking
+        onProgress?.(0, 100, 'Fetching group members...', apiCallsMade);
+        const allMembers: OktaUser[] = [];
+        let nextUrl: string | null = `/api/v1/groups/${groupId}/users?limit=200`;
+        let pageCount = 0;
+
+        while (nextUrl) {
+          pageCount++;
+          onResult?.(`Fetching page ${pageCount}...`, 'info');
+
+          const response = await makeApiRequest(nextUrl);
+          apiCallsMade++;
+          onProgress?.(0, 100, `Fetching members (page ${pageCount})...`, apiCallsMade);
+
+          if (!response.success) {
+            throw new Error(response.error || 'Failed to fetch group members');
+          }
+
+          const pageMembers = response.data || [];
+          allMembers.push(...pageMembers);
+
+          onResult?.(
+            `Page ${pageCount}: Loaded ${pageMembers.length} members (Total: ${allMembers.length})`,
+            'info'
+          );
+
+          // Parse next link from headers
+          nextUrl = null;
+          if (response.headers?.link) {
+            const links = response.headers.link.split(',');
+            for (const link of links) {
+              if (link.includes('rel="next"')) {
+                const match = link.match(/<([^>]+)>/);
+                if (match) {
+                  const fullUrl = new URL(match[1]);
+                  nextUrl = fullUrl.pathname + fullUrl.search;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        const deprovisionedUsers = allMembers.filter((u) => u.status === 'DEPROVISIONED');
 
         onResult?.(`Found ${deprovisionedUsers.length} deprovisioned users`, 'warning');
 
@@ -223,18 +271,30 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
           return;
         }
 
+        // Calculate total API calls: fetch phase + removal phase
+        const totalApiCalls = apiCallsMade + deprovisionedUsers.length;
+
         // Remove each deprovisioned user
         for (let i = 0; i < deprovisionedUsers.length; i++) {
           checkCancelled(); // Check if cancelled before each iteration
 
           const user = deprovisionedUsers[i];
           affectedUserIds.push(user.id);
-          onProgress?.(i + 1, deprovisionedUsers.length, `Removing user ${i + 1} of ${deprovisionedUsers.length}`);
 
-          const result = await removeUserFromGroup(groupId, groupName, user);
+          const currentApiCall = apiCallsMade + i + 1;
+          onProgress?.(currentApiCall, totalApiCalls, `Removing ${user.profile.firstName} ${user.profile.lastName} (${i + 1}/${deprovisionedUsers.length})`, currentApiCall);
+
+          // Skip individual undo logging - we'll log a bulk action at the end
+          const result = await removeUserFromGroup(groupId, groupName, user, true);
 
           if (result.success) {
             removed++;
+            // Collect for bulk undo
+            removedUsers.push({
+              userId: user.id,
+              userEmail: user.profile.email,
+              userName: `${user.profile.firstName} ${user.profile.lastName}`,
+            });
             onResult?.(
               `Removed: ${user.profile.login} (${user.profile.firstName} ${user.profile.lastName})`,
               'success'
@@ -256,6 +316,13 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
           await new Promise((resolve) => setTimeout(resolve, 100));
         }
 
+        apiCallsMade += deprovisionedUsers.length;
+
+        // Log a single bulk undo action for all removed users
+        if (removedUsers.length > 0) {
+          await logBulkRemoveAction(groupId, groupName, removedUsers, 'deprovisioned');
+        }
+
         onResult?.(`Complete: ${removed} removed, ${failed} failed`, removed > 0 ? 'success' : 'warning');
       } catch (error) {
         const errorMsg = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -265,7 +332,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
         setIsLoading(false);
         setAbortController(null);
         setIsCancelled(false);
-        onProgress?.(100, 100, 'Complete');
+        onProgress?.(apiCallsMade, apiCallsMade, 'Complete', apiCallsMade);
 
         // Log to audit trail (fire-and-forget)
         if (currentUser && affectedUserIds.length > 0) {
@@ -281,7 +348,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
             details: {
               usersSucceeded: removed,
               usersFailed: failed,
-              apiRequestCount: affectedUserIds.length,
+              apiRequestCount: apiCallsMade,
               durationMs: Date.now() - startTime,
               errorMessages: errorMessages.length > 0 ? errorMessages : undefined,
             },
@@ -292,7 +359,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
         }
       }
     },
-    [makeApiRequest, getAllGroupMembers, removeUserFromGroup, getCurrentUser, onResult, onProgress, checkCancelled]
+    [makeApiRequest, removeUserFromGroup, getCurrentUser, onResult, onProgress, checkCancelled]
   );
 
   const smartCleanup = useCallback(
@@ -302,18 +369,31 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       let groupName = 'Unknown Group';
       let removed = 0;
       let failed = 0;
+      let apiCallsMade = 0;
       const errorMessages: string[] = [];
       const affectedUserIds: string[] = [];
+      const removedUsers: BulkUserInfo[] = []; // Collect for bulk undo
 
       try {
+        // Reset cancellation state and create new controller
+        setIsCancelled(false);
+        const controller = new AbortController();
+        setAbortController(controller);
+
         setIsLoading(true);
         onResult?.('Starting: Smart Cleanup (remove all inactive users)', 'info');
+        onProgress?.(0, 100, 'Fetching user info...', 0);
 
         // Get current user for audit logging
         currentUser = await getCurrentUser();
+        apiCallsMade++;
+
+        checkCancelled(); // Check if cancelled
 
         // Check group type
+        onProgress?.(0, 100, 'Checking group type...', apiCallsMade);
         const groupDetails = await makeApiRequest(`/api/v1/groups/${groupId}`);
+        apiCallsMade++;
         if (groupDetails.success && groupDetails.data?.type === 'APP_GROUP') {
           onResult?.('ERROR: Cannot modify APP_GROUP', 'error');
           return;
@@ -321,10 +401,48 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
         groupName = groupDetails.data?.profile?.name || 'Unknown Group';
 
-        // Fetch all members
-        const members = await getAllGroupMembers(groupId);
+        checkCancelled(); // Check if cancelled
+
+        // Fetch all members with progress tracking
+        onProgress?.(0, 100, 'Fetching group members...', apiCallsMade);
+        const allMembers: OktaUser[] = [];
+        let nextUrl: string | null = `/api/v1/groups/${groupId}/users?limit=200`;
+        let pageCount = 0;
+
+        while (nextUrl) {
+          pageCount++;
+          onResult?.(`Fetching page ${pageCount}...`, 'info');
+
+          const response = await makeApiRequest(nextUrl);
+          apiCallsMade++;
+          onProgress?.(0, 100, `Fetching members (page ${pageCount})...`, apiCallsMade);
+
+          if (!response.success) {
+            throw new Error(response.error || 'Failed to fetch group members');
+          }
+
+          const pageMembers = response.data || [];
+          allMembers.push(...pageMembers);
+
+          // Parse next link from headers
+          nextUrl = null;
+          if (response.headers?.link) {
+            const links = response.headers.link.split(',');
+            for (const link of links) {
+              if (link.includes('rel="next"')) {
+                const match = link.match(/<([^>]+)>/);
+                if (match) {
+                  const fullUrl = new URL(match[1]);
+                  nextUrl = fullUrl.pathname + fullUrl.search;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
         const inactiveStatuses: UserStatus[] = ['DEPROVISIONED', 'SUSPENDED', 'LOCKED_OUT'];
-        const inactiveUsers = members.filter((u) => inactiveStatuses.includes(u.status));
+        const inactiveUsers = allMembers.filter((u) => inactiveStatuses.includes(u.status));
 
         onResult?.(`Found ${inactiveUsers.length} inactive users`, 'warning');
 
@@ -341,16 +459,30 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
           }
         });
 
+        // Calculate total API calls: fetch phase + removal phase
+        const totalApiCalls = apiCallsMade + inactiveUsers.length;
+
         // Remove each inactive user
         for (let i = 0; i < inactiveUsers.length; i++) {
+          checkCancelled(); // Check if cancelled before each iteration
+
           const user = inactiveUsers[i];
           affectedUserIds.push(user.id);
-          onProgress?.(i + 1, inactiveUsers.length, `Removing user ${i + 1} of ${inactiveUsers.length}`);
 
-          const result = await removeUserFromGroup(groupId, groupName, user);
+          const currentApiCall = apiCallsMade + i + 1;
+          onProgress?.(currentApiCall, totalApiCalls, `Removing ${user.profile.firstName} ${user.profile.lastName} (${i + 1}/${inactiveUsers.length})`, currentApiCall);
+
+          // Skip individual undo logging - we'll log a bulk action at the end
+          const result = await removeUserFromGroup(groupId, groupName, user, true);
 
           if (result.success) {
             removed++;
+            // Collect for bulk undo
+            removedUsers.push({
+              userId: user.id,
+              userEmail: user.profile.email,
+              userName: `${user.profile.firstName} ${user.profile.lastName}`,
+            });
             onResult?.(`Removed: ${user.profile.login} (${user.status})`, 'success');
           } else {
             failed++;
@@ -367,14 +499,23 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
           await new Promise((resolve) => setTimeout(resolve, 100));
         }
 
+        apiCallsMade += inactiveUsers.length;
+
+        // Log a single bulk undo action for all removed users
+        if (removedUsers.length > 0) {
+          await logBulkRemoveAction(groupId, groupName, removedUsers, 'inactive');
+        }
+
         onResult?.(`Smart Cleanup complete: ${removed} removed, ${failed} failed`, 'success');
       } catch (error) {
         const errorMsg = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
         errorMessages.push(errorMsg);
-        onResult?.(errorMsg, 'error');
+        onResult?.(errorMsg, error instanceof Error && error.message === 'Operation cancelled' ? 'warning' : 'error');
       } finally {
         setIsLoading(false);
-        onProgress?.(100, 100, 'Complete');
+        setAbortController(null);
+        setIsCancelled(false);
+        onProgress?.(apiCallsMade, apiCallsMade, 'Complete', apiCallsMade);
 
         // Log to audit trail (fire-and-forget)
         if (currentUser && affectedUserIds.length > 0) {
@@ -390,7 +531,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
             details: {
               usersSucceeded: removed,
               usersFailed: failed,
-              apiRequestCount: affectedUserIds.length,
+              apiRequestCount: apiCallsMade,
               durationMs: Date.now() - startTime,
               errorMessages: errorMessages.length > 0 ? errorMessages : undefined,
             },
@@ -401,7 +542,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
         }
       }
     },
-    [makeApiRequest, getAllGroupMembers, removeUserFromGroup, getCurrentUser, onResult, onProgress]
+    [makeApiRequest, removeUserFromGroup, getCurrentUser, onResult, onProgress, checkCancelled]
   );
 
   const customFilter = useCallback(
@@ -411,8 +552,10 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       let groupName = 'Unknown Group';
       let removed = 0;
       let failed = 0;
+      let apiCallsMade = 0;
       const errorMessages: string[] = [];
       const affectedUserIds: string[] = [];
+      const removedUsers: BulkUserInfo[] = []; // Collect for bulk undo
 
       try {
         // Reset cancellation state and create new controller
@@ -422,14 +565,18 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
         setIsLoading(true);
         onResult?.(`Starting: ${action === 'remove' ? 'Remove' : 'List'} users with status ${targetStatus}`, 'info');
+        onProgress?.(0, 100, 'Fetching user info...', 0);
 
         // Get current user for audit logging
         currentUser = await getCurrentUser();
+        apiCallsMade++;
 
         checkCancelled(); // Check if cancelled
 
         // Check group type
+        onProgress?.(0, 100, 'Checking group type...', apiCallsMade);
         const groupDetails = await makeApiRequest(`/api/v1/groups/${groupId}`);
+        apiCallsMade++;
         if (action === 'remove' && groupDetails.success && groupDetails.data?.type === 'APP_GROUP') {
           onResult?.('ERROR: Cannot modify APP_GROUP', 'error');
           return;
@@ -439,8 +586,45 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
         checkCancelled(); // Check if cancelled
 
-        const members = await getAllGroupMembers(groupId);
-        const filteredUsers = members.filter((u) => u.status === targetStatus);
+        // Fetch all members with progress tracking
+        onProgress?.(0, 100, 'Fetching group members...', apiCallsMade);
+        const allMembers: OktaUser[] = [];
+        let nextUrl: string | null = `/api/v1/groups/${groupId}/users?limit=200`;
+        let pageCount = 0;
+
+        while (nextUrl) {
+          pageCount++;
+          onResult?.(`Fetching page ${pageCount}...`, 'info');
+
+          const response = await makeApiRequest(nextUrl);
+          apiCallsMade++;
+          onProgress?.(0, 100, `Fetching members (page ${pageCount})...`, apiCallsMade);
+
+          if (!response.success) {
+            throw new Error(response.error || 'Failed to fetch group members');
+          }
+
+          const pageMembers = response.data || [];
+          allMembers.push(...pageMembers);
+
+          // Parse next link from headers
+          nextUrl = null;
+          if (response.headers?.link) {
+            const links = response.headers.link.split(',');
+            for (const link of links) {
+              if (link.includes('rel="next"')) {
+                const match = link.match(/<([^>]+)>/);
+                if (match) {
+                  const fullUrl = new URL(match[1]);
+                  nextUrl = fullUrl.pathname + fullUrl.search;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        const filteredUsers = allMembers.filter((u) => u.status === targetStatus);
 
         onResult?.(`Found ${filteredUsers.length} users with status ${targetStatus}`, 'warning');
 
@@ -458,16 +642,28 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
           });
           onResult?.(`Listed ${filteredUsers.length} users`, 'success');
         } else {
+          // Calculate total API calls: fetch phase + removal phase
+          const totalApiCalls = apiCallsMade + filteredUsers.length;
+
           for (let i = 0; i < filteredUsers.length; i++) {
             checkCancelled(); // Check if cancelled before each iteration
 
             const user = filteredUsers[i];
             affectedUserIds.push(user.id);
-            onProgress?.(i + 1, filteredUsers.length, `Removing user ${i + 1} of ${filteredUsers.length}`);
 
-            const result = await removeUserFromGroup(groupId, groupName, user);
+            const currentApiCall = apiCallsMade + i + 1;
+            onProgress?.(currentApiCall, totalApiCalls, `Removing ${user.profile.firstName} ${user.profile.lastName} (${i + 1}/${filteredUsers.length})`, currentApiCall);
+
+            // Skip individual undo logging - we'll log a bulk action at the end
+            const result = await removeUserFromGroup(groupId, groupName, user, true);
             if (result.success) {
               removed++;
+              // Collect for bulk undo
+              removedUsers.push({
+                userId: user.id,
+                userEmail: user.profile.email,
+                userName: `${user.profile.firstName} ${user.profile.lastName}`,
+              });
               onResult?.(`Removed: ${user.profile.login}`, 'success');
             } else {
               failed++;
@@ -483,6 +679,14 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
             }
             await new Promise((resolve) => setTimeout(resolve, 100));
           }
+
+          apiCallsMade += filteredUsers.length;
+
+          // Log a single bulk undo action for all removed users
+          if (removedUsers.length > 0) {
+            await logBulkRemoveAction(groupId, groupName, removedUsers, 'custom_status', targetStatus);
+          }
+
           onResult?.(`Removed ${removed} users`, 'success');
         }
       } catch (error) {
@@ -493,7 +697,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
         setIsLoading(false);
         setAbortController(null);
         setIsCancelled(false);
-        onProgress?.(100, 100, 'Complete');
+        onProgress?.(apiCallsMade, apiCallsMade, 'Complete', apiCallsMade);
 
         // Log to audit trail (fire-and-forget) - only for remove actions
         if (action === 'remove' && currentUser && affectedUserIds.length > 0) {
@@ -509,7 +713,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
             details: {
               usersSucceeded: removed,
               usersFailed: failed,
-              apiRequestCount: affectedUserIds.length,
+              apiRequestCount: apiCallsMade,
               durationMs: Date.now() - startTime,
               errorMessages: errorMessages.length > 0 ? errorMessages : undefined,
             },
@@ -520,7 +724,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
         }
       }
     },
-    [makeApiRequest, getAllGroupMembers, removeUserFromGroup, getCurrentUser, onResult, onProgress, checkCancelled]
+    [makeApiRequest, removeUserFromGroup, getCurrentUser, onResult, onProgress, checkCancelled]
   );
 
   const exportMembers = useCallback(
@@ -728,6 +932,120 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       } catch (error) {
         console.error(`[useOktaApi] Failed to get group memberships for user ${userId}:`, error);
         return 0;
+      }
+    },
+    [makeApiRequest]
+  );
+
+  /**
+   * Search for users by name, email, or login
+   */
+  const searchUsers = useCallback(
+    async (query: string): Promise<Array<{ id: string; email: string; firstName: string; lastName: string; login: string; status: string }>> => {
+      if (!query || query.length < 2) {
+        return [];
+      }
+
+      try {
+        // Use Okta's search API with the q parameter for flexible search
+        const response = await makeApiRequest(`/api/v1/users?q=${encodeURIComponent(query)}&limit=20`);
+
+        if (response.success && response.data) {
+          return response.data.map((user: any) => ({
+            id: user.id,
+            email: user.profile?.email || '',
+            firstName: user.profile?.firstName || '',
+            lastName: user.profile?.lastName || '',
+            login: user.profile?.login || '',
+            status: user.status || 'UNKNOWN',
+          }));
+        }
+        return [];
+      } catch (error) {
+        console.error('[useOktaApi] searchUsers error:', error);
+        return [];
+      }
+    },
+    [makeApiRequest]
+  );
+
+  /**
+   * Search for groups by name
+   */
+  const searchGroups = useCallback(
+    async (query: string): Promise<Array<{ id: string; name: string; description: string; type: string }>> => {
+      if (!query || query.length < 2) {
+        return [];
+      }
+
+      try {
+        // Use the Okta q parameter for flexible search
+        const response = await makeApiRequest(`/api/v1/groups?q=${encodeURIComponent(query)}&limit=20`);
+
+        if (response.success && response.data) {
+          return response.data.map((group: any) => ({
+            id: group.id,
+            name: group.profile?.name || group.id,
+            description: group.profile?.description || '',
+            type: group.type || 'OKTA_GROUP',
+          }));
+        }
+        return [];
+      } catch (error) {
+        console.error('[useOktaApi] searchGroups error:', error);
+        return [];
+      }
+    },
+    [makeApiRequest]
+  );
+
+  /**
+   * Get user details by ID
+   */
+  const getUserById = useCallback(
+    async (userId: string): Promise<{ id: string; email: string; firstName: string; lastName: string; login: string; status: string } | null> => {
+      try {
+        const response = await makeApiRequest(`/api/v1/users/${userId}`);
+        if (response.success && response.data) {
+          const user = response.data;
+          return {
+            id: user.id,
+            email: user.profile?.email || '',
+            firstName: user.profile?.firstName || '',
+            lastName: user.profile?.lastName || '',
+            login: user.profile?.login || '',
+            status: user.status || 'UNKNOWN',
+          };
+        }
+        return null;
+      } catch (error) {
+        console.error('[useOktaApi] getUserById error:', error);
+        return null;
+      }
+    },
+    [makeApiRequest]
+  );
+
+  /**
+   * Get group details by ID
+   */
+  const getGroupById = useCallback(
+    async (groupId: string): Promise<{ id: string; name: string; description: string; type: string } | null> => {
+      try {
+        const response = await makeApiRequest(`/api/v1/groups/${groupId}`);
+        if (response.success && response.data) {
+          const group = response.data;
+          return {
+            id: group.id,
+            name: group.profile?.name || group.id,
+            description: group.profile?.description || '',
+            type: group.type || 'OKTA_GROUP',
+          };
+        }
+        return null;
+      } catch (error) {
+        console.error('[useOktaApi] getGroupById error:', error);
+        return null;
       }
     },
     [makeApiRequest]
@@ -1036,25 +1354,92 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
   /**
    * Get all apps assigned to a user (with pagination)
+   * Uses /api/v1/users/{userId}/appLinks endpoint
    */
   const getUserApps = useCallback(
     async (userId: string, expand?: boolean): Promise<UserAppAssignment[]> => {
+      console.log('[useOktaApi] getUserApps called with userId:', userId, 'expand:', expand);
       try {
         const allApps: UserAppAssignment[] = [];
-        const expandParam = expand ? '&expand=app' : '';
-        // Use proper URL encoding for the filter parameter (+ for spaces, quotes for string values)
-        let nextUrl: string | null = `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=200${expandParam}`;
+        // Use the correct endpoint for user app links
+        let nextUrl: string | null = `/api/v1/users/${userId}/appLinks`;
+        console.log('[useOktaApi] getUserApps URL:', nextUrl);
 
         while (nextUrl) {
           const response = await makeApiRequest(nextUrl);
+          console.log('[useOktaApi] getUserApps response:', response.success, 'data length:', response.data?.length);
           if (response.success && response.data) {
-            const apps = Array.isArray(response.data) ? response.data : [response.data];
-            allApps.push(...apps);
+            const appLinks = Array.isArray(response.data) ? response.data : [response.data];
+
+            // appLinks returns basic info, we need to fetch full app details if expand is true
+            for (const link of appLinks) {
+              if (expand && link.appInstanceId) {
+                // Fetch full app details including assignment profile
+                try {
+                  const appResponse = await makeApiRequest(`/api/v1/apps/${link.appInstanceId}/users/${userId}`);
+                  if (appResponse.success && appResponse.data) {
+                    // Merge appLink data with user assignment data
+                    allApps.push({
+                      id: link.appInstanceId,
+                      label: link.label,
+                      linkUrl: link.linkUrl,
+                      logoUrl: link.logoUrl,
+                      appName: link.appName,
+                      status: appResponse.data.status || 'ACTIVE',
+                      profile: appResponse.data.profile || {},
+                      credentials: appResponse.data.credentials,
+                      _embedded: {
+                        app: {
+                          id: link.appInstanceId,
+                          label: link.label,
+                          name: link.appName,
+                        }
+                      }
+                    } as UserAppAssignment);
+                  }
+                } catch (err) {
+                  // If we can't get details, still include basic info
+                  allApps.push({
+                    id: link.appInstanceId,
+                    label: link.label,
+                    linkUrl: link.linkUrl,
+                    logoUrl: link.logoUrl,
+                    appName: link.appName,
+                    status: 'ACTIVE',
+                    profile: {},
+                    _embedded: {
+                      app: {
+                        id: link.appInstanceId,
+                        label: link.label,
+                        name: link.appName,
+                      }
+                    }
+                  } as UserAppAssignment);
+                }
+              } else {
+                // Basic info only
+                allApps.push({
+                  id: link.appInstanceId,
+                  label: link.label,
+                  linkUrl: link.linkUrl,
+                  logoUrl: link.logoUrl,
+                  appName: link.appName,
+                  status: 'ACTIVE',
+                  profile: {},
+                  _embedded: {
+                    app: {
+                      id: link.appInstanceId,
+                      label: link.label,
+                      name: link.appName,
+                    }
+                  }
+                } as UserAppAssignment);
+              }
+            }
 
             // Check for next page using Link header
             const linkHeader = response.headers?.['link'] || response.headers?.['Link'];
             if (linkHeader && linkHeader.includes('rel="next"')) {
-              // Parse the Link header to extract the next URL
               const links = linkHeader.split(',');
               for (const link of links) {
                 if (link.includes('rel="next"')) {
@@ -1066,7 +1451,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
                   }
                 }
               }
-              if (!nextUrl || nextUrl === `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=200${expandParam}`) {
+              if (!nextUrl || nextUrl === `/api/v1/users/${userId}/appLinks`) {
                 nextUrl = null;
               }
             } else {
@@ -1077,6 +1462,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
           }
         }
 
+        console.log('[useOktaApi] getUserApps returning', allApps.length, 'apps');
         return allApps;
       } catch (error) {
         console.error(`[useOktaApi] Failed to get apps for user ${userId}:`, error);
@@ -1380,6 +1766,152 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
   );
 
   /**
+   * Deep merge utility for complex app profiles
+   * Handles arrays (merge or replace based on strategy), nested objects, and null values
+   */
+  const deepMergeProfiles = (
+    baseProfile: Record<string, any>,
+    overrideProfile: Record<string, any>,
+    arrayStrategy: 'merge' | 'replace' = 'replace'
+  ): Record<string, any> => {
+    const result: Record<string, any> = { ...baseProfile };
+
+    for (const [key, overrideValue] of Object.entries(overrideProfile)) {
+      const baseValue = result[key];
+
+      // Skip null/undefined override values (keep base)
+      if (overrideValue === null || overrideValue === undefined) {
+        continue;
+      }
+
+      // Handle arrays (e.g., Salesforce permission sets)
+      if (Array.isArray(overrideValue)) {
+        if (arrayStrategy === 'merge' && Array.isArray(baseValue)) {
+          // Merge arrays, dedupe
+          result[key] = [...new Set([...baseValue, ...overrideValue])];
+        } else {
+          // Replace array entirely
+          result[key] = [...overrideValue];
+        }
+      }
+      // Handle nested objects (not arrays)
+      else if (typeof overrideValue === 'object' && typeof baseValue === 'object' && !Array.isArray(baseValue)) {
+        result[key] = deepMergeProfiles(baseValue || {}, overrideValue, arrayStrategy);
+      }
+      // Primitive values
+      else {
+        result[key] = overrideValue;
+      }
+    }
+
+    return result;
+  };
+
+  /**
+   * Get app profile schema for validation
+   */
+  const getAppProfileSchema = useCallback(
+    async (appId: string): Promise<Record<string, any> | null> => {
+      try {
+        const response = await makeApiRequest(`/api/v1/apps/${appId}`);
+        if (response.success && response.data) {
+          // App profile schema is in the credentials.scheme or settings.app
+          return response.data.settings?.app || response.data.credentials?.scheme || null;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    },
+    [makeApiRequest]
+  );
+
+  /**
+   * Preview conversion without making changes
+   */
+  const previewConversion = useCallback(
+    async (
+      userId: string,
+      targetGroupId: string,
+      appId: string
+    ): Promise<{
+      userProfile: Record<string, any>;
+      groupProfile: Record<string, any>;
+      mergedProfile: Record<string, any>;
+      differences: Array<{
+        field: string;
+        userValue: any;
+        groupValue: any;
+        mergedValue: any;
+        fieldType: string;
+      }>;
+      warnings: string[];
+    }> => {
+      const userAssignment = await getUserAppAssignment(appId, userId);
+      const existingGroupAssignment = await getGroupAppAssignment(appId, targetGroupId);
+
+      const userProfile = userAssignment?.profile || {};
+      const groupProfile = existingGroupAssignment?.profile || {};
+      const mergedProfile = deepMergeProfiles(groupProfile, userProfile, 'merge');
+
+      const warnings: string[] = [];
+      const differences: Array<{
+        field: string;
+        userValue: any;
+        groupValue: any;
+        mergedValue: any;
+        fieldType: string;
+      }> = [];
+
+      // Analyze all fields
+      const allKeys = new Set([...Object.keys(userProfile), ...Object.keys(groupProfile)]);
+      allKeys.forEach((key) => {
+        const uVal = userProfile[key];
+        const gVal = groupProfile[key];
+        const mVal = mergedProfile[key];
+
+        // Determine field type
+        let fieldType = 'string';
+        if (Array.isArray(uVal) || Array.isArray(gVal)) fieldType = 'array';
+        else if (typeof uVal === 'object' || typeof gVal === 'object') fieldType = 'object';
+        else if (typeof uVal === 'boolean' || typeof gVal === 'boolean') fieldType = 'boolean';
+
+        // Check if there's a difference
+        const isDifferent = JSON.stringify(uVal) !== JSON.stringify(gVal);
+        if (isDifferent) {
+          differences.push({
+            field: key,
+            userValue: uVal,
+            groupValue: gVal,
+            mergedValue: mVal,
+            fieldType,
+          });
+        }
+      });
+
+      // Add warnings
+      if (userAssignment?.credentials) {
+        warnings.push('User has stored credentials that cannot be transferred to group assignment. User may need to re-authenticate.');
+      }
+      if (!existingGroupAssignment) {
+        warnings.push('This will create a new group assignment to the app.');
+      }
+      if (differences.some(d => d.fieldType === 'array')) {
+        warnings.push('Profile contains array fields (like permission sets). Arrays will be merged, not replaced.');
+      }
+
+      return {
+        userProfile,
+        groupProfile,
+        mergedProfile,
+        differences,
+        warnings,
+      };
+    },
+    [getUserAppAssignment, getGroupAppAssignment]
+  );
+
+  /**
    * FEATURE 2: Convert user app assignments to group assignments
    */
   const convertUserToGroupAssignment = useCallback(
@@ -1416,40 +1948,76 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
             // Check if group assignment already exists
             const existingGroupAssignment = await getGroupAppAssignment(appId, request.targetGroupId);
 
-            // Determine profile based on merge strategy
-            let mergedProfile: Record<string, any> | undefined;
-            const profileChanges: any = {
-              userProfile: userAssignment.profile || {},
-              groupProfile: existingGroupAssignment?.profile || {},
-              differences: [],
-              credentialsHandled: !!userAssignment.credentials,
+            // Determine profile based on merge strategy using deep merge
+            // Filter out user-specific profile properties that can't be set on group assignments
+            const userSpecificFields = new Set([
+              'email', 'emailType', 'displayName', 'givenName', 'familyName',
+              'firstName', 'lastName', 'login', 'secondEmail', 'middleName',
+              'honorificPrefix', 'honorificSuffix', 'title', 'nickName',
+              'profileUrl', 'primaryPhone', 'mobilePhone', 'streetAddress',
+              'city', 'state', 'zipCode', 'countryCode', 'postalAddress',
+              'preferredLanguage', 'locale', 'timezone', 'userType',
+              'employeeNumber', 'costCenter', 'organization', 'division',
+              'department', 'managerId', 'manager'
+            ]);
+
+            // Filter user profile to only include app-specific settings (not user-derived values)
+            const filterUserSpecificFields = (profile: Record<string, any>): Record<string, any> => {
+              const filtered: Record<string, any> = {};
+              for (const [key, value] of Object.entries(profile)) {
+                if (!userSpecificFields.has(key)) {
+                  filtered[key] = value;
+                }
+              }
+              return filtered;
             };
 
-            if (userAssignment.profile || existingGroupAssignment?.profile) {
-              const userProfile = userAssignment.profile || {};
-              const groupProfile = existingGroupAssignment?.profile || {};
+            let mergedProfile: Record<string, any> | undefined;
+            const userProfile = filterUserSpecificFields(userAssignment.profile || {});
+            const groupProfile = existingGroupAssignment?.profile || {};
 
-              // Find differences
+            const profileChanges: any = {
+              userProfile,
+              groupProfile,
+              differences: [],
+              credentialsHandled: !!userAssignment.credentials,
+              hasArrayFields: false,
+              hasNestedObjects: false,
+            };
+
+            // Detect complex fields
+            [...Object.values(userProfile), ...Object.values(groupProfile)].forEach(val => {
+              if (Array.isArray(val)) profileChanges.hasArrayFields = true;
+              if (val && typeof val === 'object' && !Array.isArray(val)) profileChanges.hasNestedObjects = true;
+            });
+
+            if (userAssignment.profile || existingGroupAssignment?.profile) {
+              // Find differences with type information
               const allKeys = new Set([...Object.keys(userProfile), ...Object.keys(groupProfile)]);
               allKeys.forEach((key) => {
-                if (userProfile[key] !== groupProfile[key]) {
+                const uVal = userProfile[key];
+                const gVal = groupProfile[key];
+                if (JSON.stringify(uVal) !== JSON.stringify(gVal)) {
                   profileChanges.differences.push({
                     field: key,
-                    userValue: userProfile[key],
-                    groupValue: groupProfile[key],
+                    userValue: uVal,
+                    groupValue: gVal,
+                    isArray: Array.isArray(uVal) || Array.isArray(gVal),
+                    isObject: (typeof uVal === 'object' && !Array.isArray(uVal)) ||
+                              (typeof gVal === 'object' && !Array.isArray(gVal)),
                   });
                 }
               });
 
-              // Apply merge strategy
+              // Apply merge strategy with deep merge support
               switch (request.mergeStrategy) {
                 case 'preserve_user':
                   // Keep existing group profile, don't modify
                   mergedProfile = existingGroupAssignment?.profile;
                   break;
                 case 'prefer_user':
-                  // Use user's profile values
-                  mergedProfile = { ...groupProfile, ...userProfile };
+                  // Deep merge with user profile taking precedence
+                  mergedProfile = deepMergeProfiles(groupProfile, userProfile, 'merge');
                   break;
                 case 'prefer_default':
                   // Use group profile or empty if new
@@ -1755,5 +2323,13 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
     bulkAssignGroupsToApps,
     analyzeAppAssignmentSecurity,
     getAppAssignmentRecommender,
+    // Profile management
+    previewConversion,
+    getAppProfileSchema,
+    // Search functions
+    searchUsers,
+    searchGroups,
+    getUserById,
+    getGroupById,
   };
 }

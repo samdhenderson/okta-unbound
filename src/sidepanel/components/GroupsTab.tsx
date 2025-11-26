@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useOktaApi } from '../hooks/useOktaApi';
-import type { GroupSummary } from '../../shared/types';
+import type { GroupSummary, LinkedGroup } from '../../shared/types';
 import GroupListItem from './groups/GroupListItem';
 import GroupCollections from './groups/GroupCollections';
 import CrossGroupUserSearch from './groups/CrossGroupUserSearch';
@@ -57,20 +57,55 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
     });
   }, []);
 
+  // Normalize group name for matching (remove common prefixes/suffixes from app push groups)
+  const normalizeGroupName = (name: string): string => {
+    return name
+      .toLowerCase()
+      .replace(/^(azure|google|salesforce|slack|okta|ad|ldap)[\s_-]*/i, '')
+      .replace(/[\s_-]*(push|sync|app)$/i, '')
+      .trim();
+  };
+
   const loadAllGroups = async () => {
     setLoading(true);
     setError(null);
 
     try {
+      // Fetch all groups (paginated automatically)
       const allGroups = await api.getAllGroups((_loaded, _total) => {
         // Progress callback
       });
 
-      // Transform to GroupSummary format
+      // Transform to GroupSummary format with member counts (parallel API calls)
+      // This is the original approach - Okta's rate limiting handles the parallelism
       const groupSummaries: GroupSummary[] = await Promise.all(
         allGroups.map(async (group: any) => {
+          // Get member count - 1 API call per group
           const memberCount = await api.getGroupMemberCount(group.id);
-          const rules = await api.getGroupRulesForGroup(group.id);
+
+          // Extract source app info from existing data (no API call needed)
+          // Only set sourceAppName if we have a real name, not just the ID
+          let sourceAppId: string | undefined;
+          let sourceAppName: string | undefined;
+
+          if (group.type === 'APP_GROUP') {
+            // Try to get app ID from _links
+            if (group._links?.apps?.href) {
+              const appIdMatch = group._links.apps.href.match(/\/apps\/([^/]+)/);
+              if (appIdMatch) {
+                sourceAppId = appIdMatch[1];
+                // Don't set sourceAppName to the ID - leave it undefined
+              }
+            }
+            // Prefer source object if available (it may have the actual name)
+            if (group.source) {
+              sourceAppId = group.source.id;
+              // Only use name if it's an actual name, not the ID
+              if (group.source.name && group.source.name !== group.source.id) {
+                sourceAppName = group.source.name;
+              }
+            }
+          }
 
           return {
             id: group.id,
@@ -79,19 +114,60 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
             type: group.type,
             memberCount,
             lastUpdated: group.lastUpdated ? new Date(group.lastUpdated) : undefined,
-            hasRules: rules.length > 0,
-            ruleCount: rules.length,
+            hasRules: false, // Skip rules for speed - can be loaded on-demand
+            ruleCount: 0,
             selected: false,
+            sourceAppId,
+            sourceAppName,
           };
         })
       );
 
-      setGroups(groupSummaries);
+      // Resolve app names for groups that have sourceAppId but no sourceAppName
+      const appIdsNeedingNames = new Set<string>();
+      groupSummaries.forEach(g => {
+        if (g.sourceAppId && !g.sourceAppName) {
+          appIdsNeedingNames.add(g.sourceAppId);
+        }
+      });
+
+      // Fetch app details in parallel to get friendly names
+      const appNameMap = new Map<string, string>();
+      if (appIdsNeedingNames.size > 0) {
+        const appDetailsPromises = Array.from(appIdsNeedingNames).map(async (appId) => {
+          try {
+            const details = await api.getAppDetails(appId);
+            return { appId, label: details.app.label };
+          } catch (err) {
+            console.warn(`Failed to fetch app details for ${appId}:`, err);
+            return { appId, label: null };
+          }
+        });
+
+        const results = await Promise.all(appDetailsPromises);
+        results.forEach(({ appId, label }) => {
+          if (label) {
+            appNameMap.set(appId, label);
+          }
+        });
+
+        // Update groups with resolved app names
+        groupSummaries.forEach(g => {
+          if (g.sourceAppId && !g.sourceAppName && appNameMap.has(g.sourceAppId)) {
+            g.sourceAppName = appNameMap.get(g.sourceAppId);
+          }
+        });
+      }
+
+      // Detect and merge push groups (pass appNameMap to resolve linked group names)
+      const mergedGroups = mergePushGroups(groupSummaries, appNameMap);
+
+      setGroups(mergedGroups);
 
       // Cache the results
       chrome.storage.local.set({
         [GROUPS_CACHE_KEY]: JSON.stringify({
-          groups: groupSummaries,
+          groups: mergedGroups,
           timestamp: Date.now(),
         }),
       });
@@ -100,6 +176,61 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Merge OKTA_GROUP and APP_GROUP pairs that represent push groups
+  const mergePushGroups = (summaries: GroupSummary[], appNameMap: Map<string, string>): GroupSummary[] => {
+    const oktaGroups = summaries.filter(g => g.type === 'OKTA_GROUP');
+    const appGroups = summaries.filter(g => g.type === 'APP_GROUP');
+    const builtInGroups = summaries.filter(g => g.type === 'BUILT_IN');
+
+    // Track which APP_GROUPs have been merged
+    const mergedAppGroupIds = new Set<string>();
+
+    // For each OKTA_GROUP, find matching APP_GROUPs
+    const mergedOktaGroups = oktaGroups.map(oktaGroup => {
+      const normalizedName = normalizeGroupName(oktaGroup.name);
+
+      // Find APP_GROUPs with similar names
+      const linkedAppGroups = appGroups.filter(appGroup => {
+        if (mergedAppGroupIds.has(appGroup.id)) return false;
+
+        const appNormalizedName = normalizeGroupName(appGroup.name);
+
+        // Match if names are similar (exact match or one contains the other)
+        return normalizedName === appNormalizedName ||
+               appGroup.name.toLowerCase().includes(oktaGroup.name.toLowerCase()) ||
+               oktaGroup.name.toLowerCase().includes(appGroup.name.toLowerCase().replace(/\s*\(.*\)$/, ''));
+      });
+
+      if (linkedAppGroups.length > 0) {
+        // Mark these APP_GROUPs as merged
+        linkedAppGroups.forEach(g => mergedAppGroupIds.add(g.id));
+
+        // Create linked groups array, resolving app names from the map
+        const linkedGroups: LinkedGroup[] = linkedAppGroups.map(g => ({
+          id: g.id,
+          name: g.name,
+          type: g.type,
+          sourceAppId: g.sourceAppId,
+          sourceAppName: g.sourceAppName || (g.sourceAppId ? appNameMap.get(g.sourceAppId) : undefined),
+          memberCount: g.memberCount,
+        }));
+
+        return {
+          ...oktaGroup,
+          isPushGroup: true,
+          linkedGroups,
+        };
+      }
+
+      return oktaGroup;
+    });
+
+    // Include unmerged APP_GROUPs
+    const unmergedAppGroups = appGroups.filter(g => !mergedAppGroupIds.has(g.id));
+
+    return [...mergedOktaGroups, ...unmergedAppGroups, ...builtInGroups];
   };
 
   const handleToggleSelect = (groupId: string) => {

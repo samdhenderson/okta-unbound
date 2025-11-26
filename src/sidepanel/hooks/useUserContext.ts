@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { GroupInfo, MessageResponse } from '../../shared/types';
+import type { UserInfo, MessageResponse } from '../../shared/types';
 
 type ConnectionStatus = 'connecting' | 'connected' | 'error';
 
-interface UseGroupContextReturn {
-  groupInfo: GroupInfo | null;
+interface UseUserContextReturn {
+  userInfo: UserInfo | null;
   connectionStatus: ConnectionStatus;
   targetTabId: number | null;
   error: string | null;
@@ -13,8 +13,8 @@ interface UseGroupContextReturn {
   oktaOrigin: string | null;
 }
 
-export function useGroupContext(): UseGroupContextReturn {
-  const [groupInfo, setGroupInfo] = useState<GroupInfo | null>(null);
+export function useUserContext(): UseUserContextReturn {
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
   const [targetTabId, setTargetTabId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -24,20 +24,20 @@ export function useGroupContext(): UseGroupContextReturn {
   // Track in-flight requests to prevent race conditions
   const fetchIdRef = useRef(0);
 
-  const fetchGroupInfo = useCallback(async (retryCount = 0) => {
+  const fetchUserInfo = useCallback(async (retryCount = 0) => {
     const currentFetchId = ++fetchIdRef.current;
 
     try {
-      console.log('[useGroupContext] Fetching group info... (attempt', retryCount + 1, ')');
+      console.log('[useUserContext] Fetching user info... (attempt', retryCount + 1, ')');
       setIsLoading(true);
       setError(null);
 
       // Get current window's tabs
       const currentWindow = await chrome.windows.getCurrent();
-      console.log('[useGroupContext] Current window ID:', currentWindow.id);
+      console.log('[useUserContext] Current window ID:', currentWindow.id);
 
       const allTabsInWindow = await chrome.tabs.query({ windowId: currentWindow.id });
-      console.log('[useGroupContext] Tabs in current window:', allTabsInWindow.length);
+      console.log('[useUserContext] Tabs in current window:', allTabsInWindow.length);
 
       // Find Okta admin tabs (any Okta page)
       const oktaTabs = allTabsInWindow.filter(
@@ -49,7 +49,7 @@ export function useGroupContext(): UseGroupContextReturn {
       );
 
       console.log(
-        '[useGroupContext] Okta tabs found:',
+        '[useUserContext] Okta tabs found:',
         oktaTabs.length,
         oktaTabs.map((t) => ({ id: t.id, url: t.url, active: t.active }))
       );
@@ -60,7 +60,7 @@ export function useGroupContext(): UseGroupContextReturn {
 
       // Prefer active Okta tab, otherwise use first
       const tab = oktaTabs.find((t) => t.active) || oktaTabs[0];
-      console.log('[useGroupContext] Selected Okta tab:', {
+      console.log('[useUserContext] Selected Okta tab:', {
         id: tab.id,
         url: tab.url,
         title: tab.title,
@@ -69,7 +69,7 @@ export function useGroupContext(): UseGroupContextReturn {
 
       // Check if this request is still relevant (no newer request has started)
       if (currentFetchId !== fetchIdRef.current) {
-        console.log('[useGroupContext] Skipping stale request');
+        console.log('[useUserContext] Skipping stale request');
         return;
       }
 
@@ -78,33 +78,33 @@ export function useGroupContext(): UseGroupContextReturn {
       // Try to communicate with content script
       try {
         // Fetch Okta origin from the tab
-        console.log('[useGroupContext] Fetching Okta origin from tab', tab.id);
+        console.log('[useUserContext] Fetching Okta origin from tab', tab.id);
         const originResponse: MessageResponse<string> = await chrome.tabs.sendMessage(tab.id!, {
           action: 'getOktaOrigin',
         });
 
         if (originResponse.success && originResponse.data) {
           setOktaOrigin(originResponse.data);
-          console.log('[useGroupContext] Okta origin:', originResponse.data);
+          console.log('[useUserContext] Okta origin:', originResponse.data);
         }
 
         // Check if still relevant
         if (currentFetchId !== fetchIdRef.current) {
-          console.log('[useGroupContext] Skipping stale request after origin fetch');
+          console.log('[useUserContext] Skipping stale request after origin fetch');
           return;
         }
 
-        // Request group info from content script
-        console.log('[useGroupContext] Sending getGroupInfo message to tab', tab.id);
-        const response: MessageResponse<GroupInfo> = await chrome.tabs.sendMessage(tab.id!, {
-          action: 'getGroupInfo',
+        // Request user info from content script
+        console.log('[useUserContext] Sending getUserInfo message to tab', tab.id);
+        const response: MessageResponse<UserInfo> = await chrome.tabs.sendMessage(tab.id!, {
+          action: 'getUserInfo',
         });
 
-        console.log('[useGroupContext] Received response:', response);
+        console.log('[useUserContext] Received response:', response);
 
         // Check if still relevant
         if (currentFetchId !== fetchIdRef.current) {
-          console.log('[useGroupContext] Skipping stale request after group info fetch');
+          console.log('[useUserContext] Skipping stale request after user info fetch');
           return;
         }
 
@@ -113,38 +113,38 @@ export function useGroupContext(): UseGroupContextReturn {
         setError(null);
 
         if (response.success && response.data) {
-          // On a group page
-          setGroupInfo(response.data);
-          console.log('[useGroupContext] Connected to Okta and on group page:', response.data.groupName);
+          // On a user page
+          setUserInfo(response.data);
+          console.log('[useUserContext] Connected to Okta and on user page:', response.data.userName);
         } else {
-          // On Okta admin but not on a group page
-          setGroupInfo(null);
-          console.log('[useGroupContext] Connected to Okta admin, but not on a group page');
+          // On Okta admin but not on a user page
+          setUserInfo(null);
+          console.log('[useUserContext] Connected to Okta admin, but not on a user page');
         }
       } catch (messageErr) {
         // Content script not responding - retry with exponential backoff
-        console.warn('[useGroupContext] Content script communication error:', messageErr);
+        console.warn('[useUserContext] Content script communication error:', messageErr);
 
         if (retryCount < 3) {
           const delay = Math.pow(2, retryCount) * 500; // 500ms, 1s, 2s
-          console.log(`[useGroupContext] Retrying in ${delay}ms...`);
-          setTimeout(() => fetchGroupInfo(retryCount + 1), delay);
+          console.log(`[useUserContext] Retrying in ${delay}ms...`);
+          setTimeout(() => fetchUserInfo(retryCount + 1), delay);
           return; // Don't finalize loading state yet
         } else {
           // After retries, still show as connected to admin but warn about communication
           setConnectionStatus('connected');
-          setGroupInfo(null);
+          setUserInfo(null);
           setError('Connected to Okta, but extension communication delayed');
-          console.warn('[useGroupContext] Max retries reached, showing as connected anyway');
+          console.warn('[useUserContext] Max retries reached, showing as connected anyway');
         }
       }
     } catch (err) {
       // No Okta tabs found
-      console.error('[useGroupContext] Error:', err);
+      console.error('[useUserContext] Error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMessage);
       setConnectionStatus('error');
-      setGroupInfo(null);
+      setUserInfo(null);
       setOktaOrigin(null);
     } finally {
       // Only update loading state if this is still the current request
@@ -155,7 +155,7 @@ export function useGroupContext(): UseGroupContextReturn {
   }, []);
 
   useEffect(() => {
-    fetchGroupInfo();
+    fetchUserInfo();
 
     // Debounce timer to prevent rapid-fire fetches
     let debounceTimer: NodeJS.Timeout | null = null;
@@ -165,18 +165,18 @@ export function useGroupContext(): UseGroupContextReturn {
         clearTimeout(debounceTimer);
       }
       debounceTimer = setTimeout(() => {
-        fetchGroupInfo();
+        fetchUserInfo();
       }, 150); // 150ms debounce
     };
 
     // Listen for tab updates (when user navigates to different Okta pages)
     const handleTabUpdate = (_tabId: number, changeInfo: { url?: string; status?: string }, tab: chrome.tabs.Tab) => {
-      // Refetch when URL changes on Okta tabs (with debouncing)
+      // Refetch when URL changes on Okta tabs
       if (changeInfo.url && tab.url &&
           (tab.url.includes('okta.com') ||
            tab.url.includes('oktapreview.com') ||
            tab.url.includes('okta-emea.com'))) {
-        console.log('[useGroupContext] Okta tab URL changed, refetching (debounced)');
+        console.log('[useUserContext] Okta tab URL changed, refetching (debounced)');
         debouncedFetch();
       }
 
@@ -185,7 +185,7 @@ export function useGroupContext(): UseGroupContextReturn {
           (tab.url.includes('okta.com') ||
            tab.url.includes('oktapreview.com') ||
            tab.url.includes('okta-emea.com'))) {
-        console.log('[useGroupContext] Okta tab loaded, verifying group context (debounced)');
+        console.log('[useUserContext] Okta tab loaded, verifying user context (debounced)');
         debouncedFetch();
       }
     };
@@ -197,7 +197,7 @@ export function useGroupContext(): UseGroupContextReturn {
             (tab.url.includes('okta.com') ||
              tab.url.includes('oktapreview.com') ||
              tab.url.includes('okta-emea.com'))) {
-          console.log('[useGroupContext] Okta tab activated, refetching group info (debounced)');
+          console.log('[useUserContext] Okta tab activated, refetching user info (debounced)');
           debouncedFetch();
         }
       });
@@ -213,15 +213,15 @@ export function useGroupContext(): UseGroupContextReturn {
       chrome.tabs.onUpdated.removeListener(handleTabUpdate);
       chrome.tabs.onActivated.removeListener(handleTabActivated);
     };
-  }, [fetchGroupInfo]);
+  }, [fetchUserInfo]);
 
   return {
-    groupInfo,
+    userInfo,
     connectionStatus,
     targetTabId,
     error,
     isLoading,
-    refetch: fetchGroupInfo,
+    refetch: fetchUserInfo,
     oktaOrigin,
   };
 }

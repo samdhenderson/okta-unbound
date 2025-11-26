@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useOktaApi } from '../hooks/useOktaApi';
 import type { UserStatus } from '../../shared/types';
 import ConfirmationModal from './ConfirmationModal';
+import { useProgress } from '../contexts/ProgressContext';
 
 interface OperationsTabProps {
   groupId?: string;
@@ -25,6 +26,9 @@ const OperationsTab: React.FC<OperationsTabProps> = ({ groupId, groupName, targe
     onConfirm: () => void;
   } | null>(null);
 
+  // Global progress context for showing progress on all tabs
+  const { updateProgress: updateGlobalProgress, completeProgress } = useProgress();
+
   // Form state
   const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv');
   const [exportFilter, setExportFilter] = useState<UserStatus | ''>('');
@@ -36,9 +40,11 @@ const OperationsTab: React.FC<OperationsTabProps> = ({ groupId, groupName, targe
     setResults((prev) => [{ message, type }, ...prev]);
   };
 
-  const updateProgress = (current: number, total: number, message: string) => {
-    console.log('[OperationsTab] updateProgress:', { current, total, message });
+  const updateProgress = (current: number, total: number, message: string, apiCalls?: number) => {
+    console.log('[OperationsTab] updateProgress:', { current, total, message, apiCalls });
     setProgress({ current, total, message });
+    // Also update global progress bar
+    updateGlobalProgress(current, total, message, apiCalls);
   };
 
   const api = useOktaApi({
@@ -46,6 +52,14 @@ const OperationsTab: React.FC<OperationsTabProps> = ({ groupId, groupName, targe
     onResult: addResult,
     onProgress: updateProgress,
   });
+
+  // Sync loading state with global progress - only complete when done
+  // The API functions now handle progress updates directly
+  useEffect(() => {
+    if (!api.isLoading) {
+      completeProgress();
+    }
+  }, [api.isLoading, completeProgress]);
 
   const disabled = !groupId || api.isLoading;
 
