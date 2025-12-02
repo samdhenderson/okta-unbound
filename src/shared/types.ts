@@ -354,6 +354,12 @@ export interface GroupSummary {
   sourceAppName?: string; // For APP_GROUP: the source app name
   linkedGroups?: LinkedGroup[]; // For merged display: linked OKTA/APP groups
   isPushGroup?: boolean; // True if this OKTA_GROUP has linked APP_GROUPs
+  // Staleness detection fields
+  created?: Date;
+  lastMembershipUpdated?: Date;
+  stalenessScore?: number; // 0-100 (higher = more stale)
+  stalenessReasons?: string[]; // Why group is considered stale
+  isStale?: boolean; // True if staleness score > threshold
 }
 
 // Linked group info for push group merging

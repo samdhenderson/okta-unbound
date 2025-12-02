@@ -6,6 +6,7 @@ import GroupCollections from './groups/GroupCollections';
 import CrossGroupUserSearch from './groups/CrossGroupUserSearch';
 import BulkOperations from './groups/BulkOperations';
 import GroupComparison from './groups/GroupComparison';
+import { applyStalenessScore } from '../../shared/utils/stalenessCalculator';
 
 interface GroupsTabProps {
   targetTabId: number | null;
@@ -26,7 +27,8 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('');
   const [sizeFilter, setSizeFilter] = useState<string>('');
-  const [sortBy, setSortBy] = useState<'name' | 'memberCount' | 'lastUpdated'>('name');
+  const [stalenessFilter, setStalenessFilter] = useState<string>('');
+  const [sortBy, setSortBy] = useState<'name' | 'memberCount' | 'lastUpdated' | 'stalenessScore' | 'lastMembershipUpdated'>('name');
 
   const api = useOktaApi({
     targetTabId,
@@ -94,19 +96,24 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
           }
         }
 
-        return {
+        const summary: GroupSummary = {
           id: group.id,
           name: group.profile?.name || group.id,
           description: group.profile?.description,
           type: group.type,
           memberCount,
           lastUpdated: group.lastUpdated ? new Date(group.lastUpdated) : undefined,
+          created: group.created ? new Date(group.created) : undefined,
+          lastMembershipUpdated: group.lastMembershipUpdated ? new Date(group.lastMembershipUpdated) : undefined,
           hasRules: false,
           ruleCount: 0,
           selected: false,
           sourceAppId,
           sourceAppName,
         };
+
+        // Apply staleness calculation
+        return applyStalenessScore(summary);
       });
 
       // Collect unique app IDs from APP_GROUPs
@@ -298,14 +305,30 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
     if (sizeFilter) {
       filtered = filtered.filter((g) => {
         switch (sizeFilter) {
+          case 'empty':
+            return g.memberCount === 0;
           case 'small':
-            return g.memberCount < 50;
+            return g.memberCount > 0 && g.memberCount < 50;
           case 'medium':
             return g.memberCount >= 50 && g.memberCount < 200;
           case 'large':
             return g.memberCount >= 200 && g.memberCount < 1000;
           case 'xlarge':
             return g.memberCount >= 1000;
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Staleness filter
+    if (stalenessFilter) {
+      filtered = filtered.filter((g) => {
+        switch (stalenessFilter) {
+          case 'stale':
+            return g.isStale === true;
+          case 'active':
+            return g.isStale === false;
           default:
             return true;
         }
@@ -323,13 +346,19 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
           if (!a.lastUpdated) return 1;
           if (!b.lastUpdated) return -1;
           return b.lastUpdated.getTime() - a.lastUpdated.getTime();
+        case 'lastMembershipUpdated':
+          if (!a.lastMembershipUpdated) return 1;
+          if (!b.lastMembershipUpdated) return -1;
+          return b.lastMembershipUpdated.getTime() - a.lastMembershipUpdated.getTime();
+        case 'stalenessScore':
+          return (b.stalenessScore || 0) - (a.stalenessScore || 0);
         default:
           return 0;
       }
     });
 
     return filtered;
-  }, [groups, searchQuery, typeFilter, sizeFilter, sortBy]);
+  }, [groups, searchQuery, typeFilter, sizeFilter, stalenessFilter, sortBy]);
 
   // Export multi-group members
   const exportMultiGroupMembers = async () => {
@@ -454,16 +483,25 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
 
                       <select value={sizeFilter} onChange={(e) => setSizeFilter(e.target.value)}>
                         <option value="">All Sizes</option>
-                        <option value="small">&lt; 50 members</option>
-                        <option value="medium">50-200 members</option>
-                        <option value="large">200-1000 members</option>
-                        <option value="xlarge">1000+ members</option>
+                        <option value="empty">Empty (0 members)</option>
+                        <option value="small">Small (1-50 members)</option>
+                        <option value="medium">Medium (50-200 members)</option>
+                        <option value="large">Large (200-1000 members)</option>
+                        <option value="xlarge">X-Large (1000+ members)</option>
+                      </select>
+
+                      <select value={stalenessFilter} onChange={(e) => setStalenessFilter(e.target.value)}>
+                        <option value="">All Activity Levels</option>
+                        <option value="stale">Stale Groups</option>
+                        <option value="active">Active Groups</option>
                       </select>
 
                       <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
                         <option value="name">Sort by Name</option>
                         <option value="memberCount">Sort by Size</option>
                         <option value="lastUpdated">Sort by Last Updated</option>
+                        <option value="lastMembershipUpdated">Sort by Last Activity</option>
+                        <option value="stalenessScore">Sort by Staleness</option>
                       </select>
                     </div>
 

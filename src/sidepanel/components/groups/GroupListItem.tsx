@@ -1,5 +1,6 @@
 import React, { useState, useCallback, memo } from 'react';
 import type { GroupSummary } from '../../../shared/types';
+import { formatRelativeTime } from '../../../shared/utils/stalenessCalculator';
 
 interface GroupListItemProps {
   group: GroupSummary;
@@ -89,6 +90,14 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(({
                   {group.sourceAppName}
                 </span>
               )}
+              {group.isStale && (
+                <span
+                  className="badge badge-warning"
+                  title={`Stale: ${group.stalenessReasons?.join(', ')}`}
+                >
+                  STALE
+                </span>
+              )}
             </div>
           </div>
           <div className="group-list-item-meta">
@@ -104,6 +113,11 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(({
             {group.healthScore !== undefined && (
               <span className={`health-score ${getHealthScoreClass(group.healthScore)}`}>
                 Health: {group.healthScore}%
+              </span>
+            )}
+            {group.lastMembershipUpdated && (
+              <span className="last-activity" title="Last membership change">
+                Last active: {formatRelativeTime(group.lastMembershipUpdated)}
               </span>
             )}
           </div>
@@ -146,6 +160,28 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(({
               <strong>Last Updated:</strong> {new Date(group.lastUpdated).toLocaleString()}
             </div>
           )}
+          {group.created && (
+            <div className="detail-row">
+              <strong>Created:</strong> {new Date(group.created).toLocaleString()}
+            </div>
+          )}
+          {group.lastMembershipUpdated && (
+            <div className="detail-row">
+              <strong>Last Membership Change:</strong> {new Date(group.lastMembershipUpdated).toLocaleString()}
+            </div>
+          )}
+          {group.stalenessScore !== undefined && (
+            <div className="detail-row">
+              <strong>Staleness Score:</strong> {group.stalenessScore}/100
+              {group.stalenessReasons && group.stalenessReasons.length > 0 && (
+                <ul style={{ marginTop: '4px', marginLeft: '20px' }}>
+                  {group.stalenessReasons.map((reason, idx) => (
+                    <li key={idx}>{reason}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
           {group.type === 'APP_GROUP' && group.sourceAppName && (
             <div className="detail-row">
               <strong>Source App:</strong> {group.sourceAppName}
@@ -181,6 +217,8 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(({
     prevProps.group.isPushGroup === nextProps.group.isPushGroup &&
     prevProps.group.hasRules === nextProps.group.hasRules &&
     prevProps.group.ruleCount === nextProps.group.ruleCount &&
+    prevProps.group.isStale === nextProps.group.isStale &&
+    prevProps.group.stalenessScore === nextProps.group.stalenessScore &&
     prevProps.selected === nextProps.selected &&
     prevProps.oktaOrigin === nextProps.oktaOrigin
   );
