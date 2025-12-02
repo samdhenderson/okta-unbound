@@ -1,0 +1,62 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src"],
+  "entryPointStrategy": "expand",
+  "out": "docs/api",
+  "exclude": [
+    "**/*+(test|spec).+(ts|tsx)",
+    "**/node_modules/**"
+  ],
+  "excludePrivate": false,
+  "excludeProtected": false,
+  "excludeExternals": true,
+  "excludeInternal": false,
+  "includeVersion": true,
+  "readme": "README.md",
+  "name": "Okta Unbound API Documentation",
+  "navigationLinks": {
+    "GitHub": "https://github.com/samdhenderson/okta-unbound"
+  },
+  "plugin": [],
+  "theme": "default",
+  "sort": ["source-order", "required-first"],
+  "visibilityFilters": {
+    "protected": true,
+    "private": false,
+    "inherited": true,
+    "external": false
+  },
+  "searchInComments": true,
+  "searchInDocuments": true,
+  "categorizeByGroup": true,
+  "defaultCategory": "Other",
+  "categoryOrder": [
+    "Background",
+    "Content Script",
+    "Hooks",
+    "Contexts",
+    "Components",
+    "Utilities",
+    "Types",
+    "*"
+  ],
+  "gitRevision": "main",
+  "gitRemote": "origin",
+  "hideGenerator": false,
+  "skipErrorChecking": true,
+  "compilerOptions": {
+    "skipLibCheck": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "kindSortOrder": [
+    "Module",
+    "Namespace",
+    "Enum",
+    "Class",
+    "Interface",
+    "TypeAlias",
+    "Function",
+    "Variable"
+  ]
+}

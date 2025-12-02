@@ -6,21 +6,18 @@
  * request scheduling through the background service worker.
  */
 
-import { useCallback } from 'react';
 import type { MessageRequest, MessageResponse, UseOktaApiOptions, ApiResponse } from './types';
 
 /**
  * Creates the core API functions used by all other modules
  */
 export function createCoreApi(options: UseOktaApiOptions, dependencies: {
-  setIsLoading: (loading: boolean) => void;
   setIsCancelled: (cancelled: boolean) => void;
   abortController: AbortController | null;
-  setAbortController: (controller: AbortController | null) => void;
   isCancelled: boolean;
 }) {
   const { targetTabId, onResult, onProgress } = options;
-  const { setIsLoading, setIsCancelled, abortController, setAbortController, isCancelled } = dependencies;
+  const { setIsCancelled, abortController, isCancelled } = dependencies;
 
   /**
    * Send a message to the content script

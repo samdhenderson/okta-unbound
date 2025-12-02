@@ -125,7 +125,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
       console.log('[RulesTab] Fetching rules from tab:', targetTabId);
 
       // Start progress - we don't know total yet, so use indeterminate progress
-      startProgress('Loading group rules...', 1);
+      startProgress('Loading Rules', 'Loading group rules...', 1);
 
       // Track API requests made
       let apiRequestCount = 0;

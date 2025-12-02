@@ -3,14 +3,97 @@ import type { OktaUser, GroupMembership } from '../../shared/types';
 import { RulesCache } from '../../shared/rulesCache';
 import { useUserContext } from '../hooks/useUserContext';
 
+// Helper to format dates in a readable way
+const formatDate = (dateString: string | null | undefined): string => {
+  if (!dateString) return 'Never';
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return dateString;
+  }
+};
+
+// Helper to calculate relative time (e.g., "3 days ago")
+const getRelativeTime = (dateString: string | null | undefined): string | null => {
+  if (!dateString) return null;
+  try {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'today';
+    if (diffDays === 1) return 'yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
+    return `${Math.floor(diffDays / 365)} years ago`;
+  } catch {
+    return null;
+  }
+};
+
+// Fields to explicitly exclude from display (security sensitive)
+const EXCLUDED_PROFILE_FIELDS = new Set([
+  'securityQuestion',
+  'securityQuestionAnswer',
+  'security_question',
+  'security_answer',
+  'recoveryQuestion',
+  'recoveryAnswer',
+  'password',
+  'credentials',
+]);
+
 interface UsersTabProps {
   targetTabId?: number;
   currentGroupId?: string;
   onNavigateToRule?: (ruleId: string) => void;
 }
 
+// Collapsible section component
+interface CollapsibleSectionProps {
+  title: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+  itemCount?: number;
+}
+
+const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
+  title,
+  defaultOpen = true,
+  children,
+  itemCount,
+}) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <div className={`collapsible-section ${isOpen ? 'open' : 'collapsed'}`}>
+      <button
+        className="collapsible-header"
+        onClick={() => setIsOpen(!isOpen)}
+        type="button"
+      >
+        <span className="collapsible-icon">{isOpen ? '▼' : '▶'}</span>
+        <span className="collapsible-title">{title}</span>
+        {itemCount !== undefined && (
+          <span className="collapsible-count">{itemCount}</span>
+        )}
+      </button>
+      {isOpen && <div className="collapsible-content">{children}</div>}
+    </div>
+  );
+};
+
 const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavigateToRule }) => {
-  const { userInfo, isLoading: isLoadingUserContext } = useUserContext();
+  const { userInfo, isLoading: isLoadingUserContext, oktaOrigin } = useUserContext();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingMemberships, setIsLoadingMemberships] = useState(false);
@@ -21,6 +104,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
   const [apiCost, setApiCost] = useState<number>(0);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [hasAutoLoadedUser, setHasAutoLoadedUser] = useState<string | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const handleSearch = useCallback(async () => {
     if (!targetTabId) {
@@ -385,77 +469,75 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     return currentGroupId && groupId === currentGroupId;
   };
 
+  // Clear search and reset to initial state
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setSelectedUser(null);
+    setMemberships([]);
+    setHasAutoLoadedUser(null);
+    setError(null);
+    searchInputRef.current?.focus();
+  };
+
   return (
     <div className="tab-content active">
       <div className="section">
-        <div className="section-header">
-          <div>
-            <h2>User Membership Tracing</h2>
-            <p className="section-description">
-              Search users and analyze group memberships
-            </p>
-          </div>
-        </div>
-
-        {/* Detected User Banner */}
-        {userInfo && (
-          <div className="context-banner user-context-banner">
-            <div className="banner-content">
-              <span className="banner-icon">&#128100;</span>
-              <div className="banner-text">
-                <strong>Currently viewing:</strong> {userInfo.userName}
-                {userInfo.userEmail && (
-                  <span className="banner-detail"> ({userInfo.userEmail})</span>
-                )}
-                {userInfo.userStatus && (
-                  <span className={`badge badge-sm ml-2 ${
-                    userInfo.userStatus === 'ACTIVE' ? 'badge-success' :
-                    userInfo.userStatus === 'DEPROVISIONED' ? 'badge-error' : 'badge-warning'
-                  }`}>
-                    {userInfo.userStatus}
-                  </span>
-                )}
-              </div>
+        {/* Search Section - Always at the very top */}
+        <div className="user-search-container">
+          <div className="user-search-row">
+            <div className="user-search-input-wrapper">
+              <input
+                ref={searchInputRef}
+                type="text"
+                className="input user-search-input"
+                placeholder="Search by email, name, or login..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {(searchQuery || selectedUser) && (
+                <button
+                  className="user-search-clear-btn"
+                  onClick={handleClearSearch}
+                  title="Clear search"
+                  type="button"
+                >
+                  &times;
+                </button>
+              )}
+              {isSearching && (
+                <div className="user-search-spinner">
+                  <div className="spinner-small"></div>
+                </div>
+              )}
             </div>
-            <button
-              className="btn btn-sm btn-secondary"
-              onClick={() => {
-                setSelectedUser(null);
-                setMemberships([]);
-                setHasAutoLoadedUser(null);
-              }}
-              title="Clear and search for a different user"
-            >
-              Search Other Users
-            </button>
-          </div>
-        )}
-
-        {/* Search Section */}
-        <div className="user-search-section">
-          <div className="search-input-group">
-            <input
-              type="text"
-              className="input"
-              placeholder="Type to search by email, name, or login (live search)"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {isSearching && (
-              <div className="search-spinner">
-                <div className="spinner-small"></div>
-              </div>
+            {oktaOrigin && selectedUser && (
+              <a
+                href={`${oktaOrigin}/admin/user/profile/view/${selectedUser.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-primary user-search-action-btn"
+                title="Open user in Okta Admin"
+              >
+                Open in Okta
+              </a>
             )}
           </div>
+          {/* Detected user hint - subtle, non-intrusive */}
+          {userInfo && !selectedUser && !searchQuery && (
+            <div className="user-detected-hint">
+              Detected: <strong>{userInfo.userName}</strong>
+              {userInfo.userStatus && (
+                <span className={`badge badge-sm ml-2 ${
+                  userInfo.userStatus === 'ACTIVE' ? 'badge-success' :
+                  userInfo.userStatus === 'DEPROVISIONED' ? 'badge-error' : 'badge-warning'
+                }`}>
+                  {userInfo.userStatus}
+                </span>
+              )}
+            </div>
+          )}
         </div>
-
-        {/* API Cost Indicator */}
-        {apiCost > 0 && (
-          <div className="api-cost-indicator">
-            <span className="api-cost-label">API Requests:</span>
-            <span className="api-cost-value">{apiCost}</span>
-          </div>
-        )}
 
         {/* Error Display */}
         {error && (
@@ -491,56 +573,277 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
           </div>
         )}
 
-        {/* Selected User Details */}
+        {/* Selected User Details - Positioned directly under search */}
         {selectedUser && (
           <div className="selected-user-section">
-            <div className="user-details-card">
-              <div className="card-header">
-                <h3>User Details</h3>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => {
-                    setSelectedUser(null);
-                    setMemberships([]);
-                  }}
-                >
-                  Back to Results
-                </button>
-              </div>
-              <div className="user-details-content">
-                <div className="detail-row">
-                  <span className="detail-label">Name:</span>
-                  <span className="detail-value">
+            {/* Compact User ID Card */}
+            <div className="user-id-card compact">
+              <div className="user-id-card-header">
+                <div className="user-avatar">
+                  {selectedUser.profile.firstName?.[0]?.toUpperCase() || '?'}
+                  {selectedUser.profile.lastName?.[0]?.toUpperCase() || ''}
+                </div>
+                <div className="user-id-card-info">
+                  <h2 className="user-id-card-name">
                     {selectedUser.profile.firstName} {selectedUser.profile.lastName}
-                  </span>
+                  </h2>
+                  <div className="user-id-card-title">
+                    {selectedUser.profile.title && (
+                      <span>{selectedUser.profile.title}</span>
+                    )}
+                    {selectedUser.profile.title && selectedUser.profile.department && (
+                      <span className="user-id-card-separator">•</span>
+                    )}
+                    {selectedUser.profile.department && (
+                      <span>{selectedUser.profile.department}</span>
+                    )}
+                  </div>
+                  <div className="user-id-card-email">{selectedUser.profile.email}</div>
+                  {selectedUser.profile.genderPronouns && (
+                    <div className="user-id-card-pronouns">{selectedUser.profile.genderPronouns}</div>
+                  )}
                 </div>
-                <div className="detail-row">
-                  <span className="detail-label">Email:</span>
-                  <span className="detail-value">{selectedUser.profile.email}</span>
-                </div>
-                <div className="detail-row">
-                  <span className="detail-label">Login:</span>
-                  <span className="detail-value">{selectedUser.profile.login}</span>
-                </div>
-                <div className="detail-row">
-                  <span className="detail-label">Status:</span>
+                <div className="user-id-card-status">
                   <span className={getStatusBadgeClass(selectedUser.status)}>
                     {selectedUser.status}
                   </span>
                 </div>
-                {selectedUser.profile.department && (
-                  <div className="detail-row">
-                    <span className="detail-label">Department:</span>
-                    <span className="detail-value">{selectedUser.profile.department}</span>
-                  </div>
-                )}
-                {selectedUser.profile.title && (
-                  <div className="detail-row">
-                    <span className="detail-label">Title:</span>
-                    <span className="detail-value">{selectedUser.profile.title}</span>
-                  </div>
-                )}
               </div>
+              <div className="user-id-card-meta">
+                <div className="user-id-card-meta-item">
+                  <span className="meta-label">Last Login</span>
+                  <span className="meta-value">
+                    {selectedUser.lastLogin
+                      ? getRelativeTime(selectedUser.lastLogin) || formatDate(selectedUser.lastLogin)
+                      : 'Never'}
+                  </span>
+                </div>
+                <div className="user-id-card-meta-item">
+                  <span className="meta-label">Created</span>
+                  <span className="meta-value">
+                    {getRelativeTime(selectedUser.created) || formatDate(selectedUser.created)}
+                  </span>
+                </div>
+                <div className="user-id-card-meta-item">
+                  <span className="meta-label">Groups</span>
+                  <span className="meta-value">{memberships.length}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Collapsible Details Sections */}
+            <div className="user-details-sections">
+              {/* Account Details */}
+              <CollapsibleSection title="Account Details" defaultOpen={false}>
+                <div className="detail-grid">
+                  <div className="detail-item">
+                    <span className="detail-label">Login</span>
+                    <span className="detail-value">{selectedUser.profile.login}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label">User ID</span>
+                    <span className="detail-value detail-value-mono">{selectedUser.id}</span>
+                  </div>
+                  {selectedUser.profile.secondEmail && (
+                    <div className="detail-item">
+                      <span className="detail-label">Secondary Email</span>
+                      <span className="detail-value">{selectedUser.profile.secondEmail}</span>
+                    </div>
+                  )}
+                  {selectedUser.activated && (
+                    <div className="detail-item">
+                      <span className="detail-label">Activated</span>
+                      <span className="detail-value">{formatDate(selectedUser.activated)}</span>
+                    </div>
+                  )}
+                  {selectedUser.statusChanged && (
+                    <div className="detail-item">
+                      <span className="detail-label">Status Changed</span>
+                      <span className="detail-value">{formatDate(selectedUser.statusChanged)}</span>
+                    </div>
+                  )}
+                  {selectedUser.passwordChanged && (
+                    <div className="detail-item">
+                      <span className="detail-label">Password Changed</span>
+                      <span className="detail-value">{formatDate(selectedUser.passwordChanged)}</span>
+                    </div>
+                  )}
+                  {selectedUser.lastUpdated && (
+                    <div className="detail-item">
+                      <span className="detail-label">Profile Updated</span>
+                      <span className="detail-value">{formatDate(selectedUser.lastUpdated)}</span>
+                    </div>
+                  )}
+                </div>
+              </CollapsibleSection>
+
+              {/* Organization - only show if any org fields exist */}
+              {(selectedUser.profile.title ||
+                selectedUser.profile.department ||
+                selectedUser.profile.division ||
+                selectedUser.profile.organization ||
+                selectedUser.profile.manager ||
+                selectedUser.profile.costCenter ||
+                selectedUser.profile.employeeNumber ||
+                selectedUser.profile.userType) && (
+                <CollapsibleSection title="Organization" defaultOpen={false}>
+                  <div className="detail-grid">
+                    {selectedUser.profile.title && (
+                      <div className="detail-item">
+                        <span className="detail-label">Title</span>
+                        <span className="detail-value">{selectedUser.profile.title}</span>
+                      </div>
+                    )}
+                    {selectedUser.profile.department && (
+                      <div className="detail-item">
+                        <span className="detail-label">Department</span>
+                        <span className="detail-value">{selectedUser.profile.department}</span>
+                      </div>
+                    )}
+                    {selectedUser.profile.division && (
+                      <div className="detail-item">
+                        <span className="detail-label">Division</span>
+                        <span className="detail-value">{selectedUser.profile.division}</span>
+                      </div>
+                    )}
+                    {selectedUser.profile.organization && (
+                      <div className="detail-item">
+                        <span className="detail-label">Organization</span>
+                        <span className="detail-value">{selectedUser.profile.organization}</span>
+                      </div>
+                    )}
+                    {selectedUser.profile.manager && (
+                      <div className="detail-item">
+                        <span className="detail-label">Manager</span>
+                        <span className="detail-value">{selectedUser.profile.manager}</span>
+                      </div>
+                    )}
+                    {selectedUser.profile.costCenter && (
+                      <div className="detail-item">
+                        <span className="detail-label">Cost Center</span>
+                        <span className="detail-value">{selectedUser.profile.costCenter}</span>
+                      </div>
+                    )}
+                    {selectedUser.profile.employeeNumber && (
+                      <div className="detail-item">
+                        <span className="detail-label">Employee #</span>
+                        <span className="detail-value">{selectedUser.profile.employeeNumber}</span>
+                      </div>
+                    )}
+                    {selectedUser.profile.userType && (
+                      <div className="detail-item">
+                        <span className="detail-label">User Type</span>
+                        <span className="detail-value">{selectedUser.profile.userType}</span>
+                      </div>
+                    )}
+                  </div>
+                </CollapsibleSection>
+              )}
+
+              {/* Contact - only show if any contact fields exist */}
+              {(selectedUser.profile.mobilePhone ||
+                selectedUser.profile.primaryPhone ||
+                selectedUser.profile.streetAddress ||
+                selectedUser.profile.city ||
+                selectedUser.profile.state ||
+                selectedUser.profile.zipCode ||
+                selectedUser.profile.countryCode) && (
+                <CollapsibleSection title="Contact" defaultOpen={false}>
+                  <div className="detail-grid">
+                    {selectedUser.profile.primaryPhone && (
+                      <div className="detail-item">
+                        <span className="detail-label">Phone</span>
+                        <span className="detail-value">{selectedUser.profile.primaryPhone}</span>
+                      </div>
+                    )}
+                    {selectedUser.profile.mobilePhone && (
+                      <div className="detail-item">
+                        <span className="detail-label">Mobile</span>
+                        <span className="detail-value">{selectedUser.profile.mobilePhone}</span>
+                      </div>
+                    )}
+                    {(selectedUser.profile.streetAddress ||
+                      selectedUser.profile.city ||
+                      selectedUser.profile.state) && (
+                      <div className="detail-item detail-item-full">
+                        <span className="detail-label">Location</span>
+                        <span className="detail-value">
+                          {[
+                            selectedUser.profile.streetAddress,
+                            selectedUser.profile.city,
+                            selectedUser.profile.state,
+                            selectedUser.profile.zipCode,
+                            selectedUser.profile.countryCode,
+                          ]
+                            .filter(Boolean)
+                            .join(', ')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </CollapsibleSection>
+              )}
+
+              {/* Preferences - only show if any exist */}
+              {(selectedUser.profile.locale || selectedUser.profile.timezone) && (
+                <CollapsibleSection title="Preferences" defaultOpen={false}>
+                  <div className="detail-grid">
+                    {selectedUser.profile.locale && (
+                      <div className="detail-item">
+                        <span className="detail-label">Locale</span>
+                        <span className="detail-value">{selectedUser.profile.locale}</span>
+                      </div>
+                    )}
+                    {selectedUser.profile.timezone && (
+                      <div className="detail-item">
+                        <span className="detail-label">Timezone</span>
+                        <span className="detail-value">{selectedUser.profile.timezone}</span>
+                      </div>
+                    )}
+                  </div>
+                </CollapsibleSection>
+              )}
+
+              {/* Custom Attributes - show any non-standard profile fields */}
+              {(() => {
+                const standardFields = new Set([
+                  'login', 'email', 'firstName', 'lastName', 'secondEmail',
+                  'mobilePhone', 'primaryPhone', 'streetAddress', 'city', 'state',
+                  'zipCode', 'countryCode', 'department', 'title', 'manager',
+                  'managerId', 'division', 'organization', 'costCenter',
+                  'employeeNumber', 'userType', 'locale', 'timezone', 'genderPronouns',
+                ]);
+                const customFields = Object.entries(selectedUser.profile).filter(
+                  ([key, value]) =>
+                    !standardFields.has(key) &&
+                    !EXCLUDED_PROFILE_FIELDS.has(key) &&
+                    !EXCLUDED_PROFILE_FIELDS.has(key.toLowerCase()) &&
+                    value !== null &&
+                    value !== undefined &&
+                    value !== ''
+                );
+
+                if (customFields.length === 0) return null;
+
+                return (
+                  <CollapsibleSection
+                    title="Custom Attributes"
+                    defaultOpen={false}
+                    itemCount={customFields.length}
+                  >
+                    <div className="detail-grid">
+                      {customFields.map(([key, value]) => (
+                        <div className="detail-item" key={key}>
+                          <span className="detail-label">{key}</span>
+                          <span className="detail-value">
+                            {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </CollapsibleSection>
+                );
+              })()}
             </div>
 
             {/* Group Memberships */}
@@ -630,13 +933,12 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
           </div>
         )}
 
-        {/* Empty State */}
-        {!isSearching && searchResults.length === 0 && !error && !selectedUser && (
-          <div className="empty-state">
-            <p className="muted">Type at least 2 characters to search for users (live search)</p>
-            <p className="muted-small">
-              You can trace group memberships and understand why users are in specific groups
-            </p>
+        {/* Empty State - Show only when no search and no user selected */}
+        {!isSearching && searchResults.length === 0 && !error && !selectedUser && !searchQuery && (
+          <div className="empty-state user-empty-state">
+            <div className="empty-state-icon">&#128100;</div>
+            <h3>User Membership Tracing</h3>
+            <p className="muted">Search for users to analyze their group memberships and understand why they're in specific groups</p>
           </div>
         )}
       </div>

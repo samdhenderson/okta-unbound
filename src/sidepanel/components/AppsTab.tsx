@@ -463,7 +463,7 @@ const AppsTab: React.FC<AppsTabProps> = ({ groupId, groupName, targetTabId }) =>
           <div className="converter-content">
             <h3>Convert User Assignments to Group Assignments</h3>
             <p className="feature-description">
-              Convert a user's direct app assignments to group-based assignments. This is ideal for
+              Convert a user&apos;s direct app assignments to group-based assignments. This is ideal for
               scaling single-person departments into RBAC (Role-Based Access Control) groups.
               Complex profile attributes like Salesforce permission sets are handled automatically.
             </p>
@@ -696,7 +696,7 @@ const AppsTab: React.FC<AppsTabProps> = ({ groupId, groupName, targetTabId }) =>
                         checked={removeUserAssignment}
                         onChange={(e) => setRemoveUserAssignment(e.target.checked)}
                       />
-                      <span>Remove user's direct assignment after conversion</span>
+                      <span>Remove user&apos;s direct assignment after conversion</span>
                       <span className="tooltip-icon" title="If checked, the user will only have access through the group. If unchecked, they'll have both direct and group access.">?</span>
                     </label>
                   </div>
@@ -715,8 +715,8 @@ const AppsTab: React.FC<AppsTabProps> = ({ groupId, groupName, targetTabId }) =>
                           onChange={() => setMergeStrategy('prefer_user')}
                         />
                         <div className="radio-card-content">
-                          <strong>Copy User's Profile (Recommended)</strong>
-                          <p>Copy the user's profile attributes to the group. Arrays (like permission sets) are merged.</p>
+                          <strong>Copy User&apos;s Profile (Recommended)</strong>
+                          <p>Copy the user&apos;s profile attributes to the group. Arrays (like permission sets) are merged.</p>
                         </div>
                       </label>
                       <label className={`radio-card ${mergeStrategy === 'preserve_user' ? 'selected' : ''}`}>
@@ -727,8 +727,8 @@ const AppsTab: React.FC<AppsTabProps> = ({ groupId, groupName, targetTabId }) =>
                           onChange={() => setMergeStrategy('preserve_user')}
                         />
                         <div className="radio-card-content">
-                          <strong>Keep Group's Profile</strong>
-                          <p>Don't change the group's existing profile attributes. User may lose custom settings.</p>
+                          <strong>Keep Group&apos;s Profile</strong>
+                          <p>Don&apos;t change the group&apos;s existing profile attributes. User may lose custom settings.</p>
                         </div>
                       </label>
                       <label className={`radio-card ${mergeStrategy === 'prefer_default' ? 'selected' : ''}`}>
@@ -740,7 +740,7 @@ const AppsTab: React.FC<AppsTabProps> = ({ groupId, groupName, targetTabId }) =>
                         />
                         <div className="radio-card-content">
                           <strong>Use Defaults</strong>
-                          <p>Use the app's default profile settings. Good for standardizing.</p>
+                          <p>Use the app&apos;s default profile settings. Good for standardizing.</p>
                         </div>
                       </label>
                     </div>
@@ -841,11 +841,11 @@ const AppsTab: React.FC<AppsTabProps> = ({ groupId, groupName, targetTabId }) =>
 
                   <div className="profile-comparison">
                     <div className="profile-column">
-                      <h4>User's Profile</h4>
+                      <h4>User&apos;s Profile</h4>
                       <pre>{JSON.stringify(previewData.userProfile, null, 2) || '(empty)'}</pre>
                     </div>
                     <div className="profile-column">
-                      <h4>Group's Current Profile</h4>
+                      <h4>Group&apos;s Current Profile</h4>
                       <pre>{JSON.stringify(previewData.groupProfile, null, 2) || '(no existing assignment)'}</pre>
                     </div>
                     <div className="profile-column merged">

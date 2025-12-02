@@ -1,3 +1,34 @@
+/**
+ * @module hooks/useOktaApi
+ * @description Primary hook for interacting with the Okta API. Provides comprehensive methods for
+ * managing users, groups, and applications with built-in rate limiting, error handling, and audit logging.
+ *
+ * This hook serves as the main interface between the UI and Okta's REST API, coordinating with:
+ * - Background scheduler for rate limit management
+ * - Audit store for operation logging
+ * - Undo manager for reversible operations
+ * - Rules cache for automation
+ *
+ * @example
+ * ```tsx
+ * const {
+ *   fetchGroupDetails,
+ *   removeDeprovisioned,
+ *   addUsersToGroup
+ * } = useOktaApi({
+ *   targetTabId: activeTabId,
+ *   onResult: (msg, type) => showToast(msg, type),
+ *   onProgress: (current, total, msg) => updateProgress(current, total, msg)
+ * });
+ *
+ * // Fetch group information
+ * const group = await fetchGroupDetails('00g...');
+ *
+ * // Remove deprovisioned users with progress tracking
+ * await removeDeprovisioned(groupId);
+ * ```
+ */
+
 import { useState, useCallback } from 'react';
 import type {
   MessageRequest,
@@ -23,12 +54,55 @@ import { auditStore } from '../../shared/storage/auditStore';
 import { RulesCache } from '../../shared/rulesCache';
 import { analyzeAppSecurity, getAppAssignmentRecommendations } from './useAppAnalysis';
 
+/**
+ * @typedef {Object} UseOktaApiOptions
+ * @property {number|null} targetTabId - Chrome tab ID where Okta is loaded (required for API calls)
+ * @property {Function} [onResult] - Callback for operation status messages
+ * @property {Function} [onProgress] - Callback for progress updates during bulk operations
+ */
 interface UseOktaApiOptions {
   targetTabId: number | null;
   onResult?: (message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
   onProgress?: (current: number, total: number, message: string, apiCalls?: number) => void;
 }
 
+/**
+ * Custom React hook providing comprehensive Okta API operations.
+ *
+ * @function useOktaApi
+ * @param {UseOktaApiOptions} options - Configuration for the hook
+ * @returns {Object} API methods and state for interacting with Okta
+ *
+ * @description
+ * This hook provides a complete suite of operations for managing Okta resources:
+ *
+ * **User Operations:**
+ * - Fetch user details and group memberships
+ * - Add/remove users from groups
+ * - Update user status (activate, deactivate, suspend)
+ * - Bulk user operations with progress tracking
+ *
+ * **Group Operations:**
+ * - Fetch group details and members (with pagination)
+ * - Search across multiple groups
+ * - Remove deprovisioned/suspended users
+ * - Bulk member management
+ *
+ * **Application Operations:**
+ * - Fetch application assignments
+ * - Create/modify/delete app assignments
+ * - Convert between user and group assignments
+ * - Bulk assignment operations
+ * - Security analysis and recommendations
+ *
+ * **Features:**
+ * - Automatic rate limit handling via background scheduler
+ * - Progress tracking for long-running operations
+ * - Comprehensive audit logging
+ * - Undo support for reversible operations
+ * - Operation cancellation support
+ * - Error handling and retry logic
+ */
 export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOptions) {
   const [isLoading, setIsLoading] = useState(false);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
@@ -1055,7 +1129,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
   const getAllGroups = useCallback(
     async (onProgress?: (loaded: number, total: number) => void): Promise<any[]> => {
       const allGroups: any[] = [];
-      let nextUrl: string | null = '/api/v1/groups?limit=200';
+      let nextUrl: string | null = '/api/v1/groups?limit=200&expand=stats';
 
       while (nextUrl) {
         const response = await makeApiRequest(nextUrl);
@@ -1380,11 +1454,11 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
                   if (appResponse.success && appResponse.data) {
                     // Merge appLink data with user assignment data
                     allApps.push({
-                      id: link.appInstanceId,
-                      label: link.label,
-                      linkUrl: link.linkUrl,
-                      logoUrl: link.logoUrl,
-                      appName: link.appName,
+                      id: appResponse.data.id || link.appInstanceId,
+                      appId: link.appInstanceId,
+                      scope: 'USER' as const,
+                      created: appResponse.data.created || new Date().toISOString(),
+                      lastUpdated: appResponse.data.lastUpdated || new Date().toISOString(),
                       status: appResponse.data.status || 'ACTIVE',
                       profile: appResponse.data.profile || {},
                       credentials: appResponse.data.credentials,
@@ -1393,18 +1467,18 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
                           id: link.appInstanceId,
                           label: link.label,
                           name: link.appName,
-                        }
+                        } as any
                       }
-                    } as UserAppAssignment);
+                    });
                   }
-                } catch (err) {
+                } catch {
                   // If we can't get details, still include basic info
                   allApps.push({
                     id: link.appInstanceId,
-                    label: link.label,
-                    linkUrl: link.linkUrl,
-                    logoUrl: link.logoUrl,
-                    appName: link.appName,
+                    appId: link.appInstanceId,
+                    scope: 'USER' as const,
+                    created: new Date().toISOString(),
+                    lastUpdated: new Date().toISOString(),
                     status: 'ACTIVE',
                     profile: {},
                     _embedded: {
@@ -1412,18 +1486,18 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
                         id: link.appInstanceId,
                         label: link.label,
                         name: link.appName,
-                      }
+                      } as any
                     }
-                  } as UserAppAssignment);
+                  });
                 }
               } else {
                 // Basic info only
                 allApps.push({
                   id: link.appInstanceId,
-                  label: link.label,
-                  linkUrl: link.linkUrl,
-                  logoUrl: link.logoUrl,
-                  appName: link.appName,
+                  appId: link.appInstanceId,
+                  scope: 'USER' as const,
+                  created: new Date().toISOString(),
+                  lastUpdated: new Date().toISOString(),
                   status: 'ACTIVE',
                   profile: {},
                   _embedded: {
@@ -1431,9 +1505,9 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
                       id: link.appInstanceId,
                       label: link.label,
                       name: link.appName,
-                    }
+                    } as any
                   }
-                } as UserAppAssignment);
+                });
               }
             }
 
@@ -2286,6 +2360,38 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
     [getUserApps, getGroupApps, makeApiRequest, onResult]
   );
 
+  /**
+   * Fetches push group mappings for an application.
+   * Uses the new Group Push Mapping API to get actual push relationships.
+   * @param appId - The application ID
+   * @returns Array of push group mappings with sourceUserGroupId linking to Okta groups
+   */
+  const getAppPushGroupMappings = useCallback(
+    async (appId: string): Promise<Array<{
+      mappingId: string;
+      sourceUserGroupId: string;
+      targetGroupId?: string;
+      status: string;
+    }>> => {
+      try {
+        const response = await makeApiRequest(`/api/v1/apps/${appId}/group-push/mappings?limit=200`);
+        if (!response.success || !response.data) {
+          return [];
+        }
+        return response.data.map((mapping: any) => ({
+          mappingId: mapping.mappingId || mapping.id,
+          sourceUserGroupId: mapping.sourceUserGroupId,
+          targetGroupId: mapping.targetGroupId,
+          status: mapping.status || 'UNKNOWN',
+        }));
+      } catch (error) {
+        console.warn(`[useOktaApi] Failed to get push group mappings for app ${appId}:`, error);
+        return [];
+      }
+    },
+    [makeApiRequest]
+  );
+
   return {
     isLoading,
     isCancelled,
@@ -2314,6 +2420,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
     getUserAppAssignment,
     getGroupAppAssignment,
     getAppDetails,
+    getAppPushGroupMappings,
     assignUserToApp,
     assignGroupToApp,
     removeUserFromApp,

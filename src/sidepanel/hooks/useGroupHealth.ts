@@ -79,9 +79,9 @@ export function useGroupHealth({ groupId, targetTabId }: UseGroupHealthOptions) 
     return allMembers;
   }, [groupId, targetTabId, sendMessageSafely]);
 
-  const fetchGroupRules = useCallback(async (): Promise<number> => {
+  const fetchGroupRules = useCallback(async (): Promise<{ ruleCount: number; hasActiveRules: boolean }> => {
     if (!targetTabId || !groupId) {
-      return 0;
+      return { ruleCount: 0, hasActiveRules: false };
     }
 
     try {
@@ -91,13 +91,19 @@ export function useGroupHealth({ groupId, targetTabId }: UseGroupHealthOptions) 
       });
 
       if (response.success && response.formattedRules) {
-        // Count rules that affect current group
-        return response.formattedRules.filter((rule: any) => rule.affectsCurrentGroup).length;
+        // Count ACTIVE rules that affect current group
+        const activeRulesForGroup = response.formattedRules.filter(
+          (rule: any) => rule.affectsCurrentGroup && rule.status === 'ACTIVE'
+        );
+        return {
+          ruleCount: activeRulesForGroup.length,
+          hasActiveRules: activeRulesForGroup.length > 0,
+        };
       }
-      return 0;
+      return { ruleCount: 0, hasActiveRules: false };
     } catch (err) {
       console.warn('[useGroupHealth] Failed to fetch group rules:', err);
-      return 0;
+      return { ruleCount: 0, hasActiveRules: false };
     }
   }, [groupId, targetTabId, sendMessageSafely]);
 
@@ -121,15 +127,33 @@ export function useGroupHealth({ groupId, targetTabId }: UseGroupHealthOptions) 
         }
       });
 
-      // Fetch rule-based memberships count
-      const ruleBasedCount = await fetchGroupRules();
+      // Fetch rule information
+      const { ruleCount, hasActiveRules } = await fetchGroupRules();
 
-      // Calculate membership sources (estimation)
-      // For now, we'll use a simple heuristic: rule-based members are estimated from active rules
-      // Direct members = total - estimated rule-based
+      // Calculate membership sources
+      // If there are active rules for this group, we estimate that all members could potentially
+      // be rule-based (since Okta doesn't expose individual membership source via API).
+      // A more accurate approach: if rules exist, assume most are rule-based.
+      // If no rules exist, all are direct.
+      let ruleBased = 0;
+      let direct = members.length;
+
+      if (hasActiveRules && members.length > 0) {
+        // When rules exist, we can't know exactly which members are rule-based.
+        // As a heuristic, we estimate based on rule count and group size.
+        // If there are rules, likely most members are rule-based.
+        // Use a conservative estimate: min(member count, rules * estimated users per rule)
+        // For large groups with rules, assume mostly rule-based.
+        if (ruleCount >= 1) {
+          // If rules exist, estimate 80% are rule-based for groups with active rules
+          ruleBased = Math.round(members.length * 0.8);
+          direct = members.length - ruleBased;
+        }
+      }
+
       const membershipSources = {
-        direct: Math.max(0, members.length - ruleBasedCount),
-        ruleBased: ruleBasedCount,
+        direct,
+        ruleBased,
       };
 
       // Calculate risk score (0-100, lower is better)

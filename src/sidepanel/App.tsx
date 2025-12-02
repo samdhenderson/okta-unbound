@@ -28,7 +28,9 @@ const App: React.FC = () => {
   useEffect(() => {
     chrome.storage.local.get([SELECTED_TAB_KEY], (result) => {
       if (result[SELECTED_TAB_KEY]) {
-        setActiveTab(result[SELECTED_TAB_KEY] as TabType);
+        // Redirect old 'operations' tab to 'dashboard'
+        const savedTab = result[SELECTED_TAB_KEY] as TabType;
+        setActiveTab(savedTab === 'operations' ? 'dashboard' : savedTab);
       }
     });
   }, []);

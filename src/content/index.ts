@@ -1,3 +1,43 @@
+/**
+ * @module content/index
+ * @description Content script injected into Okta web pages to facilitate API communication.
+ *
+ * This content script serves as the bridge between the extension's sidepanel and Okta's web application.
+ * It runs in the context of Okta pages and has access to the authenticated session, XSRF tokens,
+ * and cookies required to make API calls.
+ *
+ * **Architecture:**
+ * ```
+ * Sidepanel → Background Worker → Content Script → Okta API
+ *                                      ↑
+ *                              (Has auth context)
+ * ```
+ *
+ * **Key Responsibilities:**
+ * - Extract page context (group IDs, user IDs, group names)
+ * - Make authenticated API requests using the page's session
+ * - Handle XSRF token extraction and inclusion
+ * - Parse pagination headers from API responses
+ * - Cache frequently accessed data (group names, etc.)
+ * - Export data to CSV/JSON formats
+ * - Display visual indicators when active
+ *
+ * **Supported Operations:**
+ * - Group management (fetch members, get info, export)
+ * - User management (search, get details, get groups)
+ * - Rules management (fetch, activate, deactivate)
+ * - Generic API requests (GET, POST, PUT, DELETE)
+ *
+ * **Security:**
+ * - All API calls use the page's existing authentication
+ * - XSRF tokens are automatically extracted and included
+ * - Credentials are never stored or transmitted
+ * - Only operates on official Okta domains
+ *
+ * @see {@link module:background/index|Background Worker} for request scheduling
+ * @see {@link module:hooks/useOktaApi|useOktaApi} for sidepanel integration
+ */
+
 // Content script for Okta Unbound
 // Runs on Okta pages and handles API requests with proper session authentication
 
@@ -792,36 +832,103 @@ function extractGroupNameFromPage(): string | null {
 }
 
 function extractUserIdFromUrl(url: string): string | null {
-  // Match /admin/user/{userId} pattern
-  const match1 = url.match(/\/admin\/user\/([a-zA-Z0-9]+)/);
-  if (match1) return match1[1];
+  console.log('[extractUserIdFromUrl] Parsing URL:', url);
 
-  // Match /users/{userId} pattern
-  const match2 = url.match(/\/users\/([a-zA-Z0-9]+)/);
-  if (match2) return match2[1];
+  // Okta user IDs are typically 20 characters, alphanumeric (e.g., 00u1234567890abcdefg)
+  // Some can be shorter or use different formats
 
-  // Match /admin/users/{userId} pattern
-  const match3 = url.match(/\/admin\/users\/([a-zA-Z0-9]+)/);
-  if (match3) return match3[1];
+  // Pattern list in order of specificity (most specific first)
+  const patterns: Array<{ regex: RegExp; name: string }> = [
+    // New Okta Identity Engine (OIE) patterns
+    { regex: /\/admin\/user\/profile\/view\/([a-zA-Z0-9]+)/, name: '/admin/user/profile/view/{id}' },
+    { regex: /\/admin\/user\/profile\/([a-zA-Z0-9]+)/, name: '/admin/user/profile/{id}' },
 
+    // Classic admin patterns
+    { regex: /\/admin\/user\/([a-zA-Z0-9]+)(?:\/|$|\?)/, name: '/admin/user/{id}' },
+    { regex: /\/admin\/users\/([a-zA-Z0-9]+)(?:\/|$|\?)/, name: '/admin/users/{id}' },
+
+    // Directory patterns (used in some Okta instances)
+    { regex: /\/admin\/directory\/people\/([a-zA-Z0-9]+)/, name: '/admin/directory/people/{id}' },
+
+    // End-user dashboard patterns
+    { regex: /\/enduser\/settings\/profile\/([a-zA-Z0-9]+)/, name: '/enduser/settings/profile/{id}' },
+    { regex: /\/app\/UserHome\/([a-zA-Z0-9]+)/, name: '/app/UserHome/{id}' },
+
+    // API/direct user patterns
+    { regex: /\/users\/([a-zA-Z0-9]+)(?:\/|$|\?)/, name: '/users/{id}' },
+
+    // Report/audit patterns that show user details
+    { regex: /\/reports\/user\/([a-zA-Z0-9]+)/, name: '/reports/user/{id}' },
+
+    // Query parameter patterns (some Okta UIs use userId in query params)
+    { regex: /[?&]userId=([a-zA-Z0-9]+)/, name: '?userId={id}' },
+    { regex: /[?&]user=([a-zA-Z0-9]+)/, name: '?user={id}' },
+  ];
+
+  for (const { regex, name } of patterns) {
+    const match = url.match(regex);
+    if (match && match[1]) {
+      // Validate it looks like an Okta ID (starts with 00u or is alphanumeric)
+      const potentialId = match[1];
+      // Skip obvious non-IDs like 'settings', 'profile', 'edit', etc.
+      const nonIdKeywords = ['settings', 'profile', 'edit', 'view', 'new', 'create', 'delete', 'list', 'search'];
+      if (nonIdKeywords.includes(potentialId.toLowerCase())) {
+        continue;
+      }
+      console.log(`[extractUserIdFromUrl] Matched pattern "${name}":`, potentialId);
+      return potentialId;
+    }
+  }
+
+  console.warn('[extractUserIdFromUrl] No pattern matched. URL:', url);
   return null;
 }
 
 function extractUserNameFromPage(): string | null {
   const selectors = [
-    'h1[data-se="user-name"]',
-    '.user-profile-header h1',
+    // Modern Okta Identity Engine selectors
+    '[data-se="user-profile-name"]',
+    '[data-se="user-name"]',
     '[data-se="user-detail-name"]',
+    '[data-testid="user-name"]',
+    '[data-testid="profile-name"]',
+
+    // Profile page headers
+    '.user-profile-header h1',
     '.user-header h1',
     '.user-detail-header h1',
+    '.profile-header h1',
+    '.person-header h1',
+
+    // Directory/people page
+    '.directory-person-header h1',
+    '.person-profile h1',
+    '[class*="ProfileHeader"] h1',
+    '[class*="UserHeader"] h1',
+
+    // Generic content headers
     'h1.okta-form-title',
     '.content-container h1',
+    'main h1',
+
+    // Breadcrumb or title area (fallback)
+    '.page-title',
+    '[class*="PageTitle"]',
   ];
 
   for (const selector of selectors) {
-    const element = document.querySelector(selector);
-    if (element) {
-      return element.textContent?.trim() || null;
+    try {
+      const element = document.querySelector(selector);
+      if (element) {
+        const text = element.textContent?.trim();
+        // Skip if it's just generic text like "User Profile" or "Settings"
+        if (text && !['User Profile', 'Profile', 'Settings', 'User'].includes(text)) {
+          return text;
+        }
+      }
+    } catch {
+      // Some selectors might throw on certain pages
+      continue;
     }
   }
 

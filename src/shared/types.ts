@@ -3,13 +3,36 @@
 export interface OktaUser {
   id: string;
   status: UserStatus;
+  created?: string;
+  activated?: string;
+  statusChanged?: string;
+  lastLogin?: string | null;
+  lastUpdated?: string;
+  passwordChanged?: string | null;
   profile: {
     login: string;
     email: string;
     firstName: string;
     lastName: string;
+    secondEmail?: string;
+    mobilePhone?: string;
+    primaryPhone?: string;
+    streetAddress?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    countryCode?: string;
     department?: string;
     title?: string;
+    manager?: string;
+    managerId?: string;
+    division?: string;
+    organization?: string;
+    costCenter?: string;
+    employeeNumber?: string;
+    userType?: string;
+    locale?: string;
+    timezone?: string;
     [key: string]: any;
   };
 }
@@ -517,6 +540,10 @@ export interface ProfileComparison {
   groupProfile: Record<string, any>;
   differences: ProfileDifference[];
   credentialsHandled: boolean;
+  /** Indicates if the profile contains array fields (e.g., Salesforce permission sets) */
+  hasArrayFields?: boolean;
+  /** Indicates if the profile contains nested object fields */
+  hasNestedObjects?: boolean;
 }
 
 export interface ProfileDifference {

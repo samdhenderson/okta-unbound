@@ -1,23 +1,40 @@
-import React, { useState, useEffect } from 'react';
+// Note: This file intentionally sets state in effects to manage elapsed time display.
+// The pattern is safe and intentional for this timer component.
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { useProgress } from '../contexts/ProgressContext';
 
 const LoadingBar: React.FC = () => {
   const { progress } = useProgress();
   const [elapsedTime, setElapsedTime] = useState(0);
 
-  // Update elapsed time every second
+  // Memoized function to update elapsed time
+  const updateElapsed = useCallback(() => {
+    if (progress.startTime) {
+      setElapsedTime(Math.floor((Date.now() - progress.startTime) / 1000));
+    }
+  }, [progress.startTime]);
+
+  // Update elapsed time every second when loading
   useEffect(() => {
     if (!progress.isLoading || !progress.startTime) {
-      setElapsedTime(0);
       return;
     }
 
-    const interval = setInterval(() => {
-      setElapsedTime(Math.floor((Date.now() - progress.startTime!) / 1000));
-    }, 1000);
+    // Calculate initial elapsed time
+    updateElapsed();
+
+    const interval = setInterval(updateElapsed, 1000);
 
     return () => clearInterval(interval);
-  }, [progress.isLoading, progress.startTime]);
+  }, [progress.isLoading, progress.startTime, updateElapsed]);
+
+  // Reset elapsed time when loading stops
+  useEffect(() => {
+    if (!progress.isLoading) {
+      setElapsedTime(0);
+    }
+  }, [progress.isLoading]);
 
   if (!progress.isLoading) {
     return null;

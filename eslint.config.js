@@ -60,6 +60,10 @@ export default [
       'react/prop-types': 'off', // Using TypeScript for type checking
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'warn',
+      // React Compiler rules - these are performance suggestions, not bugs
+      // Setting state in effects is valid React when done intentionally
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
     },
     settings: {
       react: {

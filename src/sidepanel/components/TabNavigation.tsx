@@ -17,12 +17,6 @@ const TabNavigation: React.FC<TabNavigationProps> = ({ activeTab, onTabChange })
         Dashboard
       </button>
       <button
-        className={`tab-button ${activeTab === 'operations' ? 'active' : ''}`}
-        onClick={() => onTabChange('operations')}
-      >
-        Operations
-      </button>
-      <button
         className={`tab-button ${activeTab === 'rules' ? 'active' : ''}`}
         onClick={() => onTabChange('rules')}
       >

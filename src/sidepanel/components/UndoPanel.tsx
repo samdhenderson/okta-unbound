@@ -13,7 +13,7 @@ interface UndoPanelProps {
 }
 
 const UndoPanel: React.FC<UndoPanelProps> = ({ targetTabId, onUndoComplete }) => {
-  const { undoableActions, isLoading, error, bulkProgress, performUndo, clearHistory } = useUndoManager();
+  const { undoableActions, isLoading, error, performUndo, clearHistory } = useUndoManager();
   const [expandedActionId, setExpandedActionId] = useState<string | null>(null);
   const [undoingActionId, setUndoingActionId] = useState<string | null>(null);
   const [localProgress, setLocalProgress] = useState<BulkUndoProgress | null>(null);

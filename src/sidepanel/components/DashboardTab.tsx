@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useGroupHealth } from '../hooks/useGroupHealth';
+import { useOktaApi } from '../hooks/useOktaApi';
+import { useProgress } from '../contexts/ProgressContext';
 import QuickStatsCard from './dashboard/QuickStatsCard';
 import StatusPieChart from './dashboard/StatusPieChart';
 import MembershipBarChart from './dashboard/MembershipBarChart';
@@ -8,8 +10,9 @@ import QuickActionsCard from './dashboard/QuickActionsCard';
 import AuditStatsCard from './dashboard/AuditStatsCard';
 import SecurityWidget from './dashboard/SecurityWidget';
 import AuditLogEntryComponent from './AuditLogEntry';
+import ConfirmationModal from './ConfirmationModal';
 import { auditStore } from '../../shared/storage/auditStore';
-import type { AuditLogEntry } from '../../shared/types';
+import type { AuditLogEntry, UserStatus } from '../../shared/types';
 
 interface DashboardTabProps {
   groupId: string | undefined;
@@ -27,7 +30,34 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
   oktaOrigin,
 }) => {
   const { metrics, isLoading, error, refresh } = useGroupHealth({ groupId, targetTabId });
+  const { showProgress, hideProgress, updateProgress } = useProgress();
   const [recentAuditLogs, setRecentAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [resultMessages, setResultMessages] = useState<Array<{ message: string; type: 'info' | 'success' | 'warning' | 'error' }>>([]);
+
+  // API integration for quick actions
+  const handleResult = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error') => {
+    setResultMessages(prev => [...prev.slice(-9), { message, type }]);
+  }, []);
+
+  const handleProgress = useCallback((current: number, total: number, message: string, apiCalls?: number) => {
+    updateProgress({
+      current,
+      total,
+      message,
+      apiCalls,
+    });
+  }, [updateProgress]);
+
+  const { smartCleanup, exportMembers, isLoading: isApiLoading } = useOktaApi({
+    targetTabId,
+    onResult: handleResult,
+    onProgress: handleProgress,
+  });
+
+  // Export modal state
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv');
+  const [exportFilter, setExportFilter] = useState<UserStatus | ''>('');
 
   // Load recent audit logs
   useEffect(() => {
@@ -102,11 +132,40 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
   };
 
   const handleExportMembers = () => {
-    onTabChange('operations');
+    setExportModalOpen(true);
+  };
+
+  const handleExportConfirm = async () => {
+    if (!groupId || !groupName) return;
+
+    setExportModalOpen(false);
+    showProgress('Export', `Exporting members to ${exportFormat.toUpperCase()}...`);
+    setResultMessages([]);
+
+    try {
+      await exportMembers(groupId, groupName, exportFormat, exportFilter);
+    } finally {
+      hideProgress();
+    }
   };
 
   const handleViewRules = () => {
     onTabChange('rules');
+  };
+
+  const handleSmartCleanup = async () => {
+    if (!groupId) return;
+
+    showProgress('Smart Cleanup', 'Removing inactive users...');
+    setResultMessages([]);
+
+    try {
+      await smartCleanup(groupId);
+      // Refresh dashboard after cleanup
+      refresh();
+    } finally {
+      hideProgress();
+    }
   };
 
   return (
@@ -164,8 +223,40 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
                 onViewRules={handleViewRules}
                 hasInactiveUsers={hasInactiveUsers}
                 hasRuleConflicts={hasRuleConflicts}
+                groupId={groupId}
+                groupName={groupName}
+                onSmartCleanup={handleSmartCleanup}
+                isLoading={isApiLoading}
               />
             </div>
+
+            {/* Result Messages */}
+            {resultMessages.length > 0 && (
+              <div className="dashboard-card result-messages">
+                <h4 style={{ marginBottom: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>Operation Log</h4>
+                <div style={{ maxHeight: '150px', overflowY: 'auto', fontSize: '12px' }}>
+                  {resultMessages.map((msg, index) => (
+                    <div
+                      key={index}
+                      className={`result-message result-${msg.type}`}
+                      style={{
+                        padding: '4px 8px',
+                        marginBottom: '2px',
+                        borderRadius: '3px',
+                        background: msg.type === 'success' ? 'var(--success-bg)' :
+                                   msg.type === 'error' ? 'var(--error-bg)' :
+                                   msg.type === 'warning' ? 'var(--warning-bg)' : 'var(--info-bg)',
+                        color: msg.type === 'success' ? 'var(--success-text)' :
+                               msg.type === 'error' ? 'var(--error-text)' :
+                               msg.type === 'warning' ? 'var(--warning-text)' : 'var(--info-text)',
+                      }}
+                    >
+                      {msg.message}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Right Column */}
@@ -201,7 +292,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
               <h3 className="dashboard-card-title">Recent Activity</h3>
               <button
                 className="btn btn-sm btn-secondary"
-                onClick={() => onTabChange('operations')}
+                onClick={() => onTabChange('undo')}
                 style={{ fontSize: '12px', padding: '6px 12px' }}
               >
                 View All
@@ -211,6 +302,56 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
               {recentAuditLogs.map((log) => (
                 <AuditLogEntryComponent key={log.id} entry={log} oktaOrigin={oktaOrigin} />
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Export Modal */}
+        {exportModalOpen && (
+          <div className="modal-overlay" onClick={() => setExportModalOpen(false)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>Export Group Members</h3>
+                <button className="modal-close" onClick={() => setExportModalOpen(false)}>&times;</button>
+              </div>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Format</label>
+                  <select
+                    className="input"
+                    value={exportFormat}
+                    onChange={(e) => setExportFormat(e.target.value as 'csv' | 'json')}
+                  >
+                    <option value="csv">CSV</option>
+                    <option value="json">JSON</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Filter by Status (optional)</label>
+                  <select
+                    className="input"
+                    value={exportFilter}
+                    onChange={(e) => setExportFilter(e.target.value as UserStatus | '')}
+                  >
+                    <option value="">All Users</option>
+                    <option value="ACTIVE">Active Only</option>
+                    <option value="DEPROVISIONED">Deprovisioned Only</option>
+                    <option value="SUSPENDED">Suspended Only</option>
+                    <option value="LOCKED_OUT">Locked Out Only</option>
+                  </select>
+                </div>
+                <p className="info-text">
+                  This will export members from <strong>{groupName}</strong> to a {exportFormat.toUpperCase()} file.
+                </p>
+              </div>
+              <div className="modal-actions">
+                <button className="btn btn-secondary" onClick={() => setExportModalOpen(false)}>
+                  Cancel
+                </button>
+                <button className="btn btn-primary" onClick={handleExportConfirm}>
+                  Export
+                </button>
+              </div>
             </div>
           </div>
         )}

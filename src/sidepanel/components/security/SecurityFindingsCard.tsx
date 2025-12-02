@@ -1,4 +1,4 @@
-import React, { memo, useCallback } from 'react';
+import React, { memo } from 'react';
 import type { SecurityFinding } from '../../../shared/types';
 
 interface SecurityFindingsCardProps {

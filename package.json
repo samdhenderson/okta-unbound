@@ -15,7 +15,9 @@
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives",
     "lint:fix": "eslint src --ext ts,tsx --fix",
-    "prepare": "husky"
+    "prepare": "husky",
+    "docs": "typedoc",
+    "docs:clean": "rm -rf docs/api"
   },
   "keywords": [
     "okta",
@@ -55,6 +57,7 @@
     "jsdom": "^27.2.0",
     "lint-staged": "^16.2.6",
     "msw": "^2.12.2",
+    "typedoc": "^0.28.15",
     "typescript": "^5.9.3",
     "vite": "^7.2.2",
     "vitest": "^4.0.10"

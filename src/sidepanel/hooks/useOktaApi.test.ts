@@ -18,6 +18,8 @@ globalThis.chrome = {
 // Mock undo manager
 vi.mock('../../shared/undoManager', () => ({
   logAction: vi.fn(),
+  logBulkRemoveAction: vi.fn(),
+  logBulkAddAction: vi.fn(),
 }));
 
 describe('useOktaApi', () => {
@@ -374,7 +376,13 @@ describe('useOktaApi', () => {
 
       await waitFor(() => {
         expect(mockOnResult).toHaveBeenCalledWith('Found 1 deprovisioned users', 'warning');
-        expect(mockOnProgress).toHaveBeenCalledWith(1, 1, 'Removing user 1 of 1');
+        // Progress now shows user name and format: "Removing FirstName LastName (n/total)"
+        expect(mockOnProgress).toHaveBeenCalledWith(
+          expect.any(Number),
+          expect.any(Number),
+          expect.stringMatching(/Removing .+ \(1\/1\)/),
+          expect.any(Number)
+        );
       });
     });
 
@@ -729,7 +737,13 @@ describe('useOktaApi', () => {
       });
 
       await waitFor(() => {
-        expect(mockOnProgress).toHaveBeenCalledWith(1, 1, 'Removing user 1 of 1');
+        // Progress now shows user name and format: "Removing FirstName LastName (n/total)"
+        expect(mockOnProgress).toHaveBeenCalledWith(
+          expect.any(Number),
+          expect.any(Number),
+          expect.stringMatching(/Removing .+ \(1\/1\)/),
+          expect.any(Number)
+        );
         expect(mockOnResult).toHaveBeenCalledWith('Removed 1 users', 'success');
       });
     });

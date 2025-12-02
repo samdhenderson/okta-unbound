@@ -57,10 +57,6 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(({
     setExpanded(prev => !prev);
   }, []);
 
-  // Calculate total member count including linked groups
-  const totalMemberCount = group.memberCount +
-    (group.linkedGroups?.reduce((sum, lg) => sum + lg.memberCount, 0) || 0);
-
   return (
     <div className={`group-list-item ${selected ? 'selected' : ''} ${group.isPushGroup ? 'push-group' : ''}`}>
       <div className="group-list-item-header" onClick={toggleExpanded}>
@@ -81,7 +77,7 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(({
               </span>
               {group.isPushGroup && group.linkedGroups && group.linkedGroups.length > 0 && (
                 <>
-                  {group.linkedGroups.map((lg, idx) => (
+                  {group.linkedGroups.map((lg) => (
                     <span key={lg.id} className="badge badge-warning" title={`Linked to ${lg.sourceAppName || 'App'}`}>
                       APP{lg.sourceAppName ? `: ${lg.sourceAppName}` : ''}
                     </span>

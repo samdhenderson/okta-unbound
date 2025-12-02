@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useCallback, memo } from 'react';
-import { parseIds, validateGroupId, validateAppId, formatValidationErrors } from '../../../shared/utils/validation';
+import { parseIds, formatValidationErrors } from '../../../shared/utils/validation';
 import { useValidation, FieldError } from '../../hooks/useValidation';
 import type { BulkAppAssignmentRequest, BulkAppAssignmentResult } from '../../../shared/types';
 
@@ -28,7 +28,7 @@ const AppBulkAssignment: React.FC<AppBulkAssignmentProps> = memo(({
   const [priority, setPriority] = useState(0);
   const [results, setResults] = useState<BulkAppAssignmentResult | null>(null);
 
-  const { errors, validate, setError, clearError, hasErrors } = useValidation();
+  const { errors, setError, clearError } = useValidation();
 
   const validateInputs = useCallback((): { groupIds: string[]; appIds: string[] } | null => {
     // Parse and validate group IDs
@@ -118,7 +118,7 @@ const AppBulkAssignment: React.FC<AppBulkAssignmentProps> = memo(({
           rows={3}
           className={errors.groupIds ? 'input-error' : ''}
         />
-        <span className="input-hint">Group IDs start with "00g"</span>
+        <span className="input-hint">Group IDs start with &quot;00g&quot;</span>
         <FieldError error={errors.groupIds} />
       </div>
 
@@ -138,7 +138,7 @@ const AppBulkAssignment: React.FC<AppBulkAssignmentProps> = memo(({
           rows={3}
           className={errors.appIds ? 'input-error' : ''}
         />
-        <span className="input-hint">App IDs start with "0oa"</span>
+        <span className="input-hint">App IDs start with &quot;0oa&quot;</span>
         <FieldError error={errors.appIds} />
       </div>
 

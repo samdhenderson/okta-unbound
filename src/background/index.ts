@@ -1,3 +1,39 @@
+/**
+ * @module background/index
+ * @description Background service worker for the Okta Unbound Chrome extension.
+ *
+ * This service worker is the core coordination layer that runs persistently in the background.
+ * It manages:
+ *
+ * **Core Responsibilities:**
+ * - Global API request scheduling and rate limit management
+ * - Tab state persistence across browser sessions
+ * - Audit log retention and cleanup
+ * - Extension lifecycle events (install, update, icon clicks)
+ * - Message routing between content scripts and sidepanel
+ *
+ * **API Scheduler:**
+ * The global scheduler prevents rate limiting by:
+ * - Queuing all API requests with priority levels
+ * - Enforcing concurrent request limits
+ * - Tracking rate limit headers and implementing cooldowns
+ * - Automatically retrying failed requests with exponential backoff
+ * - Broadcasting scheduler state to all extension components
+ *
+ * **Tab State Management:**
+ * Preserves user interface state (filters, selections, etc.) across:
+ * - Browser restarts
+ * - Extension updates
+ * - Tab switches
+ *
+ * **Audit Retention:**
+ * Automatically cleans up old audit logs daily based on retention settings.
+ *
+ * @see {@link module:shared/scheduler/apiScheduler|ApiScheduler} for rate limiting details
+ * @see {@link module:shared/tabState/tabStateManager|TabStateManager} for state persistence
+ * @see {@link module:shared/storage/auditStore|AuditStore} for audit logging
+ */
+
 // Background service worker for Okta Unbound extension
 import { auditStore } from '../shared/storage/auditStore';
 import { ApiScheduler } from '../shared/scheduler/apiScheduler';
