@@ -77,13 +77,14 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(({
                 {group.type === 'OKTA_GROUP' ? 'OKTA' : group.type === 'APP_GROUP' ? 'APP' : group.type.replace('_', ' ')}
               </span>
               {group.isPushGroup && group.linkedGroups && group.linkedGroups.length > 0 && (
-                <>
-                  {group.linkedGroups.map((lg) => (
-                    <span key={lg.id} className="badge badge-warning" title={`Linked to ${lg.sourceAppName || 'App'}`}>
-                      APP{lg.sourceAppName ? `: ${lg.sourceAppName}` : ''}
-                    </span>
-                  ))}
-                </>
+                <span
+                  className="badge badge-info"
+                  title={`Pushed to: ${group.linkedGroups.map(lg => lg.sourceAppName || 'App').join(', ')}`}
+                >
+                  PUSH → {group.linkedGroups.length === 1
+                    ? (group.linkedGroups[0].sourceAppName || 'App')
+                    : `${group.linkedGroups.length} apps`}
+                </span>
               )}
               {group.type === 'APP_GROUP' && group.sourceAppName && (
                 <span className="badge badge-secondary" title="Source application">
@@ -102,10 +103,7 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(({
           </div>
           <div className="group-list-item-meta">
             <span className="member-count">
-              {group.isPushGroup && group.linkedGroups && group.linkedGroups.length > 0
-                ? `${group.memberCount} + ${group.linkedGroups.reduce((sum, lg) => sum + lg.memberCount, 0)} members`
-                : `${group.memberCount} members`
-              }
+              {group.memberCount} member{group.memberCount !== 1 ? 's' : ''}
             </span>
             {group.hasRules && (
               <span className="rule-count">{group.ruleCount} rule{group.ruleCount !== 1 ? 's' : ''}</span>
@@ -189,18 +187,18 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(({
           )}
           {group.isPushGroup && group.linkedGroups && group.linkedGroups.length > 0 && (
             <div className="detail-row linked-groups-section">
-              <strong>Linked App Groups:</strong>
+              <strong>Pushed to Applications:</strong>
               <ul className="linked-groups-list">
                 {group.linkedGroups.map(lg => (
                   <li key={lg.id}>
-                    <span className="linked-group-name">{lg.name}</span>
-                    {lg.sourceAppName && (
-                      <span className="linked-group-app"> ({lg.sourceAppName})</span>
-                    )}
-                    <span className="linked-group-members"> - {lg.memberCount} members</span>
+                    <span className="linked-group-name">{lg.sourceAppName || 'Unknown App'}</span>
+                    <span className="push-status"> (Active push mapping)</span>
                   </li>
                 ))}
               </ul>
+              <p className="push-info-note">
+                Members of this group are automatically synced to the above applications.
+              </p>
             </div>
           )}
         </div>

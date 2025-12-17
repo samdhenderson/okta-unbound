@@ -49,7 +49,10 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
           if (age < CACHE_DURATION) {
             setGroups(cached.groups.map((g: any) => ({
               ...g,
+              // Convert all date strings back to Date objects
               lastUpdated: g.lastUpdated ? new Date(g.lastUpdated) : undefined,
+              lastMembershipUpdated: g.lastMembershipUpdated ? new Date(g.lastMembershipUpdated) : undefined,
+              created: g.created ? new Date(g.created) : undefined,
             })));
           }
         } catch (err) {
@@ -126,8 +129,8 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
 
       // Fetch app details and push group mappings in parallel
       const appNameMap = new Map<string, string>();
-      // Maps sourceUserGroupId (Okta group) -> { appGroupId, appId, appName }
-      const pushGroupMappings = new Map<string, { appGroupId: string; appId: string; appName?: string }>();
+      // Maps sourceUserGroupId (Okta group) -> array of { appId, appName } for each app it's pushed to
+      const pushGroupMappings = new Map<string, Array<{ appId: string; appName?: string }>>();
 
       if (appIdsFromGroups.size > 0) {
         const appPromises = Array.from(appIdsFromGroups).map(async (appId) => {
@@ -143,26 +146,19 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
               appNameMap.set(appId, appLabel);
             }
 
-            // Process push group mappings - link source Okta groups to their pushed APP_GROUPs
-            // Each mapping represents one OKTA_GROUP being pushed to one APP_GROUP in this app
+            // Process push group mappings
+            // Each mapping shows which OKTA_GROUP is pushed to this app
             for (const mapping of mappingsResult) {
               if (mapping.sourceUserGroupId && mapping.status === 'ACTIVE') {
-                // Only process active mappings and ensure 1:1 relationship
-                if (!pushGroupMappings.has(mapping.sourceUserGroupId)) {
-                  // Find the APP_GROUP that matches this specific mapping
-                  // The mapping's targetGroupId should help identify the specific APP_GROUP
-                  const appGroup = groupSummaries.find(g =>
-                    g.type === 'APP_GROUP' &&
-                    g.sourceAppId === appId &&
-                    (mapping.targetGroupId ? g.id === mapping.targetGroupId : true)
-                  );
-                  if (appGroup) {
-                    pushGroupMappings.set(mapping.sourceUserGroupId, {
-                      appGroupId: appGroup.id,
-                      appId,
-                      appName: appLabel,
-                    });
-                  }
+                // Add this app to the list of apps this group is pushed to
+                const existingMappings = pushGroupMappings.get(mapping.sourceUserGroupId) || [];
+                // Avoid duplicates
+                if (!existingMappings.some(m => m.appId === appId)) {
+                  existingMappings.push({
+                    appId,
+                    appName: appLabel,
+                  });
+                  pushGroupMappings.set(mapping.sourceUserGroupId, existingMappings);
                 }
               }
             }
@@ -184,8 +180,8 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
         });
       }
 
-      // Merge push groups using actual API mappings
-      const mergedGroups = mergePushGroups(groupSummaries, appNameMap, pushGroupMappings);
+      // Apply push group mappings to OKTA_GROUPs
+      const mergedGroups = applyPushGroupMappings(groupSummaries, pushGroupMappings);
 
       setGroups(mergedGroups);
 
@@ -203,52 +199,35 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
     }
   };
 
-  // Merge OKTA_GROUP and APP_GROUP pairs using actual push group mapping API data
-  const mergePushGroups = (
+  // Apply push group mappings to OKTA_GROUPs to show which apps they're pushed to
+  const applyPushGroupMappings = (
     summaries: GroupSummary[],
-    appNameMap: Map<string, string>,
-    pushGroupMappings: Map<string, { appGroupId: string; appId: string; appName?: string }>
+    pushGroupMappings: Map<string, Array<{ appId: string; appName?: string }>>
   ): GroupSummary[] => {
-    const oktaGroups = summaries.filter(g => g.type === 'OKTA_GROUP');
-    const appGroups = summaries.filter(g => g.type === 'APP_GROUP');
-    const builtInGroups = summaries.filter(g => g.type === 'BUILT_IN');
-
-    // Track which APP_GROUPs have been merged via push group mappings
-    const mergedAppGroupIds = new Set<string>();
-
-    // For each OKTA_GROUP, check if it has a push group mapping
-    const mergedOktaGroups = oktaGroups.map(oktaGroup => {
-      const mapping = pushGroupMappings.get(oktaGroup.id);
-
-      if (mapping) {
-        const linkedAppGroup = appGroups.find(g => g.id === mapping.appGroupId);
-        if (linkedAppGroup) {
-          mergedAppGroupIds.add(linkedAppGroup.id);
-
-          const linkedGroups: LinkedGroup[] = [{
-            id: linkedAppGroup.id,
-            name: linkedAppGroup.name,
-            type: linkedAppGroup.type,
-            sourceAppId: mapping.appId,
-            sourceAppName: mapping.appName || appNameMap.get(mapping.appId),
-            memberCount: linkedAppGroup.memberCount,
-          }];
+    return summaries.map(group => {
+      // Only apply to OKTA_GROUPs
+      if (group.type === 'OKTA_GROUP') {
+        const mappings = pushGroupMappings.get(group.id);
+        if (mappings && mappings.length > 0) {
+          // Convert mappings to linkedGroups format for display
+          const linkedGroups: LinkedGroup[] = mappings.map(m => ({
+            id: m.appId, // Use appId as identifier
+            name: m.appName || 'App',
+            type: 'APP_GROUP' as const,
+            sourceAppId: m.appId,
+            sourceAppName: m.appName,
+            memberCount: 0, // We don't have member count for the remote app group
+          }));
 
           return {
-            ...oktaGroup,
+            ...group,
             isPushGroup: true,
             linkedGroups,
           };
         }
       }
-
-      return oktaGroup;
+      return group;
     });
-
-    // Include unmerged APP_GROUPs (those not linked via push group mappings)
-    const unmergedAppGroups = appGroups.filter(g => !mergedAppGroupIds.has(g.id));
-
-    return [...mergedOktaGroups, ...unmergedAppGroups, ...builtInGroups];
   };
 
   const handleToggleSelect = (groupId: string) => {

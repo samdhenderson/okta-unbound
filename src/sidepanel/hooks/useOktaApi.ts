@@ -801,6 +801,200 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
     [makeApiRequest, removeUserFromGroup, getCurrentUser, onResult, onProgress, checkCancelled]
   );
 
+  /**
+   * Custom filter for multiple statuses - allows selecting multiple user statuses to list or remove
+   */
+  const customFilterMultiple = useCallback(
+    async (groupId: string, targetStatuses: UserStatus[], action: 'list' | 'remove') => {
+      const startTime = Date.now();
+      let currentUser: { email: string; id: string } | null = null;
+      let groupName = 'Unknown Group';
+      let removed = 0;
+      let failed = 0;
+      let apiCallsMade = 0;
+      const errorMessages: string[] = [];
+      const affectedUserIds: string[] = [];
+      const removedUsers: BulkUserInfo[] = [];
+
+      try {
+        // Reset cancellation state and create new controller
+        setIsCancelled(false);
+        const controller = new AbortController();
+        setAbortController(controller);
+
+        setIsLoading(true);
+        const statusLabel = targetStatuses.join(', ');
+        onResult?.(`Starting: ${action === 'remove' ? 'Remove' : 'List'} users with statuses: ${statusLabel}`, 'info');
+        onProgress?.(0, 100, 'Fetching user info...', 0);
+
+        // Get current user for audit logging
+        currentUser = await getCurrentUser();
+        apiCallsMade++;
+
+        checkCancelled();
+
+        // Check group type
+        onProgress?.(0, 100, 'Checking group type...', apiCallsMade);
+        const groupDetails = await makeApiRequest(`/api/v1/groups/${groupId}`);
+        apiCallsMade++;
+        if (action === 'remove' && groupDetails.success && groupDetails.data?.type === 'APP_GROUP') {
+          onResult?.('ERROR: Cannot modify APP_GROUP', 'error');
+          return;
+        }
+
+        groupName = groupDetails.data?.profile?.name || 'Unknown Group';
+
+        checkCancelled();
+
+        // Fetch all members with progress tracking
+        onProgress?.(0, 100, 'Fetching group members...', apiCallsMade);
+        const allMembers: OktaUser[] = [];
+        let nextUrl: string | null = `/api/v1/groups/${groupId}/users?limit=200`;
+        let pageCount = 0;
+
+        while (nextUrl) {
+          pageCount++;
+          onResult?.(`Fetching page ${pageCount}...`, 'info');
+
+          const response = await makeApiRequest(nextUrl);
+          apiCallsMade++;
+          onProgress?.(0, 100, `Fetching members (page ${pageCount})...`, apiCallsMade);
+
+          if (!response.success) {
+            throw new Error(response.error || 'Failed to fetch group members');
+          }
+
+          const pageMembers = response.data || [];
+          allMembers.push(...pageMembers);
+
+          // Parse next link from headers
+          nextUrl = null;
+          if (response.headers?.link) {
+            const links = response.headers.link.split(',');
+            for (const link of links) {
+              if (link.includes('rel="next"')) {
+                const match = link.match(/<([^>]+)>/);
+                if (match) {
+                  const fullUrl = new URL(match[1]);
+                  nextUrl = fullUrl.pathname + fullUrl.search;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        // Filter users matching any of the target statuses
+        const filteredUsers = allMembers.filter((u) => targetStatuses.includes(u.status));
+
+        onResult?.(`Found ${filteredUsers.length} users matching statuses: ${statusLabel}`, 'warning');
+
+        // Show breakdown by status
+        targetStatuses.forEach((status) => {
+          const count = filteredUsers.filter((u) => u.status === status).length;
+          if (count > 0) {
+            onResult?.(`- ${status}: ${count} users`, 'info');
+          }
+        });
+
+        if (filteredUsers.length === 0) {
+          onResult?.(`No users with statuses: ${statusLabel}`, 'success');
+          return;
+        }
+
+        if (action === 'list') {
+          filteredUsers.forEach((user) => {
+            onResult?.(
+              `[${user.status}] ${user.profile.login} - ${user.profile.firstName} ${user.profile.lastName}`,
+              'info'
+            );
+          });
+          onResult?.(`Listed ${filteredUsers.length} users`, 'success');
+        } else {
+          // Calculate total API calls: fetch phase + removal phase
+          const totalApiCalls = apiCallsMade + filteredUsers.length;
+
+          for (let i = 0; i < filteredUsers.length; i++) {
+            checkCancelled();
+
+            const user = filteredUsers[i];
+            affectedUserIds.push(user.id);
+
+            const currentApiCall = apiCallsMade + i + 1;
+            onProgress?.(currentApiCall, totalApiCalls, `Removing ${user.profile.firstName} ${user.profile.lastName} (${i + 1}/${filteredUsers.length})`, currentApiCall);
+
+            // Skip individual undo logging
+            const result = await removeUserFromGroup(groupId, groupName, user, true);
+            if (result.success) {
+              removed++;
+              removedUsers.push({
+                userId: user.id,
+                userEmail: user.profile.email,
+                userName: `${user.profile.firstName} ${user.profile.lastName}`,
+              });
+              onResult?.(`Removed: ${user.profile.login} (${user.status})`, 'success');
+            } else {
+              failed++;
+              const errorMsg = `Failed: ${user.profile.login} - ${result.error}`;
+              errorMessages.push(errorMsg);
+              if (result.status === 403) {
+                onResult?.(`403 Forbidden: ${user.profile.login} - ${result.error}`, 'error');
+                onResult?.('Stopping after first 403 error', 'warning');
+                break;
+              } else {
+                onResult?.(errorMsg, 'error');
+              }
+            }
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+
+          apiCallsMade += filteredUsers.length;
+
+          // Log a single bulk undo action for all removed users
+          if (removedUsers.length > 0) {
+            await logBulkRemoveAction(groupId, groupName, removedUsers, 'multi_status', targetStatuses.join(','));
+          }
+
+          onResult?.(`Removed ${removed} users, ${failed} failed`, removed > 0 ? 'success' : 'warning');
+        }
+      } catch (error) {
+        const errorMsg = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        errorMessages.push(errorMsg);
+        onResult?.(errorMsg, error instanceof Error && error.message === 'Operation cancelled' ? 'warning' : 'error');
+      } finally {
+        setIsLoading(false);
+        setAbortController(null);
+        setIsCancelled(false);
+        onProgress?.(apiCallsMade, apiCallsMade, 'Complete', apiCallsMade);
+
+        // Log to audit trail
+        if (action === 'remove' && currentUser && affectedUserIds.length > 0) {
+          const auditEntry: AuditLogEntry = {
+            id: crypto.randomUUID(),
+            timestamp: new Date(),
+            action: 'remove_users',
+            groupId,
+            groupName,
+            performedBy: currentUser.email,
+            affectedUsers: affectedUserIds,
+            result: failed === 0 ? 'success' : removed === 0 ? 'failed' : 'partial',
+            details: {
+              usersSucceeded: removed,
+              usersFailed: failed,
+              apiRequestCount: apiCallsMade,
+              durationMs: Date.now() - startTime,
+              errorMessages: errorMessages.length > 0 ? errorMessages : undefined,
+            },
+          };
+          auditStore.logOperation(auditEntry).catch((err) => {
+            console.error('[useOktaApi] Failed to log audit entry:', err);
+          });
+        }
+      }
+    },
+    [makeApiRequest, removeUserFromGroup, getCurrentUser, onResult, onProgress, checkCancelled]
+  );
+
   const exportMembers = useCallback(
     async (groupId: string, groupName: string, format: 'csv' | 'json', statusFilter?: UserStatus | '') => {
       const startTime = Date.now();
@@ -2402,6 +2596,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
     removeDeprovisioned,
     smartCleanup,
     customFilter,
+    customFilterMultiple,
     exportMembers,
     getUserLastLogin,
     getUserAppAssignments,

@@ -32,8 +32,46 @@ const OperationsTab: React.FC<OperationsTabProps> = ({ groupId, groupName, targe
   // Form state
   const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv');
   const [exportFilter, setExportFilter] = useState<UserStatus | ''>('');
-  const [customFilterStatus, setCustomFilterStatus] = useState<UserStatus>('ACTIVE');
+  const [customFilterStatuses, setCustomFilterStatuses] = useState<Set<UserStatus>>(new Set(['DEPROVISIONED']));
   const [customFilterAction, setCustomFilterAction] = useState<'list' | 'remove'>('list');
+
+  // All available statuses for multi-select
+  const allStatuses: UserStatus[] = [
+    'DEPROVISIONED',
+    'SUSPENDED',
+    'LOCKED_OUT',
+    'ACTIVE',
+    'STAGED',
+    'PROVISIONED',
+    'RECOVERY',
+    'PASSWORD_EXPIRED',
+  ];
+
+  // Toggle a status in the multi-select
+  const toggleStatus = (status: UserStatus) => {
+    setCustomFilterStatuses(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(status)) {
+        newSet.delete(status);
+      } else {
+        newSet.add(status);
+      }
+      return newSet;
+    });
+  };
+
+  // Quick select presets
+  const selectInactiveStatuses = () => {
+    setCustomFilterStatuses(new Set(['DEPROVISIONED', 'SUSPENDED', 'LOCKED_OUT']));
+  };
+
+  const selectAllStatuses = () => {
+    setCustomFilterStatuses(new Set(allStatuses));
+  };
+
+  const clearStatuses = () => {
+    setCustomFilterStatuses(new Set());
+  };
 
   const addResult = (message: string, type: Result['type'] = 'info') => {
     console.log('[OperationsTab] addResult:', { message, type });
@@ -105,10 +143,16 @@ const OperationsTab: React.FC<OperationsTabProps> = ({ groupId, groupName, targe
   };
 
   const handleCustomFilter = () => {
+    if (customFilterStatuses.size === 0) {
+      addResult('Please select at least one status', 'warning');
+      return;
+    }
+
+    const statusList = Array.from(customFilterStatuses).join(', ');
     const actionText = customFilterAction === 'list' ? 'list' : 'remove';
     showConfirmation(
       `${customFilterAction === 'list' ? 'List' : 'Remove'} Users by Status`,
-      `This will ${actionText} all users with status: ${customFilterStatus}${
+      `This will ${actionText} all users with status: ${statusList}${
         customFilterAction === 'remove' ? '. This action cannot be undone.' : ''
       }`,
       customFilterAction === 'list'
@@ -117,7 +161,8 @@ const OperationsTab: React.FC<OperationsTabProps> = ({ groupId, groupName, targe
       () => {
         closeModal();
         if (groupId) {
-          api.customFilter(groupId, customFilterStatus, customFilterAction);
+          // Call customFilterMultiple for multiple statuses
+          api.customFilterMultiple(groupId, Array.from(customFilterStatuses), customFilterAction);
         }
       }
     );
@@ -203,27 +248,61 @@ const OperationsTab: React.FC<OperationsTabProps> = ({ groupId, groupName, targe
             <option value="list">List Users</option>
             <option value="remove">Remove Users</option>
           </select>
-          <label htmlFor="customFilterStatus">Status:</label>
-          <select
-            id="customFilterStatus"
-            className="input"
-            value={customFilterStatus}
-            onChange={(e) => setCustomFilterStatus(e.target.value as UserStatus)}
-            disabled={disabled}
-          >
-            <option value="ACTIVE">ACTIVE</option>
-            <option value="DEPROVISIONED">DEPROVISIONED</option>
-            <option value="SUSPENDED">SUSPENDED</option>
-            <option value="STAGED">STAGED</option>
-            <option value="PROVISIONED">PROVISIONED</option>
-            <option value="RECOVERY">RECOVERY</option>
-            <option value="LOCKED_OUT">LOCKED_OUT</option>
-            <option value="PASSWORD_EXPIRED">PASSWORD_EXPIRED</option>
-          </select>
+
+          <label>Select Status Types:</label>
+          <div className="status-multi-select">
+            <div className="status-presets">
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary"
+                onClick={selectInactiveStatuses}
+                disabled={disabled}
+              >
+                Inactive
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary"
+                onClick={selectAllStatuses}
+                disabled={disabled}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary"
+                onClick={clearStatuses}
+                disabled={disabled}
+              >
+                Clear
+              </button>
+            </div>
+            <div className="status-checkboxes">
+              {allStatuses.map((status) => (
+                <label key={status} className="status-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={customFilterStatuses.has(status)}
+                    onChange={() => toggleStatus(status)}
+                    disabled={disabled}
+                  />
+                  <span className={`status-label status-${status.toLowerCase()}`}>
+                    {status}
+                  </span>
+                </label>
+              ))}
+            </div>
+            {customFilterStatuses.size > 0 && (
+              <div className="selected-count">
+                {customFilterStatuses.size} status{customFilterStatuses.size !== 1 ? 'es' : ''} selected
+              </div>
+            )}
+          </div>
+
           <button
             className={`btn ${customFilterAction === 'remove' ? 'btn-primary' : 'btn-success'}`}
             onClick={handleCustomFilter}
-            disabled={disabled}
+            disabled={disabled || customFilterStatuses.size === 0}
           >
             {customFilterAction === 'list' ? 'List Users' : 'Remove Users'}
           </button>

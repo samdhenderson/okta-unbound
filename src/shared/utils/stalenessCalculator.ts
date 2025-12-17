@@ -24,6 +24,16 @@ export interface StalenessResult {
 }
 
 /**
+ * Convert a value to a Date object, handling both Date objects and ISO strings
+ */
+function toDate(value: Date | string | undefined | null): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const date = new Date(value);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+/**
  * Calculate the number of days between two dates
  */
 function daysBetween(date1: Date, date2: Date): number {
@@ -44,17 +54,21 @@ export function calculateStaleness(
   const reasons: string[] = [];
   const now = new Date();
 
+  // Convert dates to proper Date objects (handles both Date and string inputs)
+  const lastMembershipUpdated = toDate(group.lastMembershipUpdated);
+  const created = toDate(group.created);
+
   // Check membership updates
-  if (group.lastMembershipUpdated) {
-    const daysSinceUpdate = daysBetween(group.lastMembershipUpdated, now);
+  if (lastMembershipUpdated) {
+    const daysSinceUpdate = daysBetween(lastMembershipUpdated, now);
     if (daysSinceUpdate > config.membershipThresholdDays) {
       score += config.noActivityWeight;
       const monthsSinceUpdate = Math.floor(daysSinceUpdate / 30);
       reasons.push(`No membership changes in ${monthsSinceUpdate} months`);
     }
-  } else if (group.created) {
+  } else if (created) {
     // If no lastMembershipUpdated, check against creation date as fallback
-    const daysSinceCreation = daysBetween(group.created, now);
+    const daysSinceCreation = daysBetween(created, now);
     if (daysSinceCreation > config.membershipThresholdDays) {
       score += config.noActivityWeight * 0.7; // Slightly lower weight since it's less certain
       const monthsSinceCreation = Math.floor(daysSinceCreation / 30);
@@ -90,10 +104,19 @@ export function calculateStaleness(
 
 /**
  * Format a relative time string (e.g., "3 months ago")
+ * Handles both Date objects and ISO date strings
  */
-export function formatRelativeTime(date: Date): string {
+export function formatRelativeTime(date: Date | string): string {
+  // Ensure we have a valid Date object
+  const dateObj = date instanceof Date ? date : new Date(date);
+
+  // Check if the date is valid
+  if (isNaN(dateObj.getTime())) {
+    return 'Unknown';
+  }
+
   const now = new Date();
-  const days = daysBetween(date, now);
+  const days = daysBetween(dateObj, now);
 
   if (days === 0) {
     return 'Today';
