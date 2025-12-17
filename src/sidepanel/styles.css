@@ -3996,3 +3996,127 @@ body {
   padding: 2px 6px;
   font-size: 9px;
 }
+
+/* ============================================
+   Status Multi-Select Component
+   ============================================ */
+.status-multi-select {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.status-presets {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.status-presets .btn {
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+.status-checkboxes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.status-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 12px;
+}
+
+.status-checkbox:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-primary);
+}
+
+.status-checkbox input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: var(--accent-primary);
+}
+
+.status-checkbox input[type="checkbox"]:checked + .status-label {
+  font-weight: 600;
+}
+
+.status-label {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* Status-specific colors */
+.status-label.status-active {
+  color: #16a34a;
+}
+
+.status-label.status-deprovisioned {
+  color: #dc2626;
+}
+
+.status-label.status-suspended {
+  color: #ea580c;
+}
+
+.status-label.status-locked_out {
+  color: #c2410c;
+}
+
+.status-label.status-staged {
+  color: #7c3aed;
+}
+
+.status-label.status-provisioned {
+  color: #2563eb;
+}
+
+.status-label.status-recovery {
+  color: #9333ea;
+}
+
+.status-label.status-password_expired {
+  color: #b45309;
+}
+
+.selected-count {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* ============================================
+   Push Group Styles
+   ============================================ */
+.push-status {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-style: italic;
+}
+
+.push-info-note {
+  margin-top: 8px;
+  padding: 8px;
+  background: var(--info-bg);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--info-text);
+}
