@@ -83,16 +83,22 @@ export async function logBulkRemoveAction(
   groupId: string,
   groupName: string,
   users: BulkUserInfo[],
-  operationType: 'deprovisioned' | 'inactive' | 'custom_status',
+  operationType: 'deprovisioned' | 'inactive' | 'custom_status' | 'multi_status',
   targetStatus?: string
 ): Promise<UndoAction> {
   const history = await getUndoHistory();
 
-  const description = operationType === 'deprovisioned'
-    ? `Removed ${users.length} deprovisioned user${users.length !== 1 ? 's' : ''} from ${groupName}`
-    : operationType === 'inactive'
-    ? `Removed ${users.length} inactive user${users.length !== 1 ? 's' : ''} from ${groupName}`
-    : `Removed ${users.length} ${targetStatus} user${users.length !== 1 ? 's' : ''} from ${groupName}`;
+  let description: string;
+  if (operationType === 'deprovisioned') {
+    description = `Removed ${users.length} deprovisioned user${users.length !== 1 ? 's' : ''} from ${groupName}`;
+  } else if (operationType === 'inactive') {
+    description = `Removed ${users.length} inactive user${users.length !== 1 ? 's' : ''} from ${groupName}`;
+  } else if (operationType === 'multi_status' && targetStatus) {
+    const statusCount = targetStatus.split(',').length;
+    description = `Removed ${users.length} user${users.length !== 1 ? 's' : ''} (${statusCount} status types) from ${groupName}`;
+  } else {
+    description = `Removed ${users.length} ${targetStatus || 'filtered'} user${users.length !== 1 ? 's' : ''} from ${groupName}`;
+  }
 
   const metadata: BulkRemoveUsersMetadata = {
     type: 'BULK_REMOVE_USERS_FROM_GROUP',

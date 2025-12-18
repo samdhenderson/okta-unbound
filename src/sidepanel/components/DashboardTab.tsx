@@ -48,7 +48,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
     });
   }, [updateProgress]);
 
-  const { smartCleanup, exportMembers, isLoading: isApiLoading } = useOktaApi({
+  const { smartCleanup, removeDeprovisioned, customFilterMultiple, exportMembers, isLoading: isApiLoading } = useOktaApi({
     targetTabId,
     onResult: handleResult,
     onProgress: handleProgress,
@@ -168,6 +168,34 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
     }
   };
 
+  const handleRemoveDeprovisioned = async () => {
+    if (!groupId) return;
+
+    showProgress('Remove Deprovisioned', 'Removing deprovisioned users...');
+    setResultMessages([]);
+
+    try {
+      await removeDeprovisioned(groupId);
+      refresh();
+    } finally {
+      hideProgress();
+    }
+  };
+
+  const handleCustomCleanup = async (statuses: string[]) => {
+    if (!groupId) return;
+
+    showProgress('Custom Cleanup', `Removing users with status: ${statuses.join(', ')}...`);
+    setResultMessages([]);
+
+    try {
+      await customFilterMultiple(groupId, statuses as any[], 'remove');
+      refresh();
+    } finally {
+      hideProgress();
+    }
+  };
+
   return (
     <div className="tab-content active">
       <div className="dashboard-container">
@@ -225,7 +253,9 @@ const DashboardTab: React.FC<DashboardTabProps> = ({
                 hasRuleConflicts={hasRuleConflicts}
                 groupId={groupId}
                 groupName={groupName}
+                onRemoveDeprovisioned={handleRemoveDeprovisioned}
                 onSmartCleanup={handleSmartCleanup}
+                onCustomCleanup={handleCustomCleanup}
                 isLoading={isApiLoading}
               />
             </div>
