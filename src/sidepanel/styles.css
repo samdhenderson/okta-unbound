@@ -1,9 +1,3 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
 :root {
   --bg-primary: #ffffff;
   --bg-secondary: #f8f9fa;
@@ -33,14 +27,16 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  background: var(--bg-secondary);
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: linear-gradient(to bottom, #fafbfc 0%, #f5f7fa 100%);
   width: 100%;
   min-height: 100vh;
   overflow-x: hidden;
   color: var(--text-primary);
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .sidebar-container {
@@ -49,132 +45,14 @@ body {
   height: 100vh;
   overflow-y: auto;
   padding-bottom: 70px; /* Space for global loading bar */
+  background:
+    radial-gradient(at 0% 0%, rgba(0, 125, 193, 0.03) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(61, 157, 217, 0.02) 0px, transparent 50%);
 }
 
-/* Header */
-.header {
-  background: var(--okta-blue);
-  color: white;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--okta-blue-hover);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
+/* Header, Group Banner, and Tab Navigation are now custom React components using Tailwind CSS */
 
-.header h1 {
-  font-size: 20px;
-  font-weight: 600;
-  margin-bottom: 6px;
-  letter-spacing: -0.3px;
-}
-
-.status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  opacity: 0.8;
-}
-
-.status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--text-tertiary);
-}
-
-.status-indicator.connected .status-dot {
-  background: #4caf50;
-}
-
-.status-indicator.error .status-dot {
-  background: #ef5350;
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-/* Group Banner */
-.group-banner {
-  background: var(--bg-primary);
-  border-bottom: 1px solid var(--border-color);
-  padding: 12px 20px;
-  position: sticky;
-  top: 50px;
-  z-index: 99;
-}
-
-.group-banner-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.group-name {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 2px;
-  letter-spacing: -0.2px;
-}
-
-.group-id {
-  font-size: 11px;
-  color: var(--text-secondary);
-  font-family: 'Monaco', 'Courier New', monospace;
-}
-
-/* Tab Navigation */
-.tab-nav {
-  display: flex;
-  background: var(--bg-primary);
-  border-bottom: 1px solid var(--border-color);
-  position: sticky;
-  top: 90px;
-  z-index: 98;
-  gap: 4px;
-  padding: 0 16px;
-}
-
-.tab-button {
-  flex: 1;
-  padding: 12px 16px;
-  background: none;
-  border: none;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: all 0.15s ease;
-}
-
-.tab-button:hover {
-  color: var(--text-primary);
-  background: var(--bg-secondary);
-}
-
-.tab-button.active {
-  color: var(--okta-blue);
-  border-bottom-color: var(--okta-blue);
-  background: transparent;
-  font-weight: 600;
-}
-
-/* Tab Content */
-.tab-content {
-  display: none;
-  padding: 20px;
-}
-
-.tab-content.active {
-  display: block;
-}
+/* Tab Content - now handled by Tailwind CSS in tailwind.css */
 
 /* Section */
 .section {

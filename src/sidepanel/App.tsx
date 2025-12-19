@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import GroupBanner from './components/GroupBanner';
-import TabNavigation from './components/TabNavigation';
-import DashboardTab from './components/DashboardTab';
-import OperationsTab from './components/OperationsTab';
+import PageHeader from './components/shared/PageHeader';
+import TabNavigation, { type TabType } from './components/TabNavigation';
+import OverviewTab from './components/OverviewTab';
 import RulesTab from './components/RulesTab';
 import UsersTab from './components/UsersTab';
 import SecurityTab from './components/SecurityTab';
@@ -15,22 +15,38 @@ import SchedulerStatusBar from './components/SchedulerStatusBar';
 import { useGroupContext } from './hooks/useGroupContext';
 import { SchedulerProvider } from './contexts/SchedulerContext';
 
-type TabType = 'dashboard' | 'operations' | 'rules' | 'users' | 'security' | 'groups' | 'apps' | 'undo';
-
 const SELECTED_TAB_KEY = 'okta_unbound_selected_tab';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
   const { groupInfo, connectionStatus, targetTabId, error, isLoading, oktaOrigin } = useGroupContext();
 
-  // Load saved tab preference on mount
+  // Load saved tab preference on mount with legacy migration
   useEffect(() => {
     chrome.storage.local.get([SELECTED_TAB_KEY], (result) => {
       if (result[SELECTED_TAB_KEY]) {
-        // Redirect old 'operations' tab to 'dashboard'
-        const savedTab = result[SELECTED_TAB_KEY] as TabType;
-        setActiveTab(savedTab === 'operations' ? 'dashboard' : savedTab);
+        // Migrate legacy tab names to new naming scheme
+        const savedTab = result[SELECTED_TAB_KEY] as string;
+        let migratedTab: TabType;
+
+        switch (savedTab) {
+          case 'dashboard':
+          case 'operations':
+            migratedTab = 'overview'; // Both dashboard and operations → overview
+            break;
+          case 'undo':
+            migratedTab = 'history'; // undo → history
+            break;
+          default:
+            migratedTab = savedTab as TabType;
+        }
+
+        setActiveTab(migratedTab);
+        // Save migrated tab back to storage
+        if (migratedTab !== savedTab) {
+          chrome.storage.local.set({ [SELECTED_TAB_KEY]: migratedTab });
+        }
       }
     });
   }, []);
@@ -70,21 +86,8 @@ const App: React.FC = () => {
 
       <TabNavigation activeTab={activeTab} onTabChange={handleTabChange} />
 
-      {activeTab === 'dashboard' && (
-        <DashboardTab
-          groupId={groupInfo?.groupId}
-          groupName={groupInfo?.groupName}
-          targetTabId={targetTabId}
-          onTabChange={handleTabChange}
-          oktaOrigin={oktaOrigin}
-        />
-      )}
-      {activeTab === 'operations' && (
-        <OperationsTab
-          groupId={groupInfo?.groupId}
-          groupName={groupInfo?.groupName}
-          targetTabId={targetTabId}
-        />
+      {activeTab === 'overview' && (
+        <OverviewTab onTabChange={handleTabChange} />
       )}
       {activeTab === 'rules' && (
         <RulesTab
@@ -122,17 +125,13 @@ const App: React.FC = () => {
           targetTabId={targetTabId ?? null}
         />
       )}
-      {activeTab === 'undo' && (
-        <div className="tab-content active">
-          <div className="section">
-            <div className="section-header">
-              <div>
-                <h2>Undo History</h2>
-                <p className="section-description">
-                  Reverse recent actions (up to 10)
-                </p>
-              </div>
-            </div>
+      {activeTab === 'history' && (
+        <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
+          <PageHeader
+            title="Operation History"
+            subtitle="View audit trail and reverse recent actions"
+          />
+          <div className="max-w-7xl mx-auto px-6 py-6">
             <UndoPanel targetTabId={targetTabId ?? undefined} />
           </div>
         </div>

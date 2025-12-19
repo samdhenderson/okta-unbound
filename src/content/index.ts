@@ -71,6 +71,10 @@ chrome.runtime.onMessage.addListener(
         handleGetUserInfo().then(sendResponse);
         return true;
 
+      case 'getAppInfo':
+        handleGetAppInfo().then(sendResponse);
+        return true;
+
       case 'makeApiRequest':
         if (!request.endpoint) {
           sendResponse({ success: false, error: 'Missing endpoint' });
@@ -88,7 +92,7 @@ chrome.runtime.onMessage.addListener(
         return true;
 
       case 'fetchGroupRules':
-        handleFetchGroupRules().then(sendResponse);
+        handleFetchGroupRules(request.groupId).then(sendResponse);
         return true;
 
       case 'activateRule':
@@ -364,6 +368,60 @@ async function handleGetUserInfo(): Promise<MessageResponse<UserInfo>> {
   }
 }
 
+async function handleGetAppInfo(): Promise<MessageResponse<import('../shared/types').AppInfo>> {
+  console.log('[Content] Processing getAppInfo request');
+
+  try {
+    const url = window.location.href;
+    console.log('[Content] Current URL:', url);
+
+    const appId = extractAppIdFromUrl(url);
+    console.log('[Content] Extracted appId:', appId);
+
+    if (!appId) {
+      return {
+        success: false,
+        error: 'Not on an app page. Please navigate to a specific app page.',
+      };
+    }
+
+    let appName = extractAppNameFromPage();
+    let appLabel: string | undefined;
+    console.log('[Content] Extracted appName from page:', appName);
+
+    // Fetch app details from API
+    console.log('[Content] Fetching app details from API...');
+    try {
+      const response = await handleMakeApiRequest(`/api/v1/apps/${appId}`, 'GET');
+      if (response.success && response.data) {
+        appName = appName || response.data.name || response.data.label || 'Unknown';
+        appLabel = response.data.label;
+        console.log('[Content] Fetched app details from API:', { appName, appLabel });
+      }
+    } catch (e) {
+      console.warn('[Content] Failed to fetch app details from API:', e);
+    }
+
+    const result = {
+      appId,
+      appName: appName || 'Unknown',
+      appLabel,
+    };
+
+    console.log('[Content] getAppInfo result:', result);
+    return {
+      success: true,
+      data: result,
+    };
+  } catch (error) {
+    console.error('[Content] getAppInfo error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
 // ============================================================================
 // Export Handler (Stub - will implement with proper modules)
 // ============================================================================
@@ -412,21 +470,46 @@ async function handleExportGroupMembers(request: MessageRequest): Promise<Messag
 // Rules Handlers
 // ============================================================================
 
-async function handleFetchGroupRules(): Promise<MessageResponse> {
-  console.log('[Content] Processing fetchGroupRules request');
+async function handleFetchGroupRules(groupId?: string): Promise<MessageResponse> {
+  console.log('[Content] Processing fetchGroupRules request for groupId:', groupId);
 
   try {
-    const response = await handleMakeApiRequest('/api/v1/groups/rules?limit=200', 'GET');
+    // Fetch all rules with pagination
+    let allRules: any[] = [];
+    let nextUrl: string | null = '/api/v1/groups/rules?limit=200';
 
-    if (!response.success) {
-      return response;
+    while (nextUrl) {
+      const response = await handleMakeApiRequest(nextUrl, 'GET');
+
+      if (!response.success) {
+        return response;
+      }
+
+      allRules = allRules.concat(response.data || []);
+
+      // Parse next link from headers
+      nextUrl = null;
+      if (response.headers?.link) {
+        const links = response.headers.link.split(',');
+        for (const link of links) {
+          if (link.includes('rel="next"')) {
+            const match = link.match(/<([^>]+)>/);
+            if (match) {
+              const fullUrl = new URL(match[1]);
+              nextUrl = fullUrl.pathname + fullUrl.search;
+              console.log('[Content] Fetching next page of rules:', nextUrl);
+              break;
+            }
+          }
+        }
+      }
     }
 
-    const rules: any[] = response.data || [];
-    console.log('[Content] Fetched', rules.length, 'rules');
+    const rules: any[] = allRules;
+    console.log('[Content] Fetched', rules.length, 'rules (total across all pages)');
 
-    // Get current group ID if on a group page
-    const currentGroupId = extractGroupIdFromUrl(window.location.href);
+    // Use provided groupId or extract from URL if on a group page
+    const currentGroupId = groupId || extractGroupIdFromUrl(window.location.href);
 
     // Collect all unique group IDs from all rules
     const allGroupIds = new Set<string>();
@@ -928,6 +1011,97 @@ function extractUserNameFromPage(): string | null {
       }
     } catch {
       // Some selectors might throw on certain pages
+      continue;
+    }
+  }
+
+  return null;
+}
+
+function extractAppIdFromUrl(url: string): string | null {
+  console.log('[extractAppIdFromUrl] Parsing URL:', url);
+
+  // Okta app IDs are typically 20 characters, alphanumeric (e.g., 0oa1234567890abcdefg)
+
+  const patterns: Array<{ regex: RegExp; name: string }> = [
+    // Admin app configuration pages
+    { regex: /\/admin\/app\/([a-zA-Z0-9]+)\/instance\/([a-zA-Z0-9]+)/, name: '/admin/app/{appId}/instance/{instanceId}' },
+    { regex: /\/admin\/app\/([a-zA-Z0-9]+)\/settings/, name: '/admin/app/{appId}/settings' },
+    { regex: /\/admin\/app\/([a-zA-Z0-9]+)\/assignment/, name: '/admin/app/{appId}/assignment' },
+    { regex: /\/admin\/app\/([a-zA-Z0-9]+)/, name: '/admin/app/{appId}' },
+
+    // Applications list and detail pages
+    { regex: /\/admin\/apps\/active\/([a-zA-Z0-9]+)/, name: '/admin/apps/active/{appId}' },
+    { regex: /\/admin\/apps\/([a-zA-Z0-9]+)/, name: '/admin/apps/{appId}' },
+
+    // API patterns
+    { regex: /\/api\/v1\/apps\/([a-zA-Z0-9]+)/, name: '/api/v1/apps/{appId}' },
+
+    // Query parameter patterns
+    { regex: /[?&]appId=([a-zA-Z0-9]+)/, name: '?appId={appId}' },
+    { regex: /[?&]app=([a-zA-Z0-9]+)/, name: '?app={appId}' },
+  ];
+
+  for (const { regex, name } of patterns) {
+    const match = url.match(regex);
+    if (match && match[1]) {
+      const potentialId = match[1];
+      // Skip obvious non-IDs
+      const nonIdKeywords = ['settings', 'new', 'create', 'list', 'active', 'inactive', 'catalog'];
+      if (nonIdKeywords.includes(potentialId.toLowerCase())) {
+        continue;
+      }
+      // Okta app IDs typically start with '0oa'
+      if (potentialId.startsWith('0oa') || potentialId.length >= 18) {
+        console.log(`[extractAppIdFromUrl] Matched pattern "${name}":`, potentialId);
+        return potentialId;
+      }
+    }
+  }
+
+  console.warn('[extractAppIdFromUrl] No pattern matched. URL:', url);
+  return null;
+}
+
+function extractAppNameFromPage(): string | null {
+  const selectors = [
+    // App configuration page headers
+    '[data-se="app-name"]',
+    '[data-se="app-label"]',
+    '[data-testid="app-name"]',
+    '[data-testid="app-label"]',
+
+    // App detail headers
+    '.app-header h1',
+    '.app-detail-header h1',
+    '[class*="AppHeader"] h1',
+    '[class*="ApplicationHeader"] h1',
+
+    // Settings page
+    '.app-settings-header h1',
+    '.application-settings h1',
+
+    // Generic headers in app context
+    'h1.okta-form-title',
+    '.content-container h1',
+    'main h1',
+
+    // Page title
+    '.page-title',
+    '[class*="PageTitle"]',
+  ];
+
+  for (const selector of selectors) {
+    try {
+      const element = document.querySelector(selector);
+      if (element) {
+        const text = element.textContent?.trim();
+        // Skip generic text
+        if (text && !['Application', 'App', 'Settings', 'Configuration'].includes(text)) {
+          return text;
+        }
+      }
+    } catch {
       continue;
     }
   }

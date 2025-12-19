@@ -6,22 +6,41 @@ interface MembershipBarChartProps {
 }
 
 const MembershipBarChart: React.FC<MembershipBarChartProps> = ({ membershipSources }) => {
-  const total = membershipSources.direct + membershipSources.ruleBased;
+  // Validate input data
+  const direct = typeof membershipSources.direct === 'number' && !isNaN(membershipSources.direct) ? membershipSources.direct : 0;
+  const ruleBased = typeof membershipSources.ruleBased === 'number' && !isNaN(membershipSources.ruleBased) ? membershipSources.ruleBased : 0;
+  const total = direct + ruleBased;
 
+  // Log for debugging
+  console.log('[MembershipBarChart] Rendering with data:', {
+    input: membershipSources,
+    validated: { direct, ruleBased, total },
+  });
+
+  // Prepare chart data with proper percentage calculation
   const data = [
     {
-      name: 'Direct',
-      count: membershipSources.direct,
-      percentage: total > 0 ? ((membershipSources.direct / total) * 100).toFixed(1) : 0,
+      name: 'Manual',
+      count: direct,
+      percentage: total > 0 ? ((direct / total) * 100).toFixed(1) : '0.0',
     },
     {
       name: 'Rule-Based',
-      count: membershipSources.ruleBased,
-      percentage: total > 0 ? ((membershipSources.ruleBased / total) * 100).toFixed(1) : 0,
+      count: ruleBased,
+      percentage: total > 0 ? ((ruleBased / total) * 100).toFixed(1) : '0.0',
     },
   ];
 
   const colors = ['#007BBF', '#4a934e'];
+
+  // Handle edge case: no data
+  if (total === 0) {
+    return (
+      <div className="flex items-center justify-center h-[200px] text-gray-500 text-sm">
+        No membership data available
+      </div>
+    );
+  }
 
   return (
     <ResponsiveContainer width="100%" height={200}>

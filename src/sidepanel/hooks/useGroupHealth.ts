@@ -43,12 +43,18 @@ export function useGroupHealth({ groupId, targetTabId }: UseGroupHealthOptions) 
     }
 
     const allMembers: OktaUser[] = [];
-    let nextUrl: string | null = `/api/v1/groups/${groupId}/users?limit=200`;
+    let currentOffset = 0;
+    const pageSize = 200;
+    let hasMore = true;
 
-    while (nextUrl) {
-      const response: { success: boolean; data?: OktaUser[]; error?: string; headers?: { link?: string } } = await sendMessageSafely(targetTabId, {
+    // Use the internal admin console API endpoint that includes managedBy.rules data
+    // This endpoint provides accurate information about rule-based vs manual assignments
+    while (hasMore) {
+      const endpoint = `/admin/users/search?iDisplayLength=${pageSize}&iColumns=6&sColumns=user.id%2Cstatus.statusLabel%2Cuser.fullName%2Cuser.login%2CmanagedBy.rules&orderBy=membershipId&enableSQLQueryGenerator=true&enableESUserLookup=true&skipCountTotal=true&groupId=${groupId}&sortDirection=desc&iDisplayStart=${currentOffset}&sSearch=`;
+
+      const response: { success: boolean; data?: any; error?: string } = await sendMessageSafely(targetTabId, {
         action: 'makeApiRequest',
-        endpoint: nextUrl,
+        endpoint,
         method: 'GET',
       });
 
@@ -56,23 +62,90 @@ export function useGroupHealth({ groupId, targetTabId }: UseGroupHealthOptions) 
         throw new Error(response.error || 'Failed to fetch group members');
       }
 
-      const pageMembers = response.data || [];
-      allMembers.push(...pageMembers);
+      // The internal API returns data in the format { aaData: [...], iTotalRecords: number }
+      const responseData = response.data;
+      const pageMembers = responseData?.aaData || [];
 
-      // Parse next link from headers
-      nextUrl = null;
-      if (response.headers?.link) {
-        const links: string[] = response.headers.link.split(',');
-        for (const link of links) {
-          if (link.includes('rel="next"')) {
-            const match: RegExpMatchArray | null = link.match(/<([^>]+)>/);
-            if (match) {
-              const fullUrl: URL = new URL(match[1]);
-              nextUrl = fullUrl.pathname + fullUrl.search;
-              break;
+      // Debug logging to inspect the actual response structure
+      if (pageMembers.length > 0 && currentOffset === 0) {
+        console.log('[useGroupHealth] Sample member from aaData:', JSON.stringify(pageMembers[0], null, 2));
+        console.log('[useGroupHealth] Keys in first member:', Object.keys(pageMembers[0]));
+      }
+
+      if (pageMembers.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      // Transform the internal API response format to match OktaUser interface
+      // The aaData returns arrays where each element maps to the sColumns order:
+      // [0] = user.id, [1] = status.statusLabel, [2] = user.fullName, [3] = user.login, [4] = managedBy.rules
+      const transformedMembers = pageMembers.map((member: any[]) => {
+        const userId = member[0];
+        const statusLabel = member[1];
+        const fullName = member[2];
+        const login = member[3];
+        const managedByRulesRaw = member[4]; // This is the key field!
+
+        // Debug log to see what managedBy looks like
+        if (currentOffset === 0 && allMembers.length < 5) {
+          console.log('[useGroupHealth] Member array:', member);
+          console.log('[useGroupHealth] managedBy.rules raw value:', managedByRulesRaw);
+          console.log('[useGroupHealth] managedBy.rules type:', typeof managedByRulesRaw);
+          console.log('[useGroupHealth] managedBy.rules is array?:', Array.isArray(managedByRulesRaw));
+          if (typeof managedByRulesRaw === 'string') {
+            console.log('[useGroupHealth] managedBy.rules string length:', managedByRulesRaw.length);
+          }
+        }
+
+        // Normalize the managedBy.rules field to always be an array of strings or undefined
+        let normalizedRules: string[] | undefined = undefined;
+
+        if (managedByRulesRaw !== null && managedByRulesRaw !== undefined && managedByRulesRaw !== '') {
+          if (Array.isArray(managedByRulesRaw)) {
+            // If it's already an array, use it
+            normalizedRules = managedByRulesRaw.filter(rule => rule && rule !== '');
+          } else if (typeof managedByRulesRaw === 'string') {
+            // If it's a string, wrap it in an array (unless it's empty)
+            if (managedByRulesRaw.trim() !== '') {
+              normalizedRules = [managedByRulesRaw];
+            }
+          } else if (typeof managedByRulesRaw === 'object') {
+            // If it's an object, try to extract rule IDs
+            // This handles cases where Okta returns {id: "ruleId"} or similar
+            if ('id' in managedByRulesRaw) {
+              normalizedRules = [managedByRulesRaw.id];
+            } else if ('ruleId' in managedByRulesRaw) {
+              normalizedRules = [managedByRulesRaw.ruleId];
             }
           }
         }
+
+        // Parse the full name into first and last
+        const nameParts = fullName ? fullName.split(' ') : ['', ''];
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
+
+        return {
+          id: userId,
+          status: statusLabel as UserStatus,
+          managedBy: normalizedRules && normalizedRules.length > 0 ? { rules: normalizedRules } : undefined,
+          profile: {
+            login: login || '',
+            email: login || '', // Login is typically the email
+            firstName,
+            lastName,
+          },
+        };
+      });
+
+      allMembers.push(...transformedMembers);
+
+      // Check if there are more results
+      if (pageMembers.length < pageSize) {
+        hasMore = false;
+      } else {
+        currentOffset += pageSize;
       }
     }
 
@@ -127,28 +200,65 @@ export function useGroupHealth({ groupId, targetTabId }: UseGroupHealthOptions) 
         }
       });
 
-      // Fetch rule information
-      const { ruleCount, hasActiveRules } = await fetchGroupRules();
-
-      // Calculate membership sources
-      // If there are active rules for this group, we estimate that all members could potentially
-      // be rule-based (since Okta doesn't expose individual membership source via API).
-      // A more accurate approach: if rules exist, assume most are rule-based.
-      // If no rules exist, all are direct.
+      // Calculate membership sources using the actual managedBy.rules data from Okta
+      // This data is only available through the internal /admin/users/search endpoint
       let ruleBased = 0;
-      let direct = members.length;
+      let direct = 0;
+      let unclassified = 0; // Track users we couldn't classify
 
-      if (hasActiveRules && members.length > 0) {
-        // When rules exist, we can't know exactly which members are rule-based.
-        // As a heuristic, we estimate based on rule count and group size.
-        // If there are rules, likely most members are rule-based.
-        // Use a conservative estimate: min(member count, rules * estimated users per rule)
-        // For large groups with rules, assume mostly rule-based.
-        if (ruleCount >= 1) {
-          // If rules exist, estimate 80% are rule-based for groups with active rules
-          ruleBased = Math.round(members.length * 0.8);
-          direct = members.length - ruleBased;
+      members.forEach((user, index) => {
+        // Check if the user has any rules managing their membership
+        // CRITICAL: user.managedBy.rules should be an array of rule IDs
+        const hasRules =
+          user.managedBy &&
+          user.managedBy.rules &&
+          Array.isArray(user.managedBy.rules) &&
+          user.managedBy.rules.length > 0;
+
+        // Debug logging for first 10 users to understand the pattern
+        if (index < 10) {
+          console.log('[useGroupHealth] User', index, ':', {
+            id: user.id,
+            login: user.profile.login,
+            managedBy: user.managedBy,
+            managedByType: user.managedBy ? typeof user.managedBy.rules : 'N/A',
+            isArray: user.managedBy ? Array.isArray(user.managedBy.rules) : false,
+            rulesLength: user.managedBy?.rules ? (Array.isArray(user.managedBy.rules) ? user.managedBy.rules.length : 'not-array') : 0,
+            hasRules,
+            classification: hasRules ? 'RULE-BASED' : 'MANUAL',
+          });
         }
+
+        if (hasRules) {
+          ruleBased++;
+        } else if (user.managedBy === undefined) {
+          // User has no managedBy data, which means manual assignment
+          direct++;
+        } else {
+          // Edge case: managedBy exists but rules is empty/invalid
+          direct++;
+          if (index < 10) {
+            console.warn('[useGroupHealth] User has managedBy but no valid rules:', user.id, user.managedBy);
+          }
+        }
+      });
+
+      console.log('[useGroupHealth] Final membership counts:', {
+        direct,
+        ruleBased,
+        total: members.length,
+        sanityCheck: direct + ruleBased === members.length ? '✓ PASS' : '✗ FAIL',
+      });
+
+      // Sanity check: ensure counts add up
+      if (direct + ruleBased !== members.length) {
+        console.error('[useGroupHealth] CRITICAL: Membership count mismatch!', {
+          direct,
+          ruleBased,
+          sum: direct + ruleBased,
+          total: members.length,
+          difference: members.length - (direct + ruleBased),
+        });
       }
 
       const membershipSources = {

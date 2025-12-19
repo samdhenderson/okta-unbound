@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import PageHeader from './shared/PageHeader';
 import type { OktaUser, GroupMembership } from '../../shared/types';
 import { RulesCache } from '../../shared/rulesCache';
 import { useUserContext } from '../hooks/useUserContext';
@@ -58,7 +59,7 @@ interface UsersTabProps {
   onNavigateToRule?: (ruleId: string) => void;
 }
 
-// Collapsible section component
+// Premium collapsible section component matching Overview tab design
 interface CollapsibleSectionProps {
   title: string;
   defaultOpen?: boolean;
@@ -75,19 +76,34 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <div className={`collapsible-section ${isOpen ? 'open' : 'collapsed'}`}>
+    <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md">
       <button
-        className="collapsible-header"
+        className="w-full flex items-center justify-between px-5 py-3.5 text-left font-semibold text-gray-900 bg-gradient-to-r from-gray-50 to-gray-100/50 hover:from-gray-100 hover:to-gray-200/50 transition-all duration-200 border-b border-gray-200/50"
         onClick={() => setIsOpen(!isOpen)}
         type="button"
       >
-        <span className="collapsible-icon">{isOpen ? '▼' : '▶'}</span>
-        <span className="collapsible-title">{title}</span>
-        {itemCount !== undefined && (
-          <span className="collapsible-count">{itemCount}</span>
-        )}
+        <div className="flex items-center gap-3">
+          <svg
+            className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${isOpen ? 'rotate-90' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+          <span className="text-sm font-semibold">{title}</span>
+          {itemCount !== undefined && (
+            <span className="px-2 py-0.5 bg-white rounded-full text-xs font-medium text-gray-600 shadow-sm">
+              {itemCount}
+            </span>
+          )}
+        </div>
       </button>
-      {isOpen && <div className="collapsible-content">{children}</div>}
+      {isOpen && (
+        <div className="p-5 bg-gradient-to-b from-white to-gray-50/30 animate-in slide-in-from-top-2 duration-300">
+          {children}
+        </div>
+      )}
     </div>
   );
 };
@@ -481,56 +497,76 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
   };
 
   return (
-    <div className="tab-content active">
-      <div className="section">
-        {/* Search Section - Always at the very top */}
-        <div className="user-search-container">
-          <div className="user-search-row">
-            <div className="user-search-input-wrapper">
-              <input
-                ref={searchInputRef}
-                type="text"
-                className="input user-search-input"
-                placeholder="Search by email, name, or login..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              {(searchQuery || selectedUser) && (
-                <button
-                  className="user-search-clear-btn"
-                  onClick={handleClearSearch}
-                  title="Clear search"
-                  type="button"
-                >
-                  &times;
-                </button>
-              )}
-              {isSearching && (
-                <div className="user-search-spinner">
-                  <div className="spinner-small"></div>
-                </div>
-              )}
+    <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
+      <PageHeader
+        title="User Search"
+        subtitle="Search users and analyze their group memberships"
+        icon="users"
+        badge={selectedUser ? { text: `${memberships.length} Groups`, variant: 'primary' } : undefined}
+        actions={
+          oktaOrigin && selectedUser ? (
+            <a
+              href={`${oktaOrigin}/admin/user/profile/view/${selectedUser.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-5 py-2.5 bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] text-white font-semibold rounded-lg hover:from-[#005a8f] hover:to-[#007dc1] transition-all duration-200 shadow-md hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-2"
+              title="Open user in Okta Admin"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              <span>Open in Okta</span>
+            </a>
+          ) : undefined
+        }
+      />
+
+      <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+        {/* Search Section */}
+        <div className="space-y-3">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
             </div>
-            {oktaOrigin && selectedUser && (
-              <a
-                href={`${oktaOrigin}/admin/user/profile/view/${selectedUser.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-primary user-search-action-btn"
-                title="Open user in Okta Admin"
+            <input
+              ref={searchInputRef}
+              type="text"
+              className="w-full pl-11 pr-12 py-3 bg-white border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#007dc1]/30 focus:border-[#007dc1] transition-all duration-200 shadow-sm hover:shadow"
+              placeholder="Search by email, name, or login..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {(searchQuery || selectedUser) && (
+              <button
+                className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+                onClick={handleClearSearch}
+                title="Clear search"
+                type="button"
               >
-                Open in Okta
-              </a>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+            {isSearching && (
+              <div className="absolute inset-y-0 right-12 flex items-center pr-3">
+                <div className="w-4 h-4 border-2 border-gray-200 border-t-[#007dc1] rounded-full animate-spin" />
+              </div>
             )}
           </div>
-          {/* Detected user hint - subtle, non-intrusive */}
+
+          {/* Detected user hint */}
           {userInfo && !selectedUser && !searchQuery && (
-            <div className="user-detected-hint">
-              Detected: <strong>{userInfo.userName}</strong>
+            <div className="px-4 py-2.5 bg-gradient-to-br from-blue-50 to-cyan-50/50 border border-blue-200/60 rounded-lg shadow-sm flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+              <span className="text-sm text-gray-700">
+                Detected: <strong className="text-gray-900">{userInfo.userName}</strong>
+              </span>
               {userInfo.userStatus && (
-                <span className={`badge badge-sm ml-2 ${
-                  userInfo.userStatus === 'ACTIVE' ? 'badge-success' :
-                  userInfo.userStatus === 'DEPROVISIONED' ? 'badge-error' : 'badge-warning'
+                <span className={`px-2.5 py-0.5 text-xs font-bold rounded-full ${
+                  userInfo.userStatus === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' :
+                  userInfo.userStatus === 'DEPROVISIONED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
                 }`}>
                   {userInfo.userStatus}
                 </span>
@@ -541,30 +577,41 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
 
         {/* Error Display */}
         {error && (
-          <div className="alert alert-error">
-            <strong>Error:</strong> {error}
+          <div className="rounded-lg bg-red-50 border border-red-200 p-4 shadow-sm animate-in slide-in-from-top-2 duration-300">
+            <div className="flex items-start gap-3">
+              <span className="text-xl">⚠️</span>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-red-900">Error</p>
+                <p className="text-sm text-red-700 mt-1">{error}</p>
+              </div>
+            </div>
           </div>
         )}
 
         {/* Search Results */}
         {searchResults.length > 0 && !selectedUser && (
-          <div className="search-results">
-            <h3 className="results-header">Search Results ({searchResults.length})</h3>
-            <div className="user-list">
+          <div className="space-y-4 animate-in slide-in-from-top-4 duration-500">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Search Results</h3>
+              <span className="px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full">
+                {searchResults.length} {searchResults.length === 1 ? 'user' : 'users'}
+              </span>
+            </div>
+            <div className="space-y-3">
               {searchResults.map(user => (
                 <div
                   key={user.id}
-                  className="user-card clickable"
+                  className="group bg-white rounded-lg border border-gray-200 p-5 cursor-pointer transition-all duration-200 hover:border-[#007dc1] hover:shadow-md hover:-translate-y-0.5"
                   onClick={() => handleSelectUser(user)}
                 >
-                  <div className="user-info">
-                    <div className="user-name">
-                      {user.profile.firstName} {user.profile.lastName}
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-gray-900 mb-1 group-hover:text-[#007dc1] transition-colors">
+                        {user.profile.firstName} {user.profile.lastName}
+                      </h4>
+                      <p className="text-sm text-gray-600 mb-1">{user.profile.email}</p>
+                      <p className="text-xs text-gray-500 font-mono">Login: {user.profile.login}</p>
                     </div>
-                    <div className="user-email muted">{user.profile.email}</div>
-                    <div className="user-login muted-small">Login: {user.profile.login}</div>
-                  </div>
-                  <div className="user-status">
                     <span className={getStatusBadgeClass(user.status)}>{user.status}</span>
                   </div>
                 </div>
@@ -575,103 +622,115 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
 
         {/* Selected User Details - Positioned directly under search */}
         {selectedUser && (
-          <div className="selected-user-section">
-            {/* Compact User ID Card */}
-            <div className="user-id-card compact">
-              <div className="user-id-card-header">
-                <div className="user-avatar">
-                  {selectedUser.profile.firstName?.[0]?.toUpperCase() || '?'}
-                  {selectedUser.profile.lastName?.[0]?.toUpperCase() || ''}
-                </div>
-                <div className="user-id-card-info">
-                  <h2 className="user-id-card-name">
-                    {selectedUser.profile.firstName} {selectedUser.profile.lastName}
-                  </h2>
-                  <div className="user-id-card-title">
-                    {selectedUser.profile.title && (
-                      <span>{selectedUser.profile.title}</span>
+          <div className="space-y-6 animate-in slide-in-from-top-4 duration-500">
+            {/* Premium User ID Card */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden">
+              <div className="p-6 bg-gradient-to-br from-white via-gray-50/30 to-white">
+                <div className="flex items-start gap-5">
+                  {/* Avatar */}
+                  <div className="flex-shrink-0 w-16 h-16 rounded-full bg-gradient-to-br from-[#007dc1] to-[#3d9dd9] flex items-center justify-center text-white text-xl font-bold shadow-lg ring-4 ring-blue-100">
+                    {selectedUser.profile.firstName?.[0]?.toUpperCase() || '?'}
+                    {selectedUser.profile.lastName?.[0]?.toUpperCase() || ''}
+                  </div>
+
+                  {/* User Info */}
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-xl font-bold text-gray-900 mb-1">
+                      {selectedUser.profile.firstName} {selectedUser.profile.lastName}
+                    </h2>
+                    {(selectedUser.profile.title || selectedUser.profile.department) && (
+                      <div className="text-sm text-gray-600 mb-2 flex items-center gap-2">
+                        {selectedUser.profile.title && <span>{selectedUser.profile.title}</span>}
+                        {selectedUser.profile.title && selectedUser.profile.department && (
+                          <span className="text-gray-400">•</span>
+                        )}
+                        {selectedUser.profile.department && <span>{selectedUser.profile.department}</span>}
+                      </div>
                     )}
-                    {selectedUser.profile.title && selectedUser.profile.department && (
-                      <span className="user-id-card-separator">•</span>
-                    )}
-                    {selectedUser.profile.department && (
-                      <span>{selectedUser.profile.department}</span>
+                    <div className="text-sm text-gray-700 mb-1">{selectedUser.profile.email}</div>
+                    {selectedUser.profile.genderPronouns && (
+                      <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-700 text-xs font-medium rounded-md border border-purple-200 mt-2">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                        </svg>
+                        {selectedUser.profile.genderPronouns}
+                      </div>
                     )}
                   </div>
-                  <div className="user-id-card-email">{selectedUser.profile.email}</div>
-                  {selectedUser.profile.genderPronouns && (
-                    <div className="user-id-card-pronouns">{selectedUser.profile.genderPronouns}</div>
-                  )}
-                </div>
-                <div className="user-id-card-status">
-                  <span className={getStatusBadgeClass(selectedUser.status)}>
-                    {selectedUser.status}
-                  </span>
+
+                  {/* Status Badge */}
+                  <div className="flex-shrink-0">
+                    <span className={getStatusBadgeClass(selectedUser.status)}>
+                      {selectedUser.status}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <div className="user-id-card-meta">
-                <div className="user-id-card-meta-item">
-                  <span className="meta-label">Last Login</span>
-                  <span className="meta-value">
+
+              {/* Metadata */}
+              <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 grid grid-cols-3 gap-4 text-sm">
+                <div className="flex flex-col">
+                  <span className="text-xs font-semibold text-gray-600 mb-1">Last Login</span>
+                  <span className="text-gray-900 font-medium">
                     {selectedUser.lastLogin
                       ? getRelativeTime(selectedUser.lastLogin) || formatDate(selectedUser.lastLogin)
                       : 'Never'}
                   </span>
                 </div>
-                <div className="user-id-card-meta-item">
-                  <span className="meta-label">Created</span>
-                  <span className="meta-value">
+                <div className="flex flex-col">
+                  <span className="text-xs font-semibold text-gray-600 mb-1">Created</span>
+                  <span className="text-gray-900 font-medium">
                     {getRelativeTime(selectedUser.created) || formatDate(selectedUser.created)}
                   </span>
                 </div>
-                <div className="user-id-card-meta-item">
-                  <span className="meta-label">Groups</span>
-                  <span className="meta-value">{memberships.length}</span>
+                <div className="flex flex-col">
+                  <span className="text-xs font-semibold text-gray-600 mb-1">Groups</span>
+                  <span className="text-gray-900 font-medium">{memberships.length}</span>
                 </div>
               </div>
             </div>
 
             {/* Collapsible Details Sections */}
-            <div className="user-details-sections">
+            <div className="space-y-4">
               {/* Account Details */}
               <CollapsibleSection title="Account Details" defaultOpen={false}>
-                <div className="detail-grid">
-                  <div className="detail-item">
-                    <span className="detail-label">Login</span>
-                    <span className="detail-value">{selectedUser.profile.login}</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div className="p-3 bg-white rounded-lg border border-gray-200">
+                    <span className="text-xs font-semibold text-gray-600 mb-1 block">Login</span>
+                    <span className="text-sm text-gray-900 block">{selectedUser.profile.login}</span>
                   </div>
-                  <div className="detail-item">
-                    <span className="detail-label">User ID</span>
+                  <div className="p-3 bg-white rounded-lg border border-gray-200">
+                    <span className="text-xs font-semibold text-gray-600 mb-1 block">User ID</span>
                     <span className="detail-value detail-value-mono">{selectedUser.id}</span>
                   </div>
                   {selectedUser.profile.secondEmail && (
-                    <div className="detail-item">
-                      <span className="detail-label">Secondary Email</span>
-                      <span className="detail-value">{selectedUser.profile.secondEmail}</span>
+                    <div className="p-3 bg-white rounded-lg border border-gray-200">
+                      <span className="text-xs font-semibold text-gray-600 mb-1 block">Secondary Email</span>
+                      <span className="text-sm text-gray-900 block">{selectedUser.profile.secondEmail}</span>
                     </div>
                   )}
                   {selectedUser.activated && (
-                    <div className="detail-item">
-                      <span className="detail-label">Activated</span>
-                      <span className="detail-value">{formatDate(selectedUser.activated)}</span>
+                    <div className="p-3 bg-white rounded-lg border border-gray-200">
+                      <span className="text-xs font-semibold text-gray-600 mb-1 block">Activated</span>
+                      <span className="text-sm text-gray-900 block">{formatDate(selectedUser.activated)}</span>
                     </div>
                   )}
                   {selectedUser.statusChanged && (
-                    <div className="detail-item">
-                      <span className="detail-label">Status Changed</span>
-                      <span className="detail-value">{formatDate(selectedUser.statusChanged)}</span>
+                    <div className="p-3 bg-white rounded-lg border border-gray-200">
+                      <span className="text-xs font-semibold text-gray-600 mb-1 block">Status Changed</span>
+                      <span className="text-sm text-gray-900 block">{formatDate(selectedUser.statusChanged)}</span>
                     </div>
                   )}
                   {selectedUser.passwordChanged && (
-                    <div className="detail-item">
-                      <span className="detail-label">Password Changed</span>
-                      <span className="detail-value">{formatDate(selectedUser.passwordChanged)}</span>
+                    <div className="p-3 bg-white rounded-lg border border-gray-200">
+                      <span className="text-xs font-semibold text-gray-600 mb-1 block">Password Changed</span>
+                      <span className="text-sm text-gray-900 block">{formatDate(selectedUser.passwordChanged)}</span>
                     </div>
                   )}
                   {selectedUser.lastUpdated && (
-                    <div className="detail-item">
-                      <span className="detail-label">Profile Updated</span>
-                      <span className="detail-value">{formatDate(selectedUser.lastUpdated)}</span>
+                    <div className="p-3 bg-white rounded-lg border border-gray-200">
+                      <span className="text-xs font-semibold text-gray-600 mb-1 block">Profile Updated</span>
+                      <span className="text-sm text-gray-900 block">{formatDate(selectedUser.lastUpdated)}</span>
                     </div>
                   )}
                 </div>
@@ -687,53 +746,53 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                 selectedUser.profile.employeeNumber ||
                 selectedUser.profile.userType) && (
                 <CollapsibleSection title="Organization" defaultOpen={false}>
-                  <div className="detail-grid">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                     {selectedUser.profile.title && (
-                      <div className="detail-item">
-                        <span className="detail-label">Title</span>
-                        <span className="detail-value">{selectedUser.profile.title}</span>
+                      <div className="p-3 bg-white rounded-lg border border-gray-200">
+                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Title</span>
+                        <span className="text-sm text-gray-900 block">{selectedUser.profile.title}</span>
                       </div>
                     )}
                     {selectedUser.profile.department && (
-                      <div className="detail-item">
-                        <span className="detail-label">Department</span>
-                        <span className="detail-value">{selectedUser.profile.department}</span>
+                      <div className="p-3 bg-white rounded-lg border border-gray-200">
+                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Department</span>
+                        <span className="text-sm text-gray-900 block">{selectedUser.profile.department}</span>
                       </div>
                     )}
                     {selectedUser.profile.division && (
-                      <div className="detail-item">
-                        <span className="detail-label">Division</span>
-                        <span className="detail-value">{selectedUser.profile.division}</span>
+                      <div className="p-3 bg-white rounded-lg border border-gray-200">
+                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Division</span>
+                        <span className="text-sm text-gray-900 block">{selectedUser.profile.division}</span>
                       </div>
                     )}
                     {selectedUser.profile.organization && (
-                      <div className="detail-item">
-                        <span className="detail-label">Organization</span>
-                        <span className="detail-value">{selectedUser.profile.organization}</span>
+                      <div className="p-3 bg-white rounded-lg border border-gray-200">
+                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Organization</span>
+                        <span className="text-sm text-gray-900 block">{selectedUser.profile.organization}</span>
                       </div>
                     )}
                     {selectedUser.profile.manager && (
-                      <div className="detail-item">
-                        <span className="detail-label">Manager</span>
-                        <span className="detail-value">{selectedUser.profile.manager}</span>
+                      <div className="p-3 bg-white rounded-lg border border-gray-200">
+                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Manager</span>
+                        <span className="text-sm text-gray-900 block">{selectedUser.profile.manager}</span>
                       </div>
                     )}
                     {selectedUser.profile.costCenter && (
-                      <div className="detail-item">
-                        <span className="detail-label">Cost Center</span>
-                        <span className="detail-value">{selectedUser.profile.costCenter}</span>
+                      <div className="p-3 bg-white rounded-lg border border-gray-200">
+                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Cost Center</span>
+                        <span className="text-sm text-gray-900 block">{selectedUser.profile.costCenter}</span>
                       </div>
                     )}
                     {selectedUser.profile.employeeNumber && (
-                      <div className="detail-item">
-                        <span className="detail-label">Employee #</span>
-                        <span className="detail-value">{selectedUser.profile.employeeNumber}</span>
+                      <div className="p-3 bg-white rounded-lg border border-gray-200">
+                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Employee #</span>
+                        <span className="text-sm text-gray-900 block">{selectedUser.profile.employeeNumber}</span>
                       </div>
                     )}
                     {selectedUser.profile.userType && (
-                      <div className="detail-item">
-                        <span className="detail-label">User Type</span>
-                        <span className="detail-value">{selectedUser.profile.userType}</span>
+                      <div className="p-3 bg-white rounded-lg border border-gray-200">
+                        <span className="text-xs font-semibold text-gray-600 mb-1 block">User Type</span>
+                        <span className="text-sm text-gray-900 block">{selectedUser.profile.userType}</span>
                       </div>
                     )}
                   </div>
@@ -749,25 +808,25 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                 selectedUser.profile.zipCode ||
                 selectedUser.profile.countryCode) && (
                 <CollapsibleSection title="Contact" defaultOpen={false}>
-                  <div className="detail-grid">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                     {selectedUser.profile.primaryPhone && (
-                      <div className="detail-item">
-                        <span className="detail-label">Phone</span>
-                        <span className="detail-value">{selectedUser.profile.primaryPhone}</span>
+                      <div className="p-3 bg-white rounded-lg border border-gray-200">
+                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Phone</span>
+                        <span className="text-sm text-gray-900 block">{selectedUser.profile.primaryPhone}</span>
                       </div>
                     )}
                     {selectedUser.profile.mobilePhone && (
-                      <div className="detail-item">
-                        <span className="detail-label">Mobile</span>
-                        <span className="detail-value">{selectedUser.profile.mobilePhone}</span>
+                      <div className="p-3 bg-white rounded-lg border border-gray-200">
+                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Mobile</span>
+                        <span className="text-sm text-gray-900 block">{selectedUser.profile.mobilePhone}</span>
                       </div>
                     )}
                     {(selectedUser.profile.streetAddress ||
                       selectedUser.profile.city ||
                       selectedUser.profile.state) && (
-                      <div className="detail-item detail-item-full">
-                        <span className="detail-label">Location</span>
-                        <span className="detail-value">
+                      <div className="p-3 bg-white rounded-lg border border-gray-200 md:col-span-2">
+                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Location</span>
+                        <span className="text-sm text-gray-900 block">
                           {[
                             selectedUser.profile.streetAddress,
                             selectedUser.profile.city,
@@ -787,17 +846,17 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
               {/* Preferences - only show if any exist */}
               {(selectedUser.profile.locale || selectedUser.profile.timezone) && (
                 <CollapsibleSection title="Preferences" defaultOpen={false}>
-                  <div className="detail-grid">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                     {selectedUser.profile.locale && (
-                      <div className="detail-item">
-                        <span className="detail-label">Locale</span>
-                        <span className="detail-value">{selectedUser.profile.locale}</span>
+                      <div className="p-3 bg-white rounded-lg border border-gray-200">
+                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Locale</span>
+                        <span className="text-sm text-gray-900 block">{selectedUser.profile.locale}</span>
                       </div>
                     )}
                     {selectedUser.profile.timezone && (
-                      <div className="detail-item">
-                        <span className="detail-label">Timezone</span>
-                        <span className="detail-value">{selectedUser.profile.timezone}</span>
+                      <div className="p-3 bg-white rounded-lg border border-gray-200">
+                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Timezone</span>
+                        <span className="text-sm text-gray-900 block">{selectedUser.profile.timezone}</span>
                       </div>
                     )}
                   </div>
@@ -831,11 +890,11 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                     defaultOpen={false}
                     itemCount={customFields.length}
                   >
-                    <div className="detail-grid">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                       {customFields.map(([key, value]) => (
-                        <div className="detail-item" key={key}>
-                          <span className="detail-label">{key}</span>
-                          <span className="detail-value">
+                        <div className="p-3 bg-white rounded-lg border border-gray-200" key={key}>
+                          <span className="text-xs font-semibold text-gray-600 mb-1 block">{key}</span>
+                          <span className="text-sm text-gray-900 block">
                             {typeof value === 'object' ? JSON.stringify(value) : String(value)}
                           </span>
                         </div>
@@ -847,70 +906,102 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
             </div>
 
             {/* Group Memberships */}
-            <div className="memberships-section">
-              <h3 className="memberships-header">
-                Group Memberships ({memberships.length})
-              </h3>
+            <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
+              <div className="px-5 py-3.5 bg-gradient-to-r from-gray-50 to-gray-100/50 border-b border-gray-200/50">
+                <h3 className="text-sm font-semibold text-gray-900">
+                  Group Memberships ({memberships.length})
+                </h3>
+              </div>
 
               {isLoadingMemberships ? (
-                <div className="loading-state">
-                  <div className="spinner"></div>
-                  <p>Loading group memberships...</p>
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="relative">
+                    <div className="w-12 h-12 border-4 border-gray-200 border-t-[#007dc1] rounded-full animate-spin" />
+                  </div>
+                  <p className="mt-4 text-gray-600 text-sm">Loading group memberships...</p>
                 </div>
               ) : memberships.length === 0 ? (
-                <div className="empty-state">
-                  <p className="muted">This user is not a member of any groups</p>
+                <div className="flex flex-col items-center justify-center py-12">
+                  <p className="text-gray-500 text-sm">This user is not a member of any groups</p>
                 </div>
               ) : (
-                <div className="memberships-list">
+                <div className="p-4 space-y-3 bg-gradient-to-b from-white to-gray-50/30">
                   {memberships.map((membership) => (
                     <div
                       key={membership.group.id}
-                      className={`membership-card ${
-                        highlightCurrentGroup(membership.group.id) ? 'current-group' : ''
-                      }`}
+                      className={`
+                        rounded-lg border p-4 transition-all duration-200
+                        ${highlightCurrentGroup(membership.group.id)
+                          ? 'border-[#007dc1] bg-gradient-to-br from-blue-50/50 to-white ring-2 ring-[#007dc1]/20 shadow-lg shadow-[#007dc1]/10'
+                          : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'
+                        }
+                      `}
                     >
-                      <div className="membership-header">
-                        <div className="membership-group-info">
-                          <div className="group-name">
-                            {membership.group.profile.name}
+                      <div className="flex items-start justify-between gap-4 mb-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-2">
+                            <h4 className="font-semibold text-gray-900 text-sm">
+                              {membership.group.profile.name}
+                            </h4>
                             {highlightCurrentGroup(membership.group.id) && (
-                              <span className="badge badge-primary ml-2">Current Group</span>
+                              <span className="px-2 py-0.5 rounded-md bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] text-white text-xs font-bold">
+                                Current Group
+                              </span>
+                            )}
+                            {oktaOrigin && (
+                              <button
+                                onClick={() => window.open(`${oktaOrigin}/admin/group/${membership.group.id}`, '_blank')}
+                                className="p-1.5 text-gray-400 hover:text-[#007dc1] hover:bg-blue-50 rounded transition-all duration-200"
+                                title="Open group in Okta admin"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                              </button>
                             )}
                           </div>
                           {membership.group.profile.description && (
-                            <div className="group-description muted-small">
+                            <p className="text-xs text-gray-600">
                               {membership.group.profile.description}
-                            </div>
+                            </p>
                           )}
                         </div>
-                        <div className="membership-badges">
+                        <div className="flex gap-2 flex-shrink-0">
                           <span className={getMembershipTypeBadge(membership.membershipType)}>
                             {membership.membershipType.replace('_', ' ')}
                           </span>
-                          <span className="badge badge-muted">{membership.group.type}</span>
+                          <span className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 text-xs font-medium border border-gray-200">
+                            {membership.group.type}
+                          </span>
                         </div>
                       </div>
 
                       {/* Show rule details if rule-based */}
                       {membership.membershipType === 'RULE_BASED' && membership.rule && (
-                        <div className="membership-rule-details">
-                          <div className="rule-indicator">
-                            <strong>Added by Rule:</strong> {membership.rule.name}
+                        <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                          <div className="flex items-center gap-2 mb-2">
+                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            <span className="text-sm font-semibold text-blue-900">Added by Rule:</span>
+                            <span className="text-sm text-blue-800">{membership.rule.name}</span>
                             {onNavigateToRule && (
                               <button
-                                className="btn btn-sm btn-secondary ml-2"
+                                className="ml-auto px-3 py-1.5 text-xs font-medium bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm inline-flex items-center gap-1"
                                 onClick={() => onNavigateToRule(membership.rule!.id)}
                                 title="View this rule in Rules tab"
                               >
-                                View Rule →
+                                <span>View Rule</span>
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
                               </button>
                             )}
                           </div>
                           {membership.rule.conditions?.expression?.value && (
-                            <div className="rule-condition">
-                              <strong>Condition:</strong>
-                              <code className="condition-code">
+                            <div className="mt-2">
+                              <span className="text-xs font-semibold text-blue-800 block mb-1">Condition:</span>
+                              <code className="block text-xs font-mono text-blue-900 bg-white p-2 rounded border border-blue-200 overflow-x-auto">
                                 {membership.rule.conditions.expression.value}
                               </code>
                             </div>
@@ -919,8 +1010,11 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                       )}
 
                       {membership.membershipType === 'DIRECT' && (
-                        <div className="membership-info">
-                          <p className="muted-small">
+                        <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                          <p className="text-xs text-gray-600 flex items-center gap-2">
+                            <svg className="w-3.5 h-3.5 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                            </svg>
                             This user was added directly to the group (not through a rule)
                           </p>
                         </div>
@@ -935,10 +1029,16 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
 
         {/* Empty State - Show only when no search and no user selected */}
         {!isSearching && searchResults.length === 0 && !error && !selectedUser && !searchQuery && (
-          <div className="empty-state user-empty-state">
-            <div className="empty-state-icon">&#128100;</div>
-            <h3>User Membership Tracing</h3>
-            <p className="muted">Search for users to analyze their group memberships and understand why they're in specific groups</p>
+          <div className="flex flex-col items-center justify-center py-16 px-6">
+            <div className="w-20 h-20 mb-6 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
+              <svg className="w-10 h-10 text-[#007dc1]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">User Membership Tracing</h3>
+            <p className="text-sm text-gray-600 text-center max-w-md">
+              Search for users to analyze their group memberships and understand why they're in specific groups
+            </p>
           </div>
         )}
       </div>

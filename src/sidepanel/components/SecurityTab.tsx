@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import PageHeader from './shared/PageHeader';
 import { useOktaApi } from '../hooks/useOktaApi';
 import { useSecurityAnalysis } from '../hooks/useSecurityAnalysis';
 import type {
@@ -199,60 +200,89 @@ const SecurityTab: React.FC<SecurityTabProps> = ({ groupId, groupName, targetTab
   if (!groupId || !targetTabId) {
     return (
       <div className="tab-content active">
-        <div className="section">
-          <div className="empty-state">
-            <h3>Not Connected</h3>
-            <p>Please navigate to an Okta group page to run security analysis.</p>
+        <div className="max-w-7xl mx-auto px-6 py-16">
+          <div className="flex flex-col items-center justify-center text-center">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-red-100 to-red-200 flex items-center justify-center mb-6 shadow-sm">
+              <svg className="w-10 h-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">Not Connected</h3>
+            <p className="text-gray-600 max-w-md">Please navigate to an Okta group page to run security analysis.</p>
           </div>
         </div>
       </div>
     );
   }
 
+  const criticalCount = scanData?.posture?.findings.filter((f) => f.severity === 'critical').length || 0;
+
   return (
-    <div className="tab-content active">
-      <div className="section">
-        {/* Header */}
-        <div className="section-header">
-          <div>
-            <h2>Security Analysis</h2>
-            <p className="section-description">
-              Identify orphaned accounts, stale memberships, and security risks based on Okta ISPM best practices
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+    <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
+      <PageHeader
+        title="Security Analysis"
+        subtitle="Identify orphaned accounts, stale memberships, and security risks"
+        icon="shield"
+        badge={criticalCount > 0 ? { text: `${criticalCount} Critical`, variant: 'error' } : undefined}
+        actions={
+          <div className="flex gap-2">
             {scanData && scanData.posture && (
-              <button className="btn btn-secondary btn-sm" onClick={handleExportFullReport}>
-                Export Report
+              <button
+                className="px-4 py-2.5 bg-white text-gray-700 border border-gray-200 font-semibold rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 shadow-sm hover:shadow flex items-center gap-2"
+                onClick={handleExportFullReport}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span>Export Report</span>
               </button>
             )}
-            <button className="btn btn-primary btn-sm" onClick={runSecurityScan} disabled={isScanning}>
-              {isScanning ? 'Scanning...' : 'Run Security Scan'}
+            <button
+              className="px-5 py-2.5 bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] text-white font-semibold rounded-lg hover:from-[#005a8f] hover:to-[#007dc1] transition-all duration-200 shadow-md hover:shadow-lg hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 flex items-center gap-2"
+              onClick={runSecurityScan}
+              disabled={isScanning}
+            >
+              {isScanning ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  <span>Scanning...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                  <span>Run Security Scan</span>
+                </>
+              )}
             </button>
           </div>
-        </div>
+        }
+      />
+
+      <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
 
         {/* Scan Progress */}
         {isScanning && (
-          <div className="scan-progress" style={{ marginBottom: '20px' }}>
-            <div className="progress-bar">
-              <div
-                className="progress-fill"
-                style={{
-                  width: `${(scanProgress.current / scanProgress.total) * 100}%`,
-                  backgroundColor: '#0066cc',
-                  height: '8px',
-                  transition: 'width 0.3s ease',
-                }}
-              />
+          <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+            <div className="space-y-3">
+              <div className="relative w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-amber-500 to-amber-600 transition-all duration-300"
+                  style={{ width: `${(scanProgress.current / scanProgress.total) * 100}%` }}
+                />
+              </div>
+              <p className="text-sm text-gray-600 text-center">{scanProgress.message}</p>
             </div>
-            <p style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>{scanProgress.message}</p>
           </div>
         )}
 
         {/* Security Score */}
         {scanData && scanData.posture && (
-          <div className="security-score-card" style={{ marginBottom: '20px' }}>
+          <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-5">
             <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
               <div className="score-gauge" style={{ flex: '0 0 120px' }}>
                 <div
@@ -311,21 +341,33 @@ const SecurityTab: React.FC<SecurityTabProps> = ({ groupId, groupName, targetTab
 
         {/* Sub-tab Navigation */}
         {scanData && (
-          <div className="security-subtabs" style={{ marginBottom: '20px' }}>
+          <div className="flex items-center gap-2 border-b border-gray-200 pb-2">
             <button
-              className={`subtab-button ${activeSubTab === 'orphaned' ? 'active' : ''}`}
+              className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-all duration-200 ${
+                activeSubTab === 'orphaned'
+                  ? 'bg-gradient-to-b from-red-50 to-white text-gray-900 border-b-2 border-red-500 -mb-0.5'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
               onClick={() => setActiveSubTab('orphaned')}
             >
               Orphaned Accounts ({scanData.orphanedAccounts.length})
             </button>
             <button
-              className={`subtab-button ${activeSubTab === 'stale' ? 'active' : ''}`}
+              className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-all duration-200 ${
+                activeSubTab === 'stale'
+                  ? 'bg-gradient-to-b from-amber-50 to-white text-gray-900 border-b-2 border-amber-500 -mb-0.5'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
               onClick={() => setActiveSubTab('stale')}
             >
               Stale Memberships ({scanData.staleMemberships.length})
             </button>
             <button
-              className={`subtab-button ${activeSubTab === 'findings' ? 'active' : ''}`}
+              className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-all duration-200 ${
+                activeSubTab === 'findings'
+                  ? 'bg-gradient-to-b from-blue-50 to-white text-gray-900 border-b-2 border-[#007dc1] -mb-0.5'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
               onClick={() => setActiveSubTab('findings')}
             >
               All Findings ({scanData.posture?.findings.length || 0})
@@ -335,17 +377,43 @@ const SecurityTab: React.FC<SecurityTabProps> = ({ groupId, groupName, targetTab
 
         {/* Content */}
         {!scanData && !isScanning && (
-          <div className="empty-state">
-            <h3>No Scan Results</h3>
-            <p>Click &ldquo;Run Security Scan&rdquo; to analyze this group for security risks.</p>
-            <div style={{ marginTop: '20px', padding: '16px', background: '#f8f9fa', borderRadius: '4px', textAlign: 'left' }}>
-              <strong>What does the security scan check?</strong>
-              <ul style={{ marginTop: '12px', paddingLeft: '20px' }}>
-                <li>Deprovisioned users still in groups (Critical)</li>
-                <li>Users who never logged in (30+ days old)</li>
-                <li>Users inactive for 90+ days</li>
-                <li>Users inactive for 180+ days</li>
-                <li>Stale group memberships (90+ days)</li>
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#007dc1]/10 to-[#3d9dd9]/10 flex items-center justify-center mb-6 shadow-sm">
+              <svg className="w-10 h-10 text-[#007dc1]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">No Scan Results</h3>
+            <p className="text-gray-600 mb-6 max-w-md">Click "Run Security Scan" to analyze this group for security risks.</p>
+
+            <div className="bg-gradient-to-br from-blue-50/50 to-blue-50/30 rounded-lg border border-blue-100 p-6 max-w-2xl text-left">
+              <h4 className="text-base font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <svg className="w-5 h-5 text-[#007dc1]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                What does the security scan check?
+              </h4>
+              <ul className="space-y-2 text-sm text-gray-700">
+                <li className="flex items-start gap-2">
+                  <span className="text-red-600 mt-0.5">•</span>
+                  <span>Deprovisioned users still in groups (Critical)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-amber-600 mt-0.5">•</span>
+                  <span>Users who never logged in (30+ days old)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-amber-600 mt-0.5">•</span>
+                  <span>Users inactive for 90+ days</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-amber-600 mt-0.5">•</span>
+                  <span>Users inactive for 180+ days</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-0.5">•</span>
+                  <span>Stale group memberships (90+ days)</span>
+                </li>
               </ul>
             </div>
           </div>
@@ -369,9 +437,14 @@ const SecurityTab: React.FC<SecurityTabProps> = ({ groupId, groupName, targetTab
             {activeSubTab === 'findings' && scanData.posture && (
               <div className="findings-view">
                 {scanData.posture.findings.length === 0 ? (
-                  <div className="empty-state">
-                    <h3>No Security Findings</h3>
-                    <p>This group looks secure! No issues detected.</p>
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-200 flex items-center justify-center mb-6 shadow-sm">
+                      <svg className="w-10 h-10 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">No Security Findings</h3>
+                    <p className="text-gray-600 max-w-md">This group looks secure! No issues detected.</p>
                   </div>
                 ) : (
                   <div className="findings-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
@@ -397,7 +470,13 @@ const SecurityTab: React.FC<SecurityTabProps> = ({ groupId, groupName, targetTab
                     <h3 style={{ marginBottom: '16px' }}>Recommendations</h3>
                     <div className="recommendations-list">
                       {scanData.posture.recommendations.map((reco, index) => (
-                        <div key={index} className="recommendation-card" style={{ marginBottom: '12px', padding: '16px', background: '#f8f9fa', borderRadius: '4px', borderLeft: `4px solid ${reco.priority === 'high' ? '#fd7e14' : reco.priority === 'medium' ? '#ffc107' : '#6c757d'}` }}>
+                        <div
+                          key={index}
+                          className={`
+                            mb-3 p-4 bg-gray-50 rounded-lg border-l-4
+                            ${reco.priority === 'high' ? 'border-orange-500' : reco.priority === 'medium' ? 'border-amber-400' : 'border-gray-500'}
+                          `}
+                        >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
                             <div>
                               <strong>{reco.title}</strong>

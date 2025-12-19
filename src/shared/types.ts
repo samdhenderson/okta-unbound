@@ -9,6 +9,12 @@ export interface OktaUser {
   lastLogin?: string | null;
   lastUpdated?: string;
   passwordChanged?: string | null;
+  managedBy?: {
+    rules?: Array<{
+      id: string;
+      name: string;
+    }>;
+  };
   profile: {
     login: string;
     email: string;
@@ -143,6 +149,12 @@ export interface UserInfo {
   userStatus?: UserStatus;
 }
 
+export interface AppInfo {
+  appId: string;
+  appName: string;
+  appLabel?: string;
+}
+
 // User Membership Tracing types
 export interface UserMembershipTrace {
   userId: string;
@@ -159,7 +171,7 @@ export interface GroupMembership {
 }
 
 export interface MessageRequest {
-  action: 'getGroupInfo' | 'getUserInfo' | 'makeApiRequest' | 'exportGroupMembers' | 'fetchGroupRules' | 'searchUsers' | 'getUserGroups' | 'getUserDetails' | 'getOktaOrigin' | 'activateRule' | 'deactivateRule' | 'getAllGroups' | 'exportMultiGroupMembers';
+  action: 'getGroupInfo' | 'getUserInfo' | 'getAppInfo' | 'makeApiRequest' | 'exportGroupMembers' | 'fetchGroupRules' | 'searchUsers' | 'getUserGroups' | 'getUserDetails' | 'getOktaOrigin' | 'activateRule' | 'deactivateRule' | 'getAllGroups' | 'exportMultiGroupMembers';
   endpoint?: string;
   method?: string;
   body?: any;

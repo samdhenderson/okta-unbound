@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import PageHeader from './shared/PageHeader';
 import { useOktaApi } from '../hooks/useOktaApi';
 import type { GroupSummary, LinkedGroup } from '../../shared/types';
 import GroupListItem from './groups/GroupListItem';
@@ -230,15 +231,17 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
     });
   };
 
-  const handleToggleSelect = (groupId: string) => {
-    const newSelected = new Set(selectedGroupIds);
-    if (newSelected.has(groupId)) {
-      newSelected.delete(groupId);
-    } else {
-      newSelected.add(groupId);
-    }
-    setSelectedGroupIds(newSelected);
-  };
+  const handleToggleSelect = useCallback((groupId: string) => {
+    setSelectedGroupIds((prevSelected) => {
+      const newSelected = new Set(prevSelected);
+      if (newSelected.has(groupId)) {
+        newSelected.delete(groupId);
+      } else {
+        newSelected.add(groupId);
+      }
+      return newSelected;
+    });
+  }, []);
 
   const handleSelectAll = () => {
     setSelectedGroupIds(new Set(filteredGroups.map((g) => g.id)));
@@ -389,39 +392,62 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
   };
 
   return (
-    <div className="tab-content active">
-      <div className="section">
-        <div className="section-header">
-          <div>
-            <h2>Multi-Group Operations</h2>
-            <p className="section-description">
-              Manage and operate on multiple groups at once
-            </p>
-          </div>
-        </div>
+    <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
+      <PageHeader
+        title="Multi-Group Operations"
+        subtitle="Browse, search, compare, and manage multiple groups"
+        icon="users"
+        badge={selectedGroupIds.size > 0 ? { text: `${selectedGroupIds.size} Selected`, variant: 'primary' } : undefined}
+      />
+
+      <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
 
         {/* View Mode Selector */}
-        <div className="view-mode-selector">
+        <div className="flex gap-2 flex-wrap">
           <button
-            className={`view-mode-btn ${viewMode === 'browse' ? 'active' : ''}`}
+            className={`
+              px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200
+              ${viewMode === 'browse'
+                ? 'bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] text-white shadow-md'
+                : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+              }
+            `}
             onClick={() => setViewMode('browse')}
           >
             Browse Groups
           </button>
           <button
-            className={`view-mode-btn ${viewMode === 'search' ? 'active' : ''}`}
+            className={`
+              px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200
+              ${viewMode === 'search'
+                ? 'bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] text-white shadow-md'
+                : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+              }
+            `}
             onClick={() => setViewMode('search')}
           >
             Find User
           </button>
           <button
-            className={`view-mode-btn ${viewMode === 'bulk' ? 'active' : ''}`}
+            className={`
+              px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200
+              ${viewMode === 'bulk'
+                ? 'bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] text-white shadow-md'
+                : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+              }
+            `}
             onClick={() => setViewMode('bulk')}
           >
             Bulk Operations
           </button>
           <button
-            className={`view-mode-btn ${viewMode === 'compare' ? 'active' : ''}`}
+            className={`
+              px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200
+              ${viewMode === 'compare'
+                ? 'bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] text-white shadow-md'
+                : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+              }
+            `}
             onClick={() => setViewMode('compare')}
           >
             Compare Groups
@@ -431,81 +457,131 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
         {/* Browse Groups View */}
         {viewMode === 'browse' && (
           <>
-            <div className="groups-browser">
-              <div className="browser-controls">
-                {groups.length === 0 ? (
+            <div className="space-y-4">
+              {groups.length === 0 ? (
+                <div className="flex items-center justify-center py-12">
                   <button
-                    className="btn-primary btn-large"
+                    className="px-6 py-3 text-base font-semibold bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] text-white rounded-lg hover:from-[#005a8f] hover:to-[#007dc1] transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5 disabled:hover:translate-y-0"
                     onClick={loadAllGroups}
                     disabled={loading || !targetTabId}
                   >
                     {loading ? 'Loading Groups...' : 'Load All Groups'}
                   </button>
-                ) : (
-                  <>
-                    <div className="search-box">
-                      <input
-                        type="text"
-                        placeholder="Search groups by name, description, or ID..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                      />
+                </div>
+              ) : (
+                <>
+                  {/* Search Bar */}
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
                     </div>
+                    <input
+                      type="text"
+                      placeholder="Search groups by name, description, or ID..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#007dc1]/30 focus:border-[#007dc1] transition-all duration-200 shadow-sm hover:shadow"
+                    />
+                  </div>
 
-                    <div className="filters">
-                      <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-                        <option value="">All Types</option>
-                        <option value="OKTA_GROUP">Okta Groups</option>
-                        <option value="APP_GROUP">App Groups</option>
-                        <option value="BUILT_IN">Built-in Groups</option>
-                      </select>
+                  {/* Filters Row */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <select
+                      value={typeFilter}
+                      onChange={(e) => setTypeFilter(e.target.value)}
+                      className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#007dc1]/30 focus:border-[#007dc1] transition-all duration-200 shadow-sm hover:shadow"
+                    >
+                      <option value="">All Types</option>
+                      <option value="OKTA_GROUP">Okta Groups</option>
+                      <option value="APP_GROUP">App Groups</option>
+                      <option value="BUILT_IN">Built-in Groups</option>
+                    </select>
 
-                      <select value={sizeFilter} onChange={(e) => setSizeFilter(e.target.value)}>
-                        <option value="">All Sizes</option>
-                        <option value="empty">Empty (0 members)</option>
-                        <option value="small">Small (1-50 members)</option>
-                        <option value="medium">Medium (50-200 members)</option>
-                        <option value="large">Large (200-1000 members)</option>
-                        <option value="xlarge">X-Large (1000+ members)</option>
-                      </select>
+                    <select
+                      value={sizeFilter}
+                      onChange={(e) => setSizeFilter(e.target.value)}
+                      className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#007dc1]/30 focus:border-[#007dc1] transition-all duration-200 shadow-sm hover:shadow"
+                    >
+                      <option value="">All Sizes</option>
+                      <option value="empty">Empty (0 members)</option>
+                      <option value="small">Small (1-50)</option>
+                      <option value="medium">Medium (50-200)</option>
+                      <option value="large">Large (200-1000)</option>
+                      <option value="xlarge">X-Large (1000+)</option>
+                    </select>
 
-                      <select value={stalenessFilter} onChange={(e) => setStalenessFilter(e.target.value)}>
-                        <option value="">All Activity Levels</option>
-                        <option value="stale">Stale Groups</option>
-                        <option value="active">Active Groups</option>
-                      </select>
+                    <select
+                      value={stalenessFilter}
+                      onChange={(e) => setStalenessFilter(e.target.value)}
+                      className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#007dc1]/30 focus:border-[#007dc1] transition-all duration-200 shadow-sm hover:shadow"
+                    >
+                      <option value="">All Activity Levels</option>
+                      <option value="stale">Stale Groups</option>
+                      <option value="active">Active Groups</option>
+                    </select>
 
-                      <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
-                        <option value="name">Sort by Name</option>
-                        <option value="memberCount">Sort by Size</option>
-                        <option value="lastUpdated">Sort by Last Updated</option>
-                        <option value="lastMembershipUpdated">Sort by Last Activity</option>
-                        <option value="stalenessScore">Sort by Staleness</option>
-                      </select>
-                    </div>
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as any)}
+                      className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#007dc1]/30 focus:border-[#007dc1] transition-all duration-200 shadow-sm hover:shadow"
+                    >
+                      <option value="name">Sort by Name</option>
+                      <option value="memberCount">Sort by Size</option>
+                      <option value="lastUpdated">Sort by Last Updated</option>
+                      <option value="lastMembershipUpdated">Sort by Last Activity</option>
+                      <option value="stalenessScore">Sort by Staleness</option>
+                    </select>
+                  </div>
 
-                    <div className="selection-controls">
-                      <span className="selection-count">
+                  {/* Selection Controls Bar */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="flex items-center gap-4 flex-wrap">
+                      <span className="text-sm font-medium text-gray-700">
                         {selectedGroupIds.size} of {filteredGroups.length} selected
                       </span>
-                      <button className="btn-link" onClick={handleSelectAll}>
-                        Select All
-                      </button>
-                      <button className="btn-link" onClick={handleDeselectAll}>
-                        Deselect All
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="text-sm text-[#007dc1] hover:text-[#005a8f] font-medium transition-colors hover:underline"
+                          onClick={handleSelectAll}
+                        >
+                          Select All
+                        </button>
+                        <span className="text-gray-300">|</span>
+                        <button
+                          className="text-sm text-[#007dc1] hover:text-[#005a8f] font-medium transition-colors hover:underline"
+                          onClick={handleDeselectAll}
+                        >
+                          Deselect All
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
                       {selectedGroupIds.size > 0 && (
-                        <button className="btn-secondary" onClick={exportMultiGroupMembers}>
-                          Export Selected ({selectedGroupIds.size})
+                        <button
+                          className="px-4 py-2 text-sm font-medium bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-all duration-200 shadow-sm hover:shadow flex items-center gap-2"
+                          onClick={exportMultiGroupMembers}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          Export ({selectedGroupIds.size})
                         </button>
                       )}
-                      <button className="btn-secondary" onClick={loadAllGroups}>
+                      <button
+                        className="px-4 py-2 text-sm font-medium bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-all duration-200 shadow-sm hover:shadow flex items-center gap-2"
+                        onClick={loadAllGroups}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
                         Refresh
                       </button>
                     </div>
-                  </>
-                )}
-              </div>
+                  </div>
+                </>
+              )}
 
               {error && <div className="alert alert-error">{error}</div>}
 
@@ -517,7 +593,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
               )}
 
               {groups.length > 0 && (
-                <div className="groups-list">
+                <div className="space-y-3">
                   {filteredGroups.map((group) => (
                     <GroupListItem
                       key={group.id}
