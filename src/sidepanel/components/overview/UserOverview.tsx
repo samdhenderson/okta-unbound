@@ -3,6 +3,9 @@ import StatCard from './shared/StatCard';
 import QuickActionsPanel, { type ActionSection } from './shared/QuickActionsPanel';
 import { UserProfileCard } from '../users';
 import { useUserMemberships } from '../../hooks/useUserMemberships';
+import AlertMessage from '../shared/AlertMessage';
+import Button from '../shared/Button';
+import LoadingSpinner from '../shared/LoadingSpinner';
 import type { OktaUser } from '../../../shared/types';
 
 interface UserOverviewProps {
@@ -61,30 +64,15 @@ const UserOverview: React.FC<UserOverviewProps> = ({
   }, [userId, targetTabId, loadMemberships]);
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-[#007dc1]"></div>
-          <p className="mt-4 text-gray-600">Loading user data...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner size="lg" message="Loading user data..." centered />;
   }
 
   const displayError = error || membershipError;
   if (displayError) {
     return (
-      <div className="rounded-lg bg-red-50 border border-red-200 p-4">
-        <div className="flex items-start">
-          <svg className="w-6 h-6 text-red-500 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-          <div>
-            <h3 className="font-semibold text-red-900">Error loading user data</h3>
-            <p className="text-red-700 mt-1">{displayError}</p>
-          </div>
-        </div>
-      </div>
+      <AlertMessage
+        message={{ text: displayError, type: 'error' }}
+      />
     );
   }
 
@@ -225,12 +213,9 @@ const UserOverview: React.FC<UserOverviewProps> = ({
           <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Recent Groups</h3>
-              <button
-                onClick={() => onTabChange('users')}
-                className="text-sm text-[#007dc1] hover:text-[#005a8f] font-medium"
-              >
+              <Button variant="ghost" size="sm" onClick={() => onTabChange('users')}>
                 View All
-              </button>
+              </Button>
             </div>
             <div className="space-y-2">
               {groups.slice(0, 5).map((membership, index) => (

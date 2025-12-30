@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PageHeader from './shared/PageHeader';
+import AlertMessage from './shared/AlertMessage';
+import Button from './shared/Button';
+import CollapsibleSection from './shared/CollapsibleSection';
+import EmptyState from './shared/EmptyState';
+import LoadingSpinner from './shared/LoadingSpinner';
 import type { OktaUser, GroupMembership } from '../../shared/types';
 import { RulesCache } from '../../shared/rulesCache';
 import { useUserContext } from '../hooks/useUserContext';
@@ -58,55 +63,6 @@ interface UsersTabProps {
   currentGroupId?: string;
   onNavigateToRule?: (ruleId: string) => void;
 }
-
-// Premium collapsible section component matching Overview tab design
-interface CollapsibleSectionProps {
-  title: string;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-  itemCount?: number;
-}
-
-const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
-  title,
-  defaultOpen = true,
-  children,
-  itemCount,
-}) => {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
-
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md">
-      <button
-        className="w-full flex items-center justify-between px-5 py-3.5 text-left font-semibold text-gray-900 bg-gradient-to-r from-gray-50 to-gray-100/50 hover:from-gray-100 hover:to-gray-200/50 transition-all duration-200 border-b border-gray-200/50"
-        onClick={() => setIsOpen(!isOpen)}
-        type="button"
-      >
-        <div className="flex items-center gap-3">
-          <svg
-            className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${isOpen ? 'rotate-90' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-          <span className="text-sm font-semibold">{title}</span>
-          {itemCount !== undefined && (
-            <span className="px-2 py-0.5 bg-white rounded-full text-xs font-medium text-gray-600 shadow-sm">
-              {itemCount}
-            </span>
-          )}
-        </div>
-      </button>
-      {isOpen && (
-        <div className="p-5 bg-gradient-to-b from-white to-gray-50/30 animate-in slide-in-from-top-2 duration-300">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-};
 
 const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavigateToRule }) => {
   const { userInfo, isLoading: isLoadingUserContext, oktaOrigin } = useUserContext();
@@ -506,18 +462,14 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
         badge={selectedUser ? { text: `${memberships.length} Groups`, variant: 'primary' } : undefined}
         actions={
           oktaOrigin && selectedUser ? (
-            <a
-              href={`${oktaOrigin}/admin/user/profile/view/${selectedUser.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-5 py-2.5 bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] text-white font-semibold rounded-lg hover:from-[#005a8f] hover:to-[#007dc1] transition-all duration-200 shadow-md hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-2"
+            <Button
+              variant="primary"
+              icon="link"
+              onClick={() => window.open(`${oktaOrigin}/admin/user/profile/view/${selectedUser.id}`, '_blank')}
               title="Open user in Okta Admin"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
-              <span>Open in Okta</span>
-            </a>
+              Open in Okta
+            </Button>
           ) : undefined
         }
       />
@@ -578,15 +530,11 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
 
         {/* Error Display */}
         {error && (
-          <div className="rounded-lg bg-red-50 border border-red-200 p-4 shadow-sm animate-in slide-in-from-top-2 duration-300">
-            <div className="flex items-start gap-3">
-              <span className="text-xl">⚠️</span>
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-red-900">Error</p>
-                <p className="text-sm text-red-700 mt-1">{error}</p>
-              </div>
-            </div>
-          </div>
+          <AlertMessage
+            message={{ text: error, type: 'error' }}
+            onDismiss={() => setError(null)}
+            className="animate-in slide-in-from-top-2 duration-300"
+          />
         )}
 
         {/* Search Results */}
@@ -915,12 +863,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
               </div>
 
               {isLoadingMemberships ? (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <div className="relative">
-                    <div className="w-12 h-12 border-4 border-gray-200 border-t-[#007dc1] rounded-full animate-spin" />
-                  </div>
-                  <p className="mt-4 text-gray-600 text-sm">Loading group memberships...</p>
-                </div>
+                <LoadingSpinner size="lg" message="Loading group memberships..." centered />
               ) : memberships.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <p className="text-gray-500 text-sm">This user is not a member of any groups</p>
@@ -987,16 +930,15 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                             <span className="text-sm font-semibold text-blue-900">Added by Rule:</span>
                             <span className="text-sm text-blue-800">{membership.rule.name}</span>
                             {onNavigateToRule && (
-                              <button
-                                className="ml-auto px-3 py-1.5 text-xs font-medium bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm inline-flex items-center gap-1"
+                              <Button
+                                variant="secondary"
+                                size="sm"
                                 onClick={() => onNavigateToRule(membership.rule!.id)}
                                 title="View this rule in Rules tab"
+                                className="ml-auto"
                               >
-                                <span>View Rule</span>
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                </svg>
-                              </button>
+                                View Rule
+                              </Button>
                             )}
                           </div>
                           {membership.rule.conditions?.expression?.value && (
@@ -1030,17 +972,11 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
 
         {/* Empty State - Show only when no search and no user selected */}
         {!isSearching && searchResults.length === 0 && !error && !selectedUser && !searchQuery && (
-          <div className="flex flex-col items-center justify-center py-16 px-6">
-            <div className="w-20 h-20 mb-6 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
-              <svg className="w-10 h-10 text-[#007dc1]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">User Membership Tracing</h3>
-            <p className="text-sm text-gray-600 text-center max-w-md">
-              Search for users to analyze their group memberships and understand why they're in specific groups
-            </p>
-          </div>
+          <EmptyState
+            icon="user"
+            title="User Membership Tracing"
+            description="Search for users to analyze their group memberships and understand why they're in specific groups"
+          />
         )}
       </div>
     </div>

@@ -1,6 +1,7 @@
 import React from 'react';
 import StatCard from './shared/StatCard';
 import QuickActionsPanel, { type ActionSection } from './shared/QuickActionsPanel';
+import Button from '../shared/Button';
 
 interface AppOverviewProps {
   appId: string;
@@ -230,12 +231,9 @@ const AppOverview: React.FC<AppOverviewProps> = ({
                   Navigate to the Apps tab for full app management capabilities including bulk assignments,
                   security scanning, and user-to-group conversion.
                 </div>
-                <button
-                  onClick={() => onTabChange('apps')}
-                  className="mt-2 text-sm text-green-600 hover:text-green-700 font-medium"
-                >
+                <Button variant="ghost" size="sm" onClick={() => onTabChange('apps')} className="mt-2">
                   Go to Apps Tab →
-                </button>
+                </Button>
               </div>
             </div>
           </div>

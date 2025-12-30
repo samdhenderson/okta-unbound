@@ -31,15 +31,9 @@ const PageHeader: React.FC<PageHeaderProps> = ({
 }) => {
   return (
     <div
-      className="relative overflow-hidden bg-gradient-to-br from-white via-gray-50/30 to-white border-b border-gray-200/60 shadow-sm"
+      className="relative bg-white border-b border-gray-200 shadow-sm"
       style={{ fontFamily: 'var(--font-primary)' }}
     >
-      {/* Subtle decorative gradient glow */}
-      <div className="absolute top-0 right-0 w-96 h-full bg-gradient-to-l from-[#007dc1]/[0.04] via-[#3d9dd9]/[0.02] to-transparent pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-80 h-full bg-gradient-to-r from-cyan-400/[0.03] via-transparent to-transparent pointer-events-none" />
-
-      {/* Animated edge highlight */}
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
 
       <div className="relative px-6 py-6 flex items-center justify-between gap-4">
         <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -87,9 +81,6 @@ const PageHeader: React.FC<PageHeaderProps> = ({
           </div>
         )}
       </div>
-
-      {/* Bottom edge highlight */}
-      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#007dc1]/20 to-transparent" />
     </div>
   );
 };
