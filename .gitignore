@@ -1,0 +1,66 @@
+# Claude Code context files (do not commit)
+CLAUDE.md
+claude.md
+.claude/
+
+# Development
+node_modules/
+.env
+.env.local
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build artifacts
+dist/
+build/
+*.crx
+*.pem
+*.zip
+extension.zip
+
+# IDE & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Testing
+coverage/
+.nyc_output/
+*.test.js.snap
+
+# Documentation
+docs/api/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Local development
+.local/
+config.local.js
+
+# Chrome extension development
+manifest.v2.json
+
+# Backup files
+*.bak
+*.backup
+*~.nib

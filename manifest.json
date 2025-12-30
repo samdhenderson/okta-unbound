@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "Okta Unbound",
+  "version": "0.3.0",
+  "description": "Advanced Okta admin tool with sidebar UI, bulk operations, CSV/JSON export, Rule Inspector, and automated cleanup for group management",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "contextMenus",
+    "downloads",
+    "notifications",
+    "sidePanel",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://*.okta.com/*",
+    "https://*.oktapreview.com/*",
+    "https://*.okta-emea.com/*"
+  ],
+  "action": {
+    "default_title": "Open Okta Unbound Sidebar",
+    "default_icon": {
+      "16": "assets/icons/icon16.png",
+      "48": "assets/icons/icon48.png",
+      "128": "assets/icons/icon128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel/index.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.okta.com/*",
+        "https://*.oktapreview.com/*",
+        "https://*.okta-emea.com/*"
+      ],
+      "js": ["src/content/index.ts"]
+    }
+  ],
+  "background": {
+    "service_worker": "src/background/index.ts",
+    "type": "module"
+  },
+  "icons": {
+    "16": "assets/icons/icon16.png",
+    "48": "assets/icons/icon48.png",
+    "128": "assets/icons/icon128.png"
+  }
+}

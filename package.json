@@ -1,0 +1,90 @@
+{
+  "name": "okta-unbound",
+  "version": "0.3.0",
+  "description": "Advanced Okta group and user management extension for administrators",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "clean": "rm -rf dist/",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:run": "vitest run",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext ts,tsx --report-unused-disable-directives",
+    "lint:fix": "eslint src --ext ts,tsx --fix",
+    "prepare": "husky",
+    "docs": "typedoc",
+    "docs:clean": "rm -rf docs/api"
+  },
+  "keywords": [
+    "okta",
+    "chrome-extension",
+    "identity-management",
+    "user-management",
+    "admin-tools",
+    "iam"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/okta-unbound.git"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.2.1",
+    "@eslint/js": "^9.39.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/chrome": "^0.1.29",
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3",
+    "@typescript-eslint/eslint-plugin": "^8.47.0",
+    "@typescript-eslint/parser": "^8.47.0",
+    "@vitejs/plugin-react": "^5.1.1",
+    "@vitest/coverage-v8": "^4.0.10",
+    "@vitest/ui": "^4.0.10",
+    "esbuild": "^0.19.0",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "happy-dom": "^20.0.10",
+    "husky": "^9.1.7",
+    "jsdom": "^27.2.0",
+    "lint-staged": "^16.2.6",
+    "msw": "^2.12.2",
+    "typedoc": "^0.28.15",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.2",
+    "vitest": "^4.0.10"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/okta-unbound/issues"
+  },
+  "homepage": "https://github.com/yourusername/okta-unbound#readme",
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.18",
+    "idb": "^8.0.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "recharts": "^3.4.1",
+    "tailwindcss": "^4.1.18"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "vitest related --run"
+    ]
+  }
+}
