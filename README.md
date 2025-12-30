@@ -4,6 +4,12 @@ Advanced group, user, and application management for Okta administrators.
 
 A Chrome Extension (Manifest V3) with side panel UI that provides powerful bulk operations, intelligent filtering, and automated cleanup tools for Okta administration.
 
+
+
+#### Dev Note
+
+This chrome extension was developed in between me and Anthropic's Claude model. It's likely that cleanup will be needed throughout. And it's likely unused, or redundant code exists.
+
 ## Features
 
 ### Overview Tab
