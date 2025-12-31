@@ -3,6 +3,8 @@ import type { AppSummary } from '../../../shared/types';
 import { enrichAppBasic } from '../../utils/appEnrichment';
 import AppListItem from './AppListItem';
 import SelectionChips from '../shared/SelectionChips';
+import Button from '../shared/Button';
+import EmptyState from '../shared/EmptyState';
 
 interface BrowseSubTabProps {
   oktaApi: {
@@ -348,20 +350,13 @@ const BrowseSubTab: React.FC<BrowseSubTabProps> = ({
             )}
           </div>
 
-          <button
+          <Button
             onClick={handleRefresh}
             disabled={isLoadingCache}
-            className="px-4 py-2.5 bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] text-white font-medium rounded-lg hover:from-[#005a8f] hover:to-[#007dc1] transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+            loading={isLoadingCache}
           >
-            {isLoadingCache ? (
-              <span className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Loading...
-              </span>
-            ) : (
-              searchMode === 'cached' ? 'Refresh Apps' : 'Load All Apps'
-            )}
-          </button>
+            {searchMode === 'cached' ? 'Refresh Apps' : 'Load All Apps'}
+          </Button>
         </div>
 
         {/* Filters (only in cached mode) */}
@@ -459,20 +454,21 @@ const BrowseSubTab: React.FC<BrowseSubTabProps> = ({
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={handleBulkEnrich}
                 disabled={selectedApps.filter(app => app.totalAssignmentCount === 0).length === 0}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Enrich selected apps with real data"
               >
                 Enrich Selected
-              </button>
-              <button
+              </Button>
+              <Button
+                size="sm"
                 onClick={() => onResult({ text: 'Bulk operations coming soon!', type: 'info' })}
-                className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] rounded-lg hover:from-[#005a8f] hover:to-[#007dc1] transition-all shadow-md hover:shadow-lg"
               >
                 Bulk Assign
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -483,45 +479,36 @@ const BrowseSubTab: React.FC<BrowseSubTabProps> = ({
         {searchMode === 'cached' && apps.length > 0 && (
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
-              <button
-                onClick={handleSelectAll}
-                className="text-sm text-[#007dc1] hover:underline font-medium"
-              >
+              <Button variant="ghost" size="sm" onClick={handleSelectAll}>
                 Select All
-              </button>
+              </Button>
               {selectedAppIds.size > 0 && (
-                <button
-                  onClick={handleDeselectAll}
-                  className="text-sm text-gray-600 hover:underline"
-                >
-                  Deselect All
-                </button>
+                <>
+                  <span className="text-gray-300">|</span>
+                  <Button variant="ghost" size="sm" onClick={handleDeselectAll}>
+                    Deselect All
+                  </Button>
+                </>
               )}
             </div>
           </div>
         )}
 
         {filteredApps.length === 0 && searchMode === 'live' && !searchQuery && (
-          <div className="text-center py-12 px-6 bg-gradient-to-br from-gray-50 to-white rounded-lg border border-gray-200">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center">
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-            </div>
-            <p className="text-lg font-semibold text-gray-900">No apps loaded</p>
-            <p className="text-sm text-gray-500 mt-1 mb-4">
-              Click "Load All Apps" to browse all applications in your Okta org
-            </p>
-          </div>
+          <EmptyState
+            icon="app"
+            title="No apps loaded"
+            description="Click 'Load All Apps' to browse all applications in your Okta org"
+            actions={[{ label: 'Load All Apps', onClick: handleRefresh, variant: 'primary' }]}
+          />
         )}
 
         {filteredApps.length === 0 && (searchMode === 'cached' || searchQuery) && (
-          <div className="text-center py-12 px-6 bg-gradient-to-br from-gray-50 to-white rounded-lg border border-gray-200">
-            <p className="text-lg font-semibold text-gray-900">No apps found</p>
-            <p className="text-sm text-gray-500 mt-1">
-              Try adjusting your search or filters
-            </p>
-          </div>
+          <EmptyState
+            icon="search"
+            title="No apps found"
+            description="Try adjusting your search or filters"
+          />
         )}
 
         {filteredApps.map(app => (

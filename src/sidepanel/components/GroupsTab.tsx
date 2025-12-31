@@ -3,8 +3,8 @@ import PageHeader from './shared/PageHeader';
 import AlertMessage from './shared/AlertMessage';
 import Button from './shared/Button';
 import EmptyState from './shared/EmptyState';
-import LoadingSpinner from './shared/LoadingSpinner';
 import Modal from './shared/Modal';
+import ScrollableList from './shared/ScrollableList';
 import { useOktaApi } from '../hooks/useOktaApi';
 import type { GroupSummary, LinkedGroup } from '../../shared/types';
 import GroupListItem from './groups/GroupListItem';
@@ -626,8 +626,9 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
 
         {/* Browse Groups View */}
         {viewMode === 'browse' && (
-          <>
-            <div className="space-y-4">
+          <div className="flex flex-col h-[calc(100vh-280px)] min-h-[400px]">
+            {/* Fixed Header Section */}
+            <div className="flex-shrink-0 space-y-4">
               {/* Mode Indicator Badge */}
               {searchMode === 'live' ? (
                 <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
@@ -775,56 +776,53 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
                   onDismiss={() => setError(null)}
                 />
               )}
-
-              {loading && (
-                <LoadingSpinner size="lg" message="Loading groups from Okta..." centered />
-              )}
-
-              {/* Results List */}
-              {filteredGroups.length > 0 && (
-                <div className="space-y-3">
-                  {filteredGroups.map((group) => (
-                    <GroupListItem
-                      key={group.id}
-                      group={group}
-                      selected={selectedGroupIds.has(group.id)}
-                      onToggleSelect={handleToggleSelect}
-                      oktaOrigin={oktaOrigin}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {/* No results message - Live mode */}
-              {searchMode === 'live' && liveSearchQuery.trim() && !isLiveSearching && filteredGroups.length === 0 && (
-                <EmptyState
-                  icon="users"
-                  title={`No groups found matching "${liveSearchQuery}"`}
-                  description="Try a different search term or load all groups for advanced filtering"
-                  actions={[
-                    { label: 'Load All Groups', onClick: handleLoadGroupsClick, variant: 'primary' }
-                  ]}
-                />
-              )}
-
-              {/* No results message - Cached mode */}
-              {searchMode === 'cached' && filteredGroups.length === 0 && groups.length > 0 && (
-                <EmptyState
-                  icon="users"
-                  title="No groups match your filters"
-                  description="Try adjusting your search or filter criteria"
-                />
-              )}
             </div>
 
-            {/* Group Collections - Only show in cached mode */}
+            {/* Scrollable List Section */}
+            <ScrollableList
+              loading={loading}
+              loadingMessage="Loading groups from Okta..."
+              className="mt-4"
+              emptyState={
+                searchMode === 'live' && liveSearchQuery.trim() && !isLiveSearching ? (
+                  <EmptyState
+                    icon="users"
+                    title={`No groups found matching "${liveSearchQuery}"`}
+                    description="Try a different search term or load all groups for advanced filtering"
+                    actions={[
+                      { label: 'Load All Groups', onClick: handleLoadGroupsClick, variant: 'primary' }
+                    ]}
+                  />
+                ) : searchMode === 'cached' && groups.length > 0 ? (
+                  <EmptyState
+                    icon="users"
+                    title="No groups match your filters"
+                    description="Try adjusting your search or filter criteria"
+                  />
+                ) : undefined
+              }
+            >
+              {filteredGroups.map((group) => (
+                <GroupListItem
+                  key={group.id}
+                  group={group}
+                  selected={selectedGroupIds.has(group.id)}
+                  onToggleSelect={handleToggleSelect}
+                  oktaOrigin={oktaOrigin}
+                />
+              ))}
+            </ScrollableList>
+
+            {/* Fixed Footer Section - Group Collections */}
             {searchMode === 'cached' && groups.length > 0 && (
-              <GroupCollections
-                selectedGroupIds={Array.from(selectedGroupIds)}
-                onLoadCollection={handleLoadCollection}
-              />
+              <div className="flex-shrink-0 mt-4">
+                <GroupCollections
+                  selectedGroupIds={Array.from(selectedGroupIds)}
+                  onLoadCollection={handleLoadCollection}
+                />
+              </div>
             )}
-          </>
+          </div>
         )}
 
         {/* Bulk Operations View */}

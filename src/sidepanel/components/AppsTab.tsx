@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import PageHeader from './shared/PageHeader';
 import AlertMessage, { type AlertMessageData } from './shared/AlertMessage';
+import Button from './shared/Button';
 import { useOktaApi } from '../hooks/useOktaApi';
 
 // Import sub-tab components
@@ -62,19 +63,14 @@ const AppsTab: React.FC<AppsTabProps> = ({ groupId, groupName, targetTabId, okta
         {/* Sub-tab navigation - pill button style matching GroupsTab */}
         <div className="flex gap-2 flex-wrap">
           {subTabs.map((tab) => (
-            <button
+            <Button
               key={tab.id}
-              className={`
-                px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200
-                ${activeSubTab === tab.id
-                  ? 'bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] text-white shadow-md'
-                  : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-                }
-              `}
+              variant={activeSubTab === tab.id ? 'primary' : 'secondary'}
+              size="sm"
               onClick={() => setActiveSubTab(tab.id)}
             >
               {tab.label}
-            </button>
+            </Button>
           ))}
         </div>
 
