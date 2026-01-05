@@ -1,6 +1,10 @@
 import React from 'react';
 import { useOktaPageContext } from '../hooks/useOktaPageContext';
 import PageHeader from './shared/PageHeader';
+import AlertMessage from './shared/AlertMessage';
+import Button from './shared/Button';
+import EmptyState from './shared/EmptyState';
+import LoadingSpinner from './shared/LoadingSpinner';
 import GroupOverview from './overview/GroupOverview';
 import UserOverview from './overview/UserOverview';
 import AppOverview from './overview/AppOverview';
@@ -27,12 +31,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ onTabChange }) => {
   if (isLoading) {
     return (
       <div className="tab-content active">
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-600"></div>
-            <p className="mt-4 text-gray-600">Detecting page context...</p>
-          </div>
-        </div>
+        <LoadingSpinner size="lg" message="Detecting page context..." centered />
       </div>
     );
   }
@@ -41,43 +40,22 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ onTabChange }) => {
   if (connectionStatus === 'error' || error) {
     return (
       <div className="tab-content active">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="rounded-lg bg-red-50 border border-red-200 p-6 shadow-sm">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-gradient-to-br from-red-100 to-red-200 flex items-center justify-center">
-                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="text-lg font-semibold text-red-900">Connection Error</h3>
-                <p className="text-red-700 mt-2 leading-relaxed">
-                  {error || 'Please open an Okta admin page in this window'}
-                </p>
-                <button
-                  onClick={refetch}
-                  className="mt-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm font-medium shadow-sm"
-                >
-                  Retry Connection
-                </button>
-              </div>
-            </div>
-          </div>
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+          <AlertMessage
+            message={{
+              text: error || 'Please open an Okta admin page in this window',
+              type: 'error'
+            }}
+            action={{ label: 'Retry Connection', onClick: refetch }}
+          />
 
           {/* Help Text */}
-          <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-6 shadow-sm">
-            <h4 className="text-base font-semibold text-blue-900 mb-3 flex items-center gap-2">
-              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>Quick Start</span>
-            </h4>
-            <ol className="text-sm text-blue-800 space-y-2 ml-6 list-decimal leading-relaxed">
-              <li>Open an Okta admin page (e.g., okta.com or okta-emea.com)</li>
-              <li>Navigate to a group, user, or app page</li>
-              <li>The Overview tab will automatically detect the context</li>
-            </ol>
-          </div>
+          <AlertMessage
+            message={{
+              text: 'Quick Start: 1) Open an Okta admin page (e.g., okta.com) 2) Navigate to a group, user, or app page 3) The Overview tab will automatically detect the context',
+              type: 'info'
+            }}
+          />
         </div>
       </div>
     );
@@ -103,17 +81,16 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ onTabChange }) => {
         icon="chart"
         badge={getBadgeConfig()}
         actions={
-          <button
+          <Button
+            variant="secondary"
+            icon="refresh"
             onClick={refetch}
             disabled={isLoading}
-            className="flex-shrink-0 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm hover:shadow"
+            loading={isLoading}
             title="Refresh context and data"
           >
-            <svg className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            <span className="hidden sm:inline">{isLoading ? 'Refreshing...' : 'Refresh'}</span>
-          </button>
+            Refresh
+          </Button>
         }
       />
 
@@ -156,31 +133,15 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ onTabChange }) => {
         )}
 
         {pageType === 'unknown' && (
-          <div className="py-12">
-            <div className="text-center">
-              <span className="text-6xl mb-4 block">🔍</span>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                Waiting for Context
-              </h3>
-              <p className="text-gray-600 max-w-md mx-auto">
-                Navigate to a group, user, or app page in Okta to see contextual insights and quick actions.
-              </p>
-              <div className="mt-6 flex gap-3 justify-center">
-                <button
-                  onClick={() => onTabChange('groups')}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
-                >
-                  Browse Groups
-                </button>
-                <button
-                  onClick={() => onTabChange('users')}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm font-medium"
-                >
-                  Search Users
-                </button>
-              </div>
-            </div>
-          </div>
+          <EmptyState
+            icon="search"
+            title="Waiting for Context"
+            description="Navigate to a group, user, or app page in Okta to see contextual insights and quick actions."
+            actions={[
+              { label: 'Browse Groups', onClick: () => onTabChange('groups'), variant: 'primary' },
+              { label: 'Search Users', onClick: () => onTabChange('users'), variant: 'secondary' }
+            ]}
+          />
         )}
       </div>
     </div>

@@ -2,6 +2,10 @@ import React, { useState, useCallback } from 'react';
 import { useGroupHealth } from '../../hooks/useGroupHealth';
 import { useOktaApi } from '../../hooks/useOktaApi';
 import { useProgress } from '../../contexts/ProgressContext';
+import AlertMessage from '../shared/AlertMessage';
+import Button from '../shared/Button';
+import LoadingSpinner from '../shared/LoadingSpinner';
+import Modal from '../shared/Modal';
 import StatCard from './shared/StatCard';
 import QuickActionsPanel, { type ActionSection } from './shared/QuickActionsPanel';
 import RiskGauge from '../dashboard/RiskGauge';
@@ -80,33 +84,15 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
   };
 
   if (isLoading && !metrics) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading group metrics...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner size="lg" message="Loading group metrics..." centered />;
   }
 
   if (error) {
     return (
-      <div className="rounded-lg bg-red-50 border border-red-200 p-4">
-        <div className="flex items-start">
-          <span className="text-2xl mr-3">⚠️</span>
-          <div>
-            <h3 className="font-semibold text-red-900">Error loading dashboard</h3>
-            <p className="text-red-700 mt-1">{error}</p>
-            <button
-              onClick={refresh}
-              className="mt-3 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      </div>
+      <AlertMessage
+        message={{ text: error, type: 'error' }}
+        action={{ label: 'Retry', onClick: refresh }}
+      />
     );
   }
 
@@ -253,116 +239,91 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
       </div>
 
       {/* Export Modal */}
-      {exportModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setExportModalOpen(false)}>
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Export Group Members</h3>
-              <button onClick={() => setExportModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                <span className="text-2xl">&times;</span>
-              </button>
-            </div>
-            <div className="px-6 py-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Format</label>
-                <select
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={exportFormat}
-                  onChange={(e) => setExportFormat(e.target.value as 'csv' | 'json')}
-                >
-                  <option value="csv">CSV</option>
-                  <option value="json">JSON</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Status (optional)</label>
-                <select
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={exportFilter}
-                  onChange={(e) => setExportFilter(e.target.value as UserStatus | '')}
-                >
-                  <option value="">All Users</option>
-                  <option value="ACTIVE">{getUserFriendlyStatus('ACTIVE')} Only</option>
-                  <option value="DEPROVISIONED">{getUserFriendlyStatus('DEPROVISIONED')} Only</option>
-                  <option value="SUSPENDED">{getUserFriendlyStatus('SUSPENDED')} Only</option>
-                  <option value="LOCKED_OUT">{getUserFriendlyStatus('LOCKED_OUT')} Only</option>
-                </select>
-              </div>
-              <p className="text-sm text-gray-600">
-                This will export members from <strong>{groupName}</strong> to a {exportFormat.toUpperCase()} file.
-              </p>
-            </div>
-            <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-lg">
-              <button
-                onClick={() => setExportModalOpen(false)}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleExportConfirm}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-              >
-                Export
-              </button>
-            </div>
+      <Modal
+        isOpen={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+        title="Export Group Members"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setExportModalOpen(false)}>Cancel</Button>
+            <Button variant="primary" onClick={handleExportConfirm}>Export</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Format</label>
+            <select
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={exportFormat}
+              onChange={(e) => setExportFormat(e.target.value as 'csv' | 'json')}
+            >
+              <option value="csv">CSV</option>
+              <option value="json">JSON</option>
+            </select>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Status (optional)</label>
+            <select
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={exportFilter}
+              onChange={(e) => setExportFilter(e.target.value as UserStatus | '')}
+            >
+              <option value="">All Users</option>
+              <option value="ACTIVE">{getUserFriendlyStatus('ACTIVE')} Only</option>
+              <option value="DEPROVISIONED">{getUserFriendlyStatus('DEPROVISIONED')} Only</option>
+              <option value="SUSPENDED">{getUserFriendlyStatus('SUSPENDED')} Only</option>
+              <option value="LOCKED_OUT">{getUserFriendlyStatus('LOCKED_OUT')} Only</option>
+            </select>
+          </div>
+          <p className="text-sm text-gray-600">
+            This will export members from <strong>{groupName}</strong> to a {exportFormat.toUpperCase()} file.
+          </p>
         </div>
-      )}
+      </Modal>
 
       {/* Custom Filter Modal */}
-      {customFilterOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setCustomFilterOpen(false)}>
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Custom Status Filter</h3>
-              <button onClick={() => setCustomFilterOpen(false)} className="text-gray-400 hover:text-gray-600">
-                <span className="text-2xl">&times;</span>
-              </button>
-            </div>
-            <div className="px-6 py-4">
-              <p className="text-sm text-gray-600 mb-4">Select user statuses to remove from this group:</p>
-              <div className="space-y-2">
-                {(['DEPROVISIONED', 'SUSPENDED', 'LOCKED_OUT', 'STAGED', 'PROVISIONED', 'RECOVERY', 'PASSWORD_EXPIRED'] as UserStatus[]).map(status => (
-                  <label key={status} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedStatuses.includes(status)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedStatuses([...selectedStatuses, status]);
-                        } else {
-                          setSelectedStatuses(selectedStatuses.filter(s => s !== status));
-                        }
-                      }}
-                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                    />
-                    <span className="text-sm">{getUserFriendlyStatus(status)}</span>
-                    <span className="ml-auto text-xs text-gray-500">
-                      ({metrics.statusBreakdown[status] || 0})
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-lg">
-              <button
-                onClick={() => setCustomFilterOpen(false)}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCustomCleanup}
-                disabled={selectedStatuses.length === 0}
-                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Remove Selected ({selectedStatuses.length})
-              </button>
-            </div>
-          </div>
+      <Modal
+        isOpen={customFilterOpen}
+        onClose={() => setCustomFilterOpen(false)}
+        title="Custom Status Filter"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setCustomFilterOpen(false)}>Cancel</Button>
+            <Button
+              variant="danger"
+              onClick={handleCustomCleanup}
+              disabled={selectedStatuses.length === 0}
+            >
+              Remove Selected ({selectedStatuses.length})
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-gray-600 mb-4">Select user statuses to remove from this group:</p>
+        <div className="space-y-2">
+          {(['DEPROVISIONED', 'SUSPENDED', 'LOCKED_OUT', 'STAGED', 'PROVISIONED', 'RECOVERY', 'PASSWORD_EXPIRED'] as UserStatus[]).map(status => (
+            <label key={status} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedStatuses.includes(status)}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setSelectedStatuses([...selectedStatuses, status]);
+                  } else {
+                    setSelectedStatuses(selectedStatuses.filter(s => s !== status));
+                  }
+                }}
+                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+              />
+              <span className="text-sm">{getUserFriendlyStatus(status)}</span>
+              <span className="ml-auto text-xs text-gray-500">
+                ({metrics.statusBreakdown[status] || 0})
+              </span>
+            </label>
+          ))}
         </div>
-      )}
+      </Modal>
     </div>
   );
 };

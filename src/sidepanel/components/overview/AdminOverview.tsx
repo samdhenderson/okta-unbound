@@ -1,6 +1,7 @@
 import React from 'react';
 import StatCard from './shared/StatCard';
 import QuickActionsPanel, { type ActionSection } from './shared/QuickActionsPanel';
+import { useOrgStats } from '../../hooks/useOrgStats';
 
 interface AdminOverviewProps {
   targetTabId: number | null;
@@ -8,12 +9,17 @@ interface AdminOverviewProps {
 }
 
 const AdminOverview: React.FC<AdminOverviewProps> = ({ onTabChange }) => {
-  // Placeholder stats - would be fetched from API in real implementation
-  const stats = {
-    totalUsers: 0,
-    totalGroups: 0,
-    totalApps: 0,
-    activeRules: 0,
+  const { stats: orgStats } = useOrgStats();
+
+  // Format cache age for display
+  const formatCacheAge = (ageMs: number | null): string => {
+    if (ageMs === null) return '';
+    const hours = Math.floor(ageMs / (60 * 60 * 1000));
+    const minutes = Math.floor((ageMs % (60 * 60 * 1000)) / (60 * 1000));
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ago`;
+    }
+    return `${minutes}m ago`;
   };
 
   const actionSections: ActionSection[] = [
@@ -55,7 +61,7 @@ const AdminOverview: React.FC<AdminOverviewProps> = ({ onTabChange }) => {
           icon: 'list',
           variant: 'ghost',
           onClick: () => onTabChange('rules'),
-          badge: stats.activeRules > 0 ? `${stats.activeRules}` : undefined,
+          badge: orgStats.activeRules && orgStats.activeRules > 0 ? `${orgStats.activeRules}` : undefined,
           tooltip: 'View and manage group assignment rules',
         },
         {
@@ -129,32 +135,36 @@ const AdminOverview: React.FC<AdminOverviewProps> = ({ onTabChange }) => {
       {/* Quick Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Total Users"
-          value={stats.totalUsers || '—'}
-          color="primary"
-          icon="user"
-          onClick={() => onTabChange('users')}
-        />
-        <StatCard
-          title="Total Groups"
-          value={stats.totalGroups || '—'}
+          title="Groups"
+          value={orgStats.totalGroups !== null ? orgStats.totalGroups : '—'}
+          subtitle={orgStats.cacheStatus.groupsCached ? formatCacheAge(orgStats.cacheStatus.groupsCacheAge) : 'Load in Groups tab'}
           color="success"
           icon="users"
           onClick={() => onTabChange('groups')}
         />
         <StatCard
           title="Applications"
-          value={stats.totalApps || '—'}
+          value={orgStats.totalApps !== null ? orgStats.totalApps : '—'}
+          subtitle={orgStats.cacheStatus.appsCached ? formatCacheAge(orgStats.cacheStatus.appsCacheAge) : 'Load in Apps tab'}
           color="neutral"
           icon="app"
           onClick={() => onTabChange('apps')}
         />
         <StatCard
           title="Active Rules"
-          value={stats.activeRules || '—'}
+          value={orgStats.activeRules !== null ? orgStats.activeRules : '—'}
+          subtitle={orgStats.cacheStatus.rulesCached ? 'Cached' : 'Load in Rules tab'}
           color="warning"
           icon="bolt"
           onClick={() => onTabChange('rules')}
+        />
+        <StatCard
+          title="Operations (7d)"
+          value={orgStats.recentOperations !== null ? orgStats.recentOperations : '0'}
+          subtitle="This week"
+          color="primary"
+          icon="refresh"
+          onClick={() => onTabChange('history')}
         />
       </div>
 

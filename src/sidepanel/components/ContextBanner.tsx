@@ -131,25 +131,8 @@ const ContextBanner: React.FC<ContextBannerProps> = ({ pageType, entityName, ent
   const showEditButton = entityId && !error && pageType !== 'admin' && pageType !== 'unknown';
 
   return (
-    <div className="relative overflow-hidden bg-gradient-to-br from-white via-gray-50/30 to-white border-b border-gray-200/60 shadow-sm animate-in fade-in slide-in-from-top-4 duration-500 z-40">
-      {/* Subtle decorative gradient with animation */}
-      <div
-        className="absolute top-0 right-0 w-96 h-full pointer-events-none transition-opacity duration-700"
-        style={{
-          background: `linear-gradient(to left, ${colors.primary}0a, ${colors.secondary}05, transparent)`
-        }}
-      />
-      <div
-        className="absolute bottom-0 left-0 w-80 h-full pointer-events-none"
-        style={{
-          background: `linear-gradient(to right, ${colors.primary}08, transparent, transparent)`
-        }}
-      />
-
-      {/* Animated edge highlight */}
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
-
-      <div className="relative px-6 py-5 flex items-center justify-between" style={{ fontFamily: 'var(--font-primary)' }}>
+    <div className="relative bg-white border-b border-gray-200 shadow-sm animate-in fade-in slide-in-from-top-4 duration-500 z-40">
+      <div className="px-6 py-5 flex items-center justify-between" style={{ fontFamily: 'var(--font-primary)' }}>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 animate-in slide-in-from-left-3 duration-500">
             {/* Status indicator with smooth transitions */}
@@ -217,14 +200,6 @@ const ContextBanner: React.FC<ContextBannerProps> = ({ pageType, entityName, ent
           </button>
         )}
       </div>
-
-      {/* Bottom edge highlight */}
-      <div
-        className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent to-transparent"
-        style={{
-          background: `linear-gradient(to right, transparent, ${colors.primary}33, transparent)`
-        }}
-      />
     </div>
   );
 };

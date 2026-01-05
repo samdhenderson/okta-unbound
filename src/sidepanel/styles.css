@@ -44,7 +44,7 @@ body {
   flex-direction: column;
   height: 100vh;
   overflow-y: auto;
-  padding-bottom: 70px; /* Space for global loading bar */
+  /* padding-bottom handled by Tailwind pb-14 in App.tsx for status bar */
   background:
     radial-gradient(at 0% 0%, rgba(0, 125, 193, 0.03) 0px, transparent 50%),
     radial-gradient(at 100% 100%, rgba(61, 157, 217, 0.02) 0px, transparent 50%);
@@ -791,28 +791,32 @@ body {
 /* Scrollbar Styling */
 .results-box::-webkit-scrollbar,
 .rules-container::-webkit-scrollbar,
-.rule-condition::-webkit-scrollbar {
+.rule-condition::-webkit-scrollbar,
+.scrollable-list::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 .results-box::-webkit-scrollbar-track,
 .rules-container::-webkit-scrollbar-track,
-.rule-condition::-webkit-scrollbar-track {
+.rule-condition::-webkit-scrollbar-track,
+.scrollable-list::-webkit-scrollbar-track {
   background: var(--bg-secondary);
   border-radius: 4px;
 }
 
 .results-box::-webkit-scrollbar-thumb,
 .rules-container::-webkit-scrollbar-thumb,
-.rule-condition::-webkit-scrollbar-thumb {
+.rule-condition::-webkit-scrollbar-thumb,
+.scrollable-list::-webkit-scrollbar-thumb {
   background: var(--text-tertiary);
   border-radius: 4px;
 }
 
 .results-box::-webkit-scrollbar-thumb:hover,
 .rules-container::-webkit-scrollbar-thumb:hover,
-.rule-condition::-webkit-scrollbar-thumb:hover {
+.rule-condition::-webkit-scrollbar-thumb:hover,
+.scrollable-list::-webkit-scrollbar-thumb:hover {
   background: var(--text-secondary);
 }
 

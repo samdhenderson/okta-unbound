@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import PageHeader from './shared/PageHeader';
+import AlertMessage from './shared/AlertMessage';
+import Button from './shared/Button';
+import EmptyState from './shared/EmptyState';
+import Modal from './shared/Modal';
+import ScrollableList from './shared/ScrollableList';
 import { useOktaApi } from '../hooks/useOktaApi';
 import type { GroupSummary, LinkedGroup } from '../../shared/types';
 import GroupListItem from './groups/GroupListItem';
@@ -572,42 +577,27 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
         {/* View Mode Selector */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex gap-2 flex-wrap">
-            <button
-              className={`
-                px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200
-                ${viewMode === 'browse'
-                  ? 'bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] text-white shadow-md'
-                  : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-                }
-              `}
+            <Button
+              variant={viewMode === 'browse' ? 'primary' : 'secondary'}
+              size="sm"
               onClick={() => setViewMode('browse')}
             >
               Browse Groups
-            </button>
-            <button
-              className={`
-                px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200
-                ${viewMode === 'bulk'
-                  ? 'bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] text-white shadow-md'
-                  : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-                }
-              `}
+            </Button>
+            <Button
+              variant={viewMode === 'bulk' ? 'primary' : 'secondary'}
+              size="sm"
               onClick={() => setViewMode('bulk')}
             >
               Bulk Operations
-            </button>
-            <button
-              className={`
-                px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200
-                ${viewMode === 'compare'
-                  ? 'bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] text-white shadow-md'
-                  : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-                }
-              `}
+            </Button>
+            <Button
+              variant={viewMode === 'compare' ? 'primary' : 'secondary'}
+              size="sm"
               onClick={() => setViewMode('compare')}
             >
               Compare Groups
-            </button>
+            </Button>
           </div>
 
           {/* Info icon for advanced filtering - Only show in live mode */}
@@ -636,8 +626,9 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
 
         {/* Browse Groups View */}
         {viewMode === 'browse' && (
-          <>
-            <div className="space-y-4">
+          <div className="flex flex-col h-[calc(100vh-280px)] min-h-[400px]">
+            {/* Fixed Header Section */}
+            <div className="flex-shrink-0 space-y-4">
               {/* Mode Indicator Badge */}
               {searchMode === 'live' ? (
                 <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
@@ -747,101 +738,91 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
                       {selectedGroupIds.size} of {filteredGroups.length} selected
                     </span>
                     <div className="flex items-center gap-2">
-                      <button
-                        className="text-sm text-[#007dc1] hover:text-[#005a8f] font-medium transition-colors hover:underline"
-                        onClick={handleSelectAll}
-                      >
+                      <Button variant="ghost" size="sm" onClick={handleSelectAll}>
                         Select All
-                      </button>
+                      </Button>
                       <span className="text-gray-300">|</span>
-                      <button
-                        className="text-sm text-[#007dc1] hover:text-[#005a8f] font-medium transition-colors hover:underline"
-                        onClick={handleDeselectAll}
-                      >
+                      <Button variant="ghost" size="sm" onClick={handleDeselectAll}>
                         Deselect All
-                      </button>
+                      </Button>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {selectedGroupIds.size > 0 && (
-                      <button
-                        className="px-4 py-2 text-sm font-medium bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-all duration-200 shadow-sm hover:shadow flex items-center gap-2"
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        icon="download"
                         onClick={exportMultiGroupMembers}
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
                         Export ({selectedGroupIds.size})
-                      </button>
+                      </Button>
                     )}
-                    <button
-                      className="px-4 py-2 text-sm font-medium bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-all duration-200 shadow-sm hover:shadow flex items-center gap-2"
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon="refresh"
                       onClick={handleLoadGroupsClick}
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
                       Refresh
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}
 
-              {error && <div className="alert alert-error">{error}</div>}
-
-              {loading && (
-                <div className="loading-state">
-                  <div className="spinner"></div>
-                  <p>Loading groups from Okta...</p>
-                </div>
-              )}
-
-              {/* Results List */}
-              {filteredGroups.length > 0 && (
-                <div className="space-y-3">
-                  {filteredGroups.map((group) => (
-                    <GroupListItem
-                      key={group.id}
-                      group={group}
-                      selected={selectedGroupIds.has(group.id)}
-                      onToggleSelect={handleToggleSelect}
-                      oktaOrigin={oktaOrigin}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {/* No results message - Live mode */}
-              {searchMode === 'live' && liveSearchQuery.trim() && !isLiveSearching && filteredGroups.length === 0 && (
-                <div className="text-center py-12 px-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <svg className="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                  <p className="text-gray-700 font-medium mb-1">No groups found matching "{liveSearchQuery}"</p>
-                  <p className="text-sm text-gray-500">Try a different search term or load all groups for advanced filtering</p>
-                </div>
-              )}
-
-              {/* No results message - Cached mode */}
-              {searchMode === 'cached' && filteredGroups.length === 0 && groups.length > 0 && (
-                <div className="text-center py-12 px-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <svg className="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                  <p className="text-gray-700 font-medium mb-1">No groups match your filters</p>
-                  <p className="text-sm text-gray-500">Try adjusting your search or filter criteria</p>
-                </div>
+              {error && (
+                <AlertMessage
+                  message={{ text: error, type: 'error' }}
+                  onDismiss={() => setError(null)}
+                />
               )}
             </div>
 
-            {/* Group Collections - Only show in cached mode */}
+            {/* Scrollable List Section */}
+            <ScrollableList
+              loading={loading}
+              loadingMessage="Loading groups from Okta..."
+              className="mt-4"
+              emptyState={
+                searchMode === 'live' && liveSearchQuery.trim() && !isLiveSearching ? (
+                  <EmptyState
+                    icon="users"
+                    title={`No groups found matching "${liveSearchQuery}"`}
+                    description="Try a different search term or load all groups for advanced filtering"
+                    actions={[
+                      { label: 'Load All Groups', onClick: handleLoadGroupsClick, variant: 'primary' }
+                    ]}
+                  />
+                ) : searchMode === 'cached' && groups.length > 0 ? (
+                  <EmptyState
+                    icon="users"
+                    title="No groups match your filters"
+                    description="Try adjusting your search or filter criteria"
+                  />
+                ) : undefined
+              }
+            >
+              {filteredGroups.map((group) => (
+                <GroupListItem
+                  key={group.id}
+                  group={group}
+                  selected={selectedGroupIds.has(group.id)}
+                  onToggleSelect={handleToggleSelect}
+                  oktaOrigin={oktaOrigin}
+                />
+              ))}
+            </ScrollableList>
+
+            {/* Fixed Footer Section - Group Collections */}
             {searchMode === 'cached' && groups.length > 0 && (
-              <GroupCollections
-                selectedGroupIds={Array.from(selectedGroupIds)}
-                onLoadCollection={handleLoadCollection}
-              />
+              <div className="flex-shrink-0 mt-4">
+                <GroupCollections
+                  selectedGroupIds={Array.from(selectedGroupIds)}
+                  onLoadCollection={handleLoadCollection}
+                />
+              </div>
             )}
-          </>
+          </div>
         )}
 
         {/* Bulk Operations View */}
@@ -862,41 +843,40 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
       </div>
 
       {/* Load Options Modal */}
-      {showLoadOptionsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowLoadOptionsModal(false)}>
-          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Load All Groups</h3>
-            <p className="text-sm text-gray-600 mb-6">
-              Choose whether to include Group Push mappings. This shows which apps OKTA groups are pushed to, but is slower.
-            </p>
-
-            <div className="space-y-3 mb-6">
-              <button
-                onClick={() => handleConfirmLoad(false)}
-                className="w-full px-4 py-3 text-left bg-white border-2 border-gray-200 rounded-lg hover:border-[#007dc1] hover:bg-blue-50 transition-all group"
-              >
-                <div className="font-medium text-gray-900 group-hover:text-[#007dc1]">Fast Load</div>
-                <div className="text-xs text-gray-500 mt-1">Load groups without push mappings (Recommended)</div>
-              </button>
-
-              <button
-                onClick={() => handleConfirmLoad(true)}
-                className="w-full px-4 py-3 text-left bg-white border-2 border-gray-200 rounded-lg hover:border-[#007dc1] hover:bg-blue-50 transition-all group"
-              >
-                <div className="font-medium text-gray-900 group-hover:text-[#007dc1]">Full Load</div>
-                <div className="text-xs text-gray-500 mt-1">Include push group mappings (slower)</div>
-              </button>
+      <Modal
+        isOpen={showLoadOptionsModal}
+        onClose={() => setShowLoadOptionsModal(false)}
+        title="Load All Groups"
+        size="sm"
+      >
+        <p className="text-sm text-gray-600 mb-6">
+          Choose whether to include Group Push mappings. This shows which apps OKTA groups are pushed to, but is slower.
+        </p>
+        <div className="space-y-3">
+          <Button
+            variant="secondary"
+            fullWidth
+            onClick={() => handleConfirmLoad(false)}
+            className="text-left justify-start"
+          >
+            <div>
+              <div className="font-medium">Fast Load</div>
+              <div className="text-xs text-gray-500 mt-1">Load groups without push mappings (Recommended)</div>
             </div>
-
-            <button
-              onClick={() => setShowLoadOptionsModal(false)}
-              className="w-full px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
+          </Button>
+          <Button
+            variant="secondary"
+            fullWidth
+            onClick={() => handleConfirmLoad(true)}
+            className="text-left justify-start"
+          >
+            <div>
+              <div className="font-medium">Full Load</div>
+              <div className="text-xs text-gray-500 mt-1">Include push group mappings (slower)</div>
+            </div>
+          </Button>
         </div>
-      )}
+      </Modal>
     </div>
   );
 };

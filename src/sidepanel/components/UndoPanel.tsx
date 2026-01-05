@@ -8,6 +8,9 @@ import type {
 } from '../../shared/undoTypes';
 import { formatActionTime, initializeSubItemsForBulkActions } from '../../shared/undoManager';
 import { useUndoManager, BulkUndoProgress } from '../hooks/useUndoManager';
+import Button from './shared/Button';
+import AlertMessage from './shared/AlertMessage';
+import EmptyState from './shared/EmptyState';
 
 interface UndoPanelProps {
   targetTabId?: number;
@@ -468,17 +471,11 @@ const UndoPanel: React.FC<UndoPanelProps> = ({ targetTabId, onUndoComplete }) =>
 
   if (undoableActions.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 px-6 bg-gradient-to-br from-gray-50 to-white rounded-lg border border-gray-200">
-        <div className="w-16 h-16 mb-4 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center">
-          <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-        <p className="text-lg font-semibold text-gray-900">No actions to undo</p>
-        <p className="text-sm text-gray-500 mt-1">
-          Recent bulk actions (up to 10) will appear here and can be undone
-        </p>
-      </div>
+      <EmptyState
+        icon="list"
+        title="No actions to undo"
+        description="Recent bulk actions (up to 10) will appear here and can be undone"
+      />
     );
   }
 
@@ -488,27 +485,20 @@ const UndoPanel: React.FC<UndoPanelProps> = ({ targetTabId, onUndoComplete }) =>
         <h3 className="text-lg font-semibold text-gray-900">
           Recent Actions ({undoableActions.length}/10)
         </h3>
-        <button
-          className="px-4 py-2 text-sm font-medium bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-all duration-200 shadow-sm hover:shadow disabled:opacity-50 disabled:cursor-not-allowed"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={handleClearHistory}
           disabled={isLoading}
         >
           Clear History
-        </button>
+        </Button>
       </div>
 
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-          <div className="flex items-start gap-3">
-            <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div className="flex-1">
-              <span className="font-semibold text-red-800">Error:</span>{' '}
-              <span className="text-red-700">{error}</span>
-            </div>
-          </div>
-        </div>
+        <AlertMessage
+          message={{ text: error, type: 'error' }}
+        />
       )}
 
       <div className="space-y-3">
@@ -585,7 +575,7 @@ const UndoPanel: React.FC<UndoPanelProps> = ({ targetTabId, onUndoComplete }) =>
                       </div>
                     )}
                     <button
-                      className="w-full px-4 py-2 text-sm font-semibold bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg hover:from-amber-600 hover:to-amber-700 transition-all duration-200 shadow-md hover:shadow-lg disabled:from-amber-300 disabled:to-amber-400 disabled:cursor-not-allowed"
+                      className="w-full px-4 py-2.5 text-sm font-semibold bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg hover:from-amber-600 hover:to-amber-700 transition-all duration-200 shadow-md hover:shadow-lg disabled:from-amber-300 disabled:to-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleUndo(action);

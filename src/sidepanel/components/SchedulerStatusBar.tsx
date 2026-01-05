@@ -36,15 +36,10 @@ const SchedulerStatusBar: React.FC = () => {
 
   if (!state) return null;
 
-  // Don't show when idle and nothing in queue
-  if (state.status === 'idle' && state.queueLength === 0 && state.activeRequests === 0) {
-    return null;
-  }
-
   const getStatusColor = (): string => {
     switch (state.status) {
       case 'idle':
-        return '#4caf50'; // Green
+        return '#22c55e'; // Green-500 - ready/idle
       case 'processing':
         return '#2196f3'; // Blue
       case 'throttled':
@@ -61,7 +56,7 @@ const SchedulerStatusBar: React.FC = () => {
   const getStatusLabel = (): string => {
     switch (state.status) {
       case 'idle':
-        return 'Idle';
+        return 'Ready';
       case 'processing':
         return 'Processing';
       case 'throttled':
@@ -94,7 +89,7 @@ const SchedulerStatusBar: React.FC = () => {
         {/* Status indicator with dot */}
         <div className="flex items-center gap-2">
           <div
-            className="w-2 h-2 rounded-full shadow-sm animate-pulse"
+            className={`w-2 h-2 rounded-full shadow-sm ${state.status !== 'idle' ? 'animate-pulse' : ''}`}
             style={{ backgroundColor: getStatusColor() }}
           />
           <span className="font-bold text-gray-900">{getStatusLabel()}</span>
