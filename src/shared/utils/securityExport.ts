@@ -1,24 +1,18 @@
 import type { OrphanedAccount, StaleGroupMembership, SecurityPosture } from '../types';
+import {
+  escapeCSV,
+  downloadCSV,
+  sanitizeFilename,
+  getDateForFilename,
+} from './csvUtils';
 
 /**
- * Format a date for CSV export
+ * Format a date for CSV export - wrapper for security export context
+ * Uses 'Never' for null dates (security-specific behavior)
  */
 function formatDateForCSV(date: Date | null): string {
   if (!date) return 'Never';
-  return date.toISOString().split('T')[0]; // YYYY-MM-DD
-}
-
-/**
- * Escape CSV value
- */
-function escapeCSV(value: string | number | null | undefined): string {
-  if (value === null || value === undefined) return '';
-  const stringValue = String(value);
-  // Escape double quotes and wrap in quotes if contains comma, newline, or quote
-  if (stringValue.includes(',') || stringValue.includes('\n') || stringValue.includes('"')) {
-    return `"${stringValue.replace(/"/g, '""')}"`;
-  }
-  return stringValue;
+  return date.toISOString().split('T')[0];
 }
 
 /**
@@ -54,20 +48,8 @@ export function exportOrphanedAccountsToCSV(
 
   const csvContent = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
 
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-
-  const sanitizedGroupName = groupName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-  const date = new Date().toISOString().split('T')[0];
-  const filename = `security-findings-orphaned-accounts-${sanitizedGroupName}-${date}.csv`;
-
-  link.setAttribute('href', url);
-  link.setAttribute('download', filename);
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  const filename = `security-findings-orphaned-accounts-${sanitizeFilename(groupName)}-${getDateForFilename()}.csv`;
+  downloadCSV(csvContent, filename);
 }
 
 /**
@@ -103,20 +85,8 @@ export function exportStaleMembershipsToCSV(
 
   const csvContent = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
 
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-
-  const sanitizedGroupName = groupName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-  const date = new Date().toISOString().split('T')[0];
-  const filename = `security-findings-stale-memberships-${sanitizedGroupName}-${date}.csv`;
-
-  link.setAttribute('href', url);
-  link.setAttribute('download', filename);
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  const filename = `security-findings-stale-memberships-${sanitizeFilename(groupName)}-${getDateForFilename()}.csv`;
+  downloadCSV(csvContent, filename);
 }
 
 /**
@@ -127,8 +97,8 @@ export function exportSecurityReportToCSV(
   _orphanedAccounts: OrphanedAccount[],
   _staleMemberships: StaleGroupMembership[]
 ): void {
-  const sanitizedGroupName = posture.groupName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-  const date = new Date().toISOString().split('T')[0];
+  const sanitizedGroupName = sanitizeFilename(posture.groupName);
+  const date = getDateForFilename();
 
   // Summary section
   const summaryHeaders = ['Security Score', 'Total Findings', 'Critical', 'High', 'Medium', 'Low'];
@@ -181,17 +151,8 @@ export function exportSecurityReportToCSV(
     ...recoRows.map((row) => row.join(',')),
   ].join('\n');
 
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
   const filename = `security-report-${sanitizedGroupName}-${date}.csv`;
-
-  link.setAttribute('href', url);
-  link.setAttribute('download', filename);
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  downloadCSV(csvContent, filename);
 }
 
 /**

@@ -2,9 +2,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { GroupCollection } from '../../../shared/types';
 import Modal from '../shared/Modal';
 
+// Re-export the type for consumers
+export type { GroupCollection };
+
 interface GroupCollectionsProps {
   selectedGroupIds: string[];
   onLoadCollection: (groupIds: string[]) => void;
+  onExportCollection?: (collection: GroupCollection) => void;
 }
 
 const COLLECTIONS_KEY = 'okta_unbound_group_collections';
@@ -12,6 +16,7 @@ const COLLECTIONS_KEY = 'okta_unbound_group_collections';
 const GroupCollections: React.FC<GroupCollectionsProps> = ({
   selectedGroupIds,
   onLoadCollection,
+  onExportCollection,
 }) => {
   const [collections, setCollections] = useState<GroupCollection[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -293,6 +298,18 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
                               </svg>
                               Load
                             </button>
+                            {onExportCollection && (
+                              <button
+                                onClick={() => onExportCollection(collection)}
+                                className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all duration-200"
+                                title="Export this collection"
+                                aria-label="Export collection"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                              </button>
+                            )}
                             <button
                               onClick={() => setEditingId(collection.id)}
                               className="p-1.5 text-gray-400 hover:text-[#007dc1] hover:bg-blue-50 rounded-lg transition-all duration-200"
