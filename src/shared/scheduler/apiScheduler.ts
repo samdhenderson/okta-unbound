@@ -25,11 +25,11 @@ import type {
 } from './types';
 
 const DEFAULT_CONFIG: SchedulerConfig = {
-  maxConcurrent: 3, // Conservative: max 3 parallel requests
-  minRemainingThreshold: 10, // Cooldown when <10% remaining
+  maxConcurrent: 4, // Conservative: max 3 parallel requests
+  minRemainingThreshold: 15, // Cooldown when <15% remaining
   cooldownDuration: 60000, // 60 seconds cooldown
   retryDelay: 2000, // 2 second base retry delay
-  maxRetries: 3, // Retry up to 3 times
+  maxRetries: 2, // Retry up to 2 times
   requestTimeout: 30000, // 30 second timeout per request
 };
 
