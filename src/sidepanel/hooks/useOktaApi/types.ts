@@ -10,16 +10,6 @@ import type {
   UserStatus,
   AuditLogEntry,
   OktaApp,
-  UserAppAssignment,
-  GroupAppAssignment,
-  CreateAppAssignmentRequest,
-  AssignmentConversionRequest,
-  AssignmentConversionResult,
-  BulkAppAssignmentRequest,
-  BulkAppAssignmentResult,
-  AppAssignmentSecurityAnalysis,
-  AssignmentRecommenderResult,
-  AppProfileSchema
 } from '../../../shared/types';
 
 export type {
@@ -29,16 +19,6 @@ export type {
   UserStatus,
   AuditLogEntry,
   OktaApp,
-  UserAppAssignment,
-  GroupAppAssignment,
-  CreateAppAssignmentRequest,
-  AssignmentConversionRequest,
-  AssignmentConversionResult,
-  BulkAppAssignmentRequest,
-  BulkAppAssignmentResult,
-  AppAssignmentSecurityAnalysis,
-  AssignmentRecommenderResult,
-  AppProfileSchema
 };
 
 /**

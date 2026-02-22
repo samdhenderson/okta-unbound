@@ -20,15 +20,15 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md">
+    <div className="rounded-md border border-neutral-200 bg-white overflow-hidden transition-all duration-100">
       <button
-        className="w-full flex items-center justify-between px-5 py-3.5 text-left font-semibold text-gray-900 bg-gradient-to-r from-gray-50 to-gray-100/50 hover:from-gray-100 hover:to-gray-200/50 transition-all duration-200 border-b border-gray-200/50"
+        className="w-full flex items-center justify-between px-5 py-3.5 text-left font-semibold text-neutral-900 bg-neutral-50 hover:bg-neutral-100 transition-all duration-100 border-b border-neutral-200"
         onClick={() => setIsOpen(!isOpen)}
         type="button"
       >
         <div className="flex items-center gap-3">
           <svg
-            className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${isOpen ? 'rotate-90' : ''}`}
+            className={`w-4 h-4 text-neutral-400 transition-transform duration-100 ${isOpen ? 'rotate-90' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -37,14 +37,14 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
           </svg>
           <span className="text-sm font-semibold">{title}</span>
           {itemCount !== undefined && (
-            <span className="px-2 py-0.5 bg-white rounded-full text-xs font-medium text-gray-600 shadow-sm">
+            <span className="px-2 py-0.5 bg-white rounded-md text-xs font-medium text-neutral-600 border border-neutral-200">
               {itemCount}
             </span>
           )}
         </div>
       </button>
       {isOpen && (
-        <div className="p-5 bg-gradient-to-b from-white to-gray-50/30 animate-in slide-in-from-top-2 duration-300">
+        <div className="p-5">
           {children}
         </div>
       )}

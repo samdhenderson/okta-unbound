@@ -1,5 +1,4 @@
-import React, { useState, useCallback } from 'react';
-import { useGroupHealth } from '../../hooks/useGroupHealth';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useOktaApi } from '../../hooks/useOktaApi';
 import { useProgress } from '../../contexts/ProgressContext';
 import AlertMessage from '../shared/AlertMessage';
@@ -8,16 +7,14 @@ import LoadingSpinner from '../shared/LoadingSpinner';
 import Modal from '../shared/Modal';
 import StatCard from './shared/StatCard';
 import QuickActionsPanel, { type ActionSection } from './shared/QuickActionsPanel';
-import RiskGauge from '../dashboard/RiskGauge';
-import GroupDistributionPieChart from '../dashboard/GroupDistributionPieChart';
-import type { UserStatus } from '../../../shared/types';
-import { getUserFriendlyStatus } from '../../../shared/utils/statusNormalizer';
+import type { OktaUser } from '../../../shared/types';
 
 interface GroupOverviewProps {
   groupId: string;
   groupName: string;
   targetTabId: number;
-  onTabChange: (tab: 'rules' | 'security' | 'users', selectedRuleId?: string) => void;
+  onTabChange: (tab: 'rules' | 'users' | 'groups', selectedRuleId?: string) => void;
+  oktaOrigin?: string | null;
 }
 
 const GroupOverview: React.FC<GroupOverviewProps> = ({
@@ -25,14 +22,15 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
   groupName,
   targetTabId,
   onTabChange,
+  oktaOrigin,
 }) => {
-  const { metrics, members, isLoading, error, refresh } = useGroupHealth({ groupId, targetTabId });
   const { startProgress, completeProgress, updateProgress } = useProgress();
+  const [members, setMembers] = useState<OktaUser[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv');
-  const [exportFilter, setExportFilter] = useState<UserStatus | ''>('');
-  const [customFilterOpen, setCustomFilterOpen] = useState(false);
-  const [selectedStatuses, setSelectedStatuses] = useState<UserStatus[]>([]);
+  const [idCopied, setIdCopied] = useState(false);
 
   const handleResult = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error') => {
     console.log(`[GroupOverview] ${type}:`, message);
@@ -42,61 +40,83 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
     updateProgress(current, total, message, apiCalls);
   }, [updateProgress]);
 
-  const { removeDeprovisioned, customFilterMultiple, exportMembers, isLoading: isApiLoading } = useOktaApi({
+  const { getAllGroupMembers, removeDeprovisioned, exportMembers, isLoading: isApiLoading } = useOktaApi({
     targetTabId,
     onResult: handleResult,
     onProgress: handleProgress,
   });
 
+  // Use ref to avoid re-triggering the effect when useOktaApi returns new function refs
+  const apiRef = useRef(getAllGroupMembers);
+  apiRef.current = getAllGroupMembers;
+
+  const loadMembers = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await apiRef.current(groupId);
+      setMembers(result || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load members');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [groupId]);
+
+  useEffect(() => {
+    loadMembers();
+  }, [loadMembers]);
+
+  // Compute status counts from members
+  const statusCounts = members.reduce<Record<string, number>>((acc, user) => {
+    acc[user.status] = (acc[user.status] || 0) + 1;
+    return acc;
+  }, {});
+
+  const deprovisionedCount = statusCounts['DEPROVISIONED'] || 0;
+  const suspendedCount = statusCounts['SUSPENDED'] || 0;
+  const lockedOutCount = statusCounts['LOCKED_OUT'] || 0;
+  const inactiveCount = deprovisionedCount + suspendedCount + lockedOutCount;
 
   const handleRemoveDeprovisioned = async () => {
     startProgress('Remove Deprovisioned', 'Removing deprovisioned users...');
     try {
       await removeDeprovisioned(groupId);
-      refresh();
+      await loadMembers();
     } finally {
       completeProgress();
     }
   };
 
-  const handleCustomCleanup = async () => {
-    if (selectedStatuses.length === 0) return;
-
-    startProgress('Custom Cleanup', `Removing users with status: ${selectedStatuses.join(', ')}...`);
-    try {
-      await customFilterMultiple(groupId, selectedStatuses, 'remove');
-      refresh();
-      setCustomFilterOpen(false);
-      setSelectedStatuses([]);
-    } finally {
-      completeProgress();
-    }
+  const handleCopyId = () => {
+    navigator.clipboard.writeText(groupId).then(() => {
+      setIdCopied(true);
+      setTimeout(() => setIdCopied(false), 1500);
+    });
   };
 
   const handleExportConfirm = async () => {
     setExportModalOpen(false);
     startProgress('Export', `Exporting members to ${exportFormat.toUpperCase()}...`);
     try {
-      await exportMembers(groupId, groupName, exportFormat, exportFilter);
+      await exportMembers(groupId, groupName, exportFormat);
     } finally {
       completeProgress();
     }
   };
 
-  if (isLoading && !metrics) {
-    return <LoadingSpinner size="lg" message="Loading group metrics..." centered />;
+  if (isLoading && members.length === 0) {
+    return <LoadingSpinner size="lg" message="Loading group members..." centered />;
   }
 
   if (error) {
     return (
       <AlertMessage
         message={{ text: error, type: 'error' }}
-        action={{ label: 'Retry', onClick: refresh }}
+        action={{ label: 'Retry', onClick: loadMembers }}
       />
     );
   }
-
-  if (!metrics) return null;
 
   const actionSections: ActionSection[] = [
     {
@@ -109,25 +129,10 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
           icon: 'trash',
           variant: 'primary',
           onClick: handleRemoveDeprovisioned,
-          disabled: (metrics.statusBreakdown?.DEPROVISIONED ?? 0) === 0 || isApiLoading,
-          badge: (metrics.statusBreakdown?.DEPROVISIONED ?? 0) > 0 ? `${metrics.statusBreakdown.DEPROVISIONED}` : undefined,
+          disabled: deprovisionedCount === 0 || isApiLoading,
+          badge: deprovisionedCount > 0 ? `${deprovisionedCount}` : undefined,
           tooltip: 'Remove only deprovisioned users',
         },
-        {
-          label: 'Custom Filter...',
-          icon: 'settings',
-          variant: 'secondary',
-          onClick: () => setCustomFilterOpen(true),
-          disabled: isApiLoading,
-          tooltip: 'Choose specific user statuses to remove',
-        },
-      ],
-    },
-    {
-      title: 'Export & Reports',
-      icon: 'chart',
-      expanded: false,
-      actions: [
         {
           label: 'Export Members',
           icon: 'download',
@@ -135,13 +140,6 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
           onClick: () => setExportModalOpen(true),
           disabled: isApiLoading,
           tooltip: 'Export member list to CSV or JSON',
-        },
-        {
-          label: 'Security Report',
-          icon: 'lock',
-          variant: 'secondary',
-          onClick: () => onTabChange('security'),
-          tooltip: 'View detailed security analysis',
         },
       ],
     },
@@ -158,11 +156,11 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
           tooltip: 'View group rules affecting this group',
         },
         {
-          label: 'View Members',
+          label: 'Search Members',
           icon: 'user',
           variant: 'ghost',
           onClick: () => onTabChange('users'),
-          tooltip: 'Search and manage individual members',
+          tooltip: 'Search and view individual members',
         },
       ],
     },
@@ -171,70 +169,71 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
   return (
     <div className="space-y-6">
       {/* Quick Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatCard
           title="Total Members"
-          value={metrics.totalUsers ?? 0}
+          value={members.length}
           color="primary"
           icon="users"
         />
         <StatCard
-          title="Active Members"
-          value={metrics.statusBreakdown?.ACTIVE ?? 0}
+          title="Active"
+          value={statusCounts['ACTIVE'] || 0}
           color="success"
           icon="check"
         />
         <StatCard
-          title="Inactive Members"
-          value={
-            (metrics.statusBreakdown?.DEPROVISIONED ?? 0) +
-            (metrics.statusBreakdown?.SUSPENDED ?? 0) +
-            (metrics.statusBreakdown?.LOCKED_OUT ?? 0)
-          }
-          color={((metrics.statusBreakdown?.DEPROVISIONED ?? 0) + (metrics.statusBreakdown?.SUSPENDED ?? 0) + (metrics.statusBreakdown?.LOCKED_OUT ?? 0)) > 0 ? 'warning' : 'success'}
+          title="Inactive"
+          value={inactiveCount}
+          color={inactiveCount > 0 ? 'warning' : 'success'}
           icon="alert"
         />
         <StatCard
-          title="Rule-Based"
-          value={metrics.membershipSources?.ruleBased ?? 0}
-          color="neutral"
-          icon="bolt"
-          subtitle={`${metrics.membershipSources?.direct ?? 0} manual (*approx)`}
+          title="Deprovisioned"
+          value={deprovisionedCount}
+          color={deprovisionedCount > 0 ? 'error' : 'success'}
+          icon="trash"
         />
       </div>
 
-      {/* Two Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Column */}
-        <div className="space-y-6">
-          {/* Health Score */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Health Score</h3>
-            <RiskGauge riskScore={metrics.riskScore} riskFactors={metrics.riskFactors} />
-          </div>
+      {/* Quick Actions */}
+      <QuickActionsPanel sections={actionSections} />
 
-          {/* Quick Actions */}
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-3">Quick Actions</h3>
-            <QuickActionsPanel sections={actionSections} />
-          </div>
-        </div>
-
-        {/* Right Column */}
-        <div className="space-y-6">
-          {/* Group Distribution */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm focus:outline-none active:border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Group Distribution</h3>
-            {metrics.statusBreakdown ? (
-              <GroupDistributionPieChart
-                statusBreakdown={metrics.statusBreakdown}
-                members={members}
-                onRuleClick={(ruleId) => onTabChange('rules', ruleId)}
-              />
+      {/* Admin Console Link and Group ID */}
+      <div className="flex flex-wrap items-center gap-2">
+        {oktaOrigin && (
+          <a
+            href={`${oktaOrigin}/admin/group/${groupId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-white text-neutral-900 border border-neutral-200 rounded-md hover:bg-neutral-50 hover:border-neutral-500 transition-colors duration-100"
+            style={{ fontFamily: 'var(--font-heading)' }}
+            title="Open this group in the Okta Admin Console"
+          >
+            <span>Open in Admin Console</span>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+        )}
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-neutral-50 border border-neutral-200 rounded-md">
+          <span className="text-xs text-neutral-500 font-medium">ID:</span>
+          <code className="text-xs font-mono text-neutral-700">{groupId}</code>
+          <button
+            onClick={handleCopyId}
+            className="p-0.5 text-neutral-400 hover:text-primary-text rounded transition-colors duration-100"
+            title={idCopied ? 'Copied!' : 'Copy group ID'}
+          >
+            {idCopied ? (
+              <svg className="w-3.5 h-3.5 text-success-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
             ) : (
-              <div className="text-center text-gray-500 py-8">No data available</div>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M8 5a2 2 0 002 2h4a2 2 0 002-2M8 5a2 2 0 012-2h4a2 2 0 012 2" />
+              </svg>
             )}
-          </div>
+          </button>
         </div>
       </div>
 
@@ -252,9 +251,9 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Format</label>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">Format</label>
             <select
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-neutral-200 rounded-md focus:outline-none focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary"
               value={exportFormat}
               onChange={(e) => setExportFormat(e.target.value as 'csv' | 'json')}
             >
@@ -262,66 +261,9 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
               <option value="json">JSON</option>
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Status (optional)</label>
-            <select
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={exportFilter}
-              onChange={(e) => setExportFilter(e.target.value as UserStatus | '')}
-            >
-              <option value="">All Users</option>
-              <option value="ACTIVE">{getUserFriendlyStatus('ACTIVE')} Only</option>
-              <option value="DEPROVISIONED">{getUserFriendlyStatus('DEPROVISIONED')} Only</option>
-              <option value="SUSPENDED">{getUserFriendlyStatus('SUSPENDED')} Only</option>
-              <option value="LOCKED_OUT">{getUserFriendlyStatus('LOCKED_OUT')} Only</option>
-            </select>
-          </div>
-          <p className="text-sm text-gray-600">
-            This will export members from <strong>{groupName}</strong> to a {exportFormat.toUpperCase()} file.
+          <p className="text-sm text-neutral-600">
+            This will export all members from <strong>{groupName}</strong> to a {exportFormat.toUpperCase()} file.
           </p>
-        </div>
-      </Modal>
-
-      {/* Custom Filter Modal */}
-      <Modal
-        isOpen={customFilterOpen}
-        onClose={() => setCustomFilterOpen(false)}
-        title="Custom Status Filter"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setCustomFilterOpen(false)}>Cancel</Button>
-            <Button
-              variant="danger"
-              onClick={handleCustomCleanup}
-              disabled={selectedStatuses.length === 0}
-            >
-              Remove Selected ({selectedStatuses.length})
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-gray-600 mb-4">Select user statuses to remove from this group:</p>
-        <div className="space-y-2">
-          {(['DEPROVISIONED', 'SUSPENDED', 'LOCKED_OUT', 'STAGED', 'PROVISIONED', 'RECOVERY', 'PASSWORD_EXPIRED'] as UserStatus[]).map(status => (
-            <label key={status} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
-              <input
-                type="checkbox"
-                checked={selectedStatuses.includes(status)}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setSelectedStatuses([...selectedStatuses, status]);
-                  } else {
-                    setSelectedStatuses(selectedStatuses.filter(s => s !== status));
-                  }
-                }}
-                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-              />
-              <span className="text-sm">{getUserFriendlyStatus(status)}</span>
-              <span className="ml-auto text-xs text-gray-500">
-                ({metrics.statusBreakdown[status] || 0})
-              </span>
-            </label>
-          ))}
         </div>
       </Modal>
     </div>

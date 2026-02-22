@@ -71,8 +71,40 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
     return allMembers;
   };
 
+  /**
+   * Add a user to a group
+   */
+  const addUserToGroup = async (
+    groupId: string,
+    groupName: string,
+    user: { id: string; profile: { login: string; firstName: string; lastName: string; email: string } }
+  ): Promise<{ success: boolean; error?: string }> => {
+    const result = await coreApi.makeApiRequest(`/api/v1/groups/${groupId}/users/${user.id}`, 'PUT');
+
+    if (result.success) {
+      await logAction(
+        `Added ${user.profile.firstName} ${user.profile.lastName} to ${groupName}`,
+        {
+          type: 'ADD_USER_TO_GROUP',
+          userId: user.id,
+          userEmail: user.profile.email,
+          userName: `${user.profile.firstName} ${user.profile.lastName}`,
+          groupId,
+          groupName,
+        }
+      );
+      coreApi.callbacks.onResult?.(
+        `Added ${user.profile.login} to ${groupName}`,
+        'success'
+      );
+    }
+
+    return { success: result.success, error: result.error };
+  };
+
   return {
     removeUserFromGroup,
     getAllGroupMembers,
+    addUserToGroup,
   };
 }

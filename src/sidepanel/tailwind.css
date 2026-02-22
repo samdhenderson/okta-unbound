@@ -1,46 +1,37 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
 @theme {
-  /* Elevated Okta Brand Colors */
-  --color-okta-blue: #007dc1;
-  --color-okta-blue-dark: #005a8f;
-  --color-okta-blue-light: #3d9dd9;
-  --color-okta-blue-glow: rgba(0, 125, 193, 0.2);
-  --color-okta-cyan: #00d4ff;
-  --color-okta-navy: #001f3f;
+  /* Odyssey Design System - Color Tokens */
+  --color-primary: #546be7;
+  --color-primary-text: #4C64E1;
+  --color-primary-dark: #2e40a5;
+  --color-primary-light: #f2f3fd;
+  --color-primary-highlight: #dbe0fa;
 
-  /* Sophisticated Accent Colors */
-  --color-accent-purple: #6e41e2;
-  --color-accent-pink: #f037a5;
-  --color-accent-orange: #ff6b2c;
-  --color-accent-green: #00c48c;
-  --color-accent-teal: #00a896;
+  --color-danger: #e72500;
+  --color-danger-text: #d92300;
+  --color-danger-light: #fff0ee;
+  --color-success: #16884a;
+  --color-success-text: #197f48;
+  --color-success-light: #defae7;
+  --color-warning: #a16c03;
+  --color-warning-text: #966603;
+  --color-warning-light: #fdfad9;
+  --color-info: #546be7;
+  --color-info-light: #f2f3fd;
 
-  /* Premium Neutral Palette */
-  --color-gray-50: #fafbfc;
-  --color-gray-100: #f5f7fa;
-  --color-gray-200: #e8ecf1;
-  --color-gray-300: #d1d9e3;
-  --color-gray-400: #9ca6b8;
-  --color-gray-500: #6b7789;
-  --color-gray-600: #4a5568;
-  --color-gray-700: #2d3748;
-  --color-gray-800: #1a202c;
-  --color-gray-900: #0f1419;
+  --color-neutral-50: #f4f4f4;
+  --color-neutral-100: #ededed;
+  --color-neutral-200: #e1e1e1;
+  --color-neutral-300: #cbcbcb;
+  --color-neutral-400: #aeaeae;
+  --color-neutral-500: #8d8d8d;
+  --color-neutral-600: #6e6e6e;
+  --color-neutral-700: #4b4b4b;
+  --color-neutral-900: #272727;
 
-  /* Semantic Colors */
-  --color-success: #00c48c;
-  --color-success-light: #e6f9f3;
-  --color-warning: #ffa94d;
-  --color-warning-light: #fff4e6;
-  --color-error: #ff5757;
-  --color-error-light: #ffe6e6;
-  --color-info: #007dc1;
-  --color-info-light: #e6f4fa;
-
-  /* Typography */
-  --font-primary: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  /* Odyssey Typography */
+  --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-heading: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'Roboto Mono', SFMono-Regular, Consolas, 'Liberation Mono', monospace;
 }
 
 @import "tailwindcss";
@@ -52,150 +43,29 @@
 
   .tab-content.active {
     @apply block;
-    animation: fadeSlideIn 0.3s ease-out;
-    position: relative;
-    z-index: 10;
+    animation: fadeIn 0.2s ease-out;
   }
 
-  /* Elevated Okta Gradients */
-  .gradient-okta {
-    background: linear-gradient(135deg, #007dc1 0%, #3d9dd9 100%);
-    position: relative;
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
-  .gradient-okta::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, transparent 100%);
-    pointer-events: none;
+  .scrollable-list::-webkit-scrollbar {
+    width: 6px;
   }
 
-  .gradient-okta-mesh {
-    background:
-      radial-gradient(at 20% 30%, rgba(0, 125, 193, 0.15) 0px, transparent 50%),
-      radial-gradient(at 80% 70%, rgba(61, 157, 217, 0.12) 0px, transparent 50%),
-      radial-gradient(at 50% 50%, rgba(0, 212, 255, 0.08) 0px, transparent 50%),
-      linear-gradient(135deg, #007dc1 0%, #005a8f 100%);
+  .scrollable-list::-webkit-scrollbar-track {
+    background: var(--color-neutral-50);
+    border-radius: 3px;
   }
 
-  .gradient-premium {
-    background: linear-gradient(135deg, #001f3f 0%, #007dc1 50%, #3d9dd9 100%);
+  .scrollable-list::-webkit-scrollbar-thumb {
+    background: var(--color-neutral-300);
+    border-radius: 3px;
   }
 
-  /* Premium Card Styles */
-  .card-elevated {
-    @apply bg-white rounded-2xl border border-gray-200/60 shadow-lg hover:shadow-xl transition-all duration-300;
-    background: linear-gradient(to bottom, #ffffff 0%, #fafbfc 100%);
+  .scrollable-list::-webkit-scrollbar-thumb:hover {
+    background: var(--color-neutral-500);
   }
-
-  .card-elevated:hover {
-    transform: translateY(-2px);
-    border-color: var(--color-okta-blue-light);
-  }
-
-  .card-premium {
-    @apply bg-white rounded-xl border border-gray-200/40;
-    box-shadow:
-      0 1px 3px rgba(0, 0, 0, 0.05),
-      0 10px 25px -5px rgba(0, 125, 193, 0.08);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .card-premium:hover {
-    box-shadow:
-      0 4px 6px rgba(0, 0, 0, 0.07),
-      0 15px 35px -5px rgba(0, 125, 193, 0.15);
-    transform: translateY(-1px);
-  }
-
-  /* Glass Effect */
-  .glass {
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(12px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-  }
-
-  .glass-blue {
-    background: rgba(0, 125, 193, 0.08);
-    backdrop-filter: blur(20px) saturate(180%);
-    border: 1px solid rgba(0, 125, 193, 0.15);
-  }
-
-  /* Animations */
-  @keyframes fadeSlideIn {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes shimmer {
-    0% {
-      background-position: -1000px 0;
-    }
-    100% {
-      background-position: 1000px 0;
-    }
-  }
-
-  @keyframes pulse-glow {
-    0%, 100% {
-      opacity: 1;
-      box-shadow: 0 0 0 0 var(--color-okta-blue-glow);
-    }
-    50% {
-      opacity: 0.9;
-      box-shadow: 0 0 15px 5px var(--color-okta-blue-glow);
-    }
-  }
-
-  @keyframes slide-in-stagger {
-    from {
-      opacity: 0;
-      transform: translateX(-20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
-  }
-
-  @keyframes slideIn {
-    from {
-      transform: scaleX(0);
-      opacity: 0;
-    }
-    to {
-      transform: scaleX(1);
-      opacity: 1;
-    }
-  }
-
-  .animate-shimmer {
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(255, 255, 255, 0.4) 50%,
-      transparent 100%
-    );
-    background-size: 1000px 100%;
-    animation: shimmer 2s infinite;
-  }
-
-  .animate-pulse-glow {
-    animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-
-  /* Stagger delays for list items */
-  .stagger-1 { animation-delay: 0.05s; }
-  .stagger-2 { animation-delay: 0.1s; }
-  .stagger-3 { animation-delay: 0.15s; }
-  .stagger-4 { animation-delay: 0.2s; }
-  .stagger-5 { animation-delay: 0.25s; }
-  .stagger-6 { animation-delay: 0.3s; }
 }

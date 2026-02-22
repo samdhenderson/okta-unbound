@@ -93,63 +93,7 @@ export function createGroupBulkOperations(
     return results;
   };
 
-  /**
-   * Compare groups to find overlaps
-   */
-  const compareGroups = async (groupIds: string[]): Promise<any> => {
-    const groupData: any[] = [];
-
-    // Fetch members for each group
-    for (const groupId of groupIds) {
-      const groupResponse = await coreApi.makeApiRequest(`/api/v1/groups/${groupId}`);
-      const members = await getAllGroupMembers(groupId);
-
-      groupData.push({
-        id: groupId,
-        name: groupResponse.data?.profile?.name || groupId,
-        type: groupResponse.data?.type,
-        members,
-        memberIds: new Set(members.map((m: any) => m.id)),
-      });
-    }
-
-    // Calculate overlaps
-    const overlaps: any[] = [];
-    for (let i = 0; i < groupData.length; i++) {
-      for (let j = i + 1; j < groupData.length; j++) {
-        const group1 = groupData[i];
-        const group2 = groupData[j];
-
-        const sharedUserIds = [...group1.memberIds].filter((id: string) => group2.memberIds.has(id));
-        const uniqueToGroup1 = group1.members.length - sharedUserIds.length;
-        const uniqueToGroup2 = group2.members.length - sharedUserIds.length;
-
-        overlaps.push({
-          group1: { id: group1.id, name: group1.name },
-          group2: { id: group2.id, name: group2.name },
-          sharedUsers: sharedUserIds.length,
-          uniqueToGroup1,
-          uniqueToGroup2,
-        });
-      }
-    }
-
-    // Calculate unique users across all groups
-    const allUserIds = new Set<string>();
-    groupData.forEach((g) => {
-      g.members.forEach((m: any) => allUserIds.add(m.id));
-    });
-
-    return {
-      totalGroups: groupData.length,
-      totalUniqueUsers: allUserIds.size,
-      groupData,
-      overlaps,
-    };
-  };
-
   return {
     executeBulkOperation,
-    compareGroups,
   };
 }

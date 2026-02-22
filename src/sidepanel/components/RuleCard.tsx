@@ -1,6 +1,7 @@
 import React, { useState, useCallback, memo } from 'react';
 import type { FormattedRule } from '../../shared/types';
 import { timeAgo } from '../../shared/ruleUtils';
+import Button from './shared/Button';
 
 interface RuleCardProps {
   rule: FormattedRule;
@@ -44,9 +45,9 @@ const renderConditionWithGroupBadges = (
     if (groupName && groupName !== groupId) {
       parts.push(
         <React.Fragment key={`${groupId}-${match.index}`}>
-          <span className="font-mono text-xs text-gray-600">{groupId}</span>
+          <span className="font-mono text-xs text-neutral-600">{groupId}</span>
           <span
-            className="ml-2 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-xs font-medium border border-blue-200"
+            className="ml-2 px-2 py-0.5 rounded-md bg-primary-light text-primary-text text-xs font-medium border border-primary-highlight"
             title={`Group: ${groupName}`}
           >
             {groupName}
@@ -101,46 +102,46 @@ const RuleCard: React.FC<RuleCardProps> = memo(({
   return (
     <div
       className={`
-        bg-white rounded-lg border shadow-sm transition-all duration-300 overflow-hidden
-        ${rule.affectsCurrentGroup ? 'border-[#007dc1] shadow-[#007dc1]/10' : 'border-gray-200'}
-        ${isHighlighted ? 'ring-2 ring-[#007dc1] ring-offset-2' : ''}
-        hover:shadow-md
+        bg-white rounded-md border transition-all duration-100 overflow-hidden
+        ${rule.affectsCurrentGroup ? 'border-primary' : 'border-neutral-200'}
+        ${isHighlighted ? 'ring-2 ring-primary ring-offset-2' : ''}
+        hover:shadow-sm
       `}
       style={{ fontFamily: 'var(--font-primary)' }}
     >
       {/* Header */}
       <div
-        className="p-5 cursor-pointer hover:bg-gray-50/50 transition-colors duration-200 flex items-center justify-between gap-4"
+        className="p-4 cursor-pointer hover:bg-neutral-50 transition-colors duration-100 flex items-center justify-between gap-4"
         onClick={toggleExpanded}
       >
-        <div className="flex items-start gap-4 flex-1 min-w-0">
+        <div className="flex items-start gap-3 flex-1 min-w-0">
           <div className={`
-            mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0
-            ${rule.status === 'ACTIVE' ? 'bg-emerald-500 ring-4 ring-emerald-500/20' : 'bg-gray-400 ring-4 ring-gray-400/20'}
+            mt-1 w-2.5 h-2.5 rounded-full shrink-0
+            ${rule.status === 'ACTIVE' ? 'bg-success ring-4 ring-success/20' : 'bg-neutral-400 ring-4 ring-neutral-400/20'}
           `} />
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap mb-2">
-              <h3 className="font-semibold text-gray-900 text-base">{rule.name}</h3>
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <h3 className="font-semibold text-neutral-900 text-sm">{rule.name}</h3>
               {rule.affectsCurrentGroup && (
-                <span className="px-2 py-0.5 rounded-md bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] text-white text-xs font-bold">
+                <span className="px-2 py-0.5 rounded-md bg-primary text-white text-xs font-bold">
                   Current Group
                 </span>
               )}
               {hasConflicts && (
-                <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 text-xs font-bold border border-amber-200">
-                  ⚠️ {rule.conflicts!.length} Conflict{rule.conflicts!.length > 1 ? 's' : ''}
+                <span className="px-2 py-0.5 rounded-md bg-warning-light text-warning-text text-xs font-bold border border-warning-light">
+                  {rule.conflicts!.length} Conflict{rule.conflicts!.length > 1 ? 's' : ''}
                 </span>
               )}
             </div>
-            <p className="text-sm text-gray-600 truncate">{rule.condition}</p>
+            <p className="text-sm text-neutral-600 truncate">{rule.condition}</p>
           </div>
         </div>
         <button
-          className="text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-lg hover:bg-gray-100 flex-shrink-0"
+          className="text-neutral-400 hover:text-neutral-600 transition-colors duration-100 p-2 rounded-md hover:bg-neutral-50 shrink-0"
           type="button"
         >
           <svg
-            className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
+            className={`w-4 h-4 transition-transform duration-100 ${isExpanded ? 'rotate-90' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -152,12 +153,12 @@ const RuleCard: React.FC<RuleCardProps> = memo(({
 
       {/* Expanded Content */}
       {isExpanded && (
-        <div className="px-5 pb-5 pt-2 space-y-5 bg-gradient-to-b from-gray-50/30 to-white border-t border-gray-100">
+        <div className="px-4 pb-4 pt-2 space-y-4 bg-neutral-50 border-t border-neutral-100">
           {/* Condition */}
           <div>
-            <div className="text-xs font-bold uppercase tracking-widest text-gray-600 mb-3">WHEN</div>
-            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <code className="text-sm text-gray-800 font-mono block overflow-x-auto">
+            <div className="text-xs font-bold uppercase tracking-wider text-neutral-600 mb-2">WHEN</div>
+            <div className="p-3 bg-white rounded-md border border-neutral-200">
+              <code className="text-sm text-neutral-900 font-mono block overflow-x-auto">
                 {renderConditionWithGroupBadges(
                   rule.conditionExpression || rule.condition,
                   rule.allGroupNamesMap
@@ -169,12 +170,12 @@ const RuleCard: React.FC<RuleCardProps> = memo(({
           {/* User Attributes */}
           {rule.userAttributes.length > 0 && (
             <div>
-              <div className="text-xs font-bold uppercase tracking-widest text-gray-600 mb-3">USES ATTRIBUTES</div>
+              <div className="text-xs font-bold uppercase tracking-wider text-neutral-600 mb-2">USES ATTRIBUTES</div>
               <div className="flex flex-wrap gap-2">
                 {rule.userAttributes.map((attr) => (
                   <span
                     key={attr}
-                    className="px-3 py-1.5 rounded-md bg-blue-50 text-blue-700 text-sm font-medium border border-blue-200"
+                    className="px-2.5 py-1 rounded-md bg-primary-light text-primary-text text-sm font-medium border border-primary-highlight"
                   >
                     {attr}
                   </span>
@@ -186,7 +187,7 @@ const RuleCard: React.FC<RuleCardProps> = memo(({
           {/* Groups */}
           {rule.groupIds.length > 0 && (
             <div>
-              <div className="text-xs font-bold uppercase tracking-widest text-gray-600 mb-3">THEN ADD TO GROUPS</div>
+              <div className="text-xs font-bold uppercase tracking-wider text-neutral-600 mb-2">THEN ADD TO GROUPS</div>
               <div className="flex flex-wrap gap-2">
                 {rule.groupIds.map((groupId, index) => {
                   const groupName = rule.groupNames?.[index];
@@ -195,12 +196,12 @@ const RuleCard: React.FC<RuleCardProps> = memo(({
                   return (
                     <span
                       key={groupId}
-                      className="px-3 py-1.5 rounded-md bg-emerald-50 text-emerald-700 text-sm font-medium border border-emerald-200"
+                      className="px-2.5 py-1 rounded-md bg-success-light text-success-text text-sm font-medium border border-success-light"
                     >
                       {isNameDifferent ? (
                         <>
                           <span className="font-semibold">{groupName}</span>
-                          <span className="ml-1.5 text-xs text-emerald-600 font-mono">({groupId.substring(0, 8)}...)</span>
+                          <span className="ml-1.5 text-xs font-mono opacity-75">({groupId.substring(0, 8)}...)</span>
                         </>
                       ) : (
                         <span className="font-mono">{groupId}</span>
@@ -215,22 +216,22 @@ const RuleCard: React.FC<RuleCardProps> = memo(({
           {/* Conflicts */}
           {hasConflicts && (
             <div>
-              <div className="text-xs font-bold uppercase tracking-widest text-amber-700 mb-3">⚠️ CONFLICTS DETECTED</div>
-              <div className="space-y-3">
+              <div className="text-xs font-bold uppercase tracking-wider text-warning-text mb-2">CONFLICTS DETECTED</div>
+              <div className="space-y-2">
                 {rule.conflicts!.map((conflict, idx) => (
-                  <div key={idx} className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                  <div key={idx} className="p-3 bg-warning-light rounded-md border border-warning-light">
                     <div className="flex items-start gap-3">
                       <span className={`
-                        px-2 py-1 rounded text-xs font-bold uppercase
-                        ${conflict.severity === 'high' ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-amber-100 text-amber-700 border border-amber-200'}
+                        px-2 py-0.5 rounded-md text-xs font-bold uppercase
+                        ${conflict.severity === 'high' ? 'bg-danger-light text-danger-text border border-danger-light' : 'bg-warning-light text-warning-text border border-warning-light'}
                       `}>
                         {conflict.severity}
                       </span>
                       <div className="flex-1">
-                        <div className="text-sm text-gray-900 mb-1">
+                        <div className="text-sm text-neutral-900 mb-1">
                           Conflicts with: <span className="font-semibold">{conflict.rule2.name}</span>
                         </div>
-                        <div className="text-xs text-gray-600">{conflict.reason}</div>
+                        <div className="text-xs text-neutral-600">{conflict.reason}</div>
                       </div>
                     </div>
                   </div>
@@ -240,40 +241,35 @@ const RuleCard: React.FC<RuleCardProps> = memo(({
           )}
 
           {/* Metadata */}
-          <div className="pt-4 border-t border-gray-200 flex flex-wrap gap-4 text-xs text-gray-600">
+          <div className="pt-3 border-t border-neutral-200 flex flex-wrap gap-4 text-xs text-neutral-600">
             <div>
               <span className="font-semibold">Last updated:</span>{' '}
               <span>{timeAgo(rule.lastUpdated)}</span>
             </div>
             <div>
               <span className="font-semibold">Rule ID:</span>{' '}
-              <span className="font-mono text-gray-500">{rule.id}</span>
+              <span className="font-mono text-neutral-500">{rule.id}</span>
             </div>
           </div>
 
           {/* Actions */}
           <div className="flex flex-wrap gap-2 pt-2">
             {rule.status === 'ACTIVE' ? (
-              <button
-                className="px-4 py-2 text-sm font-medium bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
-                onClick={handleDeactivate}
-              >
+              <Button variant="secondary" size="sm" onClick={handleDeactivate}>
                 Deactivate Rule
-              </button>
+              </Button>
             ) : (
-              <button
-                className="px-4 py-2 text-sm font-semibold bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] text-white rounded-lg hover:from-[#005a8f] hover:to-[#007dc1] transition-all duration-200 shadow-md hover:shadow-lg"
-                onClick={handleActivate}
-              >
+              <Button variant="primary" size="sm" onClick={handleActivate}>
                 Activate Rule
-              </button>
+              </Button>
             )}
             {oktaOrigin && (
               <a
                 href={`${oktaOrigin}/admin/groups#rules`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-4 py-2 text-sm font-medium bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm inline-flex items-center gap-2"
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-white text-neutral-900 border border-neutral-200 rounded-md hover:bg-neutral-50 hover:border-neutral-500 transition-colors duration-100"
+                style={{ fontFamily: 'var(--font-heading)', minHeight: '36px' }}
                 title="Open Rules page in Okta Admin Console (you can search for this rule by name)"
               >
                 <span>View in Okta</span>

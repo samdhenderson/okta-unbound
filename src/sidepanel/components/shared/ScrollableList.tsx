@@ -92,7 +92,7 @@ const ScrollableList: React.FC<ScrollableListProps> = ({
     'overflow-y-auto',
     // Flex behavior for fill available
     fillAvailable ? 'flex-1 min-h-0' : '',
-    // Custom scrollbar styling (defined in styles.css)
+    // Custom scrollbar styling (defined in tailwind.css)
     'scrollable-list',
     // User-provided classes
     className,

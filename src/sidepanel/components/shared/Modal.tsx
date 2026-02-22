@@ -28,20 +28,20 @@ const Modal: React.FC<ModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center z-50 animate-in fade-in duration-200 isolate"
+      className="fixed inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center z-50 animate-in fade-in duration-100 isolate"
       onClick={onClose}
     >
       <div
-        className={`bg-white rounded-lg shadow-xl ${sizeClasses[size]} w-full mx-4 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300`}
+        className={`bg-white rounded-md shadow-xl ${sizeClasses[size]} w-full mx-4 animate-in zoom-in-95 slide-in-from-bottom-4 duration-100`}
         onClick={(e) => e.stopPropagation()}
         style={{ fontFamily: 'var(--font-primary)' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200">
+          <h3 className="text-lg font-semibold text-neutral-900">{title}</h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100"
+            className="text-neutral-400 hover:text-neutral-700 transition-colors duration-100 p-1 rounded-md hover:bg-neutral-50"
             aria-label="Close modal"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -57,7 +57,7 @@ const Modal: React.FC<ModalProps> = ({
 
         {/* Footer */}
         {footer && (
-          <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-lg border-t border-gray-200">
+          <div className="flex items-center justify-end gap-3 px-6 py-4 bg-neutral-50 rounded-b-md border-t border-neutral-200">
             {footer}
           </div>
         )}

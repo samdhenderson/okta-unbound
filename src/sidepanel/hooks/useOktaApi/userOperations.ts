@@ -167,6 +167,36 @@ export function createUserOperations(coreApi: CoreApi) {
     }
   };
 
+  /**
+   * Suspend an active user, preventing them from signing in.
+   * Only valid for users in ACTIVE status.
+   */
+  const suspendUser = async (userId: string): Promise<{ success: boolean; error?: string }> => {
+    const result = await coreApi.makeApiRequest(`/api/v1/users/${userId}/lifecycle/suspend`, 'POST');
+    return { success: result.success, error: result.error };
+  };
+
+  /**
+   * Unsuspend a suspended user, restoring their ability to sign in.
+   * Only valid for users in SUSPENDED status.
+   */
+  const unsuspendUser = async (userId: string): Promise<{ success: boolean; error?: string }> => {
+    const result = await coreApi.makeApiRequest(`/api/v1/users/${userId}/lifecycle/unsuspend`, 'POST');
+    return { success: result.success, error: result.error };
+  };
+
+  /**
+   * Trigger a password reset email for the user.
+   * Sends an email with a one-time reset link. Valid for ACTIVE and RECOVERY status users.
+   */
+  const resetPassword = async (userId: string): Promise<{ success: boolean; error?: string }> => {
+    const result = await coreApi.makeApiRequest(
+      `/api/v1/users/${userId}/lifecycle/reset_password?sendEmail=true`,
+      'POST'
+    );
+    return { success: result.success, error: result.error };
+  };
+
   return {
     getUserLastLogin,
     getUserAppAssignments,
@@ -174,5 +204,8 @@ export function createUserOperations(coreApi: CoreApi) {
     getUserGroupMemberships,
     searchUsers,
     getUserById,
+    suspendUser,
+    unsuspendUser,
+    resetPassword,
   };
 }

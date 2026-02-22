@@ -22,40 +22,43 @@ interface ButtonProps {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary: `
-    bg-gradient-to-r from-[#007dc1] to-[#3d9dd9]
-    hover:from-[#005a8f] hover:to-[#007dc1]
-    text-white font-semibold shadow-md hover:shadow-lg
-    disabled:from-blue-300 disabled:to-blue-400
+    bg-primary hover:bg-primary-dark
+    text-white font-semibold
+    disabled:bg-primary-highlight disabled:text-neutral-400
   `,
   secondary: `
-    bg-white hover:bg-gray-50
-    text-gray-700 font-medium
-    border border-gray-200 shadow-sm hover:shadow
-    disabled:bg-gray-50 disabled:text-gray-400
+    bg-white hover:bg-neutral-50
+    text-neutral-900 font-medium
+    border border-neutral-200 hover:border-neutral-500
+    disabled:bg-neutral-50 disabled:text-neutral-400 disabled:border-neutral-200
   `,
   danger: `
-    bg-gradient-to-r from-red-600 to-red-700
-    hover:from-red-700 hover:to-red-800
-    text-white font-semibold shadow-md hover:shadow-lg
-    disabled:from-red-300 disabled:to-red-400
+    bg-danger hover:bg-danger-text
+    text-white font-semibold
+    disabled:bg-danger-light disabled:text-neutral-400
   `,
   success: `
-    bg-gradient-to-r from-emerald-600 to-emerald-700
-    hover:from-emerald-700 hover:to-emerald-800
-    text-white font-semibold shadow-md hover:shadow-lg
-    disabled:from-emerald-300 disabled:to-emerald-400
+    bg-success hover:bg-success-text
+    text-white font-semibold
+    disabled:bg-success-light disabled:text-neutral-400
   `,
   ghost: `
-    bg-transparent hover:bg-gray-100/80
-    text-gray-700 font-medium
-    disabled:text-gray-400
+    bg-transparent hover:bg-neutral-50
+    text-neutral-700 font-medium
+    disabled:text-neutral-400
   `,
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
   sm: 'px-3 py-1.5 text-xs',
-  md: 'px-4 py-2.5 text-sm',
-  lg: 'px-6 py-3 text-base',
+  md: 'px-4 py-2 text-sm',
+  lg: 'px-4 py-3 text-base',
+};
+
+const sizeHeights: Record<ButtonSize, string> = {
+  sm: '36px',
+  md: '40px',
+  lg: '56px',
 };
 
 const Button: React.FC<ButtonProps> = ({
@@ -75,10 +78,9 @@ const Button: React.FC<ButtonProps> = ({
 }) => {
   const baseClasses = `
     inline-flex items-center justify-center gap-2
-    rounded-lg transition-all duration-200
-    disabled:cursor-not-allowed disabled:opacity-50
-    hover:-translate-y-0.5 disabled:hover:translate-y-0
-    focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#007dc1]/30
+    rounded-md transition-all duration-100
+    disabled:cursor-not-allowed
+    focus:outline-2 focus:outline-offset-2 focus:outline-primary
     ${variantClasses[variant]}
     ${sizeClasses[size]}
     ${fullWidth ? 'w-full' : ''}
@@ -91,7 +93,7 @@ const Button: React.FC<ButtonProps> = ({
       disabled={disabled || loading}
       className={`${baseClasses} ${className}`}
       title={title}
-      style={{ fontFamily: 'var(--font-primary)' }}
+      style={{ fontFamily: 'var(--font-heading)', minHeight: sizeHeights[size] }}
     >
       {loading && (
         <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
@@ -107,7 +109,7 @@ const Button: React.FC<ButtonProps> = ({
         <Icon type={icon} size={size === 'sm' ? 'sm' : 'md'} />
       )}
       {badge && (
-        <span className="ml-1 px-2 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white">
+        <span className="ml-1 px-2 py-0.5 rounded-full text-xs font-bold bg-danger text-white">
           {badge}
         </span>
       )}

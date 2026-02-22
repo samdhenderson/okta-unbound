@@ -1,6 +1,6 @@
 {
   "name": "okta-unbound",
-  "version": "0.3.0",
+  "version": "0.4.0-beta.1",
   "description": "Advanced Okta group and user management extension for administrators",
   "type": "module",
   "scripts": {
@@ -78,7 +78,6 @@
     "idb": "^8.0.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "recharts": "^3.4.1",
     "tailwindcss": "^4.1.18"
   },
   "lint-staged": {

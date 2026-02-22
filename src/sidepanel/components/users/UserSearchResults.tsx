@@ -34,8 +34,8 @@ const UserSearchResults: React.FC<UserSearchResultsProps> = ({
   return (
     <div className="space-y-4 animate-in slide-in-from-top-4 duration-500">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">Search Results</h3>
-        <span className="px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full">
+        <h3 className="text-lg font-semibold text-neutral-900">Search Results</h3>
+        <span className="px-3 py-1 bg-neutral-100 text-neutral-700 text-sm font-medium rounded-full">
           {results.length} {results.length === 1 ? 'user' : 'users'}
         </span>
       </div>
@@ -43,16 +43,16 @@ const UserSearchResults: React.FC<UserSearchResultsProps> = ({
         {results.map(user => (
           <div
             key={user.id}
-            className="group bg-white rounded-lg border border-gray-200 p-5 cursor-pointer transition-all duration-200 hover:border-[#007dc1] hover:shadow-md hover:-translate-y-0.5"
+            className="group bg-white rounded-md border border-neutral-200 p-5 cursor-pointer transition-all duration-100 hover:border-neutral-500"
             onClick={() => onSelectUser(user)}
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
-                <h4 className="font-semibold text-gray-900 mb-1 group-hover:text-[#007dc1] transition-colors">
+                <h4 className="font-semibold text-neutral-900 mb-1 group-hover:text-primary-text transition-colors">
                   {user.profile.firstName} {user.profile.lastName}
                 </h4>
-                <p className="text-sm text-gray-600 mb-1">{user.profile.email}</p>
-                <p className="text-xs text-gray-500 font-mono">Login: {user.profile.login}</p>
+                <p className="text-sm text-neutral-600 mb-1">{user.profile.email}</p>
+                <p className="text-xs text-neutral-500 font-mono">Login: {user.profile.login}</p>
               </div>
               <span className={getStatusBadgeClass(user.status)}>{user.status}</span>
             </div>

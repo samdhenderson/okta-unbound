@@ -25,10 +25,10 @@ interface QuickActionsPanelProps {
 }
 
 const variantClasses = {
-  primary: 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-md hover:shadow-lg disabled:from-blue-300 disabled:to-blue-400',
-  secondary: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 shadow-sm hover:shadow disabled:bg-gray-50 disabled:text-gray-400',
-  danger: 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white shadow-md hover:shadow-lg disabled:from-red-300 disabled:to-red-400',
-  ghost: 'bg-transparent hover:bg-gray-100/80 text-gray-700 disabled:text-gray-400',
+  primary: 'bg-primary hover:bg-primary-dark text-white shadow-sm disabled:opacity-50',
+  secondary: 'bg-white hover:bg-neutral-50 text-neutral-700 border border-neutral-200 shadow-sm disabled:bg-neutral-50 disabled:text-neutral-400',
+  danger: 'bg-danger hover:bg-danger text-white shadow-sm disabled:opacity-50',
+  ghost: 'bg-transparent hover:bg-neutral-100 text-neutral-700 disabled:text-neutral-400',
 };
 
 const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({ sections, className = '' }) => {
@@ -51,32 +51,32 @@ const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({ sections, classNa
       {sections.map((section, sectionIndex) => (
         <div
           key={sectionIndex}
-          className="rounded-xl border border-gray-200/80 bg-white shadow-sm hover:shadow-md overflow-hidden transition-all duration-300"
+          className="rounded-md border border-neutral-200 bg-white shadow-sm overflow-hidden transition-all duration-100"
         >
           {/* Section Header */}
           <button
             onClick={() => toggleSection(sectionIndex)}
             className="
               w-full flex items-center justify-between px-5 py-3.5
-              text-left font-semibold text-gray-900 bg-gradient-to-r from-gray-50 to-gray-100/50
-              hover:from-gray-100 hover:to-gray-200/50 transition-all duration-200
-              border-b border-gray-200/50
+              text-left font-semibold text-neutral-900 bg-neutral-50
+              hover:bg-neutral-100 transition-all duration-100
+              border-b border-neutral-200
             "
           >
             <div className="flex items-center gap-3">
               {section.icon && (
-                <div className="p-1.5 bg-white rounded-lg shadow-sm">
-                  <Icon type={section.icon} size="sm" className="text-gray-600" />
+                <div className="p-1.5 bg-white rounded-md shadow-sm">
+                  <Icon type={section.icon} size="sm" className="text-neutral-600" />
                 </div>
               )}
               <span className="text-sm font-semibold">{section.title}</span>
-              <span className="px-2 py-0.5 bg-white rounded-full text-xs font-medium text-gray-600 shadow-sm">
+              <span className="px-2 py-0.5 bg-white rounded-full text-xs font-medium text-neutral-600 shadow-sm">
                 {section.actions.length}
               </span>
             </div>
             <svg
               className={`
-                w-5 h-5 text-gray-400 transition-transform duration-300
+                w-5 h-5 text-neutral-400 transition-transform duration-100
                 ${expandedSections[sectionIndex] ? 'rotate-180' : ''}
               `}
               fill="none"
@@ -89,7 +89,7 @@ const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({ sections, classNa
 
           {/* Section Content */}
           {expandedSections[sectionIndex] && (
-            <div className="p-3 bg-gradient-to-b from-white to-gray-50/30 space-y-2">
+            <div className="p-3 bg-white space-y-2">
               {section.actions.map((action, actionIndex) => (
                 <button
                   key={actionIndex}
@@ -98,9 +98,8 @@ const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({ sections, classNa
                   title={action.tooltip}
                   className={`
                     w-full flex items-center justify-between px-4 py-3
-                    rounded-lg text-sm font-semibold transition-all duration-200
+                    rounded-md text-sm font-semibold transition-all duration-100
                     disabled:cursor-not-allowed disabled:opacity-50
-                    transform hover:scale-[1.01]
                     ${variantClasses[action.variant || 'secondary']}
                   `}
                 >
@@ -118,7 +117,7 @@ const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({ sections, classNa
                   {action.badge && (
                     <span className="
                       ml-2 px-2.5 py-1 rounded-full text-xs font-bold
-                      bg-gradient-to-r from-red-500 to-red-600 text-white shadow-sm
+                      bg-danger text-white shadow-sm
                     ">
                       {action.badge}
                     </span>

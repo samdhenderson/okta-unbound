@@ -7,11 +7,9 @@ import EmptyState from './shared/EmptyState';
 import LoadingSpinner from './shared/LoadingSpinner';
 import GroupOverview from './overview/GroupOverview';
 import UserOverview from './overview/UserOverview';
-import AppOverview from './overview/AppOverview';
-import AdminOverview from './overview/AdminOverview';
 
 interface OverviewTabProps {
-  onTabChange: (tab: 'rules' | 'users' | 'security' | 'groups' | 'apps' | 'history', selectedRuleId?: string) => void;
+  onTabChange: (tab: 'rules' | 'users' | 'groups' | 'history', selectedRuleId?: string) => void;
 }
 
 const OverviewTab: React.FC<OverviewTabProps> = ({ onTabChange }) => {
@@ -19,15 +17,14 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ onTabChange }) => {
     pageType,
     groupInfo,
     userInfo,
-    appInfo,
     connectionStatus,
     targetTabId,
     error,
     isLoading,
     refetch,
+    oktaOrigin,
   } = useOktaPageContext();
 
-  // Show loading state
   if (isLoading) {
     return (
       <div className="tab-content active">
@@ -36,7 +33,6 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ onTabChange }) => {
     );
   }
 
-  // Show error state
   if (connectionStatus === 'error' || error) {
     return (
       <div className="tab-content active">
@@ -48,8 +44,6 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ onTabChange }) => {
             }}
             action={{ label: 'Retry Connection', onClick: refetch }}
           />
-
-          {/* Help Text */}
           <AlertMessage
             message={{
               text: 'Quick Start: 1) Open an Okta admin page (e.g., okta.com) 2) Navigate to a group, user, or app page 3) The Overview tab will automatically detect the context',
@@ -61,16 +55,10 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ onTabChange }) => {
     );
   }
 
-  // Map page type to badge configuration
   const getBadgeConfig = (): { text: string; variant: 'primary' | 'success' | 'warning' | 'error' | 'neutral' } | undefined => {
-    const badgeMap = {
-      group: { text: 'Group', variant: 'primary' as const },
-      user: { text: 'User', variant: 'primary' as const },
-      app: { text: 'Application', variant: 'success' as const },
-      admin: { text: 'Organization', variant: 'neutral' as const },
-    };
-
-    return pageType !== 'unknown' ? badgeMap[pageType] : undefined;
+    if (pageType === 'group') return { text: 'Group', variant: 'primary' };
+    if (pageType === 'user') return { text: 'User', variant: 'primary' };
+    return undefined;
   };
 
   return (
@@ -78,7 +66,6 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ onTabChange }) => {
       <PageHeader
         title="Overview"
         subtitle="Context-aware insights and quick actions"
-        icon="chart"
         badge={getBadgeConfig()}
         actions={
           <Button
@@ -95,14 +82,13 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ onTabChange }) => {
       />
 
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-
-        {/* Context-Specific Content */}
         {pageType === 'group' && groupInfo && targetTabId && (
           <GroupOverview
             groupId={groupInfo.groupId}
             groupName={groupInfo.groupName}
             targetTabId={targetTabId}
             onTabChange={(tab, selectedRuleId) => onTabChange(tab, selectedRuleId)}
+            oktaOrigin={oktaOrigin}
           />
         )}
 
@@ -112,31 +98,15 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ onTabChange }) => {
             userName={userInfo.userName}
             targetTabId={targetTabId}
             onTabChange={onTabChange}
+            oktaOrigin={oktaOrigin}
           />
         )}
 
-        {pageType === 'app' && appInfo && targetTabId && (
-          <AppOverview
-            appId={appInfo.appId}
-            appName={appInfo.appName}
-            appLabel={appInfo.appLabel}
-            targetTabId={targetTabId}
-            onTabChange={onTabChange}
-          />
-        )}
-
-        {pageType === 'admin' && (
-          <AdminOverview
-            targetTabId={targetTabId}
-            onTabChange={onTabChange}
-          />
-        )}
-
-        {pageType === 'unknown' && (
+        {(pageType === 'unknown' || pageType === 'admin' || pageType === 'app') && (
           <EmptyState
             icon="search"
             title="Waiting for Context"
-            description="Navigate to a group, user, or app page in Okta to see contextual insights and quick actions."
+            description="Navigate to a group or user page in Okta to see contextual insights and quick actions."
             actions={[
               { label: 'Browse Groups', onClick: () => onTabChange('groups'), variant: 'primary' },
               { label: 'Search Users', onClick: () => onTabChange('users'), variant: 'secondary' }
