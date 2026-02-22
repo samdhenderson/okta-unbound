@@ -20,24 +20,24 @@ interface AlertMessageProps {
 
 const typeStyles = {
   info: {
-    bg: 'bg-blue-50 border-blue-200',
-    icon: 'text-blue-500',
-    text: 'text-blue-800',
+    bg: 'bg-info-light border-primary-highlight',
+    icon: 'text-primary-text',
+    text: 'text-primary-dark',
   },
   success: {
-    bg: 'bg-emerald-50 border-emerald-200',
-    icon: 'text-emerald-500',
-    text: 'text-emerald-800',
+    bg: 'bg-success-light border-success-light',
+    icon: 'text-success',
+    text: 'text-success-text',
   },
   warning: {
-    bg: 'bg-amber-50 border-amber-200',
-    icon: 'text-amber-500',
-    text: 'text-amber-800',
+    bg: 'bg-warning-light border-warning-light',
+    icon: 'text-warning',
+    text: 'text-warning-text',
   },
   error: {
-    bg: 'bg-red-50 border-red-200',
-    icon: 'text-red-500',
-    text: 'text-red-800',
+    bg: 'bg-danger-light border-danger-light',
+    icon: 'text-danger',
+    text: 'text-danger-text',
   },
 };
 
@@ -59,7 +59,7 @@ const AlertMessage: React.FC<AlertMessageProps> = ({ message, onDismiss, action,
 
   return (
     <div
-      className={`p-4 rounded-lg border flex items-start justify-between gap-4 ${styles.bg} ${className}`}
+      className={`p-4 rounded-md border flex items-start justify-between gap-4 ${styles.bg} ${className}`}
       role="alert"
     >
       <div className="flex items-start gap-3 flex-1">
@@ -109,12 +109,10 @@ const AlertMessage: React.FC<AlertMessageProps> = ({ message, onDismiss, action,
           <button
             type="button"
             onClick={action.onClick}
-            className={`ml-3 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              action.variant === 'danger'
-                ? 'bg-red-600 text-white hover:bg-red-700'
-                : message.type === 'error'
-                  ? 'bg-red-600 text-white hover:bg-red-700'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
+            className={`ml-3 px-3 py-1.5 text-sm font-medium rounded-md transition-colors duration-100 ${
+              action.variant === 'danger' || message.type === 'error'
+                ? 'bg-danger text-white hover:bg-danger-text'
+                : 'bg-primary text-white hover:bg-primary-dark'
             }`}
           >
             {action.label}
@@ -126,7 +124,7 @@ const AlertMessage: React.FC<AlertMessageProps> = ({ message, onDismiss, action,
       {onDismiss && (
         <button
           type="button"
-          className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-white/50"
+          className="text-neutral-400 hover:text-neutral-600 transition-colors duration-100 p-1 rounded-full hover:bg-white/50"
           onClick={onDismiss}
           aria-label="Dismiss message"
         >

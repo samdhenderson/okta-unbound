@@ -2,12 +2,15 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PageHeader from './shared/PageHeader';
 import AlertMessage from './shared/AlertMessage';
 import Button from './shared/Button';
+import Modal from './shared/Modal';
 import CollapsibleSection from './shared/CollapsibleSection';
 import EmptyState from './shared/EmptyState';
 import LoadingSpinner from './shared/LoadingSpinner';
 import type { OktaUser, GroupMembership } from '../../shared/types';
+import type { AlertMessageData } from './shared/AlertMessage';
 import { RulesCache } from '../../shared/rulesCache';
 import { useUserContext } from '../hooks/useUserContext';
+import { useOktaApi } from '../hooks/useOktaApi';
 
 // Helper to format dates in a readable way
 const formatDate = (dateString: string | null | undefined): string => {
@@ -64,6 +67,16 @@ interface UsersTabProps {
   onNavigateToRule?: (ruleId: string) => void;
 }
 
+type LifecycleAction = 'suspend' | 'unsuspend' | 'resetPassword';
+
+// Shape returned by searchGroups in groupDiscovery.ts
+interface GroupSearchResult {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+}
+
 const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavigateToRule }) => {
   const { userInfo, isLoading: isLoadingUserContext, oktaOrigin } = useUserContext();
   const [searchQuery, setSearchQuery] = useState('');
@@ -73,9 +86,26 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
   const [searchResults, setSearchResults] = useState<OktaUser[]>([]);
   const [memberships, setMemberships] = useState<GroupMembership[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [resultMessage, setResultMessage] = useState<AlertMessageData | null>(null);
+  const [pendingLifecycleAction, setPendingLifecycleAction] = useState<LifecycleAction | null>(null);
+  const [isLifecycleLoading, setIsLifecycleLoading] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [hasAutoLoadedUser, setHasAutoLoadedUser] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Add to Group modal state
+  const [isAddToGroupModalOpen, setIsAddToGroupModalOpen] = useState(false);
+  const [groupSearchQuery, setGroupSearchQuery] = useState('');
+  const [groupSearchResults, setGroupSearchResults] = useState<GroupSearchResult[]>([]);
+  const [isSearchingGroups, setIsSearchingGroups] = useState(false);
+  const [selectedGroup, setSelectedGroup] = useState<GroupSearchResult | null>(null);
+  const [isAddingToGroup, setIsAddingToGroup] = useState(false);
+  const [showGroupDropdown, setShowGroupDropdown] = useState(false);
+  const groupDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const { suspendUser, unsuspendUser, resetPassword, getUserById, searchGroups, addUserToGroup } = useOktaApi({
+    targetTabId: targetTabId ?? null,
+  });
 
   const handleSearch = useCallback(async () => {
     if (!targetTabId) {
@@ -450,7 +480,142 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     setMemberships([]);
     setHasAutoLoadedUser(null);
     setError(null);
+    setResultMessage(null);
     searchInputRef.current?.focus();
+  };
+
+  const handleLifecycleAction = async () => {
+    if (!selectedUser || !pendingLifecycleAction) return;
+
+    // Capture before clearing so success message lookup still works
+    const action = pendingLifecycleAction;
+    setIsLifecycleLoading(true);
+    setPendingLifecycleAction(null);
+
+    try {
+      let result: { success: boolean; error?: string };
+
+      if (action === 'suspend') {
+        result = await suspendUser(selectedUser.id);
+      } else if (action === 'unsuspend') {
+        result = await unsuspendUser(selectedUser.id);
+      } else {
+        result = await resetPassword(selectedUser.id);
+      }
+
+      if (result.success) {
+        const successMessages: Record<LifecycleAction, string> = {
+          suspend: 'User suspended successfully. They can no longer sign in.',
+          unsuspend: 'User unsuspended successfully. They can now sign in.',
+          resetPassword: 'Password reset email sent successfully.',
+        };
+        setResultMessage({ text: successMessages[action], type: 'success' });
+
+        // Refresh user status cheaply without reloading memberships
+        if (action !== 'resetPassword') {
+          const refreshed = await getUserById(selectedUser.id);
+          if (refreshed) {
+            setSelectedUser((prev) =>
+              prev ? { ...prev, status: refreshed.status as OktaUser['status'] } : prev
+            );
+          }
+        }
+      } else {
+        setResultMessage({
+          text: result.error || 'The operation failed. Please try again.',
+          type: 'error',
+        });
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
+      setResultMessage({ text: message, type: 'error' });
+    } finally {
+      setIsLifecycleLoading(false);
+    }
+  };
+
+  // Debounced group search for the Add to Group modal
+  useEffect(() => {
+    if (groupDebounceTimerRef.current) {
+      clearTimeout(groupDebounceTimerRef.current);
+    }
+
+    if (groupSearchQuery.trim().length < 2) {
+      setGroupSearchResults([]);
+      setShowGroupDropdown(false);
+      return;
+    }
+
+    groupDebounceTimerRef.current = setTimeout(async () => {
+      setIsSearchingGroups(true);
+      try {
+        const results = await searchGroups(groupSearchQuery.trim());
+        setGroupSearchResults(results);
+        setShowGroupDropdown(results.length > 0);
+      } catch {
+        setGroupSearchResults([]);
+        setShowGroupDropdown(false);
+      } finally {
+        setIsSearchingGroups(false);
+      }
+    }, 300);
+
+    return () => {
+      if (groupDebounceTimerRef.current) {
+        clearTimeout(groupDebounceTimerRef.current);
+      }
+    };
+  }, [groupSearchQuery, searchGroups]);
+
+  const handleOpenAddToGroupModal = () => {
+    setGroupSearchQuery('');
+    setGroupSearchResults([]);
+    setSelectedGroup(null);
+    setShowGroupDropdown(false);
+    setIsAddToGroupModalOpen(true);
+  };
+
+  const handleCloseAddToGroupModal = () => {
+    setIsAddToGroupModalOpen(false);
+    setGroupSearchQuery('');
+    setGroupSearchResults([]);
+    setSelectedGroup(null);
+    setShowGroupDropdown(false);
+  };
+
+  const handleConfirmAddToGroup = async () => {
+    if (!selectedUser || !selectedGroup) return;
+
+    setIsAddingToGroup(true);
+    try {
+      const result = await addUserToGroup(selectedGroup.id, selectedGroup.name, {
+        id: selectedUser.id,
+        profile: {
+          login: selectedUser.profile.login,
+          firstName: selectedUser.profile.firstName,
+          lastName: selectedUser.profile.lastName,
+          email: selectedUser.profile.email,
+        },
+      });
+
+      if (result.success) {
+        handleCloseAddToGroupModal();
+        // Refresh memberships so the new group appears immediately
+        await handleSelectUser(selectedUser);
+      } else {
+        setResultMessage({
+          text: result.error || 'Failed to add user to group. Please try again.',
+          type: 'error',
+        });
+        handleCloseAddToGroupModal();
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
+      setResultMessage({ text: message, type: 'error' });
+      handleCloseAddToGroupModal();
+    } finally {
+      setIsAddingToGroup(false);
+    }
   };
 
   return (
@@ -458,7 +623,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
       <PageHeader
         title="User Search"
         subtitle="Search users and analyze their group memberships"
-        icon="user"
         badge={selectedUser ? { text: `${memberships.length} Groups`, variant: 'primary' } : undefined}
         actions={
           oktaOrigin && selectedUser ? (
@@ -479,21 +643,21 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
         <div className="space-y-3">
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-5 w-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>
             <input
               ref={searchInputRef}
               type="text"
-              className="w-full pl-11 pr-12 py-3 bg-white border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#007dc1]/30 focus:border-[#007dc1] transition-all duration-200 shadow-sm hover:shadow"
+              className="w-full pl-11 pr-12 py-3 bg-white border border-neutral-200 rounded-md text-sm placeholder-neutral-400 focus:outline-none focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary transition-all duration-100"
               placeholder="Search by email, name, or login..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
             {(searchQuery || selectedUser) && (
               <button
-                className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+                className="absolute inset-y-0 right-0 pr-4 flex items-center text-neutral-400 hover:text-neutral-700 transition-colors duration-100"
                 onClick={handleClearSearch}
                 title="Clear search"
                 type="button"
@@ -505,21 +669,21 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
             )}
             {isSearching && (
               <div className="absolute inset-y-0 right-12 flex items-center pr-3">
-                <div className="w-4 h-4 border-2 border-gray-200 border-t-[#007dc1] rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-neutral-200 border-t-primary rounded-full animate-spin" />
               </div>
             )}
           </div>
 
           {/* Detected user hint */}
           {userInfo && !selectedUser && !searchQuery && (
-            <div className="px-4 py-2.5 bg-gradient-to-br from-blue-50 to-cyan-50/50 border border-blue-200/60 rounded-lg shadow-sm flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
-              <span className="text-sm text-gray-700">
-                Detected: <strong className="text-gray-900">{userInfo.userName}</strong>
+            <div className="px-4 py-2.5 bg-primary-light border border-primary-highlight rounded-md flex items-center gap-2">
+              <span className="text-sm text-neutral-700">
+                Detected: <strong className="text-neutral-900">{userInfo.userName}</strong>
               </span>
               {userInfo.userStatus && (
-                <span className={`px-2.5 py-0.5 text-xs font-bold rounded-full ${
-                  userInfo.userStatus === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' :
-                  userInfo.userStatus === 'DEPROVISIONED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                <span className={`px-2.5 py-0.5 text-xs font-bold rounded-md ${
+                  userInfo.userStatus === 'ACTIVE' ? 'bg-success-light text-success-text' :
+                  userInfo.userStatus === 'DEPROVISIONED' ? 'bg-danger-light text-danger-text' : 'bg-warning-light text-warning-text'
                 }`}>
                   {userInfo.userStatus}
                 </span>
@@ -537,12 +701,21 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
           />
         )}
 
+        {/* Lifecycle operation result */}
+        {resultMessage && (
+          <AlertMessage
+            message={resultMessage}
+            onDismiss={() => setResultMessage(null)}
+            className="animate-in slide-in-from-top-2 duration-300"
+          />
+        )}
+
         {/* Search Results */}
         {searchResults.length > 0 && !selectedUser && (
           <div className="space-y-4 animate-in slide-in-from-top-4 duration-500">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Search Results</h3>
-              <span className="px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full">
+              <h3 className="text-lg font-semibold text-neutral-900">Search Results</h3>
+              <span className="px-3 py-1 bg-neutral-100 text-neutral-700 text-sm font-medium rounded-md">
                 {searchResults.length} {searchResults.length === 1 ? 'user' : 'users'}
               </span>
             </div>
@@ -550,16 +723,16 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
               {searchResults.map(user => (
                 <div
                   key={user.id}
-                  className="group bg-white rounded-lg border border-gray-200 p-5 cursor-pointer transition-all duration-200 hover:border-[#007dc1] hover:shadow-md hover:-translate-y-0.5"
+                  className="group bg-white rounded-md border border-neutral-200 p-5 cursor-pointer transition-all duration-100 hover:border-neutral-500 hover:shadow-sm"
                   onClick={() => handleSelectUser(user)}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold text-gray-900 mb-1 group-hover:text-[#007dc1] transition-colors">
+                      <h4 className="font-semibold text-neutral-900 mb-1 group-hover:text-primary-text transition-colors duration-100">
                         {user.profile.firstName} {user.profile.lastName}
                       </h4>
-                      <p className="text-sm text-gray-600 mb-1">{user.profile.email}</p>
-                      <p className="text-xs text-gray-500 font-mono">Login: {user.profile.login}</p>
+                      <p className="text-sm text-neutral-600 mb-1">{user.profile.email}</p>
+                      <p className="text-xs text-neutral-500 font-mono">Login: {user.profile.login}</p>
                     </div>
                     <span className={getStatusBadgeClass(user.status)}>{user.status}</span>
                   </div>
@@ -573,32 +746,32 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
         {selectedUser && (
           <div className="space-y-6 animate-in slide-in-from-top-4 duration-500">
             {/* Premium User ID Card */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden">
-              <div className="p-6 bg-gradient-to-br from-white via-gray-50/30 to-white">
+            <div className="bg-white rounded-md border border-neutral-200 overflow-hidden">
+              <div className="p-6">
                 <div className="flex items-start gap-5">
                   {/* Avatar */}
-                  <div className="flex-shrink-0 w-16 h-16 rounded-full bg-gradient-to-br from-[#007dc1] to-[#3d9dd9] flex items-center justify-center text-white text-xl font-bold shadow-lg ring-4 ring-blue-100">
+                  <div className="shrink-0 w-16 h-16 rounded-full bg-primary flex items-center justify-center text-white text-xl font-bold ring-4 ring-primary-highlight">
                     {selectedUser.profile.firstName?.[0]?.toUpperCase() || '?'}
                     {selectedUser.profile.lastName?.[0]?.toUpperCase() || ''}
                   </div>
 
                   {/* User Info */}
                   <div className="flex-1 min-w-0">
-                    <h2 className="text-xl font-bold text-gray-900 mb-1">
+                    <h2 className="text-xl font-bold text-neutral-900 mb-1">
                       {selectedUser.profile.firstName} {selectedUser.profile.lastName}
                     </h2>
                     {(selectedUser.profile.title || selectedUser.profile.department) && (
-                      <div className="text-sm text-gray-600 mb-2 flex items-center gap-2">
+                      <div className="text-sm text-neutral-600 mb-2 flex items-center gap-2">
                         {selectedUser.profile.title && <span>{selectedUser.profile.title}</span>}
                         {selectedUser.profile.title && selectedUser.profile.department && (
-                          <span className="text-gray-400">•</span>
+                          <span className="text-neutral-400">•</span>
                         )}
                         {selectedUser.profile.department && <span>{selectedUser.profile.department}</span>}
                       </div>
                     )}
-                    <div className="text-sm text-gray-700 mb-1">{selectedUser.profile.email}</div>
+                    <div className="text-sm text-neutral-700 mb-1">{selectedUser.profile.email}</div>
                     {selectedUser.profile.genderPronouns && (
-                      <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-700 text-xs font-medium rounded-md border border-purple-200 mt-2">
+                      <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-neutral-50 text-neutral-700 text-xs font-medium rounded-md border border-neutral-200 mt-2">
                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                         </svg>
@@ -608,7 +781,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                   </div>
 
                   {/* Status Badge */}
-                  <div className="flex-shrink-0">
+                  <div className="shrink-0">
                     <span className={getStatusBadgeClass(selectedUser.status)}>
                       {selectedUser.status}
                     </span>
@@ -617,69 +790,182 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
               </div>
 
               {/* Metadata */}
-              <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 grid grid-cols-3 gap-4 text-sm">
+              <div className="px-6 py-4 bg-neutral-50 border-t border-neutral-200 grid grid-cols-3 gap-4 text-sm">
                 <div className="flex flex-col">
-                  <span className="text-xs font-semibold text-gray-600 mb-1">Last Login</span>
-                  <span className="text-gray-900 font-medium">
+                  <span className="text-xs font-semibold text-neutral-600 mb-1">Last Login</span>
+                  <span className="text-neutral-900 font-medium">
                     {selectedUser.lastLogin
                       ? getRelativeTime(selectedUser.lastLogin) || formatDate(selectedUser.lastLogin)
                       : 'Never'}
                   </span>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-xs font-semibold text-gray-600 mb-1">Created</span>
-                  <span className="text-gray-900 font-medium">
+                  <span className="text-xs font-semibold text-neutral-600 mb-1">Created</span>
+                  <span className="text-neutral-900 font-medium">
                     {getRelativeTime(selectedUser.created) || formatDate(selectedUser.created)}
                   </span>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-xs font-semibold text-gray-600 mb-1">Groups</span>
-                  <span className="text-gray-900 font-medium">{memberships.length}</span>
+                  <span className="text-xs font-semibold text-neutral-600 mb-1">Groups</span>
+                  <span className="text-neutral-900 font-medium">{memberships.length}</span>
                 </div>
               </div>
             </div>
+
+            {/* Lifecycle Actions */}
+            {selectedUser.status !== 'DEPROVISIONED' ? (
+              <div className="bg-white rounded-md border border-neutral-200 px-5 py-4">
+                <h3 className="text-xs font-semibold text-neutral-600 uppercase tracking-wide mb-3">
+                  Lifecycle Actions
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {selectedUser.status === 'ACTIVE' && (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      disabled={isLifecycleLoading}
+                      onClick={() => setPendingLifecycleAction('suspend')}
+                    >
+                      Suspend User
+                    </Button>
+                  )}
+                  {selectedUser.status === 'SUSPENDED' && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={isLifecycleLoading}
+                      onClick={() => setPendingLifecycleAction('unsuspend')}
+                    >
+                      Unsuspend User
+                    </Button>
+                  )}
+                  {(selectedUser.status === 'ACTIVE' ||
+                    selectedUser.status === 'RECOVERY' ||
+                    selectedUser.status === 'LOCKED_OUT' ||
+                    selectedUser.status === 'PASSWORD_EXPIRED') && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={isLifecycleLoading}
+                      onClick={() => setPendingLifecycleAction('resetPassword')}
+                    >
+                      Reset Password
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="px-5 py-3 bg-neutral-50 rounded-md border border-neutral-200">
+                <p className="text-xs text-neutral-500">
+                  No lifecycle actions are available for deprovisioned users.
+                </p>
+              </div>
+            )}
+
+            {/* Confirmation modal for lifecycle actions */}
+            <Modal
+              isOpen={pendingLifecycleAction !== null}
+              onClose={() => setPendingLifecycleAction(null)}
+              title={
+                pendingLifecycleAction === 'suspend'
+                  ? 'Suspend User'
+                  : pendingLifecycleAction === 'unsuspend'
+                  ? 'Unsuspend User'
+                  : 'Reset Password'
+              }
+              size="sm"
+              footer={
+                <>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setPendingLifecycleAction(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant={pendingLifecycleAction === 'suspend' ? 'danger' : 'primary'}
+                    size="sm"
+                    onClick={handleLifecycleAction}
+                  >
+                    {pendingLifecycleAction === 'suspend'
+                      ? 'Suspend'
+                      : pendingLifecycleAction === 'unsuspend'
+                      ? 'Unsuspend'
+                      : 'Send Reset Email'}
+                  </Button>
+                </>
+              }
+            >
+              <p className="text-sm text-neutral-700">
+                {pendingLifecycleAction === 'suspend' && (
+                  <>
+                    Are you sure you want to suspend{' '}
+                    <strong className="text-neutral-900">
+                      {selectedUser.profile.firstName} {selectedUser.profile.lastName}
+                    </strong>
+                    ? They will be unable to sign in until unsuspended.
+                  </>
+                )}
+                {pendingLifecycleAction === 'unsuspend' && (
+                  <>
+                    Unsuspend{' '}
+                    <strong className="text-neutral-900">
+                      {selectedUser.profile.firstName} {selectedUser.profile.lastName}
+                    </strong>
+                    ? They will regain the ability to sign in.
+                  </>
+                )}
+                {pendingLifecycleAction === 'resetPassword' && (
+                  <>
+                    Send a password reset email to{' '}
+                    <strong className="text-neutral-900">{selectedUser.profile.email}</strong>?
+                  </>
+                )}
+              </p>
+            </Modal>
 
             {/* Collapsible Details Sections */}
             <div className="space-y-4">
               {/* Account Details */}
               <CollapsibleSection title="Account Details" defaultOpen={false}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                  <div className="p-3 bg-white rounded-lg border border-gray-200">
-                    <span className="text-xs font-semibold text-gray-600 mb-1 block">Login</span>
-                    <span className="text-sm text-gray-900 block">{selectedUser.profile.login}</span>
+                  <div className="p-3 bg-white rounded-md border border-neutral-200">
+                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">Login</span>
+                    <span className="text-sm text-neutral-900 block">{selectedUser.profile.login}</span>
                   </div>
-                  <div className="p-3 bg-white rounded-lg border border-gray-200">
-                    <span className="text-xs font-semibold text-gray-600 mb-1 block">User ID</span>
-                    <span className="detail-value detail-value-mono">{selectedUser.id}</span>
+                  <div className="p-3 bg-white rounded-md border border-neutral-200">
+                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">User ID</span>
+                    <span className="text-xs font-mono bg-neutral-100 px-1.5 py-0.5 rounded select-all">{selectedUser.id}</span>
                   </div>
                   {selectedUser.profile.secondEmail && (
-                    <div className="p-3 bg-white rounded-lg border border-gray-200">
-                      <span className="text-xs font-semibold text-gray-600 mb-1 block">Secondary Email</span>
-                      <span className="text-sm text-gray-900 block">{selectedUser.profile.secondEmail}</span>
+                    <div className="p-3 bg-white rounded-md border border-neutral-200">
+                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">Secondary Email</span>
+                      <span className="text-sm text-neutral-900 block">{selectedUser.profile.secondEmail}</span>
                     </div>
                   )}
                   {selectedUser.activated && (
-                    <div className="p-3 bg-white rounded-lg border border-gray-200">
-                      <span className="text-xs font-semibold text-gray-600 mb-1 block">Activated</span>
-                      <span className="text-sm text-gray-900 block">{formatDate(selectedUser.activated)}</span>
+                    <div className="p-3 bg-white rounded-md border border-neutral-200">
+                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">Activated</span>
+                      <span className="text-sm text-neutral-900 block">{formatDate(selectedUser.activated)}</span>
                     </div>
                   )}
                   {selectedUser.statusChanged && (
-                    <div className="p-3 bg-white rounded-lg border border-gray-200">
-                      <span className="text-xs font-semibold text-gray-600 mb-1 block">Status Changed</span>
-                      <span className="text-sm text-gray-900 block">{formatDate(selectedUser.statusChanged)}</span>
+                    <div className="p-3 bg-white rounded-md border border-neutral-200">
+                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">Status Changed</span>
+                      <span className="text-sm text-neutral-900 block">{formatDate(selectedUser.statusChanged)}</span>
                     </div>
                   )}
                   {selectedUser.passwordChanged && (
-                    <div className="p-3 bg-white rounded-lg border border-gray-200">
-                      <span className="text-xs font-semibold text-gray-600 mb-1 block">Password Changed</span>
-                      <span className="text-sm text-gray-900 block">{formatDate(selectedUser.passwordChanged)}</span>
+                    <div className="p-3 bg-white rounded-md border border-neutral-200">
+                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">Password Changed</span>
+                      <span className="text-sm text-neutral-900 block">{formatDate(selectedUser.passwordChanged)}</span>
                     </div>
                   )}
                   {selectedUser.lastUpdated && (
-                    <div className="p-3 bg-white rounded-lg border border-gray-200">
-                      <span className="text-xs font-semibold text-gray-600 mb-1 block">Profile Updated</span>
-                      <span className="text-sm text-gray-900 block">{formatDate(selectedUser.lastUpdated)}</span>
+                    <div className="p-3 bg-white rounded-md border border-neutral-200">
+                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">Profile Updated</span>
+                      <span className="text-sm text-neutral-900 block">{formatDate(selectedUser.lastUpdated)}</span>
                     </div>
                   )}
                 </div>
@@ -697,51 +983,51 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                 <CollapsibleSection title="Organization" defaultOpen={false}>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                     {selectedUser.profile.title && (
-                      <div className="p-3 bg-white rounded-lg border border-gray-200">
-                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Title</span>
-                        <span className="text-sm text-gray-900 block">{selectedUser.profile.title}</span>
+                      <div className="p-3 bg-white rounded-md border border-neutral-200">
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Title</span>
+                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.title}</span>
                       </div>
                     )}
                     {selectedUser.profile.department && (
-                      <div className="p-3 bg-white rounded-lg border border-gray-200">
-                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Department</span>
-                        <span className="text-sm text-gray-900 block">{selectedUser.profile.department}</span>
+                      <div className="p-3 bg-white rounded-md border border-neutral-200">
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Department</span>
+                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.department}</span>
                       </div>
                     )}
                     {selectedUser.profile.division && (
-                      <div className="p-3 bg-white rounded-lg border border-gray-200">
-                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Division</span>
-                        <span className="text-sm text-gray-900 block">{selectedUser.profile.division}</span>
+                      <div className="p-3 bg-white rounded-md border border-neutral-200">
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Division</span>
+                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.division}</span>
                       </div>
                     )}
                     {selectedUser.profile.organization && (
-                      <div className="p-3 bg-white rounded-lg border border-gray-200">
-                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Organization</span>
-                        <span className="text-sm text-gray-900 block">{selectedUser.profile.organization}</span>
+                      <div className="p-3 bg-white rounded-md border border-neutral-200">
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Organization</span>
+                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.organization}</span>
                       </div>
                     )}
                     {selectedUser.profile.manager && (
-                      <div className="p-3 bg-white rounded-lg border border-gray-200">
-                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Manager</span>
-                        <span className="text-sm text-gray-900 block">{selectedUser.profile.manager}</span>
+                      <div className="p-3 bg-white rounded-md border border-neutral-200">
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Manager</span>
+                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.manager}</span>
                       </div>
                     )}
                     {selectedUser.profile.costCenter && (
-                      <div className="p-3 bg-white rounded-lg border border-gray-200">
-                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Cost Center</span>
-                        <span className="text-sm text-gray-900 block">{selectedUser.profile.costCenter}</span>
+                      <div className="p-3 bg-white rounded-md border border-neutral-200">
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Cost Center</span>
+                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.costCenter}</span>
                       </div>
                     )}
                     {selectedUser.profile.employeeNumber && (
-                      <div className="p-3 bg-white rounded-lg border border-gray-200">
-                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Employee #</span>
-                        <span className="text-sm text-gray-900 block">{selectedUser.profile.employeeNumber}</span>
+                      <div className="p-3 bg-white rounded-md border border-neutral-200">
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Employee #</span>
+                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.employeeNumber}</span>
                       </div>
                     )}
                     {selectedUser.profile.userType && (
-                      <div className="p-3 bg-white rounded-lg border border-gray-200">
-                        <span className="text-xs font-semibold text-gray-600 mb-1 block">User Type</span>
-                        <span className="text-sm text-gray-900 block">{selectedUser.profile.userType}</span>
+                      <div className="p-3 bg-white rounded-md border border-neutral-200">
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">User Type</span>
+                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.userType}</span>
                       </div>
                     )}
                   </div>
@@ -759,23 +1045,23 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                 <CollapsibleSection title="Contact" defaultOpen={false}>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                     {selectedUser.profile.primaryPhone && (
-                      <div className="p-3 bg-white rounded-lg border border-gray-200">
-                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Phone</span>
-                        <span className="text-sm text-gray-900 block">{selectedUser.profile.primaryPhone}</span>
+                      <div className="p-3 bg-white rounded-md border border-neutral-200">
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Phone</span>
+                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.primaryPhone}</span>
                       </div>
                     )}
                     {selectedUser.profile.mobilePhone && (
-                      <div className="p-3 bg-white rounded-lg border border-gray-200">
-                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Mobile</span>
-                        <span className="text-sm text-gray-900 block">{selectedUser.profile.mobilePhone}</span>
+                      <div className="p-3 bg-white rounded-md border border-neutral-200">
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Mobile</span>
+                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.mobilePhone}</span>
                       </div>
                     )}
                     {(selectedUser.profile.streetAddress ||
                       selectedUser.profile.city ||
                       selectedUser.profile.state) && (
-                      <div className="p-3 bg-white rounded-lg border border-gray-200 md:col-span-2">
-                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Location</span>
-                        <span className="text-sm text-gray-900 block">
+                      <div className="p-3 bg-white rounded-md border border-neutral-200 md:col-span-2">
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Location</span>
+                        <span className="text-sm text-neutral-900 block">
                           {[
                             selectedUser.profile.streetAddress,
                             selectedUser.profile.city,
@@ -797,15 +1083,15 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                 <CollapsibleSection title="Preferences" defaultOpen={false}>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                     {selectedUser.profile.locale && (
-                      <div className="p-3 bg-white rounded-lg border border-gray-200">
-                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Locale</span>
-                        <span className="text-sm text-gray-900 block">{selectedUser.profile.locale}</span>
+                      <div className="p-3 bg-white rounded-md border border-neutral-200">
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Locale</span>
+                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.locale}</span>
                       </div>
                     )}
                     {selectedUser.profile.timezone && (
-                      <div className="p-3 bg-white rounded-lg border border-gray-200">
-                        <span className="text-xs font-semibold text-gray-600 mb-1 block">Timezone</span>
-                        <span className="text-sm text-gray-900 block">{selectedUser.profile.timezone}</span>
+                      <div className="p-3 bg-white rounded-md border border-neutral-200">
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Timezone</span>
+                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.timezone}</span>
                       </div>
                     )}
                   </div>
@@ -841,9 +1127,9 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                   >
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                       {customFields.map(([key, value]) => (
-                        <div className="p-3 bg-white rounded-lg border border-gray-200" key={key}>
-                          <span className="text-xs font-semibold text-gray-600 mb-1 block">{key}</span>
-                          <span className="text-sm text-gray-900 block">
+                        <div className="p-3 bg-white rounded-md border border-neutral-200" key={key}>
+                          <span className="text-xs font-semibold text-neutral-600 mb-1 block">{key}</span>
+                          <span className="text-sm text-neutral-900 block">
                             {typeof value === 'object' ? JSON.stringify(value) : String(value)}
                           </span>
                         </div>
@@ -855,47 +1141,55 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
             </div>
 
             {/* Group Memberships */}
-            <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
-              <div className="px-5 py-3.5 bg-gradient-to-r from-gray-50 to-gray-100/50 border-b border-gray-200/50">
-                <h3 className="text-sm font-semibold text-gray-900">
+            <div className="rounded-md border border-neutral-200 bg-white shadow-sm overflow-hidden">
+              <div className="px-5 py-3 bg-neutral-50 border-b border-neutral-200 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold text-neutral-900">
                   Group Memberships ({memberships.length})
                 </h3>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleOpenAddToGroupModal}
+                  disabled={isLoadingMemberships}
+                >
+                  Add to Group
+                </Button>
               </div>
 
               {isLoadingMemberships ? (
                 <LoadingSpinner size="lg" message="Loading group memberships..." centered />
               ) : memberships.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12">
-                  <p className="text-gray-500 text-sm">This user is not a member of any groups</p>
+                  <p className="text-neutral-500 text-sm">This user is not a member of any groups</p>
                 </div>
               ) : (
-                <div className="p-4 space-y-3 bg-gradient-to-b from-white to-gray-50/30">
+                <div className="p-4 space-y-3">
                   {memberships.map((membership) => (
                     <div
                       key={membership.group.id}
                       className={`
-                        rounded-lg border p-4 transition-all duration-200
+                        rounded-md border p-4 transition-all duration-100
                         ${highlightCurrentGroup(membership.group.id)
-                          ? 'border-[#007dc1] bg-gradient-to-br from-blue-50/50 to-white ring-2 ring-[#007dc1]/20 shadow-lg shadow-[#007dc1]/10'
-                          : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'
+                          ? 'border-primary bg-primary-light ring-1 ring-primary/20'
+                          : 'border-neutral-200 bg-white hover:border-neutral-500'
                         }
                       `}
                     >
                       <div className="flex items-start justify-between gap-4 mb-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap mb-2">
-                            <h4 className="font-semibold text-gray-900 text-sm">
+                            <h4 className="font-semibold text-neutral-900 text-sm">
                               {membership.group.profile.name}
                             </h4>
                             {highlightCurrentGroup(membership.group.id) && (
-                              <span className="px-2 py-0.5 rounded-md bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] text-white text-xs font-bold">
+                              <span className="px-2 py-0.5 rounded-md bg-primary text-white text-xs font-bold">
                                 Current Group
                               </span>
                             )}
                             {oktaOrigin && (
                               <button
                                 onClick={() => window.open(`${oktaOrigin}/admin/group/${membership.group.id}`, '_blank')}
-                                className="p-1.5 text-gray-400 hover:text-[#007dc1] hover:bg-blue-50 rounded transition-all duration-200"
+                                className="p-1.5 text-neutral-400 hover:text-primary-text hover:bg-primary-light rounded-md transition-all duration-100"
                                 title="Open group in Okta admin"
                               >
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -905,16 +1199,16 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                             )}
                           </div>
                           {membership.group.profile.description && (
-                            <p className="text-xs text-gray-600">
+                            <p className="text-xs text-neutral-600">
                               {membership.group.profile.description}
                             </p>
                           )}
                         </div>
-                        <div className="flex gap-2 flex-shrink-0">
+                        <div className="flex gap-2 shrink-0">
                           <span className={getMembershipTypeBadge(membership.membershipType)}>
                             {membership.membershipType.replace('_', ' ')}
                           </span>
-                          <span className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 text-xs font-medium border border-gray-200">
+                          <span className="px-2 py-0.5 rounded-md bg-neutral-100 text-neutral-700 text-xs font-medium border border-neutral-200">
                             {membership.group.type}
                           </span>
                         </div>
@@ -922,13 +1216,13 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
 
                       {/* Show rule details if rule-based */}
                       {membership.membershipType === 'RULE_BASED' && membership.rule && (
-                        <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="mt-3 p-3 bg-primary-light rounded-md border border-primary-highlight">
                           <div className="flex items-center gap-2 mb-2">
-                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4 text-primary-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                             </svg>
-                            <span className="text-sm font-semibold text-blue-900">Added by Rule:</span>
-                            <span className="text-sm text-blue-800">{membership.rule.name}</span>
+                            <span className="text-sm font-semibold text-primary-dark">Added by Rule:</span>
+                            <span className="text-sm text-primary-text">{membership.rule.name}</span>
                             {onNavigateToRule && (
                               <Button
                                 variant="secondary"
@@ -943,8 +1237,8 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                           </div>
                           {membership.rule.conditions?.expression?.value && (
                             <div className="mt-2">
-                              <span className="text-xs font-semibold text-blue-800 block mb-1">Condition:</span>
-                              <code className="block text-xs font-mono text-blue-900 bg-white p-2 rounded border border-blue-200 overflow-x-auto">
+                              <span className="text-xs font-semibold text-primary-text block mb-1">Condition:</span>
+                              <code className="block text-xs font-mono text-neutral-900 bg-white p-2 rounded-md border border-primary-highlight overflow-x-auto">
                                 {membership.rule.conditions.expression.value}
                               </code>
                             </div>
@@ -953,9 +1247,9 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                       )}
 
                       {membership.membershipType === 'DIRECT' && (
-                        <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                          <p className="text-xs text-gray-600 flex items-center gap-2">
-                            <svg className="w-3.5 h-3.5 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                        <div className="mt-3 p-3 bg-neutral-50 rounded-md border border-neutral-200">
+                          <p className="text-xs text-neutral-600 flex items-center gap-2">
+                            <svg className="w-3.5 h-3.5 text-neutral-500" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                             </svg>
                             This user was added directly to the group (not through a rule)
@@ -979,6 +1273,90 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
           />
         )}
       </div>
+
+      {/* Add to Group Modal */}
+      <Modal
+        isOpen={isAddToGroupModalOpen}
+        onClose={handleCloseAddToGroupModal}
+        title={`Add ${selectedUser?.profile?.firstName || 'User'} to Group`}
+        size="md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" size="sm" onClick={handleCloseAddToGroupModal}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleConfirmAddToGroup}
+              disabled={!selectedGroup || isAddingToGroup}
+              loading={isAddingToGroup}
+            >
+              Add to Group
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="relative">
+            <label className="block text-sm font-medium text-neutral-700 mb-1">
+              Search for a group
+            </label>
+            <input
+              type="text"
+              value={groupSearchQuery}
+              onChange={(e) => setGroupSearchQuery(e.target.value)}
+              placeholder="Type to search by group name..."
+              className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+            />
+            {isSearchingGroups && (
+              <div className="absolute right-3 top-8">
+                <LoadingSpinner size="sm" />
+              </div>
+            )}
+
+            {/* Search results dropdown */}
+            {showGroupDropdown && groupSearchResults.length > 0 && !selectedGroup && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-neutral-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                {groupSearchResults.map((group) => (
+                  <button
+                    key={group.id}
+                    onClick={() => {
+                      setSelectedGroup(group);
+                      setShowGroupDropdown(false);
+                      setGroupSearchQuery('');
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-neutral-50 border-b border-neutral-100 last:border-0"
+                  >
+                    <div className="text-sm font-medium text-neutral-900">{group.name}</div>
+                    <div className="text-xs text-neutral-500">{group.type}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Selected group display */}
+          {selectedGroup && (
+            <div className="flex items-center justify-between p-3 bg-primary-light border border-primary-highlight rounded-md">
+              <div>
+                <div className="text-sm font-medium text-neutral-900">{selectedGroup.name}</div>
+                <div className="text-xs text-neutral-500">{selectedGroup.type}</div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSelectedGroup(null);
+                  setGroupSearchQuery('');
+                }}
+              >
+                Clear
+              </Button>
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 };

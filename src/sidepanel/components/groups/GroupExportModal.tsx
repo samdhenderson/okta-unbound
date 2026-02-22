@@ -33,22 +33,11 @@ const DEFAULT_COLUMNS: ExportColumn[] = [
   { id: 'description', label: 'Description', enabled: true },
   { id: 'type', label: 'Type', enabled: true },
   { id: 'memberCount', label: 'Member Count', enabled: true },
-  { id: 'daysSinceActivity', label: 'Days Since Last Activity', enabled: true },
-  { id: 'pushGroupApps', label: 'Push Group Apps', enabled: true },
   { id: 'hasRules', label: 'Has Rules', enabled: false },
   { id: 'ruleCount', label: 'Rule Count', enabled: false },
   { id: 'created', label: 'Created Date', enabled: false },
   { id: 'lastUpdated', label: 'Last Updated', enabled: false },
 ];
-
-function calculateDaysSinceLastActivity(group: GroupSummary): number | null {
-  const activityDate = group.lastMembershipUpdated || group.lastUpdated;
-  if (!activityDate) return null;
-  const date = activityDate instanceof Date ? activityDate : new Date(activityDate);
-  if (isNaN(date.getTime())) return null;
-  const diffTime = Math.abs(Date.now() - date.getTime());
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-}
 
 function getColumnValue(group: GroupSummary, columnId: string): string {
   switch (columnId) {
@@ -62,15 +51,6 @@ function getColumnValue(group: GroupSummary, columnId: string): string {
       return group.type;
     case 'memberCount':
       return String(group.memberCount);
-    case 'daysSinceActivity': {
-      const days = calculateDaysSinceLastActivity(group);
-      return days !== null ? String(days) : 'N/A';
-    }
-    case 'pushGroupApps':
-      if (!group.isPushGroup || !group.linkedGroups) return '';
-      return group.linkedGroups
-        .map((lg) => lg.sourceAppName || lg.name || 'Unknown')
-        .join(', ');
     case 'hasRules':
       return group.hasRules ? 'Yes' : 'No';
     case 'ruleCount':
@@ -222,40 +202,40 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
       <div className="space-y-6">
         {/* Column Selection */}
         <div>
-          <h4 className="text-sm font-medium text-gray-700 mb-3">Select columns to include:</h4>
+          <h4 className="text-sm font-medium text-neutral-700 mb-3">Select columns to include:</h4>
           <div className="grid grid-cols-2 gap-2">
             {columns.map((col) => (
               <label
                 key={col.id}
-                className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                className="flex items-center gap-2 p-2 rounded-md hover:bg-neutral-50 cursor-pointer transition-colors"
               >
                 <input
                   type="checkbox"
                   checked={col.enabled}
                   onChange={() => toggleColumn(col.id)}
-                  className="w-4 h-4 text-[#007dc1] border-gray-300 rounded focus:ring-[#007dc1]/30"
+                  className="w-4 h-4 text-primary border-neutral-300 rounded focus:outline-2 focus:outline-offset-2 focus:outline-primary"
                 />
-                <span className="text-sm text-gray-700">{col.label}</span>
+                <span className="text-sm text-neutral-700">{col.label}</span>
               </label>
             ))}
           </div>
         </div>
 
         {/* Separator */}
-        <div className="border-t border-gray-200" />
+        <div className="border-t border-neutral-200" />
 
         {/* Member List Toggle */}
         <div>
-          <label className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:border-gray-300 cursor-pointer transition-colors">
+          <label className="flex items-start gap-3 p-3 rounded-md border border-neutral-200 hover:border-neutral-300 cursor-pointer transition-colors">
             <input
               type="checkbox"
               checked={includeMemberList}
               onChange={(e) => setIncludeMemberList(e.target.checked)}
-              className="w-4 h-4 mt-0.5 text-[#007dc1] border-gray-300 rounded focus:ring-[#007dc1]/30"
+              className="w-4 h-4 mt-0.5 text-primary border-neutral-300 rounded focus:outline-2 focus:outline-offset-2 focus:outline-primary"
             />
             <div>
-              <span className="text-sm font-medium text-gray-700">Include member list</span>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <span className="text-sm font-medium text-neutral-700">Include member list</span>
+              <p className="text-xs text-neutral-500 mt-0.5">
                 Generates a second CSV file with member details (Group ID, Group Name, User ID, Email, First
                 Name, Last Name, Status)
               </p>
@@ -265,8 +245,8 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
 
         {/* Progress */}
         {exportProgress && (
-          <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
-            <svg className="w-4 h-4 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
+          <div className="flex items-center gap-2 p-3 bg-info-light rounded-md border border-primary/20">
+            <svg className="w-4 h-4 text-primary animate-spin" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path
                 className="opacity-75"
@@ -274,17 +254,17 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
               />
             </svg>
-            <span className="text-sm text-blue-700">{exportProgress}</span>
+            <span className="text-sm text-primary-text">{exportProgress}</span>
           </div>
         )}
 
         {/* Warning for large exports with members */}
         {includeMemberList && groups.length > 20 && (
-          <div className="flex items-start gap-2 p-3 bg-amber-50 rounded-lg border border-amber-100">
-            <svg className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex items-start gap-2 p-3 bg-warning-light rounded-md border border-warning/20">
+            <svg className="w-4 h-4 text-warning-text mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            <p className="text-sm text-amber-700">
+            <p className="text-sm text-warning-text">
               Exporting members for {groups.length} groups may take a while. Consider exporting fewer groups at a time.
             </p>
           </div>

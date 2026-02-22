@@ -1,11 +1,8 @@
 import React from 'react';
-import Icon, { type IconType } from '../overview/shared/Icon';
 
 interface PageHeaderProps {
   title: string;
   subtitle?: string;
-  icon?: IconType;
-  emoji?: string;
   actions?: React.ReactNode;
   badge?: {
     text: string;
@@ -14,72 +11,36 @@ interface PageHeaderProps {
 }
 
 const badgeVariants = {
-  primary: 'bg-gradient-to-r from-[#007dc1]/10 to-[#3d9dd9]/10 text-[#007dc1] border-[#007dc1]/20',
-  success: 'bg-gradient-to-r from-emerald-500/10 to-emerald-600/10 text-emerald-600 border-emerald-200/40',
-  warning: 'bg-gradient-to-r from-amber-500/10 to-amber-600/10 text-amber-600 border-amber-200/40',
-  error: 'bg-gradient-to-r from-rose-500/10 to-rose-600/10 text-rose-600 border-rose-200/40',
-  neutral: 'bg-gradient-to-r from-gray-500/10 to-gray-600/10 text-gray-600 border-gray-200/40',
+  primary: 'bg-primary-light text-primary-text border-primary-highlight',
+  success: 'bg-success-light text-success-text border-success-light',
+  warning: 'bg-warning-light text-warning-text border-warning-light',
+  error: 'bg-danger-light text-danger-text border-danger-light',
+  neutral: 'bg-neutral-50 text-neutral-600 border-neutral-200',
 };
 
 const PageHeader: React.FC<PageHeaderProps> = ({
   title,
   subtitle,
-  icon,
-  emoji,
   actions,
   badge,
 }) => {
   return (
-    <div
-      className="relative bg-white border-b border-gray-200 shadow-sm"
-      style={{ fontFamily: 'var(--font-primary)' }}
-    >
-
-      <div className="relative px-6 py-6 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4 flex-1 min-w-0">
-          {/* Icon or Emoji */}
-          {(icon || emoji) && (
-            <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-[#007dc1]/10 to-[#3d9dd9]/10 border border-[#007dc1]/20 flex items-center justify-center shadow-sm ring-1 ring-black/5">
-              {icon ? (
-                <Icon type={icon} size="lg" className="text-[#007dc1]" />
-              ) : (
-                <span className="text-2xl">{emoji}</span>
-              )}
-            </div>
-          )}
-
-          {/* Title and subtitle */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-                {title}
-              </h1>
-              {badge && (
-                <span
-                  className={`
-                    px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider
-                    border backdrop-blur-sm shadow-sm
-                    ${badgeVariants[badge.variant || 'neutral']}
-                  `}
-                >
-                  {badge.text}
-                </span>
-              )}
-            </div>
-            {subtitle && (
-              <p className="mt-1.5 text-sm text-gray-600 font-medium leading-relaxed">
-                {subtitle}
-              </p>
+    <div className="bg-white border-b border-neutral-200">
+      <div className="px-5 py-4 flex items-center justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-semibold text-neutral-900" style={{ fontFamily: 'var(--font-heading)' }}>{title}</h1>
+            {badge && (
+              <span className={`px-2 py-0.5 rounded-md text-xs font-medium border ${badgeVariants[badge.variant || 'neutral']}`}>
+                {badge.text}
+              </span>
             )}
           </div>
+          {subtitle && (
+            <p className="mt-0.5 text-sm text-neutral-600">{subtitle}</p>
+          )}
         </div>
-
-        {/* Actions */}
-        {actions && (
-          <div className="flex-shrink-0">
-            {actions}
-          </div>
-        )}
+        {actions && <div className="shrink-0">{actions}</div>}
       </div>
     </div>
   );

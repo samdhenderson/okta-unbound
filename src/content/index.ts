@@ -832,7 +832,7 @@ async function handleSearchGroups(query: string): Promise<MessageResponse> {
     // Use 'q' parameter for flexible name-based search (autocomplete scenario)
     // This matches the pattern used by searchUsers and is simple/fast
     const qParam = encodeURIComponent(trimmedQuery);
-    const searchUrl = `/api/v1/groups?q=${qParam}&limit=20`;
+    const searchUrl = `/api/v1/groups?q=${qParam}&limit=20&expand=stats`;
 
     console.log('[Content] Searching groups with q parameter:', searchUrl);
     const response = await handleMakeApiRequest(searchUrl, 'GET');

@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import RuleCard from './RuleCard';
 import PageHeader from './shared/PageHeader';
+import Button from './shared/Button';
+import AlertMessage from './shared/AlertMessage';
+import LoadingSpinner from './shared/LoadingSpinner';
+import EmptyState from './shared/EmptyState';
 import type { FormattedRule, AuditLogEntry } from '../../shared/types';
 import { filterRules } from '../../shared/ruleUtils';
 import { useProgress } from '../contexts/ProgressContext';
@@ -460,36 +464,29 @@ const RulesTab: React.FC<RulesTabProps> = ({
     return result;
   }, [rules, searchQuery, activeFilter]);
 
+  const filterButtonClass = (filter: FilterType) =>
+    `px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-100 ${
+      activeFilter === filter
+        ? 'bg-primary text-white'
+        : 'bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-50 hover:border-neutral-500'
+    }`;
+
   return (
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
       <PageHeader
         title="Group Rules"
         subtitle="Analyze group rules and detect potential conflicts"
-        icon="bolt"
         badge={stats.conflicts > 0 ? { text: `${stats.conflicts} Conflicts`, variant: 'warning' } : undefined}
         actions={
-          <button
-            className="px-5 py-2.5 bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] text-white font-semibold rounded-lg hover:from-[#005a8f] hover:to-[#007dc1] transition-all duration-200 shadow-md hover:shadow-lg hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 flex items-center gap-2"
+          <Button
+            variant={rules.length > 0 ? 'secondary' : 'primary'}
+            icon="refresh"
             onClick={() => handleLoadRules(rules.length > 0)}
             disabled={isLoading}
+            loading={isLoading}
           >
-            {isLoading ? (
-              <>
-                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                <span>Loading...</span>
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span>{rules.length > 0 ? 'Refresh' : 'Load Rules'}</span>
-              </>
-            )}
-          </button>
+            {rules.length > 0 ? 'Refresh' : 'Load Rules'}
+          </Button>
         }
       />
 
@@ -498,15 +495,15 @@ const RulesTab: React.FC<RulesTabProps> = ({
         {(apiCost !== null || (lastFetchTime && rules.length > 0)) && (
           <div className="flex gap-3 flex-wrap">
             {apiCost !== null && (
-              <div className="px-4 py-2 bg-gradient-to-br from-white to-gray-50/50 border border-gray-200/60 rounded-lg shadow-sm flex items-center gap-2">
-                <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider">API Requests:</span>
-                <span className="text-sm font-bold text-[#007dc1]">{apiCost}</span>
+              <div className="px-3 py-1.5 bg-neutral-50 border border-neutral-200 rounded-md flex items-center gap-2">
+                <span className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">API Requests:</span>
+                <span className="text-sm font-bold text-primary-text">{apiCost}</span>
               </div>
             )}
             {lastFetchTime && rules.length > 0 && (
-              <div className="px-4 py-2 bg-gradient-to-br from-white to-gray-50/50 border border-gray-200/60 rounded-lg shadow-sm flex items-center gap-2">
-                <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Cached:</span>
-                <span className="text-sm font-mono text-gray-700">{new Date(lastFetchTime).toLocaleString()}</span>
+              <div className="px-3 py-1.5 bg-neutral-50 border border-neutral-200 rounded-md flex items-center gap-2">
+                <span className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Cached:</span>
+                <span className="text-sm font-mono text-neutral-700">{new Date(lastFetchTime).toLocaleString()}</span>
               </div>
             )}
           </div>
@@ -514,64 +511,47 @@ const RulesTab: React.FC<RulesTabProps> = ({
 
         {/* Error Display */}
         {error && (
-          <div className="rounded-lg bg-red-50 border border-red-200 p-4 shadow-sm animate-in slide-in-from-top-2 duration-300">
-            <div className="flex items-start gap-3">
-              <span className="text-xl">⚠️</span>
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-red-900">Error</p>
-                <p className="text-sm text-red-700 mt-1">{error}</p>
-              </div>
-            </div>
-          </div>
+          <AlertMessage
+            message={{ text: error, type: 'error' }}
+            onDismiss={() => setError(null)}
+          />
         )}
 
         {/* Stats Overview */}
         {rules.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-in slide-in-from-top-3 duration-500">
-            <div className="relative overflow-hidden rounded-xl border border-gray-200/60 p-5 bg-gradient-to-br from-white to-gray-50/50 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#007dc1]/10 to-[#3d9dd9]/10 opacity-50 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
-              <div className="relative">
-                <p className="text-xs font-bold uppercase tracking-widest text-gray-600">Total Rules</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{stats.total}</p>
-              </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="rounded-md border border-neutral-200 p-4 bg-white">
+              <p className="text-xs font-bold uppercase tracking-wider text-neutral-600">Total Rules</p>
+              <p className="text-2xl font-bold text-neutral-900 mt-1">{stats.total}</p>
             </div>
-            <div className="relative overflow-hidden rounded-xl border border-emerald-200/60 p-5 bg-gradient-to-br from-white to-emerald-50/50 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 opacity-50 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
-              <div className="relative">
-                <p className="text-xs font-bold uppercase tracking-widest text-gray-600">Active</p>
-                <p className="text-3xl font-bold text-emerald-600 mt-2">{stats.active}</p>
-              </div>
+            <div className="rounded-md border border-neutral-200 p-4 bg-white">
+              <p className="text-xs font-bold uppercase tracking-wider text-neutral-600">Active</p>
+              <p className="text-2xl font-bold text-success mt-1">{stats.active}</p>
             </div>
-            <div className="relative overflow-hidden rounded-xl border border-gray-200/60 p-5 bg-gradient-to-br from-white to-gray-50/50 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-gray-500/10 to-gray-600/10 opacity-50 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
-              <div className="relative">
-                <p className="text-xs font-bold uppercase tracking-widest text-gray-600">Inactive</p>
-                <p className="text-3xl font-bold text-gray-600 mt-2">{stats.inactive}</p>
-              </div>
+            <div className="rounded-md border border-neutral-200 p-4 bg-white">
+              <p className="text-xs font-bold uppercase tracking-wider text-neutral-600">Inactive</p>
+              <p className="text-2xl font-bold text-neutral-600 mt-1">{stats.inactive}</p>
             </div>
-            <div className="relative overflow-hidden rounded-xl border border-amber-200/60 p-5 bg-gradient-to-br from-white to-amber-50/50 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-amber-500/10 to-amber-600/10 opacity-50 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
-              <div className="relative">
-                <p className="text-xs font-bold uppercase tracking-widest text-gray-600">Conflicts</p>
-                <p className="text-3xl font-bold text-amber-600 mt-2">{stats.conflicts}</p>
-              </div>
+            <div className="rounded-md border border-neutral-200 p-4 bg-white">
+              <p className="text-xs font-bold uppercase tracking-wider text-neutral-600">Conflicts</p>
+              <p className="text-2xl font-bold text-warning mt-1">{stats.conflicts}</p>
             </div>
           </div>
         )}
 
         {/* Search and Filters */}
         {rules.length > 0 && (
-          <div className="space-y-3 animate-in slide-in-from-top-4 duration-500">
+          <div className="space-y-3">
             {/* Search Bar */}
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-5 w-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
               <input
                 type="text"
-                className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#007dc1]/30 focus:border-[#007dc1] transition-all duration-200 shadow-sm hover:shadow"
+                className="w-full pl-11 pr-4 py-2.5 bg-white border border-neutral-200 rounded-md text-sm placeholder-neutral-400 focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary transition-all duration-100"
                 placeholder="Search rules by name, condition, or attributes..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -580,46 +560,21 @@ const RulesTab: React.FC<RulesTabProps> = ({
 
             {/* Filter Buttons */}
             <div className="flex flex-wrap gap-2">
-              <button
-                className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
-                  activeFilter === 'all'
-                    ? 'bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] text-white shadow-md'
-                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300'
-                }`}
-                onClick={() => setActiveFilter('all')}
-              >
+              <button className={filterButtonClass('all')} onClick={() => setActiveFilter('all')}>
                 All Rules
               </button>
-              <button
-                className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
-                  activeFilter === 'active'
-                    ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-md'
-                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300'
-                }`}
-                onClick={() => setActiveFilter('active')}
-              >
+              <button className={filterButtonClass('active')} onClick={() => setActiveFilter('active')}>
                 Active Only
               </button>
               <button
-                className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
-                  activeFilter === 'conflicts'
-                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-md'
-                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300'
-                }`}
+                className={`${filterButtonClass('conflicts')} disabled:opacity-50 disabled:cursor-not-allowed`}
                 onClick={() => setActiveFilter('conflicts')}
                 disabled={stats.conflicts === 0}
               >
                 Conflicts ({stats.conflicts})
               </button>
               {currentGroupId && (
-                <button
-                  className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
-                    activeFilter === 'current-group'
-                      ? 'bg-gradient-to-r from-[#007dc1] to-[#3d9dd9] text-white shadow-md'
-                      : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300'
-                  }`}
-                  onClick={() => setActiveFilter('current-group')}
-                >
+                <button className={filterButtonClass('current-group')} onClick={() => setActiveFilter('current-group')}>
                   Current Group
                 </button>
               )}
@@ -630,36 +585,26 @@ const RulesTab: React.FC<RulesTabProps> = ({
         {/* Rules List */}
         <div className="min-h-[400px]">
           {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-16 animate-in fade-in duration-300">
-              <div className="relative">
-                <div className="w-16 h-16 border-4 border-gray-200 border-t-[#007dc1] rounded-full animate-spin" />
-                <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-t-[#3d9dd9] rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }} />
-              </div>
-              <p className="mt-6 text-gray-600 font-medium">Loading rules...</p>
-            </div>
+            <LoadingSpinner size="lg" message="Loading rules..." centered />
           ) : rules.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center animate-in fade-in slide-in-from-bottom-3 duration-500">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#007dc1]/10 to-[#3d9dd9]/10 flex items-center justify-center mb-4">
-                <span className="text-3xl">⚡</span>
-              </div>
-              <p className="text-gray-600 max-w-md">Click "Load Rules" to analyze your Okta group rules</p>
-            </div>
+            <EmptyState
+              icon="list"
+              title="No Rules Loaded"
+              description='Click "Load Rules" to analyze your Okta group rules'
+              actions={[
+                { label: 'Load Rules', onClick: () => handleLoadRules(false), variant: 'primary' }
+              ]}
+            />
           ) : filteredRules.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center animate-in fade-in slide-in-from-bottom-3 duration-500">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gray-500/10 to-gray-600/10 flex items-center justify-center mb-4">
-                <span className="text-3xl">🔍</span>
-              </div>
-              <p className="text-gray-600 max-w-md">No rules match your search or filter criteria</p>
-            </div>
+            <EmptyState
+              icon="search"
+              title="No Matching Rules"
+              description="No rules match your search or filter criteria"
+            />
           ) : (
-            <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              {filteredRules.map((rule, index) => (
-                <div
-                  key={rule.id}
-                  data-rule-id={rule.id}
-                  className="animate-in slide-in-from-left-2 duration-300"
-                  style={{ animationDelay: `${Math.min(index * 50, 300)}ms` }}
-                >
+            <div className="space-y-3">
+              {filteredRules.map((rule) => (
+                <div key={rule.id} data-rule-id={rule.id}>
                   <RuleCard
                     rule={rule}
                     onActivate={handleActivateRule}

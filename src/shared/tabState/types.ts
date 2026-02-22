@@ -2,22 +2,15 @@
  * Tab State Persistence Types
  *
  * Defines types for persisting and restoring UI state across tab navigation.
- * This prevents unnecessary re-fetching and maintains user context.
  */
 
-export type TabName = 'dashboard' | 'operations' | 'rules' | 'users' | 'security' | 'groups' | 'undo';
+export type TabName = 'overview' | 'rules' | 'users' | 'groups' | 'history';
 
-/**
- * Base tab state - common to all tabs
- */
 export interface BaseTabState {
-  lastVisited: number; // Timestamp
+  lastVisited: number;
   scrollPosition: number;
 }
 
-/**
- * Rules tab state
- */
 export interface RulesTabState extends BaseTabState {
   searchQuery: string;
   activeFilter: 'all' | 'active' | 'conflicts' | 'current-group';
@@ -26,9 +19,6 @@ export interface RulesTabState extends BaseTabState {
   lastFetchTime: string | null;
 }
 
-/**
- * Users tab state
- */
 export interface UsersTabState extends BaseTabState {
   searchQuery: string;
   statusFilter: string;
@@ -38,11 +28,7 @@ export interface UsersTabState extends BaseTabState {
   expandedUserId: string | null;
 }
 
-/**
- * Groups tab state
- */
 export interface GroupsTabState extends BaseTabState {
-  viewMode: 'browse' | 'search' | 'bulk' | 'compare';
   searchQuery: string;
   typeFilter: string;
   sizeFilter: string;
@@ -52,66 +38,25 @@ export interface GroupsTabState extends BaseTabState {
   cacheTimestamp: number | null;
 }
 
-/**
- * Dashboard tab state
- */
-export interface DashboardTabState extends BaseTabState {
-  activeWidget: string | null;
-  expandedSections: string[];
-}
-
-/**
- * Operations tab state
- */
-export interface OperationsTabState extends BaseTabState {
-  selectedOperation: string | null;
-  lastOperation: string | null;
-  outputLog: string[];
-}
-
-/**
- * Security tab state
- */
-export interface SecurityTabState extends BaseTabState {
-  activeView: 'findings' | 'orphaned' | 'stale';
-  selectedFindings: string[];
-  cachedFindings: any[] | null;
-  cacheTimestamp: number | null;
-}
-
-/**
- * Undo tab state
- */
-export interface UndoTabState extends BaseTabState {
+export interface HistoryTabState extends BaseTabState {
   expandedEntryId: string | null;
 }
 
-/**
- * Complete tab state collection
- */
 export interface AllTabStates {
-  dashboard: DashboardTabState | null;
-  operations: OperationsTabState | null;
+  overview: BaseTabState | null;
   rules: RulesTabState | null;
   users: UsersTabState | null;
-  security: SecurityTabState | null;
   groups: GroupsTabState | null;
-  undo: UndoTabState | null;
+  history: HistoryTabState | null;
 }
 
-/**
- * State persistence options
- */
 export interface StatePersistOptions {
-  ttl?: number; // How long state is valid (ms), null = forever
-  skipCache?: boolean; // Don't persist cached data (rules, groups, etc.)
+  ttl?: number;
+  skipCache?: boolean;
 }
 
-/**
- * Stored state metadata
- */
 export interface StoredStateMetadata {
-  version: number; // Schema version for migrations
+  version: number;
   lastUpdated: number;
   expiresAt: number | null;
 }

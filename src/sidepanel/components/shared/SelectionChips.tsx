@@ -35,7 +35,7 @@ function SelectionChips<T>({
 }: SelectionChipsProps<T>) {
   if (items.length === 0) {
     return (
-      <div className={`text-sm text-gray-500 italic py-2 ${className}`}>
+      <div className={`text-sm text-neutral-500 italic py-2 ${className}`}>
         {emptyMessage}
       </div>
     );
@@ -47,13 +47,13 @@ function SelectionChips<T>({
         {items.map((item) => (
           <div
             key={getKey(item)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#007dc1]/10 text-[#007dc1] rounded-full text-sm font-medium border border-[#007dc1]/20"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary-light text-primary-text rounded-full text-sm font-medium border border-primary-highlight"
           >
             <span className="max-w-[200px] truncate">{getLabel(item)}</span>
             <button
               type="button"
               onClick={() => onRemove(item)}
-              className="p-0.5 hover:bg-[#007dc1]/20 rounded-full transition-colors"
+              className="p-0.5 hover:bg-primary-highlight rounded-full transition-colors"
               title={`Remove ${getLabel(item)}`}
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -68,7 +68,7 @@ function SelectionChips<T>({
         <button
           type="button"
           onClick={onClearAll}
-          className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
+          className="text-xs text-neutral-500 hover:text-neutral-700 transition-colors"
         >
           Clear all
         </button>

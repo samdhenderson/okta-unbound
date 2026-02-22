@@ -13,12 +13,14 @@ interface UserOverviewProps {
   userName?: string;
   targetTabId: number;
   onTabChange: (tab: 'users') => void;
+  oktaOrigin?: string | null;
 }
 
 const UserOverview: React.FC<UserOverviewProps> = ({
   userId,
   targetTabId,
   onTabChange,
+  oktaOrigin,
 }) => {
   const [userDetails, setUserDetails] = useState<OktaUser | null>(null);
   const [isLoadingUser, setIsLoadingUser] = useState(true);
@@ -133,6 +135,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
           user={userDetails}
           groupCount={totalGroups}
           showCollapsibleSections={false}
+          oktaOrigin={oktaOrigin}
         />
       )}
 
@@ -172,7 +175,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
         <div className="space-y-6">
           {/* Quick Actions */}
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-3">Quick Actions</h3>
+            <h3 className="text-lg font-semibold text-neutral-900 mb-3">Quick Actions</h3>
             <QuickActionsPanel sections={actionSections} />
           </div>
         </div>
@@ -180,27 +183,27 @@ const UserOverview: React.FC<UserOverviewProps> = ({
         {/* Right Column */}
         <div className="space-y-6">
           {/* Group Membership Chart */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Group Membership Distribution</h3>
+          <div className="bg-white rounded-md border border-neutral-200 p-6 shadow-sm">
+            <h3 className="text-lg font-semibold text-neutral-900 mb-4">Group Membership Distribution</h3>
             <div className="flex items-center justify-center h-48">
               <div className="text-center">
-                <div className="text-5xl font-bold text-[#007dc1]">{totalGroups}</div>
-                <div className="text-gray-600 mt-2">Total Groups</div>
+                <div className="text-5xl font-bold text-primary">{totalGroups}</div>
+                <div className="text-neutral-600 mt-2">Total Groups</div>
                 <div className="mt-4 flex gap-4 justify-center text-sm">
                   {unknownGroups === totalGroups ? (
                     <div>
-                      <span className="font-semibold text-gray-900">{totalGroups}</span>
-                      <span className="text-gray-600"> Total</span>
+                      <span className="font-semibold text-neutral-900">{totalGroups}</span>
+                      <span className="text-neutral-600"> Total</span>
                     </div>
                   ) : (
                     <>
                       <div>
-                        <span className="font-semibold text-gray-900">{directGroups}</span>
-                        <span className="text-gray-600"> Direct</span>
+                        <span className="font-semibold text-neutral-900">{directGroups}</span>
+                        <span className="text-neutral-600"> Direct</span>
                       </div>
                       <div>
-                        <span className="font-semibold text-gray-900">{ruleBasedGroups}</span>
-                        <span className="text-gray-600"> Rule-Based</span>
+                        <span className="font-semibold text-neutral-900">{ruleBasedGroups}</span>
+                        <span className="text-neutral-600"> Rule-Based</span>
                       </div>
                     </>
                   )}
@@ -210,29 +213,29 @@ const UserOverview: React.FC<UserOverviewProps> = ({
           </div>
 
           {/* Recent Groups */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+          <div className="bg-white rounded-md border border-neutral-200 p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Recent Groups</h3>
+              <h3 className="text-lg font-semibold text-neutral-900">Recent Groups</h3>
               <Button variant="ghost" size="sm" onClick={() => onTabChange('users')}>
                 View All
               </Button>
             </div>
             <div className="space-y-2">
               {groups.slice(0, 5).map((membership, index) => (
-                <div key={index} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
+                <div key={index} className="flex items-center justify-between p-2 hover:bg-neutral-50 rounded">
                   <div className="flex-1">
-                    <div className="font-medium text-gray-900 text-sm">
+                    <div className="font-medium text-neutral-900 text-sm">
                       {membership.group?.profile?.name || 'Unknown Group'}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-neutral-500">
                       {membership.membershipType === 'DIRECT' ? 'Direct Assignment' :
                         membership.membershipType === 'RULE_BASED' ? 'Rule-Based' : 'Group'}
                     </div>
                   </div>
                   <span className={`
                     px-2 py-1 rounded text-xs font-medium
-                    ${membership.membershipType === 'DIRECT' ? 'bg-blue-100 text-blue-800' :
-                      membership.membershipType === 'RULE_BASED' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}
+                    ${membership.membershipType === 'DIRECT' ? 'bg-primary-light text-primary-text' :
+                      membership.membershipType === 'RULE_BASED' ? 'bg-success-light text-success-text' : 'bg-neutral-100 text-neutral-700'}
                   `}>
                     {membership.membershipType === 'DIRECT' ? 'Manual' :
                       membership.membershipType === 'RULE_BASED' ? 'Auto' : 'Member'}
@@ -240,7 +243,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
                 </div>
               ))}
               {groups.length === 0 && (
-                <div className="text-center py-8 text-gray-500 text-sm">
+                <div className="text-center py-8 text-neutral-500 text-sm">
                   No group memberships found
                 </div>
               )}
