@@ -60,6 +60,29 @@ export function createPushGroupOperations(coreApi: CoreApi) {
 
     if (appIds.size === 0) return groups;
 
+    // Resolve app labels from Okta API (1 request per unique app, in parallel)
+    const resolvedNames = await Promise.all(
+      Array.from(appIds.keys()).map(async (appId) => {
+        try {
+          const response = await coreApi.makeApiRequest(`/api/v1/apps/${appId}`, 'GET', undefined, 'low');
+          if (response.success && response.data) {
+            const label = response.data.label || response.data.name;
+            if (label) return { appId, name: label };
+          }
+        } catch {
+          // Keep existing name on failure
+        }
+        return null;
+      })
+    );
+
+    // Update appIds map with resolved labels
+    for (const result of resolvedNames) {
+      if (result) {
+        appIds.set(result.appId, result.name);
+      }
+    }
+
     // Fetch push mappings for all apps in parallel (scheduler handles concurrency)
     const appEntries = Array.from(appIds.entries());
     const total = appEntries.length;
@@ -84,13 +107,20 @@ export function createPushGroupOperations(coreApi: CoreApi) {
       mappingsByGroup.set(mapping.sourceUserGroupId, existing);
     }
 
-    // Apply to groups
+    // Apply push mappings and resolved app names to groups
     return groups.map((group) => {
       const pushMappings = mappingsByGroup.get(group.id);
+      const resolvedAppName = group.sourceAppId ? appIds.get(group.sourceAppId) : undefined;
+      const updates: Partial<GroupSummary> = {};
+
       if (pushMappings && pushMappings.length > 0) {
-        return { ...group, pushMappings };
+        updates.pushMappings = pushMappings;
       }
-      return group;
+      if (resolvedAppName && resolvedAppName !== group.sourceAppId) {
+        updates.sourceAppName = resolvedAppName;
+      }
+
+      return Object.keys(updates).length > 0 ? { ...group, ...updates } : group;
     });
   };
 
