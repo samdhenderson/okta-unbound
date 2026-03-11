@@ -81,13 +81,16 @@ export class RateLimitDetector {
   }
 
   /**
-   * Check if we're approaching the rate limit
+   * Check if we're approaching the rate limit.
+   * Accounts for in-flight requests that have been dispatched but whose
+   * response headers haven't been processed yet.
    */
-  isApproachingLimit(thresholdPercent: number = 10): boolean {
+  isApproachingLimit(thresholdPercent: number = 10, inFlightCount: number = 0): boolean {
     const info = this.getMostRestrictive();
     if (!info) return false;
 
-    const percentRemaining = (info.remaining / info.limit) * 100;
+    const effectiveRemaining = Math.max(0, info.remaining - inFlightCount);
+    const percentRemaining = (effectiveRemaining / info.limit) * 100;
     const approaching = percentRemaining <= thresholdPercent;
 
     if (approaching) {
@@ -133,8 +136,8 @@ export class RateLimitDetector {
   /**
    * Calculate recommended wait time before next request
    */
-  getRecommendedWaitTime(thresholdPercent: number = 10): number {
-    if (!this.isApproachingLimit(thresholdPercent)) {
+  getRecommendedWaitTime(thresholdPercent: number = 10, inFlightCount: number = 0): number {
+    if (!this.isApproachingLimit(thresholdPercent, inFlightCount)) {
       return 0;
     }
 

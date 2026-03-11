@@ -1,5 +1,24 @@
 import React, { useState, useCallback, memo } from 'react';
-import type { GroupSummary } from '../../../shared/types';
+import type { GroupSummary, StalenessInfo } from '../../../shared/types';
+
+function getStalenessColor(score: number): { bg: string; text: string; label: string } {
+  if (score <= 25) return { bg: 'bg-success-light', text: 'text-success-text', label: 'Healthy' };
+  if (score <= 50) return { bg: 'bg-warning-light', text: 'text-warning-text', label: 'Monitor' };
+  if (score <= 75) return { bg: 'bg-warning-light', text: 'text-danger-text', label: 'Stale' };
+  return { bg: 'bg-danger-light', text: 'text-danger-text', label: 'Very Stale' };
+}
+
+const StalenessIndicator: React.FC<{ staleness: StalenessInfo }> = ({ staleness }) => {
+  const color = getStalenessColor(staleness.score);
+  return (
+    <span
+      className={`px-2 py-0.5 rounded-md text-xs font-medium ${color.bg} ${color.text}`}
+      title={`Staleness: ${staleness.score}/100 - ${staleness.factors.join(', ')}`}
+    >
+      {color.label} ({staleness.score})
+    </span>
+  );
+};
 
 interface GroupListItemProps {
   group: GroupSummary;
@@ -94,6 +113,16 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(({
                     <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-primary-light text-primary-text border border-primary-highlight">
                       {group.sourceAppName}
                     </span>
+                  )}
+
+                  {group.pushMappings && group.pushMappings.length > 0 && (
+                    <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-success-light text-success-text border border-success-light">
+                      PUSH ({group.pushMappings.length})
+                    </span>
+                  )}
+
+                  {group.staleness && group.staleness.score > 0 && (
+                    <StalenessIndicator staleness={group.staleness} />
                   )}
                 </div>
               </div>
@@ -220,6 +249,41 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(({
               <div className="text-sm font-medium text-primary-dark">{group.sourceAppName}</div>
             </div>
           )}
+
+          {group.pushMappings && group.pushMappings.length > 0 && (
+            <div className="space-y-1">
+              <div className="text-xs font-medium text-neutral-600">Push Group Mappings</div>
+              {group.pushMappings.map((m) => (
+                <div key={m.mappingId} className="p-2 bg-success-light rounded-md border border-success-light flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-medium text-success-text">{m.appName || m.appId}</div>
+                    {m.targetGroupName && (
+                      <div className="text-xs text-neutral-600 mt-0.5">Target: {m.targetGroupName}</div>
+                    )}
+                  </div>
+                  <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                    m.status === 'ACTIVE' ? 'bg-success text-white' : 'bg-neutral-200 text-neutral-600'
+                  }`}>
+                    {m.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {group.staleness && group.staleness.score > 0 && group.staleness.factors.length > 0 && (
+            <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
+              <div className="text-xs font-medium text-neutral-600 mb-1">Staleness Factors</div>
+              <ul className="text-xs text-neutral-700 space-y-0.5">
+                {group.staleness.factors.map((f, i) => (
+                  <li key={i} className="flex items-center gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-neutral-400 shrink-0" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -232,6 +296,8 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(({
     prevProps.group.type === nextProps.group.type &&
     prevProps.group.hasRules === nextProps.group.hasRules &&
     prevProps.group.ruleCount === nextProps.group.ruleCount &&
+    prevProps.group.pushMappings === nextProps.group.pushMappings &&
+    prevProps.group.staleness?.score === nextProps.group.staleness?.score &&
     prevProps.selected === nextProps.selected &&
     prevProps.oktaOrigin === nextProps.oktaOrigin
   );
