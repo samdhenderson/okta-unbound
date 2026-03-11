@@ -2,10 +2,9 @@
   "manifest_version": 3,
   "name": "Okta Unbound",
   "version": "0.4.0",
-  "description": "Advanced Okta admin tool with side panel UI for group, user, and rule management with bulk operations, CSV/JSON export, and audit logging",
+  "description": "Advanced Okta admin tool with side panel UI.",
   "permissions": [
     "activeTab",
-    "scripting",
     "storage",
     "contextMenus",
     "downloads",
