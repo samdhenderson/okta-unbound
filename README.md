@@ -1,10 +1,8 @@
 # Okta Unbound
 
-Advanced group, user, and application management for Okta administrators.
+Advanced group, user, and rule management for Okta administrators.
 
-A Chrome Extension (Manifest V3) with side panel UI that provides powerful bulk operations, intelligent filtering, and automated cleanup tools for Okta administration.
-
-
+A Chrome Extension (Manifest V3) with side panel UI that provides powerful bulk operations, intelligent filtering, and audit logging for Okta administration.
 
 #### Dev Note
 
@@ -16,15 +14,6 @@ This chrome extension was developed in between me and Anthropic's Claude model. 
 Context-aware insights based on the current Okta page:
 - Automatic detection of group, user, app, and admin pages
 - Quick stats and relevant actions for each context
-- Recent activity from audit logs
-
-### Groups Tab
-Hybrid search and bulk operations:
-- **Live Mode**: Real-time API search with instant results
-- **Cached Mode**: Load all groups once, then filter by type, size, staleness
-- Multi-select with bulk operations (remove inactive users, export, security scans)
-- Group collections for frequently-used sets
-- Compare 2-5 groups with Venn diagram visualization
 
 ### Users Tab
 User search and membership analysis:
@@ -33,25 +22,20 @@ User search and membership analysis:
 - Group membership with type detection (RULE_BASED, DIRECT, APP_GROUP)
 - Rule attribution analysis
 
-### Apps Tab
-Application assignment management:
-- **Browse**: Hybrid search with enrichment (assignment counts per app)
-- **Convert & Copy**: Convert user assignments to group assignments
-- **Bulk Assign**: Assign groups to apps or apps to groups in bulk
+### Groups Tab
+Hybrid search and bulk operations:
+- **Live Mode**: Real-time API search with instant results
+- **Cached Mode**: Load all groups once, then filter by type, size, staleness
+- Multi-select with bulk operations (remove inactive users, export)
+- Group collections for frequently-used sets
+- Compare 2-5 groups with Venn diagram visualization
+- Cross-group user search
 
 ### Rules Tab
 Group rules inspection:
 - Load and cache all group rules
 - Conflict detection between rules
 - Rule condition parsing and display
-
-### Security Tab
-Security posture analysis based on Okta ISPM best practices:
-- Orphaned accounts detection
-- Users who never logged in
-- Inactive users (90+ and 180+ days)
-- Stale membership analysis
-- Security scoring (0-100) with remediation options
 
 ### History Tab
 Complete audit trail for compliance:
@@ -61,6 +45,19 @@ Complete audit trail for compliance:
 - Undo/redo support for reversible operations
 
 ## Installation
+
+### Option A: Download from Releases
+
+1. Go to the [Releases](https://github.com/samdhenderson/okta-unbound/releases) page
+2. Download the latest `okta-unbound-*.zip` file
+3. Extract the zip file
+4. Load in Chrome:
+   - Go to `chrome://extensions/`
+   - Enable "Developer mode"
+   - Click "Load unpacked"
+   - Select the extracted `dist/` folder
+
+### Option B: Build from Source
 
 1. Clone the repository:
    ```bash
@@ -99,6 +96,12 @@ npm run build
 # Run tests
 npm test
 
+# Run tests once (no watch)
+npm run test:run
+
+# Test coverage
+npm run test:coverage
+
 # Type checking
 npm run type-check
 
@@ -110,6 +113,7 @@ npm run lint
 
 - TypeScript
 - React 19
+- Tailwind CSS
 - Vite
 - Vitest
 - Chrome Extension Manifest V3
