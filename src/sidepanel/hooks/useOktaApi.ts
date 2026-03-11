@@ -12,6 +12,8 @@ import { createGroupBulkOperations } from './useOktaApi/groupBulkOps';
 import { createGroupDiscoveryOperations } from './useOktaApi/groupDiscovery';
 import { createUserOperations } from './useOktaApi/userOperations';
 import { createExportOperations } from './useOktaApi/exportOperations';
+import { createPushGroupOperations } from './useOktaApi/pushGroupOps';
+import { createGroupAnalysisOperations } from './useOktaApi/groupAnalysis';
 
 export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOptions) {
   const [isLoading, setIsLoading] = useState(false);
@@ -40,6 +42,8 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
   const groupDiscoveryOps = createGroupDiscoveryOperations(coreApi);
   const userOps = createUserOperations(coreApi);
   const exportOps = createExportOperations(coreApi);
+  const pushGroupOps = createPushGroupOperations(coreApi);
+  const groupAnalysisOps = createGroupAnalysisOperations(groupMemberOps.getAllGroupMembers);
 
   const wrapOperation = useCallback(
     (fn: (...args: any[]) => Promise<void>) => {
@@ -94,5 +98,14 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
     // Export operations
     exportMembers: wrapOperation(exportOps.exportMembers),
+
+    // Push group operations
+    getAppPushGroupMappings: pushGroupOps.getAppPushGroupMappings,
+    applyPushGroupMappings: pushGroupOps.applyPushGroupMappings,
+
+    // Group analysis operations
+    compareGroups: groupAnalysisOps.compareGroups,
+    searchUserAcrossGroups: groupAnalysisOps.searchUserAcrossGroups,
+    calculateStaleness: groupAnalysisOps.calculateStaleness,
   };
 }

@@ -26,7 +26,7 @@ import type {
 
 const DEFAULT_CONFIG: SchedulerConfig = {
   maxConcurrent: 3, // Conservative: max 3 parallel requests
-  minRemainingThreshold: 18, // Cooldown when <15% remaining
+  minRemainingThreshold: 10, // Cooldown when <10% remaining
   cooldownDuration: 60000, // 60 seconds cooldown
   retryDelay: 2000, // 2 second base retry delay
   maxRetries: 2, // Retry up to 2 times
@@ -178,8 +178,8 @@ export class ApiScheduler {
       return;
     }
 
-    // Check rate limits
-    if (this.rateLimitDetector.isApproachingLimit(this.config.minRemainingThreshold)) {
+    // Check rate limits (account for in-flight requests)
+    if (this.rateLimitDetector.isApproachingLimit(this.config.minRemainingThreshold, this.activeRequests.size)) {
       this.enterCooldown();
       return;
     }
@@ -320,7 +320,8 @@ export class ApiScheduler {
    * Check if we should enter cooldown based on rate limit info
    */
   private shouldEnterCooldown(info: RateLimitInfo): boolean {
-    const percentRemaining = (info.remaining / info.limit) * 100;
+    const effectiveRemaining = Math.max(0, info.remaining - this.activeRequests.size);
+    const percentRemaining = (effectiveRemaining / info.limit) * 100;
     return percentRemaining <= this.config.minRemainingThreshold;
   }
 
@@ -435,6 +436,13 @@ export class ApiScheduler {
     const total = this.metrics.successfulRequests + this.metrics.failedRequests;
     const currentAvg = this.metrics.averageExecutionTime;
     this.metrics.averageExecutionTime = (currentAvg * (total - 1) + executionTime) / total;
+  }
+
+  /**
+   * Get total queue depth including active requests
+   */
+  getQueueDepth(): number {
+    return this.queue.length + this.activeRequests.size;
   }
 
   /**
