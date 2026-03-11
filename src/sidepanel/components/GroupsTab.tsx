@@ -37,13 +37,14 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
   const [typeFilter, setTypeFilter] = useState<string>('');
   const [sizeFilter, setSizeFilter] = useState<string>('');
   const [pushFilter, setPushFilter] = useState<PushFilter>('');
+  const [pushAppFilter, setPushAppFilter] = useState<Set<string>>(new Set());
   const [stalenessFilter, setStalenessFilter] = useState<StalenessLevel>('');
   const [sortBy, setSortBy] = useState<SortField>('name');
   const [sortDesc, setSortDesc] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
   // Active filter count for badge
-  const activeFilterCount = [typeFilter, sizeFilter, pushFilter, stalenessFilter].filter(Boolean).length;
+  const activeFilterCount = [typeFilter, sizeFilter, pushFilter, stalenessFilter].filter(Boolean).length + (pushAppFilter.size > 0 ? 1 : 0);
 
   // Hybrid search mode state
   const [searchMode, setSearchMode] = useState<'live' | 'cached'>('live');
@@ -279,6 +280,14 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
       });
     }
 
+    // Push App filter
+    if (pushAppFilter.size > 0) {
+      filtered = filtered.filter((g) => {
+        if (!g.pushMappings || g.pushMappings.length === 0) return false;
+        return g.pushMappings.some(m => pushAppFilter.has(m.appId));
+      });
+    }
+
     // Staleness filter
     if (stalenessFilter) {
       filtered = filtered.filter((g) => {
@@ -316,7 +325,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
     });
 
     return filtered;
-  }, [searchMode, liveSearchResults, groups, searchQuery, typeFilter, sizeFilter, pushFilter, stalenessFilter, sortBy, sortDesc]);
+  }, [searchMode, liveSearchResults, groups, searchQuery, typeFilter, sizeFilter, pushFilter, pushAppFilter, stalenessFilter, sortBy, sortDesc]);
 
   const handleExportSelection = useCallback(() => {
     if (selectedGroupIds.size === 0) {
@@ -387,6 +396,22 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
     return names;
   }, [groups]);
 
+  const availablePushApps = useMemo(() => {
+    const apps = new Map<string, string>();
+    for (const group of groups) {
+      if (group.pushMappings) {
+        for (const mapping of group.pushMappings) {
+          if (!apps.has(mapping.appId)) {
+            apps.set(mapping.appId, mapping.appName || mapping.appId);
+          }
+        }
+      }
+    }
+    return Array.from(apps.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [groups]);
+
   const selectedGroups = useMemo(
     () => groups.filter((g) => selectedGroupIds.has(g.id)),
     [groups, selectedGroupIds]
@@ -396,6 +421,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
     setTypeFilter('');
     setSizeFilter('');
     setPushFilter('');
+    setPushAppFilter(new Set());
     setStalenessFilter('');
     setSearchQuery('');
   }, []);
@@ -526,6 +552,14 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
                     {stalenessFilter && (
                       <FilterChip label={`Health: ${stalenessFilter.replace('_', ' ')}`} onRemove={() => setStalenessFilter('')} />
                     )}
+                    {pushAppFilter.size > 0 && (
+                      <FilterChip
+                        label={`Apps: ${Array.from(pushAppFilter).map(id =>
+                          availablePushApps.find(a => a.id === id)?.name || id
+                        ).join(', ')}`}
+                        onRemove={() => setPushAppFilter(new Set())}
+                      />
+                    )}
                     <button onClick={handleClearFilters} className="text-xs text-primary-text hover:underline ml-1">
                       Clear all
                     </button>
@@ -636,6 +670,45 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
                     </div>
                   </div>
                 </div>
+
+                {/* Push Target App Filter */}
+                {availablePushApps.length > 0 && (
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600 mb-1.5">Push Target App</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        onClick={() => setPushAppFilter(new Set())}
+                        className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                          pushAppFilter.size === 0
+                            ? 'bg-primary text-white'
+                            : 'bg-neutral-50 text-neutral-700 border border-neutral-200 hover:border-neutral-400'
+                        }`}
+                      >
+                        All
+                      </button>
+                      {availablePushApps.map((app) => (
+                        <button
+                          key={app.id}
+                          onClick={() => {
+                            setPushAppFilter(prev => {
+                              const next = new Set(prev);
+                              if (next.has(app.id)) next.delete(app.id);
+                              else next.add(app.id);
+                              return next;
+                            });
+                          }}
+                          className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                            pushAppFilter.has(app.id)
+                              ? 'bg-primary text-white'
+                              : 'bg-neutral-50 text-neutral-700 border border-neutral-200 hover:border-neutral-400'
+                          }`}
+                        >
+                          {app.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Sort Controls */}
                 <div>

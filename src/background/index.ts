@@ -48,9 +48,9 @@ console.log('[Background] Service worker started');
 
 // Initialize the global API scheduler
 const globalScheduler = new ApiScheduler({
-  maxConcurrent: 3,
+  maxConcurrent: 5,
   minRemainingThreshold: 10, // Cooldown at 10% remaining
-  cooldownDuration: 60000, // 60 seconds
+  cooldownDuration: 30000, // 30 seconds fallback
   retryDelay: 2000,
   maxRetries: 3,
   requestTimeout: 30000,

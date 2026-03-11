@@ -44,7 +44,6 @@ export function createGroupBulkOperations(
 
             for (const user of inactiveUsers) {
               await removeUserFromGroup(groupId, groupName, user);
-              await new Promise((resolve) => setTimeout(resolve, 100));
             }
             break;
           }
@@ -87,7 +86,7 @@ export function createGroupBulkOperations(
         });
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
 
     return results;
