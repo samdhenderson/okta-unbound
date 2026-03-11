@@ -60,17 +60,21 @@ export function createPushGroupOperations(coreApi: CoreApi) {
 
     if (appIds.size === 0) return groups;
 
-    // Fetch push mappings for each app
-    const allMappings: PushGroupMapping[] = [];
+    // Fetch push mappings for all apps in parallel (scheduler handles concurrency)
+    const appEntries = Array.from(appIds.entries());
+    const total = appEntries.length;
     let processed = 0;
-    const total = appIds.size;
 
-    for (const [appId, appName] of appIds) {
-      const mappings = await getAppPushGroupMappings(appId, appName);
-      allMappings.push(...mappings);
-      processed++;
-      onProgress?.(processed, total);
-    }
+    const mappingResults = await Promise.all(
+      appEntries.map(async ([appId, appName]) => {
+        const mappings = await getAppPushGroupMappings(appId, appName);
+        processed++;
+        onProgress?.(processed, total);
+        return mappings;
+      })
+    );
+
+    const allMappings = mappingResults.flat();
 
     // Build lookup: groupId -> mappings[]
     const mappingsByGroup = new Map<string, PushGroupMapping[]>();

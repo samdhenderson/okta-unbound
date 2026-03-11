@@ -115,11 +115,23 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(({
                     </span>
                   )}
 
-                  {group.pushMappings && group.pushMappings.length > 0 && (
-                    <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-success-light text-success-text border border-success-light">
-                      PUSH ({group.pushMappings.length})
-                    </span>
-                  )}
+                  {group.pushMappings && group.pushMappings.length > 0 && (() => {
+                    const uniqueApps = [...new Set(group.pushMappings!.map(m => m.appName || m.appId))];
+                    const MAX_DISPLAY = 2;
+                    const displayApps = uniqueApps.slice(0, MAX_DISPLAY);
+                    const remaining = uniqueApps.length - MAX_DISPLAY;
+                    const label = remaining > 0
+                      ? `PUSH: ${displayApps.join(', ')} +${remaining}`
+                      : `PUSH: ${displayApps.join(', ')}`;
+                    return (
+                      <span
+                        className="px-2 py-0.5 rounded-md text-xs font-medium bg-success-light text-success-text border border-success-light"
+                        title={`Pushed to: ${uniqueApps.join(', ')}`}
+                      >
+                        {label}
+                      </span>
+                    );
+                  })()}
 
                   {group.staleness && group.staleness.score > 0 && (
                     <StalenessIndicator staleness={group.staleness} />
