@@ -1,10 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeAllBreakdowns,
+  computeDimensionBreakdown,
   computeMfaBreakdown,
   filterMembers,
   getMemberDimensionValue,
+  getObservedFactorLabels,
   memberMatchesMfaValue,
+  sortMembers,
   NONE_VALUE,
   OTHER_VALUE,
   type MemberFilter,
@@ -112,6 +115,25 @@ describe('filterMembers', () => {
     const result = filterMembers([members[0], members[1]], '', filters, mfa);
     expect(result.map((m) => m.id)).toEqual(['alice']);
   });
+
+  it('ANDs multiple mfa constraints, supporting has + missing together', () => {
+    const mfa = new Map<string, MemberMfaResult>([
+      // alice: SMS only
+      ['alice', summarizeFactors('alice', [{ id: '1', factorType: 'sms', provider: 'OKTA', status: 'ACTIVE' }])],
+      // bob: SMS + Okta Verify Push
+      ['bob', summarizeFactors('bob', [
+        { id: '1', factorType: 'sms', provider: 'OKTA', status: 'ACTIVE' },
+        { id: '2', factorType: 'push', provider: 'OKTA', status: 'ACTIVE' },
+      ])],
+    ]);
+    // Has SMS AND Missing Okta Verify Push -> only alice
+    const filters: MemberFilter[] = [
+      { dimension: 'mfa', value: 'has:SMS', label: 'Has SMS' },
+      { dimension: 'mfa', value: 'missing:Okta Verify Push', label: 'Missing Okta Verify Push' },
+    ];
+    const result = filterMembers([members[0], members[1]], '', filters, mfa);
+    expect(result.map((m) => m.id)).toEqual(['alice']);
+  });
 });
 
 describe('memberMatchesMfaValue', () => {
@@ -121,7 +143,7 @@ describe('memberMatchesMfaValue', () => {
   ]);
   const none = summarizeFactors('u', []);
 
-  it('evaluates none / multiple / has: / enrolled', () => {
+  it('evaluates none / multiple / has: / missing: / enrolled', () => {
     expect(memberMatchesMfaValue(none, 'none')).toBe(true);
     expect(memberMatchesMfaValue(enrolled, 'none')).toBe(false);
     expect(memberMatchesMfaValue(enrolled, 'multiple')).toBe(true);
@@ -129,6 +151,54 @@ describe('memberMatchesMfaValue', () => {
     expect(memberMatchesMfaValue(enrolled, 'has:Voice Call')).toBe(false);
     expect(memberMatchesMfaValue(enrolled, 'enrolled')).toBe(true);
     expect(memberMatchesMfaValue(undefined, 'none')).toBe(false);
+  });
+
+  it('handles missing: as negation, including unscanned members', () => {
+    expect(memberMatchesMfaValue(enrolled, 'missing:SMS')).toBe(false); // has it
+    expect(memberMatchesMfaValue(enrolled, 'missing:Voice Call')).toBe(true); // lacks it
+    expect(memberMatchesMfaValue(none, 'missing:SMS')).toBe(true); // no factors
+    expect(memberMatchesMfaValue(undefined, 'missing:SMS')).toBe(true); // unscanned -> lacks it
+  });
+});
+
+describe('sortMembers', () => {
+  it('sorts by name ascending and descending', () => {
+    const asc = sortMembers(members, 'name', false, null).map((m) => m.id);
+    const desc = sortMembers(members, 'name', true, null).map((m) => m.id);
+    expect(asc).toEqual(['alice', 'bob', 'carol', 'dave']);
+    expect(desc).toEqual(['dave', 'carol', 'bob', 'alice']);
+  });
+
+  it('sorts by factor count using scan results', () => {
+    const mfa = new Map<string, MemberMfaResult>([
+      ['alice', summarizeFactors('alice', [
+        { id: '1', factorType: 'sms', provider: 'OKTA', status: 'ACTIVE' },
+        { id: '2', factorType: 'push', provider: 'OKTA', status: 'ACTIVE' },
+      ])],
+      ['bob', summarizeFactors('bob', [])],
+    ]);
+    const result = sortMembers([members[0], members[1]], 'factors', true, mfa).map((m) => m.id);
+    expect(result).toEqual(['alice', 'bob']); // alice has more factors, desc first
+  });
+});
+
+describe('computeDimensionBreakdown', () => {
+  it('returns the full distribution without an Other row by default', () => {
+    const many: OktaUser[] = Array.from({ length: 12 }, (_, i) => user(`u${i}`, { department: `Dept${i}` }));
+    const rows = computeDimensionBreakdown(many, 'department');
+    expect(rows).toHaveLength(12);
+    expect(rows.some((r) => r.value === OTHER_VALUE)).toBe(false);
+  });
+});
+
+describe('getObservedFactorLabels', () => {
+  it('returns the sorted union of factor labels across results', () => {
+    const mfa = new Map<string, MemberMfaResult>([
+      ['alice', summarizeFactors('alice', [{ id: '1', factorType: 'sms', provider: 'OKTA', status: 'ACTIVE' }])],
+      ['bob', summarizeFactors('bob', [{ id: '2', factorType: 'push', provider: 'OKTA', status: 'ACTIVE' }])],
+    ]);
+    expect(getObservedFactorLabels(mfa)).toEqual(['Okta Verify Push', 'SMS']);
+    expect(getObservedFactorLabels(null)).toEqual([]);
   });
 });
 

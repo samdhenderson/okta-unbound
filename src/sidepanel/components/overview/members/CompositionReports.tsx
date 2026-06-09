@@ -6,7 +6,7 @@ import {
   type Dimension,
   type MemberFilter,
   type ProfileDimension,
-  PROFILE_DIMENSIONS,
+  COMPOSITION_DIMENSIONS,
   DIMENSION_TITLES,
   NONE_VALUE,
 } from './memberAnalytics';
@@ -15,19 +15,32 @@ interface CompositionReportsProps {
   breakdowns: Record<ProfileDimension, BreakdownRow[]>;
   filters: MemberFilter[];
   onToggle: (dimension: Dimension, row: BreakdownRow) => void;
+  /** Open the full-distribution details modal for a dimension (the "Other" values). */
+  onShowOther: (dimension: ProfileDimension) => void;
 }
 
-const CompositionReports: React.FC<CompositionReportsProps> = ({ breakdowns, filters, onToggle }) => {
+const CompositionReports: React.FC<CompositionReportsProps> = ({
+  breakdowns,
+  filters,
+  onToggle,
+  onShowOther,
+}) => {
   // Only render dimensions where at least one member has a real (non-empty) value.
-  const visibleDimensions = PROFILE_DIMENSIONS.filter((dim) =>
+  const visibleDimensions = COMPOSITION_DIMENSIONS.filter((dim) =>
     breakdowns[dim].some((row) => row.value !== NONE_VALUE && row.count > 0)
   );
 
-  if (visibleDimensions.length === 0) return null;
+  if (visibleDimensions.length === 0) {
+    return (
+      <p className="text-xs text-neutral-500">
+        No profile attributes (department, title, location…) are populated for this group.
+      </p>
+    );
+  }
 
   return (
     <div className="space-y-3">
-      {visibleDimensions.map((dim) => {
+      {visibleDimensions.map((dim, index) => {
         const activeValues = new Set(
           filters.filter((f) => f.dimension === dim).map((f) => f.value)
         );
@@ -36,13 +49,14 @@ const CompositionReports: React.FC<CompositionReportsProps> = ({ breakdowns, fil
           <CollapsibleSection
             key={dim}
             title={DIMENSION_TITLES[dim]}
-            defaultOpen={dim === 'status'}
+            defaultOpen={index === 0}
             itemCount={distinct}
           >
             <BreakdownReport
               rows={breakdowns[dim]}
               activeValues={activeValues}
               onRowClick={(row) => onToggle(dim, row)}
+              onShowOther={() => onShowOther(dim)}
             />
           </CollapsibleSection>
         );

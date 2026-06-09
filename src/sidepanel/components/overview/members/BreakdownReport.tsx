@@ -7,8 +7,10 @@ interface BreakdownReportProps {
   rows: BreakdownRow[];
   /** Canonical values currently selected as filters (for highlight). */
   activeValues: Set<string>;
-  /** Called when a clickable row is toggled. The "Other" row is not clickable. */
+  /** Called when a clickable value row is toggled. */
   onRowClick: (row: BreakdownRow) => void;
+  /** Called when the aggregated "Other" row is clicked, to reveal its values. */
+  onShowOther?: () => void;
   /** Optional empty-state message when there are no rows. */
   emptyMessage?: string;
 }
@@ -22,6 +24,7 @@ const BreakdownReport: React.FC<BreakdownReportProps> = ({
   rows,
   activeValues,
   onRowClick,
+  onShowOther,
   emptyMessage = 'No data',
 }) => {
   if (rows.length === 0) {
@@ -33,21 +36,25 @@ const BreakdownReport: React.FC<BreakdownReportProps> = ({
       {rows.map((row) => {
         const isOther = row.value === OTHER_VALUE;
         const isActive = activeValues.has(row.value);
-        const clickable = !isOther;
+        // "Other" is clickable only when a details handler is supplied.
+        const clickable = isOther ? !!onShowOther : true;
 
         return (
           <button
             key={row.value}
             type="button"
             disabled={!clickable}
-            onClick={() => clickable && onRowClick(row)}
+            onClick={() => {
+              if (isOther) onShowOther?.();
+              else onRowClick(row);
+            }}
             className={`
               relative w-full text-left rounded-md px-2.5 py-1.5
               transition-colors duration-100
               ${clickable ? 'cursor-pointer hover:bg-neutral-50' : 'cursor-default'}
               ${isActive ? 'ring-1 ring-primary bg-primary-light/40' : ''}
             `.trim().replace(/\s+/g, ' ')}
-            aria-pressed={clickable ? isActive : undefined}
+            aria-pressed={!isOther ? isActive : undefined}
           >
             {/* Proportion bar background */}
             <div className="absolute inset-y-0 left-0 rounded-md bg-neutral-100" style={{ width: '100%' }} />
@@ -62,6 +69,7 @@ const BreakdownReport: React.FC<BreakdownReportProps> = ({
                 title={row.label}
               >
                 {row.label}
+                {isOther && clickable && <span className="ml-1.5 not-italic text-primary-text">View →</span>}
               </span>
               <span className="flex-shrink-0 text-xs font-medium text-neutral-600 tabular-nums">
                 {row.count.toLocaleString()}
