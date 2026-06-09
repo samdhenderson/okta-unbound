@@ -6,6 +6,7 @@
 import type { CoreApi } from './core';
 import type { OktaFactor, MemberMfaResult } from '../../../shared/types';
 import { summarizeFactors } from '../../../shared/utils/mfaUtils';
+import { parseNextLink } from './utilities';
 
 export function createUserOperations(coreApi: CoreApi) {
   /**
@@ -49,6 +50,38 @@ export function createUserOperations(coreApi: CoreApi) {
       console.error(`[useOktaApi] Failed to get app assignments for user ${userId}:`, error);
       return 0;
     }
+  };
+
+  /**
+   * Get the list of apps assigned to a user (id + display label).
+   *
+   * Reflects effective assignments (direct + via group) as returned by the
+   * apps filter endpoint. Follows pagination via the Link header.
+   */
+  const getUserApps = async (
+    userId: string
+  ): Promise<Array<{ id: string; label: string }>> => {
+    const apps: Array<{ id: string; label: string }> = [];
+    let nextUrl: string | null = `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=200`;
+
+    try {
+      while (nextUrl) {
+        const response = await coreApi.makeApiRequest(nextUrl);
+        if (!response.success || !response.data) {
+          break;
+        }
+
+        for (const app of response.data) {
+          apps.push({ id: app.id, label: app.label || app.name || app.id });
+        }
+
+        nextUrl = parseNextLink(response.headers?.link);
+      }
+    } catch (error) {
+      console.error(`[useOktaApi] Failed to list apps for user ${userId}:`, error);
+    }
+
+    return apps;
   };
 
   /**
@@ -244,6 +277,7 @@ export function createUserOperations(coreApi: CoreApi) {
   return {
     getUserLastLogin,
     getUserAppAssignments,
+    getUserApps,
     batchGetUserDetails,
     scanGroupMfa,
     getUserGroupMemberships,

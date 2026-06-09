@@ -88,6 +88,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
     // User operations
     getUserLastLogin: userOps.getUserLastLogin,
     getUserAppAssignments: userOps.getUserAppAssignments,
+    getUserApps: userOps.getUserApps,
     batchGetUserDetails: userOps.batchGetUserDetails,
     scanGroupMfa: userOps.scanGroupMfa,
     getUserGroupMemberships: userOps.getUserGroupMemberships,

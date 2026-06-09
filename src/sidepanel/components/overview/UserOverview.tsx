@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import StatCard from './shared/StatCard';
 import QuickActionsPanel, { type ActionSection } from './shared/QuickActionsPanel';
-import { UserProfileCard } from '../users';
+import { UserProfileCard, UserComparisonModal } from '../users';
 import { useUserMemberships } from '../../hooks/useUserMemberships';
 import AlertMessage from '../shared/AlertMessage';
 import Button from '../shared/Button';
@@ -25,6 +25,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
   const [userDetails, setUserDetails] = useState<OktaUser | null>(null);
   const [isLoadingUser, setIsLoadingUser] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isCompareOpen, setIsCompareOpen] = useState(false);
 
   // Use the shared hook for consistent membership analysis
   const {
@@ -97,6 +98,13 @@ const UserOverview: React.FC<UserOverviewProps> = ({
           onClick: () => onTabChange('users'),
           badge: `${totalGroups}`,
           tooltip: 'See full list of group memberships',
+        },
+        {
+          label: 'Compare with User',
+          icon: 'users',
+          variant: 'secondary',
+          onClick: () => setIsCompareOpen(true),
+          tooltip: 'Compare group & app access with another user',
         },
       ],
     },
@@ -251,6 +259,18 @@ const UserOverview: React.FC<UserOverviewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* User comparison modal */}
+      {userDetails && (
+        <UserComparisonModal
+          isOpen={isCompareOpen}
+          onClose={() => setIsCompareOpen(false)}
+          contextUser={userDetails}
+          contextGroups={groups}
+          targetTabId={targetTabId}
+          onGroupsChanged={() => loadMemberships(userDetails)}
+        />
+      )}
     </div>
   );
 };
