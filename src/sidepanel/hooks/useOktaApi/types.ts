@@ -10,6 +10,9 @@ import type {
   UserStatus,
   AuditLogEntry,
   OktaApp,
+  OktaFactor,
+  MemberMfaResult,
+  MfaScanStatus,
 } from '../../../shared/types';
 
 export type {
@@ -19,6 +22,9 @@ export type {
   UserStatus,
   AuditLogEntry,
   OktaApp,
+  OktaFactor,
+  MemberMfaResult,
+  MfaScanStatus,
 };
 
 /**

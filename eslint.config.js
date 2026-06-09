@@ -44,6 +44,8 @@ export default [
         confirm: 'readonly',
         HTMLInputElement: 'readonly',
         HTMLElement: 'readonly',
+        HTMLDivElement: 'readonly',
+        IntersectionObserver: 'readonly',
       },
     },
     plugins: {
