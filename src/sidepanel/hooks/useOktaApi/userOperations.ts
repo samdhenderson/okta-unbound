@@ -4,6 +4,8 @@
  */
 
 import type { CoreApi } from './core';
+import type { OktaFactor, MemberMfaResult } from '../../../shared/types';
+import { summarizeFactors } from '../../../shared/utils/mfaUtils';
 
 export function createUserOperations(coreApi: CoreApi) {
   /**
@@ -87,6 +89,51 @@ export function createUserOperations(coreApi: CoreApi) {
     }
 
     return userDetailsMap;
+  };
+
+  /**
+   * Scan MFA factor enrollment for a list of users.
+   *
+   * Costs one API call per user (GET /api/v1/users/{id}/factors). Uses the same
+   * batching pattern as batchGetUserDetails (batch size 3, low priority) to avoid
+   * starving interactive requests. Returns a Map keyed by userId.
+   */
+  const scanGroupMfa = async (
+    userIds: string[],
+    onProgress?: (current: number, total: number) => void
+  ): Promise<Map<string, MemberMfaResult>> => {
+    const resultMap = new Map<string, MemberMfaResult>();
+    const batchSize = 3; // Match scheduler maxConcurrent convention
+
+    for (let i = 0; i < userIds.length; i += batchSize) {
+      const batch = userIds.slice(i, i + batchSize);
+      const batchResults = await Promise.all(
+        batch.map(async (userId) => {
+          try {
+            const response = await coreApi.makeApiRequest(
+              `/api/v1/users/${userId}/factors`,
+              'GET',
+              undefined,
+              'low'
+            );
+            const factors: OktaFactor[] =
+              response.success && Array.isArray(response.data) ? response.data : [];
+            return { userId, factors };
+          } catch (error) {
+            console.error(`[useOktaApi] Failed to fetch factors for user ${userId}:`, error);
+            return { userId, factors: [] as OktaFactor[] };
+          }
+        })
+      );
+
+      batchResults.forEach(({ userId, factors }) => {
+        resultMap.set(userId, summarizeFactors(userId, factors));
+      });
+
+      onProgress?.(Math.min(i + batchSize, userIds.length), userIds.length);
+    }
+
+    return resultMap;
   };
 
   /**
@@ -198,6 +245,7 @@ export function createUserOperations(coreApi: CoreApi) {
     getUserLastLogin,
     getUserAppAssignments,
     batchGetUserDetails,
+    scanGroupMfa,
     getUserGroupMemberships,
     searchUsers,
     getUserById,

@@ -317,6 +317,59 @@ describe('useOktaApi', () => {
     });
   });
 
+  describe('scanGroupMfa', () => {
+    it('fetches factors per user with low priority and summarizes results', async () => {
+      // alice: sms (enrolled, 1 factor); bob: no factors
+      mockRuntimeSendMessage
+        .mockResolvedValueOnce({
+          success: true,
+          data: [{ id: 'f1', factorType: 'sms', provider: 'OKTA', status: 'ACTIVE' }],
+        })
+        .mockResolvedValueOnce({ success: true, data: [] });
+
+      const { result } = renderHook(() =>
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+      );
+
+      const map = await act(async () => {
+        return result.current.scanGroupMfa(['alice', 'bob']);
+      });
+
+      expect(mockRuntimeSendMessage).toHaveBeenCalledWith({
+        action: 'scheduleApiRequest',
+        endpoint: '/api/v1/users/alice/factors',
+        method: 'GET',
+        body: undefined,
+        tabId: targetTabId,
+        priority: 'low',
+      });
+      expect(map.get('alice')).toMatchObject({ enrolled: true, factorCount: 1, factorLabels: ['SMS'] });
+      expect(map.get('bob')).toMatchObject({ enrolled: false, factorCount: 0, factorLabels: [] });
+    });
+
+    it('reports progress and tolerates failed factor requests', async () => {
+      mockRuntimeSendMessage
+        .mockResolvedValueOnce({ success: false, error: 'boom' })
+        .mockResolvedValueOnce({
+          success: true,
+          data: [{ id: 'f1', factorType: 'push', provider: 'OKTA', status: 'ACTIVE' }],
+        });
+
+      const onProgress = vi.fn();
+      const { result } = renderHook(() =>
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+      );
+
+      const map = await act(async () => {
+        return result.current.scanGroupMfa(['x', 'y'], onProgress);
+      });
+
+      expect(map.get('x')).toMatchObject({ enrolled: false, factorCount: 0 });
+      expect(map.get('y')).toMatchObject({ enrolled: true, factorLabels: ['Okta Verify Push'] });
+      expect(onProgress).toHaveBeenCalledWith(2, 2);
+    });
+  });
+
   describe('removeDeprovisioned', () => {
     it('should remove all deprovisioned users', async () => {
       const mockUsers: OktaUser[] = [
