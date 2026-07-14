@@ -88,12 +88,17 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
 
 ### 6. `[~]` zod at the fetch boundary + `any` burndown
 
-- In `content/index.ts`, parse Okta JSON with the schemas in
-  [shared/schemas/okta.ts](../src/shared/schemas/okta.ts) via `parseOkta(...)` right
-  after `response.json()`; extend schemas as new endpoints are covered (hot paths:
-  users, groups, memberships).
-- Replace `any` in the message/API layer with inferred types; target the 68 `any`s.
-- Then flip `@typescript-eslint/no-explicit-any` `warn`→`error` (ADR-0004/0006).
+- [x] Wired strict `parseOkta` into the two single-object read paths that already
+      degrade gracefully: `handleGetUserInfo` (`oktaUserSchema`, falls back to page
+      scraping) and `handleGetGroupInfo` (`oktaGroupSchema`, falls back to 'Unknown').
+      Added `oktaGroupSchema` tests. Removed the `userStatus as any`.
+- [ ] Multi-item / non-standard-shape paths deferred: search-users/groups and
+      `getUserGroups` return lists (throwing on one sparse item would nuke the whole
+      result — needs a resilient per-item parse decision first); `getUserContext` hits
+      the non-standard `/admin/users/search` `aaData` DataTables shape (own schema).
+- [ ] Replace `any` in the message/API layer with inferred types; target the ~71
+      `any`s (god-component ones — UsersTab/GroupsTab/RulesTab — ride with §7).
+- [ ] Then flip `@typescript-eslint/no-explicit-any` `warn`→`error` (ADR-0004/0006).
 - Doc: `docs/development.md` + `docs/architecture.md`. Agents: `test-writer`
   (schema tests), `security-logging-reviewer`.
 - Done when: hot-path responses validated; `any` count near zero; rule flipped.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { oktaUserSchema, parseOkta } from './okta';
+import { oktaUserSchema, oktaGroupSchema, parseOkta } from './okta';
 
 const validUser = {
   id: '00u1abcdefghijklmno',
@@ -29,5 +29,27 @@ describe('oktaUserSchema / parseOkta', () => {
   it('rejects a payload missing required profile fields', () => {
     const bad = { id: '00u1', status: 'ACTIVE', profile: { login: 'x' } };
     expect(() => parseOkta(oktaUserSchema, bad, 'test')).toThrow(/validation failed/);
+  });
+});
+
+describe('oktaGroupSchema', () => {
+  it('accepts a group with id and profile.name', () => {
+    const group = parseOkta(
+      oktaGroupSchema,
+      { id: '00g1', profile: { name: 'Engineering', description: null } },
+      'test',
+    );
+    expect(group.profile.name).toBe('Engineering');
+  });
+
+  it('rejects a group missing profile.name', () => {
+    const bad = { id: '00g1', profile: { description: 'x' } };
+    expect(() => parseOkta(oktaGroupSchema, bad, 'test')).toThrow(/validation failed/);
+  });
+
+  it('surfaces the context in the error message', () => {
+    expect(() => parseOkta(oktaGroupSchema, { id: 1 }, 'GET /groups/{id}')).toThrow(
+      /GET \/groups\/\{id\}/,
+    );
   });
 });

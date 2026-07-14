@@ -47,10 +47,12 @@ import type {
   OktaUser,
   GroupInfo,
   UserInfo,
+  UserStatus,
   ApiResponse,
 } from '../shared/types';
 import { getCacheEntry, setCacheEntry } from '../shared/cache';
 import { createLogger } from '../shared/utils/logger';
+import { oktaUserSchema, oktaGroupSchema, parseOkta } from '../shared/schemas/okta';
 
 const log = createLogger('Content');
 
@@ -307,8 +309,9 @@ async function handleGetGroupInfo(): Promise<MessageResponse<GroupInfo>> {
       log.debug('Fetching group name from API');
       try {
         const response = await handleMakeApiRequest(`/api/v1/groups/${groupId}`, 'GET');
-        if (response.success && response.data?.profile?.name) {
-          groupName = response.data.profile.name;
+        if (response.success) {
+          const group = parseOkta(oktaGroupSchema, response.data, 'GET /api/v1/groups/{id}');
+          groupName = group.profile.name;
           log.debug('Fetched groupName from API', { found: Boolean(groupName) });
         }
       } catch (e) {
@@ -361,18 +364,19 @@ async function handleGetUserInfo(): Promise<MessageResponse<UserInfo>> {
 
     let userName: string | undefined;
     let userEmail: string | undefined;
-    let userStatus: string | undefined;
+    let userStatus: UserStatus | undefined;
 
     // Fetch user details from API (prioritize API over page scraping)
     log.debug('Fetching user details from API');
     try {
       const response = await handleMakeApiRequest(`/api/v1/users/${userId}`, 'GET');
-      if (response.success && response.data) {
-        const profile = response.data.profile || {};
+      if (response.success) {
+        const user = parseOkta(oktaUserSchema, response.data, 'GET /api/v1/users/{id}');
+        const profile = user.profile;
         // Use API data for the full name (firstName + lastName)
         userName = `${profile.firstName || ''} ${profile.lastName || ''}`.trim();
         userEmail = profile.email;
-        userStatus = response.data.status;
+        userStatus = user.status;
         log.debug('Fetched user details from API', {
           hasName: Boolean(userName),
           hasEmail: Boolean(userEmail),
@@ -393,7 +397,7 @@ async function handleGetUserInfo(): Promise<MessageResponse<UserInfo>> {
       userId,
       userName: userName || 'Unknown',
       userEmail,
-      userStatus: userStatus as any,
+      userStatus,
     };
 
     log.debug('getUserInfo result', {
