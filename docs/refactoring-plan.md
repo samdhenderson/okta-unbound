@@ -96,9 +96,16 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
       `getUserGroups` return lists (throwing on one sparse item would nuke the whole
       result — needs a resilient per-item parse decision first); `getUserContext` hits
       the non-standard `/admin/users/search` `aaData` DataTables shape (own schema).
-- [ ] Replace `any` in the message/API layer with inferred types; target the ~71
-      `any`s (god-component ones — UsersTab/GroupsTab/RulesTab — ride with §7).
-- [ ] Then flip `@typescript-eslint/no-explicit-any` `warn`→`error` (ADR-0004/0006).
+- [x] Burned down the message/API-layer `any`s (60→4): typing-only, precise types
+      across content/useOktaApi/scheduler/tabState/rulesCache (introduced
+      `MembershipRule`; reused existing rule/group/`RequestResult` types). Repo-wide
+      no-explicit-any warnings 82→26. The 4 remaining in-scope are intentional
+      (`ApiResponse`/`MessageResponse` `<T = any>` defaults, the org-extensible
+      `profile` index signature, `RequestResult.data` raw payload).
+- [ ] Flip `@typescript-eslint/no-explicit-any` `warn`→`error` (ADR-0004/0006) —
+      **blocked on §7**: 19 `any`s remain only in the god components
+      (UsersTab/GroupsTab/RulesTab/BulkOperationsPanel), which decompose in §7; flip
+      once those clear (plus the 4 intentional ones get `eslint-disable` w/ reason).
 - Doc: `docs/development.md` + `docs/architecture.md`. Agents: `test-writer`
   (schema tests), `security-logging-reviewer`.
 - Done when: hot-path responses validated; `any` count near zero; rule flipped.
