@@ -53,7 +53,11 @@ export function createCoreApi(
       throw new Error('No target tab ID - not connected to Okta page');
     }
 
-    log.debug('Scheduling API request via background', { endpoint, method, priority });
+    log.debug('Scheduling API request via background', {
+      endpoint: endpoint.split('?')[0],
+      method,
+      priority,
+    });
 
     // Route through the background scheduler for rate limit control
     const response = await chrome.runtime.sendMessage({
@@ -65,7 +69,10 @@ export function createCoreApi(
       priority,
     });
 
-    log.debug('Received scheduled response', { endpoint, success: response?.success });
+    log.debug('Received scheduled response', {
+      endpoint: endpoint.split('?')[0],
+      success: response?.success,
+    });
     return response;
   };
 

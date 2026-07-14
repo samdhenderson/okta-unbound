@@ -28,7 +28,7 @@ export class RateLimitDetector {
     const reset = headers['x-rate-limit-reset'];
 
     if (!limit || !remaining || !reset) {
-      log.debug('Missing rate limit headers for', endpoint);
+      log.debug('Missing rate limit headers for', endpoint.split('?')[0]);
       return null;
     }
 
@@ -49,7 +49,7 @@ export class RateLimitDetector {
     }
 
     log.debug('Rate limit updated:', {
-      endpoint,
+      endpoint: endpoint.split('?')[0],
       remaining: info.remaining,
       limit: info.limit,
       resetIn: this.getSecondsUntilReset(info),

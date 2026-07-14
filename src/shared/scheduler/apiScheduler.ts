@@ -103,7 +103,7 @@ export class ApiScheduler {
 
       log.debug('Scheduled request:', {
         id: request.id,
-        endpoint,
+        endpoint: endpoint.split('?')[0],
         method,
         priority,
         queueLength: this.queue.length,
@@ -214,7 +214,7 @@ export class ApiScheduler {
     try {
       log.debug('Executing request:', {
         id: request.id,
-        endpoint: request.endpoint,
+        endpoint: request.endpoint.split('?')[0],
         method: request.method,
         attempt: request.retryCount + 1,
       });
