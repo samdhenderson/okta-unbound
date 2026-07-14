@@ -30,16 +30,16 @@ Status legend: `[ ]` todo · `[~]` partially done · `[x]` done.
 
 ### 2. `[~] `console.* → logger` migration
 
-- Replace remaining raw `console.*` (~324 sites; background/content/`useOktaApi/core.ts`
-  hot paths already done) with `createLogger(scope)` from
-  [src/shared/utils/logger.ts](../src/shared/utils/logger.ts). **Never log tokens or
-  payloads** — action/endpoint/outcome only.
-- Then flip `no-console` `warn`→`error` in [eslint.config.js](../eslint.config.js)
-  (keep the logger module's `eslint-disable`), and update ADR-0004.
-- Heaviest files: `content/index.ts`, `RulesTab.tsx`, `useUserContext.ts`,
-  `useGroupContext.ts`, `UsersTab.tsx`, `apiScheduler.ts`.
-- Doc: `docs/development.md`. Agent: `security-logging-reviewer` to verify no leaks.
-- Done when: `grep -rn "console\." src` returns only `logger.ts`; lint stays 0 errors.
+- [x] Migrated ~260 sites across shared infra, hooks, content, background, and
+  components to `createLogger(scope)`; security-logging review verified no
+  token/payload/PII leaks (fixed 4 endpoint-query-string leaks in the scheduler).
+- [ ] The 3 context hooks (`useGroupContext`/`useUserContext`/`useOktaPageContext`,
+  56 calls) are deferred to the §7 `useOktaTabContext` merge (rewritten with fresh
+  lean logging), plus `ruleEvaluator.test.ts` console-spy assignments.
+- [ ] Flip `no-console` `warn`→`error` in [eslint.config.js](../eslint.config.js)
+  once the above land, and update ADR-0004.
+- Doc: `docs/development.md`. Done when: `grep -rn "console\." src` returns only
+  `logger.ts` (+ intentional test spies); rule flipped.
 
 ### 3. `[ ]` Route raw `<button>`s through shared `Button`
 
