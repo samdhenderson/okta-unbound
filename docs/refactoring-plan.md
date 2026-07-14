@@ -41,14 +41,27 @@ Status legend: `[ ]` todo · `[~]` partially done · `[x]` done.
 - Doc: `docs/development.md`. Done when: `grep -rn "console\." src` returns only
   `logger.ts` (+ intentional test spies); rule flipped.
 
-### 3. `[ ]` Route raw `<button>`s through shared `Button`
+### 3. `[~]` Route raw `<button>`s through shared primitives
 
-- ~54 raw `<button>`s in feature components → shared `Button`. Where a shape is
-  missing (filter chip / toggle), add a `chip`/`toggle` variant to `Button` rather
-  than inline classes. Same for raw `<input>/<select>/<textarea>`.
-- Sites: `GroupsTab.tsx`, `RulesTab.tsx`, `GroupCollections.tsx`, `SearchDropdown.tsx`, …
+Approach chosen (not "everything through `Button`"): a small **primitive family** —
+`Button` (CTA), new `IconButton` (icon-only), `FilterPill` (chip/toggle, promoted to
+`shared/`). Raw `<button>`s **inside** `shared/` primitives are allowed; the target is
+no raw buttons in **feature** components. A few genuinely-custom controls stay raw,
+documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
+
+- [x] Built `IconButton` (+ tests); promoted `FilterPill` to `shared/`; barrel updated.
+- [x] Migrated ~22 raw buttons across 19 **stable** (non-god) feature components to
+  `Button`/`IconButton`/`FilterPill`. 7 left raw as documented custom controls.
+- [ ] **God-component buttons** (`GroupsTab` 10, `RulesTab` 4, `UsersTab` 3,
+  `UserComparisonModal` 2) → migrate during their §7 decomposition.
+- [ ] **`AttributeFacet`** (4) → with the §9 chart tokenization.
+- [ ] **Raw form controls** (~11 stable: `GroupCollections` text inputs,
+  `CompositionReports`, search composites; + god components). Text inputs → shared
+  `Input`. Checkboxes (`GroupExportModal`, `GroupListItem`) need a new `Checkbox`
+  primitive (shared `Input` is text-only) — add it or leave raw+documented.
 - Doc: `docs/components.md`. Agent: `component-builder`; verify with `ui-reviewer`.
-- Done when: `grep -rn "<button" src/sidepanel/components` hits only `shared/`.
+- Done when: no raw `<button>` in feature components except documented exceptions;
+  form controls routed through shared `Input`/`Select`/`Textarea`/`Checkbox`.
 
 ### 4. `[x]` Finish the `error → danger` codemod
 
