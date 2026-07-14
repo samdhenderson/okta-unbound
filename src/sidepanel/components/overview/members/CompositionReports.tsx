@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import CollapsibleSection from '../../shared/CollapsibleSection';
+import { Input } from '../../shared';
+import Icon from '../shared/Icon';
 import AttributeFacet from './AttributeFacet';
 import {
   type AttributeSummary,
@@ -64,28 +66,14 @@ const CompositionReports: React.FC<CompositionReportsProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-neutral-500">Click any value to filter the members.</p>
           {attributes.length > SEARCH_THRESHOLD && (
-            <div className="relative">
-              <svg
-                className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z"
-                />
-              </svg>
-              <input
-                type="text"
-                value={attrQuery}
-                onChange={(e) => setAttrQuery(e.target.value)}
-                placeholder="Find attribute…"
-                className="w-40 rounded-md border border-neutral-200 bg-white py-1 pl-8 pr-2 text-xs text-neutral-800 placeholder:text-neutral-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </div>
+            <Input
+              value={attrQuery}
+              onChange={setAttrQuery}
+              placeholder="Find attribute…"
+              icon={<Icon type="search" size="sm" />}
+              fullWidth={false}
+              className="w-44"
+            />
           )}
         </div>
 

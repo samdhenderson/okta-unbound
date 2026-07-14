@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button, IconButton } from '../shared';
+import { Button, IconButton, Input } from '../shared';
 import type { GroupCollection, GroupSummary } from '../../../shared/types';
 import { createLogger } from '../../../shared/utils/logger';
 
@@ -148,21 +148,17 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
       {/* Create Form */}
       {showCreate && (
         <div className="p-3 border-b border-neutral-200 bg-primary-light space-y-2">
-          <input
-            type="text"
+          <Input
             placeholder="Collection name..."
             value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-md bg-white focus:outline-none focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary"
+            onChange={setNewName}
             autoFocus
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
           />
-          <input
-            type="text"
+          <Input
             placeholder="Description (optional)..."
             value={newDescription}
-            onChange={(e) => setNewDescription(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-md bg-white focus:outline-none focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary"
+            onChange={setNewDescription}
           />
           <div className="flex justify-between items-center">
             <span className="text-xs text-primary-text">
@@ -200,11 +196,10 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
           <div key={col.id} className="p-3 border-b border-neutral-100 last:border-b-0">
             {editingId === col.id ? (
               <div className="flex gap-2">
-                <input
-                  type="text"
+                <Input
                   value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="flex-1 px-2 py-1 text-sm border border-neutral-200 rounded-md focus:outline-none focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary"
+                  onChange={setEditName}
+                  className="flex-1"
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleRename(col.id);

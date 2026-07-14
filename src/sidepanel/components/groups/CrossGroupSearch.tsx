@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { Button, IconButton } from '../shared';
+import { Button, IconButton, Input } from '../shared';
+import Icon from '../overview/shared/Icon';
 import type { OktaUser } from '../../../shared/types';
 
 interface CrossGroupSearchProps {
@@ -103,31 +104,14 @@ const CrossGroupSearch: React.FC<CrossGroupSearchProps> = ({
 
       {/* Search Input */}
       <div className="p-3 border-b border-neutral-100">
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg
-              className="h-4 w-4 text-neutral-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-          </div>
-          <input
-            type="text"
-            placeholder="Search by name, email, or login..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm border border-neutral-200 rounded-md bg-white placeholder-neutral-400 focus:outline-none focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary"
-            autoFocus
-          />
-        </div>
+        <Input
+          type="search"
+          placeholder="Search by name, email, or login..."
+          value={query}
+          onChange={setQuery}
+          icon={<Icon type="search" size="sm" />}
+          autoFocus
+        />
         {cachedGroupCount === 0 && (
           <p className="text-xs text-warning-text mt-2">
             No groups have been cached yet. Load members via group comparison or export to populate

@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Button, IconButton } from '../shared';
+import { Button, IconButton, Input } from '../shared';
 import type { GroupSummary, BulkOperationResult } from '../../../shared/types';
 
 type BulkOpType = 'cleanup_inactive' | 'export_all' | 'remove_user';
@@ -167,12 +167,11 @@ const BulkOperationsPanel: React.FC<BulkOperationsPanelProps> = ({
           {/* Remove User Input */}
           {showRemoveInput && (
             <div className="flex gap-2 mt-2">
-              <input
-                type="text"
+              <Input
                 placeholder="Enter user ID to remove..."
                 value={removeUserId}
-                onChange={(e) => setRemoveUserId(e.target.value)}
-                className="flex-1 px-3 py-2 text-sm border border-neutral-200 rounded-md focus:outline-none focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary"
+                onChange={setRemoveUserId}
+                className="flex-1"
                 autoFocus
               />
               <Button
