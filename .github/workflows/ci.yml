@@ -19,8 +19,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Format gate (npm run format:check) is enabled after the one-time repo-wide
-      # `npm run format` reformat lands as its own commit (ADR-0003).
+      - name: Format check
+        run: npm run format:check
 
       - name: Lint
         run: npm run lint

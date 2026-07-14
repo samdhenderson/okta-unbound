@@ -19,13 +19,14 @@ Status legend: `[ ]` todo · `[~]` partially done · `[x]` done.
 
 ## Order of work (do top-to-bottom; each is independently shippable)
 
-### 1. `[ ]` One-time repo-wide format, then turn on the gates
+### 1. `[~]` One-time repo-wide format, then turn on the gates
 
-- Run `npm run format` as its own dedicated commit (ADR-0003).
-- Re-enable the two CI steps in [.github/workflows/ci.yml](../.github/workflows/ci.yml):
-  the `format:check` step and the coverage step (only once §5 has raised coverage).
+- [x] Run `npm run format` as its own dedicated commit (ADR-0003).
+- [x] Re-enable the `format:check` CI step in
+      [.github/workflows/ci.yml](../.github/workflows/ci.yml).
+- [ ] Add the coverage CI step (only once §5/§8 has raised coverage to 80/75).
 - Doc: `docs/development.md`. Agent: none (mechanical).
-- Done when: `npm run format:check` passes in CI.
+- Done when: `npm run format:check` passes in CI. ✔ (coverage gate pending §8)
 
 ### 2. `[~] `console.* → logger` migration
 
