@@ -28,18 +28,18 @@ Status legend: `[ ]` todo · `[~]` partially done · `[x]` done.
 - Doc: `docs/development.md`. Agent: none (mechanical).
 - Done when: `npm run format:check` passes in CI. ✔ (coverage gate pending §8)
 
-### 2. `[~] `console.* → logger` migration
+### 2. `[x] `console.* → logger` migration
 
 - [x] Migrated ~260 sites across shared infra, hooks, content, background, and
       components to `createLogger(scope)`; security-logging review verified no
       token/payload/PII leaks (fixed 4 endpoint-query-string leaks in the scheduler).
-- [ ] The 3 context hooks (`useGroupContext`/`useUserContext`/`useOktaPageContext`,
-      56 calls) are deferred to the §7 `useOktaTabContext` merge (rewritten with fresh
-      lean logging), plus `ruleEvaluator.test.ts` console-spy assignments.
-- [ ] Flip `no-console` `warn`→`error` in [eslint.config.js](../eslint.config.js)
-      once the above land, and update ADR-0004.
-- Doc: `docs/development.md`. Done when: `grep -rn "console\." src` returns only
-  `logger.ts` (+ intentional test spies); rule flipped.
+- [x] The 3 context hooks (56 calls) rewritten with lean logging during the
+      `useOktaTabContext` merge; `ruleEvaluator.test.ts` console spies handled via a
+      test-file ESLint override (tests may spy on console).
+- [x] Flipped `no-console` `warn`→`error` in [eslint.config.js](../eslint.config.js)
+      (exceptions: `logger.ts` inline-disable, test files); updated ADR-0004.
+- Done: `grep -rn "console\." src` returns only `logger.ts` (+ comment examples and
+  intentional test spies); rule flipped and enforced.
 
 ### 3. `[~]` Route raw `<button>`s through shared primitives
 
@@ -78,8 +78,8 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
 
 ### 5. `[~]` Adopt the shared utils everywhere
 
-- [x] `isOktaUrl` adopted at all non-hook sites (the only remaining inline checks
-      are in the 3 context hooks, handled by the §7 `useOktaTabContext` merge).
+- [x] `isOktaUrl` adopted everywhere, including the 3 context hooks (the inline
+      checks were removed in the `useOktaTabContext` merge).
 - [x] `UserProfileCard` adopts `dateFormat` (`formatDateShort` added for date-only).
 - [ ] `UsersTab.tsx` inline `formatDate`/`getRelativeTime` — removed during its §7
       decomposition. `csvUtils.formatDateForCSV` is a distinct CSV format — keep.
@@ -117,8 +117,10 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
 - Per file: (1) pin behavior with RTL/MSW tests; (2) extract logic into `use*` hooks
   (mirror the `useOktaApi/` module split); (3) move pure helpers to `shared/utils`;
   (4) split UI into subcomponents (like `overview/members/`); (5) re-verify.
-- Also: merge the near-identical `useGroupContext`/`useUserContext` into a shared
-  `useOktaTabContext` base.
+- [x] Merged the near-identical `useGroupContext`/`useUserContext`/
+      `useOktaPageContext` into a shared generic `useOktaTabContext<T>` base (thin
+      wrappers, public APIs unchanged; first tests added). Done ahead of the god-
+      component work since it was self-contained.
 - Target: no component over ~300 lines.
 - Doc: `docs/state-management.md`. Agents: `test-writer` then `architecture-refactor`.
 - Done when: each target is decomposed with tests, behavior unchanged.

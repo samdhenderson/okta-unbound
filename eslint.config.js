@@ -70,10 +70,10 @@ export default [
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
       'react-hooks/set-state-in-effect': 'warn', // Downgrade from error to warning
-      // Logging policy (ADR-0004): use the logger util, not raw console.
-      // Currently 'warn' while the ~324 legacy console.* sites are migrated;
-      // flips to 'error' once the migration completes.
-      'no-console': 'warn',
+      // Logging policy (ADR-0004): use the logger util (src/shared/utils/logger.ts),
+      // not raw console. Migration complete — logger.ts is the only production
+      // console.* holder (allowed via its own override); tests may spy on console.
+      'no-console': 'error',
       // Architecture guard (docs/architecture.md): Okta API traffic must go through
       // the ApiScheduler. Raw `chrome.tabs.sendMessage` is the direct side-panel→
       // content path that bypasses rate limiting — forbid new call sites. Existing
@@ -119,6 +119,13 @@ export default [
     ],
     rules: {
       'no-restricted-syntax': 'off',
+    },
+  },
+  // Tests may spy on / stub console (e.g. suppressing expected warnings).
+  {
+    files: ['**/*.test.{ts,tsx}', 'src/test/**/*.{ts,tsx}'],
+    rules: {
+      'no-console': 'off',
     },
   },
   // Disable ESLint rules that conflict with Prettier (must be last).
