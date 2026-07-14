@@ -4,6 +4,7 @@ import typescriptParser from '@typescript-eslint/parser';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
+import prettier from 'eslint-config-prettier';
 
 export default [
   {
@@ -69,8 +70,10 @@ export default [
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
       'react-hooks/set-state-in-effect': 'warn', // Downgrade from error to warning
-      // Relax other common rules that cause CI failures
-      'no-console': 'off',
+      // Logging policy (ADR-0004): use the logger util, not raw console.
+      // Currently 'warn' while the ~324 legacy console.* sites are migrated;
+      // flips to 'error' once the migration completes.
+      'no-console': 'warn',
       'no-debugger': 'warn',
       'no-undef': 'warn', // Downgrade from error to warning
       '@typescript-eslint/ban-ts-comment': 'warn',
@@ -83,4 +86,6 @@ export default [
       },
     },
   },
+  // Disable ESLint rules that conflict with Prettier (must be last).
+  prettier,
 ];

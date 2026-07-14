@@ -1,0 +1,6 @@
+dist/
+node_modules/
+coverage/
+docs/api/
+*.min.js
+assets/

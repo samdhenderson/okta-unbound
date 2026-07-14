@@ -15,6 +15,8 @@
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives",
     "lint:fix": "eslint src --ext ts,tsx --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"*.{json,js,ts}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"*.{json,js,ts}\"",
     "prepare": "husky",
     "docs": "typedoc",
     "docs:clean": "rm -rf docs/api"
@@ -27,11 +29,11 @@
     "admin-tools",
     "iam"
   ],
-  "author": "Your Name",
+  "author": "Sam Henderson",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourusername/okta-unbound.git"
+    "url": "git+https://github.com/shsamhenderson/okta-unbound.git"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.2.1",
@@ -49,6 +51,7 @@
     "@vitest/ui": "^4.0.10",
     "esbuild": "^0.19.0",
     "eslint": "^9.39.1",
+    "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
@@ -57,6 +60,7 @@
     "jsdom": "^27.2.0",
     "lint-staged": "^16.2.6",
     "msw": "^2.12.2",
+    "prettier": "^3.4.2",
     "typedoc": "^0.28.15",
     "typescript": "^5.9.3",
     "vite": "^7.2.2",
@@ -70,20 +74,25 @@
     "doc": "docs"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/okta-unbound/issues"
+    "url": "https://github.com/shsamhenderson/okta-unbound/issues"
   },
-  "homepage": "https://github.com/yourusername/okta-unbound#readme",
+  "homepage": "https://github.com/shsamhenderson/okta-unbound#readme",
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
     "idb": "^8.0.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "tailwindcss": "^4.1.18"
+    "tailwindcss": "^4.1.18",
+    "zod": "^3.24.1"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
       "eslint --fix",
+      "prettier --write",
       "vitest related --run"
+    ],
+    "*.{json,css,md}": [
+      "prettier --write"
     ]
   }
 }
