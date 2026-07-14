@@ -74,6 +74,19 @@ export default [
       // Currently 'warn' while the ~324 legacy console.* sites are migrated;
       // flips to 'error' once the migration completes.
       'no-console': 'warn',
+      // Architecture guard (docs/architecture.md): Okta API traffic must go through
+      // the ApiScheduler. Raw `chrome.tabs.sendMessage` is the direct side-panel→
+      // content path that bypasses rate limiting — forbid new call sites. Existing
+      // holders are grandfathered in the override block below.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "CallExpression[callee.property.name='sendMessage'][callee.object.property.name='tabs']",
+          message:
+            'Do not call chrome.tabs.sendMessage directly — it bypasses the ApiScheduler rate limiting. Route API traffic through useOktaApi (makeApiRequest) / coreApi.sendMessage. See docs/architecture.md.',
+        },
+      ],
       'no-debugger': 'warn',
       'no-undef': 'warn', // Downgrade from error to warning
       '@typescript-eslint/ban-ts-comment': 'warn',
@@ -84,6 +97,28 @@ export default [
       react: {
         version: 'detect',
       },
+    },
+  },
+  // Grandfathered holders of raw `chrome.tabs.sendMessage` (see the guard above).
+  // Sanctioned (keeps raw access): apiScheduler.ts (the rate-limited path's own
+  // dispatch to content — the endpoint the guard steers traffic toward),
+  // useOktaApi/core.ts, and useOktaTabContext.ts (lightweight page-context probes,
+  // not rate-limited API traffic). Legacy, pending migration onto the scheduler
+  // with §7/§8: the god components + useUserSearch/useUserMemberships/UserOverview.
+  {
+    files: [
+      'src/shared/scheduler/apiScheduler.ts',
+      'src/sidepanel/hooks/useOktaApi/core.ts',
+      'src/sidepanel/hooks/useOktaTabContext.ts',
+      'src/sidepanel/hooks/useUserSearch.ts',
+      'src/sidepanel/hooks/useUserMemberships.ts',
+      'src/sidepanel/components/overview/UserOverview.tsx',
+      'src/sidepanel/components/GroupsTab.tsx',
+      'src/sidepanel/components/UsersTab.tsx',
+      'src/sidepanel/components/RulesTab.tsx',
+    ],
+    rules: {
+      'no-restricted-syntax': 'off',
     },
   },
   // Disable ESLint rules that conflict with Prettier (must be last).
