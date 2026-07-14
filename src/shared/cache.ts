@@ -19,7 +19,7 @@ const DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes
 export async function setCacheEntry<T>(
   key: string,
   data: T,
-  options: CacheOptions = {}
+  options: CacheOptions = {},
 ): Promise<void> {
   const ttl = options.ttl || DEFAULT_TTL;
   const now = Date.now();

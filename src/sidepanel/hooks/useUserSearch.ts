@@ -36,44 +36,47 @@ export function useUserSearch({
   const [error, setError] = useState<string | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const performSearch = useCallback(async (query: string) => {
-    if (!targetTabId) {
-      setError('No Okta tab connected');
-      return;
-    }
-
-    if (!query.trim()) {
-      setError('Please enter a search query');
-      return;
-    }
-
-    setIsSearching(true);
-    setError(null);
-
-    try {
-      console.log('[useUserSearch] Searching for users:', query);
-
-      const response = await chrome.tabs.sendMessage(targetTabId, {
-        action: 'searchUsers',
-        query: query.trim(),
-      });
-
-      if (response.success) {
-        setSearchResults(response.data || []);
-        console.log('[useUserSearch] Found users:', response.data?.length);
-      } else {
-        setError(response.error || 'Failed to search users');
-        setSearchResults([]);
+  const performSearch = useCallback(
+    async (query: string) => {
+      if (!targetTabId) {
+        setError('No Okta tab connected');
+        return;
       }
-    } catch (err: unknown) {
-      const error = err as Error;
-      setError(error.message || 'Failed to communicate with Okta tab');
-      setSearchResults([]);
-      console.error('[useUserSearch] Search error:', err);
-    } finally {
-      setIsSearching(false);
-    }
-  }, [targetTabId]);
+
+      if (!query.trim()) {
+        setError('Please enter a search query');
+        return;
+      }
+
+      setIsSearching(true);
+      setError(null);
+
+      try {
+        console.log('[useUserSearch] Searching for users:', query);
+
+        const response = await chrome.tabs.sendMessage(targetTabId, {
+          action: 'searchUsers',
+          query: query.trim(),
+        });
+
+        if (response.success) {
+          setSearchResults(response.data || []);
+          console.log('[useUserSearch] Found users:', response.data?.length);
+        } else {
+          setError(response.error || 'Failed to search users');
+          setSearchResults([]);
+        }
+      } catch (err: unknown) {
+        const error = err as Error;
+        setError(error.message || 'Failed to communicate with Okta tab');
+        setSearchResults([]);
+        console.error('[useUserSearch] Search error:', err);
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [targetTabId],
+  );
 
   // Debounced search effect
   useEffect(() => {

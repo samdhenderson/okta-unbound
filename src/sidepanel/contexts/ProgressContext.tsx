@@ -61,7 +61,12 @@ export interface ProgressState {
  */
 interface ProgressContextType {
   progress: ProgressState;
-  startProgress: (operationName: string, message: string, total?: number, canCancel?: boolean) => void;
+  startProgress: (
+    operationName: string,
+    message: string,
+    total?: number,
+    canCancel?: boolean,
+  ) => void;
   updateProgress: (current: number, total?: number, message?: string, apiCalls?: number) => void;
   incrementApiCalls: () => void;
   completeProgress: () => void;
@@ -88,29 +93,35 @@ export const ProgressProvider: React.FC<{ children: ReactNode }> = ({ children }
     message: '',
   });
 
-  const startProgress = useCallback((operationName: string, message: string, total: number = 100, canCancel: boolean = true) => {
-    setProgress({
-      isLoading: true,
-      current: 0,
-      total,
-      message,
-      operationName,
-      apiCalls: 0,
-      startTime: Date.now(),
-      canCancel,
-    });
-  }, []);
+  const startProgress = useCallback(
+    (operationName: string, message: string, total: number = 100, canCancel: boolean = true) => {
+      setProgress({
+        isLoading: true,
+        current: 0,
+        total,
+        message,
+        operationName,
+        apiCalls: 0,
+        startTime: Date.now(),
+        canCancel,
+      });
+    },
+    [],
+  );
 
-  const updateProgress = useCallback((current: number, total?: number, message?: string, apiCalls?: number) => {
-    setProgress((prev) => ({
-      ...prev,
-      isLoading: true,
-      current,
-      total: total ?? prev.total,
-      message: message ?? prev.message,
-      apiCalls: apiCalls ?? prev.apiCalls,
-    }));
-  }, []);
+  const updateProgress = useCallback(
+    (current: number, total?: number, message?: string, apiCalls?: number) => {
+      setProgress((prev) => ({
+        ...prev,
+        isLoading: true,
+        current,
+        total: total ?? prev.total,
+        message: message ?? prev.message,
+        apiCalls: apiCalls ?? prev.apiCalls,
+      }));
+    },
+    [],
+  );
 
   const incrementApiCalls = useCallback(() => {
     setProgress((prev) => ({
@@ -128,19 +139,18 @@ export const ProgressProvider: React.FC<{ children: ReactNode }> = ({ children }
     });
   }, []);
 
-  const contextValue = useMemo(() => ({
-    progress,
-    startProgress,
-    updateProgress,
-    incrementApiCalls,
-    completeProgress,
-  }), [progress, startProgress, updateProgress, incrementApiCalls, completeProgress]);
-
-  return (
-    <ProgressContext.Provider value={contextValue}>
-      {children}
-    </ProgressContext.Provider>
+  const contextValue = useMemo(
+    () => ({
+      progress,
+      startProgress,
+      updateProgress,
+      incrementApiCalls,
+      completeProgress,
+    }),
+    [progress, startProgress, updateProgress, incrementApiCalls, completeProgress],
   );
+
+  return <ProgressContext.Provider value={contextValue}>{children}</ProgressContext.Provider>;
 };
 
 /**

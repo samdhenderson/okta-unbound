@@ -87,7 +87,9 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
   const [memberships, setMemberships] = useState<GroupMembership[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [resultMessage, setResultMessage] = useState<AlertMessageData | null>(null);
-  const [pendingLifecycleAction, setPendingLifecycleAction] = useState<LifecycleAction | null>(null);
+  const [pendingLifecycleAction, setPendingLifecycleAction] = useState<LifecycleAction | null>(
+    null,
+  );
   const [isLifecycleLoading, setIsLifecycleLoading] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [hasAutoLoadedUser, setHasAutoLoadedUser] = useState<string | null>(null);
@@ -103,9 +105,10 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
   const [showGroupDropdown, setShowGroupDropdown] = useState(false);
   const groupDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { suspendUser, unsuspendUser, resetPassword, getUserById, searchGroups, addUserToGroup } = useOktaApi({
-    targetTabId: targetTabId ?? null,
-  });
+  const { suspendUser, unsuspendUser, resetPassword, getUserById, searchGroups, addUserToGroup } =
+    useOktaApi({
+      targetTabId: targetTabId ?? null,
+    });
 
   const handleSearch = useCallback(async () => {
     if (!targetTabId) {
@@ -200,7 +203,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
             rules,
             [],
             rulesResponse.stats || { total: 0, active: 0, inactive: 0, conflicts: 0 },
-            rulesResponse.conflicts || []
+            rulesResponse.conflicts || [],
           );
         }
       }
@@ -216,7 +219,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
 
       console.log('[UsersTab] Loaded memberships:', {
         count: analyzedMemberships.length,
-        usedCache: cachedRules !== null
+        usedCache: cachedRules !== null,
       });
     } catch (err: any) {
       setError(err.message || 'Failed to load user memberships');
@@ -241,16 +244,17 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
    * 4. For APP_GROUP types, always RULE_BASED (managed by application)
    * 5. For groups without rules, DIRECT
    */
-  const analyzeMemberships = (
-    groups: any[],
-    rules: any[],
-    user: OktaUser
-  ): GroupMembership[] => {
+  const analyzeMemberships = (groups: any[], rules: any[], user: OktaUser): GroupMembership[] => {
     console.log('[UsersTab] Analyzing memberships for user:', user.id);
-    console.log('[UsersTab] Total rules:', rules.length, 'Active rules:', rules.filter((r: any) => r.status === 'ACTIVE').length);
+    console.log(
+      '[UsersTab] Total rules:',
+      rules.length,
+      'Active rules:',
+      rules.filter((r: any) => r.status === 'ACTIVE').length,
+    );
     console.log('[UsersTab] Total groups:', groups.length);
 
-    return groups.map(group => {
+    return groups.map((group) => {
       // APP_GROUPs are always managed by the application (rule-based)
       if (group.type === 'APP_GROUP') {
         console.log(`[UsersTab] Group "${group.profile.name}": APP_GROUP (application managed)`);
@@ -268,7 +272,9 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
         return groupIds.includes(group.id);
       });
 
-      console.log(`[UsersTab] Group "${group.profile.name}": Found ${matchingRules.length} active rules`);
+      console.log(
+        `[UsersTab] Group "${group.profile.name}": Found ${matchingRules.length} active rules`,
+      );
 
       if (matchingRules.length === 0) {
         // No active rules for this group - must be direct assignment
@@ -317,7 +323,9 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
         }
       }
 
-      console.log(`[UsersTab] Group "${group.profile.name}": RULE_BASED (rule: ${bestMatchRule.name}, confidence: ${confidence})`);
+      console.log(
+        `[UsersTab] Group "${group.profile.name}": RULE_BASED (rule: ${bestMatchRule.name}, confidence: ${confidence})`,
+      );
 
       return {
         group: group,
@@ -421,7 +429,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
               rules,
               [],
               rulesResponse.stats || { total: 0, active: 0, inactive: 0, conflicts: 0 },
-              rulesResponse.conflicts || []
+              rulesResponse.conflicts || [],
             );
           }
         }
@@ -516,7 +524,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
           const refreshed = await getUserById(selectedUser.id);
           if (refreshed) {
             setSelectedUser((prev) =>
-              prev ? { ...prev, status: refreshed.status as OktaUser['status'] } : prev
+              prev ? { ...prev, status: refreshed.status as OktaUser['status'] } : prev,
             );
           }
         }
@@ -623,13 +631,17 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
       <PageHeader
         title="User Search"
         subtitle="Search users and analyze their group memberships"
-        badge={selectedUser ? { text: `${memberships.length} Groups`, variant: 'primary' } : undefined}
+        badge={
+          selectedUser ? { text: `${memberships.length} Groups`, variant: 'primary' } : undefined
+        }
         actions={
           oktaOrigin && selectedUser ? (
             <Button
               variant="primary"
               icon="link"
-              onClick={() => window.open(`${oktaOrigin}/admin/user/profile/view/${selectedUser.id}`, '_blank')}
+              onClick={() =>
+                window.open(`${oktaOrigin}/admin/user/profile/view/${selectedUser.id}`, '_blank')
+              }
               title="Open user in Okta Admin"
             >
               Open in Okta
@@ -643,8 +655,18 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
         <div className="space-y-3">
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              <svg
+                className="h-5 w-5 text-neutral-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
               </svg>
             </div>
             <input
@@ -663,7 +685,12 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                 type="button"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             )}
@@ -681,10 +708,15 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                 Detected: <strong className="text-neutral-900">{userInfo.userName}</strong>
               </span>
               {userInfo.userStatus && (
-                <span className={`px-2.5 py-0.5 text-xs font-bold rounded-md ${
-                  userInfo.userStatus === 'ACTIVE' ? 'bg-success-light text-success-text' :
-                  userInfo.userStatus === 'DEPROVISIONED' ? 'bg-danger-light text-danger-text' : 'bg-warning-light text-warning-text'
-                }`}>
+                <span
+                  className={`px-2.5 py-0.5 text-xs font-bold rounded-md ${
+                    userInfo.userStatus === 'ACTIVE'
+                      ? 'bg-success-light text-success-text'
+                      : userInfo.userStatus === 'DEPROVISIONED'
+                        ? 'bg-danger-light text-danger-text'
+                        : 'bg-warning-light text-warning-text'
+                  }`}
+                >
                   {userInfo.userStatus}
                 </span>
               )}
@@ -720,7 +752,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
               </span>
             </div>
             <div className="space-y-3">
-              {searchResults.map(user => (
+              {searchResults.map((user) => (
                 <div
                   key={user.id}
                   className="group bg-white rounded-md border border-neutral-200 p-5 cursor-pointer transition-all duration-100 hover:border-neutral-500 hover:shadow-sm"
@@ -732,7 +764,9 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                         {user.profile.firstName} {user.profile.lastName}
                       </h4>
                       <p className="text-sm text-neutral-600 mb-1">{user.profile.email}</p>
-                      <p className="text-xs text-neutral-500 font-mono">Login: {user.profile.login}</p>
+                      <p className="text-xs text-neutral-500 font-mono">
+                        Login: {user.profile.login}
+                      </p>
                     </div>
                     <span className={getStatusBadgeClass(user.status)}>{user.status}</span>
                   </div>
@@ -766,14 +800,22 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                         {selectedUser.profile.title && selectedUser.profile.department && (
                           <span className="text-neutral-400">•</span>
                         )}
-                        {selectedUser.profile.department && <span>{selectedUser.profile.department}</span>}
+                        {selectedUser.profile.department && (
+                          <span>{selectedUser.profile.department}</span>
+                        )}
                       </div>
                     )}
-                    <div className="text-sm text-neutral-700 mb-1">{selectedUser.profile.email}</div>
+                    <div className="text-sm text-neutral-700 mb-1">
+                      {selectedUser.profile.email}
+                    </div>
                     {selectedUser.profile.genderPronouns && (
                       <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-neutral-50 text-neutral-700 text-xs font-medium rounded-md border border-neutral-200 mt-2">
                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                          <path
+                            fillRule="evenodd"
+                            d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+                            clipRule="evenodd"
+                          />
                         </svg>
                         {selectedUser.profile.genderPronouns}
                       </div>
@@ -795,7 +837,8 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                   <span className="text-xs font-semibold text-neutral-600 mb-1">Last Login</span>
                   <span className="text-neutral-900 font-medium">
                     {selectedUser.lastLogin
-                      ? getRelativeTime(selectedUser.lastLogin) || formatDate(selectedUser.lastLogin)
+                      ? getRelativeTime(selectedUser.lastLogin) ||
+                        formatDate(selectedUser.lastLogin)
                       : 'Never'}
                   </span>
                 </div>
@@ -870,8 +913,8 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                 pendingLifecycleAction === 'suspend'
                   ? 'Suspend User'
                   : pendingLifecycleAction === 'unsuspend'
-                  ? 'Unsuspend User'
-                  : 'Reset Password'
+                    ? 'Unsuspend User'
+                    : 'Reset Password'
               }
               size="sm"
               footer={
@@ -891,8 +934,8 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                     {pendingLifecycleAction === 'suspend'
                       ? 'Suspend'
                       : pendingLifecycleAction === 'unsuspend'
-                      ? 'Unsuspend'
-                      : 'Send Reset Email'}
+                        ? 'Unsuspend'
+                        : 'Send Reset Email'}
                   </Button>
                 </>
               }
@@ -932,40 +975,66 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
                     <span className="text-xs font-semibold text-neutral-600 mb-1 block">Login</span>
-                    <span className="text-sm text-neutral-900 block">{selectedUser.profile.login}</span>
+                    <span className="text-sm text-neutral-900 block">
+                      {selectedUser.profile.login}
+                    </span>
                   </div>
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">User ID</span>
-                    <span className="text-xs font-mono bg-neutral-100 px-1.5 py-0.5 rounded select-all">{selectedUser.id}</span>
+                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                      User ID
+                    </span>
+                    <span className="text-xs font-mono bg-neutral-100 px-1.5 py-0.5 rounded select-all">
+                      {selectedUser.id}
+                    </span>
                   </div>
                   {selectedUser.profile.secondEmail && (
                     <div className="p-3 bg-white rounded-md border border-neutral-200">
-                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">Secondary Email</span>
-                      <span className="text-sm text-neutral-900 block">{selectedUser.profile.secondEmail}</span>
+                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                        Secondary Email
+                      </span>
+                      <span className="text-sm text-neutral-900 block">
+                        {selectedUser.profile.secondEmail}
+                      </span>
                     </div>
                   )}
                   {selectedUser.activated && (
                     <div className="p-3 bg-white rounded-md border border-neutral-200">
-                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">Activated</span>
-                      <span className="text-sm text-neutral-900 block">{formatDate(selectedUser.activated)}</span>
+                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                        Activated
+                      </span>
+                      <span className="text-sm text-neutral-900 block">
+                        {formatDate(selectedUser.activated)}
+                      </span>
                     </div>
                   )}
                   {selectedUser.statusChanged && (
                     <div className="p-3 bg-white rounded-md border border-neutral-200">
-                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">Status Changed</span>
-                      <span className="text-sm text-neutral-900 block">{formatDate(selectedUser.statusChanged)}</span>
+                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                        Status Changed
+                      </span>
+                      <span className="text-sm text-neutral-900 block">
+                        {formatDate(selectedUser.statusChanged)}
+                      </span>
                     </div>
                   )}
                   {selectedUser.passwordChanged && (
                     <div className="p-3 bg-white rounded-md border border-neutral-200">
-                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">Password Changed</span>
-                      <span className="text-sm text-neutral-900 block">{formatDate(selectedUser.passwordChanged)}</span>
+                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                        Password Changed
+                      </span>
+                      <span className="text-sm text-neutral-900 block">
+                        {formatDate(selectedUser.passwordChanged)}
+                      </span>
                     </div>
                   )}
                   {selectedUser.lastUpdated && (
                     <div className="p-3 bg-white rounded-md border border-neutral-200">
-                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">Profile Updated</span>
-                      <span className="text-sm text-neutral-900 block">{formatDate(selectedUser.lastUpdated)}</span>
+                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                        Profile Updated
+                      </span>
+                      <span className="text-sm text-neutral-900 block">
+                        {formatDate(selectedUser.lastUpdated)}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -984,50 +1053,82 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                     {selectedUser.profile.title && (
                       <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Title</span>
-                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.title}</span>
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                          Title
+                        </span>
+                        <span className="text-sm text-neutral-900 block">
+                          {selectedUser.profile.title}
+                        </span>
                       </div>
                     )}
                     {selectedUser.profile.department && (
                       <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Department</span>
-                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.department}</span>
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                          Department
+                        </span>
+                        <span className="text-sm text-neutral-900 block">
+                          {selectedUser.profile.department}
+                        </span>
                       </div>
                     )}
                     {selectedUser.profile.division && (
                       <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Division</span>
-                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.division}</span>
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                          Division
+                        </span>
+                        <span className="text-sm text-neutral-900 block">
+                          {selectedUser.profile.division}
+                        </span>
                       </div>
                     )}
                     {selectedUser.profile.organization && (
                       <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Organization</span>
-                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.organization}</span>
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                          Organization
+                        </span>
+                        <span className="text-sm text-neutral-900 block">
+                          {selectedUser.profile.organization}
+                        </span>
                       </div>
                     )}
                     {selectedUser.profile.manager && (
                       <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Manager</span>
-                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.manager}</span>
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                          Manager
+                        </span>
+                        <span className="text-sm text-neutral-900 block">
+                          {selectedUser.profile.manager}
+                        </span>
                       </div>
                     )}
                     {selectedUser.profile.costCenter && (
                       <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Cost Center</span>
-                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.costCenter}</span>
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                          Cost Center
+                        </span>
+                        <span className="text-sm text-neutral-900 block">
+                          {selectedUser.profile.costCenter}
+                        </span>
                       </div>
                     )}
                     {selectedUser.profile.employeeNumber && (
                       <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Employee #</span>
-                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.employeeNumber}</span>
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                          Employee #
+                        </span>
+                        <span className="text-sm text-neutral-900 block">
+                          {selectedUser.profile.employeeNumber}
+                        </span>
                       </div>
                     )}
                     {selectedUser.profile.userType && (
                       <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">User Type</span>
-                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.userType}</span>
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                          User Type
+                        </span>
+                        <span className="text-sm text-neutral-900 block">
+                          {selectedUser.profile.userType}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -1046,21 +1147,31 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                     {selectedUser.profile.primaryPhone && (
                       <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Phone</span>
-                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.primaryPhone}</span>
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                          Phone
+                        </span>
+                        <span className="text-sm text-neutral-900 block">
+                          {selectedUser.profile.primaryPhone}
+                        </span>
                       </div>
                     )}
                     {selectedUser.profile.mobilePhone && (
                       <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Mobile</span>
-                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.mobilePhone}</span>
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                          Mobile
+                        </span>
+                        <span className="text-sm text-neutral-900 block">
+                          {selectedUser.profile.mobilePhone}
+                        </span>
                       </div>
                     )}
                     {(selectedUser.profile.streetAddress ||
                       selectedUser.profile.city ||
                       selectedUser.profile.state) && (
                       <div className="p-3 bg-white rounded-md border border-neutral-200 md:col-span-2">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Location</span>
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                          Location
+                        </span>
                         <span className="text-sm text-neutral-900 block">
                           {[
                             selectedUser.profile.streetAddress,
@@ -1084,14 +1195,22 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                     {selectedUser.profile.locale && (
                       <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Locale</span>
-                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.locale}</span>
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                          Locale
+                        </span>
+                        <span className="text-sm text-neutral-900 block">
+                          {selectedUser.profile.locale}
+                        </span>
                       </div>
                     )}
                     {selectedUser.profile.timezone && (
                       <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">Timezone</span>
-                        <span className="text-sm text-neutral-900 block">{selectedUser.profile.timezone}</span>
+                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                          Timezone
+                        </span>
+                        <span className="text-sm text-neutral-900 block">
+                          {selectedUser.profile.timezone}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -1101,11 +1220,30 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
               {/* Custom Attributes - show any non-standard profile fields */}
               {(() => {
                 const standardFields = new Set([
-                  'login', 'email', 'firstName', 'lastName', 'secondEmail',
-                  'mobilePhone', 'primaryPhone', 'streetAddress', 'city', 'state',
-                  'zipCode', 'countryCode', 'department', 'title', 'manager',
-                  'managerId', 'division', 'organization', 'costCenter',
-                  'employeeNumber', 'userType', 'locale', 'timezone', 'genderPronouns',
+                  'login',
+                  'email',
+                  'firstName',
+                  'lastName',
+                  'secondEmail',
+                  'mobilePhone',
+                  'primaryPhone',
+                  'streetAddress',
+                  'city',
+                  'state',
+                  'zipCode',
+                  'countryCode',
+                  'department',
+                  'title',
+                  'manager',
+                  'managerId',
+                  'division',
+                  'organization',
+                  'costCenter',
+                  'employeeNumber',
+                  'userType',
+                  'locale',
+                  'timezone',
+                  'genderPronouns',
                 ]);
                 const customFields = Object.entries(selectedUser.profile).filter(
                   ([key, value]) =>
@@ -1114,7 +1252,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                     !EXCLUDED_PROFILE_FIELDS.has(key.toLowerCase()) &&
                     value !== null &&
                     value !== undefined &&
-                    value !== ''
+                    value !== '',
                 );
 
                 if (customFields.length === 0) return null;
@@ -1127,8 +1265,13 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                   >
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                       {customFields.map(([key, value]) => (
-                        <div className="p-3 bg-white rounded-md border border-neutral-200" key={key}>
-                          <span className="text-xs font-semibold text-neutral-600 mb-1 block">{key}</span>
+                        <div
+                          className="p-3 bg-white rounded-md border border-neutral-200"
+                          key={key}
+                        >
+                          <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                            {key}
+                          </span>
                           <span className="text-sm text-neutral-900 block">
                             {typeof value === 'object' ? JSON.stringify(value) : String(value)}
                           </span>
@@ -1160,7 +1303,9 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                 <LoadingSpinner size="lg" message="Loading group memberships..." centered />
               ) : memberships.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12">
-                  <p className="text-neutral-500 text-sm">This user is not a member of any groups</p>
+                  <p className="text-neutral-500 text-sm">
+                    This user is not a member of any groups
+                  </p>
                 </div>
               ) : (
                 <div className="p-4 space-y-3">
@@ -1169,9 +1314,10 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                       key={membership.group.id}
                       className={`
                         rounded-md border p-4 transition-all duration-100
-                        ${highlightCurrentGroup(membership.group.id)
-                          ? 'border-primary bg-primary-light ring-1 ring-primary/20'
-                          : 'border-neutral-200 bg-white hover:border-neutral-500'
+                        ${
+                          highlightCurrentGroup(membership.group.id)
+                            ? 'border-primary bg-primary-light ring-1 ring-primary/20'
+                            : 'border-neutral-200 bg-white hover:border-neutral-500'
                         }
                       `}
                     >
@@ -1188,12 +1334,27 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                             )}
                             {oktaOrigin && (
                               <button
-                                onClick={() => window.open(`${oktaOrigin}/admin/group/${membership.group.id}`, '_blank')}
+                                onClick={() =>
+                                  window.open(
+                                    `${oktaOrigin}/admin/group/${membership.group.id}`,
+                                    '_blank',
+                                  )
+                                }
                                 className="p-1.5 text-neutral-400 hover:text-primary-text hover:bg-primary-light rounded-md transition-all duration-100"
                                 title="Open group in Okta admin"
                               >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                <svg
+                                  className="w-3.5 h-3.5"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                                  />
                                 </svg>
                               </button>
                             )}
@@ -1218,11 +1379,25 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                       {membership.membershipType === 'RULE_BASED' && membership.rule && (
                         <div className="mt-3 p-3 bg-primary-light rounded-md border border-primary-highlight">
                           <div className="flex items-center gap-2 mb-2">
-                            <svg className="w-4 h-4 text-primary-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            <svg
+                              className="w-4 h-4 text-primary-text"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M13 10V3L4 14h7v7l9-11h-7z"
+                              />
                             </svg>
-                            <span className="text-sm font-semibold text-primary-dark">Added by Rule:</span>
-                            <span className="text-sm text-primary-text">{membership.rule.name}</span>
+                            <span className="text-sm font-semibold text-primary-dark">
+                              Added by Rule:
+                            </span>
+                            <span className="text-sm text-primary-text">
+                              {membership.rule.name}
+                            </span>
                             {onNavigateToRule && (
                               <Button
                                 variant="secondary"
@@ -1237,7 +1412,9 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                           </div>
                           {membership.rule.conditions?.expression?.value && (
                             <div className="mt-2">
-                              <span className="text-xs font-semibold text-primary-text block mb-1">Condition:</span>
+                              <span className="text-xs font-semibold text-primary-text block mb-1">
+                                Condition:
+                              </span>
                               <code className="block text-xs font-mono text-neutral-900 bg-white p-2 rounded-md border border-primary-highlight overflow-x-auto">
                                 {membership.rule.conditions.expression.value}
                               </code>
@@ -1249,8 +1426,16 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                       {membership.membershipType === 'DIRECT' && (
                         <div className="mt-3 p-3 bg-neutral-50 rounded-md border border-neutral-200">
                           <p className="text-xs text-neutral-600 flex items-center gap-2">
-                            <svg className="w-3.5 h-3.5 text-neutral-500" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                            <svg
+                              className="w-3.5 h-3.5 text-neutral-500"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                                clipRule="evenodd"
+                              />
                             </svg>
                             This user was added directly to the group (not through a rule)
                           </p>

@@ -31,7 +31,7 @@ export class TabStateManager {
   static async saveTabState<T extends BaseTabState>(
     tabName: TabName,
     state: T,
-    options: StatePersistOptions = {}
+    options: StatePersistOptions = {},
   ): Promise<void> {
     const ttl = options.ttl ?? DEFAULT_TTL;
     const now = Date.now();
@@ -62,9 +62,7 @@ export class TabStateManager {
   /**
    * Load state for a specific tab
    */
-  static async loadTabState<T extends BaseTabState>(
-    tabName: TabName
-  ): Promise<T | null> {
+  static async loadTabState<T extends BaseTabState>(tabName: TabName): Promise<T | null> {
     const storageKey = `${STORAGE_KEY_PREFIX}${tabName}`;
 
     try {
@@ -127,9 +125,7 @@ export class TabStateManager {
   static async clearAllTabStates(): Promise<void> {
     try {
       const allKeys = await chrome.storage.local.get(null);
-      const tabStateKeys = Object.keys(allKeys).filter((key) =>
-        key.startsWith(STORAGE_KEY_PREFIX)
-      );
+      const tabStateKeys = Object.keys(allKeys).filter((key) => key.startsWith(STORAGE_KEY_PREFIX));
 
       if (tabStateKeys.length > 0) {
         await chrome.storage.local.remove(tabStateKeys);
@@ -251,7 +247,7 @@ export class TabStateManager {
     try {
       const allKeys = await chrome.storage.local.get(null);
       const tabStateEntries = Object.entries(allKeys).filter(([key]) =>
-        key.startsWith(STORAGE_KEY_PREFIX)
+        key.startsWith(STORAGE_KEY_PREFIX),
       );
 
       const states = tabStateEntries.map(([key, value]) => {
@@ -294,4 +290,3 @@ export async function saveRulesTabState(state: Partial<RulesTabState>): Promise<
   };
   await TabStateManager.saveTabState('rules', newState);
 }
-

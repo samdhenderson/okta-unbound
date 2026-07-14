@@ -183,7 +183,23 @@ export interface GroupMembership {
 }
 
 export interface MessageRequest {
-  action: 'getGroupInfo' | 'getUserInfo' | 'getAppInfo' | 'makeApiRequest' | 'exportGroupMembers' | 'fetchGroupRules' | 'searchUsers' | 'searchGroups' | 'getUserGroups' | 'getUserDetails' | 'getUserContext' | 'getOktaOrigin' | 'activateRule' | 'deactivateRule' | 'getAllGroups' | 'exportMultiGroupMembers';
+  action:
+    | 'getGroupInfo'
+    | 'getUserInfo'
+    | 'getAppInfo'
+    | 'makeApiRequest'
+    | 'exportGroupMembers'
+    | 'fetchGroupRules'
+    | 'searchUsers'
+    | 'searchGroups'
+    | 'getUserGroups'
+    | 'getUserDetails'
+    | 'getUserContext'
+    | 'getOktaOrigin'
+    | 'activateRule'
+    | 'deactivateRule'
+    | 'getAllGroups'
+    | 'exportMultiGroupMembers';
   endpoint?: string;
   method?: string;
   body?: any;

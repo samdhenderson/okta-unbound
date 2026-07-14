@@ -66,9 +66,7 @@ describe('summarizeFactors', () => {
   });
 
   it('ignores the password factor for enrollment', () => {
-    const result = summarizeFactors('u3', [
-      factor({ factorType: 'password', status: 'ACTIVE' }),
-    ]);
+    const result = summarizeFactors('u3', [factor({ factorType: 'password', status: 'ACTIVE' })]);
     expect(result.enrolled).toBe(false);
     expect(result.factorCount).toBe(0);
   });

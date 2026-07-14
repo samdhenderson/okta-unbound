@@ -29,9 +29,12 @@ export function escapeCSV(value: string | number | boolean | null | undefined): 
 /**
  * Generate CSV content from headers and rows
  */
-export function generateCSV(headers: string[], rows: (string | number | boolean | null | undefined)[][]): string {
-  const headerLine = headers.map(h => escapeCSV(h)).join(',');
-  const dataLines = rows.map(row => row.map(cell => escapeCSV(cell)).join(','));
+export function generateCSV(
+  headers: string[],
+  rows: (string | number | boolean | null | undefined)[][],
+): string {
+  const headerLine = headers.map((h) => escapeCSV(h)).join(',');
+  const dataLines = rows.map((row) => row.map((cell) => escapeCSV(cell)).join(','));
   return [headerLine, ...dataLines].join('\n');
 }
 

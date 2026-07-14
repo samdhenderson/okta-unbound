@@ -46,24 +46,21 @@ const EmptyState: React.FC<EmptyStateProps> = ({
       </div>
 
       {/* Title */}
-      <h3 className="text-xl font-semibold text-neutral-900 mb-2" style={{ fontFamily: 'var(--font-heading)' }}>
+      <h3
+        className="text-xl font-semibold text-neutral-900 mb-2"
+        style={{ fontFamily: 'var(--font-heading)' }}
+      >
         {title}
       </h3>
 
       {/* Description */}
-      <p className="text-neutral-600 max-w-md mx-auto mb-6">
-        {description}
-      </p>
+      <p className="text-neutral-600 max-w-md mx-auto mb-6">{description}</p>
 
       {/* Actions */}
       {actions && actions.length > 0 && (
         <div className="flex gap-3 justify-center">
           {actions.map((action, index) => (
-            <Button
-              key={index}
-              variant={action.variant || 'primary'}
-              onClick={action.onClick}
-            >
+            <Button key={index} variant={action.variant || 'primary'} onClick={action.onClick}>
               {action.label}
             </Button>
           ))}

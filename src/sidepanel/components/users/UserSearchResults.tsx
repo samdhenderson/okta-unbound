@@ -23,10 +23,7 @@ const getStatusBadgeClass = (status: string) => {
 /**
  * Displays a list of user search results.
  */
-const UserSearchResults: React.FC<UserSearchResultsProps> = ({
-  results,
-  onSelectUser,
-}) => {
+const UserSearchResults: React.FC<UserSearchResultsProps> = ({ results, onSelectUser }) => {
   if (results.length === 0) {
     return null;
   }
@@ -40,7 +37,7 @@ const UserSearchResults: React.FC<UserSearchResultsProps> = ({
         </span>
       </div>
       <div className="space-y-3">
-        {results.map(user => (
+        {results.map((user) => (
           <div
             key={user.id}
             className="group bg-white rounded-md border border-neutral-200 p-5 cursor-pointer transition-all duration-100 hover:border-neutral-500"

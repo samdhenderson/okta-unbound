@@ -40,7 +40,7 @@ const MemberList: React.FC<MemberListProps> = ({
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) onLoadMore();
       },
-      { rootMargin: '120px' }
+      { rootMargin: '120px' },
     );
     observer.observe(node);
     return () => observer.disconnect();

@@ -29,7 +29,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
   currentGroupId,
   oktaOrigin,
   selectedRuleId,
-  onRuleSelected
+  onRuleSelected,
 }) => {
   const [rules, setRules] = useState<FormattedRule[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -170,7 +170,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
           response.rules || [],
           [], // rawRules not available from formatted response
           response.stats || { total: 0, active: 0, inactive: 0, conflicts: 0 },
-          response.conflicts || []
+          response.conflicts || [],
         );
 
         // Calculate actual API cost based on response metadata
@@ -181,7 +181,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
         console.log('[RulesTab] Loaded rules successfully:', {
           count: response.rules?.length,
           stats: response.stats,
-          apiCost: apiRequestCount
+          apiCost: apiRequestCount,
         });
 
         // Complete progress after a short delay to show success message
@@ -226,7 +226,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
       }
 
       // Find the rule to get its name for undo logging
-      const rule = rules.find(r => r.id === ruleId);
+      const rule = rules.find((r) => r.id === ruleId);
       const ruleName = rule?.name || 'Unknown Rule';
       const groupIds = rule?.groupIds || [];
       const groupNames = rule?.groupNames || [];
@@ -297,7 +297,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
       console.error('[RulesTab] Activation error:', err);
 
       // Log error to audit trail
-      const rule = rules.find(r => r.id === ruleId);
+      const rule = rules.find((r) => r.id === ruleId);
       const groupIds = rule?.groupIds || [];
       const groupNames = rule?.groupNames || [];
       const auditEntry: AuditLogEntry = {
@@ -347,7 +347,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
       }
 
       // Find the rule to get its name for undo logging
-      const rule = rules.find(r => r.id === ruleId);
+      const rule = rules.find((r) => r.id === ruleId);
       const ruleName = rule?.name || 'Unknown Rule';
       const groupIds = rule?.groupIds || [];
       const groupNames = rule?.groupNames || [];
@@ -418,7 +418,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
       console.error('[RulesTab] Deactivation error:', err);
 
       // Log error to audit trail
-      const rule = rules.find(r => r.id === ruleId);
+      const rule = rules.find((r) => r.id === ruleId);
       const groupIds = rule?.groupIds || [];
       const groupNames = rule?.groupNames || [];
       const auditEntry: AuditLogEntry = {
@@ -476,7 +476,11 @@ const RulesTab: React.FC<RulesTabProps> = ({
       <PageHeader
         title="Group Rules"
         subtitle="Analyze group rules and detect potential conflicts"
-        badge={stats.conflicts > 0 ? { text: `${stats.conflicts} Conflicts`, variant: 'warning' } : undefined}
+        badge={
+          stats.conflicts > 0
+            ? { text: `${stats.conflicts} Conflicts`, variant: 'warning' }
+            : undefined
+        }
         actions={
           <Button
             variant={rules.length > 0 ? 'secondary' : 'primary'}
@@ -496,14 +500,20 @@ const RulesTab: React.FC<RulesTabProps> = ({
           <div className="flex gap-3 flex-wrap">
             {apiCost !== null && (
               <div className="px-3 py-1.5 bg-neutral-50 border border-neutral-200 rounded-md flex items-center gap-2">
-                <span className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">API Requests:</span>
+                <span className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                  API Requests:
+                </span>
                 <span className="text-sm font-bold text-primary-text">{apiCost}</span>
               </div>
             )}
             {lastFetchTime && rules.length > 0 && (
               <div className="px-3 py-1.5 bg-neutral-50 border border-neutral-200 rounded-md flex items-center gap-2">
-                <span className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Cached:</span>
-                <span className="text-sm font-mono text-neutral-700">{new Date(lastFetchTime).toLocaleString()}</span>
+                <span className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                  Cached:
+                </span>
+                <span className="text-sm font-mono text-neutral-700">
+                  {new Date(lastFetchTime).toLocaleString()}
+                </span>
               </div>
             )}
           </div>
@@ -511,17 +521,16 @@ const RulesTab: React.FC<RulesTabProps> = ({
 
         {/* Error Display */}
         {error && (
-          <AlertMessage
-            message={{ text: error, type: 'error' }}
-            onDismiss={() => setError(null)}
-          />
+          <AlertMessage message={{ text: error, type: 'error' }} onDismiss={() => setError(null)} />
         )}
 
         {/* Stats Overview */}
         {rules.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="rounded-md border border-neutral-200 p-4 bg-white">
-              <p className="text-xs font-bold uppercase tracking-wider text-neutral-600">Total Rules</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-neutral-600">
+                Total Rules
+              </p>
               <p className="text-2xl font-bold text-neutral-900 mt-1">{stats.total}</p>
             </div>
             <div className="rounded-md border border-neutral-200 p-4 bg-white">
@@ -529,11 +538,15 @@ const RulesTab: React.FC<RulesTabProps> = ({
               <p className="text-2xl font-bold text-success mt-1">{stats.active}</p>
             </div>
             <div className="rounded-md border border-neutral-200 p-4 bg-white">
-              <p className="text-xs font-bold uppercase tracking-wider text-neutral-600">Inactive</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-neutral-600">
+                Inactive
+              </p>
               <p className="text-2xl font-bold text-neutral-600 mt-1">{stats.inactive}</p>
             </div>
             <div className="rounded-md border border-neutral-200 p-4 bg-white">
-              <p className="text-xs font-bold uppercase tracking-wider text-neutral-600">Conflicts</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-neutral-600">
+                Conflicts
+              </p>
               <p className="text-2xl font-bold text-warning mt-1">{stats.conflicts}</p>
             </div>
           </div>
@@ -545,8 +558,18 @@ const RulesTab: React.FC<RulesTabProps> = ({
             {/* Search Bar */}
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                <svg
+                  className="h-5 w-5 text-neutral-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
                 </svg>
               </div>
               <input
@@ -563,7 +586,10 @@ const RulesTab: React.FC<RulesTabProps> = ({
               <button className={filterButtonClass('all')} onClick={() => setActiveFilter('all')}>
                 All Rules
               </button>
-              <button className={filterButtonClass('active')} onClick={() => setActiveFilter('active')}>
+              <button
+                className={filterButtonClass('active')}
+                onClick={() => setActiveFilter('active')}
+              >
                 Active Only
               </button>
               <button
@@ -574,7 +600,10 @@ const RulesTab: React.FC<RulesTabProps> = ({
                 Conflicts ({stats.conflicts})
               </button>
               {currentGroupId && (
-                <button className={filterButtonClass('current-group')} onClick={() => setActiveFilter('current-group')}>
+                <button
+                  className={filterButtonClass('current-group')}
+                  onClick={() => setActiveFilter('current-group')}
+                >
                   Current Group
                 </button>
               )}
@@ -592,7 +621,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
               title="No Rules Loaded"
               description='Click "Load Rules" to analyze your Okta group rules'
               actions={[
-                { label: 'Load Rules', onClick: () => handleLoadRules(false), variant: 'primary' }
+                { label: 'Load Rules', onClick: () => handleLoadRules(false), variant: 'primary' },
               ]}
             />
           ) : filteredRules.length === 0 ? (

@@ -8,7 +8,7 @@ interface CrossGroupSearchProps {
   searchUserAcrossGroups: (
     query: string,
     cache: Map<string, OktaUser[]>,
-    names: Map<string, string>
+    names: Map<string, string>,
   ) => Array<{ groupId: string; groupName: string; user: OktaUser }>;
   onRemoveUserFromGroups: (userId: string, groupIds: string[]) => Promise<void>;
   onClose: () => void;
@@ -32,7 +32,10 @@ const CrossGroupSearch: React.FC<CrossGroupSearchProps> = ({
 
   // Group results by user
   const groupedResults = useMemo(() => {
-    const byUser = new Map<string, { user: OktaUser; groups: Array<{ groupId: string; groupName: string }> }>();
+    const byUser = new Map<
+      string,
+      { user: OktaUser; groups: Array<{ groupId: string; groupName: string }> }
+    >();
     for (const r of results) {
       if (!byUser.has(r.user.id)) {
         byUser.set(r.user.id, { user: r.user, groups: [] });
@@ -91,7 +94,12 @@ const CrossGroupSearch: React.FC<CrossGroupSearchProps> = ({
           className="p-1 text-neutral-400 hover:text-neutral-700 rounded-md hover:bg-neutral-100 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
           </svg>
         </button>
       </div>
@@ -100,8 +108,18 @@ const CrossGroupSearch: React.FC<CrossGroupSearchProps> = ({
       <div className="p-3 border-b border-neutral-100">
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg className="h-4 w-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            <svg
+              className="h-4 w-4 text-neutral-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
             </svg>
           </div>
           <input
@@ -115,7 +133,8 @@ const CrossGroupSearch: React.FC<CrossGroupSearchProps> = ({
         </div>
         {cachedGroupCount === 0 && (
           <p className="text-xs text-warning-text mt-2">
-            No groups have been cached yet. Load members via group comparison or export to populate the cache.
+            No groups have been cached yet. Load members via group comparison or export to populate
+            the cache.
           </p>
         )}
       </div>
@@ -132,9 +151,13 @@ const CrossGroupSearch: React.FC<CrossGroupSearchProps> = ({
                   </span>
                   <span className="text-xs text-neutral-500 ml-2">{user.profile.email}</span>
                 </div>
-                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                  user.status === 'ACTIVE' ? 'bg-success-light text-success-text' : 'bg-neutral-100 text-neutral-600'
-                }`}>
+                <span
+                  className={`px-2 py-0.5 rounded text-xs font-medium ${
+                    user.status === 'ACTIVE'
+                      ? 'bg-success-light text-success-text'
+                      : 'bg-neutral-100 text-neutral-600'
+                  }`}
+                >
                   {user.status}
                 </span>
               </div>
@@ -155,8 +178,18 @@ const CrossGroupSearch: React.FC<CrossGroupSearchProps> = ({
                     >
                       {groupName}
                       {isSelected && (
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        <svg
+                          className="w-3 h-3"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M6 18L18 6M6 6l12 12"
+                          />
                         </svg>
                       )}
                     </button>

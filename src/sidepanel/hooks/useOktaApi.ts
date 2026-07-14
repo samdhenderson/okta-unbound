@@ -38,31 +38,32 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
   const groupMemberOps = createGroupMemberOperations(coreApi);
   const groupCleanupOps = createGroupCleanupOperations(coreApi, groupMemberOps.removeUserFromGroup);
-  const groupBulkOps = createGroupBulkOperations(coreApi, groupMemberOps.removeUserFromGroup, groupMemberOps.getAllGroupMembers);
+  const groupBulkOps = createGroupBulkOperations(
+    coreApi,
+    groupMemberOps.removeUserFromGroup,
+    groupMemberOps.getAllGroupMembers,
+  );
   const groupDiscoveryOps = createGroupDiscoveryOperations(coreApi);
   const userOps = createUserOperations(coreApi);
   const exportOps = createExportOperations(coreApi);
   const pushGroupOps = createPushGroupOperations(coreApi);
   const groupAnalysisOps = createGroupAnalysisOperations(groupMemberOps.getAllGroupMembers);
 
-  const wrapOperation = useCallback(
-    (fn: (...args: any[]) => Promise<void>) => {
-      return async (...args: any[]) => {
+  const wrapOperation = useCallback((fn: (...args: any[]) => Promise<void>) => {
+    return async (...args: any[]) => {
+      setIsCancelled(false);
+      const controller = new AbortController();
+      setAbortController(controller);
+      setIsLoading(true);
+      try {
+        await fn(...args);
+      } finally {
+        setIsLoading(false);
+        setAbortController(null);
         setIsCancelled(false);
-        const controller = new AbortController();
-        setAbortController(controller);
-        setIsLoading(true);
-        try {
-          await fn(...args);
-        } finally {
-          setIsLoading(false);
-          setAbortController(null);
-          setIsCancelled(false);
-        }
-      };
-    },
-    []
-  );
+      }
+    };
+  }, []);
 
   return {
     // State

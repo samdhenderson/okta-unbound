@@ -55,7 +55,7 @@ export function useOktaPageContext(): OktaPageContext {
           tab.url &&
           (tab.url.includes('okta.com') ||
             tab.url.includes('oktapreview.com') ||
-            tab.url.includes('okta-emea.com'))
+            tab.url.includes('okta-emea.com')),
       );
 
       console.log('[useOktaPageContext] Okta tabs found:', oktaTabs.length);
@@ -96,7 +96,7 @@ export function useOktaPageContext(): OktaPageContext {
         const [groupResponse, userResponse, appResponse]: [
           MessageResponse<GroupInfo>,
           MessageResponse<UserInfo>,
-          MessageResponse<AppInfo>
+          MessageResponse<AppInfo>,
         ] = await Promise.all([
           chrome.tabs.sendMessage(tab.id!, { action: 'getGroupInfo' }),
           chrome.tabs.sendMessage(tab.id!, { action: 'getUserInfo' }),
@@ -189,19 +189,29 @@ export function useOktaPageContext(): OktaPageContext {
     };
 
     // Listen for tab updates
-    const handleTabUpdate = (_tabId: number, changeInfo: { url?: string; status?: string }, tab: chrome.tabs.Tab) => {
-      if (changeInfo.url && tab.url &&
-          (tab.url.includes('okta.com') ||
-           tab.url.includes('oktapreview.com') ||
-           tab.url.includes('okta-emea.com'))) {
+    const handleTabUpdate = (
+      _tabId: number,
+      changeInfo: { url?: string; status?: string },
+      tab: chrome.tabs.Tab,
+    ) => {
+      if (
+        changeInfo.url &&
+        tab.url &&
+        (tab.url.includes('okta.com') ||
+          tab.url.includes('oktapreview.com') ||
+          tab.url.includes('okta-emea.com'))
+      ) {
         console.log('[useOktaPageContext] Okta tab URL changed, refetching (debounced)');
         debouncedFetch();
       }
 
-      if (changeInfo.status === 'complete' && tab.url &&
-          (tab.url.includes('okta.com') ||
-           tab.url.includes('oktapreview.com') ||
-           tab.url.includes('okta-emea.com'))) {
+      if (
+        changeInfo.status === 'complete' &&
+        tab.url &&
+        (tab.url.includes('okta.com') ||
+          tab.url.includes('oktapreview.com') ||
+          tab.url.includes('okta-emea.com'))
+      ) {
         console.log('[useOktaPageContext] Okta tab loaded, verifying context (debounced)');
         debouncedFetch();
       }
@@ -209,10 +219,12 @@ export function useOktaPageContext(): OktaPageContext {
 
     const handleTabActivated = (activeInfo: { tabId: number; windowId: number }) => {
       chrome.tabs.get(activeInfo.tabId, (tab) => {
-        if (tab.url &&
-            (tab.url.includes('okta.com') ||
-             tab.url.includes('oktapreview.com') ||
-             tab.url.includes('okta-emea.com'))) {
+        if (
+          tab.url &&
+          (tab.url.includes('okta.com') ||
+            tab.url.includes('oktapreview.com') ||
+            tab.url.includes('okta-emea.com'))
+        ) {
           console.log('[useOktaPageContext] Okta tab activated, refetching context (debounced)');
           debouncedFetch();
         }

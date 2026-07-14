@@ -40,14 +40,14 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ onTabChange }) => {
           <AlertMessage
             message={{
               text: error || 'Please open an Okta admin page in this window',
-              type: 'error'
+              type: 'error',
             }}
             action={{ label: 'Retry Connection', onClick: refetch }}
           />
           <AlertMessage
             message={{
               text: 'Quick Start: 1) Open an Okta admin page (e.g., okta.com) 2) Navigate to a group, user, or app page 3) The Overview tab will automatically detect the context',
-              type: 'info'
+              type: 'info',
             }}
           />
         </div>
@@ -55,7 +55,9 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ onTabChange }) => {
     );
   }
 
-  const getBadgeConfig = (): { text: string; variant: 'primary' | 'success' | 'warning' | 'error' | 'neutral' } | undefined => {
+  const getBadgeConfig = ():
+    | { text: string; variant: 'primary' | 'success' | 'warning' | 'error' | 'neutral' }
+    | undefined => {
     if (pageType === 'group') return { text: 'Group', variant: 'primary' };
     if (pageType === 'user') return { text: 'User', variant: 'primary' };
     return undefined;
@@ -109,7 +111,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ onTabChange }) => {
             description="Navigate to a group or user page in Okta to see contextual insights and quick actions."
             actions={[
               { label: 'Browse Groups', onClick: () => onTabChange('groups'), variant: 'primary' },
-              { label: 'Search Users', onClick: () => onTabChange('users'), variant: 'secondary' }
+              { label: 'Search Users', onClick: () => onTabChange('users'), variant: 'secondary' },
             ]}
           />
         )}

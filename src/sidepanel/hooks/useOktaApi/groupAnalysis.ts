@@ -3,7 +3,12 @@
  * @description Group comparison, cross-group user search, and staleness scoring
  */
 
-import type { OktaUser, GroupSummary, GroupComparisonResult, StalenessInfo } from '../../../shared/types';
+import type {
+  OktaUser,
+  GroupSummary,
+  GroupComparisonResult,
+  StalenessInfo,
+} from '../../../shared/types';
 
 type GetAllGroupMembers = (groupId: string) => Promise<OktaUser[]>;
 
@@ -15,7 +20,7 @@ export function createGroupAnalysisOperations(getAllGroupMembers: GetAllGroupMem
   const compareGroups = async (
     groups: Array<{ id: string; name: string }>,
     onProgress?: (current: number, total: number, message?: string) => void,
-    memberCache?: Map<string, OktaUser[]>
+    memberCache?: Map<string, OktaUser[]>,
   ): Promise<GroupComparisonResult> => {
     if (groups.length < 2 || groups.length > 5) {
       throw new Error('Select 2-5 groups to compare');
@@ -53,7 +58,9 @@ export function createGroupAnalysisOperations(getAllGroupMembers: GetAllGroupMem
         .filter(([id]) => id !== groupId)
         .map(([, s]) => s);
 
-      uniqueMembers[groupId] = [...members].filter((userId) => !otherSets.some((s) => s.has(userId)));
+      uniqueMembers[groupId] = [...members].filter(
+        (userId) => !otherSets.some((s) => s.has(userId)),
+      );
     }
 
     // Total unique users across all groups
@@ -79,7 +86,7 @@ export function createGroupAnalysisOperations(getAllGroupMembers: GetAllGroupMem
   const searchUserAcrossGroups = (
     query: string,
     groupMembersCache: Map<string, OktaUser[]>,
-    groupNames: Map<string, string>
+    groupNames: Map<string, string>,
   ): Array<{ groupId: string; groupName: string; user: OktaUser }> => {
     const q = query.toLowerCase();
     const results: Array<{ groupId: string; groupName: string; user: OktaUser }> = [];

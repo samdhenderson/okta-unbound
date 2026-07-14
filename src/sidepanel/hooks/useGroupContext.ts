@@ -45,13 +45,13 @@ export function useGroupContext(): UseGroupContextReturn {
           tab.url &&
           (tab.url.includes('okta.com') ||
             tab.url.includes('oktapreview.com') ||
-            tab.url.includes('okta-emea.com'))
+            tab.url.includes('okta-emea.com')),
       );
 
       console.log(
         '[useGroupContext] Okta tabs found:',
         oktaTabs.length,
-        oktaTabs.map((t) => ({ id: t.id, url: t.url, active: t.active }))
+        oktaTabs.map((t) => ({ id: t.id, url: t.url, active: t.active })),
       );
 
       if (oktaTabs.length === 0) {
@@ -115,7 +115,10 @@ export function useGroupContext(): UseGroupContextReturn {
         if (response.success && response.data) {
           // On a group page
           setGroupInfo(response.data);
-          console.log('[useGroupContext] Connected to Okta and on group page:', response.data.groupName);
+          console.log(
+            '[useGroupContext] Connected to Okta and on group page:',
+            response.data.groupName,
+          );
         } else {
           // On Okta admin but not on a group page
           setGroupInfo(null);
@@ -170,21 +173,31 @@ export function useGroupContext(): UseGroupContextReturn {
     };
 
     // Listen for tab updates (when user navigates to different Okta pages)
-    const handleTabUpdate = (_tabId: number, changeInfo: { url?: string; status?: string }, tab: chrome.tabs.Tab) => {
+    const handleTabUpdate = (
+      _tabId: number,
+      changeInfo: { url?: string; status?: string },
+      tab: chrome.tabs.Tab,
+    ) => {
       // Refetch when URL changes on Okta tabs (with debouncing)
-      if (changeInfo.url && tab.url &&
-          (tab.url.includes('okta.com') ||
-           tab.url.includes('oktapreview.com') ||
-           tab.url.includes('okta-emea.com'))) {
+      if (
+        changeInfo.url &&
+        tab.url &&
+        (tab.url.includes('okta.com') ||
+          tab.url.includes('oktapreview.com') ||
+          tab.url.includes('okta-emea.com'))
+      ) {
         console.log('[useGroupContext] Okta tab URL changed, refetching (debounced)');
         debouncedFetch();
       }
 
       // Also refetch when page finishes loading (to catch any delayed navigation)
-      if (changeInfo.status === 'complete' && tab.url &&
-          (tab.url.includes('okta.com') ||
-           tab.url.includes('oktapreview.com') ||
-           tab.url.includes('okta-emea.com'))) {
+      if (
+        changeInfo.status === 'complete' &&
+        tab.url &&
+        (tab.url.includes('okta.com') ||
+          tab.url.includes('oktapreview.com') ||
+          tab.url.includes('okta-emea.com'))
+      ) {
         console.log('[useGroupContext] Okta tab loaded, verifying group context (debounced)');
         debouncedFetch();
       }
@@ -193,10 +206,12 @@ export function useGroupContext(): UseGroupContextReturn {
     // Listen for new tabs being activated
     const handleTabActivated = (activeInfo: { tabId: number; windowId: number }) => {
       chrome.tabs.get(activeInfo.tabId, (tab) => {
-        if (tab.url &&
-            (tab.url.includes('okta.com') ||
-             tab.url.includes('oktapreview.com') ||
-             tab.url.includes('okta-emea.com'))) {
+        if (
+          tab.url &&
+          (tab.url.includes('okta.com') ||
+            tab.url.includes('oktapreview.com') ||
+            tab.url.includes('okta-emea.com'))
+        ) {
           console.log('[useGroupContext] Okta tab activated, refetching group info (debounced)');
           debouncedFetch();
         }

@@ -3,11 +3,7 @@ import type { OktaUser, MemberMfaResult, MfaScanStatus } from '../../../../share
 import Button from '../../shared/Button';
 import Modal from '../../shared/Modal';
 import BreakdownReport from './BreakdownReport';
-import {
-  type BreakdownRow,
-  type MemberFilter,
-  computeMfaBreakdown,
-} from './memberAnalytics';
+import { type BreakdownRow, type MemberFilter, computeMfaBreakdown } from './memberAnalytics';
 
 /** Above this member count, scanning requires explicit confirmation. */
 export const MFA_AUTO_THRESHOLD = 500;
@@ -43,7 +39,7 @@ const MfaScanPanel: React.FC<MfaScanPanelProps> = ({
 
   const mfaRows = React.useMemo(
     () => computeMfaBreakdown(members, mfaResults),
-    [members, mfaResults]
+    [members, mfaResults],
   );
   const activeValues = new Set(filters.filter((f) => f.dimension === 'mfa').map((f) => f.value));
 

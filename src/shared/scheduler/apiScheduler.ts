@@ -77,7 +77,7 @@ export class ApiScheduler {
     method: string,
     body: any | undefined,
     tabId: number,
-    priority: RequestPriority = 'normal'
+    priority: RequestPriority = 'normal',
   ): Promise<RequestResult> {
     return new Promise((resolve, reject) => {
       const request: QueuedRequest = {
@@ -179,7 +179,12 @@ export class ApiScheduler {
     }
 
     // Check rate limits (account for in-flight requests)
-    if (this.rateLimitDetector.isApproachingLimit(this.config.minRemainingThreshold, this.activeRequests.size)) {
+    if (
+      this.rateLimitDetector.isApproachingLimit(
+        this.config.minRemainingThreshold,
+        this.activeRequests.size,
+      )
+    ) {
       this.enterCooldown();
       return;
     }
@@ -216,10 +221,7 @@ export class ApiScheduler {
 
       // Parse rate limit headers if present
       if (result.headers) {
-        const rateLimitInfo = this.rateLimitDetector.parseHeaders(
-          result.headers,
-          request.endpoint
-        );
+        const rateLimitInfo = this.rateLimitDetector.parseHeaders(result.headers, request.endpoint);
 
         // Check if we should enter cooldown after this request
         if (rateLimitInfo && this.shouldEnterCooldown(rateLimitInfo)) {
@@ -334,9 +336,10 @@ export class ApiScheduler {
 
     // Use reset time if available and shorter, otherwise fall back to configured cooldown
     const resetWaitTime = this.rateLimitDetector.getMillisecondsUntilReset(info);
-    const cooldownDuration = resetWaitTime > 0
-      ? Math.min(this.config.cooldownDuration, resetWaitTime)
-      : this.config.cooldownDuration;
+    const cooldownDuration =
+      resetWaitTime > 0
+        ? Math.min(this.config.cooldownDuration, resetWaitTime)
+        : this.config.cooldownDuration;
 
     this.cooldownEndsAt = Date.now() + cooldownDuration;
     this.metrics.cooldownEvents++;

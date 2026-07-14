@@ -15,7 +15,7 @@ export function createExportOperations(coreApi: CoreApi) {
     groupId: string,
     groupName: string,
     format: 'csv' | 'json',
-    statusFilter?: UserStatus | ''
+    statusFilter?: UserStatus | '',
   ) => {
     const startTime = Date.now();
     let currentUser: { email: string; id: string } | null = null;
@@ -35,7 +35,10 @@ export function createExportOperations(coreApi: CoreApi) {
       });
 
       if (response.success) {
-        coreApi.callbacks.onResult?.(`Export complete: ${response.count} members exported`, 'success');
+        coreApi.callbacks.onResult?.(
+          `Export complete: ${response.count} members exported`,
+          'success',
+        );
 
         // Log to audit trail (fire-and-forget)
         if (currentUser) {

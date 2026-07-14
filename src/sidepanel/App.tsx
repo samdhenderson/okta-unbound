@@ -19,7 +19,8 @@ const SELECTED_TAB_KEY = 'okta_unbound_selected_tab';
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
-  const { groupInfo, connectionStatus, targetTabId, error, isLoading, oktaOrigin } = useGroupContext();
+  const { groupInfo, connectionStatus, targetTabId, error, isLoading, oktaOrigin } =
+    useGroupContext();
   const { pageType, userInfo, appInfo } = useOktaPageContext();
 
   // Load saved tab preference on mount with legacy migration
@@ -76,16 +77,22 @@ const App: React.FC = () => {
         <ContextBanner
           pageType={pageType}
           entityName={
-            pageType === 'group' ? groupInfo?.groupName :
-            pageType === 'user' ? userInfo?.userName :
-            pageType === 'app' ? appInfo?.appName :
-            undefined
+            pageType === 'group'
+              ? groupInfo?.groupName
+              : pageType === 'user'
+                ? userInfo?.userName
+                : pageType === 'app'
+                  ? appInfo?.appName
+                  : undefined
           }
           entityId={
-            pageType === 'group' ? groupInfo?.groupId :
-            pageType === 'user' ? userInfo?.userId :
-            pageType === 'app' ? appInfo?.appId :
-            undefined
+            pageType === 'group'
+              ? groupInfo?.groupId
+              : pageType === 'user'
+                ? userInfo?.userId
+                : pageType === 'app'
+                  ? appInfo?.appId
+                  : undefined
           }
           isLoading={isLoading}
           error={error}
@@ -93,9 +100,7 @@ const App: React.FC = () => {
 
         <TabNavigation activeTab={activeTab} onTabChange={handleTabChange} />
 
-        {activeTab === 'overview' && (
-          <OverviewTab onTabChange={handleTabChange} />
-        )}
+        {activeTab === 'overview' && <OverviewTab onTabChange={handleTabChange} />}
         {activeTab === 'rules' && (
           <RulesTab
             targetTabId={targetTabId ?? undefined}
@@ -113,17 +118,14 @@ const App: React.FC = () => {
           />
         )}
         {activeTab === 'groups' && (
-          <GroupsTab
-            targetTabId={targetTabId ?? null}
-            oktaOrigin={oktaOrigin ?? undefined}
-          />
+          <GroupsTab targetTabId={targetTabId ?? null} oktaOrigin={oktaOrigin ?? undefined} />
         )}
         {activeTab === 'history' && (
-          <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
-            <PageHeader
-              title="Audit Log"
-              subtitle="View history of actions performed"
-            />
+          <div
+            className="tab-content active"
+            style={{ fontFamily: 'var(--font-primary)', padding: 0 }}
+          >
+            <PageHeader title="Audit Log" subtitle="View history of actions performed" />
             <div className="max-w-7xl mx-auto px-6 py-6">
               <AuditLogViewer />
             </div>

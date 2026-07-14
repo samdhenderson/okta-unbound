@@ -90,7 +90,7 @@ export function detectConflicts(rules: OktaGroupRule[]): RuleConflict[] {
 export function formatRuleForDisplay(
   rule: OktaGroupRule,
   currentGroupId?: string,
-  conflicts?: RuleConflict[]
+  conflicts?: RuleConflict[],
 ): FormattedRule {
   const groupIds = rule.actions?.assignUserToGroups?.groupIds || [];
   const userAttributes = extractUserAttributes(rule);
@@ -106,9 +106,8 @@ export function formatRuleForDisplay(
   const affectsCurrentGroup = currentGroupId ? groupIds.includes(currentGroupId) : false;
 
   // Find conflicts involving this rule
-  const ruleConflicts = conflicts?.filter(
-    (c) => c.rule1.id === rule.id || c.rule2.id === rule.id
-  ) || [];
+  const ruleConflicts =
+    conflicts?.filter((c) => c.rule1.id === rule.id || c.rule2.id === rule.id) || [];
 
   return {
     id: rule.id,

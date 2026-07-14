@@ -6,7 +6,14 @@
  * queue information, rate limit warnings, and cooldown countdowns.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  ReactNode,
+} from 'react';
 import type { SchedulerState, SchedulerMetrics } from '../../shared/scheduler/types';
 
 interface SchedulerContextType {

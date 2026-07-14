@@ -72,16 +72,12 @@ const UserOverview: React.FC<UserOverviewProps> = ({
 
   const displayError = error || membershipError;
   if (displayError) {
-    return (
-      <AlertMessage
-        message={{ text: displayError, type: 'error' }}
-      />
-    );
+    return <AlertMessage message={{ text: displayError, type: 'error' }} />;
   }
 
-  const directGroups = groups.filter(g => g.membershipType === 'DIRECT').length;
-  const ruleBasedGroups = groups.filter(g => g.membershipType === 'RULE_BASED').length;
-  const unknownGroups = groups.filter(g => g.membershipType === 'UNKNOWN').length;
+  const directGroups = groups.filter((g) => g.membershipType === 'DIRECT').length;
+  const ruleBasedGroups = groups.filter((g) => g.membershipType === 'RULE_BASED').length;
+  const unknownGroups = groups.filter((g) => g.membershipType === 'UNKNOWN').length;
   const totalGroups = groups.length;
 
   // Only include actions that actually work - removed "coming soon" placeholders
@@ -149,12 +145,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
 
       {/* Quick Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Groups"
-          value={totalGroups}
-          color="primary"
-          icon="users"
-        />
+        <StatCard title="Total Groups" value={totalGroups} color="primary" icon="users" />
         <StatCard
           title="Direct Assignments"
           value={directGroups}
@@ -192,7 +183,9 @@ const UserOverview: React.FC<UserOverviewProps> = ({
         <div className="space-y-6">
           {/* Group Membership Chart */}
           <div className="bg-white rounded-md border border-neutral-200 p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-neutral-900 mb-4">Group Membership Distribution</h3>
+            <h3 className="text-lg font-semibold text-neutral-900 mb-4">
+              Group Membership Distribution
+            </h3>
             <div className="flex items-center justify-center h-48">
               <div className="text-center">
                 <div className="text-5xl font-bold text-primary">{totalGroups}</div>
@@ -230,23 +223,39 @@ const UserOverview: React.FC<UserOverviewProps> = ({
             </div>
             <div className="space-y-2">
               {groups.slice(0, 5).map((membership, index) => (
-                <div key={index} className="flex items-center justify-between p-2 hover:bg-neutral-50 rounded">
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-2 hover:bg-neutral-50 rounded"
+                >
                   <div className="flex-1">
                     <div className="font-medium text-neutral-900 text-sm">
                       {membership.group?.profile?.name || 'Unknown Group'}
                     </div>
                     <div className="text-xs text-neutral-500">
-                      {membership.membershipType === 'DIRECT' ? 'Direct Assignment' :
-                        membership.membershipType === 'RULE_BASED' ? 'Rule-Based' : 'Group'}
+                      {membership.membershipType === 'DIRECT'
+                        ? 'Direct Assignment'
+                        : membership.membershipType === 'RULE_BASED'
+                          ? 'Rule-Based'
+                          : 'Group'}
                     </div>
                   </div>
-                  <span className={`
+                  <span
+                    className={`
                     px-2 py-1 rounded text-xs font-medium
-                    ${membership.membershipType === 'DIRECT' ? 'bg-primary-light text-primary-text' :
-                      membership.membershipType === 'RULE_BASED' ? 'bg-success-light text-success-text' : 'bg-neutral-100 text-neutral-700'}
-                  `}>
-                    {membership.membershipType === 'DIRECT' ? 'Manual' :
-                      membership.membershipType === 'RULE_BASED' ? 'Auto' : 'Member'}
+                    ${
+                      membership.membershipType === 'DIRECT'
+                        ? 'bg-primary-light text-primary-text'
+                        : membership.membershipType === 'RULE_BASED'
+                          ? 'bg-success-light text-success-text'
+                          : 'bg-neutral-100 text-neutral-700'
+                    }
+                  `}
+                  >
+                    {membership.membershipType === 'DIRECT'
+                      ? 'Manual'
+                      : membership.membershipType === 'RULE_BASED'
+                        ? 'Auto'
+                        : 'Member'}
                   </span>
                 </div>
               ))}

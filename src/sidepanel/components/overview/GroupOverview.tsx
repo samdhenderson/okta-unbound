@@ -35,15 +35,27 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
   const [mfaResults, setMfaResults] = useState<Map<string, MemberMfaResult> | null>(null);
   const [scanStatus, setScanStatus] = useState<MfaScanStatus>('idle');
 
-  const handleResult = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error') => {
-    console.log(`[GroupOverview] ${type}:`, message);
-  }, []);
+  const handleResult = useCallback(
+    (message: string, type: 'info' | 'success' | 'warning' | 'error') => {
+      console.log(`[GroupOverview] ${type}:`, message);
+    },
+    [],
+  );
 
-  const handleProgress = useCallback((current: number, total: number, message: string, apiCalls?: number) => {
-    updateProgress(current, total, message, apiCalls);
-  }, [updateProgress]);
+  const handleProgress = useCallback(
+    (current: number, total: number, message: string, apiCalls?: number) => {
+      updateProgress(current, total, message, apiCalls);
+    },
+    [updateProgress],
+  );
 
-  const { getAllGroupMembers, removeDeprovisioned, exportMembers, scanGroupMfa, isLoading: isApiLoading } = useOktaApi({
+  const {
+    getAllGroupMembers,
+    removeDeprovisioned,
+    exportMembers,
+    scanGroupMfa,
+    isLoading: isApiLoading,
+  } = useOktaApi({
     targetTabId,
     onResult: handleResult,
     onProgress: handleProgress,
@@ -119,7 +131,8 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
     try {
       const result = await scanMfaRef.current(
         members.map((m) => m.id),
-        (current, total) => updateProgress(current, total, `Scanned ${current}/${total} members`, current)
+        (current, total) =>
+          updateProgress(current, total, `Scanned ${current}/${total} members`, current),
       );
       setMfaResults(result);
       setScanStatus('complete');
@@ -192,18 +205,8 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
     <div className="space-y-6">
       {/* Quick Stats Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Members"
-          value={members.length}
-          color="primary"
-          icon="users"
-        />
-        <StatCard
-          title="Active"
-          value={statusCounts['ACTIVE'] || 0}
-          color="success"
-          icon="check"
-        />
+        <StatCard title="Total Members" value={members.length} color="primary" icon="users" />
+        <StatCard title="Active" value={statusCounts['ACTIVE'] || 0} color="success" icon="check" />
         <StatCard
           title="Inactive"
           value={inactiveCount}
@@ -245,7 +248,12 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
           >
             <span>Open in Admin Console</span>
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+              />
             </svg>
           </a>
         )}
@@ -258,12 +266,27 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
             title={idCopied ? 'Copied!' : 'Copy group ID'}
           >
             {idCopied ? (
-              <svg className="w-3.5 h-3.5 text-success-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              <svg
+                className="w-3.5 h-3.5 text-success-text"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                />
               </svg>
             ) : (
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M8 5a2 2 0 002 2h4a2 2 0 002-2M8 5a2 2 0 012-2h4a2 2 0 012 2" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M8 5a2 2 0 002 2h4a2 2 0 002-2M8 5a2 2 0 012-2h4a2 2 0 012 2"
+                />
               </svg>
             )}
           </button>
@@ -277,8 +300,12 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
         title="Export Group Members"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setExportModalOpen(false)}>Cancel</Button>
-            <Button variant="primary" onClick={handleExportConfirm}>Export</Button>
+            <Button variant="secondary" onClick={() => setExportModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={handleExportConfirm}>
+              Export
+            </Button>
           </>
         }
       >
@@ -295,7 +322,8 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
             </select>
           </div>
           <p className="text-sm text-neutral-600">
-            This will export all members from <strong>{groupName}</strong> to a {exportFormat.toUpperCase()} file.
+            This will export all members from <strong>{groupName}</strong> to a{' '}
+            {exportFormat.toUpperCase()} file.
           </p>
         </div>
       </Modal>

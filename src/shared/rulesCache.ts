@@ -48,7 +48,7 @@ class RulesCache {
       console.log('[RulesCache] Using cached rules:', {
         count: cached.rules.length,
         age: Math.round((now - cached.timestamp) / 1000) + 's',
-        expiresIn: Math.round((cached.timestamp + cached.ttl - now) / 1000) + 's'
+        expiresIn: Math.round((cached.timestamp + cached.ttl - now) / 1000) + 's',
       });
 
       return cached;
@@ -66,7 +66,7 @@ class RulesCache {
     rawRules: OktaGroupRule[],
     stats: RulesCacheEntry['stats'],
     conflicts: any[],
-    ttl: number = this.DEFAULT_TTL
+    ttl: number = this.DEFAULT_TTL,
   ): Promise<void> {
     try {
       const entry: RulesCacheEntry = {
@@ -106,7 +106,7 @@ class RulesCache {
       return [];
     }
 
-    return cached.rules.filter(rule => rule.groupIds.includes(groupId));
+    return cached.rules.filter((rule) => rule.groupIds.includes(groupId));
   }
 
   /**
@@ -119,7 +119,7 @@ class RulesCache {
     }
 
     return cached.rules.filter(
-      rule => rule.status === 'ACTIVE' && rule.groupIds.includes(groupId)
+      (rule) => rule.status === 'ACTIVE' && rule.groupIds.includes(groupId),
     );
   }
 

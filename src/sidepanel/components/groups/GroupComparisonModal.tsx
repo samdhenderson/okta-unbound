@@ -10,13 +10,25 @@ interface GroupComparisonModalProps {
   compareGroups: (
     groups: Array<{ id: string; name: string }>,
     onProgress?: (current: number, total: number, message?: string) => void,
-    memberCache?: Map<string, OktaUser[]>
+    memberCache?: Map<string, OktaUser[]>,
   ) => Promise<GroupComparisonResult>;
   memberCache: Map<string, OktaUser[]>;
 }
 
-const COLORS = ['text-primary-text', 'text-warning-text', 'text-success-text', 'text-danger-text', 'text-neutral-700'];
-const BG_COLORS = ['bg-primary-light', 'bg-warning-light', 'bg-success-light', 'bg-danger-light', 'bg-neutral-50'];
+const COLORS = [
+  'text-primary-text',
+  'text-warning-text',
+  'text-success-text',
+  'text-danger-text',
+  'text-neutral-700',
+];
+const BG_COLORS = [
+  'bg-primary-light',
+  'bg-warning-light',
+  'bg-success-light',
+  'bg-danger-light',
+  'bg-neutral-50',
+];
 
 const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
   isOpen,
@@ -38,7 +50,7 @@ const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
       const comparison = await compareGroups(
         groups.map((g) => ({ id: g.id, name: g.name })),
         (_current, _total, message) => setProgress(message || ''),
-        memberCache
+        memberCache,
       );
       setResult(comparison);
     } catch (err) {
@@ -91,8 +103,12 @@ const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
       footer={
         result && (
           <>
-            <Button variant="secondary" onClick={onClose}>Close</Button>
-            <Button variant="primary" icon="download" onClick={handleExportResults}>Export Results</Button>
+            <Button variant="secondary" onClick={onClose}>
+              Close
+            </Button>
+            <Button variant="primary" icon="download" onClick={handleExportResults}>
+              Export Results
+            </Button>
           </>
         )
       }
@@ -117,25 +133,33 @@ const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
               <div className="text-xs text-neutral-600 mt-0.5">Total Unique Users</div>
             </div>
             <div className="p-3 bg-primary-light rounded-md border border-primary-highlight text-center">
-              <div className="text-2xl font-bold text-primary-text">{result.intersection.length}</div>
+              <div className="text-2xl font-bold text-primary-text">
+                {result.intersection.length}
+              </div>
               <div className="text-xs text-primary-text mt-0.5">In All Groups</div>
             </div>
           </div>
 
           {/* Per-Group Breakdown */}
           <div className="space-y-2">
-            <div className="text-xs font-semibold text-neutral-700 uppercase tracking-wide">Per-Group Breakdown</div>
+            <div className="text-xs font-semibold text-neutral-700 uppercase tracking-wide">
+              Per-Group Breakdown
+            </div>
             {result.groups.map((group, i) => {
               const uniqueCount = result.uniqueMembers[group.id]?.length || 0;
               const sharedCount = group.memberCount - uniqueCount;
-              const overlapPct = group.memberCount > 0
-                ? Math.round((sharedCount / group.memberCount) * 100)
-                : 0;
+              const overlapPct =
+                group.memberCount > 0 ? Math.round((sharedCount / group.memberCount) * 100) : 0;
 
               return (
-                <div key={group.id} className={`p-3 rounded-md border border-neutral-200 ${BG_COLORS[i] || 'bg-neutral-50'}`}>
+                <div
+                  key={group.id}
+                  className={`p-3 rounded-md border border-neutral-200 ${BG_COLORS[i] || 'bg-neutral-50'}`}
+                >
                   <div className="flex items-center justify-between mb-2">
-                    <span className={`text-sm font-semibold ${COLORS[i] || 'text-neutral-900'}`}>{group.name}</span>
+                    <span className={`text-sm font-semibold ${COLORS[i] || 'text-neutral-900'}`}>
+                      {group.name}
+                    </span>
                     <span className="text-xs text-neutral-600">{group.memberCount} members</span>
                   </div>
                   <div className="flex gap-4 text-xs">
@@ -167,7 +191,9 @@ const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
           {/* Overlap Matrix */}
           {result.groups.length > 2 && (
             <div className="space-y-2">
-              <div className="text-xs font-semibold text-neutral-700 uppercase tracking-wide">Pairwise Overlap</div>
+              <div className="text-xs font-semibold text-neutral-700 uppercase tracking-wide">
+                Pairwise Overlap
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs border-collapse">
                   <thead>
@@ -184,11 +210,17 @@ const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
                     {result.groups.map((rowGroup, ri) => (
                       <tr key={rowGroup.id}>
                         <td className={`p-2 font-medium ${COLORS[ri]}`}>
-                          {rowGroup.name.length > 15 ? rowGroup.name.slice(0, 15) + '...' : rowGroup.name}
+                          {rowGroup.name.length > 15
+                            ? rowGroup.name.slice(0, 15) + '...'
+                            : rowGroup.name}
                         </td>
                         {result.groups.map((colGroup) => {
                           if (rowGroup.id === colGroup.id) {
-                            return <td key={colGroup.id} className="p-2 text-center text-neutral-400">-</td>;
+                            return (
+                              <td key={colGroup.id} className="p-2 text-center text-neutral-400">
+                                -
+                              </td>
+                            );
                           }
                           // Compute pairwise overlap from cache
                           const rowMembers = memberCache.get(rowGroup.id);
@@ -199,7 +231,10 @@ const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
                             overlap = rowMembers.filter((u) => colSet.has(u.id)).length;
                           }
                           return (
-                            <td key={colGroup.id} className="p-2 text-center font-medium text-neutral-900">
+                            <td
+                              key={colGroup.id}
+                              className="p-2 text-center font-medium text-neutral-900"
+                            >
                               {overlap}
                             </td>
                           );

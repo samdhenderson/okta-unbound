@@ -20,7 +20,8 @@ const statusBadge: Record<string, string> = {
 
 const MemberRow: React.FC<MemberRowProps> = ({ user, mfa, mfaScanned, oktaOrigin }) => {
   const badgeClass = statusBadge[user.status] || 'bg-neutral-100 text-neutral-700';
-  const fullName = `${user.profile.firstName || ''} ${user.profile.lastName || ''}`.trim() || user.profile.login;
+  const fullName =
+    `${user.profile.firstName || ''} ${user.profile.lastName || ''}`.trim() || user.profile.login;
 
   const content = (
     <div className="flex items-start justify-between gap-3">

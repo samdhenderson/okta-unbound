@@ -18,27 +18,27 @@ const badgeVariants = {
   neutral: 'bg-neutral-50 text-neutral-600 border-neutral-200',
 };
 
-const PageHeader: React.FC<PageHeaderProps> = ({
-  title,
-  subtitle,
-  actions,
-  badge,
-}) => {
+const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, actions, badge }) => {
   return (
     <div className="bg-white border-b border-neutral-200">
       <div className="px-5 py-4 flex items-center justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-semibold text-neutral-900" style={{ fontFamily: 'var(--font-heading)' }}>{title}</h1>
+            <h1
+              className="text-lg font-semibold text-neutral-900"
+              style={{ fontFamily: 'var(--font-heading)' }}
+            >
+              {title}
+            </h1>
             {badge && (
-              <span className={`px-2 py-0.5 rounded-md text-xs font-medium border ${badgeVariants[badge.variant || 'neutral']}`}>
+              <span
+                className={`px-2 py-0.5 rounded-md text-xs font-medium border ${badgeVariants[badge.variant || 'neutral']}`}
+              >
                 {badge.text}
               </span>
             )}
           </div>
-          {subtitle && (
-            <p className="mt-0.5 text-sm text-neutral-600">{subtitle}</p>
-          )}
+          {subtitle && <p className="mt-0.5 text-sm text-neutral-600">{subtitle}</p>}
         </div>
         {actions && <div className="shrink-0">{actions}</div>}
       </div>

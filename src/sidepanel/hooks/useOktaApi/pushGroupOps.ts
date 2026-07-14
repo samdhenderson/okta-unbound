@@ -13,7 +13,10 @@ export function createPushGroupOperations(coreApi: CoreApi) {
    * Uses the Okta Apps API to get groups assigned to an application,
    * then checks for push group configurations.
    */
-  const getAppPushGroupMappings = async (appId: string, appName?: string): Promise<PushGroupMapping[]> => {
+  const getAppPushGroupMappings = async (
+    appId: string,
+    appName?: string,
+  ): Promise<PushGroupMapping[]> => {
     const mappings: PushGroupMapping[] = [];
     let nextUrl: string | null = `/api/v1/apps/${appId}/groups?limit=200`;
 
@@ -24,7 +27,9 @@ export function createPushGroupOperations(coreApi: CoreApi) {
 
         for (const assignment of response.data) {
           mappings.push({
-            mappingId: assignment.id || `${appId}_${assignment._links?.group?.href?.split('/').pop() || 'unknown'}`,
+            mappingId:
+              assignment.id ||
+              `${appId}_${assignment._links?.group?.href?.split('/').pop() || 'unknown'}`,
             sourceUserGroupId: assignment._links?.group?.href?.split('/').pop() || '',
             targetGroupName: assignment.profile?.name || assignment.profile?.groupName || '',
             status: assignment.priority !== undefined ? 'ACTIVE' : 'INACTIVE',
@@ -48,7 +53,7 @@ export function createPushGroupOperations(coreApi: CoreApi) {
    */
   const applyPushGroupMappings = async (
     groups: GroupSummary[],
-    onProgress?: (current: number, total: number) => void
+    onProgress?: (current: number, total: number) => void,
   ): Promise<GroupSummary[]> => {
     // Collect unique app IDs from APP_GROUP type groups
     const appIds = new Map<string, string>(); // appId -> appName
@@ -64,7 +69,12 @@ export function createPushGroupOperations(coreApi: CoreApi) {
     const resolvedNames = await Promise.all(
       Array.from(appIds.keys()).map(async (appId) => {
         try {
-          const response = await coreApi.makeApiRequest(`/api/v1/apps/${appId}`, 'GET', undefined, 'low');
+          const response = await coreApi.makeApiRequest(
+            `/api/v1/apps/${appId}`,
+            'GET',
+            undefined,
+            'low',
+          );
           if (response.success && response.data) {
             const label = response.data.label || response.data.name;
             if (label) return { appId, name: label };
@@ -73,7 +83,7 @@ export function createPushGroupOperations(coreApi: CoreApi) {
           // Keep existing name on failure
         }
         return null;
-      })
+      }),
     );
 
     // Update appIds map with resolved labels
@@ -94,7 +104,7 @@ export function createPushGroupOperations(coreApi: CoreApi) {
         processed++;
         onProgress?.(processed, total);
         return mappings;
-      })
+      }),
     );
 
     const allMappings = mappingResults.flat();

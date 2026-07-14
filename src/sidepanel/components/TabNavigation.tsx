@@ -24,9 +24,10 @@ const TabNavigation: React.FC<TabNavigationProps> = ({ activeTab, onTabChange })
             key={tab.id}
             className={`
               relative px-4 py-2.5 text-sm font-medium transition-colors duration-100
-              ${activeTab === tab.id
-                ? 'text-primary-text'
-                : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+              ${
+                activeTab === tab.id
+                  ? 'text-primary-text'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
               }
             `}
             style={{ fontFamily: 'var(--font-heading)', minHeight: '40px' }}

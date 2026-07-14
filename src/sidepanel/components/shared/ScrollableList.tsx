@@ -72,10 +72,7 @@ const ScrollableList: React.FC<ScrollableListProps> = ({
   // Empty state
   if (isEmpty && emptyState) {
     return (
-      <div
-        className={fillAvailable ? 'flex-1' : ''}
-        data-testid={testId}
-      >
+      <div className={fillAvailable ? 'flex-1' : ''} data-testid={testId}>
         {emptyState}
       </div>
     );
@@ -96,22 +93,16 @@ const ScrollableList: React.FC<ScrollableListProps> = ({
     'scrollable-list',
     // User-provided classes
     className,
-  ].filter(Boolean).join(' ');
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   // Container style for explicit max-height
-  const containerStyle: React.CSSProperties | undefined = maxHeight
-    ? { maxHeight }
-    : undefined;
+  const containerStyle: React.CSSProperties | undefined = maxHeight ? { maxHeight } : undefined;
 
   return (
-    <div
-      className={containerClasses}
-      style={containerStyle}
-      data-testid={testId}
-    >
-      <div className="space-y-3">
-        {children}
-      </div>
+    <div className={containerClasses} style={containerStyle} data-testid={testId}>
+      <div className="space-y-3">{children}</div>
     </div>
   );
 };

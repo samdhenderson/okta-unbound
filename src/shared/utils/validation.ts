@@ -63,21 +63,21 @@ export function validateId(id: string, type: IdType): ValidationResult {
   if (trimmed.length !== 20) {
     return {
       isValid: false,
-      error: `${type} ID must be 20 characters (got ${trimmed.length})`
+      error: `${type} ID must be 20 characters (got ${trimmed.length})`,
     };
   }
 
   if (!trimmed.startsWith(ID_PREFIXES[type])) {
     return {
       isValid: false,
-      error: `${type} ID must start with "${ID_PREFIXES[type]}"`
+      error: `${type} ID must start with "${ID_PREFIXES[type]}"`,
     };
   }
 
   if (!ID_PATTERNS[type].test(trimmed)) {
     return {
       isValid: false,
-      error: `${type} ID contains invalid characters`
+      error: `${type} ID contains invalid characters`,
     };
   }
 
@@ -124,8 +124,8 @@ export function parseIds(input: string, type: IdType): ParsedIds {
   // Split by comma, newline, or whitespace
   const candidates = input
     .split(/[,\n\s]+/)
-    .map(s => s.trim())
-    .filter(s => s.length > 0);
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 
   const valid: string[] = [];
   const invalid: string[] = [];
@@ -173,7 +173,11 @@ export function validateEmail(email: string): ValidationResult {
 /**
  * Validates a search query (non-empty, reasonable length)
  */
-export function validateSearchQuery(query: string, minLength = 2, maxLength = 100): ValidationResult {
+export function validateSearchQuery(
+  query: string,
+  minLength = 2,
+  maxLength = 100,
+): ValidationResult {
   if (!query || typeof query !== 'string') {
     return { isValid: false, error: 'Search query is required' };
   }
@@ -183,14 +187,14 @@ export function validateSearchQuery(query: string, minLength = 2, maxLength = 10
   if (trimmed.length < minLength) {
     return {
       isValid: false,
-      error: `Search query must be at least ${minLength} characters`
+      error: `Search query must be at least ${minLength} characters`,
     };
   }
 
   if (trimmed.length > maxLength) {
     return {
       isValid: false,
-      error: `Search query must be less than ${maxLength} characters`
+      error: `Search query must be less than ${maxLength} characters`,
     };
   }
 

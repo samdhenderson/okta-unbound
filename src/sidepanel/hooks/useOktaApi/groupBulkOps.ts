@@ -8,15 +8,20 @@ import type { OktaUser } from './types';
 
 export function createGroupBulkOperations(
   coreApi: CoreApi,
-  removeUserFromGroup: (groupId: string, groupName: string, user: OktaUser, skipUndoLog?: boolean) => Promise<any>,
-  getAllGroupMembers: (groupId: string) => Promise<OktaUser[]>
+  removeUserFromGroup: (
+    groupId: string,
+    groupName: string,
+    user: OktaUser,
+    skipUndoLog?: boolean,
+  ) => Promise<any>,
+  getAllGroupMembers: (groupId: string) => Promise<OktaUser[]>,
 ) {
   /**
    * Execute bulk operation across multiple groups
    */
   const executeBulkOperation = async (
     operation: any,
-    onProgress?: (current: number, total: number, currentGroupName: string) => void
+    onProgress?: (current: number, total: number, currentGroupName: string) => void,
   ): Promise<any[]> => {
     const results: any[] = [];
     const totalGroups = operation.targetGroups.length;
@@ -59,7 +64,7 @@ export function createGroupBulkOperations(
             if (operation.config?.userId) {
               const removeResult = await coreApi.makeApiRequest(
                 `/api/v1/groups/${groupId}/users/${operation.config.userId}`,
-                'DELETE'
+                'DELETE',
               );
               result.status = removeResult.success ? 'success' : 'failed';
               result.itemsProcessed = removeResult.success ? 1 : 0;

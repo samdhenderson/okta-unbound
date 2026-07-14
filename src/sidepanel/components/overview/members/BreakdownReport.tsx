@@ -53,11 +53,16 @@ const BreakdownReport: React.FC<BreakdownReportProps> = ({
               transition-colors duration-100
               ${clickable ? 'cursor-pointer hover:bg-neutral-50' : 'cursor-default'}
               ${isActive ? 'ring-1 ring-primary bg-primary-light/40' : ''}
-            `.trim().replace(/\s+/g, ' ')}
+            `
+              .trim()
+              .replace(/\s+/g, ' ')}
             aria-pressed={!isOther ? isActive : undefined}
           >
             {/* Proportion bar background */}
-            <div className="absolute inset-y-0 left-0 rounded-md bg-neutral-100" style={{ width: '100%' }} />
+            <div
+              className="absolute inset-y-0 left-0 rounded-md bg-neutral-100"
+              style={{ width: '100%' }}
+            />
             <div
               className={`absolute inset-y-0 left-0 rounded-md ${isActive ? 'bg-primary-highlight' : 'bg-primary-light'}`}
               style={{ width: `${Math.max(row.pct, 1.5)}%` }}
@@ -69,7 +74,9 @@ const BreakdownReport: React.FC<BreakdownReportProps> = ({
                 title={row.label}
               >
                 {row.label}
-                {isOther && clickable && <span className="ml-1.5 not-italic text-primary-text">View →</span>}
+                {isOther && clickable && (
+                  <span className="ml-1.5 not-italic text-primary-text">View →</span>
+                )}
               </span>
               <span className="flex-shrink-0 text-xs font-medium text-neutral-600 tabular-nums">
                 {row.count.toLocaleString()}

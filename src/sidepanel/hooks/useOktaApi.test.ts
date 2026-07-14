@@ -44,7 +44,7 @@ describe('useOktaApi', () => {
       mockRuntimeSendMessage.mockResolvedValue(mockResponse);
 
       const { result } = renderHook(() =>
-        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
       const response = await act(async () => {
@@ -64,7 +64,7 @@ describe('useOktaApi', () => {
 
     it('should throw error when no target tab ID', async () => {
       const { result } = renderHook(() =>
-        useOktaApi({ targetTabId: null, onResult: mockOnResult, onProgress: mockOnProgress })
+        useOktaApi({ targetTabId: null, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
       await expect(async () => {
@@ -101,7 +101,7 @@ describe('useOktaApi', () => {
       });
 
       const { result } = renderHook(() =>
-        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
       const members = await act(async () => {
@@ -126,16 +126,18 @@ describe('useOktaApi', () => {
         },
       }));
 
-      const page2Users: OktaUser[] = [{
-        id: 'user201',
-        status: 'ACTIVE',
-        profile: {
-          login: 'user201@example.com',
-          email: 'user201@example.com',
-          firstName: 'First201',
-          lastName: 'Last201',
+      const page2Users: OktaUser[] = [
+        {
+          id: 'user201',
+          status: 'ACTIVE',
+          profile: {
+            login: 'user201@example.com',
+            email: 'user201@example.com',
+            firstName: 'First201',
+            lastName: 'Last201',
+          },
         },
-      }];
+      ];
 
       mockRuntimeSendMessage
         .mockResolvedValueOnce({
@@ -152,7 +154,7 @@ describe('useOktaApi', () => {
         });
 
       const { result } = renderHook(() =>
-        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
       const members = await act(async () => {
@@ -161,14 +163,8 @@ describe('useOktaApi', () => {
 
       expect(members).toHaveLength(201);
       expect(mockRuntimeSendMessage).toHaveBeenCalledTimes(2);
-      expect(mockOnResult).toHaveBeenCalledWith(
-        'Page 1: Loaded 200 members (Total: 200)',
-        'info'
-      );
-      expect(mockOnResult).toHaveBeenCalledWith(
-        'Page 2: Loaded 1 members (Total: 201)',
-        'info'
-      );
+      expect(mockOnResult).toHaveBeenCalledWith('Page 1: Loaded 200 members (Total: 200)', 'info');
+      expect(mockOnResult).toHaveBeenCalledWith('Page 2: Loaded 1 members (Total: 201)', 'info');
     });
 
     it('should fetch all pages with 1000+ members (6 pages)', async () => {
@@ -202,7 +198,7 @@ describe('useOktaApi', () => {
       });
 
       const { result } = renderHook(() =>
-        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
       const members = await act(async () => {
@@ -251,7 +247,7 @@ describe('useOktaApi', () => {
         });
 
       const { result } = renderHook(() =>
-        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
       const members = await act(async () => {
@@ -276,7 +272,7 @@ describe('useOktaApi', () => {
       });
 
       const { result } = renderHook(() =>
-        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
       await expect(async () => {
@@ -285,16 +281,18 @@ describe('useOktaApi', () => {
     });
 
     it('should handle Link header without next rel', async () => {
-      const users: OktaUser[] = [{
-        id: 'user1',
-        status: 'ACTIVE',
-        profile: {
-          login: 'user1@example.com',
-          email: 'user1@example.com',
-          firstName: 'First1',
-          lastName: 'Last1',
+      const users: OktaUser[] = [
+        {
+          id: 'user1',
+          status: 'ACTIVE',
+          profile: {
+            login: 'user1@example.com',
+            email: 'user1@example.com',
+            firstName: 'First1',
+            lastName: 'Last1',
+          },
         },
-      }];
+      ];
 
       mockRuntimeSendMessage.mockResolvedValueOnce({
         success: true,
@@ -305,7 +303,7 @@ describe('useOktaApi', () => {
       });
 
       const { result } = renderHook(() =>
-        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
       const members = await act(async () => {
@@ -328,7 +326,7 @@ describe('useOktaApi', () => {
         .mockResolvedValueOnce({ success: true, data: [] });
 
       const { result } = renderHook(() =>
-        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
       const map = await act(async () => {
@@ -343,7 +341,11 @@ describe('useOktaApi', () => {
         tabId: targetTabId,
         priority: 'low',
       });
-      expect(map.get('alice')).toMatchObject({ enrolled: true, factorCount: 1, factorLabels: ['SMS'] });
+      expect(map.get('alice')).toMatchObject({
+        enrolled: true,
+        factorCount: 1,
+        factorLabels: ['SMS'],
+      });
       expect(map.get('bob')).toMatchObject({ enrolled: false, factorCount: 0, factorLabels: [] });
     });
 
@@ -357,7 +359,7 @@ describe('useOktaApi', () => {
 
       const onProgress = vi.fn();
       const { result } = renderHook(() =>
-        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
       const map = await act(async () => {
@@ -420,7 +422,7 @@ describe('useOktaApi', () => {
       });
 
       const { result } = renderHook(() =>
-        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
       await act(async () => {
@@ -434,7 +436,7 @@ describe('useOktaApi', () => {
           expect.any(Number),
           expect.any(Number),
           expect.stringMatching(/Removing .+ \(1\/1\)/),
-          expect.any(Number)
+          expect.any(Number),
         );
       });
     });
@@ -490,7 +492,7 @@ describe('useOktaApi', () => {
       });
 
       const { result } = renderHook(() =>
-        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
       await act(async () => {
@@ -500,7 +502,7 @@ describe('useOktaApi', () => {
       await waitFor(() => {
         expect(mockOnResult).toHaveBeenCalledWith(
           expect.stringContaining('403 Forbidden'),
-          'error'
+          'error',
         );
         expect(mockOnResult).toHaveBeenCalledWith('Stopping after first 403 error', 'warning');
       });
@@ -523,7 +525,7 @@ describe('useOktaApi', () => {
       });
 
       const { result } = renderHook(() =>
-        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
       await act(async () => {
@@ -572,7 +574,7 @@ describe('useOktaApi', () => {
       mockRuntimeSendMessage.mockResolvedValue({ success: true });
 
       const { result } = renderHook(() =>
-        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
       const removePromise = act(async () => {
@@ -608,7 +610,7 @@ describe('useOktaApi', () => {
       });
 
       const { result } = renderHook(() =>
-        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
       await act(async () => {
@@ -623,7 +625,10 @@ describe('useOktaApi', () => {
           format: 'csv',
           statusFilter: undefined,
         });
-        expect(mockOnResult).toHaveBeenCalledWith('Export complete: 150 members exported', 'success');
+        expect(mockOnResult).toHaveBeenCalledWith(
+          'Export complete: 150 members exported',
+          'success',
+        );
       });
     });
 
@@ -640,7 +645,7 @@ describe('useOktaApi', () => {
       });
 
       const { result } = renderHook(() =>
-        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
       await act(async () => {
@@ -671,7 +676,7 @@ describe('useOktaApi', () => {
       });
 
       const { result } = renderHook(() =>
-        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
       await act(async () => {
@@ -689,7 +694,7 @@ describe('useOktaApi', () => {
       mockRuntimeSendMessage.mockRejectedValueOnce(new Error('Network error'));
 
       const { result } = renderHook(() =>
-        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
       await expect(async () => {
@@ -705,7 +710,7 @@ describe('useOktaApi', () => {
       });
 
       const { result } = renderHook(() =>
-        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
       const response = await act(async () => {
@@ -724,7 +729,7 @@ describe('useOktaApi', () => {
       });
 
       const { result } = renderHook(() =>
-        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress })
+        useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
       const response = await act(async () => {

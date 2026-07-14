@@ -49,9 +49,7 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
     <div className={`${centered ? 'flex items-center justify-center py-12' : ''}`}>
       <div className="text-center">
         {spinner}
-        {message && (
-          <p className="mt-4 text-neutral-600 text-sm">{message}</p>
-        )}
+        {message && <p className="mt-4 text-neutral-600 text-sm">{message}</p>}
       </div>
     </div>
   );

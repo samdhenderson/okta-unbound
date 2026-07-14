@@ -80,7 +80,7 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
 
   const toggleColumn = useCallback((columnId: string) => {
     setColumns((prev) =>
-      prev.map((col) => (col.id === columnId ? { ...col, enabled: !col.enabled } : col))
+      prev.map((col) => (col.id === columnId ? { ...col, enabled: !col.enabled } : col)),
     );
   }, []);
 
@@ -103,11 +103,13 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
       // Generate groups CSV
       const headers = enabledColumns.map((col) => col.label);
       const rows = groups.map((group) =>
-        enabledColumns.map((col) => escapeCSV(getColumnValue(group, col.id)))
+        enabledColumns.map((col) => escapeCSV(getColumnValue(group, col.id))),
       );
 
       const groupsCSV =
-        headers.map((h) => escapeCSV(h)).join(',') + '\n' + rows.map((row) => row.join(',')).join('\n');
+        headers.map((h) => escapeCSV(h)).join(',') +
+        '\n' +
+        rows.map((row) => row.join(',')).join('\n');
 
       // Generate filename
       const date = getDateForFilename();
@@ -125,7 +127,15 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
       if (includeMemberList) {
         setExportProgress('Fetching group members...');
 
-        const memberHeaders = ['Group ID', 'Group Name', 'User ID', 'Email', 'First Name', 'Last Name', 'Status'];
+        const memberHeaders = [
+          'Group ID',
+          'Group Name',
+          'User ID',
+          'Email',
+          'First Name',
+          'Last Name',
+          'Status',
+        ];
         const memberRows: string[][] = [];
 
         for (let i = 0; i < groups.length; i++) {
@@ -178,7 +188,16 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
       setIsExporting(false);
       setExportProgress(null);
     }
-  }, [columns, groups, includeMemberList, exportType, collectionName, targetTabId, onFetchMembers, onClose]);
+  }, [
+    columns,
+    groups,
+    includeMemberList,
+    exportType,
+    collectionName,
+    targetTabId,
+    onFetchMembers,
+    onClose,
+  ]);
 
   const enabledCount = columns.filter((c) => c.enabled).length;
 
@@ -193,7 +212,11 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
           <Button variant="secondary" onClick={onClose} disabled={isExporting}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={handleExport} disabled={isExporting || enabledCount === 0}>
+          <Button
+            variant="primary"
+            onClick={handleExport}
+            disabled={isExporting || enabledCount === 0}
+          >
             {isExporting ? 'Exporting...' : `Export (${groups.length})`}
           </Button>
         </>
@@ -236,8 +259,8 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
             <div>
               <span className="text-sm font-medium text-neutral-700">Include member list</span>
               <p className="text-xs text-neutral-500 mt-0.5">
-                Generates a second CSV file with member details (Group ID, Group Name, User ID, Email, First
-                Name, Last Name, Status)
+                Generates a second CSV file with member details (Group ID, Group Name, User ID,
+                Email, First Name, Last Name, Status)
               </p>
             </div>
           </label>
@@ -247,7 +270,14 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
         {exportProgress && (
           <div className="flex items-center gap-2 p-3 bg-info-light rounded-md border border-primary/20">
             <svg className="w-4 h-4 text-primary animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
               <path
                 className="opacity-75"
                 fill="currentColor"
@@ -261,11 +291,22 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
         {/* Warning for large exports with members */}
         {includeMemberList && groups.length > 20 && (
           <div className="flex items-start gap-2 p-3 bg-warning-light rounded-md border border-warning/20">
-            <svg className="w-4 h-4 text-warning-text mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            <svg
+              className="w-4 h-4 text-warning-text mt-0.5 shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
             </svg>
             <p className="text-sm text-warning-text">
-              Exporting members for {groups.length} groups may take a while. Consider exporting fewer groups at a time.
+              Exporting members for {groups.length} groups may take a while. Consider exporting
+              fewer groups at a time.
             </p>
           </div>
         )}

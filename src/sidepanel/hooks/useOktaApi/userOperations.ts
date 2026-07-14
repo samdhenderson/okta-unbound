@@ -31,7 +31,9 @@ export function createUserOperations(coreApi: CoreApi) {
   const getUserAppAssignments = async (userId: string): Promise<number> => {
     try {
       // Fetch first page with limit=200 to get app assignments count
-      const response = await coreApi.makeApiRequest(`/api/v1/apps?filter=user.id+eq+"${userId}"&limit=200`);
+      const response = await coreApi.makeApiRequest(
+        `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=200`,
+      );
       if (response.success && response.data) {
         const firstPageCount = response.data.length;
 
@@ -58,9 +60,7 @@ export function createUserOperations(coreApi: CoreApi) {
    * Reflects effective assignments (direct + via group) as returned by the
    * apps filter endpoint. Follows pagination via the Link header.
    */
-  const getUserApps = async (
-    userId: string
-  ): Promise<Array<{ id: string; label: string }>> => {
+  const getUserApps = async (userId: string): Promise<Array<{ id: string; label: string }>> => {
     const apps: Array<{ id: string; label: string }> = [];
     let nextUrl: string | null = `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=200`;
 
@@ -91,7 +91,7 @@ export function createUserOperations(coreApi: CoreApi) {
    */
   const batchGetUserDetails = async (
     userIds: string[],
-    onProgress?: (current: number, total: number) => void
+    onProgress?: (current: number, total: number) => void,
   ): Promise<Map<string, any>> => {
     const userDetailsMap = new Map<string, any>();
     const batchSize = 3; // Match scheduler maxConcurrent
@@ -100,7 +100,12 @@ export function createUserOperations(coreApi: CoreApi) {
       const batch = userIds.slice(i, i + batchSize);
       const batchPromises = batch.map(async (userId) => {
         try {
-          const response = await coreApi.makeApiRequest(`/api/v1/users/${userId}`, 'GET', undefined, 'low');
+          const response = await coreApi.makeApiRequest(
+            `/api/v1/users/${userId}`,
+            'GET',
+            undefined,
+            'low',
+          );
           if (response.success && response.data) {
             return { userId, data: response.data };
           }
@@ -133,7 +138,7 @@ export function createUserOperations(coreApi: CoreApi) {
    */
   const scanGroupMfa = async (
     userIds: string[],
-    onProgress?: (current: number, total: number) => void
+    onProgress?: (current: number, total: number) => void,
   ): Promise<Map<string, MemberMfaResult>> => {
     const resultMap = new Map<string, MemberMfaResult>();
     const batchSize = 3; // Match scheduler maxConcurrent convention
@@ -147,7 +152,7 @@ export function createUserOperations(coreApi: CoreApi) {
               `/api/v1/users/${userId}/factors`,
               'GET',
               undefined,
-              'low'
+              'low',
             );
             const factors: OktaFactor[] =
               response.success && Array.isArray(response.data) ? response.data : [];
@@ -156,7 +161,7 @@ export function createUserOperations(coreApi: CoreApi) {
             console.error(`[useOktaApi] Failed to fetch factors for user ${userId}:`, error);
             return { userId, factors: [] as OktaFactor[] };
           }
-        })
+        }),
       );
 
       batchResults.forEach(({ userId, factors }) => {
@@ -189,9 +194,16 @@ export function createUserOperations(coreApi: CoreApi) {
    * Search for users by name, email, or login
    */
   const searchUsers = async (
-    query: string
+    query: string,
   ): Promise<
-    Array<{ id: string; email: string; firstName: string; lastName: string; login: string; status: string }>
+    Array<{
+      id: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+      login: string;
+      status: string;
+    }>
   > => {
     if (!query || query.length < 2) {
       return [];
@@ -199,7 +211,9 @@ export function createUserOperations(coreApi: CoreApi) {
 
     try {
       // Use Okta's search API with the q parameter for flexible search
-      const response = await coreApi.makeApiRequest(`/api/v1/users?q=${encodeURIComponent(query)}&limit=20`);
+      const response = await coreApi.makeApiRequest(
+        `/api/v1/users?q=${encodeURIComponent(query)}&limit=20`,
+      );
 
       if (response.success && response.data) {
         return response.data.map((user: any) => ({
@@ -222,8 +236,15 @@ export function createUserOperations(coreApi: CoreApi) {
    * Get user details by ID
    */
   const getUserById = async (
-    userId: string
-  ): Promise<{ id: string; email: string; firstName: string; lastName: string; login: string; status: string } | null> => {
+    userId: string,
+  ): Promise<{
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    login: string;
+    status: string;
+  } | null> => {
     try {
       const response = await coreApi.makeApiRequest(`/api/v1/users/${userId}`);
       if (response.success && response.data) {
@@ -249,7 +270,10 @@ export function createUserOperations(coreApi: CoreApi) {
    * Only valid for users in ACTIVE status.
    */
   const suspendUser = async (userId: string): Promise<{ success: boolean; error?: string }> => {
-    const result = await coreApi.makeApiRequest(`/api/v1/users/${userId}/lifecycle/suspend`, 'POST');
+    const result = await coreApi.makeApiRequest(
+      `/api/v1/users/${userId}/lifecycle/suspend`,
+      'POST',
+    );
     return { success: result.success, error: result.error };
   };
 
@@ -258,7 +282,10 @@ export function createUserOperations(coreApi: CoreApi) {
    * Only valid for users in SUSPENDED status.
    */
   const unsuspendUser = async (userId: string): Promise<{ success: boolean; error?: string }> => {
-    const result = await coreApi.makeApiRequest(`/api/v1/users/${userId}/lifecycle/unsuspend`, 'POST');
+    const result = await coreApi.makeApiRequest(
+      `/api/v1/users/${userId}/lifecycle/unsuspend`,
+      'POST',
+    );
     return { success: result.success, error: result.error };
   };
 
@@ -269,7 +296,7 @@ export function createUserOperations(coreApi: CoreApi) {
   const resetPassword = async (userId: string): Promise<{ success: boolean; error?: string }> => {
     const result = await coreApi.makeApiRequest(
       `/api/v1/users/${userId}/lifecycle/reset_password?sendEmail=true`,
-      'POST'
+      'POST',
     );
     return { success: result.success, error: result.error };
   };

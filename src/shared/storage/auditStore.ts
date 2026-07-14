@@ -138,7 +138,8 @@ class AuditStore {
       const entries = await this.getHistory({ startDate, endDate });
 
       // CSV header
-      const header = 'Timestamp,Action,Group,Performed By,Result,Users Affected,Users Succeeded,Users Failed,Duration (ms),API Requests,Errors\n';
+      const header =
+        'Timestamp,Action,Group,Performed By,Result,Users Affected,Users Succeeded,Users Failed,Duration (ms),API Requests,Errors\n';
 
       // CSV rows
       const rows = entries.map((entry) => {

@@ -35,9 +35,7 @@ function SelectionChips<T>({
 }: SelectionChipsProps<T>) {
   if (items.length === 0) {
     return (
-      <div className={`text-sm text-neutral-500 italic py-2 ${className}`}>
-        {emptyMessage}
-      </div>
+      <div className={`text-sm text-neutral-500 italic py-2 ${className}`}>{emptyMessage}</div>
     );
   }
 
@@ -57,7 +55,12 @@ function SelectionChips<T>({
               title={`Remove ${getLabel(item)}`}
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>

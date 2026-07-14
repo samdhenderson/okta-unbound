@@ -44,7 +44,9 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
   const [showFilters, setShowFilters] = useState(false);
 
   // Active filter count for badge
-  const activeFilterCount = [typeFilter, sizeFilter, pushFilter, stalenessFilter].filter(Boolean).length + (pushAppFilter.size > 0 ? 1 : 0);
+  const activeFilterCount =
+    [typeFilter, sizeFilter, pushFilter, stalenessFilter].filter(Boolean).length +
+    (pushAppFilter.size > 0 ? 1 : 0);
 
   // Hybrid search mode state
   const [searchMode, setSearchMode] = useState<'live' | 'cached'>('live');
@@ -168,51 +170,54 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
   };
 
   // Live search handler
-  const handleLiveSearch = useCallback(async (query: string) => {
-    if (!targetTabId) {
-      setError('No Okta tab connected');
-      return;
-    }
-
-    if (!query.trim()) {
-      setLiveSearchResults([]);
-      return;
-    }
-
-    setIsLiveSearching(true);
-    setError(null);
-
-    try {
-      const response = await chrome.tabs.sendMessage(targetTabId, {
-        action: 'searchGroups',
-        query: query.trim(),
-      });
-
-      if (response.success) {
-        const results = (response.data || []).map((group: any) => ({
-          id: group.id,
-          name: group.profile?.name || group.id,
-          description: group.profile?.description,
-          type: group.type,
-          memberCount: group._embedded?.stats?.usersCount ?? 0,
-          lastUpdated: group.lastUpdated ? new Date(group.lastUpdated) : undefined,
-          created: group.created ? new Date(group.created) : undefined,
-          hasRules: false,
-          ruleCount: 0,
-          selected: false,
-        }));
-        setLiveSearchResults(results);
-      } else {
-        setError(response.error || 'Failed to search groups');
-        setLiveSearchResults([]);
+  const handleLiveSearch = useCallback(
+    async (query: string) => {
+      if (!targetTabId) {
+        setError('No Okta tab connected');
+        return;
       }
-    } catch (err) {
-      setError((err as Error).message || 'Failed to communicate with Okta tab');
-      setLiveSearchResults([]);
-    } finally {
-      setIsLiveSearching(false);
-    }
-  }, [targetTabId]);
+
+      if (!query.trim()) {
+        setLiveSearchResults([]);
+        return;
+      }
+
+      setIsLiveSearching(true);
+      setError(null);
+
+      try {
+        const response = await chrome.tabs.sendMessage(targetTabId, {
+          action: 'searchGroups',
+          query: query.trim(),
+        });
+
+        if (response.success) {
+          const results = (response.data || []).map((group: any) => ({
+            id: group.id,
+            name: group.profile?.name || group.id,
+            description: group.profile?.description,
+            type: group.type,
+            memberCount: group._embedded?.stats?.usersCount ?? 0,
+            lastUpdated: group.lastUpdated ? new Date(group.lastUpdated) : undefined,
+            created: group.created ? new Date(group.created) : undefined,
+            hasRules: false,
+            ruleCount: 0,
+            selected: false,
+          }));
+          setLiveSearchResults(results);
+        } else {
+          setError(response.error || 'Failed to search groups');
+          setLiveSearchResults([]);
+        }
+      } catch (err) {
+        setError((err as Error).message || 'Failed to communicate with Okta tab');
+        setLiveSearchResults([]);
+      } finally {
+        setIsLiveSearching(false);
+      }
+    },
+    [targetTabId],
+  );
 
   // Debounced search effect
   useEffect(() => {
@@ -249,7 +254,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
         (g) =>
           g.name.toLowerCase().includes(q) ||
           g.description?.toLowerCase().includes(q) ||
-          g.id.toLowerCase().includes(q)
+          g.id.toLowerCase().includes(q),
       );
     }
 
@@ -262,12 +267,18 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
     if (sizeFilter) {
       filtered = filtered.filter((g) => {
         switch (sizeFilter) {
-          case 'empty': return g.memberCount === 0;
-          case 'small': return g.memberCount > 0 && g.memberCount < 50;
-          case 'medium': return g.memberCount >= 50 && g.memberCount < 200;
-          case 'large': return g.memberCount >= 200 && g.memberCount < 1000;
-          case 'xlarge': return g.memberCount >= 1000;
-          default: return true;
+          case 'empty':
+            return g.memberCount === 0;
+          case 'small':
+            return g.memberCount > 0 && g.memberCount < 50;
+          case 'medium':
+            return g.memberCount >= 50 && g.memberCount < 200;
+          case 'large':
+            return g.memberCount >= 200 && g.memberCount < 1000;
+          case 'xlarge':
+            return g.memberCount >= 1000;
+          default:
+            return true;
         }
       });
     }
@@ -284,7 +295,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
     if (pushAppFilter.size > 0) {
       filtered = filtered.filter((g) => {
         if (!g.pushMappings || g.pushMappings.length === 0) return false;
-        return g.pushMappings.some(m => pushAppFilter.has(m.appId));
+        return g.pushMappings.some((m) => pushAppFilter.has(m.appId));
       });
     }
 
@@ -293,11 +304,16 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
       filtered = filtered.filter((g) => {
         const score = g.staleness?.score || 0;
         switch (stalenessFilter) {
-          case 'healthy': return score <= 25;
-          case 'monitor': return score > 25 && score <= 50;
-          case 'stale': return score > 50 && score <= 75;
-          case 'very_stale': return score > 75;
-          default: return true;
+          case 'healthy':
+            return score <= 25;
+          case 'monitor':
+            return score > 25 && score <= 50;
+          case 'stale':
+            return score > 50 && score <= 75;
+          case 'very_stale':
+            return score > 75;
+          default:
+            return true;
         }
       });
     }
@@ -325,7 +341,19 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
     });
 
     return filtered;
-  }, [searchMode, liveSearchResults, groups, searchQuery, typeFilter, sizeFilter, pushFilter, pushAppFilter, stalenessFilter, sortBy, sortDesc]);
+  }, [
+    searchMode,
+    liveSearchResults,
+    groups,
+    searchQuery,
+    typeFilter,
+    sizeFilter,
+    pushFilter,
+    pushAppFilter,
+    stalenessFilter,
+    sortBy,
+    sortDesc,
+  ]);
 
   const handleExportSelection = useCallback(() => {
     if (selectedGroupIds.size === 0) {
@@ -337,7 +365,15 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
   }, [selectedGroupIds, groups]);
 
   const handleExportGroupsList = useCallback(() => {
-    const headers = ['ID', 'Name', 'Description', 'Type', 'Member Count', 'Staleness Score', 'Push Status'];
+    const headers = [
+      'ID',
+      'Name',
+      'Description',
+      'Type',
+      'Member Count',
+      'Staleness Score',
+      'Push Status',
+    ];
     const rows = filteredGroups.map((g) => [
       g.id,
       g.name,
@@ -362,27 +398,27 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
   const apiRef = useRef(api);
   apiRef.current = api;
 
-  const handleFetchMembers = useCallback(
-    async (groupId: string) => {
-      const members = await apiRef.current.getAllGroupMembers(groupId);
-      // Populate cache
-      setGroupMembersCache((prev) => {
-        const next = new Map(prev);
-        next.set(groupId, members);
-        return next;
-      });
-      return members;
-    },
-    []
-  );
+  const handleFetchMembers = useCallback(async (groupId: string) => {
+    const members = await apiRef.current.getAllGroupMembers(groupId);
+    // Populate cache
+    setGroupMembersCache((prev) => {
+      const next = new Map(prev);
+      next.set(groupId, members);
+      return next;
+    });
+    return members;
+  }, []);
 
-  const handleRemoveUserFromGroups = useCallback(async (userId: string, groupIds: string[]) => {
-    for (const groupId of groupIds) {
-      const groupName = groups.find((g) => g.id === groupId)?.name || groupId;
-      await apiRef.current.makeApiRequest(`/api/v1/groups/${groupId}/users/${userId}`, 'DELETE');
-      console.log(`[GroupsTab] Removed user ${userId} from group ${groupName}`);
-    }
-  }, [groups]);
+  const handleRemoveUserFromGroups = useCallback(
+    async (userId: string, groupIds: string[]) => {
+      for (const groupId of groupIds) {
+        const groupName = groups.find((g) => g.id === groupId)?.name || groupId;
+        await apiRef.current.makeApiRequest(`/api/v1/groups/${groupId}/users/${userId}`, 'DELETE');
+        console.log(`[GroupsTab] Removed user ${userId} from group ${groupName}`);
+      }
+    },
+    [groups],
+  );
 
   const handleLoadCollection = useCallback((groupIds: string[]) => {
     setSelectedGroupIds(new Set(groupIds));
@@ -414,7 +450,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
 
   const selectedGroups = useMemo(
     () => groups.filter((g) => selectedGroupIds.has(g.id)),
-    [groups, selectedGroupIds]
+    [groups, selectedGroupIds],
   );
 
   const handleClearFilters = useCallback(() => {
@@ -430,25 +466,29 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
     setActivePanel((prev) => (prev === panel ? 'none' : panel));
   }, []);
 
-  const toggleSort = useCallback((field: SortField) => {
-    if (sortBy === field) {
-      setSortDesc((prev) => !prev);
-    } else {
-      setSortBy(field);
-      setSortDesc(field !== 'name'); // default desc for numeric fields
-    }
-  }, [sortBy]);
+  const toggleSort = useCallback(
+    (field: SortField) => {
+      if (sortBy === field) {
+        setSortDesc((prev) => !prev);
+      } else {
+        setSortBy(field);
+        setSortDesc(field !== 'name'); // default desc for numeric fields
+      }
+    },
+    [sortBy],
+  );
 
   return (
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
       <PageHeader
         title="Groups"
         subtitle="Browse, search, and manage groups"
-        badge={selectedGroupIds.size > 0
-          ? { text: `${selectedGroupIds.size} Selected`, variant: 'primary' }
-          : searchMode === 'cached'
-            ? { text: `${groups.length} Cached`, variant: 'success' }
-            : { text: 'Live', variant: 'primary' }
+        badge={
+          selectedGroupIds.size > 0
+            ? { text: `${selectedGroupIds.size} Selected`, variant: 'primary' }
+            : searchMode === 'cached'
+              ? { text: `${groups.length} Cached`, variant: 'success' }
+              : { text: 'Live', variant: 'primary' }
         }
         actions={
           searchMode === 'live' ? (
@@ -461,12 +501,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
               Load All Groups
             </Button>
           ) : (
-            <Button
-              variant="secondary"
-              icon="refresh"
-              onClick={loadAllGroups}
-              loading={loading}
-            >
+            <Button variant="secondary" icon="refresh" onClick={loadAllGroups} loading={loading}>
               Refresh
             </Button>
           )
@@ -481,8 +516,18 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <svg className="h-5 w-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  <svg
+                    className="h-5 w-5 text-neutral-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
                   </svg>
                 </div>
                 {searchMode === 'live' ? (
@@ -521,7 +566,12 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
                   title="Toggle filters"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+                    />
                   </svg>
                   Filters
                   {activeFilterCount > 0 && (
@@ -541,26 +591,41 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs font-medium text-neutral-500">Active:</span>
                     {typeFilter && (
-                      <FilterChip label={`Type: ${typeFilter.replace('_', ' ')}`} onRemove={() => setTypeFilter('')} />
+                      <FilterChip
+                        label={`Type: ${typeFilter.replace('_', ' ')}`}
+                        onRemove={() => setTypeFilter('')}
+                      />
                     )}
                     {sizeFilter && (
-                      <FilterChip label={`Size: ${sizeFilter}`} onRemove={() => setSizeFilter('')} />
+                      <FilterChip
+                        label={`Size: ${sizeFilter}`}
+                        onRemove={() => setSizeFilter('')}
+                      />
                     )}
                     {pushFilter && (
-                      <FilterChip label={`Push: ${pushFilter}`} onRemove={() => setPushFilter('')} />
+                      <FilterChip
+                        label={`Push: ${pushFilter}`}
+                        onRemove={() => setPushFilter('')}
+                      />
                     )}
                     {stalenessFilter && (
-                      <FilterChip label={`Health: ${stalenessFilter.replace('_', ' ')}`} onRemove={() => setStalenessFilter('')} />
+                      <FilterChip
+                        label={`Health: ${stalenessFilter.replace('_', ' ')}`}
+                        onRemove={() => setStalenessFilter('')}
+                      />
                     )}
                     {pushAppFilter.size > 0 && (
                       <FilterChip
-                        label={`Apps: ${Array.from(pushAppFilter).map(id =>
-                          availablePushApps.find(a => a.id === id)?.name || id
-                        ).join(', ')}`}
+                        label={`Apps: ${Array.from(pushAppFilter)
+                          .map((id) => availablePushApps.find((a) => a.id === id)?.name || id)
+                          .join(', ')}`}
                         onRemove={() => setPushAppFilter(new Set())}
                       />
                     )}
-                    <button onClick={handleClearFilters} className="text-xs text-primary-text hover:underline ml-1">
+                    <button
+                      onClick={handleClearFilters}
+                      className="text-xs text-primary-text hover:underline ml-1"
+                    >
                       Clear all
                     </button>
                   </div>
@@ -570,7 +635,9 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
                 <div className="grid grid-cols-2 gap-3">
                   {/* Type Filter */}
                   <div>
-                    <label className="block text-xs font-medium text-neutral-600 mb-1.5">Group Type</label>
+                    <label className="block text-xs font-medium text-neutral-600 mb-1.5">
+                      Group Type
+                    </label>
                     <div className="flex flex-wrap gap-1.5">
                       {[
                         { value: '', label: 'All' },
@@ -595,7 +662,9 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
 
                   {/* Size Filter */}
                   <div>
-                    <label className="block text-xs font-medium text-neutral-600 mb-1.5">Group Size</label>
+                    <label className="block text-xs font-medium text-neutral-600 mb-1.5">
+                      Group Size
+                    </label>
                     <div className="flex flex-wrap gap-1.5">
                       {[
                         { value: '', label: 'All' },
@@ -622,7 +691,9 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
 
                   {/* Push Status Filter */}
                   <div>
-                    <label className="block text-xs font-medium text-neutral-600 mb-1.5">Push Status</label>
+                    <label className="block text-xs font-medium text-neutral-600 mb-1.5">
+                      Push Status
+                    </label>
                     <div className="flex flex-wrap gap-1.5">
                       {[
                         { value: '' as PushFilter, label: 'All' },
@@ -646,14 +717,32 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
 
                   {/* Health / Staleness Filter */}
                   <div>
-                    <label className="block text-xs font-medium text-neutral-600 mb-1.5">Group Health</label>
+                    <label className="block text-xs font-medium text-neutral-600 mb-1.5">
+                      Group Health
+                    </label>
                     <div className="flex flex-wrap gap-1.5">
                       {[
                         { value: '' as StalenessLevel, label: 'All', color: '' },
-                        { value: 'healthy' as StalenessLevel, label: 'Healthy', color: 'bg-success-light text-success-text border-success-light' },
-                        { value: 'monitor' as StalenessLevel, label: 'Monitor', color: 'bg-warning-light text-warning-text border-warning-light' },
-                        { value: 'stale' as StalenessLevel, label: 'Stale', color: 'bg-warning-light text-danger-text border-warning-light' },
-                        { value: 'very_stale' as StalenessLevel, label: 'Critical', color: 'bg-danger-light text-danger-text border-danger-light' },
+                        {
+                          value: 'healthy' as StalenessLevel,
+                          label: 'Healthy',
+                          color: 'bg-success-light text-success-text border-success-light',
+                        },
+                        {
+                          value: 'monitor' as StalenessLevel,
+                          label: 'Monitor',
+                          color: 'bg-warning-light text-warning-text border-warning-light',
+                        },
+                        {
+                          value: 'stale' as StalenessLevel,
+                          label: 'Stale',
+                          color: 'bg-warning-light text-danger-text border-warning-light',
+                        },
+                        {
+                          value: 'very_stale' as StalenessLevel,
+                          label: 'Critical',
+                          color: 'bg-danger-light text-danger-text border-danger-light',
+                        },
                       ].map((opt) => (
                         <button
                           key={opt.value}
@@ -661,7 +750,8 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
                           className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors border ${
                             stalenessFilter === opt.value
                               ? 'bg-primary text-white border-primary'
-                              : opt.color || 'bg-neutral-50 text-neutral-700 border-neutral-200 hover:border-neutral-400'
+                              : opt.color ||
+                                'bg-neutral-50 text-neutral-700 border-neutral-200 hover:border-neutral-400'
                           }`}
                         >
                           {opt.label}
@@ -674,7 +764,9 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
                 {/* Push Target App Filter */}
                 {availablePushApps.length > 0 && (
                   <div>
-                    <label className="block text-xs font-medium text-neutral-600 mb-1.5">Push Target App</label>
+                    <label className="block text-xs font-medium text-neutral-600 mb-1.5">
+                      Push Target App
+                    </label>
                     <div className="flex flex-wrap gap-1.5">
                       <button
                         onClick={() => setPushAppFilter(new Set())}
@@ -690,7 +782,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
                         <button
                           key={app.id}
                           onClick={() => {
-                            setPushAppFilter(prev => {
+                            setPushAppFilter((prev) => {
                               const next = new Set(prev);
                               if (next.has(app.id)) next.delete(app.id);
                               else next.add(app.id);
@@ -712,7 +804,9 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
 
                 {/* Sort Controls */}
                 <div>
-                  <label className="block text-xs font-medium text-neutral-600 mb-1.5">Sort by</label>
+                  <label className="block text-xs font-medium text-neutral-600 mb-1.5">
+                    Sort by
+                  </label>
                   <div className="flex flex-wrap gap-1.5">
                     {[
                       { value: 'name' as SortField, label: 'Name' },
@@ -731,8 +825,18 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
                       >
                         {opt.label}
                         {sortBy === opt.value && (
-                          <svg className={`w-3 h-3 transition-transform ${sortDesc ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                          <svg
+                            className={`w-3 h-3 transition-transform ${sortDesc ? 'rotate-180' : ''}`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 15l7-7 7 7"
+                            />
                           </svg>
                         )}
                       </button>
@@ -749,7 +853,11 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
                   <span className="text-sm font-medium text-neutral-700">
                     {selectedGroupIds.size} of {filteredGroups.length} selected
                   </span>
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedGroupIds(new Set(filteredGroups.map(g => g.id)))}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedGroupIds(new Set(filteredGroups.map((g) => g.id)))}
+                  >
                     Select All
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => setSelectedGroupIds(new Set())}>
@@ -759,7 +867,12 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
                 <div className="flex items-center gap-2 flex-wrap">
                   {/* Compare Button */}
                   {selectedGroupIds.size >= 2 && selectedGroupIds.size <= 5 && (
-                    <Button variant="secondary" size="sm" icon="chart" onClick={() => setShowComparisonModal(true)}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon="chart"
+                      onClick={() => setShowComparisonModal(true)}
+                    >
                       Compare ({selectedGroupIds.size})
                     </Button>
                   )}
@@ -802,7 +915,12 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
 
                   {/* Export buttons */}
                   {selectedGroupIds.size > 0 && (
-                    <Button variant="secondary" size="sm" icon="download" onClick={handleExportSelection}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon="download"
+                      onClick={handleExportSelection}
+                    >
                       Export ({selectedGroupIds.size})
                     </Button>
                   )}
@@ -869,7 +987,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
                   title={`No groups found matching "${liveSearchQuery}"`}
                   description="Try a different search term or load all groups for advanced filtering"
                   actions={[
-                    { label: 'Load All Groups', onClick: loadAllGroups, variant: 'primary' }
+                    { label: 'Load All Groups', onClick: loadAllGroups, variant: 'primary' },
                   ]}
                 />
               ) : searchMode === 'cached' && groups.length > 0 ? (
@@ -877,9 +995,17 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
                   icon="users"
                   title="No groups match your filters"
                   description="Try adjusting your search or filter criteria"
-                  actions={activeFilterCount > 0 ? [
-                    { label: 'Clear Filters', onClick: handleClearFilters, variant: 'secondary' }
-                  ] : undefined}
+                  actions={
+                    activeFilterCount > 0
+                      ? [
+                          {
+                            label: 'Clear Filters',
+                            onClick: handleClearFilters,
+                            variant: 'secondary',
+                          },
+                        ]
+                      : undefined
+                  }
                 />
               ) : undefined
             }
@@ -924,9 +1050,17 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
 const FilterChip: React.FC<{ label: string; onRemove: () => void }> = ({ label, onRemove }) => (
   <span className="inline-flex items-center gap-1 px-2 py-1 bg-primary-light text-primary-text rounded-full text-xs font-medium border border-primary-highlight">
     {label}
-    <button onClick={onRemove} className="p-0.5 hover:bg-primary-highlight rounded-full transition-colors">
+    <button
+      onClick={onRemove}
+      className="p-0.5 hover:bg-primary-highlight rounded-full transition-colors"
+    >
       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M6 18L18 6M6 6l12 12"
+        />
       </svg>
     </button>
   </span>

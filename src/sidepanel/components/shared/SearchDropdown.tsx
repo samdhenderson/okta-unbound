@@ -71,9 +71,7 @@ function SearchDropdown<T>({
   if (selectedItem && renderSelected) {
     return (
       <div className="space-y-1">
-        {label && (
-          <label className="block text-sm font-medium text-neutral-700">{label}</label>
-        )}
+        {label && <label className="block text-sm font-medium text-neutral-700">{label}</label>}
         <div className="flex items-center justify-between p-3 bg-neutral-50 border border-neutral-200 rounded-md">
           <div className="flex-1 min-w-0">{renderSelected(selectedItem)}</div>
           {onClear && (
@@ -84,7 +82,12 @@ function SearchDropdown<T>({
               title="Clear selection"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           )}
@@ -96,14 +99,22 @@ function SearchDropdown<T>({
 
   return (
     <div className="space-y-1">
-      {label && (
-        <label className="block text-sm font-medium text-neutral-700">{label}</label>
-      )}
+      {label && <label className="block text-sm font-medium text-neutral-700">{label}</label>}
       <div className="relative">
         {/* Search icon */}
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <svg className="h-5 w-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          <svg
+            className="h-5 w-5 text-neutral-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
           </svg>
         </div>
 
@@ -133,16 +144,19 @@ function SearchDropdown<T>({
             onClick={onClear}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         )}
 
         {/* Dropdown results */}
         {showDropdown && results.length > 0 && (
-          <div
-            className="absolute z-50 w-full mt-1 bg-white border border-neutral-200 rounded-md shadow-lg max-h-60 overflow-auto"
-          >
+          <div className="absolute z-50 w-full mt-1 bg-white border border-neutral-200 rounded-md shadow-lg max-h-60 overflow-auto">
             {results.map((item, index) => (
               <button
                 key={index}

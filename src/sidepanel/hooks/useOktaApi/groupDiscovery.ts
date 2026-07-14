@@ -11,7 +11,9 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
   /**
    * Get all groups with pagination
    */
-  const getAllGroups = async (onProgress?: (loaded: number, total: number) => void): Promise<any[]> => {
+  const getAllGroups = async (
+    onProgress?: (loaded: number, total: number) => void,
+  ): Promise<any[]> => {
     const allGroups: any[] = [];
     let nextUrl: string | null = '/api/v1/groups?limit=200&expand=stats';
 
@@ -38,7 +40,9 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
    */
   const getGroupMemberCount = async (groupId: string): Promise<number> => {
     try {
-      const usersResponse = await coreApi.makeApiRequest(`/api/v1/groups/${groupId}/users?limit=200`);
+      const usersResponse = await coreApi.makeApiRequest(
+        `/api/v1/groups/${groupId}/users?limit=200`,
+      );
       if (usersResponse.success && usersResponse.data) {
         const firstPageCount = usersResponse.data.length;
 
@@ -97,14 +101,16 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
    * Search for groups by name
    */
   const searchGroups = async (
-    query: string
+    query: string,
   ): Promise<Array<{ id: string; name: string; description: string; type: string }>> => {
     if (!query || query.length < 2) {
       return [];
     }
 
     try {
-      const response = await coreApi.makeApiRequest(`/api/v1/groups?q=${encodeURIComponent(query)}&limit=20`);
+      const response = await coreApi.makeApiRequest(
+        `/api/v1/groups?q=${encodeURIComponent(query)}&limit=20`,
+      );
 
       if (response.success && response.data) {
         return response.data.map((group: any) => ({
@@ -125,7 +131,7 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
    * Get group details by ID
    */
   const getGroupById = async (
-    groupId: string
+    groupId: string,
   ): Promise<{ id: string; name: string; description: string; type: string } | null> => {
     try {
       const response = await coreApi.makeApiRequest(`/api/v1/groups/${groupId}`);

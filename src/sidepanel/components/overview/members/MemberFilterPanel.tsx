@@ -2,11 +2,7 @@ import React from 'react';
 import type { MemberMfaResult } from '../../../../shared/types';
 import FilterPill from './FilterPill';
 import ActiveFilterChips from './ActiveFilterChips';
-import {
-  type BreakdownRow,
-  type MemberFilter,
-  type SortField,
-} from './memberAnalytics';
+import { type BreakdownRow, type MemberFilter, type SortField } from './memberAnalytics';
 
 type FactorMode = 'off' | 'has' | 'missing';
 
@@ -115,7 +111,9 @@ const MemberFilterPanel: React.FC<MemberFilterPanelProps> = ({
       <div>
         <label className="block text-xs font-medium text-neutral-600 mb-1.5">MFA Factors</label>
         {!mfaResults ? (
-          <p className="text-xs text-neutral-500">Run the MFA scan above to filter by enrolled factors.</p>
+          <p className="text-xs text-neutral-500">
+            Run the MFA scan above to filter by enrolled factors.
+          </p>
         ) : (
           <div className="space-y-2">
             {/* Quick count-based toggles */}
@@ -157,7 +155,9 @@ const MemberFilterPanel: React.FC<MemberFilterPanelProps> = ({
                         </FilterPill>
                         <FilterPill
                           active={mode === 'missing'}
-                          onClick={() => onSetFactorMode(label, mode === 'missing' ? 'off' : 'missing')}
+                          onClick={() =>
+                            onSetFactorMode(label, mode === 'missing' ? 'off' : 'missing')
+                          }
                           title={`Show only members missing ${label}`}
                           inactiveClassName="bg-neutral-50 text-danger-text border border-neutral-200 hover:border-danger-text"
                         >
@@ -177,8 +177,20 @@ const MemberFilterPanel: React.FC<MemberFilterPanelProps> = ({
       <div>
         <label className="block text-xs font-medium text-neutral-600 mb-1.5">Sort by</label>
         <div className="flex flex-wrap gap-1.5">
-          <SortButton field="name" label="Name" sortBy={sortBy} sortDesc={sortDesc} onToggle={onToggleSort} />
-          <SortButton field="status" label="Status" sortBy={sortBy} sortDesc={sortDesc} onToggle={onToggleSort} />
+          <SortButton
+            field="name"
+            label="Name"
+            sortBy={sortBy}
+            sortDesc={sortDesc}
+            onToggle={onToggleSort}
+          />
+          <SortButton
+            field="status"
+            label="Status"
+            sortBy={sortBy}
+            sortDesc={sortDesc}
+            onToggle={onToggleSort}
+          />
           {mfaResults && (
             <SortButton
               field="factors"

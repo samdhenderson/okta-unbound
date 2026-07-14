@@ -54,7 +54,7 @@ function generateActionId(): string {
  */
 export async function logAction(
   description: string,
-  metadata: UndoActionMetadata
+  metadata: UndoActionMetadata,
 ): Promise<UndoAction> {
   const history = await getUndoHistory();
 
@@ -85,7 +85,7 @@ export async function logBulkRemoveAction(
   groupName: string,
   users: BulkUserInfo[],
   operationType: 'deprovisioned' | 'inactive' | 'custom_status' | 'multi_status',
-  targetStatus?: string
+  targetStatus?: string,
 ): Promise<UndoAction> {
   let description: string;
   if (operationType === 'deprovisioned') {

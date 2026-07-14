@@ -24,7 +24,8 @@ const LoadingBar: React.FC = () => {
 
   if (!progress.isLoading) return null;
 
-  const percentage = progress.total > 0 ? Math.min((progress.current / progress.total) * 100, 100) : 0;
+  const percentage =
+    progress.total > 0 ? Math.min((progress.current / progress.total) * 100, 100) : 0;
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -32,9 +33,8 @@ const LoadingBar: React.FC = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const estimatedTotal = progress.current > 0
-    ? Math.round((elapsedTime / progress.current) * progress.total)
-    : 0;
+  const estimatedTotal =
+    progress.current > 0 ? Math.round((elapsedTime / progress.current) * progress.total) : 0;
   const remainingTime = Math.max(0, estimatedTotal - elapsedTime);
 
   return (
@@ -61,7 +61,9 @@ const LoadingBar: React.FC = () => {
 
         <div className="flex items-center justify-between text-xs text-neutral-600">
           <span>{progress.message}</span>
-          <span className="font-medium">{progress.current} / {progress.total}</span>
+          <span className="font-medium">
+            {progress.current} / {progress.total}
+          </span>
         </div>
 
         <div className="h-1.5 bg-neutral-100 rounded-full overflow-hidden">

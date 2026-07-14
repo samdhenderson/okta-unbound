@@ -75,10 +75,15 @@ const StatCard: React.FC<StatCardProps> = ({
     >
       <div className="relative flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
-          <p className={`text-xs font-bold uppercase tracking-widest ${config.textColor} opacity-60`}>
+          <p
+            className={`text-xs font-bold uppercase tracking-widest ${config.textColor} opacity-60`}
+          >
             {title}
           </p>
-          <p className={`mt-3 text-4xl font-bold ${config.textColor} tracking-tight`} style={{ fontFamily: 'var(--font-primary)' }}>
+          <p
+            className={`mt-3 text-4xl font-bold ${config.textColor} tracking-tight`}
+            style={{ fontFamily: 'var(--font-primary)' }}
+          >
             {typeof value === 'number' ? value.toLocaleString() : value}
           </p>
           {subtitle && (

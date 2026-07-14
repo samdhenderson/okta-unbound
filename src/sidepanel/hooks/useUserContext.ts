@@ -45,13 +45,13 @@ export function useUserContext(): UseUserContextReturn {
           tab.url &&
           (tab.url.includes('okta.com') ||
             tab.url.includes('oktapreview.com') ||
-            tab.url.includes('okta-emea.com'))
+            tab.url.includes('okta-emea.com')),
       );
 
       console.log(
         '[useUserContext] Okta tabs found:',
         oktaTabs.length,
-        oktaTabs.map((t) => ({ id: t.id, url: t.url, active: t.active }))
+        oktaTabs.map((t) => ({ id: t.id, url: t.url, active: t.active })),
       );
 
       if (oktaTabs.length === 0) {
@@ -115,7 +115,10 @@ export function useUserContext(): UseUserContextReturn {
         if (response.success && response.data) {
           // On a user page
           setUserInfo(response.data);
-          console.log('[useUserContext] Connected to Okta and on user page:', response.data.userName);
+          console.log(
+            '[useUserContext] Connected to Okta and on user page:',
+            response.data.userName,
+          );
         } else {
           // On Okta admin but not on a user page
           setUserInfo(null);
@@ -170,21 +173,31 @@ export function useUserContext(): UseUserContextReturn {
     };
 
     // Listen for tab updates (when user navigates to different Okta pages)
-    const handleTabUpdate = (_tabId: number, changeInfo: { url?: string; status?: string }, tab: chrome.tabs.Tab) => {
+    const handleTabUpdate = (
+      _tabId: number,
+      changeInfo: { url?: string; status?: string },
+      tab: chrome.tabs.Tab,
+    ) => {
       // Refetch when URL changes on Okta tabs
-      if (changeInfo.url && tab.url &&
-          (tab.url.includes('okta.com') ||
-           tab.url.includes('oktapreview.com') ||
-           tab.url.includes('okta-emea.com'))) {
+      if (
+        changeInfo.url &&
+        tab.url &&
+        (tab.url.includes('okta.com') ||
+          tab.url.includes('oktapreview.com') ||
+          tab.url.includes('okta-emea.com'))
+      ) {
         console.log('[useUserContext] Okta tab URL changed, refetching (debounced)');
         debouncedFetch();
       }
 
       // Also refetch when page finishes loading (to catch any delayed navigation)
-      if (changeInfo.status === 'complete' && tab.url &&
-          (tab.url.includes('okta.com') ||
-           tab.url.includes('oktapreview.com') ||
-           tab.url.includes('okta-emea.com'))) {
+      if (
+        changeInfo.status === 'complete' &&
+        tab.url &&
+        (tab.url.includes('okta.com') ||
+          tab.url.includes('oktapreview.com') ||
+          tab.url.includes('okta-emea.com'))
+      ) {
         console.log('[useUserContext] Okta tab loaded, verifying user context (debounced)');
         debouncedFetch();
       }
@@ -193,10 +206,12 @@ export function useUserContext(): UseUserContextReturn {
     // Listen for new tabs being activated
     const handleTabActivated = (activeInfo: { tabId: number; windowId: number }) => {
       chrome.tabs.get(activeInfo.tabId, (tab) => {
-        if (tab.url &&
-            (tab.url.includes('okta.com') ||
-             tab.url.includes('oktapreview.com') ||
-             tab.url.includes('okta-emea.com'))) {
+        if (
+          tab.url &&
+          (tab.url.includes('okta.com') ||
+            tab.url.includes('oktapreview.com') ||
+            tab.url.includes('okta-emea.com'))
+        ) {
           console.log('[useUserContext] Okta tab activated, refetching user info (debounced)');
           debouncedFetch();
         }

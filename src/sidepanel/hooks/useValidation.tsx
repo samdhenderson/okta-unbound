@@ -44,14 +44,14 @@ export function useValidation(): UseValidationReturn {
 
   const validate = useCallback((field: string, result: ValidationResult): boolean => {
     if (result.isValid) {
-      setErrors(prev => {
+      setErrors((prev) => {
         const next = { ...prev };
         delete next[field];
         return next;
       });
       return true;
     } else {
-      setErrors(prev => ({
+      setErrors((prev) => ({
         ...prev,
         [field]: result.error,
       }));
@@ -60,14 +60,14 @@ export function useValidation(): UseValidationReturn {
   }, []);
 
   const setError = useCallback((field: string, error: string) => {
-    setErrors(prev => ({
+    setErrors((prev) => ({
       ...prev,
       [field]: error,
     }));
   }, []);
 
   const clearError = useCallback((field: string) => {
-    setErrors(prev => {
+    setErrors((prev) => {
       const next = { ...prev };
       delete next[field];
       return next;
@@ -80,13 +80,19 @@ export function useValidation(): UseValidationReturn {
 
   const hasErrors = useMemo(() => Object.keys(errors).length > 0, [errors]);
 
-  const getError = useCallback((field: string): string | undefined => {
-    return errors[field];
-  }, [errors]);
+  const getError = useCallback(
+    (field: string): string | undefined => {
+      return errors[field];
+    },
+    [errors],
+  );
 
-  const hasError = useCallback((field: string): boolean => {
-    return !!errors[field];
-  }, [errors]);
+  const hasError = useCallback(
+    (field: string): boolean => {
+      return !!errors[field];
+    },
+    [errors],
+  );
 
   return {
     errors,

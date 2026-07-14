@@ -29,7 +29,7 @@ export function parseNextLink(linkHeader?: string): string | null {
 export function deepMergeProfiles(
   baseProfile: Record<string, any>,
   overrideProfile: Record<string, any>,
-  arrayStrategy: 'merge' | 'replace' = 'replace'
+  arrayStrategy: 'merge' | 'replace' = 'replace',
 ): Record<string, any> {
   const result: Record<string, any> = { ...baseProfile };
 
@@ -52,7 +52,11 @@ export function deepMergeProfiles(
       }
     }
     // Handle nested objects (not arrays)
-    else if (typeof overrideValue === 'object' && typeof baseValue === 'object' && !Array.isArray(baseValue)) {
+    else if (
+      typeof overrideValue === 'object' &&
+      typeof baseValue === 'object' &&
+      !Array.isArray(baseValue)
+    ) {
       result[key] = deepMergeProfiles(baseValue || {}, overrideValue, arrayStrategy);
     }
     // Primitive values

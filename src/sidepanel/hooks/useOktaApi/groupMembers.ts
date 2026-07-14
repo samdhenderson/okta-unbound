@@ -16,9 +16,12 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
     groupId: string,
     groupName: string,
     user: OktaUser,
-    skipUndoLog = false
+    skipUndoLog = false,
   ) => {
-    const result = await coreApi.makeApiRequest(`/api/v1/groups/${groupId}/users/${user.id}`, 'DELETE');
+    const result = await coreApi.makeApiRequest(
+      `/api/v1/groups/${groupId}/users/${user.id}`,
+      'DELETE',
+    );
 
     // Log undo action if successful (skip for bulk operations which log at the end)
     if (result.success && !skipUndoLog) {
@@ -31,7 +34,7 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
           userName: `${user.profile.firstName} ${user.profile.lastName}`,
           groupId,
           groupName,
-        }
+        },
       );
     }
 
@@ -61,7 +64,7 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
 
       coreApi.callbacks.onResult?.(
         `Page ${pageCount}: Loaded ${pageMembers.length} members (Total: ${allMembers.length})`,
-        'info'
+        'info',
       );
 
       nextUrl = parseNextLink(response.headers?.link);
@@ -77,26 +80,26 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
   const addUserToGroup = async (
     groupId: string,
     groupName: string,
-    user: { id: string; profile: { login: string; firstName: string; lastName: string; email: string } }
+    user: {
+      id: string;
+      profile: { login: string; firstName: string; lastName: string; email: string };
+    },
   ): Promise<{ success: boolean; error?: string }> => {
-    const result = await coreApi.makeApiRequest(`/api/v1/groups/${groupId}/users/${user.id}`, 'PUT');
+    const result = await coreApi.makeApiRequest(
+      `/api/v1/groups/${groupId}/users/${user.id}`,
+      'PUT',
+    );
 
     if (result.success) {
-      await logAction(
-        `Added ${user.profile.firstName} ${user.profile.lastName} to ${groupName}`,
-        {
-          type: 'ADD_USER_TO_GROUP',
-          userId: user.id,
-          userEmail: user.profile.email,
-          userName: `${user.profile.firstName} ${user.profile.lastName}`,
-          groupId,
-          groupName,
-        }
-      );
-      coreApi.callbacks.onResult?.(
-        `Added ${user.profile.login} to ${groupName}`,
-        'success'
-      );
+      await logAction(`Added ${user.profile.firstName} ${user.profile.lastName} to ${groupName}`, {
+        type: 'ADD_USER_TO_GROUP',
+        userId: user.id,
+        userEmail: user.profile.email,
+        userName: `${user.profile.firstName} ${user.profile.lastName}`,
+        groupId,
+        groupName,
+      });
+      coreApi.callbacks.onResult?.(`Added ${user.profile.login} to ${groupName}`, 'success');
     }
 
     return { success: result.success, error: result.error };

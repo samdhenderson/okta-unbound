@@ -118,7 +118,7 @@ export function useSearchWithDropdown<T>({
       setResults([]);
       onSelect?.(item);
     },
-    [onSelect]
+    [onSelect],
   );
 
   const clearSearch = useCallback(() => {

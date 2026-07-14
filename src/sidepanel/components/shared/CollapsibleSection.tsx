@@ -43,11 +43,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
           )}
         </div>
       </button>
-      {isOpen && (
-        <div className="p-5">
-          {children}
-        </div>
-      )}
+      {isOpen && <div className="p-5">{children}</div>}
     </div>
   );
 };
