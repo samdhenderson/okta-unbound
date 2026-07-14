@@ -1,4 +1,5 @@
 import React from 'react';
+import { IconButton } from '../../shared';
 import type { MemberFilter } from './memberAnalytics';
 
 interface ActiveFilterChipsProps {
@@ -19,11 +20,12 @@ const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({ filters, onRemove
           className="inline-flex items-center gap-1 px-2 py-1 bg-primary-light text-primary-text rounded-full text-xs font-medium border border-primary-highlight"
         >
           {filter.label}
-          <button
-            type="button"
+          <IconButton
+            label={`Remove ${filter.label} filter`}
             onClick={() => onRemove(filter)}
-            className="p-0.5 hover:bg-primary-highlight rounded-full transition-colors"
-            aria-label={`Remove ${filter.label} filter`}
+            variant="ghost"
+            size="sm"
+            className="rounded-full"
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -33,7 +35,7 @@ const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({ filters, onRemove
                 d="M6 18L18 6M6 6l12 12"
               />
             </svg>
-          </button>
+          </IconButton>
         </span>
       ))}
       <button onClick={onClearAll} className="text-xs text-primary-text hover:underline ml-1">

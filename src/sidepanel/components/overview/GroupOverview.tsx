@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useOktaApi } from '../../hooks/useOktaApi';
 import { useProgress } from '../../contexts/ProgressContext';
 import AlertMessage from '../shared/AlertMessage';
-import Button from '../shared/Button';
+import { Button, IconButton } from '../shared';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import Modal from '../shared/Modal';
 import StatCard from './shared/StatCard';
@@ -263,10 +263,11 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
         <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-neutral-50 border border-neutral-200 rounded-md">
           <span className="text-xs text-neutral-500 font-medium">ID:</span>
           <code className="text-xs font-mono text-neutral-700">{groupId}</code>
-          <button
+          <IconButton
+            label={idCopied ? 'Copied!' : 'Copy group ID'}
             onClick={handleCopyId}
-            className="p-0.5 text-neutral-400 hover:text-primary-text rounded transition-colors duration-100"
-            title={idCopied ? 'Copied!' : 'Copy group ID'}
+            variant="ghost"
+            size="sm"
           >
             {idCopied ? (
               <svg
@@ -292,7 +293,7 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
                 />
               </svg>
             )}
-          </button>
+          </IconButton>
         </div>
       </div>
 

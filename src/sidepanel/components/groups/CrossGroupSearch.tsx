@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import Button from '../shared/Button';
+import { Button, IconButton } from '../shared';
 import type { OktaUser } from '../../../shared/types';
 
 interface CrossGroupSearchProps {
@@ -89,10 +89,7 @@ const CrossGroupSearch: React.FC<CrossGroupSearchProps> = ({
             Searching across {cachedGroupCount} cached group{cachedGroupCount !== 1 ? 's' : ''}
           </p>
         </div>
-        <button
-          onClick={onClose}
-          className="p-1 text-neutral-400 hover:text-neutral-700 rounded-md hover:bg-neutral-100 transition-colors"
-        >
+        <IconButton label="Close" onClick={onClose} variant="ghost" size="sm">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
@@ -101,7 +98,7 @@ const CrossGroupSearch: React.FC<CrossGroupSearchProps> = ({
               d="M6 18L18 6M6 6l12 12"
             />
           </svg>
-        </button>
+        </IconButton>
       </div>
 
       {/* Search Input */}

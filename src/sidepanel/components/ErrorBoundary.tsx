@@ -1,4 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
+import { Button } from './shared';
 import { createLogger } from '../../shared/utils/logger';
 
 const log = createLogger('ErrorBoundary');
@@ -90,18 +91,12 @@ class ErrorBoundary extends Component<Props, State> {
               )}
 
               <div className="flex gap-3 pt-4">
-                <button
-                  onClick={this.handleReset}
-                  className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-all duration-100 font-medium"
-                >
+                <Button variant="primary" onClick={this.handleReset}>
                   Try Again
-                </button>
-                <button
-                  onClick={() => window.location.reload()}
-                  className="px-4 py-2 bg-white text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-all duration-100 font-medium"
-                >
+                </Button>
+                <Button variant="secondary" onClick={() => window.location.reload()}>
                   Reload Extension
-                </button>
+                </Button>
               </div>
             </div>
           </div>

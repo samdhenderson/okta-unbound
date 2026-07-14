@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import type { OktaUser, MemberMfaResult } from '../../../../shared/types';
 import ScrollableList from '../../shared/ScrollableList';
+import { Button } from '../../shared';
 import MemberRow from './MemberRow';
 
 interface MemberListProps {
@@ -74,13 +75,9 @@ const MemberList: React.FC<MemberListProps> = ({
           Showing {visible.length.toLocaleString()} of {members.length.toLocaleString()}
         </span>
         {hasMore && (
-          <button
-            type="button"
-            onClick={onLoadMore}
-            className="px-3 py-1.5 rounded-md border border-neutral-200 font-medium text-neutral-700 hover:bg-neutral-50 hover:border-neutral-500 transition-colors duration-100"
-          >
+          <Button variant="secondary" size="sm" onClick={onLoadMore}>
             Load more (+{Math.min(PAGE, members.length - visibleCount)})
-          </button>
+          </Button>
         )}
       </div>
     </div>

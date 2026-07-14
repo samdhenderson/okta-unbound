@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { IconButton } from '../shared';
 
 interface UserSearchBarProps {
   searchQuery: string;
@@ -54,11 +55,12 @@ const UserSearchBar: React.FC<UserSearchBarProps> = ({
         onChange={(e) => onSearchChange(e.target.value)}
       />
       {showClearButton && (
-        <button
-          className="absolute inset-y-0 right-0 pr-4 flex items-center text-neutral-400 hover:text-neutral-600 transition-colors"
+        <IconButton
+          label="Clear search"
+          className="absolute right-2 top-1/2 -translate-y-1/2"
           onClick={handleClear}
-          title="Clear search"
-          type="button"
+          variant="ghost"
+          size="sm"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -68,7 +70,7 @@ const UserSearchBar: React.FC<UserSearchBarProps> = ({
               d="M6 18L18 6M6 6l12 12"
             />
           </svg>
-        </button>
+        </IconButton>
       )}
       {isSearching && (
         <div className="absolute inset-y-0 right-12 flex items-center pr-3">

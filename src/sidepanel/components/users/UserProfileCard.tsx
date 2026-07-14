@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { OktaUser } from '../../../shared/types';
 import CollapsibleSection from '../shared/CollapsibleSection';
+import { IconButton } from '../shared';
 import { formatDateShort, getRelativeTime } from '../../../shared/utils/dateFormat';
 
 interface UserProfileCardProps {
@@ -179,10 +180,12 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
                 <span className="text-xs font-semibold text-neutral-600 mb-1 block">User ID</span>
                 <div className="flex items-center gap-1.5">
                   <span className="font-mono text-xs text-neutral-900 truncate">{user.id}</span>
-                  <button
+                  <IconButton
+                    label={idCopied ? 'Copied!' : 'Copy ID'}
                     onClick={handleCopyId}
-                    className="shrink-0 p-0.5 text-neutral-400 hover:text-primary-text rounded transition-colors duration-100"
-                    title={idCopied ? 'Copied!' : 'Copy ID'}
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0"
                   >
                     {idCopied ? (
                       <svg
@@ -213,7 +216,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
                         />
                       </svg>
                     )}
-                  </button>
+                  </IconButton>
                 </div>
               </div>
               {user.profile.secondEmail && (

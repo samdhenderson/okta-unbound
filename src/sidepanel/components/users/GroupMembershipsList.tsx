@@ -1,4 +1,5 @@
 import React from 'react';
+import { Button, IconButton } from '../shared';
 import type { GroupMembership } from '../../../shared/types';
 
 interface GroupMembershipsListProps {
@@ -93,12 +94,13 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
                       </span>
                     )}
                     {oktaOrigin && (
-                      <button
+                      <IconButton
+                        label="Open group in Okta admin"
                         onClick={() =>
                           window.open(`${oktaOrigin}/admin/group/${membership.group.id}`, '_blank')
                         }
-                        className="p-1.5 text-neutral-400 hover:text-primary-text hover:bg-primary-light rounded transition-all duration-100"
-                        title="Open group in Okta admin"
+                        variant="ghost"
+                        size="md"
                       >
                         <svg
                           className="w-3.5 h-3.5"
@@ -113,7 +115,7 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
                             d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
                           />
                         </svg>
-                      </button>
+                      </IconButton>
                     )}
                   </div>
                   {membership.group.profile.description && (
@@ -160,8 +162,10 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
                       *
                     </span>
                     {onNavigateToRule && (
-                      <button
-                        className="ml-auto px-3 py-1.5 text-xs font-medium bg-white text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors shadow-sm inline-flex items-center gap-1"
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="ml-auto shadow-sm"
                         onClick={() => onNavigateToRule(membership.rule!.id)}
                         title="View this rule in Rules tab"
                       >
@@ -179,7 +183,7 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
                             d="M9 5l7 7-7 7"
                           />
                         </svg>
-                      </button>
+                      </Button>
                     )}
                   </div>
                   {membership.rule.conditions?.expression?.value && (

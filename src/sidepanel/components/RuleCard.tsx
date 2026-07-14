@@ -1,7 +1,7 @@
 import React, { useState, useCallback, memo } from 'react';
 import type { FormattedRule } from '../../shared/types';
 import { timeAgo } from '../../shared/ruleUtils';
-import Button from './shared/Button';
+import { Button, IconButton } from './shared';
 
 interface RuleCardProps {
   rule: FormattedRule;
@@ -133,9 +133,11 @@ const RuleCard: React.FC<RuleCardProps> = memo(
               <p className="text-sm text-neutral-600 truncate">{rule.condition}</p>
             </div>
           </div>
-          <button
-            className="text-neutral-400 hover:text-neutral-600 transition-colors duration-100 p-2 rounded-md hover:bg-neutral-50 shrink-0"
-            type="button"
+          <IconButton
+            label={isExpanded ? 'Collapse' : 'Expand'}
+            variant="ghost"
+            size="md"
+            className="shrink-0"
           >
             <svg
               className={`w-4 h-4 transition-transform duration-100 ${isExpanded ? 'rotate-90' : ''}`}
@@ -145,7 +147,7 @@ const RuleCard: React.FC<RuleCardProps> = memo(
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-          </button>
+          </IconButton>
         </div>
 
         {/* Expanded Content */}

@@ -1,4 +1,5 @@
 import React, { useState, useCallback, memo } from 'react';
+import { IconButton } from '../shared';
 import type { GroupSummary, StalenessInfo } from '../../../shared/types';
 
 function getStalenessColor(score: number): { bg: string; text: string; label: string } {
@@ -170,10 +171,11 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
                 {/* Action Buttons */}
                 <div className="flex items-center gap-1 shrink-0">
                   {oktaOrigin && (
-                    <button
+                    <IconButton
+                      label="Open in Okta"
                       onClick={handleOpenInOkta}
-                      className="p-1.5 text-neutral-400 hover:text-primary-text hover:bg-primary-light rounded-md transition-colors duration-100"
-                      title="Open in Okta"
+                      variant="ghost"
+                      size="md"
                     >
                       <svg
                         className="w-4 h-4"
@@ -188,15 +190,16 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
                           d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
                         />
                       </svg>
-                    </button>
+                    </IconButton>
                   )}
-                  <button
+                  <IconButton
+                    label={expanded ? 'Collapse' : 'Expand'}
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleExpanded();
                     }}
-                    className="p-1.5 text-neutral-400 hover:text-primary-text hover:bg-primary-light rounded-md transition-colors duration-100"
-                    title={expanded ? 'Collapse' : 'Expand'}
+                    variant="ghost"
+                    size="md"
                   >
                     <svg
                       className={`w-4 h-4 transition-transform duration-100 ${expanded ? 'rotate-90' : ''}`}
@@ -211,7 +214,7 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
                         d="M9 5l7 7-7 7"
                       />
                     </svg>
-                  </button>
+                  </IconButton>
                 </div>
               </div>
 
@@ -293,10 +296,12 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
                 <div className="text-xs font-medium text-neutral-600 mb-0.5">Group ID</div>
                 <div className="flex items-center gap-1.5">
                   <code className="text-xs font-mono text-neutral-900 truncate">{group.id}</code>
-                  <button
+                  <IconButton
+                    label={idCopied ? 'Copied!' : 'Copy ID'}
                     onClick={handleCopyId}
-                    className="shrink-0 p-0.5 text-neutral-400 hover:text-primary-text rounded transition-colors duration-100"
-                    title={idCopied ? 'Copied!' : 'Copy ID'}
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0"
                   >
                     {idCopied ? (
                       <svg
@@ -327,7 +332,7 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
                         />
                       </svg>
                     )}
-                  </button>
+                  </IconButton>
                 </div>
               </div>
 

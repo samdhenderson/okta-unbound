@@ -11,6 +11,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { Button } from './shared';
 import { useScheduler } from '../contexts/SchedulerContext';
 
 const SchedulerStatusBar: React.FC = () => {
@@ -158,13 +159,14 @@ const SchedulerStatusBar: React.FC = () => {
 
         {/* Cancel/Clear Queue Button */}
         {state.queueLength > 0 && (
-          <button
-            onClick={async () => {
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={() => {
               if (confirm(`Cancel ${state.queueLength} pending API requests?`)) {
-                await clearQueue();
+                void clearQueue();
               }
             }}
-            className="px-3 py-1.5 bg-danger hover:bg-danger-text text-white text-xs font-bold rounded-md transition-all duration-100 flex items-center gap-1.5"
             title="Cancel all pending requests"
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -176,7 +178,7 @@ const SchedulerStatusBar: React.FC = () => {
               />
             </svg>
             <span>Cancel</span>
-          </button>
+          </Button>
         )}
       </div>
     </div>
