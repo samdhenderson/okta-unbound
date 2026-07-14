@@ -1,5 +1,5 @@
 import React, { useState, useCallback, memo } from 'react';
-import { IconButton } from '../shared';
+import { IconButton, Checkbox } from '../shared';
 import type { GroupSummary, StalenessInfo } from '../../../shared/types';
 
 function getStalenessColor(score: number): { bg: string; text: string; label: string } {
@@ -67,13 +67,9 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
       [oktaOrigin, group.id],
     );
 
-    const handleToggle = useCallback(
-      (e: React.ChangeEvent<HTMLInputElement>) => {
-        e.stopPropagation();
-        onToggleSelect(group.id);
-      },
-      [onToggleSelect, group.id],
-    );
+    const handleToggle = useCallback(() => {
+      onToggleSelect(group.id);
+    }, [onToggleSelect, group.id]);
 
     const toggleExpanded = useCallback(() => {
       setExpanded((prev) => !prev);
@@ -108,11 +104,10 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
           <div className="flex items-start gap-3">
             {/* Checkbox */}
             <div className="flex items-center pt-0.5" onClick={(e) => e.stopPropagation()}>
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={selected}
                 onChange={handleToggle}
-                className="w-4 h-4 rounded border-neutral-500 text-primary focus:ring-primary cursor-pointer accent-primary"
+                aria-label={`Select ${group.name}`}
               />
             </div>
 

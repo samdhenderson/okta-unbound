@@ -5,6 +5,7 @@ export { default as FilterPill } from './FilterPill';
 export { default as CopyButton } from './CopyButton';
 export { default as Modal } from './Modal';
 export { default as Input } from './Input';
+export { default as Checkbox } from './Checkbox';
 export { default as Select } from './Select';
 export { default as Textarea } from './Textarea';
 export { default as PageHeader } from './PageHeader';

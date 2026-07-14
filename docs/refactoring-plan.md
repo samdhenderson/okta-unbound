@@ -31,13 +31,13 @@ Status legend: `[ ]` todo · `[~]` partially done · `[x]` done.
 ### 2. `[~] `console.* → logger` migration
 
 - [x] Migrated ~260 sites across shared infra, hooks, content, background, and
-  components to `createLogger(scope)`; security-logging review verified no
-  token/payload/PII leaks (fixed 4 endpoint-query-string leaks in the scheduler).
+      components to `createLogger(scope)`; security-logging review verified no
+      token/payload/PII leaks (fixed 4 endpoint-query-string leaks in the scheduler).
 - [ ] The 3 context hooks (`useGroupContext`/`useUserContext`/`useOktaPageContext`,
-  56 calls) are deferred to the §7 `useOktaTabContext` merge (rewritten with fresh
-  lean logging), plus `ruleEvaluator.test.ts` console-spy assignments.
+      56 calls) are deferred to the §7 `useOktaTabContext` merge (rewritten with fresh
+      lean logging), plus `ruleEvaluator.test.ts` console-spy assignments.
 - [ ] Flip `no-console` `warn`→`error` in [eslint.config.js](../eslint.config.js)
-  once the above land, and update ADR-0004.
+      once the above land, and update ADR-0004.
 - Doc: `docs/development.md`. Done when: `grep -rn "console\." src` returns only
   `logger.ts` (+ intentional test spies); rule flipped.
 
@@ -51,14 +51,17 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
 
 - [x] Built `IconButton` (+ tests); promoted `FilterPill` to `shared/`; barrel updated.
 - [x] Migrated ~22 raw buttons across 19 **stable** (non-god) feature components to
-  `Button`/`IconButton`/`FilterPill`. 7 left raw as documented custom controls.
+      `Button`/`IconButton`/`FilterPill`. 7 left raw as documented custom controls.
+- [x] **Stable text inputs** routed through shared `Input` (extended with
+      `onKeyDown`/`autoFocus`/`inputRef` + a `bg-white` base): `GroupCollections` (3),
+      `BulkOperationsPanel`, `CrossGroupSearch`, `CompositionReports`. `UserSearchBar`
+      left raw+documented (trailing clear-button + spinner + refocus composite).
+- [x] **Checkboxes** → new shared `Checkbox` primitive (`GroupExportModal` 2,
+      `GroupListItem` 1). Added to the barrel with tests.
 - [ ] **God-component buttons** (`GroupsTab` 10, `RulesTab` 4, `UsersTab` 3,
-  `UserComparisonModal` 2) → migrate during their §7 decomposition.
+      `UserComparisonModal` 2) + their raw text inputs (`GroupsTab` 2, `UsersTab` 2,
+      `RulesTab` 1, `UserComparisonModal` 1) → migrate during their §7 decomposition.
 - [ ] **`AttributeFacet`** (4) → with the §9 chart tokenization.
-- [ ] **Raw form controls** (~11 stable: `GroupCollections` text inputs,
-  `CompositionReports`, search composites; + god components). Text inputs → shared
-  `Input`. Checkboxes (`GroupExportModal`, `GroupListItem`) need a new `Checkbox`
-  primitive (shared `Input` is text-only) — add it or leave raw+documented.
 - Doc: `docs/components.md`. Agent: `component-builder`; verify with `ui-reviewer`.
 - Done when: no raw `<button>` in feature components except documented exceptions;
   form controls routed through shared `Input`/`Select`/`Textarea`/`Checkbox`.
@@ -66,20 +69,20 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
 ### 4. `[x]` Finish the `error → danger` codemod
 
 - [x] Migrated the 12 `AlertMessage type:'error'` call sites to `'danger'` and
-  removed the `'error'` alias + `normalizeStatus` from
-  [shared/status.ts](../src/sidepanel/components/shared/status.ts); AlertMessage now
-  consumes the canonical `StatusType` directly. (The unrelated `ConnectionStatus`
-  union and `StatCard`/`PageHeader` `variant='error'` color prop are a separate
-  vocabulary, intentionally untouched.)
+      removed the `'error'` alias + `normalizeStatus` from
+      [shared/status.ts](../src/sidepanel/components/shared/status.ts); AlertMessage now
+      consumes the canonical `StatusType` directly. (The unrelated `ConnectionStatus`
+      union and `StatCard`/`PageHeader` `variant='error'` color prop are a separate
+      vocabulary, intentionally untouched.)
 - Doc: `docs/design-system.md` / ADR-0002.
 
 ### 5. `[~]` Adopt the shared utils everywhere
 
 - [x] `isOktaUrl` adopted at all non-hook sites (the only remaining inline checks
-  are in the 3 context hooks, handled by the §7 `useOktaTabContext` merge).
+      are in the 3 context hooks, handled by the §7 `useOktaTabContext` merge).
 - [x] `UserProfileCard` adopts `dateFormat` (`formatDateShort` added for date-only).
 - [ ] `UsersTab.tsx` inline `formatDate`/`getRelativeTime` — removed during its §7
-  decomposition. `csvUtils.formatDateForCSV` is a distinct CSV format — keep.
+      decomposition. `csvUtils.formatDateForCSV` is a distinct CSV format — keep.
 - Doc: `docs/development.md`. Agent: `architecture-refactor`.
 - Done when: no duplicate implementations remain (UsersTab pending §7).
 

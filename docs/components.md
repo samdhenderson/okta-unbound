@@ -6,10 +6,13 @@ Feature components live under `components/{groups,users,overview}/`.
 
 ## Hard rules
 
-1. **Never hand-roll a `<button>`, `<input>`, `<select>`, or `<textarea>`** in a
-   feature component. Use `Button`, `Input`, `Select`, `Textarea`. If a shape is
-   missing (e.g. a filter chip / toggle), add a variant to the shared component —
-   don't inline bespoke classes. (Audit: 54 raw `<button>`s to migrate.)
+1. **Never hand-roll a `<button>`, `<input>`, `<select>`, `<textarea>`, or
+   `<input type="checkbox">`** in a feature component. Use `Button`/`IconButton`/
+   `FilterPill`, `Input`, `Select`, `Textarea`, `Checkbox`. If a shape is missing
+   (e.g. a filter chip / toggle), add a variant to the shared component — don't
+   inline bespoke classes. Remaining raw controls live only in the god components
+   (pending §7 decomposition) and a few documented composites (`SearchDropdown`,
+   `UserSearchBar`).
 2. **Import from the barrel** `components/shared` — not deep paths. The barrel must
    export every shared component (currently incomplete — see below).
 3. **No raw hex / no ad-hoc spacing** — see [design-system.md](./design-system.md).
@@ -36,15 +39,14 @@ info`) — never `error`.
 
 ## Catalog
 
-`shared/`: `Button`, `Modal`, `Input`, `Select`, `Textarea`, `PageHeader`,
-`CollapsibleSection`, `AlertMessage`, `EmptyState`, `LoadingSpinner`,
-`ScrollableList`, `SearchDropdown`, `SelectionChips`.
+`shared/`: `Button`, `IconButton`, `FilterPill`, `CopyButton`, `Modal`, `Input`,
+`Checkbox`, `Select`, `Textarea`, `PageHeader`, `CollapsibleSection`,
+`AlertMessage`, `EmptyState`, `LoadingSpinner`, `ScrollableList`, `SearchDropdown`,
+`SelectionChips`.
 `overview/shared/`: `Icon`, `StatCard`, `QuickActionsPanel`.
 
-**Barrel gap:** `shared/index.ts` exports only `Button, Modal, Input, Select,
-Textarea, PageHeader, CollapsibleSection`. Add the remaining six
-(`AlertMessage, EmptyState, LoadingSpinner, ScrollableList, SearchDropdown,
-SelectionChips`) and migrate deep imports.
+**Barrel:** `shared/index.ts` now exports the full catalog above — import from the
+barrel (`../shared`), not deep paths.
 
 ## When to build vs reuse
 
