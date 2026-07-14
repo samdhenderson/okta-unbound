@@ -39,17 +39,17 @@ const SchedulerStatusBar: React.FC = () => {
   const getStatusColor = (): string => {
     switch (state.status) {
       case 'idle':
-        return '#22c55e'; // Green-500 - ready/idle
+        return 'var(--color-success)'; // ready/idle
       case 'processing':
-        return '#2196f3'; // Blue
+        return 'var(--color-info)';
       case 'throttled':
-        return '#ff9800'; // Orange
+        return 'var(--color-warning)';
       case 'cooldown':
-        return '#f44336'; // Red
+        return 'var(--color-danger)';
       case 'paused':
-        return '#9e9e9e'; // Gray
+        return 'var(--color-neutral-500)';
       default:
-        return '#666';
+        return 'var(--color-neutral-600)';
     }
   };
 
@@ -137,7 +137,9 @@ const SchedulerStatusBar: React.FC = () => {
         {state.status === 'cooldown' && cooldownRemaining > 0 && (
           <div className="flex items-center gap-1.5 px-2.5 py-1 bg-danger-light border border-danger/20 rounded-md">
             <span className="text-danger-text font-semibold">Resuming in:</span>
-            <span className="font-bold text-danger font-mono">{formatCooldownTime(cooldownRemaining)}</span>
+            <span className="font-bold text-danger font-mono">
+              {formatCooldownTime(cooldownRemaining)}
+            </span>
           </div>
         )}
 
@@ -147,7 +149,9 @@ const SchedulerStatusBar: React.FC = () => {
             <span className="text-neutral-600">Processed:</span>
             <span className="font-bold text-neutral-900">{state.totalProcessed}</span>
             {metrics.failedRequests > 0 && (
-              <span className="font-semibold text-danger-text">({metrics.failedRequests} failed)</span>
+              <span className="font-semibold text-danger-text">
+                ({metrics.failedRequests} failed)
+              </span>
             )}
           </div>
         )}
@@ -164,7 +168,12 @@ const SchedulerStatusBar: React.FC = () => {
             title="Cancel all pending requests"
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
             <span>Cancel</span>
           </button>

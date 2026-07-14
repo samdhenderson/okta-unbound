@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { OktaUser, MemberMfaResult, MfaScanStatus } from '../../../../shared/types';
+import Button from '../../shared/Button';
 import MemberSearchBar from './MemberSearchBar';
 import MemberFilterPanel from './MemberFilterPanel';
+import CopyMembersModal from './CopyMembersModal';
 import CompositionReports from './CompositionReports';
 import BreakdownDetailsModal from './BreakdownDetailsModal';
 import MfaScanPanel from './MfaScanPanel';
@@ -10,14 +12,13 @@ import {
   type BreakdownRow,
   type Dimension,
   type MemberFilter,
-  type ProfileDimension,
   type SortField,
-  computeAllBreakdowns,
   computeDimensionBreakdown,
+  discoverAttributeBreakdowns,
   filterMembers,
   sortMembers,
   getObservedFactorLabels,
-  DIMENSION_TITLES,
+  dimensionTitle,
 } from './memberAnalytics';
 
 type FactorMode = 'off' | 'has' | 'missing';
@@ -50,7 +51,8 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState<SortField>('name');
   const [sortDesc, setSortDesc] = useState(false);
-  const [otherDim, setOtherDim] = useState<ProfileDimension | null>(null);
+  const [detailKey, setDetailKey] = useState<string | null>(null);
+  const [copyOpen, setCopyOpen] = useState(false);
 
   // Debounce the search query so filtering runs at most a few times per second.
   useEffect(() => {
@@ -58,17 +60,18 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
     return () => clearTimeout(id);
   }, [query]);
 
-  // Breakdowns are computed over the full member set (stable while faceting).
-  const breakdowns = useMemo(() => computeAllBreakdowns(members), [members]);
+  // Distributions are computed over the full member set (stable while faceting).
+  const attributes = useMemo(() => discoverAttributeBreakdowns(members), [members]);
+  const statusRows = useMemo(() => computeDimensionBreakdown(members, 'status'), [members]);
   const factorLabels = useMemo(() => getObservedFactorLabels(mfaResults), [mfaResults]);
 
   const filtered = useMemo(
     () => filterMembers(members, debouncedQuery, filters, mfaResults),
-    [members, debouncedQuery, filters, mfaResults]
+    [members, debouncedQuery, filters, mfaResults],
   );
   const sorted = useMemo(
     () => sortMembers(filtered, sortBy, sortDesc, mfaResults),
-    [filtered, sortBy, sortDesc, mfaResults]
+    [filtered, sortBy, sortDesc, mfaResults],
   );
 
   // Reset the visible window whenever the result set / order changes. Done during
@@ -93,31 +96,34 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
 
   const handleCompositionToggle = useCallback(
     (dimension: Dimension, row: BreakdownRow) => {
-      const title = DIMENSION_TITLES[dimension as ProfileDimension];
-      toggleFilter(dimension, row.value, `${title}: ${row.label}`);
+      toggleFilter(dimension, row.value, `${dimensionTitle(dimension)}: ${row.label}`);
     },
-    [toggleFilter]
+    [toggleFilter],
   );
 
   const handleStatusToggle = useCallback(
     (row: BreakdownRow) => toggleFilter('status', row.value, `Status: ${row.label}`),
-    [toggleFilter]
+    [toggleFilter],
   );
 
   const handleClearStatus = useCallback(
     () => setFilters((prev) => prev.filter((f) => f.dimension !== 'status')),
-    []
+    [],
   );
 
   const handleMfaValueToggle = useCallback(
     (value: string, label: string) => toggleFilter('mfa', value, label),
-    [toggleFilter]
+    [toggleFilter],
   );
 
   const handleSetFactorMode = useCallback((label: string, mode: FactorMode) => {
     setFilters((prev) => {
       const without = prev.filter(
-        (f) => !(f.dimension === 'mfa' && (f.value === `has:${label}` || f.value === `missing:${label}`))
+        (f) =>
+          !(
+            f.dimension === 'mfa' &&
+            (f.value === `has:${label}` || f.value === `missing:${label}`)
+          ),
       );
       if (mode === 'off') return without;
       const value = mode === 'has' ? `has:${label}` : `missing:${label}`;
@@ -128,7 +134,7 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
 
   const removeFilter = useCallback(
     (filter: MemberFilter) => setFilters((prev) => prev.filter((f) => f !== filter)),
-    []
+    [],
   );
   const clearAll = useCallback(() => setFilters([]), []);
 
@@ -150,14 +156,14 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
   const mfaScanned = mfaResults !== null && scanStatus === 'complete';
   const activeFilterCount = filters.length;
 
-  // Full distribution for the "Other" details modal.
-  const otherRows = useMemo(
-    () => (otherDim ? computeDimensionBreakdown(members, otherDim) : []),
-    [otherDim, members]
+  // Full value distribution for the attribute details modal.
+  const detailRows = useMemo(
+    () => (detailKey ? computeDimensionBreakdown(members, detailKey) : []),
+    [detailKey, members],
   );
-  const otherActiveValues = useMemo(
-    () => new Set(filters.filter((f) => f.dimension === otherDim).map((f) => f.value)),
-    [filters, otherDim]
+  const detailActiveValues = useMemo(
+    () => new Set(filters.filter((f) => f.dimension === detailKey).map((f) => f.value)),
+    [filters, detailKey],
   );
 
   return (
@@ -178,7 +184,12 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
           title="Toggle filters"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+            />
           </svg>
           Filters
           {activeFilterCount > 0 && (
@@ -193,7 +204,7 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
       {showFilters && (
         <MemberFilterPanel
           filters={filters}
-          statusRows={breakdowns.status}
+          statusRows={statusRows}
           mfaResults={mfaResults}
           factorLabels={factorLabels}
           sortBy={sortBy}
@@ -220,20 +231,17 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
         onToggleMfaFilter={(row) => handleMfaValueToggle(row.value, row.label)}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Composition reports */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-neutral-900">Composition</h3>
-          <CompositionReports
-            breakdowns={breakdowns}
-            filters={filters}
-            onToggle={handleCompositionToggle}
-            onShowOther={setOtherDim}
-          />
-        </div>
+      {/* Composition: distribution of every browseable profile attribute */}
+      <CompositionReports
+        attributes={attributes}
+        filters={filters}
+        onToggle={handleCompositionToggle}
+        onExpand={setDetailKey}
+      />
 
-        {/* Member list */}
-        <div className="space-y-3">
+      {/* Member list */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-semibold text-neutral-900">
             Members
             <span className="ml-2 text-xs font-normal text-neutral-500">
@@ -241,26 +249,39 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
               {sorted.length !== members.length && ` of ${members.length.toLocaleString()}`}
             </span>
           </h3>
-          <MemberList
-            members={sorted}
-            mfaResults={mfaResults}
-            mfaScanned={mfaScanned}
-            visibleCount={visibleCount}
-            onLoadMore={loadMore}
-            oktaOrigin={oktaOrigin}
-          />
+          <Button
+            variant="secondary"
+            size="sm"
+            icon="clipboard"
+            onClick={() => setCopyOpen(true)}
+            disabled={sorted.length === 0}
+            title="Copy the listed members as names or emails"
+          >
+            Copy members
+          </Button>
         </div>
+        <MemberList
+          members={sorted}
+          mfaResults={mfaResults}
+          mfaScanned={mfaScanned}
+          visibleCount={visibleCount}
+          onLoadMore={loadMore}
+          oktaOrigin={oktaOrigin}
+        />
       </div>
 
-      {/* "Other" details modal */}
+      {/* Full attribute distribution modal */}
       <BreakdownDetailsModal
-        isOpen={otherDim !== null}
-        onClose={() => setOtherDim(null)}
-        title={otherDim ? DIMENSION_TITLES[otherDim] : ''}
-        rows={otherRows}
-        activeValues={otherActiveValues}
-        onRowClick={(row) => otherDim && handleCompositionToggle(otherDim, row)}
+        isOpen={detailKey !== null}
+        onClose={() => setDetailKey(null)}
+        title={detailKey ? dimensionTitle(detailKey) : ''}
+        rows={detailRows}
+        activeValues={detailActiveValues}
+        onRowClick={(row) => detailKey && handleCompositionToggle(detailKey, row)}
       />
+
+      {/* Copy members (name / email / username) modal */}
+      <CopyMembersModal isOpen={copyOpen} onClose={() => setCopyOpen(false)} members={sorted} />
     </div>
   );
 };

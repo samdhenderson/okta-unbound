@@ -41,8 +41,18 @@
 // Content script for Okta Unbound
 // Runs on Okta pages and handles API requests with proper session authentication
 
-import type { MessageRequest, MessageResponse, OktaUser, GroupInfo, UserInfo, ApiResponse } from '../shared/types';
+import type {
+  MessageRequest,
+  MessageResponse,
+  OktaUser,
+  GroupInfo,
+  UserInfo,
+  ApiResponse,
+} from '../shared/types';
 import { getCacheEntry, setCacheEntry } from '../shared/cache';
+import { createLogger } from '../shared/utils/logger';
+
+const log = createLogger('Content');
 
 console.log('[Content] Content script loaded', {
   url: window.location.href,
@@ -55,7 +65,11 @@ console.log('[Content] Content script loaded', {
 // ============================================================================
 
 chrome.runtime.onMessage.addListener(
-  (request: MessageRequest, sender: chrome.runtime.MessageSender, sendResponse: (response: MessageResponse) => void) => {
+  (
+    request: MessageRequest,
+    sender: chrome.runtime.MessageSender,
+    sendResponse: (response: MessageResponse) => void,
+  ) => {
     console.log('[Content] Received message:', {
       action: request.action,
       from: sender.id,
@@ -160,7 +174,7 @@ chrome.runtime.onMessage.addListener(
         sendResponse({ success: false, error: 'Unknown action' });
         return true;
     }
-  }
+  },
 );
 
 // ============================================================================
@@ -170,7 +184,7 @@ chrome.runtime.onMessage.addListener(
 async function handleMakeApiRequest(
   endpoint: string,
   method: string = 'GET',
-  body?: any
+  body?: any,
 ): Promise<ApiResponse> {
   console.log('[Content] makeApiRequest called:', { endpoint, method, hasBody: !!body });
 
@@ -179,15 +193,13 @@ async function handleMakeApiRequest(
 
     // Extract XSRF token from the page
     const xsrfToken = getXsrfToken();
-    console.log('[Content] XSRF token check:', {
-      tokenLength: xsrfToken.length,
-      tokenPreview: xsrfToken ? xsrfToken.substring(0, 20) + '...' : 'none',
-    });
+    // Never log the token or any preview of it — only whether one was found.
+    log.debug('XSRF token check', { present: xsrfToken.length > 0 });
 
     const options: RequestInit = {
       method,
       headers: {
-        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        Accept: 'application/json, text/javascript, */*; q=0.01',
         'Content-Type': 'application/json',
         'Cache-Control': 'no-cache, no-store',
         'X-Requested-With': 'XMLHttpRequest',
@@ -244,7 +256,8 @@ async function handleMakeApiRequest(
     if (!response.ok) {
       return {
         success: false,
-        error: data?.errorSummary || data?.message || `Request failed with status ${response.status}`,
+        error:
+          data?.errorSummary || data?.message || `Request failed with status ${response.status}`,
         status: response.status,
         data,
       };
@@ -357,7 +370,11 @@ async function handleGetUserInfo(): Promise<MessageResponse<UserInfo>> {
         userName = `${profile.firstName || ''} ${profile.lastName || ''}`.trim();
         userEmail = profile.email;
         userStatus = response.data.status;
-        console.log('[Content] Fetched user details from API:', { userName, userEmail, userStatus });
+        console.log('[Content] Fetched user details from API:', {
+          userName,
+          userEmail,
+          userStatus,
+        });
       }
     } catch (e) {
       console.warn('[Content] Failed to fetch user details from API:', e);
@@ -591,7 +608,11 @@ async function handleFetchGroupRules(groupId?: string): Promise<MessageResponse>
       }
     });
 
-    console.log('[Content] Successfully fetched', groupNameMap.size, 'group names (parallel fetch with caching)');
+    console.log(
+      '[Content] Successfully fetched',
+      groupNameMap.size,
+      'group names (parallel fetch with caching)',
+    );
 
     // Calculate stats
     const activeRules = rules.filter((r) => r.status === 'ACTIVE');
@@ -614,8 +635,12 @@ async function handleFetchGroupRules(groupId?: string): Promise<MessageResponse>
           // Extract user attributes
           const expr1 = rule1.conditions?.expression?.value || '';
           const expr2 = rule2.conditions?.expression?.value || '';
-          const attrs1 = (expr1.match(/user\.(\w+)/g) || []).map((m: string) => m.replace('user.', ''));
-          const attrs2 = (expr2.match(/user\.(\w+)/g) || []).map((m: string) => m.replace('user.', ''));
+          const attrs1 = (expr1.match(/user\.(\w+)/g) || []).map((m: string) =>
+            m.replace('user.', ''),
+          );
+          const attrs2 = (expr2.match(/user\.(\w+)/g) || []).map((m: string) =>
+            m.replace('user.', ''),
+          );
           const commonAttrs = attrs1.filter((a: string) => attrs2.includes(a));
 
           if (commonAttrs.length > 0) {
@@ -624,7 +649,8 @@ async function handleFetchGroupRules(groupId?: string): Promise<MessageResponse>
               rule1: { id: rule1.id, name: rule1.name },
               rule2: { id: rule2.id, name: rule2.name },
               reason: `Both rules use ${commonAttrs.join(', ')} and assign to ${sharedGroups.length} shared group(s)`,
-              severity: sharedGroups.length > 2 ? 'high' : sharedGroups.length > 1 ? 'medium' : 'low',
+              severity:
+                sharedGroups.length > 2 ? 'high' : sharedGroups.length > 1 ? 'medium' : 'low',
               affectedGroups: sharedGroups,
             });
           }
@@ -638,7 +664,9 @@ async function handleFetchGroupRules(groupId?: string): Promise<MessageResponse>
       const expression = rule.conditions?.expression?.value || 'No condition specified';
 
       // Extract user attributes
-      const attrs = (expression.match(/user\.(\w+)/g) || []).map((m: string) => m.replace('user.', ''));
+      const attrs = (expression.match(/user\.(\w+)/g) || []).map((m: string) =>
+        m.replace('user.', ''),
+      );
 
       // Simplify expression for display
       const simpleCondition = expression
@@ -651,7 +679,7 @@ async function handleFetchGroupRules(groupId?: string): Promise<MessageResponse>
 
       // Find conflicts involving this rule
       const ruleConflicts = conflicts.filter(
-        (c) => c.rule1.id === rule.id || c.rule2.id === rule.id
+        (c) => c.rule1.id === rule.id || c.rule2.id === rule.id,
       );
 
       // Map group IDs to their names (for target groups)
@@ -716,7 +744,7 @@ async function handleActivateRule(ruleId: string): Promise<MessageResponse> {
   try {
     const response = await handleMakeApiRequest(
       `/api/v1/groups/rules/${ruleId}/lifecycle/activate`,
-      'POST'
+      'POST',
     );
 
     if (response.success) {
@@ -740,7 +768,7 @@ async function handleDeactivateRule(ruleId: string): Promise<MessageResponse> {
   try {
     const response = await handleMakeApiRequest(
       `/api/v1/groups/rules/${ruleId}/lifecycle/deactivate`,
-      'POST'
+      'POST',
     );
 
     if (response.success) {
@@ -956,7 +984,10 @@ async function handleGetUserContext(userId: string): Promise<MessageResponse> {
         rules = managedByRulesRaw;
       } else if (typeof managedByRulesRaw === 'string' && managedByRulesRaw.trim()) {
         rules = [managedByRulesRaw];
-      } else if (typeof managedByRulesRaw === 'object' && (managedByRulesRaw.id || managedByRulesRaw.ruleId)) {
+      } else if (
+        typeof managedByRulesRaw === 'object' &&
+        (managedByRulesRaw.id || managedByRulesRaw.ruleId)
+      ) {
         rules = [managedByRulesRaw.id || managedByRulesRaw.ruleId];
       }
     }
@@ -965,7 +996,7 @@ async function handleGetUserContext(userId: string): Promise<MessageResponse> {
       success: true,
       data: {
         userId: userData[0],
-        managedByRules: rules
+        managedByRules: rules,
       },
     };
   } catch (error) {
@@ -1049,7 +1080,10 @@ function extractUserIdFromUrl(url: string): string | null {
   // Pattern list in order of specificity (most specific first)
   const patterns: Array<{ regex: RegExp; name: string }> = [
     // New Okta Identity Engine (OIE) patterns
-    { regex: /\/admin\/user\/profile\/view\/([a-zA-Z0-9]+)/, name: '/admin/user/profile/view/{id}' },
+    {
+      regex: /\/admin\/user\/profile\/view\/([a-zA-Z0-9]+)/,
+      name: '/admin/user/profile/view/{id}',
+    },
     { regex: /\/admin\/user\/profile\/([a-zA-Z0-9]+)/, name: '/admin/user/profile/{id}' },
 
     // Classic admin patterns
@@ -1060,7 +1094,10 @@ function extractUserIdFromUrl(url: string): string | null {
     { regex: /\/admin\/directory\/people\/([a-zA-Z0-9]+)/, name: '/admin/directory/people/{id}' },
 
     // End-user dashboard patterns
-    { regex: /\/enduser\/settings\/profile\/([a-zA-Z0-9]+)/, name: '/enduser/settings/profile/{id}' },
+    {
+      regex: /\/enduser\/settings\/profile\/([a-zA-Z0-9]+)/,
+      name: '/enduser/settings/profile/{id}',
+    },
     { regex: /\/app\/UserHome\/([a-zA-Z0-9]+)/, name: '/app/UserHome/{id}' },
 
     // API/direct user patterns
@@ -1080,7 +1117,17 @@ function extractUserIdFromUrl(url: string): string | null {
       // Validate it looks like an Okta ID (starts with 00u or is alphanumeric)
       const potentialId = match[1];
       // Skip obvious non-IDs like 'settings', 'profile', 'edit', etc.
-      const nonIdKeywords = ['settings', 'profile', 'edit', 'view', 'new', 'create', 'delete', 'list', 'search'];
+      const nonIdKeywords = [
+        'settings',
+        'profile',
+        'edit',
+        'view',
+        'new',
+        'create',
+        'delete',
+        'list',
+        'search',
+      ];
       if (nonIdKeywords.includes(potentialId.toLowerCase())) {
         continue;
       }
@@ -1154,7 +1201,10 @@ function extractAppIdFromUrl(url: string): string | null {
 
   const patterns: Array<{ regex: RegExp; name: string }> = [
     // Admin app configuration pages
-    { regex: /\/admin\/app\/([a-zA-Z0-9]+)\/instance\/([a-zA-Z0-9]+)/, name: '/admin/app/{appId}/instance/{instanceId}' },
+    {
+      regex: /\/admin\/app\/([a-zA-Z0-9]+)\/instance\/([a-zA-Z0-9]+)/,
+      name: '/admin/app/{appId}/instance/{instanceId}',
+    },
     { regex: /\/admin\/app\/([a-zA-Z0-9]+)\/settings/, name: '/admin/app/{appId}/settings' },
     { regex: /\/admin\/app\/([a-zA-Z0-9]+)\/assignment/, name: '/admin/app/{appId}/assignment' },
     { regex: /\/admin\/app\/([a-zA-Z0-9]+)/, name: '/admin/app/{appId}' },
@@ -1275,7 +1325,7 @@ function convertToCSV(users: OktaUser[]): string {
   if (users.length === 0) return '';
 
   const headers = ['ID', 'Email', 'First Name', 'Last Name', 'Status'];
-  const rows = users.map(u => [
+  const rows = users.map((u) => [
     u.id,
     u.profile.login,
     u.profile.firstName,
@@ -1285,7 +1335,7 @@ function convertToCSV(users: OktaUser[]): string {
 
   const csvContent = [
     headers.join(','),
-    ...rows.map(row => row.map(cell => `"${cell}"`).join(',')),
+    ...rows.map((row) => row.map((cell) => `"${cell}"`).join(',')),
   ].join('\n');
 
   return csvContent;

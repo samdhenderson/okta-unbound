@@ -1,4 +1,5 @@
 import React from 'react';
+import { isOktaUrl } from '@/shared/utils/oktaUrl';
 
 type PageType = 'group' | 'user' | 'app' | 'admin' | 'unknown';
 
@@ -10,19 +11,19 @@ interface ContextBannerProps {
   error: string | null;
 }
 
-const ContextBanner: React.FC<ContextBannerProps> = ({ pageType, entityName, entityId, isLoading, error }) => {
+const ContextBanner: React.FC<ContextBannerProps> = ({
+  pageType,
+  entityName,
+  entityId,
+  isLoading,
+  error,
+}) => {
   const handleEditInOkta = () => {
     if (!entityId || !pageType || pageType === 'admin' || pageType === 'unknown') return;
 
     // Find the Okta tab and open the entity edit page
     chrome.tabs.query({ currentWindow: true }, (tabs) => {
-      const oktaTab = tabs.find(
-        (tab) =>
-          tab.url &&
-          (tab.url.includes('okta.com') ||
-            tab.url.includes('oktapreview.com') ||
-            tab.url.includes('okta-emea.com'))
-      );
+      const oktaTab = tabs.find((tab) => isOktaUrl(tab.url));
 
       if (oktaTab && oktaTab.url) {
         const origin = new URL(oktaTab.url).origin;
@@ -99,13 +100,13 @@ const ContextBanner: React.FC<ContextBannerProps> = ({ pageType, entityName, ent
         };
       case 'user':
         return {
-          primary: '#9333ea',
-          dark: '#7e22ce',
+          primary: 'var(--color-accent)',
+          dark: 'var(--color-accent-dark)',
         };
       case 'app':
         return {
           primary: 'var(--color-success)',
-          dark: '#127a40',
+          dark: 'var(--color-success-text)',
         };
       case 'admin':
         return {
@@ -127,7 +128,10 @@ const ContextBanner: React.FC<ContextBannerProps> = ({ pageType, entityName, ent
 
   return (
     <div className="relative bg-white border-b border-neutral-200 animate-in fade-in slide-in-from-top-4 duration-100 z-40">
-      <div className="px-6 py-5 flex items-center justify-between" style={{ fontFamily: 'var(--font-primary)' }}>
+      <div
+        className="px-6 py-5 flex items-center justify-between"
+        style={{ fontFamily: 'var(--font-primary)' }}
+      >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 animate-in slide-in-from-left-3 duration-100">
             {/* Status indicator with smooth transitions */}
@@ -144,7 +148,12 @@ const ContextBanner: React.FC<ContextBannerProps> = ({ pageType, entityName, ent
             )}
             {!error && !isLoading && entityId && (
               <div className="relative">
-                <span className="text-xl animate-in zoom-in duration-100" style={{ color: colors.primary }}>●</span>
+                <span
+                  className="text-xl animate-in zoom-in duration-100"
+                  style={{ color: colors.primary }}
+                >
+                  ●
+                </span>
                 <div
                   className="absolute inset-0 rounded-full blur-md opacity-20 animate-pulse"
                   style={{ backgroundColor: colors.primary }}
@@ -156,7 +165,10 @@ const ContextBanner: React.FC<ContextBannerProps> = ({ pageType, entityName, ent
             </h2>
           </div>
           {displayId && (
-            <p className="mt-1.5 text-xs font-mono text-neutral-500 tracking-wide truncate animate-in fade-in slide-in-from-left-2 duration-100 delay-100" style={{ fontFamily: 'var(--font-mono)' }}>
+            <p
+              className="mt-1.5 text-xs font-mono text-neutral-500 tracking-wide truncate animate-in fade-in slide-in-from-left-2 duration-100 delay-100"
+              style={{ fontFamily: 'var(--font-mono)' }}
+            >
               {displayId}
             </p>
           )}
@@ -180,7 +192,12 @@ const ContextBanner: React.FC<ContextBannerProps> = ({ pageType, entityName, ent
             }}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+              />
             </svg>
             <span>Edit in Okta</span>
           </button>

@@ -4,11 +4,19 @@
  */
 
 import type { MessageRequest, MessageResponse, OperationCallbacks } from './types';
+import { createLogger } from '@/shared/utils/logger';
+
+const log = createLogger('useOktaApi');
 
 export interface CoreApi {
   targetTabId: number | null;
   sendMessage: <T = any>(message: MessageRequest) => Promise<MessageResponse<T>>;
-  makeApiRequest: (endpoint: string, method?: string, body?: any, priority?: 'high' | 'normal' | 'low') => Promise<any>;
+  makeApiRequest: (
+    endpoint: string,
+    method?: string,
+    body?: any,
+    priority?: 'high' | 'normal' | 'low',
+  ) => Promise<any>;
   getCurrentUser: () => Promise<{ email: string; id: string }>;
   checkCancelled: () => void;
   callbacks: OperationCallbacks;
@@ -20,16 +28,17 @@ export interface CoreApi {
 export function createCoreApi(
   targetTabId: number | null,
   checkCancelled: () => void,
-  callbacks: OperationCallbacks
+  callbacks: OperationCallbacks,
 ): CoreApi {
   const sendMessage = async <T = any>(message: MessageRequest): Promise<MessageResponse<T>> => {
     if (!targetTabId) {
       throw new Error('No target tab ID - not connected to Okta page');
     }
 
-    console.log('[useOktaApi] Sending message:', message);
+    // Log the action only — never the message body (may contain payloads).
+    log.debug('Sending message', { action: message.action });
     const response = await chrome.tabs.sendMessage(targetTabId, message);
-    console.log('[useOktaApi] Received response:', response);
+    log.debug('Received response', { action: message.action, success: response?.success });
 
     return response;
   };
@@ -38,13 +47,13 @@ export function createCoreApi(
     endpoint: string,
     method: string = 'GET',
     body?: any,
-    priority: 'high' | 'normal' | 'low' = 'normal'
+    priority: 'high' | 'normal' | 'low' = 'normal',
   ) => {
     if (!targetTabId) {
       throw new Error('No target tab ID - not connected to Okta page');
     }
 
-    console.log('[useOktaApi] Scheduling API request via background:', { endpoint, method, priority });
+    log.debug('Scheduling API request via background', { endpoint, method, priority });
 
     // Route through the background scheduler for rate limit control
     const response = await chrome.runtime.sendMessage({
@@ -56,7 +65,7 @@ export function createCoreApi(
       priority,
     });
 
-    console.log('[useOktaApi] Received scheduled response:', response);
+    log.debug('Received scheduled response', { endpoint, success: response?.success });
     return response;
   };
 
@@ -71,7 +80,7 @@ export function createCoreApi(
       }
       return { email: 'unknown@unknown.com', id: 'unknown' };
     } catch (error) {
-      console.error('[useOktaApi] Failed to get current user:', error);
+      log.error('Failed to get current user', error);
       return { email: 'unknown@unknown.com', id: 'unknown' };
     }
   };
