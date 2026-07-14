@@ -50,25 +50,25 @@ Status legend: `[ ]` todo · `[~]` partially done · `[x]` done.
 - Doc: `docs/components.md`. Agent: `component-builder`; verify with `ui-reviewer`.
 - Done when: `grep -rn "<button" src/sidepanel/components` hits only `shared/`.
 
-### 4. `[~]` Finish the `error → danger` codemod
+### 4. `[x]` Finish the `error → danger` codemod
 
-- 29 call sites still pass `type: 'error'` to `AlertMessage`. Migrate them to
-  `'danger'` (the alias in [shared/status.ts](../src/sidepanel/components/shared/status.ts)
-  keeps them working meanwhile), then drop the `'error'` alias from
-  `StatusTypeWithLegacy`.
-- Doc: `docs/design-system.md` / ADR-0002. Agent: `ui-reviewer`.
-- Done when: `grep -rn "'error'" src` finds no status usages; alias removed.
+- [x] Migrated the 12 `AlertMessage type:'error'` call sites to `'danger'` and
+  removed the `'error'` alias + `normalizeStatus` from
+  [shared/status.ts](../src/sidepanel/components/shared/status.ts); AlertMessage now
+  consumes the canonical `StatusType` directly. (The unrelated `ConnectionStatus`
+  union and `StatCard`/`PageHeader` `variant='error'` color prop are a separate
+  vocabulary, intentionally untouched.)
+- Doc: `docs/design-system.md` / ADR-0002.
 
 ### 5. `[~]` Adopt the shared utils everywhere
 
-- Replace remaining inline Okta-domain checks (~15 sites) with `isOktaUrl`
-  ([shared/utils/oktaUrl.ts](../src/shared/utils/oktaUrl.ts)) — e.g.
-  `useOktaPageContext.ts`, `useGroupContext.ts`, `useUserContext.ts`.
-- Replace the duplicate `formatDate`/`getRelativeTime` in `UsersTab.tsx`,
-  `users/UserProfileCard.tsx`, `csvUtils.ts` with
-  [shared/utils/dateFormat.ts](../src/shared/utils/dateFormat.ts).
+- [x] `isOktaUrl` adopted at all non-hook sites (the only remaining inline checks
+  are in the 3 context hooks, handled by the §7 `useOktaTabContext` merge).
+- [x] `UserProfileCard` adopts `dateFormat` (`formatDateShort` added for date-only).
+- [ ] `UsersTab.tsx` inline `formatDate`/`getRelativeTime` — removed during its §7
+  decomposition. `csvUtils.formatDateForCSV` is a distinct CSV format — keep.
 - Doc: `docs/development.md`. Agent: `architecture-refactor`.
-- Done when: no duplicate implementations remain.
+- Done when: no duplicate implementations remain (UsersTab pending §7).
 
 ### 6. `[~]` zod at the fetch boundary + `any` burndown
 
