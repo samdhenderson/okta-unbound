@@ -1,6 +1,9 @@
 import { useState, useCallback } from 'react';
 import type { OktaUser, GroupMembership, OktaGroup } from '../../shared/types';
 import { RulesCache } from '../../shared/rulesCache';
+import { createLogger } from '../../shared/utils/logger';
+
+const log = createLogger('useUserMemberships');
 
 interface UseUserMembershipsOptions {
   targetTabId: number | undefined;
@@ -41,21 +44,19 @@ function isUserExcludedFromRule(rule: any, userId: string): boolean {
  * - Historical rule changes may affect accuracy
  */
 function analyzeMemberships(groups: OktaGroup[], rules: any[], user: OktaUser): GroupMembership[] {
-  console.log('[useUserMemberships] Analyzing memberships for user:', user.id);
-  console.log(
-    '[useUserMemberships] Total rules:',
+  log.debug('Analyzing memberships for user:', user.id);
+  log.debug(
+    'Total rules:',
     rules.length,
     'Active rules:',
     rules.filter((r: any) => r.status === 'ACTIVE').length,
   );
-  console.log('[useUserMemberships] Total groups:', groups.length);
+  log.debug('Total groups:', groups.length);
 
   return groups.map((group) => {
     // APP_GROUPs are always managed by the application (rule-based)
     if (group.type === 'APP_GROUP') {
-      console.log(
-        `[useUserMemberships] Group "${group.profile.name}": APP_GROUP (application managed)`,
-      );
+      log.debug(`Group ${group.id}: APP_GROUP (application managed)`);
       return {
         group: group,
         membershipType: 'RULE_BASED' as const,
@@ -70,13 +71,11 @@ function analyzeMemberships(groups: OktaGroup[], rules: any[], user: OktaUser): 
       return groupIds.includes(group.id);
     });
 
-    console.log(
-      `[useUserMemberships] Group "${group.profile.name}": Found ${matchingRules.length} active rules`,
-    );
+    log.debug(`Group ${group.id}: Found ${matchingRules.length} active rules`);
 
     if (matchingRules.length === 0) {
       // No active rules for this group - must be direct assignment
-      console.log(`[useUserMemberships] Group "${group.profile.name}": DIRECT (no active rules)`);
+      log.debug(`Group ${group.id}: DIRECT (no active rules)`);
       return {
         group: group,
         membershipType: 'DIRECT' as const,
@@ -93,9 +92,7 @@ function analyzeMemberships(groups: OktaGroup[], rules: any[], user: OktaUser): 
     if (rulesWithoutExclusion.length === 0) {
       // User is excluded from ALL rules that target this group
       // They must have been added directly (manually)
-      console.log(
-        `[useUserMemberships] Group "${group.profile.name}": DIRECT (user excluded from all ${matchingRules.length} rules)`,
-      );
+      log.debug(`Group ${group.id}: DIRECT (user excluded from all ${matchingRules.length} rules)`);
       return {
         group: group,
         membershipType: 'DIRECT' as const,
@@ -106,9 +103,7 @@ function analyzeMemberships(groups: OktaGroup[], rules: any[], user: OktaUser): 
     // Log if user is excluded from some but not all rules
     if (rulesWithoutExclusion.length < matchingRules.length) {
       const excludedRules = matchingRules.filter((rule) => isUserExcludedFromRule(rule, user.id));
-      console.log(
-        `[useUserMemberships] Group "${group.profile.name}": User excluded from ${excludedRules.length} rule(s): ${excludedRules.map((r: any) => r.name).join(', ')}`,
-      );
+      log.debug(`Group ${group.id}: User excluded from ${excludedRules.length} rule(s)`);
     }
 
     // Try to evaluate which rule might have added the user
@@ -148,8 +143,8 @@ function analyzeMemberships(groups: OktaGroup[], rules: any[], user: OktaUser): 
       }
     }
 
-    console.log(
-      `[useUserMemberships] Group "${group.profile.name}": RULE_BASED (rule: ${bestMatchRule.name}, confidence: ${confidence})`,
+    log.debug(
+      `Group ${group.id}: RULE_BASED (rule: ${bestMatchRule.id}, confidence: ${confidence})`,
     );
 
     return {
@@ -186,7 +181,7 @@ export function useUserMemberships({
       setError(null);
 
       try {
-        console.log('[useUserMemberships] Loading memberships for user:', user.id);
+        log.debug('Loading memberships for user:', user.id);
 
         // Fetch user's groups
         const groupsResponse = await chrome.tabs.sendMessage(targetTabId, {
@@ -203,20 +198,17 @@ export function useUserMemberships({
         const cachedRules = await RulesCache.get();
 
         if (cachedRules) {
-          console.log('[useUserMemberships] Using cached rules from global cache');
+          log.debug('Using cached rules from global cache');
           rules = cachedRules.rules;
         } else {
           // Cache miss - fetch rules
-          console.log('[useUserMemberships] Cache miss - fetching rules');
+          log.debug('Cache miss - fetching rules');
           const rulesResponse = await chrome.tabs.sendMessage(targetTabId, {
             action: 'fetchGroupRules',
           });
 
           if (!rulesResponse.success) {
-            console.warn(
-              '[useUserMemberships] Could not fetch rules for analysis:',
-              rulesResponse.error,
-            );
+            log.warn('Could not fetch rules for analysis:', rulesResponse.error);
           } else {
             rules = rulesResponse.rules || [];
             // Populate cache for future use
@@ -237,14 +229,14 @@ export function useUserMemberships({
 
         setMemberships(analyzedMemberships);
 
-        console.log('[useUserMemberships] Loaded memberships:', {
+        log.debug('Loaded memberships:', {
           count: analyzedMemberships.length,
           usedCache: cachedRules !== null,
         });
       } catch (err: any) {
         setError(err.message || 'Failed to load user memberships');
         setMemberships([]);
-        console.error('[useUserMemberships] Membership loading error:', err);
+        log.error('Membership loading error:', err);
       } finally {
         setIsLoading(false);
       }

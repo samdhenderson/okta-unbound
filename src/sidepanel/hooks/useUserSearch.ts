@@ -1,5 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { OktaUser } from '../../shared/types';
+import { createLogger } from '../../shared/utils/logger';
+
+const log = createLogger('useUserSearch');
 
 interface UseUserSearchOptions {
   targetTabId: number | undefined;
@@ -52,7 +55,7 @@ export function useUserSearch({
       setError(null);
 
       try {
-        console.log('[useUserSearch] Searching for users:', query);
+        log.debug('Searching for users', { queryLength: query.length });
 
         const response = await chrome.tabs.sendMessage(targetTabId, {
           action: 'searchUsers',
@@ -61,7 +64,7 @@ export function useUserSearch({
 
         if (response.success) {
           setSearchResults(response.data || []);
-          console.log('[useUserSearch] Found users:', response.data?.length);
+          log.debug('Found users:', response.data?.length);
         } else {
           setError(response.error || 'Failed to search users');
           setSearchResults([]);
@@ -70,7 +73,7 @@ export function useUserSearch({
         const error = err as Error;
         setError(error.message || 'Failed to communicate with Okta tab');
         setSearchResults([]);
-        console.error('[useUserSearch] Search error:', err);
+        log.error('Search error:', err);
       } finally {
         setIsSearching(false);
       }

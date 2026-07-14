@@ -15,6 +15,9 @@ import React, {
   ReactNode,
 } from 'react';
 import type { SchedulerState, SchedulerMetrics } from '../../shared/scheduler/types';
+import { createLogger } from '../../shared/utils/logger';
+
+const log = createLogger('SchedulerContext');
 
 interface SchedulerContextType {
   state: SchedulerState | null;
@@ -42,7 +45,7 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
         setState(response.state);
       }
     } catch (error) {
-      console.error('[SchedulerContext] Failed to fetch scheduler state:', error);
+      log.error('Failed to fetch scheduler state:', error);
     }
   }, []);
 
@@ -56,7 +59,7 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
         setMetrics(response.metrics);
       }
     } catch (error) {
-      console.error('[SchedulerContext] Failed to fetch scheduler metrics:', error);
+      log.error('Failed to fetch scheduler metrics:', error);
     }
   }, []);
 
@@ -96,7 +99,7 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
       await chrome.runtime.sendMessage({ action: 'pauseScheduler' });
       await refreshState();
     } catch (error) {
-      console.error('[SchedulerContext] Failed to pause scheduler:', error);
+      log.error('Failed to pause scheduler:', error);
     }
   }, [refreshState]);
 
@@ -105,7 +108,7 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
       await chrome.runtime.sendMessage({ action: 'resumeScheduler' });
       await refreshState();
     } catch (error) {
-      console.error('[SchedulerContext] Failed to resume scheduler:', error);
+      log.error('Failed to resume scheduler:', error);
     }
   }, [refreshState]);
 
@@ -114,7 +117,7 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
       await chrome.runtime.sendMessage({ action: 'clearSchedulerQueue' });
       await refreshState();
     } catch (error) {
-      console.error('[SchedulerContext] Failed to clear queue:', error);
+      log.error('Failed to clear queue:', error);
     }
   }, [refreshState]);
 

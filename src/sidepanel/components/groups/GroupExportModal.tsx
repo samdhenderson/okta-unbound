@@ -9,6 +9,9 @@ import {
   sanitizeFilename,
   getDateForFilename,
 } from '../../../shared/utils/csvUtils';
+import { createLogger } from '../../../shared/utils/logger';
+
+const log = createLogger('GroupExportModal');
 
 interface ExportColumn {
   id: string;
@@ -156,7 +159,7 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
               ]);
             });
           } catch (err) {
-            console.error(`Failed to fetch members for group ${group.name}:`, err);
+            log.error(`Failed to fetch members for group ${group.id}:`, err);
             // Add error row
             memberRows.push([
               escapeCSV(group.id),
@@ -182,7 +185,7 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
       setExportProgress(null);
       onClose();
     } catch (err) {
-      console.error('Export failed:', err);
+      log.error('Export failed:', err);
       alert(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setIsExporting(false);

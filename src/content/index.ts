@@ -54,10 +54,8 @@ import { createLogger } from '../shared/utils/logger';
 
 const log = createLogger('Content');
 
-console.log('[Content] Content script loaded', {
-  url: window.location.href,
+log.debug('Content script loaded', {
   readyState: document.readyState,
-  timestamp: new Date().toISOString(),
 });
 
 // ============================================================================
@@ -70,10 +68,9 @@ chrome.runtime.onMessage.addListener(
     sender: chrome.runtime.MessageSender,
     sendResponse: (response: MessageResponse) => void,
   ) => {
-    console.log('[Content] Received message:', {
+    log.debug('Received message', {
       action: request.action,
       from: sender.id,
-      timestamp: new Date().toISOString(),
     });
 
     switch (request.action) {
@@ -170,7 +167,7 @@ chrome.runtime.onMessage.addListener(
         return true;
 
       default:
-        console.warn('[Content] Unknown action:', (request as any).action);
+        log.warn('Unknown action', { action: (request as any).action });
         sendResponse({ success: false, error: 'Unknown action' });
         return true;
     }
@@ -186,7 +183,11 @@ async function handleMakeApiRequest(
   method: string = 'GET',
   body?: any,
 ): Promise<ApiResponse> {
-  console.log('[Content] makeApiRequest called:', { endpoint, method, hasBody: !!body });
+  log.debug('makeApiRequest called', {
+    endpoint: endpoint.split('?')[0],
+    method,
+    hasBody: !!body,
+  });
 
   try {
     const url = window.location.origin + endpoint;
@@ -215,14 +216,13 @@ async function handleMakeApiRequest(
       options.body = JSON.stringify(body);
     }
 
-    console.log('[Content] About to call fetch() - check Network tab');
+    log.debug('About to call fetch()');
     const response = await fetch(url, options);
-    console.log('[Content] fetch() completed');
+    log.debug('fetch() completed');
 
-    console.log('[Content] Okta API response:', {
-      url,
+    log.debug('Okta API response', {
+      endpoint: endpoint.split('?')[0],
       status: response.status,
-      statusText: response.statusText,
       ok: response.ok,
     });
 
@@ -249,7 +249,7 @@ async function handleMakeApiRequest(
       try {
         data = await response.json();
       } catch {
-        console.warn('[Content] Failed to parse JSON response');
+        log.warn('Failed to parse JSON response');
       }
     }
 
@@ -270,7 +270,7 @@ async function handleMakeApiRequest(
       status: response.status,
     };
   } catch (error) {
-    console.error('[Content] makeApiRequest error:', error);
+    log.error('makeApiRequest error', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -283,14 +283,14 @@ async function handleMakeApiRequest(
 // ============================================================================
 
 async function handleGetGroupInfo(): Promise<MessageResponse<GroupInfo>> {
-  console.log('[Content] Processing getGroupInfo request');
+  log.debug('Processing getGroupInfo request');
 
   try {
     const url = window.location.href;
-    console.log('[Content] Current URL:', url);
+    log.debug('Current page location', { path: window.location.pathname });
 
     const groupId = extractGroupIdFromUrl(url);
-    console.log('[Content] Extracted groupId:', groupId);
+    log.debug('Extracted groupId', { groupId });
 
     if (!groupId) {
       return {
@@ -300,19 +300,19 @@ async function handleGetGroupInfo(): Promise<MessageResponse<GroupInfo>> {
     }
 
     let groupName = extractGroupNameFromPage();
-    console.log('[Content] Extracted groupName from page:', groupName);
+    log.debug('Extracted groupName from page', { found: Boolean(groupName) });
 
     // Fallback: fetch from API if not found in DOM
     if (!groupName) {
-      console.log('[Content] Fetching group name from API...');
+      log.debug('Fetching group name from API');
       try {
         const response = await handleMakeApiRequest(`/api/v1/groups/${groupId}`, 'GET');
         if (response.success && response.data?.profile?.name) {
           groupName = response.data.profile.name;
-          console.log('[Content] Fetched groupName from API:', groupName);
+          log.debug('Fetched groupName from API', { found: Boolean(groupName) });
         }
       } catch (e) {
-        console.warn('[Content] Failed to fetch group name from API:', e);
+        log.warn('Failed to fetch group name from API', e);
       }
     }
 
@@ -321,13 +321,16 @@ async function handleGetGroupInfo(): Promise<MessageResponse<GroupInfo>> {
       groupName: groupName || 'Unknown',
     };
 
-    console.log('[Content] getGroupInfo result:', result);
+    log.debug('getGroupInfo result', {
+      groupId: result.groupId,
+      hasName: result.groupName !== 'Unknown',
+    });
     return {
       success: true,
       data: result,
     };
   } catch (error) {
-    console.error('[Content] getGroupInfo error:', error);
+    log.error('getGroupInfo error', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -340,14 +343,14 @@ async function handleGetGroupInfo(): Promise<MessageResponse<GroupInfo>> {
 // ============================================================================
 
 async function handleGetUserInfo(): Promise<MessageResponse<UserInfo>> {
-  console.log('[Content] Processing getUserInfo request');
+  log.debug('Processing getUserInfo request');
 
   try {
     const url = window.location.href;
-    console.log('[Content] Current URL:', url);
+    log.debug('Current page location', { path: window.location.pathname });
 
     const userId = extractUserIdFromUrl(url);
-    console.log('[Content] Extracted userId:', userId);
+    log.debug('Extracted userId', { userId });
 
     if (!userId) {
       return {
@@ -361,7 +364,7 @@ async function handleGetUserInfo(): Promise<MessageResponse<UserInfo>> {
     let userStatus: string | undefined;
 
     // Fetch user details from API (prioritize API over page scraping)
-    console.log('[Content] Fetching user details from API...');
+    log.debug('Fetching user details from API');
     try {
       const response = await handleMakeApiRequest(`/api/v1/users/${userId}`, 'GET');
       if (response.success && response.data) {
@@ -370,20 +373,20 @@ async function handleGetUserInfo(): Promise<MessageResponse<UserInfo>> {
         userName = `${profile.firstName || ''} ${profile.lastName || ''}`.trim();
         userEmail = profile.email;
         userStatus = response.data.status;
-        console.log('[Content] Fetched user details from API:', {
-          userName,
-          userEmail,
+        log.debug('Fetched user details from API', {
+          hasName: Boolean(userName),
+          hasEmail: Boolean(userEmail),
           userStatus,
         });
       }
     } catch (e) {
-      console.warn('[Content] Failed to fetch user details from API:', e);
+      log.warn('Failed to fetch user details from API', e);
     }
 
     // Fallback to page scraping if API didn't provide a name
     if (!userName) {
       userName = extractUserNameFromPage() || undefined;
-      console.log('[Content] Extracted userName from page (fallback):', userName);
+      log.debug('Extracted userName from page (fallback)', { found: Boolean(userName) });
     }
 
     const result: UserInfo = {
@@ -393,13 +396,18 @@ async function handleGetUserInfo(): Promise<MessageResponse<UserInfo>> {
       userStatus: userStatus as any,
     };
 
-    console.log('[Content] getUserInfo result:', result);
+    log.debug('getUserInfo result', {
+      userId: result.userId,
+      hasName: result.userName !== 'Unknown',
+      hasEmail: Boolean(result.userEmail),
+      userStatus: result.userStatus,
+    });
     return {
       success: true,
       data: result,
     };
   } catch (error) {
-    console.error('[Content] getUserInfo error:', error);
+    log.error('getUserInfo error', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -408,14 +416,14 @@ async function handleGetUserInfo(): Promise<MessageResponse<UserInfo>> {
 }
 
 async function handleGetAppInfo(): Promise<MessageResponse<import('../shared/types').AppInfo>> {
-  console.log('[Content] Processing getAppInfo request');
+  log.debug('Processing getAppInfo request');
 
   try {
     const url = window.location.href;
-    console.log('[Content] Current URL:', url);
+    log.debug('Current page location', { path: window.location.pathname });
 
     const appId = extractAppIdFromUrl(url);
-    console.log('[Content] Extracted appId:', appId);
+    log.debug('Extracted appId', { appId });
 
     if (!appId) {
       return {
@@ -426,19 +434,22 @@ async function handleGetAppInfo(): Promise<MessageResponse<import('../shared/typ
 
     let appName = extractAppNameFromPage();
     let appLabel: string | undefined;
-    console.log('[Content] Extracted appName from page:', appName);
+    log.debug('Extracted appName from page', { found: Boolean(appName) });
 
     // Fetch app details from API
-    console.log('[Content] Fetching app details from API...');
+    log.debug('Fetching app details from API');
     try {
       const response = await handleMakeApiRequest(`/api/v1/apps/${appId}`, 'GET');
       if (response.success && response.data) {
         appName = appName || response.data.name || response.data.label || 'Unknown';
         appLabel = response.data.label;
-        console.log('[Content] Fetched app details from API:', { appName, appLabel });
+        log.debug('Fetched app details from API', {
+          hasName: Boolean(appName),
+          hasLabel: Boolean(appLabel),
+        });
       }
     } catch (e) {
-      console.warn('[Content] Failed to fetch app details from API:', e);
+      log.warn('Failed to fetch app details from API', e);
     }
 
     const result = {
@@ -447,13 +458,17 @@ async function handleGetAppInfo(): Promise<MessageResponse<import('../shared/typ
       appLabel,
     };
 
-    console.log('[Content] getAppInfo result:', result);
+    log.debug('getAppInfo result', {
+      appId: result.appId,
+      hasName: result.appName !== 'Unknown',
+      hasLabel: Boolean(result.appLabel),
+    });
     return {
       success: true,
       data: result,
     };
   } catch (error) {
-    console.error('[Content] getAppInfo error:', error);
+    log.error('getAppInfo error', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -466,7 +481,7 @@ async function handleGetAppInfo(): Promise<MessageResponse<import('../shared/typ
 // ============================================================================
 
 async function handleExportGroupMembers(request: MessageRequest): Promise<MessageResponse> {
-  console.log('[Content] Processing exportGroupMembers request');
+  log.debug('Processing exportGroupMembers request');
 
   try {
     const { groupId, groupName, format, statusFilter } = request;
@@ -497,7 +512,7 @@ async function handleExportGroupMembers(request: MessageRequest): Promise<Messag
       count: filteredMembers.length,
     };
   } catch (error) {
-    console.error('[Content] exportGroupMembers error:', error);
+    log.error('exportGroupMembers error', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Export failed',
@@ -510,7 +525,7 @@ async function handleExportGroupMembers(request: MessageRequest): Promise<Messag
 // ============================================================================
 
 async function handleFetchGroupRules(groupId?: string): Promise<MessageResponse> {
-  console.log('[Content] Processing fetchGroupRules request for groupId:', groupId);
+  log.debug('Processing fetchGroupRules request', { groupId });
 
   try {
     // Fetch all rules with pagination
@@ -536,7 +551,7 @@ async function handleFetchGroupRules(groupId?: string): Promise<MessageResponse>
             if (match) {
               const fullUrl = new URL(match[1]);
               nextUrl = fullUrl.pathname + fullUrl.search;
-              console.log('[Content] Fetching next page of rules:', nextUrl);
+              log.debug('Fetching next page of rules', { path: fullUrl.pathname });
               break;
             }
           }
@@ -545,7 +560,7 @@ async function handleFetchGroupRules(groupId?: string): Promise<MessageResponse>
     }
 
     const rules: any[] = allRules;
-    console.log('[Content] Fetched', rules.length, 'rules (total across all pages)');
+    log.debug('Fetched rules (total across all pages)', { count: rules.length });
 
     // Use provided groupId or extract from URL if on a group page
     const currentGroupId = groupId || extractGroupIdFromUrl(window.location.href);
@@ -568,7 +583,7 @@ async function handleFetchGroupRules(groupId?: string): Promise<MessageResponse>
 
     // Fetch group details for all group IDs in parallel (optimized)
     const groupNameMap = new Map<string, string>();
-    console.log('[Content] Fetching names for', allGroupIds.size, 'groups in parallel');
+    log.debug('Fetching group names in parallel', { count: allGroupIds.size });
 
     // Create an array of promises to fetch all groups in parallel with caching
     const groupFetchPromises = Array.from(allGroupIds).map(async (groupId) => {
@@ -578,7 +593,7 @@ async function handleFetchGroupRules(groupId?: string): Promise<MessageResponse>
         const cachedName = await getCacheEntry<string>(cacheKey);
 
         if (cachedName) {
-          console.log('[Content] Using cached name for group:', groupId);
+          log.debug('Using cached name for group', { groupId });
           return { groupId, name: cachedName };
         }
 
@@ -593,7 +608,7 @@ async function handleFetchGroupRules(groupId?: string): Promise<MessageResponse>
           return { groupId, name: groupName };
         }
       } catch (err) {
-        console.warn('[Content] Failed to fetch group name for', groupId, err);
+        log.warn('Failed to fetch group name for group', { groupId }, err);
       }
       return null;
     });
@@ -608,11 +623,9 @@ async function handleFetchGroupRules(groupId?: string): Promise<MessageResponse>
       }
     });
 
-    console.log(
-      '[Content] Successfully fetched',
-      groupNameMap.size,
-      'group names (parallel fetch with caching)',
-    );
+    log.debug('Successfully fetched group names (parallel fetch with caching)', {
+      count: groupNameMap.size,
+    });
 
     // Calculate stats
     const activeRules = rules.filter((r) => r.status === 'ACTIVE');
@@ -721,7 +734,7 @@ async function handleFetchGroupRules(groupId?: string): Promise<MessageResponse>
       conflicts: conflictCount,
     };
 
-    console.log('[Content] Rule stats:', stats);
+    log.debug('Rule stats', stats);
 
     return {
       success: true,
@@ -730,7 +743,7 @@ async function handleFetchGroupRules(groupId?: string): Promise<MessageResponse>
       conflicts,
     };
   } catch (error) {
-    console.error('[Content] fetchGroupRules error:', error);
+    log.error('fetchGroupRules error', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch rules',
@@ -739,7 +752,7 @@ async function handleFetchGroupRules(groupId?: string): Promise<MessageResponse>
 }
 
 async function handleActivateRule(ruleId: string): Promise<MessageResponse> {
-  console.log('[Content] Activating rule:', ruleId);
+  log.debug('Activating rule', { ruleId });
 
   try {
     const response = await handleMakeApiRequest(
@@ -748,13 +761,13 @@ async function handleActivateRule(ruleId: string): Promise<MessageResponse> {
     );
 
     if (response.success) {
-      console.log('[Content] Rule activated successfully');
+      log.debug('Rule activated successfully');
       return { success: true };
     } else {
       return response;
     }
   } catch (error) {
-    console.error('[Content] activateRule error:', error);
+    log.error('activateRule error', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to activate rule',
@@ -763,7 +776,7 @@ async function handleActivateRule(ruleId: string): Promise<MessageResponse> {
 }
 
 async function handleDeactivateRule(ruleId: string): Promise<MessageResponse> {
-  console.log('[Content] Deactivating rule:', ruleId);
+  log.debug('Deactivating rule', { ruleId });
 
   try {
     const response = await handleMakeApiRequest(
@@ -772,13 +785,13 @@ async function handleDeactivateRule(ruleId: string): Promise<MessageResponse> {
     );
 
     if (response.success) {
-      console.log('[Content] Rule deactivated successfully');
+      log.debug('Rule deactivated successfully');
       return { success: true };
     } else {
       return response;
     }
   } catch (error) {
-    console.error('[Content] deactivateRule error:', error);
+    log.error('deactivateRule error', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to deactivate rule',
@@ -791,7 +804,7 @@ async function handleDeactivateRule(ruleId: string): Promise<MessageResponse> {
 // ============================================================================
 
 async function handleSearchUsers(query: string): Promise<MessageResponse> {
-  console.log('[Content] Processing searchUsers request:', query);
+  log.debug('Processing searchUsers request', { queryLength: query.length });
 
   try {
     // Okta search API supports multiple search methods
@@ -805,35 +818,35 @@ async function handleSearchUsers(query: string): Promise<MessageResponse> {
     const qParam = encodeURIComponent(trimmedQuery);
     const qSearchUrl = `/api/v1/users?q=${qParam}&limit=20`;
 
-    console.log('[Content] Searching users with q parameter:', qSearchUrl);
+    log.debug('Searching users with q parameter');
     let response = await handleMakeApiRequest(qSearchUrl, 'GET');
 
     if (response.success && response.data && response.data.length > 0) {
       users = response.data;
-      console.log('[Content] Found', users.length, 'users with q search');
+      log.debug('Found users with q search', { count: users.length });
     } else {
       // Strategy 2: If 'q' doesn't work, try 'search' parameter (prefix search)
       const searchParam = encodeURIComponent(trimmedQuery);
       const searchUrl = `/api/v1/users?search=${searchParam}&limit=20`;
 
-      console.log('[Content] Trying search parameter:', searchUrl);
+      log.debug('Trying search parameter');
       response = await handleMakeApiRequest(searchUrl, 'GET');
 
       if (response.success && response.data) {
         users = response.data;
-        console.log('[Content] Found', users.length, 'users with search parameter');
+        log.debug('Found users with search parameter', { count: users.length });
       }
     }
 
     // If still no results and query looks like an email, try filter
     if (users.length === 0 && trimmedQuery.includes('@')) {
       const filterUrl = `/api/v1/users?filter=profile.email eq "${trimmedQuery}"&limit=20`;
-      console.log('[Content] Trying email filter:', filterUrl);
+      log.debug('Trying email filter');
       response = await handleMakeApiRequest(filterUrl, 'GET');
 
       if (response.success && response.data) {
         users = response.data;
-        console.log('[Content] Found', users.length, 'users with email filter');
+        log.debug('Found users with email filter', { count: users.length });
       }
     }
 
@@ -843,7 +856,7 @@ async function handleSearchUsers(query: string): Promise<MessageResponse> {
       count: users.length,
     };
   } catch (error) {
-    console.error('[Content] searchUsers error:', error);
+    log.error('searchUsers error', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to search users',
@@ -852,7 +865,7 @@ async function handleSearchUsers(query: string): Promise<MessageResponse> {
 }
 
 async function handleSearchGroups(query: string): Promise<MessageResponse> {
-  console.log('[Content] Processing searchGroups request:', query);
+  log.debug('Processing searchGroups request', { queryLength: query.length });
 
   try {
     const trimmedQuery = query.trim();
@@ -862,12 +875,12 @@ async function handleSearchGroups(query: string): Promise<MessageResponse> {
     const qParam = encodeURIComponent(trimmedQuery);
     const searchUrl = `/api/v1/groups?q=${qParam}&limit=20&expand=stats`;
 
-    console.log('[Content] Searching groups with q parameter:', searchUrl);
+    log.debug('Searching groups with q parameter');
     const response = await handleMakeApiRequest(searchUrl, 'GET');
 
     if (response.success && response.data) {
       const groups = response.data;
-      console.log('[Content] Found', groups.length, 'groups');
+      log.debug('Found groups', { count: groups.length });
 
       return {
         success: true,
@@ -882,7 +895,7 @@ async function handleSearchGroups(query: string): Promise<MessageResponse> {
       count: 0,
     };
   } catch (error) {
-    console.error('[Content] searchGroups error:', error);
+    log.error('searchGroups error', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to search groups',
@@ -891,7 +904,7 @@ async function handleSearchGroups(query: string): Promise<MessageResponse> {
 }
 
 async function handleGetUserGroups(userId: string): Promise<MessageResponse> {
-  console.log('[Content] Processing getUserGroups request for user:', userId);
+  log.debug('Processing getUserGroups request', { userId });
 
   try {
     let allGroups: any[] = [];
@@ -940,7 +953,7 @@ async function handleGetUserGroups(userId: string): Promise<MessageResponse> {
       count: memberships.length,
     };
   } catch (error) {
-    console.error('[Content] getUserGroups error:', error);
+    log.error('getUserGroups error', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch user groups',
@@ -948,7 +961,7 @@ async function handleGetUserGroups(userId: string): Promise<MessageResponse> {
   }
 }
 async function handleGetUserContext(userId: string): Promise<MessageResponse> {
-  console.log('[Content] Processing getUserContext request for user:', userId);
+  log.debug('Processing getUserContext request', { userId });
 
   try {
     // Use the internal admin console API endpoint that includes managedBy.rules data
@@ -1000,7 +1013,7 @@ async function handleGetUserContext(userId: string): Promise<MessageResponse> {
       },
     };
   } catch (error) {
-    console.error('[Content] getUserContext error:', error);
+    log.error('getUserContext error', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch user context',
@@ -1009,7 +1022,7 @@ async function handleGetUserContext(userId: string): Promise<MessageResponse> {
 }
 
 async function handleGetUserDetails(userId: string): Promise<MessageResponse> {
-  console.log('[Content] Processing getUserDetails request for user:', userId);
+  log.debug('Processing getUserDetails request', { userId });
 
   try {
     const response = await handleMakeApiRequest(`/api/v1/users/${userId}`, 'GET');
@@ -1018,14 +1031,14 @@ async function handleGetUserDetails(userId: string): Promise<MessageResponse> {
       return response;
     }
 
-    console.log('[Content] Retrieved user details');
+    log.debug('Retrieved user details');
 
     return {
       success: true,
       data: response.data,
     };
   } catch (error) {
-    console.error('[Content] getUserDetails error:', error);
+    log.error('getUserDetails error', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch user details',
@@ -1072,7 +1085,7 @@ function extractGroupNameFromPage(): string | null {
 }
 
 function extractUserIdFromUrl(url: string): string | null {
-  console.log('[extractUserIdFromUrl] Parsing URL:', url);
+  log.debug('extractUserIdFromUrl: parsing URL', { path: url.split('?')[0] });
 
   // Okta user IDs are typically 20 characters, alphanumeric (e.g., 00u1234567890abcdefg)
   // Some can be shorter or use different formats
@@ -1131,12 +1144,12 @@ function extractUserIdFromUrl(url: string): string | null {
       if (nonIdKeywords.includes(potentialId.toLowerCase())) {
         continue;
       }
-      console.log(`[extractUserIdFromUrl] Matched pattern "${name}":`, potentialId);
+      log.debug('extractUserIdFromUrl: matched pattern', { pattern: name, id: potentialId });
       return potentialId;
     }
   }
 
-  console.warn('[extractUserIdFromUrl] No pattern matched. URL:', url);
+  log.warn('extractUserIdFromUrl: no pattern matched', { path: url.split('?')[0] });
   return null;
 }
 
@@ -1195,7 +1208,7 @@ function extractUserNameFromPage(): string | null {
 }
 
 function extractAppIdFromUrl(url: string): string | null {
-  console.log('[extractAppIdFromUrl] Parsing URL:', url);
+  log.debug('extractAppIdFromUrl: parsing URL', { path: url.split('?')[0] });
 
   // Okta app IDs are typically 20 characters, alphanumeric (e.g., 0oa1234567890abcdefg)
 
@@ -1232,13 +1245,13 @@ function extractAppIdFromUrl(url: string): string | null {
       }
       // Okta app IDs typically start with '0oa'
       if (potentialId.startsWith('0oa') || potentialId.length >= 18) {
-        console.log(`[extractAppIdFromUrl] Matched pattern "${name}":`, potentialId);
+        log.debug('extractAppIdFromUrl: matched pattern', { pattern: name, id: potentialId });
         return potentialId;
       }
     }
   }
 
-  console.warn('[extractAppIdFromUrl] No pattern matched. URL:', url);
+  log.warn('extractAppIdFromUrl: no pattern matched', { path: url.split('?')[0] });
   return null;
 }
 
@@ -1385,10 +1398,10 @@ function injectIndicator(): void {
 // Initialize
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
-    console.log('[Content] DOMContentLoaded fired');
+    log.debug('DOMContentLoaded fired');
     injectIndicator();
   });
 } else {
-  console.log('[Content] DOM already loaded, injecting indicator');
+  log.debug('DOM already loaded, injecting indicator');
   injectIndicator();
 }

@@ -9,6 +9,9 @@ import StatCard from './shared/StatCard';
 import QuickActionsPanel, { type ActionSection } from './shared/QuickActionsPanel';
 import MemberExplorer from './members/MemberExplorer';
 import type { OktaUser, MemberMfaResult, MfaScanStatus } from '../../../shared/types';
+import { createLogger } from '../../../shared/utils/logger';
+
+const log = createLogger('GroupOverview');
 
 interface GroupOverviewProps {
   groupId: string;
@@ -37,7 +40,7 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
 
   const handleResult = useCallback(
     (message: string, type: 'info' | 'success' | 'warning' | 'error') => {
-      console.log(`[GroupOverview] ${type}:`, message);
+      log.debug(`${type}:`, message);
     },
     [],
   );
@@ -137,7 +140,7 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
       setMfaResults(result);
       setScanStatus('complete');
     } catch (err) {
-      console.error('[GroupOverview] MFA scan failed:', err);
+      log.error('MFA scan failed:', err);
       setScanStatus('error');
     } finally {
       completeProgress();

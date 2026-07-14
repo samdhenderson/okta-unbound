@@ -6,6 +6,9 @@
 import type { CoreApi } from './core';
 import type { PushGroupMapping, GroupSummary } from '../../../shared/types';
 import { parseNextLink } from './utilities';
+import { createLogger } from '../../../shared/utils/logger';
+
+const log = createLogger('pushGroupOps');
 
 export function createPushGroupOperations(coreApi: CoreApi) {
   /**
@@ -41,7 +44,7 @@ export function createPushGroupOperations(coreApi: CoreApi) {
         nextUrl = parseNextLink(response.headers?.link);
       }
     } catch (error) {
-      console.error(`[pushGroupOps] Failed to fetch push mappings for app ${appId}:`, error);
+      log.error(`Failed to fetch push mappings for app ${appId}:`, error);
     }
 
     return mappings;

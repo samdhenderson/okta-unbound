@@ -7,6 +7,9 @@ import type { CoreApi } from './core';
 import type { OktaFactor, MemberMfaResult } from '../../../shared/types';
 import { summarizeFactors } from '../../../shared/utils/mfaUtils';
 import { parseNextLink } from './utilities';
+import { createLogger } from '../../../shared/utils/logger';
+
+const log = createLogger('useOktaApi');
 
 export function createUserOperations(coreApi: CoreApi) {
   /**
@@ -20,7 +23,7 @@ export function createUserOperations(coreApi: CoreApi) {
       }
       return null;
     } catch (error) {
-      console.error(`[useOktaApi] Failed to get last login for user ${userId}:`, error);
+      log.error(`Failed to get last login for user ${userId}:`, error);
       return null;
     }
   };
@@ -49,7 +52,7 @@ export function createUserOperations(coreApi: CoreApi) {
       }
       return 0;
     } catch (error) {
-      console.error(`[useOktaApi] Failed to get app assignments for user ${userId}:`, error);
+      log.error(`Failed to get app assignments for user ${userId}:`, error);
       return 0;
     }
   };
@@ -78,7 +81,7 @@ export function createUserOperations(coreApi: CoreApi) {
         nextUrl = parseNextLink(response.headers?.link);
       }
     } catch (error) {
-      console.error(`[useOktaApi] Failed to list apps for user ${userId}:`, error);
+      log.error(`Failed to list apps for user ${userId}:`, error);
     }
 
     return apps;
@@ -111,7 +114,7 @@ export function createUserOperations(coreApi: CoreApi) {
           }
           return { userId, data: null };
         } catch (error) {
-          console.error(`[useOktaApi] Failed to fetch user ${userId}:`, error);
+          log.error(`Failed to fetch user ${userId}:`, error);
           return { userId, data: null };
         }
       });
@@ -158,7 +161,7 @@ export function createUserOperations(coreApi: CoreApi) {
               response.success && Array.isArray(response.data) ? response.data : [];
             return { userId, factors };
           } catch (error) {
-            console.error(`[useOktaApi] Failed to fetch factors for user ${userId}:`, error);
+            log.error(`Failed to fetch factors for user ${userId}:`, error);
             return { userId, factors: [] as OktaFactor[] };
           }
         }),
@@ -185,7 +188,7 @@ export function createUserOperations(coreApi: CoreApi) {
       }
       return 0;
     } catch (error) {
-      console.error(`[useOktaApi] Failed to get group memberships for user ${userId}:`, error);
+      log.error(`Failed to get group memberships for user ${userId}:`, error);
       return 0;
     }
   };
@@ -227,7 +230,7 @@ export function createUserOperations(coreApi: CoreApi) {
       }
       return [];
     } catch (error) {
-      console.error('[useOktaApi] searchUsers error:', error);
+      log.error('searchUsers error:', error);
       return [];
     }
   };
@@ -260,7 +263,7 @@ export function createUserOperations(coreApi: CoreApi) {
       }
       return null;
     } catch (error) {
-      console.error('[useOktaApi] getUserById error:', error);
+      log.error('getUserById error:', error);
       return null;
     }
   };

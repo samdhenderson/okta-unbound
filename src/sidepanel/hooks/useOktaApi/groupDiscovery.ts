@@ -6,6 +6,9 @@
 import type { CoreApi } from './core';
 import { RulesCache } from '../../../shared/rulesCache';
 import { parseNextLink } from './utilities';
+import { createLogger } from '../../../shared/utils/logger';
+
+const log = createLogger('useOktaApi');
 
 export function createGroupDiscoveryOperations(coreApi: CoreApi) {
   /**
@@ -58,7 +61,7 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
 
       return 0;
     } catch (error) {
-      console.error(`[useOktaApi] Failed to get member count for group ${groupId}:`, error);
+      log.error(`Failed to get member count for group ${groupId}:`, error);
       return 0;
     }
   };
@@ -71,12 +74,12 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
       // Check cache first
       const cachedRules = await RulesCache.getRulesForGroup(groupId);
       if (cachedRules.length > 0 || (await RulesCache.isFresh())) {
-        console.log(`[useOktaApi] Using cached rules for group ${groupId}:`, cachedRules.length);
+        log.debug(`Using cached rules for group ${groupId}:`, cachedRules.length);
         return cachedRules;
       }
 
       // Cache miss - fetch all group rules
-      console.log(`[useOktaApi] Cache miss - fetching all rules for group ${groupId}`);
+      log.debug(`Cache miss - fetching all rules for group ${groupId}`);
       const response = await coreApi.makeApiRequest('/api/v1/groups/rules?limit=200');
       if (!response.success) {
         return [];
@@ -92,7 +95,7 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
 
       return groupRules;
     } catch (error) {
-      console.error(`[useOktaApi] Failed to get rules for group ${groupId}:`, error);
+      log.error(`Failed to get rules for group ${groupId}:`, error);
       return [];
     }
   };
@@ -122,7 +125,7 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
       }
       return [];
     } catch (error) {
-      console.error('[useOktaApi] searchGroups error:', error);
+      log.error('searchGroups error:', error);
       return [];
     }
   };
@@ -146,7 +149,7 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
       }
       return null;
     } catch (error) {
-      console.error('[useOktaApi] getGroupById error:', error);
+      log.error('getGroupById error:', error);
       return null;
     }
   };

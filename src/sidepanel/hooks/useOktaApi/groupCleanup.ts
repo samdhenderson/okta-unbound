@@ -9,6 +9,9 @@ import type { BulkUserInfo } from '../../../shared/undoTypes';
 import { logBulkRemoveAction } from '../../../shared/undoManager';
 import { auditStore } from '../../../shared/storage/auditStore';
 import { parseNextLink } from './utilities';
+import { createLogger } from '../../../shared/utils/logger';
+
+const log = createLogger('useOktaApi');
 
 /**
  * Fetch all members of a group with pagination
@@ -190,7 +193,7 @@ export function createGroupCleanupOperations(
           },
         };
         auditStore.logOperation(auditEntry).catch((err) => {
-          console.error('[useOktaApi] Failed to log audit entry:', err);
+          log.error('Failed to log audit entry:', err);
         });
       }
     }

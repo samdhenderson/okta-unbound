@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createLogger } from '../../shared/utils/logger';
+
+const log = createLogger('useSearchWithDropdown');
 
 interface UseSearchWithDropdownOptions<T> {
   searchFn: (query: string) => Promise<T[]>;
@@ -96,7 +99,7 @@ export function useSearchWithDropdown<T>({
           setShowDropdown(searchResults.length > 0);
         }
       } catch (error) {
-        console.error('[useSearchWithDropdown] Search error:', error);
+        log.error('Search error:', error);
         if (isMounted.current) {
           setResults([]);
           setShowDropdown(false);

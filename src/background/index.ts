@@ -79,7 +79,7 @@ globalScheduler.onStateChange((state: SchedulerState) => {
 setInterval(
   () => {
     TabStateManager.cleanupExpiredStates().catch((err) => {
-      console.error('[Background] Failed to cleanup expired tab states:', err);
+      log.error('Failed to cleanup expired tab states', err);
     });
   },
   60 * 60 * 1000,
@@ -90,7 +90,7 @@ setInterval(
 // ============================================================================
 
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
-  console.log('[Background] Received message:', request.action);
+  log.debug('Received message', { action: request.action });
 
   switch (request.action) {
     case 'scheduleApiRequest':
@@ -251,11 +251,11 @@ chrome.runtime.onInstalled.addListener((details) => {
 // ============================================================================
 
 chrome.action.onClicked.addListener((tab) => {
-  console.log('[Background] Extension icon clicked for tab:', tab.id);
+  log.debug('Extension icon clicked', { tabId: tab.id });
 
   if (tab.url && isOktaUrl(tab.url)) {
     chrome.sidePanel.open({ windowId: tab.windowId });
-    console.log('[Background] Side panel opened');
+    log.debug('Side panel opened');
   } else {
     chrome.notifications.create({
       type: 'basic',
@@ -263,7 +263,7 @@ chrome.action.onClicked.addListener((tab) => {
       title: 'Okta Unbound',
       message: 'Please navigate to an Okta page to use this extension.',
     });
-    console.log('[Background] Notification shown - not on Okta page');
+    log.debug('Notification shown - not on Okta page');
   }
 });
 
@@ -274,7 +274,7 @@ chrome.action.onClicked.addListener((tab) => {
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === 'openSidebar' && tab?.windowId) {
     chrome.sidePanel.open({ windowId: tab.windowId });
-    console.log('[Background] Side panel opened from context menu');
+    log.debug('Side panel opened from context menu');
   }
 });
 
@@ -288,7 +288,7 @@ function setupAuditRetentionAlarm(): void {
     periodInMinutes: 24 * 60, // Every 24 hours
     when: getNextMidnight(),
   });
-  console.log('[Background] Audit retention alarm created');
+  log.debug('Audit retention alarm created');
 }
 
 function getNextMidnight(): number {
@@ -300,7 +300,7 @@ function getNextMidnight(): number {
 // Listen for alarms
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'auditRetentionCleanup') {
-    console.log('[Background] Running audit retention cleanup...');
+    log.debug('Running audit retention cleanup');
 
     try {
       // Get retention settings
@@ -310,11 +310,9 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       // Clear old logs
       await auditStore.clearOldLogs(retentionDays);
 
-      console.log(
-        `[Background] Audit retention cleanup completed (${retentionDays} days retention)`,
-      );
+      log.debug('Audit retention cleanup completed', { retentionDays });
     } catch (error) {
-      console.error('[Background] Audit retention cleanup failed:', error);
+      log.error('Audit retention cleanup failed', error);
     }
   }
 });

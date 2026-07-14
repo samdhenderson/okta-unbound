@@ -10,7 +10,10 @@
  * Reference: https://developer.okta.com/docs/reference/rate-limits/
  */
 
+import { createLogger } from '../utils/logger';
 import type { RateLimitInfo } from './types';
+
+const log = createLogger('RateLimitDetector');
 
 export class RateLimitDetector {
   private limits: Map<string, RateLimitInfo> = new Map();
@@ -25,7 +28,7 @@ export class RateLimitDetector {
     const reset = headers['x-rate-limit-reset'];
 
     if (!limit || !remaining || !reset) {
-      console.log('[RateLimitDetector] Missing rate limit headers for', endpoint);
+      log.debug('Missing rate limit headers for', endpoint);
       return null;
     }
 
@@ -45,7 +48,7 @@ export class RateLimitDetector {
       this.globalLimit = info;
     }
 
-    console.log('[RateLimitDetector] Rate limit updated:', {
+    log.debug('Rate limit updated:', {
       endpoint,
       remaining: info.remaining,
       limit: info.limit,
@@ -94,7 +97,7 @@ export class RateLimitDetector {
     const approaching = percentRemaining <= thresholdPercent;
 
     if (approaching) {
-      console.warn('[RateLimitDetector] Approaching rate limit:', {
+      log.warn('Approaching rate limit:', {
         remaining: info.remaining,
         limit: info.limit,
         percentRemaining: percentRemaining.toFixed(1) + '%',
@@ -203,7 +206,7 @@ export class RateLimitDetector {
   reset(): void {
     this.limits.clear();
     this.globalLimit = null;
-    console.log('[RateLimitDetector] Reset all rate limit tracking');
+    log.debug('Reset all rate limit tracking');
   }
 
   /**

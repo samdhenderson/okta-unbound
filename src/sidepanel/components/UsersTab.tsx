@@ -11,6 +11,9 @@ import type { AlertMessageData } from './shared/AlertMessage';
 import { RulesCache } from '../../shared/rulesCache';
 import { useUserContext } from '../hooks/useUserContext';
 import { useOktaApi } from '../hooks/useOktaApi';
+import { createLogger } from '../../shared/utils/logger';
+
+const log = createLogger('UsersTab');
 
 // Helper to format dates in a readable way
 const formatDate = (dateString: string | null | undefined): string => {
@@ -128,7 +131,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     let requestCount = 0;
 
     try {
-      console.log('[UsersTab] Searching for users:', searchQuery);
+      log.debug('Searching for users', { queryLength: searchQuery.trim().length });
 
       const response = await chrome.tabs.sendMessage(targetTabId, {
         action: 'searchUsers',
@@ -139,7 +142,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
 
       if (response.success) {
         setSearchResults(response.data || []);
-        console.log('[UsersTab] Found users:', response.data?.length);
+        log.debug('Found users:', response.data?.length);
       } else {
         setError(response.error || 'Failed to search users');
         setSearchResults([]);
@@ -148,7 +151,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
       const error = err as Error;
       setError(error.message || 'Failed to communicate with Okta tab');
       setSearchResults([]);
-      console.error('[UsersTab] Search error:', err);
+      log.error('Search error:', err);
     } finally {
       setIsSearching(false);
     }
@@ -163,7 +166,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     let requestCount = 0;
 
     try {
-      console.log('[UsersTab] Loading memberships for user:', user.id);
+      log.debug('Loading memberships for user:', user.id);
 
       // Fetch user's groups
       const groupsResponse = await chrome.tabs.sendMessage(targetTabId, {
@@ -182,12 +185,12 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
       const cachedRules = await RulesCache.get();
 
       if (cachedRules) {
-        console.log('[UsersTab] Using cached rules from global cache');
+        log.debug('Using cached rules from global cache');
         rules = cachedRules.rules;
         // No additional API call needed
       } else {
         // Cache miss - fetch rules
-        console.log('[UsersTab] Cache miss - fetching rules');
+        log.debug('Cache miss - fetching rules');
         const rulesResponse = await chrome.tabs.sendMessage(targetTabId, {
           action: 'fetchGroupRules',
         });
@@ -195,7 +198,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
         requestCount++;
 
         if (!rulesResponse.success) {
-          console.warn('[UsersTab] Could not fetch rules for analysis:', rulesResponse.error);
+          log.warn('Could not fetch rules for analysis:', rulesResponse.error);
         } else {
           rules = rulesResponse.rules || [];
           // Populate cache for future use
@@ -217,14 +220,14 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
 
       setMemberships(analyzedMemberships);
 
-      console.log('[UsersTab] Loaded memberships:', {
+      log.debug('Loaded memberships:', {
         count: analyzedMemberships.length,
         usedCache: cachedRules !== null,
       });
     } catch (err: any) {
       setError(err.message || 'Failed to load user memberships');
       setMemberships([]);
-      console.error('[UsersTab] Membership loading error:', err);
+      log.error('Membership loading error:', err);
     } finally {
       setIsLoadingMemberships(false);
     }
@@ -245,19 +248,19 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
    * 5. For groups without rules, DIRECT
    */
   const analyzeMemberships = (groups: any[], rules: any[], user: OktaUser): GroupMembership[] => {
-    console.log('[UsersTab] Analyzing memberships for user:', user.id);
-    console.log(
-      '[UsersTab] Total rules:',
+    log.debug('Analyzing memberships for user:', user.id);
+    log.debug(
+      'Total rules:',
       rules.length,
       'Active rules:',
       rules.filter((r: any) => r.status === 'ACTIVE').length,
     );
-    console.log('[UsersTab] Total groups:', groups.length);
+    log.debug('Total groups:', groups.length);
 
     return groups.map((group) => {
       // APP_GROUPs are always managed by the application (rule-based)
       if (group.type === 'APP_GROUP') {
-        console.log(`[UsersTab] Group "${group.profile.name}": APP_GROUP (application managed)`);
+        log.debug(`Group ${group.id}: APP_GROUP (application managed)`);
         return {
           group: group,
           membershipType: 'RULE_BASED' as const,
@@ -272,13 +275,11 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
         return groupIds.includes(group.id);
       });
 
-      console.log(
-        `[UsersTab] Group "${group.profile.name}": Found ${matchingRules.length} active rules`,
-      );
+      log.debug(`Group ${group.id}: Found ${matchingRules.length} active rules`);
 
       if (matchingRules.length === 0) {
         // No active rules for this group - must be direct assignment
-        console.log(`[UsersTab] Group "${group.profile.name}": DIRECT (no active rules)`);
+        log.debug(`Group ${group.id}: DIRECT (no active rules)`);
         return {
           group: group,
           membershipType: 'DIRECT' as const,
@@ -323,8 +324,8 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
         }
       }
 
-      console.log(
-        `[UsersTab] Group "${group.profile.name}": RULE_BASED (rule: ${bestMatchRule.name}, confidence: ${confidence})`,
+      log.debug(
+        `Group ${group.id}: RULE_BASED (rule: ${bestMatchRule.id}, confidence: ${confidence})`,
       );
 
       return {
@@ -382,7 +383,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     if (hasAutoLoadedUser === userInfo.userId) return;
 
     const autoLoadUser = async () => {
-      console.log('[UsersTab] Auto-loading detected user:', userInfo.userId);
+      log.debug('Auto-loading detected user:', userInfo.userId);
       setHasAutoLoadedUser(userInfo.userId);
       setIsLoadingMemberships(true);
       setError(null);

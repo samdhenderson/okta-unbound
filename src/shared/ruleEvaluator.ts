@@ -1,4 +1,7 @@
+import { createLogger } from './utils/logger';
 import type { OktaUser } from './types';
+
+const log = createLogger('RuleEvaluator');
 
 /**
  * Basic Okta Expression Language Evaluator (Client-Side)
@@ -81,7 +84,7 @@ export function evaluateRuleExpression(expression: string, user: OktaUser): bool
       // If the rule depends on group membership, and we don't have it, we might return false or throw.
       // For basic profile-based rules, this won't be hit.
       // If we strictly only support profile attributes for now as per the plan:
-      console.warn(
+      log.warn(
         'isMemberOfGroup is not fully supported in client-side evaluation without group list context',
       );
       return 'false';
@@ -92,7 +95,7 @@ export function evaluateRuleExpression(expression: string, user: OktaUser): bool
     const result = new Function(`return ${expr}`);
     return Boolean(result());
   } catch (err) {
-    console.warn(`Failed to evaluate expression: "${expression}"`, err);
+    log.warn(`Failed to evaluate expression: "${expression}"`, err);
     return false;
   }
 }

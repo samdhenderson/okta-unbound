@@ -141,6 +141,7 @@ describe('statusNormalizer', () => {
       it('should return default for object without recognizable properties', () => {
         expect(normalizeUserStatus({ foo: 'bar' })).toBe('ACTIVE');
         expect(consoleWarnSpy).toHaveBeenCalledWith(
+          '[statusNormalizer]',
           expect.stringContaining('object without recognizable property'),
           expect.anything(),
         );
@@ -150,22 +151,34 @@ describe('statusNormalizer', () => {
     describe('Edge cases and error handling', () => {
       it('should return ACTIVE for null', () => {
         expect(normalizeUserStatus(null)).toBe('ACTIVE');
-        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('null/undefined'));
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          '[statusNormalizer]',
+          expect.stringContaining('null/undefined'),
+        );
       });
 
       it('should return ACTIVE for undefined', () => {
         expect(normalizeUserStatus(undefined)).toBe('ACTIVE');
-        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('null/undefined'));
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          '[statusNormalizer]',
+          expect.stringContaining('null/undefined'),
+        );
       });
 
       it('should return ACTIVE for empty string', () => {
         expect(normalizeUserStatus('')).toBe('ACTIVE');
-        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('empty string'));
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          '[statusNormalizer]',
+          expect.stringContaining('empty string'),
+        );
       });
 
       it('should return ACTIVE for whitespace-only string', () => {
         expect(normalizeUserStatus('   ')).toBe('ACTIVE');
-        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('empty string'));
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          '[statusNormalizer]',
+          expect.stringContaining('empty string'),
+        );
       });
 
       it('should return ACTIVE for non-string primitives', () => {
@@ -179,6 +192,7 @@ describe('statusNormalizer', () => {
         expect(normalizeUserStatus('INVALID_STATUS')).toBe('ACTIVE');
         expect(normalizeUserStatus('UnknownValue')).toBe('ACTIVE');
         expect(consoleWarnSpy).toHaveBeenCalledWith(
+          '[statusNormalizer]',
           expect.stringContaining('Unknown status after normalization'),
         );
       });
@@ -192,12 +206,16 @@ describe('statusNormalizer', () => {
     describe('Context parameter for debugging', () => {
       it('should include context in warning messages', () => {
         normalizeUserStatus(null, 'user:00u123');
-        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('for user:00u123'));
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          '[statusNormalizer]',
+          expect.stringContaining('for user:00u123'),
+        );
       });
 
       it('should include context for unknown statuses', () => {
         normalizeUserStatus('InvalidStatus', 'api:/admin/users');
         expect(consoleWarnSpy).toHaveBeenCalledWith(
+          '[statusNormalizer]',
           expect.stringContaining('for api:/admin/users'),
         );
       });
@@ -303,12 +321,18 @@ describe('statusNormalizer', () => {
 
     it('should include index in context when no prefix provided', () => {
       normalizeUserStatusBatch([null, 'Active']);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('for index:0'));
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[statusNormalizer]',
+        expect.stringContaining('for index:0'),
+      );
     });
 
     it('should use contextPrefix when provided', () => {
       normalizeUserStatusBatch([null], 'group:00g123');
-      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('for group:00g123[0]'));
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[statusNormalizer]',
+        expect.stringContaining('for group:00g123[0]'),
+      );
     });
 
     it('should handle HTML in batch', () => {

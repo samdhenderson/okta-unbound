@@ -6,6 +6,9 @@
 import type { CoreApi } from './core';
 import type { UserStatus, AuditLogEntry } from './types';
 import { auditStore } from '../../../shared/storage/auditStore';
+import { createLogger } from '../../../shared/utils/logger';
+
+const log = createLogger('useOktaApi');
 
 export function createExportOperations(coreApi: CoreApi) {
   /**
@@ -59,7 +62,7 @@ export function createExportOperations(coreApi: CoreApi) {
             },
           };
           auditStore.logOperation(auditEntry).catch((err) => {
-            console.error('[useOktaApi] Failed to log audit entry:', err);
+            log.error('Failed to log audit entry:', err);
           });
         }
       } else {
@@ -85,7 +88,7 @@ export function createExportOperations(coreApi: CoreApi) {
             },
           };
           auditStore.logOperation(auditEntry).catch((err) => {
-            console.error('[useOktaApi] Failed to log audit entry:', err);
+            log.error('Failed to log audit entry:', err);
           });
         }
       }
@@ -113,7 +116,7 @@ export function createExportOperations(coreApi: CoreApi) {
           },
         };
         auditStore.logOperation(auditEntry).catch((err) => {
-          console.error('[useOktaApi] Failed to log audit entry:', err);
+          log.error('Failed to log audit entry:', err);
         });
       }
     }

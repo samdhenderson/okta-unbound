@@ -12,6 +12,7 @@
  * Okta API calls across the entire extension.
  */
 
+import { createLogger } from '../utils/logger';
 import { RateLimitDetector } from './rateLimitDetector';
 import type {
   QueuedRequest,
@@ -23,6 +24,8 @@ import type {
   RequestResult,
   RateLimitInfo,
 } from './types';
+
+const log = createLogger('ApiScheduler');
 
 const DEFAULT_CONFIG: SchedulerConfig = {
   maxConcurrent: 5, // Max 5 parallel requests
@@ -63,7 +66,7 @@ export class ApiScheduler {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.rateLimitDetector = new RateLimitDetector();
 
-    console.log('[ApiScheduler] Initialized with config:', this.config);
+    log.debug('Initialized with config:', this.config);
 
     // Start processing loop
     this.startProcessing();
@@ -98,7 +101,7 @@ export class ApiScheduler {
       this.metrics.totalRequests++;
       this.notifyStateChange();
 
-      console.log('[ApiScheduler] Scheduled request:', {
+      log.debug('Scheduled request:', {
         id: request.id,
         endpoint,
         method,
@@ -138,7 +141,7 @@ export class ApiScheduler {
       this.processQueue();
     }, 50);
 
-    console.log('[ApiScheduler] Started processing loop');
+    log.debug('Started processing loop');
   }
 
   /**
@@ -149,7 +152,7 @@ export class ApiScheduler {
       clearInterval(this.processingInterval);
       this.processingInterval = null;
     }
-    console.log('[ApiScheduler] Stopped processing loop');
+    log.debug('Stopped processing loop');
   }
 
   /**
@@ -168,7 +171,7 @@ export class ApiScheduler {
       return;
     } else if (this.cooldownEndsAt) {
       // Cooldown ended
-      console.log('[ApiScheduler] Cooldown ended, resuming processing');
+      log.debug('Cooldown ended, resuming processing');
       this.cooldownEndsAt = null;
     }
 
@@ -209,7 +212,7 @@ export class ApiScheduler {
     const startTime = Date.now();
 
     try {
-      console.log('[ApiScheduler] Executing request:', {
+      log.debug('Executing request:', {
         id: request.id,
         endpoint: request.endpoint,
         method: request.method,
@@ -238,13 +241,13 @@ export class ApiScheduler {
       this.activeRequests.delete(request.id);
       request.resolve(result);
 
-      console.log('[ApiScheduler] Request completed:', {
+      log.debug('Request completed:', {
         id: request.id,
         success: result.success,
         executionTime: `${executionTime}ms`,
       });
     } catch (error) {
-      console.error('[ApiScheduler] Request failed:', {
+      log.error('Request failed:', {
         id: request.id,
         error: error instanceof Error ? error.message : 'Unknown error',
         attempt: request.retryCount + 1,
@@ -302,7 +305,7 @@ export class ApiScheduler {
     // Calculate exponential backoff delay
     const backoffDelay = this.config.retryDelay * Math.pow(2, request.retryCount - 1);
 
-    console.log('[ApiScheduler] Retrying request:', {
+    log.debug('Retrying request:', {
       id: request.id,
       attempt: request.retryCount + 1,
       maxRetries: request.maxRetries,
@@ -344,7 +347,7 @@ export class ApiScheduler {
     this.cooldownEndsAt = Date.now() + cooldownDuration;
     this.metrics.cooldownEvents++;
 
-    console.warn('[ApiScheduler] Entering cooldown mode:', {
+    log.warn('Entering cooldown mode:', {
       remaining: info.remaining,
       limit: info.limit,
       cooldownDuration: `${Math.ceil(cooldownDuration / 1000)}s`,
@@ -361,7 +364,7 @@ export class ApiScheduler {
   pause(): void {
     this.isPaused = true;
     this.updateStatus('paused');
-    console.log('[ApiScheduler] Paused');
+    log.debug('Paused');
   }
 
   /**
@@ -369,7 +372,7 @@ export class ApiScheduler {
    */
   resume(): void {
     this.isPaused = false;
-    console.log('[ApiScheduler] Resumed');
+    log.debug('Resumed');
   }
 
   /**
@@ -378,7 +381,7 @@ export class ApiScheduler {
   private updateStatus(status: SchedulerStatus): void {
     if (this.status !== status) {
       this.status = status;
-      console.log('[ApiScheduler] Status changed:', status);
+      log.debug('Status changed:', status);
     }
   }
 
@@ -422,7 +425,7 @@ export class ApiScheduler {
       try {
         listener(state);
       } catch (error) {
-        console.error('[ApiScheduler] Error in state listener:', error);
+        log.error('Error in state listener:', error);
       }
     });
   }
@@ -456,7 +459,7 @@ export class ApiScheduler {
   clearQueue(): void {
     const queueLength = this.queue.length;
     this.queue = [];
-    console.log(`[ApiScheduler] Cleared ${queueLength} requests from queue`);
+    log.debug(`Cleared ${queueLength} requests from queue`);
     this.notifyStateChange();
   }
 
@@ -475,6 +478,6 @@ export class ApiScheduler {
       cooldownEvents: 0,
       throttleEvents: 0,
     };
-    console.log('[ApiScheduler] Metrics reset');
+    log.debug('Metrics reset');
   }
 }

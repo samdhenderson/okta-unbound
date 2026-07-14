@@ -46,7 +46,10 @@
  * ```
  */
 
+import { createLogger } from './logger';
 import type { UserStatus } from '../types';
+
+const log = createLogger('statusNormalizer');
 
 /**
  * Comprehensive mapping of all possible status variations to canonical UserStatus values.
@@ -166,7 +169,7 @@ export function normalizeUserStatus(statusValue: unknown, context?: string): Use
   // Handle null/undefined
   // ========================================
   if (statusValue == null) {
-    console.warn(`[statusNormalizer] Status is null/undefined${context ? ` for ${context}` : ''}`);
+    log.warn(`Status is null/undefined${context ? ` for ${context}` : ''}`);
     return DEFAULT_STATUS;
   }
 
@@ -186,10 +189,9 @@ export function normalizeUserStatus(statusValue: unknown, context?: string): Use
     }
 
     // Object doesn't have a recognizable status property
-    console.warn(
-      `[statusNormalizer] Status is object without recognizable property${context ? ` for ${context}` : ''}`,
-      statusValue,
-    );
+    log.warn(`Status is object without recognizable property${context ? ` for ${context}` : ''}`, {
+      keys: Object.keys(obj),
+    });
     return DEFAULT_STATUS;
   }
 
@@ -197,11 +199,7 @@ export function normalizeUserStatus(statusValue: unknown, context?: string): Use
   // Handle non-string primitives
   // ========================================
   if (typeof statusValue !== 'string') {
-    console.warn(
-      `[statusNormalizer] Status is not a string${context ? ` for ${context}` : ''}`,
-      typeof statusValue,
-      statusValue,
-    );
+    log.warn(`Status is not a string${context ? ` for ${context}` : ''}`, typeof statusValue);
     return DEFAULT_STATUS;
   }
 
@@ -209,7 +207,7 @@ export function normalizeUserStatus(statusValue: unknown, context?: string): Use
   // Handle empty string
   // ========================================
   if (!statusValue.trim()) {
-    console.warn(`[statusNormalizer] Status is empty string${context ? ` for ${context}` : ''}`);
+    log.warn(`Status is empty string${context ? ` for ${context}` : ''}`);
     return DEFAULT_STATUS;
   }
 
@@ -219,7 +217,7 @@ export function normalizeUserStatus(statusValue: unknown, context?: string): Use
   let cleanStatus = statusValue;
   if (statusValue.includes('<') && statusValue.includes('>')) {
     cleanStatus = statusValue.replace(/<[^>]*>/g, '').trim();
-    console.debug(`[statusNormalizer] Extracted from HTML: "${statusValue}" => "${cleanStatus}"`);
+    log.debug(`Extracted from HTML: "${statusValue}" => "${cleanStatus}"`);
   }
 
   // ========================================
@@ -234,8 +232,8 @@ export function normalizeUserStatus(statusValue: unknown, context?: string): Use
 
   if (!result) {
     // Unknown status - log warning and return safe default
-    console.warn(
-      `[statusNormalizer] Unknown status after normalization: "${normalizedKey}" from original: "${statusValue}"${context ? ` for ${context}` : ''}`,
+    log.warn(
+      `Unknown status after normalization: "${normalizedKey}" from original: "${statusValue}"${context ? ` for ${context}` : ''}`,
     );
     return DEFAULT_STATUS;
   }

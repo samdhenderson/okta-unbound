@@ -1,6 +1,7 @@
 // Undo Manager
 // Manages action history for audit logging
 
+import { createLogger } from './utils/logger';
 import type {
   UndoAction,
   UndoActionMetadata,
@@ -8,6 +9,8 @@ import type {
   BulkRemoveUsersMetadata,
   BulkUserInfo,
 } from './undoTypes';
+
+const log = createLogger('UndoManager');
 
 const UNDO_STORAGE_KEY = 'undoHistory';
 const MAX_UNDO_SIZE = 50;
@@ -26,7 +29,7 @@ export async function getUndoHistory(): Promise<UndoHistory> {
 
     return { actions: [], maxSize: MAX_UNDO_SIZE };
   } catch (error) {
-    console.error('[UndoManager] Failed to get history:', error);
+    log.error('Failed to get history:', error);
     return { actions: [], maxSize: MAX_UNDO_SIZE };
   }
 }
@@ -38,7 +41,7 @@ async function saveUndoHistory(history: UndoHistory): Promise<void> {
   try {
     await chrome.storage.local.set({ [UNDO_STORAGE_KEY]: history });
   } catch (error) {
-    console.error('[UndoManager] Failed to save history:', error);
+    log.error('Failed to save history:', error);
   }
 }
 

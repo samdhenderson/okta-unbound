@@ -12,6 +12,9 @@ import GroupComparisonModal from './groups/GroupComparisonModal';
 import CrossGroupSearch from './groups/CrossGroupSearch';
 import BulkOperationsPanel from './groups/BulkOperationsPanel';
 import GroupCollections from './groups/GroupCollections';
+import { createLogger } from '../../shared/utils/logger';
+
+const log = createLogger('GroupsTab');
 
 interface GroupsTabProps {
   targetTabId: number | null;
@@ -89,7 +92,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
             setSearchMode('cached');
           }
         } catch (err) {
-          console.error('Failed to parse groups cache:', err);
+          log.error('Failed to parse groups cache:', err);
         }
       }
     });
@@ -147,7 +150,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
       try {
         groupSummaries = await api.applyPushGroupMappings(groupSummaries);
       } catch (err) {
-        console.warn('[GroupsTab] Failed to load push group mappings:', err);
+        log.warn('Failed to load push group mappings:', err);
       }
 
       setGroups(groupSummaries);
@@ -409,16 +412,12 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
     return members;
   }, []);
 
-  const handleRemoveUserFromGroups = useCallback(
-    async (userId: string, groupIds: string[]) => {
-      for (const groupId of groupIds) {
-        const groupName = groups.find((g) => g.id === groupId)?.name || groupId;
-        await apiRef.current.makeApiRequest(`/api/v1/groups/${groupId}/users/${userId}`, 'DELETE');
-        console.log(`[GroupsTab] Removed user ${userId} from group ${groupName}`);
-      }
-    },
-    [groups],
-  );
+  const handleRemoveUserFromGroups = useCallback(async (userId: string, groupIds: string[]) => {
+    for (const groupId of groupIds) {
+      await apiRef.current.makeApiRequest(`/api/v1/groups/${groupId}/users/${userId}`, 'DELETE');
+      log.debug(`Removed user ${userId} from group ${groupId}`);
+    }
+  }, []);
 
   const handleLoadCollection = useCallback((groupIds: string[]) => {
     setSelectedGroupIds(new Set(groupIds));

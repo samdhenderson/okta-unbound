@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Button from '../shared/Button';
 import type { GroupCollection, GroupSummary } from '../../../shared/types';
+import { createLogger } from '../../../shared/utils/logger';
+
+const log = createLogger('GroupCollections');
 
 const COLLECTIONS_STORAGE_KEY = 'okta_unbound_group_collections';
 
@@ -35,7 +38,7 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
         try {
           setCollections(JSON.parse(result[COLLECTIONS_STORAGE_KEY] as string));
         } catch (err) {
-          console.error('Failed to parse collections:', err);
+          log.error('Failed to parse collections:', err);
         }
       }
     });
