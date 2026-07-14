@@ -10,8 +10,9 @@ interface FilterPillProps {
 }
 
 /**
- * A small pill/button used inside filter panels. Matches the Groups tab filter
- * button styling: solid primary when active, neutral outline when inactive.
+ * A small pill/toggle used inside filter panels: solid primary when active,
+ * neutral outline when inactive. Reflects its state as `aria-pressed`.
+ * For icon-only buttons use {@link IconButton}; for text CTAs use {@link Button}.
  */
 const FilterPill: React.FC<FilterPillProps> = ({
   active,

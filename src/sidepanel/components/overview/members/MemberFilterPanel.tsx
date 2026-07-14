@@ -1,6 +1,6 @@
 import React from 'react';
 import type { MemberMfaResult } from '../../../../shared/types';
-import FilterPill from './FilterPill';
+import FilterPill from '../../shared/FilterPill';
 import ActiveFilterChips from './ActiveFilterChips';
 import { type BreakdownRow, type MemberFilter, type SortField } from './memberAnalytics';
 
