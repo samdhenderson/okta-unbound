@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { formatDate, getRelativeTime } from './dateFormat';
+import { formatDate, formatDateShort, getRelativeTime } from './dateFormat';
 
 describe('formatDate', () => {
   it('returns "Never" for empty input', () => {
@@ -12,6 +12,21 @@ describe('formatDate', () => {
     const out = formatDate('2026-03-05T14:30:00Z');
     expect(out).toContain('2026');
     expect(out).toMatch(/Mar/);
+  });
+});
+
+describe('formatDateShort', () => {
+  it('returns "Never" for empty input', () => {
+    expect(formatDateShort(null)).toBe('Never');
+    expect(formatDateShort(undefined)).toBe('Never');
+    expect(formatDateShort('')).toBe('Never');
+  });
+
+  it('formats a valid ISO date to a date-only string (no time)', () => {
+    const out = formatDateShort('2026-03-05T14:30:00Z');
+    expect(out).toContain('2026');
+    expect(out).toMatch(/Mar/);
+    expect(out).not.toMatch(/:/); // no clock time
   });
 });
 

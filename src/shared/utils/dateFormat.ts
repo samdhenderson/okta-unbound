@@ -27,6 +27,24 @@ export function formatDate(dateString: string | null | undefined): string {
 }
 
 /**
+ * Date-only variant, e.g. "Mar 5, 2026" (no time). Used where a compact date is
+ * preferred over the full timestamp. Returns "Never"/the raw string on the same
+ * conditions as {@link formatDate}.
+ */
+export function formatDateShort(dateString: string | null | undefined): string {
+  if (!dateString) return 'Never';
+  try {
+    return new Date(dateString).toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return dateString;
+  }
+}
+
+/**
  * Relative time from now, e.g. "3 days ago". Returns `null` for empty/invalid input.
  */
 export function getRelativeTime(dateString: string | null | undefined): string | null {

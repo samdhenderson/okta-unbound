@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { OktaUser } from '../../../shared/types';
 import CollapsibleSection from '../shared/CollapsibleSection';
+import { formatDateShort, getRelativeTime } from '../../../shared/utils/dateFormat';
 
 interface UserProfileCardProps {
   user: OktaUser;
@@ -50,36 +51,6 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
         return `${baseClasses} bg-red-50 text-red-700 border border-red-200`;
       default:
         return `${baseClasses} bg-neutral-100 text-neutral-700 border border-neutral-300`;
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    } catch {
-      return dateString;
-    }
-  };
-
-  const getRelativeTime = (dateString: string): string | null => {
-    try {
-      const date = new Date(dateString);
-      const now = new Date();
-      const diffMs = now.getTime() - date.getTime();
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-      if (diffDays === 0) return 'Today';
-      if (diffDays === 1) return 'Yesterday';
-      if (diffDays < 7) return `${diffDays} days ago`;
-      if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-      if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-      return `${Math.floor(diffDays / 365)} years ago`;
-    } catch {
-      return null;
     }
   };
 
@@ -175,14 +146,16 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
             <span className="text-xs font-semibold text-neutral-600 mb-1">Last Login</span>
             <span className="text-neutral-900 font-medium">
               {user.lastLogin
-                ? getRelativeTime(user.lastLogin) || formatDate(user.lastLogin)
+                ? getRelativeTime(user.lastLogin) || formatDateShort(user.lastLogin)
                 : 'Never'}
             </span>
           </div>
           <div className="flex flex-col">
             <span className="text-xs font-semibold text-neutral-600 mb-1">Created</span>
             <span className="text-neutral-900 font-medium">
-              {user.created ? getRelativeTime(user.created) || formatDate(user.created) : 'Unknown'}
+              {user.created
+                ? getRelativeTime(user.created) || formatDateShort(user.created)
+                : 'Unknown'}
             </span>
           </div>
           <div className="flex flex-col">
@@ -257,7 +230,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
                     Activated
                   </span>
                   <span className="text-sm text-neutral-900 block">
-                    {formatDate(user.activated)}
+                    {formatDateShort(user.activated)}
                   </span>
                 </div>
               )}
@@ -267,7 +240,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
                     Status Changed
                   </span>
                   <span className="text-sm text-neutral-900 block">
-                    {formatDate(user.statusChanged)}
+                    {formatDateShort(user.statusChanged)}
                   </span>
                 </div>
               )}
@@ -277,7 +250,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
                     Password Changed
                   </span>
                   <span className="text-sm text-neutral-900 block">
-                    {formatDate(user.passwordChanged)}
+                    {formatDateShort(user.passwordChanged)}
                   </span>
                 </div>
               )}
@@ -287,7 +260,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
                     Profile Updated
                   </span>
                   <span className="text-sm text-neutral-900 block">
-                    {formatDate(user.lastUpdated)}
+                    {formatDateShort(user.lastUpdated)}
                   </span>
                 </div>
               )}
