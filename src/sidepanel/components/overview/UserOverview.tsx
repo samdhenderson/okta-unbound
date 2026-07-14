@@ -72,7 +72,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
 
   const displayError = error || membershipError;
   if (displayError) {
-    return <AlertMessage message={{ text: displayError, type: 'error' }} />;
+    return <AlertMessage message={{ text: displayError, type: 'danger' }} />;
   }
 
   const directGroups = groups.filter((g) => g.membershipType === 'DIRECT').length;

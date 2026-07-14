@@ -17,5 +17,4 @@ export { default as SelectionChips } from './SelectionChips';
 // Re-export commonly used types
 export type { ButtonVariant, ButtonSize } from './Button';
 export type { AlertMessageData, AlertAction } from './AlertMessage';
-export { normalizeStatus } from './status';
-export type { StatusType, StatusTypeWithLegacy } from './status';
+export type { StatusType } from './status';

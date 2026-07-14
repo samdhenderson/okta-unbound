@@ -969,7 +969,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
 
             {error && (
               <AlertMessage
-                message={{ text: error, type: 'error' }}
+                message={{ text: error, type: 'danger' }}
                 onDismiss={() => setError(null)}
               />
             )}

@@ -521,7 +521,10 @@ const RulesTab: React.FC<RulesTabProps> = ({
 
         {/* Error Display */}
         {error && (
-          <AlertMessage message={{ text: error, type: 'error' }} onDismiss={() => setError(null)} />
+          <AlertMessage
+            message={{ text: error, type: 'danger' }}
+            onDismiss={() => setError(null)}
+          />
         )}
 
         {/* Stats Overview */}

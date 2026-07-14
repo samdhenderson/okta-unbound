@@ -1,10 +1,10 @@
 import React from 'react';
-import { normalizeStatus, type StatusTypeWithLegacy } from './status';
+import { type StatusType } from './status';
 
 export interface AlertMessageData {
   text: string;
-  /** Use `'danger'` (canonical). `'error'` is a deprecated alias — see ADR-0002. */
-  type: StatusTypeWithLegacy;
+  /** Canonical status vocabulary — `success | warning | danger | info` (ADR-0002). */
+  type: StatusType;
 }
 
 export interface AlertAction {
@@ -62,7 +62,7 @@ const AlertMessage: React.FC<AlertMessageProps> = ({
   action,
   className = '',
 }) => {
-  const status = normalizeStatus(message.type);
+  const status = message.type;
   const styles = typeStyles[status];
 
   return (

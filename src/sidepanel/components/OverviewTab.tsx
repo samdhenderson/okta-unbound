@@ -40,7 +40,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ onTabChange }) => {
           <AlertMessage
             message={{
               text: error || 'Please open an Okta admin page in this window',
-              type: 'error',
+              type: 'danger',
             }}
             action={{ label: 'Retry Connection', onClick: refetch }}
           />

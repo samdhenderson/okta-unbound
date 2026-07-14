@@ -531,12 +531,12 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
       } else {
         setResultMessage({
           text: result.error || 'The operation failed. Please try again.',
-          type: 'error',
+          type: 'danger',
         });
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
-      setResultMessage({ text: message, type: 'error' });
+      setResultMessage({ text: message, type: 'danger' });
     } finally {
       setIsLifecycleLoading(false);
     }
@@ -613,13 +613,13 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
       } else {
         setResultMessage({
           text: result.error || 'Failed to add user to group. Please try again.',
-          type: 'error',
+          type: 'danger',
         });
         handleCloseAddToGroupModal();
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
-      setResultMessage({ text: message, type: 'error' });
+      setResultMessage({ text: message, type: 'danger' });
       handleCloseAddToGroupModal();
     } finally {
       setIsAddingToGroup(false);
@@ -727,7 +727,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
         {/* Error Display */}
         {error && (
           <AlertMessage
-            message={{ text: error, type: 'error' }}
+            message={{ text: error, type: 'danger' }}
             onDismiss={() => setError(null)}
             className="animate-in slide-in-from-top-2 duration-300"
           />

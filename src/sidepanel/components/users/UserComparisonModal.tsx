@@ -281,13 +281,15 @@ const UserComparisonModal: React.FC<UserComparisonModalProps> = ({
             </div>
           )}
 
-          {!isLoading && loadError && <AlertMessage message={{ text: loadError, type: 'error' }} />}
+          {!isLoading && loadError && (
+            <AlertMessage message={{ text: loadError, type: 'danger' }} />
+          )}
 
           {!isLoading && !loadError && (
             <>
               {addError && (
                 <AlertMessage
-                  message={{ text: addError, type: 'error' }}
+                  message={{ text: addError, type: 'danger' }}
                   onDismiss={() => setAddError(null)}
                 />
               )}

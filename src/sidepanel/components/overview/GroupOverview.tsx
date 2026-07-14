@@ -154,7 +154,7 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
   if (error) {
     return (
       <AlertMessage
-        message={{ text: error, type: 'error' }}
+        message={{ text: error, type: 'danger' }}
         action={{ label: 'Retry', onClick: loadMembers }}
       />
     );
