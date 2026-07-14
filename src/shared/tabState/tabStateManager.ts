@@ -70,7 +70,8 @@ export class TabStateManager {
 
     try {
       const result = await chrome.storage.local.get([storageKey]);
-      const stored = result[storageKey] as any;
+      const stored = result[storageKey] as
+        ({ _metadata: StoredStateMetadata } & Record<string, unknown>) | undefined;
 
       if (!stored || typeof stored !== 'object') {
         log.debug(`No state found for tab: ${tabName}`);
@@ -101,7 +102,7 @@ export class TabStateManager {
         age: `${Math.round((Date.now() - metadata.lastUpdated) / 1000)}s`,
       });
 
-      return state as T;
+      return state as unknown as T;
     } catch (error) {
       log.error(`Failed to load state for tab: ${tabName}`, error);
       return null;
@@ -144,16 +145,16 @@ export class TabStateManager {
    */
   static async getAllTabStates(): Promise<Partial<AllTabStates>> {
     const tabNames: TabName[] = ['overview', 'rules', 'users', 'groups', 'history'];
-    const states: Partial<AllTabStates> = {};
+    const states: Partial<Record<TabName, BaseTabState>> = {};
 
     for (const tabName of tabNames) {
       const state = await this.loadTabState(tabName);
       if (state) {
-        (states as any)[tabName] = state;
+        states[tabName] = state;
       }
     }
 
-    return states;
+    return states as unknown as Partial<AllTabStates>;
   }
 
   /**
@@ -194,7 +195,7 @@ export class TabStateManager {
 
       for (const [key, value] of Object.entries(allKeys)) {
         if (key.startsWith(STORAGE_KEY_PREFIX) && value && typeof value === 'object') {
-          const metadata = (value as any)._metadata as StoredStateMetadata | undefined;
+          const metadata = (value as { _metadata?: StoredStateMetadata })._metadata;
           if (metadata && metadata.expiresAt && now > metadata.expiresAt) {
             keysToRemove.push(key);
           }
@@ -218,7 +219,7 @@ export class TabStateManager {
 
     try {
       const result = await chrome.storage.local.get([storageKey]);
-      const stored = result[storageKey] as any;
+      const stored = result[storageKey] as { _metadata?: StoredStateMetadata } | undefined;
 
       if (!stored || !stored._metadata) {
         return null;
@@ -255,7 +256,7 @@ export class TabStateManager {
 
       const states = tabStateEntries.map(([key, value]) => {
         const tabName = key.replace(STORAGE_KEY_PREFIX, '');
-        const metadata = (value as any)._metadata as StoredStateMetadata;
+        const metadata = (value as { _metadata?: StoredStateMetadata })._metadata;
         const size = JSON.stringify(value).length;
         const age = metadata ? Date.now() - metadata.lastUpdated : 0;
 

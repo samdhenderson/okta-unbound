@@ -4,7 +4,7 @@
  */
 
 import type { CoreApi } from './core';
-import type { OktaFactor, MemberMfaResult } from '../../../shared/types';
+import type { OktaFactor, MemberMfaResult, OktaUser } from '../../../shared/types';
 import { summarizeFactors } from '../../../shared/utils/mfaUtils';
 import { parseNextLink } from './utilities';
 import { createLogger } from '../../../shared/utils/logger';
@@ -95,8 +95,8 @@ export function createUserOperations(coreApi: CoreApi) {
   const batchGetUserDetails = async (
     userIds: string[],
     onProgress?: (current: number, total: number) => void,
-  ): Promise<Map<string, any>> => {
-    const userDetailsMap = new Map<string, any>();
+  ): Promise<Map<string, OktaUser>> => {
+    const userDetailsMap = new Map<string, OktaUser>();
     const batchSize = 3; // Match scheduler maxConcurrent
 
     for (let i = 0; i < userIds.length; i += batchSize) {
@@ -219,7 +219,7 @@ export function createUserOperations(coreApi: CoreApi) {
       );
 
       if (response.success && response.data) {
-        return response.data.map((user: any) => ({
+        return response.data.map((user: OktaUser) => ({
           id: user.id,
           email: user.profile?.email || '',
           firstName: user.profile?.firstName || '',

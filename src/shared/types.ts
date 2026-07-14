@@ -176,10 +176,27 @@ export interface UserMembershipTrace {
   totalGroups: number;
 }
 
+/**
+ * A group rule as consumed by membership analysis and display. Either a raw
+ * Okta rule (conditions/actions) or a formatted rule (groupIds/
+ * conditionExpression/userAttributes) may be supplied, so the shape-specific
+ * fields are optional.
+ */
+export interface MembershipRule {
+  id: string;
+  name: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  conditions?: RuleConditions;
+  actions?: RuleActions;
+  groupIds?: string[];
+  conditionExpression?: string;
+  userAttributes?: string[];
+}
+
 export interface GroupMembership {
   group: OktaGroup;
   membershipType: 'DIRECT' | 'RULE_BASED' | 'UNKNOWN';
-  rule?: OktaGroupRule;
+  rule?: MembershipRule;
 }
 
 export interface MessageRequest {
@@ -202,7 +219,7 @@ export interface MessageRequest {
     | 'exportMultiGroupMembers';
   endpoint?: string;
   method?: string;
-  body?: any;
+  body?: unknown;
   groupId?: string;
   groupName?: string;
   format?: 'csv' | 'json';
@@ -339,7 +356,7 @@ export interface BulkOperation {
   status: 'pending' | 'running' | 'completed' | 'failed';
   progress: number;
   results: BulkOperationResult[];
-  config?: any;
+  config?: { userId?: string };
 }
 
 export interface BulkOperationResult {

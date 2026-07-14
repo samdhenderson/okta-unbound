@@ -15,11 +15,11 @@ export interface QueuedRequest {
   id: string;
   endpoint: string;
   method: string;
-  body?: any;
+  body?: unknown;
   priority: RequestPriority;
   tabId: number;
   timestamp: number;
-  resolve: (response: any) => void;
+  resolve: (response: RequestResult) => void;
   reject: (error: Error) => void;
   retryCount: number;
   maxRetries: number;

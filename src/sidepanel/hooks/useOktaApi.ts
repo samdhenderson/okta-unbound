@@ -49,8 +49,8 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
   const pushGroupOps = createPushGroupOperations(coreApi);
   const groupAnalysisOps = createGroupAnalysisOperations(groupMemberOps.getAllGroupMembers);
 
-  const wrapOperation = useCallback((fn: (...args: any[]) => Promise<void>) => {
-    return async (...args: any[]) => {
+  const wrapOperation = useCallback(<A extends unknown[]>(fn: (...args: A) => Promise<void>) => {
+    return async (...args: A) => {
       setIsCancelled(false);
       const controller = new AbortController();
       setAbortController(controller);

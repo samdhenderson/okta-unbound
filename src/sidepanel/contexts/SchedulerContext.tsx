@@ -81,9 +81,9 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Listen for scheduler state changes from background
   useEffect(() => {
-    const listener = (message: any) => {
+    const listener = (message: { action?: string; state?: SchedulerState }) => {
       if (message.action === 'schedulerStateChanged') {
-        setState(message.state);
+        setState(message.state ?? null);
       }
     };
 

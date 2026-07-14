@@ -78,7 +78,7 @@ export class ApiScheduler {
   async scheduleRequest(
     endpoint: string,
     method: string,
-    body: any | undefined,
+    body: unknown,
     tabId: number,
     priority: RequestPriority = 'normal',
   ): Promise<RequestResult> {
@@ -298,7 +298,7 @@ export class ApiScheduler {
   /**
    * Retry a failed request
    */
-  private async retryRequest(request: QueuedRequest, _error: any): Promise<void> {
+  private async retryRequest(request: QueuedRequest, _error: unknown): Promise<void> {
     request.retryCount++;
     this.metrics.retriedRequests++;
 

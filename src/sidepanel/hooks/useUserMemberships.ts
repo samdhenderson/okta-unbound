@@ -1,5 +1,11 @@
 import { useState, useCallback } from 'react';
-import type { OktaUser, GroupMembership, OktaGroup } from '../../shared/types';
+import type {
+  OktaUser,
+  GroupMembership,
+  OktaGroup,
+  MembershipRule,
+  FormattedRule,
+} from '../../shared/types';
 import { RulesCache } from '../../shared/rulesCache';
 import { createLogger } from '../../shared/utils/logger';
 
@@ -21,7 +27,7 @@ interface UseUserMembershipsReturn {
  * Check if a user is explicitly excluded from a rule.
  * Users on the exclusion list are not affected by the rule even if they match conditions.
  */
-function isUserExcludedFromRule(rule: any, userId: string): boolean {
+function isUserExcludedFromRule(rule: MembershipRule, userId: string): boolean {
   const excludedUsers = rule.conditions?.people?.users?.exclude || [];
   return excludedUsers.includes(userId);
 }
@@ -43,13 +49,17 @@ function isUserExcludedFromRule(rule: any, userId: string): boolean {
  * - Cannot evaluate app.* attributes
  * - Historical rule changes may affect accuracy
  */
-function analyzeMemberships(groups: OktaGroup[], rules: any[], user: OktaUser): GroupMembership[] {
+function analyzeMemberships(
+  groups: OktaGroup[],
+  rules: MembershipRule[],
+  user: OktaUser,
+): GroupMembership[] {
   log.debug('Analyzing memberships for user:', user.id);
   log.debug(
     'Total rules:',
     rules.length,
     'Active rules:',
-    rules.filter((r: any) => r.status === 'ACTIVE').length,
+    rules.filter((r) => r.status === 'ACTIVE').length,
   );
   log.debug('Total groups:', groups.length);
 
@@ -65,7 +75,7 @@ function analyzeMemberships(groups: OktaGroup[], rules: any[], user: OktaUser): 
     }
 
     // Find ACTIVE rules that assign users to this group
-    const matchingRules = rules.filter((rule: any) => {
+    const matchingRules = rules.filter((rule) => {
       if (rule.status !== 'ACTIVE') return false;
       const groupIds = rule.groupIds || rule.actions?.assignUserToGroups?.groupIds || [];
       return groupIds.includes(group.id);
@@ -194,7 +204,7 @@ export function useUserMemberships({
         }
 
         // Check cache for rules first
-        let rules: any[] = [];
+        let rules: FormattedRule[] = [];
         const cachedRules = await RulesCache.get();
 
         if (cachedRules) {
@@ -223,8 +233,10 @@ export function useUserMemberships({
 
         // Extract raw groups from membership wrapper objects
         // groupsResponse.data is an array of { group, membershipType, addedDate }
-        const membershipData = groupsResponse.data || [];
-        const rawGroups = membershipData.map((m: any) => m.group || m);
+        const membershipData: Array<{ group?: OktaGroup }> = groupsResponse.data || [];
+        const rawGroups: OktaGroup[] = membershipData.map(
+          (m) => m.group || (m as unknown as OktaGroup),
+        );
         const analyzedMemberships = analyzeMemberships(rawGroups, rules, user);
 
         setMemberships(analyzedMemberships);
@@ -233,8 +245,8 @@ export function useUserMemberships({
           count: analyzedMemberships.length,
           usedCache: cachedRules !== null,
         });
-      } catch (err: any) {
-        setError(err.message || 'Failed to load user memberships');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load user memberships');
         setMemberships([]);
         log.error('Membership loading error:', err);
       } finally {

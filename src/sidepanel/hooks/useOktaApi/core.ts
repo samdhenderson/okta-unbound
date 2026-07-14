@@ -4,19 +4,20 @@
  */
 
 import type { MessageRequest, MessageResponse, OperationCallbacks } from './types';
+import type { RequestResult } from '@/shared/scheduler/types';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('useOktaApi');
 
 export interface CoreApi {
   targetTabId: number | null;
-  sendMessage: <T = any>(message: MessageRequest) => Promise<MessageResponse<T>>;
+  sendMessage: <T = unknown>(message: MessageRequest) => Promise<MessageResponse<T>>;
   makeApiRequest: (
     endpoint: string,
     method?: string,
-    body?: any,
+    body?: unknown,
     priority?: 'high' | 'normal' | 'low',
-  ) => Promise<any>;
+  ) => Promise<RequestResult>;
   getCurrentUser: () => Promise<{ email: string; id: string }>;
   checkCancelled: () => void;
   callbacks: OperationCallbacks;
@@ -30,7 +31,7 @@ export function createCoreApi(
   checkCancelled: () => void,
   callbacks: OperationCallbacks,
 ): CoreApi {
-  const sendMessage = async <T = any>(message: MessageRequest): Promise<MessageResponse<T>> => {
+  const sendMessage = async <T = unknown>(message: MessageRequest): Promise<MessageResponse<T>> => {
     if (!targetTabId) {
       throw new Error('No target tab ID - not connected to Okta page');
     }
@@ -46,9 +47,9 @@ export function createCoreApi(
   const makeApiRequest = async (
     endpoint: string,
     method: string = 'GET',
-    body?: any,
+    body?: unknown,
     priority: 'high' | 'normal' | 'low' = 'normal',
-  ) => {
+  ): Promise<RequestResult> => {
     if (!targetTabId) {
       throw new Error('No target tab ID - not connected to Okta page');
     }

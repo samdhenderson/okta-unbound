@@ -4,6 +4,7 @@
  */
 
 import type { CoreApi } from './core';
+import type { OktaGroup, OktaGroupRule, FormattedRule } from '../../../shared/types';
 import { RulesCache } from '../../../shared/rulesCache';
 import { parseNextLink } from './utilities';
 import { createLogger } from '../../../shared/utils/logger';
@@ -16,8 +17,8 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
    */
   const getAllGroups = async (
     onProgress?: (loaded: number, total: number) => void,
-  ): Promise<any[]> => {
-    const allGroups: any[] = [];
+  ): Promise<OktaGroup[]> => {
+    const allGroups: OktaGroup[] = [];
     let nextUrl: string | null = '/api/v1/groups?limit=200&expand=stats';
 
     while (nextUrl) {
@@ -69,7 +70,9 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
   /**
    * Get group rules for a specific group
    */
-  const getGroupRulesForGroup = async (groupId: string): Promise<any[]> => {
+  const getGroupRulesForGroup = async (
+    groupId: string,
+  ): Promise<FormattedRule[] | OktaGroupRule[]> => {
     try {
       // Check cache first
       const cachedRules = await RulesCache.getRulesForGroup(groupId);
@@ -85,10 +88,10 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
         return [];
       }
 
-      const allRules = response.data || [];
+      const allRules: OktaGroupRule[] = response.data || [];
 
       // Filter rules that target this group
-      const groupRules = allRules.filter((rule: any) => {
+      const groupRules = allRules.filter((rule) => {
         const targetGroupIds = rule.actions?.assignUserToGroups?.groupIds || [];
         return targetGroupIds.includes(groupId);
       });
@@ -116,7 +119,7 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
       );
 
       if (response.success && response.data) {
-        return response.data.map((group: any) => ({
+        return response.data.map((group: OktaGroup) => ({
           id: group.id,
           name: group.profile?.name || group.id,
           description: group.profile?.description || '',

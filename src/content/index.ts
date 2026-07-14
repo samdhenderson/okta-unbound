@@ -45,6 +45,9 @@ import type {
   MessageRequest,
   MessageResponse,
   OktaUser,
+  OktaGroup,
+  OktaGroupRule,
+  RuleConflict,
   GroupInfo,
   UserInfo,
   UserStatus,
@@ -169,7 +172,7 @@ chrome.runtime.onMessage.addListener(
         return true;
 
       default:
-        log.warn('Unknown action', { action: (request as any).action });
+        log.warn('Unknown action', { action: request.action });
         sendResponse({ success: false, error: 'Unknown action' });
         return true;
     }
@@ -183,7 +186,7 @@ chrome.runtime.onMessage.addListener(
 async function handleMakeApiRequest(
   endpoint: string,
   method: string = 'GET',
-  body?: any,
+  body?: unknown,
 ): Promise<ApiResponse> {
   log.debug('makeApiRequest called', {
     endpoint: endpoint.split('?')[0],
@@ -245,7 +248,7 @@ async function handleMakeApiRequest(
     }
 
     // Try to parse JSON
-    let data: any = null;
+    let data: unknown = null;
     const contentType = response.headers.get('content-type');
     if (contentType?.includes('application/json')) {
       try {
@@ -256,10 +259,13 @@ async function handleMakeApiRequest(
     }
 
     if (!response.ok) {
+      const errorBody = data as { errorSummary?: string; message?: string } | null;
       return {
         success: false,
         error:
-          data?.errorSummary || data?.message || `Request failed with status ${response.status}`,
+          errorBody?.errorSummary ||
+          errorBody?.message ||
+          `Request failed with status ${response.status}`,
         status: response.status,
         data,
       };
@@ -533,7 +539,7 @@ async function handleFetchGroupRules(groupId?: string): Promise<MessageResponse>
 
   try {
     // Fetch all rules with pagination
-    let allRules: any[] = [];
+    let allRules: OktaGroupRule[] = [];
     let nextUrl: string | null = '/api/v1/groups/rules?limit=200';
 
     while (nextUrl) {
@@ -563,7 +569,7 @@ async function handleFetchGroupRules(groupId?: string): Promise<MessageResponse>
       }
     }
 
-    const rules: any[] = allRules;
+    const rules: OktaGroupRule[] = allRules;
     log.debug('Fetched rules (total across all pages)', { count: rules.length });
 
     // Use provided groupId or extract from URL if on a group page
@@ -637,7 +643,7 @@ async function handleFetchGroupRules(groupId?: string): Promise<MessageResponse>
 
     // Detect conflicts (simple implementation in content script)
     let conflictCount = 0;
-    const conflicts: any[] = [];
+    const conflicts: RuleConflict[] = [];
 
     for (let i = 0; i < activeRules.length; i++) {
       for (let j = i + 1; j < activeRules.length; j++) {
@@ -911,7 +917,7 @@ async function handleGetUserGroups(userId: string): Promise<MessageResponse> {
   log.debug('Processing getUserGroups request', { userId });
 
   try {
-    let allGroups: any[] = [];
+    let allGroups: OktaGroup[] = [];
     let nextUrl: string | null = `/api/v1/users/${userId}/groups?limit=200`;
 
     // Fetch all groups with pagination

@@ -6,7 +6,7 @@
  */
 
 import { createLogger } from './utils/logger';
-import type { FormattedRule, OktaGroupRule } from './types';
+import type { FormattedRule, OktaGroupRule, RuleConflict } from './types';
 
 const log = createLogger('RulesCache');
 
@@ -19,7 +19,7 @@ interface RulesCacheEntry {
     inactive: number;
     conflicts: number;
   };
-  conflicts: any[];
+  conflicts: RuleConflict[];
   timestamp: number;
   ttl: number;
 }
@@ -68,7 +68,7 @@ class RulesCache {
     rules: FormattedRule[],
     rawRules: OktaGroupRule[],
     stats: RulesCacheEntry['stats'],
-    conflicts: any[],
+    conflicts: RuleConflict[],
     ttl: number = this.DEFAULT_TTL,
   ): Promise<void> {
     try {

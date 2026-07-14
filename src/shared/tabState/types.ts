@@ -4,6 +4,8 @@
  * Defines types for persisting and restoring UI state across tab navigation.
  */
 
+import type { FormattedRule, RuleStats, GroupSummary } from '../types';
+
 export type TabName = 'overview' | 'rules' | 'users' | 'groups' | 'history';
 
 export interface BaseTabState {
@@ -14,8 +16,8 @@ export interface BaseTabState {
 export interface RulesTabState extends BaseTabState {
   searchQuery: string;
   activeFilter: 'all' | 'active' | 'conflicts' | 'current-group';
-  cachedRules: any[] | null;
-  cachedStats: any | null;
+  cachedRules: FormattedRule[] | null;
+  cachedStats: RuleStats | null;
   lastFetchTime: string | null;
 }
 
@@ -34,7 +36,7 @@ export interface GroupsTabState extends BaseTabState {
   sizeFilter: string;
   sortBy: 'name' | 'memberCount' | 'lastUpdated';
   selectedGroupIds: string[];
-  cachedGroups: any[] | null;
+  cachedGroups: GroupSummary[] | null;
   cacheTimestamp: number | null;
 }
 

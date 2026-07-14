@@ -5,6 +5,7 @@
 
 import type { CoreApi } from './core';
 import type { OktaUser, AuditLogEntry } from './types';
+import type { RequestResult } from '../../../shared/scheduler/types';
 import type { BulkUserInfo } from '../../../shared/undoTypes';
 import { logBulkRemoveAction } from '../../../shared/undoManager';
 import { auditStore } from '../../../shared/storage/auditStore';
@@ -51,7 +52,7 @@ export function createGroupCleanupOperations(
     groupName: string,
     user: OktaUser,
     skipUndoLog?: boolean,
-  ) => Promise<any>,
+  ) => Promise<RequestResult>,
 ) {
   /**
    * Remove all deprovisioned users from a group
