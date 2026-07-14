@@ -12,6 +12,12 @@ interface InputProps {
   fullWidth?: boolean;
   icon?: React.ReactNode;
   className?: string;
+  /** Focus the input on mount. */
+  autoFocus?: boolean;
+  /** Key handler on the input (e.g. Enter to submit, Escape to cancel). */
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  /** Ref to the underlying `<input>` (e.g. to refocus after clearing). */
+  inputRef?: React.Ref<HTMLInputElement>;
 }
 
 const Input: React.FC<InputProps> = ({
@@ -26,10 +32,13 @@ const Input: React.FC<InputProps> = ({
   fullWidth = true,
   icon,
   className = '',
+  autoFocus = false,
+  onKeyDown,
+  inputRef,
 }) => {
   const inputClasses = `
     px-3 py-2 text-sm
-    border rounded-md
+    border rounded-md bg-white
     transition-all duration-100
     focus:outline-2 focus:outline-offset-2 focus:outline-primary
     disabled:bg-neutral-50 disabled:text-neutral-500 disabled:cursor-not-allowed
@@ -48,11 +57,14 @@ const Input: React.FC<InputProps> = ({
           <div className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">{icon}</div>
         )}
         <input
+          ref={inputRef}
           type={type}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onKeyDown={onKeyDown}
           placeholder={placeholder}
           disabled={disabled}
+          autoFocus={autoFocus}
           className={inputClasses}
           style={{ fontFamily: 'var(--font-primary)' }}
         />
