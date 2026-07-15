@@ -67,11 +67,18 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
   // Group members cache (built up by comparison/export operations)
   const [groupMembersCache, setGroupMembersCache] = useState<Map<string, OktaUser[]>>(new Map());
 
-  const api = useOktaApi({
-    targetTabId,
-    onResult: (message, type) => {
+  // Must be stable: useOktaApi memoizes its operations on this callback's identity,
+  // so a fresh arrow here would rebuild every operation on every render.
+  const handleResult = useCallback(
+    (message: string, type: 'info' | 'success' | 'warning' | 'error') => {
       if (type === 'error') setError(message);
     },
+    [],
+  );
+
+  const api = useOktaApi({
+    targetTabId,
+    onResult: handleResult,
   });
 
   // Load groups from cache on mount

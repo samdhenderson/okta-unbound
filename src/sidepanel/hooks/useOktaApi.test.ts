@@ -35,6 +35,51 @@ describe('useOktaApi', () => {
     vi.restoreAllMocks();
   });
 
+  // Regression: the hook used to rebuild coreApi and all nine operation objects on
+  // every render, so every function it returned had a fresh identity each time. Any
+  // effect listing one in its deps re-ran forever — UsersTab's Add-to-Group search
+  // re-queried /api/v1/groups roughly 3x/sec for as long as the modal was open.
+  describe('referential stability', () => {
+    it('keeps every returned operation identity-stable across re-renders', () => {
+      const stableOnResult = vi.fn();
+      const stableOnProgress = vi.fn();
+
+      const { result, rerender } = renderHook(() =>
+        useOktaApi({ targetTabId, onResult: stableOnResult, onProgress: stableOnProgress }),
+      );
+
+      const first = result.current;
+      rerender();
+      rerender();
+      const second = result.current;
+
+      // The exact function UsersTab's debounced group-search effect depends on.
+      expect(second.searchGroups).toBe(first.searchGroups);
+
+      // ...and the rest of the surface, so the trap cannot reappear elsewhere.
+      const operations = Object.keys(first).filter(
+        (key) => typeof first[key as keyof typeof first] === 'function',
+      ) as Array<keyof typeof first>;
+      const unstable = operations.filter((key) => second[key] !== first[key]);
+      expect(unstable).toEqual([]);
+
+      // The whole object too, so `const api = useOktaApi(...)` is dep-array safe.
+      expect(second).toBe(first);
+    });
+
+    it('rebuilds operations when targetTabId changes', () => {
+      const { result, rerender } = renderHook(
+        ({ tabId }) => useOktaApi({ targetTabId: tabId, onResult: mockOnResult }),
+        { initialProps: { tabId: 123 } },
+      );
+
+      const before = result.current.searchGroups;
+      rerender({ tabId: 456 });
+
+      expect(result.current.searchGroups).not.toBe(before);
+    });
+  });
+
   describe('sendMessage', () => {
     it('should send message to target tab', async () => {
       const mockResponse: MessageResponse = {
