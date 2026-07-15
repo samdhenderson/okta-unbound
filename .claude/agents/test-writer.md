@@ -1,7 +1,7 @@
 ---
 name: test-writer
 description: Use to add or fix Vitest / Testing Library / MSW tests, especially component tests and tests that pin behavior before a refactor.
-tools: Read, Edit, Write, Bash
+tools: Read, Edit, Write, Grep, Glob, Bash
 model: inherit
 ---
 
