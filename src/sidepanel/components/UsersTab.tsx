@@ -140,7 +140,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     setError(null);
     setSelectedUser(null);
     setMemberships([]);
-    let requestCount = 0;
 
     try {
       log.debug('Searching for users', { queryLength: searchQuery.trim().length });
@@ -149,8 +148,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
         action: 'searchUsers',
         query: searchQuery.trim(),
       });
-
-      requestCount++;
 
       if (response.success) {
         setSearchResults(response.data || []);
@@ -175,7 +172,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     setSelectedUser(user);
     setIsLoadingMemberships(true);
     setError(null);
-    let requestCount = 0;
 
     try {
       log.debug('Loading memberships for user:', user.id);
@@ -185,8 +181,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
         action: 'getUserGroups',
         userId: user.id,
       });
-
-      requestCount++;
 
       if (!groupsResponse.success) {
         throw new Error(groupsResponse.error || 'Failed to fetch user groups');
@@ -206,8 +200,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
         const rulesResponse = await chrome.tabs.sendMessage(targetTabId, {
           action: 'fetchGroupRules',
         });
-
-        requestCount++;
 
         if (!rulesResponse.success) {
           log.warn('Could not fetch rules for analysis:', rulesResponse.error);
