@@ -8,6 +8,16 @@ import UserSearchResults from './UserSearchResults';
 import { useUserSearch } from '../../hooks/useUserSearch';
 import { useUserMemberships } from '../../hooks/useUserMemberships';
 import { useOktaApi } from '../../hooks/useOktaApi';
+import { userDisplayName, initialsOf, hueFromId } from '../../../shared/utils/userDisplay';
+import {
+  jaccard,
+  bucketGroups,
+  bucketApps,
+  similarityColor,
+  type AppEntry,
+  type TabKey,
+  type DiffItem,
+} from './comparison/comparisonAnalytics';
 import type { OktaUser, OktaGroup, GroupMembership } from '../../../shared/types';
 
 interface UserComparisonModalProps {
@@ -18,38 +28,6 @@ interface UserComparisonModalProps {
   targetTabId: number;
   onGroupsChanged: () => void;
 }
-
-interface AppEntry {
-  id: string;
-  label: string;
-}
-
-type TabKey = 'overview' | 'groups' | 'apps';
-
-const userDisplayName = (user: OktaUser): string => {
-  const name = `${user.profile.firstName || ''} ${user.profile.lastName || ''}`.trim();
-  return name || user.profile.login || user.profile.email || 'User';
-};
-
-const initialsOf = (user: OktaUser): string => {
-  const first = (user.profile.firstName || '').trim();
-  const last = (user.profile.lastName || '').trim();
-  if (first || last) {
-    return `${first[0] || ''}${last[0] || ''}`.toUpperCase() || '?';
-  }
-  const fallback = user.profile.login || user.profile.email || '?';
-  return fallback.slice(0, 2).toUpperCase();
-};
-
-// Stable hue per user id so avatar colors are consistent across renders.
-const hueFromId = (id: string): number => {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return h % 360;
-};
-
-const jaccard = (sharedCount: number, unionCount: number): number =>
-  unionCount === 0 ? 0 : Math.round((sharedCount / unionCount) * 100);
 
 const UserComparisonModal: React.FC<UserComparisonModalProps> = ({
   isOpen,
@@ -175,37 +153,15 @@ const UserComparisonModal: React.FC<UserComparisonModalProps> = ({
     [addUserToGroup, contextUser, onGroupsChanged],
   );
 
-  const groupBuckets = useMemo(() => {
-    const contextGroupIds = new Set(contextGroups.map((m) => m.group.id));
-    const comparedGroupIds = new Set(comparedGroups.map((m) => m.group.id));
+  const groupBuckets = useMemo(
+    () => bucketGroups(contextGroups, comparedGroups, addedGroupIds),
+    [contextGroups, comparedGroups, addedGroupIds],
+  );
 
-    const onlyCompared: OktaGroup[] = [];
-    const shared: OktaGroup[] = [];
-    for (const m of comparedGroups) {
-      if (contextGroupIds.has(m.group.id) || addedGroupIds.has(m.group.id)) {
-        shared.push(m.group);
-      } else {
-        onlyCompared.push(m.group);
-      }
-    }
-
-    const onlyContext = contextGroups
-      .filter((m) => !comparedGroupIds.has(m.group.id))
-      .map((m) => m.group);
-
-    return { onlyCompared, shared, onlyContext };
-  }, [contextGroups, comparedGroups, addedGroupIds]);
-
-  const appBuckets = useMemo(() => {
-    const contextAppIds = new Set(contextApps.map((a) => a.id));
-    const comparedAppIds = new Set(comparedApps.map((a) => a.id));
-
-    const onlyCompared = comparedApps.filter((a) => !contextAppIds.has(a.id));
-    const shared = comparedApps.filter((a) => contextAppIds.has(a.id));
-    const onlyContext = contextApps.filter((a) => !comparedAppIds.has(a.id));
-
-    return { onlyCompared, shared, onlyContext };
-  }, [contextApps, comparedApps]);
+  const appBuckets = useMemo(
+    () => bucketApps(contextApps, comparedApps),
+    [contextApps, comparedApps],
+  );
 
   const groupDiffCount = groupBuckets.onlyCompared.length + groupBuckets.onlyContext.length;
   const appDiffCount = appBuckets.onlyCompared.length + appBuckets.onlyContext.length;
@@ -522,13 +478,6 @@ const ComparisonHero: React.FC<ComparisonHeroProps> = ({
   </div>
 );
 
-const similarityColor = (pct: number): string => {
-  if (pct >= 75) return 'var(--color-success-text)';
-  if (pct >= 40) return 'var(--color-primary-text)';
-  if (pct >= 15) return 'var(--color-warning-text)';
-  return 'var(--color-neutral-700)';
-};
-
 const UserSide: React.FC<{
   user: OktaUser;
   name: string;
@@ -789,11 +738,6 @@ const ProportionStack: React.FC<{
 };
 
 // ------------------------------------------------------------------ Diff tab (Groups / Apps)
-
-interface DiffItem {
-  id: string;
-  label: string;
-}
 
 interface DiffTabProps {
   contextName: string;
