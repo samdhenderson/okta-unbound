@@ -33,4 +33,7 @@ utils in `src/shared/utils/`).
 
 Preserve public props and observable behavior. Migrate any direct
 side-panel→content calls onto the scheduler path. No new `any`; validate external
-data with zod (`docs/development.md`). Keep changes reviewable — small, sequential.
+data with zod (`docs/development.md`). Every module, hook, and exported helper you
+create or move carries a TypeDoc `@module`/`@description` header + doc comments on
+its exports — carry existing comments through verbatim, including `CHARACTERIZED:`
+notes (`docs/development.md`). Keep changes reviewable — small, sequential.

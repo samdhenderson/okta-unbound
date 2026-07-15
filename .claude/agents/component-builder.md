@@ -27,8 +27,13 @@ You build and edit React components for this Chrome MV3 side panel to spec.
 - Type props with a local `interface XProps`. Compose primitives; split large UIs
   into subcomponents.
 
+- Document with TypeDoc: a `@module`/`@description` header on the file, a summary
+  comment on the component, and doc comments on each `XProps` field (they render as
+  their own TypeDoc pages — `docs/development.md`).
+
 ## Definition of done
 
 `npm run type-check` and `npm run lint` are clean; the component is exported from the
-barrel; a Testing Library test exists (delegate to `test-writer` or write it). Run
-`npx prettier --write` on touched files.
+barrel; it carries its TypeDoc header + prop-level comments; a Testing Library test
+exists (delegate to `test-writer` or write it). Run `npx prettier --write` on touched
+files.

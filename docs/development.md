@@ -11,6 +11,8 @@
 | `npm run format`            | Prettier (added — ADR-0003)                            |
 | `npm run test` / `test:run` | Vitest (watch / once)                                  |
 | `npm run test:coverage`     | Coverage against 80/75 thresholds                      |
+| `npm run docs`              | Regenerate `docs/api/` (TypeDoc from source comments)  |
+| `npm run docs:clean`        | Delete the generated `docs/api/`                       |
 
 ## Logging policy (hard rule)
 
@@ -27,6 +29,26 @@
   `error` after the boundary-validation burndown (ADR-0004/0006).
 - Validate external data (Okta responses) at the boundary with **zod**; use inferred
   types instead of hand-written `any`-laden interfaces.
+
+## Documentation comments (TypeDoc)
+
+API docs are generated from source comments with **TypeDoc** (`npm run docs` →
+`docs/api/`). The config (`typedoc.json`) expands over all of `src` **except**
+`*.test`/`*.spec` files, so every non-test module is part of the public API surface
+and is expected to carry doc comments. When you add or move a module, document it in
+the same change — treat it like the type-check gate, not a follow-up.
+
+- **Every module file** opens with a header block: `@module <path within src>` plus a
+  one-line `@description` of what it is and why it exists.
+- **Exported functions, hooks, and components** get a summary sentence; add
+  `@param`/`@returns` where they carry signal and `@example` for non-obvious helpers.
+- **Exported interfaces/types and their fields** get brief doc comments — each renders
+  as its own TypeDoc page, so a bare `interface` reads as undocumented.
+- Keep the "why" _in_ the comment: preserve `CHARACTERIZED:` / intentional-quirk notes
+  as prose so the rationale ships with the symbol (see the `groups/` hooks for the
+  pattern).
+- `docs/api/` is **generated output** — never hand-edit it. Change the source comment
+  and re-run `npm run docs`.
 
 ## Quality gates
 

@@ -20,6 +20,7 @@ npm run lint          # eslint (0 errors required; warnings are legacy debt)
 npm run format        # prettier --write
 npm run test:run      # vitest once
 npm run test:coverage # coverage (thresholds 80/75)
+npm run docs          # regenerate docs/api (TypeDoc from source comments)
 ```
 
 ## Message-passing model (the one thing to know)
@@ -48,6 +49,9 @@ Details: `docs/architecture.md`.
 - **Version** comes from `package.json` only — never hardcode it. (ADR-0007)
 - **Status vocabulary is `danger`, not `error`.** (ADR-0002)
 - Keep components under ~300 lines; push logic into hooks. (`docs/state-management.md`)
+- **Document exports with TypeDoc JSDoc.** Every module opens with a
+  `@module`/`@description` header; exported functions/hooks/components/types get doc
+  comments (feeds `npm run docs`). (`docs/development.md`)
 
 ## Routing table — read ONLY the matching row(s)
 
@@ -60,6 +64,7 @@ Details: `docs/architecture.md`.
 | Adding / fixing tests                          | `docs/testing.md`                                  | `test-writer`               |
 | Logging / secrets / validation / `any` removal | `docs/development.md`                              | `security-logging-reviewer` |
 | Build / lint / CI / release / versioning       | `docs/development.md`                              | —                           |
+| Documenting code / TypeDoc / API comments      | `docs/development.md`                              | `docs-maintainer`           |
 | Writing / updating a spec or ADR               | `docs/README.md` + the affected doc                | `docs-maintainer`           |
 | Understanding the whole system                 | `docs/architecture.md`                             | —                           |
 
