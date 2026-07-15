@@ -56,12 +56,15 @@ const ADMIN: PageDetection = { pageType: 'admin', groupInfo: null, userInfo: nul
  * matching info. Falls back to `admin` when none match. Thin wrapper over
  * {@link useOktaTabContext}.
  *
+ * @param enabled - When `false`, live re-detection on navigation is suspended
+ *   (a resync is deferred until re-enabled while the panel is visible). Defaults
+ *   to `true`. Used to scope detection to the active Overview tab.
  * @returns The detected `pageType` with the corresponding `groupInfo` /
  *   `userInfo` / `appInfo` (the others `null`), plus shared connection state
  *   (`connectionStatus`, `targetTabId`, `error`, `isLoading`, `refetch`,
  *   `oktaOrigin`).
  */
-export function useOktaPageContext(): OktaPageContext {
+export function useOktaPageContext(enabled = true): OktaPageContext {
   const loadEntity = useCallback(
     async ({ sendToTab }: EntityLoadContext): Promise<PageDetection> => {
       const [groupResponse, userResponse, appResponse] = await Promise.all([
@@ -89,6 +92,7 @@ export function useOktaPageContext(): OktaPageContext {
     initialData: UNKNOWN,
     commsFailedData: ADMIN,
     loadEntity,
+    enabled,
   });
 
   return { ...data, ...rest };

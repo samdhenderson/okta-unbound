@@ -40,7 +40,11 @@ const App: React.FC = () => {
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
   const { groupInfo, connectionStatus, targetTabId, error, isLoading, oktaOrigin } =
     useGroupContext();
-  const { pageType, userInfo, appInfo } = useOktaPageContext();
+  // Live page detection (which feeds the Overview tab + context banner) re-probes
+  // only while Overview is the active tab; on other tabs it holds the last-known
+  // context and resyncs on return, so admin navigation doesn't drive it. Tab
+  // targeting (targetTabId/origin) stays available everywhere via useGroupContext.
+  const { pageType, userInfo, appInfo } = useOktaPageContext(activeTab === 'overview');
 
   // Load saved tab preference on mount with legacy migration
   useEffect(() => {
@@ -90,7 +94,7 @@ const App: React.FC = () => {
 
   return (
     <SchedulerProvider>
-      <div className="flex flex-col h-screen overflow-y-auto pb-14">
+      <div className="flex flex-col h-screen overflow-y-auto pb-14 bg-canvas">
         <Header status={connectionStatus} />
 
         <ContextBanner

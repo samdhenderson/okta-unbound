@@ -1,10 +1,30 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useGroupContext } from './useGroupContext';
 import { useUserContext } from './useUserContext';
 import { useOktaPageContext } from './useOktaPageContext';
 
 type SendResponse = { success: boolean; data?: unknown };
+
+/** Grab the most recently registered listener from a mocked `addListener`. */
+function lastListener<T>(addListener: unknown): T {
+  const calls = (addListener as { mock: { calls: unknown[][] } }).mock.calls;
+  return calls[calls.length - 1][0] as T;
+}
+
+/** Count of content-script messages sent so far (a proxy for "did we refetch"). */
+function sendCount(): number {
+  return (chrome.tabs.sendMessage as unknown as { mock: { calls: unknown[] } }).mock.calls.length;
+}
+
+/** Override document visibility (jsdom exposes both as read-only getters). */
+function setVisibility(state: 'visible' | 'hidden'): void {
+  Object.defineProperty(document, 'visibilityState', { value: state, configurable: true });
+  Object.defineProperty(document, 'hidden', { value: state === 'hidden', configurable: true });
+}
+
+/** Wait one debounce window plus slack, then let microtasks settle. */
+const afterDebounce = () => new Promise((r) => setTimeout(r, 250));
 
 /** Wire chrome.* mocks for a single active Okta tab, with a per-action responder. */
 function mockOktaTab(responder: (action: string) => SendResponse, tabs?: unknown[]) {
@@ -95,5 +115,78 @@ describe('useOktaTabContext (via context hooks)', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.pageType).toBe('admin');
     expect(result.current.connectionStatus).toBe('connected');
+  });
+});
+
+describe('useOktaTabContext detection hygiene', () => {
+  const groupResponder = (action: string): SendResponse =>
+    action === 'getGroupInfo'
+      ? { success: true, data: { groupId: '00g1', groupName: 'Engineering' } }
+      : origin(action);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setVisibility('visible');
+  });
+
+  afterEach(() => {
+    setVisibility('visible');
+  });
+
+  it('does not refetch on a hash-only URL change', async () => {
+    mockOktaTab(groupResponder); // initial tab url: .../admin/groups
+    const { result } = renderHook(() => useGroupContext());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    const before = sendCount();
+    const onUpdated = lastListener<
+      (id: number, change: { url?: string }, tab: chrome.tabs.Tab) => void
+    >(chrome.tabs.onUpdated.addListener);
+
+    // Same page, new fragment — Okta's in-page section tabs.
+    const hashUrl = 'https://acme.okta.com/admin/groups#assignments';
+    onUpdated(42, { url: hashUrl }, { url: hashUrl } as chrome.tabs.Tab);
+
+    await afterDebounce();
+    expect(sendCount()).toBe(before);
+  });
+
+  it('refetches when navigating to a different entity URL', async () => {
+    mockOktaTab(groupResponder);
+    const { result } = renderHook(() => useGroupContext());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    const before = sendCount();
+    const onUpdated = lastListener<
+      (id: number, change: { url?: string }, tab: chrome.tabs.Tab) => void
+    >(chrome.tabs.onUpdated.addListener);
+
+    const nextUrl = 'https://acme.okta.com/admin/groups/00gOTHER';
+    onUpdated(42, { url: nextUrl }, { url: nextUrl } as chrome.tabs.Tab);
+
+    await waitFor(() => expect(sendCount()).toBeGreaterThan(before));
+  });
+
+  it('defers refetch while the panel is hidden and catches up when shown', async () => {
+    mockOktaTab(groupResponder);
+    const { result } = renderHook(() => useGroupContext());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    const before = sendCount();
+    const onUpdated = lastListener<
+      (id: number, change: { url?: string }, tab: chrome.tabs.Tab) => void
+    >(chrome.tabs.onUpdated.addListener);
+
+    // Hidden: a real navigation must NOT fetch.
+    setVisibility('hidden');
+    const nextUrl = 'https://acme.okta.com/admin/groups/00gHIDDEN';
+    onUpdated(42, { url: nextUrl }, { url: nextUrl } as chrome.tabs.Tab);
+    await afterDebounce();
+    expect(sendCount()).toBe(before);
+
+    // Shown again: exactly one catch-up fetch runs.
+    setVisibility('visible');
+    document.dispatchEvent(new globalThis.Event('visibilitychange'));
+    await waitFor(() => expect(sendCount()).toBeGreaterThan(before));
   });
 });

@@ -44,6 +44,15 @@ const DEFAULT_CONFIG: SchedulerConfig = {
 export class ApiScheduler {
   private queue: QueuedRequest[] = [];
   private activeRequests: Map<string, QueuedRequest> = new Map();
+  // Identical in-flight/queued GETs coalesced onto one leader request. Extra
+  // callers wait for the leader's result instead of issuing their own fetch.
+  private coalescableGets: Map<
+    string,
+    {
+      request: QueuedRequest;
+      waiters: Array<{ resolve: (r: RequestResult) => void; reject: (e: Error) => void }>;
+    }
+  > = new Map();
   private rateLimitDetector: RateLimitDetector;
   private config: SchedulerConfig;
   private status: SchedulerStatus = 'idle';
@@ -58,6 +67,7 @@ export class ApiScheduler {
     failedRequests: 0,
     retriedRequests: 0,
     cacheHits: 0,
+    coalescedRequests: 0,
     averageWaitTime: 0,
     averageExecutionTime: 0,
     cooldownEvents: 0,
@@ -98,6 +108,21 @@ export class ApiScheduler {
     tabId: number,
     priority: RequestPriority = 'normal',
   ): Promise<RequestResult> {
+    const dedupKey = this.getGetDedupKey(method, endpoint);
+
+    // Coalesce an identical in-flight/queued GET: attach to the leader's result
+    // instead of issuing a second fetch. Reads are idempotent, so this is safe.
+    if (dedupKey) {
+      const existing = this.coalescableGets.get(dedupKey);
+      if (existing) {
+        this.metrics.coalescedRequests++;
+        log.debug('Coalescing duplicate GET onto in-flight request:', {
+          endpoint: endpoint.split('?')[0],
+        });
+        return new Promise((resolve, reject) => existing.waiters.push({ resolve, reject }));
+      }
+    }
+
     return new Promise((resolve, reject) => {
       const request: QueuedRequest = {
         id: this.generateRequestId(),
@@ -113,6 +138,26 @@ export class ApiScheduler {
         maxRetries: this.config.maxRetries,
       };
 
+      // Register this GET as the coalescing leader and fan its result out to any
+      // callers that joined while it was in flight, clearing the slot on settle.
+      if (dedupKey) {
+        const entry: {
+          request: QueuedRequest;
+          waiters: Array<{ resolve: (r: RequestResult) => void; reject: (e: Error) => void }>;
+        } = { request, waiters: [] };
+        this.coalescableGets.set(dedupKey, entry);
+        request.resolve = (result: RequestResult) => {
+          this.coalescableGets.delete(dedupKey);
+          resolve(result);
+          entry.waiters.forEach((w) => w.resolve(result));
+        };
+        request.reject = (error: Error) => {
+          this.coalescableGets.delete(dedupKey);
+          reject(error);
+          entry.waiters.forEach((w) => w.reject(error));
+        };
+      }
+
       this.addToQueue(request);
       this.metrics.totalRequests++;
       this.notifyStateChange();
@@ -125,6 +170,15 @@ export class ApiScheduler {
         queueLength: this.queue.length,
       });
     });
+  }
+
+  /**
+   * Coalescing key for an idempotent GET, or `null` for methods that must not be
+   * de-duplicated (mutations). Includes the full endpoint so differing query
+   * strings stay distinct.
+   */
+  private getGetDedupKey(method: string, endpoint: string): string | null {
+    return method.toUpperCase() === 'GET' ? `GET ${endpoint}` : null;
   }
 
   /**
@@ -491,6 +545,7 @@ export class ApiScheduler {
       failedRequests: 0,
       retriedRequests: 0,
       cacheHits: 0,
+      coalescedRequests: 0,
       averageWaitTime: 0,
       averageExecutionTime: 0,
       cooldownEvents: 0,

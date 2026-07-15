@@ -12,6 +12,7 @@ import StatCard from './shared/StatCard';
 import QuickActionsPanel, { type ActionSection } from './shared/QuickActionsPanel';
 import { UserProfileCard, UserComparisonModal } from '../users';
 import { useUserMemberships } from '../../hooks/useUserMemberships';
+import { useEntityQuery } from '../../cache/useEntityQuery';
 import AlertMessage from '../shared/AlertMessage';
 import Button from '../shared/Button';
 import LoadingSpinner from '../shared/LoadingSpinner';
@@ -41,12 +42,30 @@ const UserOverview: React.FC<UserOverviewProps> = ({
   onTabChange,
   oktaOrigin,
 }) => {
-  const [userDetails, setUserDetails] = useState<OktaUser | null>(null);
-  const [isLoadingUser, setIsLoadingUser] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
 
-  // Use the shared hook for consistent membership analysis
+  // User details from the shared entity cache: re-navigating back to this user
+  // (or returning from another tab) serves instantly with no refetch.
+  const {
+    data: userDetails,
+    isLoading: isLoadingUser,
+    error: userError,
+  } = useEntityQuery<OktaUser>(
+    ['userDetails', userId],
+    async () => {
+      const userResponse = await chrome.tabs.sendMessage(targetTabId, {
+        action: 'getUserDetails',
+        userId,
+      });
+      if (!userResponse.success || !userResponse.data) {
+        throw new Error(userResponse.error || 'Failed to load user details');
+      }
+      return userResponse.data as OktaUser;
+    },
+    { enabled: Boolean(targetTabId && userId) },
+  );
+
+  // Use the shared hook for consistent membership analysis (also cache-backed).
   const {
     memberships: groups,
     isLoading: isLoadingMemberships,
@@ -56,40 +75,17 @@ const UserOverview: React.FC<UserOverviewProps> = ({
 
   const isLoading = isLoadingUser || isLoadingMemberships;
 
+  // Load memberships once the user details are available (served from cache on
+  // revisit). `userDetails`/`loadMemberships` are stable across renders.
   useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        setIsLoadingUser(true);
-        setError(null);
-
-        // Fetch user details
-        const userResponse = await chrome.tabs.sendMessage(targetTabId, {
-          action: 'getUserDetails',
-          userId,
-        });
-
-        if (userResponse.success && userResponse.data) {
-          setUserDetails(userResponse.data);
-          // Load memberships using the shared hook (includes proper rule analysis)
-          await loadMemberships(userResponse.data);
-        } else {
-          setError(userResponse.error || 'Failed to load user details');
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load user data');
-      } finally {
-        setIsLoadingUser(false);
-      }
-    };
-
-    fetchUserData();
-  }, [userId, targetTabId, loadMemberships]);
+    if (userDetails) loadMemberships(userDetails);
+  }, [userDetails, loadMemberships]);
 
   if (isLoading) {
     return <LoadingSpinner size="lg" message="Loading user data..." centered />;
   }
 
-  const displayError = error || membershipError;
+  const displayError = userError || membershipError;
   if (displayError) {
     return <AlertMessage message={{ text: displayError, type: 'danger' }} />;
   }
@@ -163,22 +159,10 @@ const UserOverview: React.FC<UserOverviewProps> = ({
       )}
 
       {/* Quick Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3">
         <StatCard title="Total Groups" value={totalGroups} color="primary" icon="users" />
-        <StatCard
-          title="Direct Assignments"
-          value={directGroups}
-          color="neutral"
-          icon="hand"
-          subtitle="*Approximate"
-        />
-        <StatCard
-          title="Rule-Based"
-          value={ruleBasedGroups}
-          color="neutral"
-          icon="bolt"
-          subtitle="*Approximate"
-        />
+        <StatCard title="Direct Assignments" value={directGroups} color="neutral" icon="hand" />
+        <StatCard title="Rule-Based" value={ruleBasedGroups} color="neutral" icon="bolt" />
         <StatCard
           title="Status"
           value={userDetails?.status || 'Unknown'}
@@ -201,7 +185,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
         {/* Right Column */}
         <div className="space-y-6">
           {/* Group Membership Chart */}
-          <div className="bg-white rounded-md border border-neutral-200 p-6 shadow-sm">
+          <div className="bg-white rounded-md border border-neutral-200 p-6">
             <h3 className="text-lg font-semibold text-neutral-900 mb-4">
               Group Membership Distribution
             </h3>
@@ -233,7 +217,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
           </div>
 
           {/* Recent Groups */}
-          <div className="bg-white rounded-md border border-neutral-200 p-6 shadow-sm">
+          <div className="bg-white rounded-md border border-neutral-200 p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-neutral-900">Recent Groups</h3>
               <Button variant="ghost" size="sm" onClick={() => onTabChange('users')}>
@@ -296,7 +280,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
           contextUser={userDetails}
           contextGroups={groups}
           targetTabId={targetTabId}
-          onGroupsChanged={() => loadMemberships(userDetails)}
+          onGroupsChanged={() => loadMemberships(userDetails, { force: true })}
         />
       )}
     </div>

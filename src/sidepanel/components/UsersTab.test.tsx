@@ -327,41 +327,47 @@ describe('user search: 600ms debounce contract', () => {
 });
 
 // ===========================================================================
-// 2. Auto-load of the detected user + the pre-await re-entrancy guard.
+// 2. Detected-user banner: MANUAL load only. The tab is never hijacked by admin
+//    navigation — it stays pinned to the explicitly selected user.
 // ===========================================================================
-describe('auto-load: detected user', () => {
-  it('loads the detected user exactly once (getUserDetails + getUserGroups)', async () => {
-    userContext.current = {
-      userInfo: { userId: 'u1', userName: 'Ada Lovelace', userStatus: 'ACTIVE' },
-      isLoading: false,
-      oktaOrigin: null,
-    };
+describe('detected user: manual-load banner', () => {
+  const detected = {
+    userInfo: { userId: 'u1', userName: 'Ada Lovelace', userStatus: 'ACTIVE' },
+    isLoading: false,
+    oktaOrigin: null,
+  };
+
+  it('does NOT auto-fetch; shows a banner and loads only when Load is clicked', async () => {
+    userContext.current = { ...detected };
     render(<UsersTab targetTabId={1} />);
+
+    // No fetch on detection — the banner is shown instead.
+    expect(tabCalls('getUserDetails')).toHaveLength(0);
+    expect(screen.getByText(/Detected in admin/)).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Load' }));
+    });
 
     expect(await screen.findByRole('heading', { name: 'Ada Lovelace' })).toBeInTheDocument();
     expect(tabCalls('getUserDetails')).toHaveLength(1);
     expect(tabCalls('getUserGroups')).toHaveLength(1);
   });
 
-  it('does not re-fire the load chain when the parent re-renders (guard holds)', async () => {
-    userContext.current = {
-      userInfo: { userId: 'u1', userName: 'Ada Lovelace', userStatus: 'ACTIVE' },
-      isLoading: false,
-      oktaOrigin: null,
-    };
+  it('never auto-fetches across parent re-renders', async () => {
+    userContext.current = { ...detected };
     const { rerender } = render(<UsersTab targetTabId={1} currentGroupId="a" />);
-    await screen.findByRole('heading', { name: 'Ada Lovelace' });
 
     for (let i = 0; i < 3; i++) {
       rerender(<UsersTab targetTabId={1} currentGroupId={`b${i}`} onNavigateToRule={() => {}} />);
       await flush();
     }
 
-    expect(tabCalls('getUserDetails')).toHaveLength(1);
-    expect(tabCalls('getUserGroups')).toHaveLength(1);
+    expect(tabCalls('getUserDetails')).toHaveLength(0);
+    expect(screen.getByText(/Detected in admin/)).toBeInTheDocument();
   });
 
-  it('surfaces the detected-user error banner when getUserDetails fails', async () => {
+  it('surfaces an error when a manual Load fails', async () => {
     userContext.current = {
       userInfo: { userId: 'u1', userName: 'Ada Lovelace' },
       isLoading: false,
@@ -370,26 +376,23 @@ describe('auto-load: detected user', () => {
     tabRoute('getUserDetails', () => ({ success: false, error: 'boom' }));
     render(<UsersTab targetTabId={1} />);
 
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Load' }));
+    });
+
     expect(await screen.findByText('boom')).toBeInTheDocument();
   });
 
-  it('Clear resets the guard and re-triggers the auto-load', async () => {
-    userContext.current = {
-      userInfo: { userId: 'u1', userName: 'Ada Lovelace', userStatus: 'ACTIVE' },
-      isLoading: false,
-      oktaOrigin: null,
-    };
+  it('Dismiss hides the banner without any fetch', async () => {
+    userContext.current = { ...detected };
     render(<UsersTab targetTabId={1} />);
-    await screen.findByRole('heading', { name: 'Ada Lovelace' });
-    expect(tabCalls('getUserDetails')).toHaveLength(1);
 
     await act(async () => {
-      fireEvent.click(screen.getByTitle('Clear search'));
+      fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     });
-    await flush();
 
-    // hasAutoLoadedUser reset to null → the effect re-runs for the same userId.
-    expect(tabCalls('getUserDetails')).toHaveLength(2);
+    expect(screen.queryByText(/Detected in admin/)).not.toBeInTheDocument();
+    expect(tabCalls('getUserDetails')).toHaveLength(0);
   });
 });
 
@@ -491,6 +494,10 @@ describe('lifecycle actions', () => {
     };
     tabRoute('getUserGroups', () => ({ success: true, data: [] }));
     render(<UsersTab targetTabId={1} />);
+    // Load the detected user via the banner (no auto-load).
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Load' }));
+    });
     await screen.findByRole('heading', { name: 'Ada Lovelace' });
   }
 
@@ -563,6 +570,10 @@ describe('add-to-group: 300ms group search (memoized searchGroups)', () => {
     };
     tabRoute('getUserGroups', () => ({ success: true, data: [] }));
     render(<UsersTab targetTabId={1} />);
+    // Load the detected user via the banner (no auto-load).
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Load' }));
+    });
     await screen.findByRole('heading', { name: 'Ada Lovelace' });
     fireEvent.click(screen.getByRole('button', { name: 'Add to Group' }));
   }

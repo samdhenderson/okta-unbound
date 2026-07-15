@@ -87,6 +87,8 @@ export interface SchedulerMetrics {
   failedRequests: number;
   retriedRequests: number;
   cacheHits: number;
+  /** GET requests served by joining an identical in-flight request (de-duplicated). */
+  coalescedRequests: number;
   averageWaitTime: number;
   averageExecutionTime: number;
   cooldownEvents: number;

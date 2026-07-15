@@ -20,8 +20,9 @@ import type { OktaUser } from '../../shared/types';
 import type { AlertMessageData } from './shared/AlertMessage';
 import { useUserContext } from '../hooks/useUserContext';
 import { useUserMemberships } from '../hooks/useUserMemberships';
+import { invalidate } from '../cache/entityCache';
 import { useUsersTabSearch } from '../hooks/useUsersTabSearch';
-import { useDetectedUserAutoLoad } from '../hooks/useDetectedUserAutoLoad';
+import { useDetectedUser } from '../hooks/useDetectedUser';
 import { useUserLifecycleActions } from '../hooks/useUserLifecycleActions';
 import { useAddToGroup } from '../hooks/useAddToGroup';
 
@@ -40,11 +41,14 @@ interface UsersTabProps {
  * group-membership list.
  */
 const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavigateToRule }) => {
-  const { userInfo, isLoading: isLoadingUserContext, oktaOrigin } = useUserContext();
+  const { userInfo, oktaOrigin } = useUserContext();
   const [isLoadingMemberships, setIsLoadingMemberships] = useState(false);
   const [selectedUser, setSelectedUser] = useState<OktaUser | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resultMessage, setResultMessage] = useState<AlertMessageData | null>(null);
+  // Detected-user banner is hidden per id once dismissed (the tab stays pinned to
+  // the user you explicitly selected; admin navigation never swaps it).
+  const [dismissedDetectedId, setDismissedDetectedId] = useState<string | null>(null);
 
   // Membership loading + attribution lives in the shared hook (also used by
   // UserOverview / user comparison). The orchestrator keeps owning the merged
@@ -78,25 +82,42 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     [targetTabId, loadMemberships],
   );
 
-  // Auto-load the user detected on the page. The raw `getUserDetails` read path (a
-  // §8-preserved scheduler bypass) lives in the hook; every orchestrator write goes
-  // through these callbacks so the load fires exactly once per detected id.
+  // After adding the user to a group their memberships have changed — drop the
+  // cached analysis so the reload reflects the new group.
+  const handleUserAddedToGroup = useCallback(
+    async (user: OktaUser) => {
+      invalidate(['userMemberships', user.id]);
+      await handleSelectUser(user);
+    },
+    [handleSelectUser],
+  );
+
+  // Load the user detected on the page — only when the banner's Load button is
+  // clicked. The raw `getUserDetails` read path (a §8-preserved scheduler bypass)
+  // lives in the hook; orchestrator writes go through these callbacks.
   const onResetSearch = useCallback(() => {
     setSearchResults([]);
     setSearchQuery('');
   }, [setSearchResults, setSearchQuery]);
 
-  const { resetAutoLoad } = useDetectedUserAutoLoad({
+  const { loadDetectedUser } = useDetectedUser({
     targetTabId,
     detectedUserId: userInfo?.userId,
-    isLoadingUserContext,
     loadMemberships,
-    clearMemberships,
     onSelectUser: setSelectedUser,
     onError: setError,
     onLoadingChange: setIsLoadingMemberships,
     onResetSearch,
   });
+
+  // Show the detected-user banner only when the page's user differs from the one
+  // explicitly selected and hasn't been dismissed — never while searching.
+  const detectedUserId = userInfo?.userId;
+  const showDetectedBanner =
+    Boolean(userInfo) &&
+    detectedUserId !== selectedUser?.id &&
+    detectedUserId !== dismissedDetectedId &&
+    !searchQuery;
 
   // Clear search and reset to initial state
   const handleClearSearch = () => {
@@ -104,7 +125,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     setSearchResults([]);
     setSelectedUser(null);
     clearMemberships();
-    resetAutoLoad();
     setError(null);
     setResultMessage(null);
   };
@@ -149,7 +169,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     targetTabId,
     selectedUser,
     onResult: setResultMessage,
-    onAdded: handleSelectUser,
+    onAdded: handleUserAddedToGroup,
   });
 
   return (
@@ -173,11 +193,11 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
             showClearButton={Boolean(searchQuery || selectedUser)}
           />
 
-          {/* Detected user hint */}
-          {userInfo && !selectedUser && !searchQuery && (
+          {/* Detected-user banner: manual load only, so the tab is never hijacked. */}
+          {showDetectedBanner && userInfo && (
             <div className="px-4 py-2.5 bg-primary-light border border-primary-highlight rounded-md flex items-center gap-2">
               <span className="text-sm text-neutral-700">
-                Detected: <strong className="text-neutral-900">{userInfo.userName}</strong>
+                Detected in admin: <strong className="text-neutral-900">{userInfo.userName}</strong>
               </span>
               {userInfo.userStatus && (
                 <span
@@ -192,6 +212,23 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                   {userInfo.userStatus}
                 </span>
               )}
+              <div className="ml-auto flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={loadDetectedUser}
+                  disabled={isLoadingMemberships}
+                >
+                  Load
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setDismissedDetectedId(userInfo.userId)}
+                >
+                  Dismiss
+                </Button>
+              </div>
             </div>
           )}
         </div>

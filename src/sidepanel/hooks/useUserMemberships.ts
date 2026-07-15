@@ -11,6 +11,7 @@
 import { useState, useCallback, useRef } from 'react';
 import type { OktaUser, GroupMembership, OktaGroup, FormattedRule } from '../../shared/types';
 import { RulesCache } from '../../shared/rulesCache';
+import { getOrFetch, peek } from '../cache/entityCache';
 import { analyzeMemberships } from '../../shared/utils/membershipAnalysis';
 import { createLogger } from '../../shared/utils/logger';
 
@@ -36,7 +37,12 @@ interface UseUserMembershipsReturn {
   memberships: GroupMembership[];
   isLoading: boolean;
   error: string | null;
-  loadMemberships: (user: OktaUser) => Promise<void>;
+  /**
+   * (Re)load a user's analyzed memberships. A fresh cached analysis is served
+   * instantly; pass `{ force: true }` after a mutation (e.g. add-to-group) to
+   * bypass the cache and refetch.
+   */
+  loadMemberships: (user: OktaUser, options?: { force?: boolean }) => Promise<void>;
   clearMemberships: () => void;
 }
 
@@ -78,70 +84,85 @@ export function useUserMemberships({
   }, []);
 
   const loadMemberships = useCallback(
-    async (user: OktaUser) => {
+    async (user: OktaUser, options?: { force?: boolean }) => {
       if (!targetTabId) {
         reportError('No Okta tab connected');
         return;
       }
 
-      reportLoading(true);
       reportError(null);
 
+      // Serve a fresh cached analysis instantly (no loading flash) unless forcing.
+      // Re-navigating back to a user, or re-selecting one, then costs nothing.
+      if (!options?.force) {
+        const cached = peek<GroupMembership[]>(['userMemberships', user.id]);
+        if (cached) {
+          setMemberships(cached);
+          return;
+        }
+      }
+
+      reportLoading(true);
+
       try {
-        log.debug('Loading memberships for user:', user.id);
+        // Fetch + analyze through the entity cache so concurrent callers de-dup and
+        // the result is reused on remount. `force` bypasses cache + in-flight.
+        const analyzedMemberships = await getOrFetch<GroupMembership[]>(
+          ['userMemberships', user.id],
+          async () => {
+            log.debug('Loading memberships for user:', user.id);
 
-        // Fetch user's groups
-        const groupsResponse = await chrome.tabs.sendMessage(targetTabId, {
-          action: 'getUserGroups',
-          userId: user.id,
-        });
+            // Fetch user's groups
+            const groupsResponse = await chrome.tabs.sendMessage(targetTabId, {
+              action: 'getUserGroups',
+              userId: user.id,
+            });
 
-        if (!groupsResponse.success) {
-          throw new Error(groupsResponse.error || 'Failed to fetch user groups');
-        }
+            if (!groupsResponse.success) {
+              throw new Error(groupsResponse.error || 'Failed to fetch user groups');
+            }
 
-        // Check cache for rules first
-        let rules: FormattedRule[] = [];
-        const cachedRules = await RulesCache.get();
+            // Check cache for rules first
+            let rules: FormattedRule[] = [];
+            const cachedRules = await RulesCache.get();
 
-        if (cachedRules) {
-          log.debug('Using cached rules from global cache');
-          rules = cachedRules.rules;
-        } else {
-          // Cache miss - fetch rules
-          log.debug('Cache miss - fetching rules');
-          const rulesResponse = await chrome.tabs.sendMessage(targetTabId, {
-            action: 'fetchGroupRules',
-          });
+            if (cachedRules) {
+              log.debug('Using cached rules from global cache');
+              rules = cachedRules.rules;
+            } else {
+              // Cache miss - fetch rules
+              log.debug('Cache miss - fetching rules');
+              const rulesResponse = await chrome.tabs.sendMessage(targetTabId, {
+                action: 'fetchGroupRules',
+              });
 
-          if (!rulesResponse.success) {
-            log.warn('Could not fetch rules for analysis:', rulesResponse.error);
-          } else {
-            rules = rulesResponse.rules || [];
-            // Populate cache for future use
-            await RulesCache.set(
-              rules,
-              [],
-              rulesResponse.stats || { total: 0, active: 0, inactive: 0, conflicts: 0 },
-              rulesResponse.conflicts || [],
+              if (!rulesResponse.success) {
+                log.warn('Could not fetch rules for analysis:', rulesResponse.error);
+              } else {
+                rules = rulesResponse.rules || [];
+                // Populate cache for future use
+                await RulesCache.set(
+                  rules,
+                  [],
+                  rulesResponse.stats || { total: 0, active: 0, inactive: 0, conflicts: 0 },
+                  rulesResponse.conflicts || [],
+                );
+              }
+            }
+
+            // Extract raw groups from membership wrapper objects
+            // groupsResponse.data is an array of { group, membershipType, addedDate }
+            const membershipData: Array<{ group?: OktaGroup }> = groupsResponse.data || [];
+            const rawGroups: OktaGroup[] = membershipData.map(
+              (m) => m.group || (m as unknown as OktaGroup),
             );
-          }
-        }
-
-        // Extract raw groups from membership wrapper objects
-        // groupsResponse.data is an array of { group, membershipType, addedDate }
-        const membershipData: Array<{ group?: OktaGroup }> = groupsResponse.data || [];
-        const rawGroups: OktaGroup[] = membershipData.map(
-          (m) => m.group || (m as unknown as OktaGroup),
+            return analyzeMemberships(rawGroups, rules, user);
+          },
+          { force: options?.force },
         );
-        const analyzedMemberships = analyzeMemberships(rawGroups, rules, user);
 
         setMemberships(analyzedMemberships);
-
-        log.debug('Loaded memberships:', {
-          count: analyzedMemberships.length,
-          usedCache: cachedRules !== null,
-        });
+        log.debug('Loaded memberships:', { count: analyzedMemberships.length });
       } catch (err) {
         reportError(err instanceof Error ? err.message : 'Failed to load user memberships');
         setMemberships([]);

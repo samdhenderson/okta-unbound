@@ -7,8 +7,10 @@
  * bulk operations (remove deprovisioned, export) plus the in-group
  * {@link MemberExplorer} (search, composition reports, MFA scan).
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useOktaApi } from '../../hooks/useOktaApi';
+import { useEntityQuery } from '../../cache/useEntityQuery';
+import { peek, setEntry, invalidate } from '../../cache/entityCache';
 import { useProgress } from '../../contexts/ProgressContext';
 import AlertMessage from '../shared/AlertMessage';
 import { Button, IconButton } from '../shared';
@@ -48,9 +50,6 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
   oktaOrigin,
 }) => {
   const { startProgress, completeProgress, updateProgress } = useProgress();
-  const [members, setMembers] = useState<OktaUser[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv');
   const [idCopied, setIdCopied] = useState(false);
@@ -83,25 +82,32 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
     onProgress: handleProgress,
   });
 
-  const loadMembers = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    // Reset any cached MFA scan when switching groups.
-    setMfaResults(null);
-    setScanStatus('idle');
-    try {
-      const result = await getAllGroupMembers(groupId);
-      setMembers(result || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load members');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [groupId, getAllGroupMembers]);
+  // Members come from the shared entity cache, so switching tabs / re-navigating
+  // back to this group serves instantly with no refetch (5-min TTL, then revalidate).
+  const {
+    data: membersData,
+    isLoading,
+    error,
+    refetch: refetchMembers,
+  } = useEntityQuery<OktaUser[]>(
+    ['groupMembers', groupId],
+    async () => (await getAllGroupMembers(groupId)) ?? [],
+    { enabled: Boolean(targetTabId && groupId) },
+  );
+  const members = useMemo(() => membersData ?? [], [membersData]);
 
+  // Restore any previous MFA scan for this group from the cache (so navigating
+  // away and back does not force a rescan). Reset to idle when none is cached.
   useEffect(() => {
-    loadMembers();
-  }, [loadMembers]);
+    const cached = peek<Map<string, MemberMfaResult>>(['mfaScan', groupId]);
+    if (cached) {
+      setMfaResults(cached);
+      setScanStatus('complete');
+    } else {
+      setMfaResults(null);
+      setScanStatus('idle');
+    }
+  }, [groupId]);
 
   // Compute status counts from members
   const statusCounts = members.reduce<Record<string, number>>((acc, user) => {
@@ -118,7 +124,9 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
     startProgress('Remove Deprovisioned', 'Removing deprovisioned users...');
     try {
       await removeDeprovisioned(groupId);
-      await loadMembers();
+      // Membership changed — drop the stale MFA scan and reload members.
+      invalidate(['mfaScan', groupId]);
+      await refetchMembers();
     } finally {
       completeProgress();
     }
@@ -152,13 +160,15 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
       );
       setMfaResults(result);
       setScanStatus('complete');
+      // Cache the scan so navigating away and back restores it without rescanning.
+      setEntry(['mfaScan', groupId], result);
     } catch (err) {
       log.error('MFA scan failed:', err);
       setScanStatus('error');
     } finally {
       completeProgress();
     }
-  }, [members, scanGroupMfa, startProgress, updateProgress, completeProgress]);
+  }, [groupId, members, scanGroupMfa, startProgress, updateProgress, completeProgress]);
 
   const requestMfaConfirm = useCallback(() => setScanStatus('confirming'), []);
   const cancelMfaConfirm = useCallback(() => setScanStatus('idle'), []);
@@ -171,7 +181,7 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
     return (
       <AlertMessage
         message={{ text: error, type: 'danger' }}
-        action={{ label: 'Retry', onClick: loadMembers }}
+        action={{ label: 'Retry', onClick: refetchMembers }}
       />
     );
   }
@@ -220,7 +230,7 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
   return (
     <div className="space-y-6">
       {/* Quick Stats Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3">
         <StatCard title="Total Members" value={members.length} color="primary" icon="users" />
         <StatCard title="Active" value={statusCounts['ACTIVE'] || 0} color="success" icon="check" />
         <StatCard

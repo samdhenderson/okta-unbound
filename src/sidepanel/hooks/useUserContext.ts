@@ -29,11 +29,14 @@ interface UseUserContextReturn {
  * Tracks the Okta user (if any) shown in the active tab. Thin wrapper over
  * {@link useOktaTabContext}.
  *
+ * @param enabled - When `false`, live re-detection on navigation is suspended
+ *   (a resync is deferred until re-enabled while the panel is visible). Defaults
+ *   to `true`.
  * @returns `userInfo` (the current page's user, or `null` when the tab is not a
  *   user page) plus shared connection state (`connectionStatus`, `targetTabId`,
  *   `error`, `isLoading`, `refetch`, `oktaOrigin`).
  */
-export function useUserContext(): UseUserContextReturn {
+export function useUserContext(enabled = true): UseUserContextReturn {
   const loadEntity = useCallback(
     async ({ sendToTab }: EntityLoadContext): Promise<UserInfo | null> => {
       const response = await sendToTab<UserInfo>('getUserInfo');
@@ -47,6 +50,7 @@ export function useUserContext(): UseUserContextReturn {
     initialData: null,
     commsFailedData: null,
     loadEntity,
+    enabled,
   });
 
   return { userInfo: data, ...rest };

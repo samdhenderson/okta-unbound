@@ -36,9 +36,12 @@ interface UseGroupContextReturn {
 /**
  * Tracks the Okta group (if any) shown in the active tab.
  *
+ * @param enabled - When `false`, live re-detection on navigation is suspended
+ *   (a resync is deferred until re-enabled while the panel is visible). Defaults
+ *   to `true`.
  * @returns The group plus shared tab-context state; see `UseGroupContextReturn`.
  */
-export function useGroupContext(): UseGroupContextReturn {
+export function useGroupContext(enabled = true): UseGroupContextReturn {
   const loadEntity = useCallback(
     async ({ sendToTab }: EntityLoadContext): Promise<GroupInfo | null> => {
       const response = await sendToTab<GroupInfo>('getGroupInfo');
@@ -52,6 +55,7 @@ export function useGroupContext(): UseGroupContextReturn {
     initialData: null,
     commsFailedData: null,
     loadEntity,
+    enabled,
   });
 
   return { groupInfo: data, ...rest };

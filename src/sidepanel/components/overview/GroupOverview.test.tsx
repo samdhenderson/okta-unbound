@@ -43,6 +43,7 @@ vi.mock('./members/MemberExplorer', () => ({
 }));
 
 import GroupOverview from './GroupOverview';
+import { resetEntityCache } from '../../cache/entityCache';
 
 const baseProps = {
   groupId: 'g1',
@@ -53,6 +54,9 @@ const baseProps = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // The entity cache is a module singleton; clear it so a group cached by one
+  // test doesn't suppress the fetch under test in the next.
+  resetEntityCache();
 });
 
 describe('GroupOverview member-load effect', () => {

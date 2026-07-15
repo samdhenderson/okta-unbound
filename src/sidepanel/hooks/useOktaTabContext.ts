@@ -38,6 +38,13 @@ export interface OktaTabContextConfig<T> {
    * path; returning stores the data and marks the connection as connected.
    */
   loadEntity: (ctx: EntityLoadContext) => Promise<T>;
+  /**
+   * When `false`, the engine stops re-probing on navigation: tab/activation events
+   * only record that a resync is owed, which is then run once the hook becomes
+   * enabled again (while the panel is visible). Defaults to `true`. Lets callers
+   * scope live detection to, e.g., the active Overview tab.
+   */
+  enabled?: boolean;
 }
 
 export interface OktaTabContext<T> {
@@ -52,6 +59,26 @@ export interface OktaTabContext<T> {
 
 const MAX_RETRIES = 3;
 const DEBOUNCE_MS = 150;
+
+/**
+ * Reduce a tab URL to its entity identity — `origin + pathname + search`, without
+ * the `#fragment`. Okta's in-page section tabs (e.g. `#assignments`, `#applications`)
+ * only change the fragment, so hash-only navigation yields the same value and the
+ * context engine can skip refetching for it.
+ *
+ * @param url - A tab URL, or `undefined`.
+ * @returns The normalized entity URL, or `null` when no URL was given. Falls back
+ *   to the raw string if it cannot be parsed.
+ */
+function normalizeEntityUrl(url?: string): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    return `${parsed.origin}${parsed.pathname}${parsed.search}`;
+  } catch {
+    return url;
+  }
+}
 
 /**
  * Shared machinery for the side panel's page-context hooks: find the active Okta
@@ -69,7 +96,7 @@ const DEBOUNCE_MS = 150;
  *   loading flags, a `refetch` trigger, and the resolved `oktaOrigin`.
  */
 export function useOktaTabContext<T>(config: OktaTabContextConfig<T>): OktaTabContext<T> {
-  const { scope, initialData, commsFailedData, loadEntity } = config;
+  const { scope, initialData, commsFailedData, loadEntity, enabled = true } = config;
   const log = useRef(createLogger(scope)).current;
 
   const [data, setData] = useState<T>(initialData);
@@ -81,6 +108,11 @@ export function useOktaTabContext<T>(config: OktaTabContextConfig<T>): OktaTabCo
 
   // Track in-flight requests so a stale fetch can't clobber a newer one.
   const fetchIdRef = useRef(0);
+  // Entity URL (fragment-stripped) of the last fetch, to skip hash-only navigation.
+  const lastEntityUrlRef = useRef<string | null>(null);
+  // Set when a navigation was observed while suppressed (hidden/disabled) and a
+  // catch-up fetch is owed once the hook is enabled + visible again.
+  const pendingResyncRef = useRef(false);
 
   const fetchContext = useCallback(
     async (retryCount = 0) => {
@@ -109,6 +141,8 @@ export function useOktaTabContext<T>(config: OktaTabContextConfig<T>): OktaTabCo
         }
 
         setTargetTabId(tab.id!);
+        // Remember the entity we're fetching so hash-only navigation is skipped.
+        lastEntityUrlRef.current = normalizeEntityUrl(tab.url);
 
         const sendToTab = <R>(action: string): Promise<MessageResponse<R>> =>
           chrome.tabs.sendMessage(tab.id!, { action });
@@ -161,13 +195,39 @@ export function useOktaTabContext<T>(config: OktaTabContextConfig<T>): OktaTabCo
     [scope, initialData, commsFailedData, loadEntity, log],
   );
 
+  // Mirror the latest enablement + fetcher into refs so the always-on listeners
+  // read current values without being torn down and re-registered each render.
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
+  const fetchContextRef = useRef(fetchContext);
+  fetchContextRef.current = fetchContext;
+
   useEffect(() => {
-    fetchContext();
+    // Initial fetch, gated by enablement + panel visibility. When suppressed we
+    // remember a sync is owed and run it once the panel is shown / re-enabled.
+    if (enabledRef.current && !document.hidden) {
+      fetchContextRef.current();
+    } else {
+      pendingResyncRef.current = true;
+    }
 
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const debouncedFetch = () => {
       if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => fetchContext(), DEBOUNCE_MS);
+      debounceTimer = setTimeout(() => fetchContextRef.current(), DEBOUNCE_MS);
+    };
+
+    // Fetch only for a genuine entity change while active + visible; otherwise
+    // record that a resync is owed for when the panel next becomes so.
+    const requestFetch = (nextUrl?: string) => {
+      if (nextUrl && normalizeEntityUrl(nextUrl) === lastEntityUrlRef.current) {
+        return; // hash-only / same-page navigation — nothing to refetch
+      }
+      if (!enabledRef.current || document.hidden) {
+        pendingResyncRef.current = true;
+        return;
+      }
+      debouncedFetch();
     };
 
     // Refetch when the user navigates within, or switches to, an Okta tab.
@@ -177,25 +237,48 @@ export function useOktaTabContext<T>(config: OktaTabContextConfig<T>): OktaTabCo
       tab: chrome.tabs.Tab,
     ) => {
       if ((changeInfo.url || changeInfo.status === 'complete') && isOktaUrl(tab.url)) {
-        debouncedFetch();
+        requestFetch(changeInfo.url ?? tab.url);
       }
     };
 
     const handleTabActivated = (activeInfo: { tabId: number; windowId: number }) => {
       chrome.tabs.get(activeInfo.tabId, (tab) => {
-        if (isOktaUrl(tab.url)) debouncedFetch();
+        if (isOktaUrl(tab.url)) requestFetch(tab.url);
       });
+    };
+
+    // When the panel is shown again after being hidden, run any owed resync once.
+    const handleVisibilityChange = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        enabledRef.current &&
+        pendingResyncRef.current
+      ) {
+        pendingResyncRef.current = false;
+        fetchContextRef.current();
+      }
     };
 
     chrome.tabs.onUpdated.addListener(handleTabUpdate);
     chrome.tabs.onActivated.addListener(handleTabActivated);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       if (debounceTimer) clearTimeout(debounceTimer);
       chrome.tabs.onUpdated.removeListener(handleTabUpdate);
       chrome.tabs.onActivated.removeListener(handleTabActivated);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [fetchContext]);
+    // Registered once per hook instance; enablement/fetcher reached via refs.
+  }, []);
+
+  // Catch up an owed resync when the hook becomes enabled while the panel is shown.
+  useEffect(() => {
+    if (enabled && !document.hidden && pendingResyncRef.current) {
+      pendingResyncRef.current = false;
+      fetchContext();
+    }
+  }, [enabled, fetchContext]);
 
   return {
     data,

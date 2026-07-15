@@ -1,10 +1,14 @@
 import '@testing-library/jest-dom';
 import { afterEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
+import { resetEntityCache } from '../sidepanel/cache/entityCache';
 
 // Cleanup after each test
 afterEach(() => {
   cleanup();
+  // The entity cache is a module-level singleton; reset it so cached data from
+  // one test never suppresses a fetch (or a loading state) asserted by the next.
+  resetEntityCache();
 });
 
 // Mock Chrome APIs
