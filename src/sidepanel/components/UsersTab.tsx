@@ -20,6 +20,7 @@ import type { OktaUser, GroupMembership } from '../../shared/types';
 import type { AlertMessageData } from './shared/AlertMessage';
 import { RulesCache } from '../../shared/rulesCache';
 import { analyzeMemberships } from '../../shared/utils/membershipAnalysis';
+import { getCustomProfileFields } from '../../shared/utils/profileFields';
 import { useUserContext } from '../hooks/useUserContext';
 import { useOktaApi } from '../hooks/useOktaApi';
 import { createLogger } from '../../shared/utils/logger';
@@ -65,18 +66,6 @@ const getRelativeTime = (dateString: string | null | undefined): string | null =
     return null;
   }
 };
-
-/** Security-sensitive profile field names that must never be rendered in the UI. */
-const EXCLUDED_PROFILE_FIELDS = new Set([
-  'securityQuestion',
-  'securityQuestionAnswer',
-  'security_question',
-  'security_answer',
-  'recoveryQuestion',
-  'recoveryAnswer',
-  'password',
-  'credentials',
-]);
 
 interface UsersTabProps {
   /** Chrome tab id of the connected Okta tab; required for all user/group API calls. */
@@ -1140,41 +1129,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
 
               {/* Custom Attributes - show any non-standard profile fields */}
               {(() => {
-                const standardFields = new Set([
-                  'login',
-                  'email',
-                  'firstName',
-                  'lastName',
-                  'secondEmail',
-                  'mobilePhone',
-                  'primaryPhone',
-                  'streetAddress',
-                  'city',
-                  'state',
-                  'zipCode',
-                  'countryCode',
-                  'department',
-                  'title',
-                  'manager',
-                  'managerId',
-                  'division',
-                  'organization',
-                  'costCenter',
-                  'employeeNumber',
-                  'userType',
-                  'locale',
-                  'timezone',
-                  'genderPronouns',
-                ]);
-                const customFields = Object.entries(selectedUser.profile).filter(
-                  ([key, value]) =>
-                    !standardFields.has(key) &&
-                    !EXCLUDED_PROFILE_FIELDS.has(key) &&
-                    !EXCLUDED_PROFILE_FIELDS.has(key.toLowerCase()) &&
-                    value !== null &&
-                    value !== undefined &&
-                    value !== '',
-                );
+                const customFields = getCustomProfileFields(selectedUser.profile);
 
                 if (customFields.length === 0) return null;
 
