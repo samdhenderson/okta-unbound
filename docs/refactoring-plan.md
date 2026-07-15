@@ -54,8 +54,10 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
       `Button`/`IconButton`/`FilterPill`. 7 left raw as documented custom controls.
 - [x] **Stable text inputs** routed through shared `Input` (extended with
       `onKeyDown`/`autoFocus`/`inputRef` + a `bg-white` base): `GroupCollections` (3),
-      `BulkOperationsPanel`, `CrossGroupSearch`, `CompositionReports`. `UserSearchBar`
-      left raw+documented (trailing clear-button + spinner + refocus composite).
+      `BulkOperationsPanel`, `CrossGroupSearch`, `CompositionReports`. `UserSearchBar`'s
+      clear button now routes through `IconButton` (adopted into UsersTab in §7); only
+      its raw `<input>` remains a documented composite (leading search icon + trailing
+      spinner), like `SearchDropdown`.
 - [x] **Checkboxes** → new shared `Checkbox` primitive (`GroupExportModal` 2,
       `GroupListItem` 1). Added to the barrel with tests.
 - [ ] **God-component buttons** (`GroupsTab` 10, `RulesTab` 4, `UsersTab` 3,

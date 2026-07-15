@@ -16,7 +16,7 @@ import Modal from './shared/Modal';
 import CollapsibleSection from './shared/CollapsibleSection';
 import EmptyState from './shared/EmptyState';
 import LoadingSpinner from './shared/LoadingSpinner';
-import { UserSearchResults } from './users';
+import { UserSearchBar, UserSearchResults } from './users';
 import type { OktaUser } from '../../shared/types';
 import type { AlertMessageData } from './shared/AlertMessage';
 import { getCustomProfileFields } from '../../shared/utils/profileFields';
@@ -107,7 +107,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
   const [isLifecycleLoading, setIsLifecycleLoading] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [hasAutoLoadedUser, setHasAutoLoadedUser] = useState<string | null>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Add to Group modal state
   const [isAddToGroupModalOpen, setIsAddToGroupModalOpen] = useState(false);
@@ -308,7 +307,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     setHasAutoLoadedUser(null);
     setError(null);
     setResultMessage(null);
-    searchInputRef.current?.focus();
   };
 
   const handleLifecycleAction = async () => {
@@ -472,53 +470,13 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         {/* Search Section */}
         <div className="space-y-3">
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <svg
-                className="h-5 w-5 text-neutral-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-            </div>
-            <input
-              ref={searchInputRef}
-              type="text"
-              className="w-full pl-11 pr-12 py-3 bg-white border border-neutral-200 rounded-md text-sm placeholder-neutral-400 focus:outline-none focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary transition-all duration-100"
-              placeholder="Search by email, name, or login..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {(searchQuery || selectedUser) && (
-              <button
-                className="absolute inset-y-0 right-0 pr-4 flex items-center text-neutral-400 hover:text-neutral-700 transition-colors duration-100"
-                onClick={handleClearSearch}
-                title="Clear search"
-                type="button"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            )}
-            {isSearching && (
-              <div className="absolute inset-y-0 right-12 flex items-center pr-3">
-                <div className="w-4 h-4 border-2 border-neutral-200 border-t-primary rounded-full animate-spin" />
-              </div>
-            )}
-          </div>
+          <UserSearchBar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            onClear={handleClearSearch}
+            isSearching={isSearching}
+            showClearButton={Boolean(searchQuery || selectedUser)}
+          />
 
           {/* Detected user hint */}
           {userInfo && !selectedUser && !searchQuery && (

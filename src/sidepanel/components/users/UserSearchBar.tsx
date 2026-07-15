@@ -43,7 +43,10 @@ const UserSearchBar: React.FC<UserSearchBarProps> = ({
 
   return (
     <div className="relative">
-      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+      <div
+        className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"
+        aria-hidden="true"
+      >
         <svg
           className="h-5 w-5 text-neutral-400"
           fill="none"
