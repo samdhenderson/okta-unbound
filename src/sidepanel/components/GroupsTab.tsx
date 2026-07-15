@@ -19,6 +19,7 @@ import { useGroupFilters } from '../hooks/useGroupFilters';
 import { useGroupSelection } from '../hooks/useGroupSelection';
 import { useGroupMembersCache } from '../hooks/useGroupMembersCache';
 import { useGroupSource } from '../hooks/useGroupSource';
+import { useGroupMerge } from '../hooks/useGroupMerge';
 import type { GroupSummary } from '../../shared/types';
 import GroupExportModal from './groups/GroupExportModal';
 import GroupComparisonModal from './groups/GroupComparisonModal';
@@ -32,6 +33,7 @@ import GroupFilterPanel from './groups/GroupFilterPanel';
 import GroupSelectionBar, { type ActivePanel } from './groups/GroupSelectionBar';
 import GroupsListPanel from './groups/GroupsListPanel';
 import GroupSourceModal from './groups/GroupSourceModal';
+import GroupMergeModal from './groups/GroupMergeModal';
 import { getDateForFilename } from '../../shared/utils/csvUtils';
 
 interface GroupsTabProps {
@@ -57,6 +59,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportGroups, setExportGroups] = useState<GroupSummary[]>([]);
   const [showComparisonModal, setShowComparisonModal] = useState(false);
+  const [showMergeModal, setShowMergeModal] = useState(false);
   const [activePanel, setActivePanel] = useState<ActivePanel>('none');
 
   // Must be stable: useOktaApi memoizes its operations on this callback's identity.
@@ -84,6 +87,12 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
   const selection = useGroupSelection(loader.groups);
   const membersCache = useGroupMembersCache(api, loader.groups);
   const groupSource = useGroupSource(targetTabId ?? undefined);
+  const merge = useGroupMerge(targetTabId ?? undefined);
+
+  const handleCloseMerge = useCallback(() => {
+    setShowMergeModal(false);
+    merge.reset();
+  }, [merge]);
 
   const { groups, loading, loadAllGroups } = loader;
   const { filteredGroups, activeFilterCount } = filters;
@@ -219,6 +228,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
                 onSelectAll={() => selection.replaceSelection(filteredGroups.map((g) => g.id))}
                 onDeselectAll={selection.deselectAll}
                 onCompare={() => setShowComparisonModal(true)}
+                onMerge={() => setShowMergeModal(true)}
                 onTogglePanel={togglePanel}
                 onExportSelection={handleExportSelection}
                 onExportGroupsList={handleExportGroupsList}
@@ -319,6 +329,19 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
         error={groupSource.error}
         onClose={groupSource.close}
         onAnalyzeMembers={groupSource.analyzeMembers}
+      />
+
+      {/* Merge wizard (A3) */}
+      <GroupMergeModal
+        isOpen={showMergeModal}
+        selectedGroups={selectedGroups}
+        phase={merge.phase}
+        plan={merge.plan}
+        results={merge.results}
+        error={merge.error}
+        onPreview={merge.preview}
+        onExecute={merge.execute}
+        onClose={handleCloseMerge}
       />
     </div>
   );

@@ -26,6 +26,8 @@ interface GroupSelectionBarProps {
   onDeselectAll: () => void;
   /** Opens the comparison modal (shown only for 2–5 selections). */
   onCompare: () => void;
+  /** Opens the merge wizard (shown for 2+ selections). */
+  onMerge: () => void;
   /** Toggles the given inline panel open/closed. */
   onTogglePanel: (panel: ActivePanel) => void;
   /** Exports the selected groups. */
@@ -47,6 +49,7 @@ const GroupSelectionBar: React.FC<GroupSelectionBarProps> = ({
   onSelectAll,
   onDeselectAll,
   onCompare,
+  onMerge,
   onTogglePanel,
   onExportSelection,
   onExportGroupsList,
@@ -68,6 +71,13 @@ const GroupSelectionBar: React.FC<GroupSelectionBarProps> = ({
       {selectedCount >= 2 && selectedCount <= 5 && (
         <Button variant="secondary" size="sm" icon="chart" onClick={onCompare}>
           Compare ({selectedCount})
+        </Button>
+      )}
+
+      {/* Merge Button */}
+      {selectedCount >= 2 && (
+        <Button variant="secondary" size="sm" icon="link" onClick={onMerge}>
+          Merge ({selectedCount})
         </Button>
       )}
 

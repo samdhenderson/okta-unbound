@@ -14,9 +14,29 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, within, act, waitFor, fireEvent } from '@testing-library/react';
+import {
+  render as rtlRender,
+  screen,
+  within,
+  act,
+  waitFor,
+  fireEvent,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactElement, ReactNode } from 'react';
 import GroupsTab from './GroupsTab';
+import { ProgressProvider } from '../contexts/ProgressContext';
+
+// GroupsTab now consumes ProgressContext (the merge flow reports progress), so
+// every render wraps it in a ProgressProvider — the same provider main.tsx gives
+// the app. This only supplies the context; no assertions change.
+const render = (ui: ReactElement, options?: Parameters<typeof rtlRender>[1]) =>
+  rtlRender(ui, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <ProgressProvider>{children}</ProgressProvider>
+    ),
+    ...options,
+  });
 
 // ---------------------------------------------------------------------------
 // Child test doubles — the feature children are separately-owned units; we stub
