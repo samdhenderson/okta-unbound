@@ -145,6 +145,22 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
       and the `[comparedUser]`-only eslint-disable are all preserved verbatim. The
       raw-control migration (§3) and the eslint-disable retirement are deliberate
       follow-ups, NOT done here.
+- [x] **`GroupsTab` DONE (session 6, 2 commits).** 1075 → 285-line presentational
+      shell + 5 concern hooks (`useGroupsLoader`, `useGroupLiveSearch`,
+      `useGroupFilters`, `useGroupSelection`, `useGroupMembersCache`) + 5
+      subcomponents (`groups/`) + pure `groupSummary.ts` / `groupFilters.ts` /
+      `groupsCache.ts` (each unit-tested). Commit 1 also cleared all 3 of the file's
+      `any`s (structural `RawOktaGroup` + `unknown`+revive cache typing) and adopted
+      `csvUtils.getDateForFilename` (the only byte-identical CSV drop-in — the
+      unconditionally-quoted serializer stays inline). Decompose-only: all 80
+      CHARACTERIZED tests pass; the apiRef-assigned-during-render trick (with a
+      carried `react-hooks/refs` eslint-disable), the stale-wins mount race, the
+      no-stale-guard live search, the by-reference live filteredGroups, the
+      compareGroups in-place cache mutation, the exportGroups snapshot, and the
+      searchQuery-uncounted/`clearFilters`-clears asymmetry are all preserved verbatim.
+      The live-search `chrome.tabs.sendMessage` §8 bypass moved into
+      `useGroupLiveSearch` (its eslint grandfather entry followed it); no scheduler
+      change and no §3 raw-control migration here.
 - Per file: (1) pin behavior with RTL/MSW tests; (2) extract logic into `use*` hooks
   (mirror the `useOktaApi/` module split); (3) move pure helpers to `shared/utils`;
   (4) split UI into subcomponents (like `overview/members/`); (5) re-verify.
