@@ -555,23 +555,25 @@ const RulesTab: React.FC<RulesTabProps> = ({
         {rules.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="rounded-md border border-neutral-200 p-4 bg-white">
-              <p className="text-xs font-bold uppercase tracking-wider text-neutral-600">
+              <p className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
                 Total Rules
               </p>
               <p className="text-2xl font-bold text-neutral-900 mt-1">{stats.total}</p>
             </div>
             <div className="rounded-md border border-neutral-200 p-4 bg-white">
-              <p className="text-xs font-bold uppercase tracking-wider text-neutral-600">Active</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
+                Active
+              </p>
               <p className="text-2xl font-bold text-success mt-1">{stats.active}</p>
             </div>
             <div className="rounded-md border border-neutral-200 p-4 bg-white">
-              <p className="text-xs font-bold uppercase tracking-wider text-neutral-600">
+              <p className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
                 Inactive
               </p>
               <p className="text-2xl font-bold text-neutral-600 mt-1">{stats.inactive}</p>
             </div>
             <div className="rounded-md border border-neutral-200 p-4 bg-white">
-              <p className="text-xs font-bold uppercase tracking-wider text-neutral-600">
+              <p className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
                 Conflicts
               </p>
               <p className="text-2xl font-bold text-warning mt-1">{stats.conflicts}</p>

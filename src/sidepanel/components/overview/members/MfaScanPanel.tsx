@@ -69,7 +69,7 @@ const MfaScanPanel: React.FC<MfaScanPanelProps> = ({
     : 0;
 
   return (
-    <div className="bg-white rounded-md border border-neutral-200 p-4 shadow-sm space-y-3">
+    <div className="bg-white rounded-md border border-neutral-200 p-4 space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-neutral-900">MFA Factors</h3>

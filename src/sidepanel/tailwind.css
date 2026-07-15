@@ -22,6 +22,9 @@
   --color-accent: #9333ea;
   --color-accent-dark: #7e22ce;
 
+  /* Page canvas — the off-white/gray backdrop white cards sit on (native Okta admin look) */
+  --color-canvas: #f4f4f4;
+
   --color-neutral-50: #f4f4f4;
   --color-neutral-100: #ededed;
   --color-neutral-200: #e1e1e1;

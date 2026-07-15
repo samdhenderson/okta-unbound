@@ -13,6 +13,7 @@ the same routing `CLAUDE.md` enforces, to keep context lean.
 | [development.md](./development.md)           | Dealing with logging, secrets, `any`, build, lint, CI, or versioning       |
 | [testing.md](./testing.md)                   | Writing or fixing tests                                                    |
 | [refactoring-plan.md](./refactoring-plan.md) | Picking up the remaining maintainability work — **start here** to refactor |
+| [features-plan.md](./features-plan.md)       | Scoping or picking up new feature work — the ranked backlog + UX sketches  |
 | [adr/](./adr/)                               | Looking up _why_ a convention exists                                       |
 | [audit/](./audit/)                           | Reviewing the maintainability baseline + backlog                           |
 

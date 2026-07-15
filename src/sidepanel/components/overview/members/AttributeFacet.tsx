@@ -9,6 +9,7 @@
 import React from 'react';
 import type { AttributeSummary, BreakdownRow } from './memberAnalytics';
 import { NONE_VALUE, OTHER_VALUE } from './memberAnalytics';
+import { INDIGO_RAMP, CHART_NONE_COLOR, CHART_OTHER_COLOR } from '../../../theme/chartPalette';
 
 /** Props for {@link AttributeFacet}. */
 interface AttributeFacetProps {
@@ -22,19 +23,11 @@ interface AttributeFacetProps {
   onExpand: () => void;
 }
 
-/**
- * Indigo ramp for the named segments, deepest first (so the largest share reads
- * darkest). Neutral tones carry the "(none)" and aggregated "Other" segments.
- */
-const RAMP = ['#4356cf', '#546be7', '#7385ec', '#95a2f1', '#b7c0f6', '#d6dbfb'];
-const NONE_COLOR = '#cbcbcb'; // neutral-300 — members missing the value
-const OTHER_COLOR = '#e5e5e5'; // lighter neutral — the long tail
-
 /** Assign a segment color to a row given its position among the named values. */
 function rowColor(row: BreakdownRow, namedIndex: number): string {
-  if (row.value === NONE_VALUE) return NONE_COLOR;
-  if (row.value === OTHER_VALUE) return OTHER_COLOR;
-  return RAMP[Math.min(namedIndex, RAMP.length - 1)];
+  if (row.value === NONE_VALUE) return CHART_NONE_COLOR;
+  if (row.value === OTHER_VALUE) return CHART_OTHER_COLOR;
+  return INDIGO_RAMP[Math.min(namedIndex, INDIGO_RAMP.length - 1)];
 }
 
 /**

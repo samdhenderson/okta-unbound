@@ -74,11 +74,10 @@ const StatCard: React.FC<StatCardProps> = ({
   const config = colorConfigs[color];
 
   const baseClasses = `
-    relative overflow-hidden rounded-md border p-6
+    relative overflow-hidden rounded-md border p-4
     transition-all duration-100 ease-out
     ${config.cardBg} ${config.border}
-    ${onClick ? 'cursor-pointer hover:shadow-sm' : ''}
-    shadow-sm
+    ${onClick ? 'cursor-pointer hover:border-neutral-300' : ''}
   `.trim();
 
   return (
@@ -88,27 +87,21 @@ const StatCard: React.FC<StatCardProps> = ({
       role={onClick ? 'button' : undefined}
       style={{ fontFamily: 'var(--font-primary)' }}
     >
-      <div className="relative flex items-start justify-between gap-4">
+      <div className="relative flex items-center justify-between gap-3">
         <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{title}</p>
           <p
-            className={`text-xs font-bold uppercase tracking-widest ${config.textColor} opacity-60`}
-          >
-            {title}
-          </p>
-          <p
-            className={`mt-3 text-4xl font-bold ${config.textColor} tracking-tight`}
+            className={`mt-2 text-3xl font-bold ${config.textColor} tracking-tight truncate`}
             style={{ fontFamily: 'var(--font-primary)' }}
           >
             {typeof value === 'number' ? value.toLocaleString() : value}
           </p>
           {subtitle && (
-            <p className={`mt-2.5 text-xs font-medium ${config.textColor} opacity-70`}>
-              {subtitle}
-            </p>
+            <p className="mt-1.5 text-xs font-medium text-neutral-500 truncate">{subtitle}</p>
           )}
         </div>
         {icon && (
-          <div className={`${config.iconBg} p-3.5 rounded-md shadow-sm ring-1 ring-black/5`}>
+          <div className={`${config.iconBg} p-2.5 rounded-md flex-shrink-0`}>
             <Icon type={icon} className={config.iconColor} size="lg" />
           </div>
         )}

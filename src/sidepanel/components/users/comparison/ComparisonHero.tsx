@@ -35,7 +35,7 @@ const ComparisonHero: React.FC<ComparisonHeroProps> = ({
   similarity,
   isLoading,
 }) => (
-  <div className="relative overflow-hidden rounded-lg border border-neutral-200 bg-gradient-to-br from-white via-white to-primary-light/40 shadow-sm">
+  <div className="relative overflow-hidden rounded-lg border border-neutral-200 bg-gradient-to-br from-white via-white to-primary-light/40">
     <div
       className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent"
       aria-hidden

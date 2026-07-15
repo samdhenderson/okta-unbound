@@ -104,7 +104,7 @@ const OverviewCard: React.FC<OverviewCardProps> = ({
   const total = onlyContext + shared + onlyCompared;
 
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-3 shadow-sm">
+    <div className="rounded-lg border border-neutral-200 bg-white p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="rounded-md bg-neutral-100 p-1.5 text-neutral-700">

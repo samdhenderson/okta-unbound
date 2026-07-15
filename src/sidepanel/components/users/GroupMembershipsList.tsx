@@ -57,7 +57,7 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
   };
 
   return (
-    <div className="rounded-md border border-neutral-200 bg-white shadow-sm overflow-hidden">
+    <div className="rounded-md border border-neutral-200 bg-white overflow-hidden">
       <div className="px-5 py-3 bg-neutral-50 border-b border-neutral-200 flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-neutral-900">
           Group Memberships ({memberships.length})

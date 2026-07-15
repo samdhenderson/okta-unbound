@@ -103,7 +103,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
   return (
     <div className="space-y-4">
       {/* Premium User ID Card */}
-      <div className="bg-white rounded-xl border border-neutral-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-md border border-neutral-200 overflow-hidden">
         <div className="p-6 bg-white">
           <div className="flex items-start gap-5">
             {/* Avatar */}
@@ -170,7 +170,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
         {/* Metadata Footer */}
         <div className="px-6 py-4 bg-neutral-50 border-t border-neutral-200 grid grid-cols-3 gap-4 text-sm">
           <div className="flex flex-col">
-            <span className="text-xs font-semibold text-neutral-600 mb-1">Last Login</span>
+            <span className="text-xs font-medium text-neutral-600 mb-1">Last Login</span>
             <span className="text-neutral-900 font-medium">
               {user.lastLogin
                 ? getRelativeTime(user.lastLogin) || formatDateShort(user.lastLogin)
@@ -178,7 +178,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
             </span>
           </div>
           <div className="flex flex-col">
-            <span className="text-xs font-semibold text-neutral-600 mb-1">Created</span>
+            <span className="text-xs font-medium text-neutral-600 mb-1">Created</span>
             <span className="text-neutral-900 font-medium">
               {user.created
                 ? getRelativeTime(user.created) || formatDateShort(user.created)
@@ -186,7 +186,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
             </span>
           </div>
           <div className="flex flex-col">
-            <span className="text-xs font-semibold text-neutral-600 mb-1">Groups</span>
+            <span className="text-xs font-medium text-neutral-600 mb-1">Groups</span>
             <span className="text-neutral-900 font-medium">{groupCount}</span>
           </div>
         </div>
@@ -201,11 +201,11 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
           <CollapsibleSection title="Account Details" defaultOpen={false}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
               <div className="p-3 bg-white rounded-md border border-neutral-200">
-                <span className="text-xs font-semibold text-neutral-600 mb-1 block">Login</span>
+                <span className="text-xs font-medium text-neutral-600 mb-1 block">Login</span>
                 <span className="text-sm text-neutral-900 block">{user.profile.login}</span>
               </div>
               <div className="p-3 bg-white rounded-md border border-neutral-200">
-                <span className="text-xs font-semibold text-neutral-600 mb-1 block">User ID</span>
+                <span className="text-xs font-medium text-neutral-600 mb-1 block">User ID</span>
                 <div className="flex items-center gap-1.5">
                   <span className="font-mono text-xs text-neutral-900 truncate">{user.id}</span>
                   <IconButton
@@ -249,7 +249,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
               </div>
               {user.profile.secondEmail && (
                 <div className="p-3 bg-white rounded-md border border-neutral-200">
-                  <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                  <span className="text-xs font-medium text-neutral-600 mb-1 block">
                     Secondary Email
                   </span>
                   <span className="text-sm text-neutral-900 block">{user.profile.secondEmail}</span>
@@ -257,9 +257,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
               )}
               {user.activated && (
                 <div className="p-3 bg-white rounded-md border border-neutral-200">
-                  <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                    Activated
-                  </span>
+                  <span className="text-xs font-medium text-neutral-600 mb-1 block">Activated</span>
                   <span className="text-sm text-neutral-900 block">
                     {formatDateShort(user.activated)}
                   </span>
@@ -267,7 +265,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
               )}
               {user.statusChanged && (
                 <div className="p-3 bg-white rounded-md border border-neutral-200">
-                  <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                  <span className="text-xs font-medium text-neutral-600 mb-1 block">
                     Status Changed
                   </span>
                   <span className="text-sm text-neutral-900 block">
@@ -277,7 +275,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
               )}
               {user.passwordChanged && (
                 <div className="p-3 bg-white rounded-md border border-neutral-200">
-                  <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                  <span className="text-xs font-medium text-neutral-600 mb-1 block">
                     Password Changed
                   </span>
                   <span className="text-sm text-neutral-900 block">
@@ -287,7 +285,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
               )}
               {user.lastUpdated && (
                 <div className="p-3 bg-white rounded-md border border-neutral-200">
-                  <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                  <span className="text-xs font-medium text-neutral-600 mb-1 block">
                     Profile Updated
                   </span>
                   <span className="text-sm text-neutral-900 block">
@@ -304,13 +302,13 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                 {user.profile.title && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">Title</span>
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">Title</span>
                     <span className="text-sm text-neutral-900 block">{user.profile.title}</span>
                   </div>
                 )}
                 {user.profile.department && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
                       Department
                     </span>
                     <span className="text-sm text-neutral-900 block">
@@ -320,7 +318,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
                 )}
                 {user.profile.division && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
                       Division
                     </span>
                     <span className="text-sm text-neutral-900 block">{user.profile.division}</span>
@@ -328,7 +326,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
                 )}
                 {user.profile.organization && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
                       Organization
                     </span>
                     <span className="text-sm text-neutral-900 block">
@@ -338,15 +336,13 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
                 )}
                 {user.profile.manager && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                      Manager
-                    </span>
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">Manager</span>
                     <span className="text-sm text-neutral-900 block">{user.profile.manager}</span>
                   </div>
                 )}
                 {user.profile.costCenter && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
                       Cost Center
                     </span>
                     <span className="text-sm text-neutral-900 block">
@@ -356,7 +352,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
                 )}
                 {user.profile.employeeNumber && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
                       Employee #
                     </span>
                     <span className="text-sm text-neutral-900 block">
@@ -366,7 +362,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
                 )}
                 {user.profile.userType && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
                       User Type
                     </span>
                     <span className="text-sm text-neutral-900 block">{user.profile.userType}</span>
@@ -382,7 +378,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                 {user.profile.primaryPhone && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">Phone</span>
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">Phone</span>
                     <span className="text-sm text-neutral-900 block">
                       {user.profile.primaryPhone}
                     </span>
@@ -390,9 +386,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
                 )}
                 {user.profile.mobilePhone && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                      Mobile
-                    </span>
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">Mobile</span>
                     <span className="text-sm text-neutral-900 block">
                       {user.profile.mobilePhone}
                     </span>
@@ -403,9 +397,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
                   user.profile.state ||
                   user.profile.zipCode) && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200 md:col-span-2">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                      Address
-                    </span>
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">Address</span>
                     <span className="text-sm text-neutral-900 block">
                       {[
                         user.profile.streetAddress,
@@ -429,15 +421,13 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                 {user.profile.locale && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                      Locale
-                    </span>
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">Locale</span>
                     <span className="text-sm text-neutral-900 block">{user.profile.locale}</span>
                   </div>
                 )}
                 {user.profile.timezone && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
                       Timezone
                     </span>
                     <span className="text-sm text-neutral-900 block">{user.profile.timezone}</span>
@@ -462,9 +452,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                   {customFields.map(([key, value]) => (
                     <div className="p-3 bg-white rounded-md border border-neutral-200" key={key}>
-                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                        {key}
-                      </span>
+                      <span className="text-xs font-medium text-neutral-600 mb-1 block">{key}</span>
                       <span className="text-sm text-neutral-900 block">
                         {typeof value === 'object' ? JSON.stringify(value) : String(value)}
                       </span>

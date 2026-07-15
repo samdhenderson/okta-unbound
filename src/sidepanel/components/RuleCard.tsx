@@ -121,7 +121,7 @@ const RuleCard: React.FC<RuleCardProps> = memo(
         bg-white rounded-md border transition-all duration-100 overflow-hidden
         ${rule.affectsCurrentGroup ? 'border-primary' : 'border-neutral-200'}
         ${isHighlighted ? 'ring-2 ring-primary ring-offset-2' : ''}
-        hover:shadow-sm
+        hover:border-neutral-300
       `}
         style={{ fontFamily: 'var(--font-primary)' }}
       >
@@ -176,7 +176,7 @@ const RuleCard: React.FC<RuleCardProps> = memo(
           <div className="px-4 pb-4 pt-2 space-y-4 bg-neutral-50 border-t border-neutral-100">
             {/* Condition */}
             <div>
-              <div className="text-xs font-bold uppercase tracking-wider text-neutral-600 mb-2">
+              <div className="text-xs font-semibold uppercase tracking-wider text-neutral-600 mb-2">
                 WHEN
               </div>
               <div className="p-3 bg-white rounded-md border border-neutral-200">
@@ -192,7 +192,7 @@ const RuleCard: React.FC<RuleCardProps> = memo(
             {/* User Attributes */}
             {rule.userAttributes.length > 0 && (
               <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-neutral-600 mb-2">
+                <div className="text-xs font-semibold uppercase tracking-wider text-neutral-600 mb-2">
                   USES ATTRIBUTES
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -211,7 +211,7 @@ const RuleCard: React.FC<RuleCardProps> = memo(
             {/* Groups */}
             {rule.groupIds.length > 0 && (
               <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-neutral-600 mb-2">
+                <div className="text-xs font-semibold uppercase tracking-wider text-neutral-600 mb-2">
                   THEN ADD TO GROUPS
                 </div>
                 <div className="flex flex-wrap gap-2">

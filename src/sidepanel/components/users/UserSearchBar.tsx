@@ -64,7 +64,7 @@ const UserSearchBar: React.FC<UserSearchBarProps> = ({
       <input
         ref={inputRef}
         type="text"
-        className="w-full pl-11 pr-12 py-3 bg-white border border-neutral-200 rounded-md text-sm placeholder-neutral-400 focus:outline-none focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary transition-all duration-100 shadow-sm hover:shadow"
+        className="w-full pl-11 pr-12 py-3 bg-white border border-neutral-200 rounded-md text-sm placeholder-neutral-400 focus:outline-none focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary transition-all duration-100"
         placeholder={placeholder}
         value={searchQuery}
         onChange={(e) => onSearchChange(e.target.value)}

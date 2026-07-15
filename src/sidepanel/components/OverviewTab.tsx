@@ -49,7 +49,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ onTabChange }) => {
   if (connectionStatus === 'error' || error) {
     return (
       <div className="tab-content active">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
           <AlertMessage
             message={{
               text: error || 'Please open an Okta admin page in this window',
@@ -96,7 +96,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ onTabChange }) => {
         }
       />
 
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="w-full max-w-7xl mx-auto px-6 py-6">
         {pageType === 'group' && groupInfo && targetTabId && (
           <GroupOverview
             groupId={groupInfo.groupId}

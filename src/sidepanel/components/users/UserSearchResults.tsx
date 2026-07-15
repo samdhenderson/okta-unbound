@@ -49,7 +49,7 @@ const UserSearchResults: React.FC<UserSearchResultsProps> = ({ results, onSelect
         {results.map((user) => (
           <div
             key={user.id}
-            className="group bg-white rounded-md border border-neutral-200 p-5 cursor-pointer transition-all duration-100 hover:border-neutral-500 hover:shadow-sm"
+            className="group bg-white rounded-md border border-neutral-200 p-5 cursor-pointer transition-all duration-100 hover:border-neutral-500"
             onClick={() => onSelectUser(user)}
           >
             <div className="flex items-start justify-between gap-4">
