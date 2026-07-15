@@ -41,6 +41,8 @@ interface GroupsTabProps {
   targetTabId: number | null;
   /** Okta org origin used to build deep links to group admin pages. */
   oktaOrigin?: string;
+  /** Deep-link to a rule in the Rules tab (from a group's feeding rules, A2 → B/A4). */
+  onNavigateToRule?: (ruleId: string) => void;
 }
 
 /**
@@ -48,7 +50,7 @@ interface GroupsTabProps {
  * and their presentational panels. Also implements CSV export of the selected or
  * filtered groups and the show/hide toggling of the bulk/cross-search/collections panels.
  */
-const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
+const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin, onNavigateToRule }) => {
   // Shell-owned state: error has three producers (loader, live search, useOktaApi
   // onResult) so it stays here; searchMode is read by three hooks so it stays above
   // them; showFilters and the modal/panel flags are pure UI.
@@ -268,6 +270,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
               <GroupCleanupPanel
                 groups={groups}
                 onSelectGroups={selection.replaceSelection}
+                onAnalyzeSource={groupSource.open}
                 onClose={() => setActivePanel('none')}
               />
             )}
@@ -329,6 +332,14 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
         error={groupSource.error}
         onClose={groupSource.close}
         onAnalyzeMembers={groupSource.analyzeMembers}
+        onNavigateToRule={
+          onNavigateToRule
+            ? (ruleId) => {
+                groupSource.close();
+                onNavigateToRule(ruleId);
+              }
+            : undefined
+        }
       />
 
       {/* Merge wizard (A3) */}

@@ -32,6 +32,8 @@ interface GroupSourceModalProps {
   onClose: () => void;
   /** Run the gated member-source analysis. */
   onAnalyzeMembers: () => void;
+  /** Jump to a feeding rule in the Rules tab (to preview/consolidate it). */
+  onNavigateToRule?: (ruleId: string) => void;
 }
 
 /** A small ACTIVE/INACTIVE status pill for a feeding rule. */
@@ -57,6 +59,7 @@ const GroupSourceModal: React.FC<GroupSourceModalProps> = ({
   error,
   onClose,
   onAnalyzeMembers,
+  onNavigateToRule,
 }) => {
   const pushMappings = group?.pushMappings ?? [];
 
@@ -95,15 +98,44 @@ const GroupSourceModal: React.FC<GroupSourceModalProps> = ({
               </p>
             ) : (
               <ul className="space-y-1.5">
-                {feedingRules.map((rule) => (
-                  <li
-                    key={rule.id}
-                    className="flex items-center justify-between gap-3 rounded-md border border-neutral-200 px-3 py-2"
-                  >
-                    <span className="text-sm text-neutral-900 truncate">{rule.name}</span>
-                    <RuleStatusPill status={rule.status} />
-                  </li>
-                ))}
+                {feedingRules.map((rule) =>
+                  onNavigateToRule ? (
+                    <li key={rule.id}>
+                      <button
+                        type="button"
+                        onClick={() => onNavigateToRule(rule.id)}
+                        title="Open this rule in the Rules tab"
+                        className="w-full flex items-center justify-between gap-3 rounded-md border border-neutral-200 px-3 py-2 text-left hover:border-primary hover:bg-primary-light transition-colors"
+                      >
+                        <span className="flex items-center gap-2 min-w-0">
+                          <span className="text-sm text-neutral-900 truncate">{rule.name}</span>
+                          <svg
+                            className="w-3.5 h-3.5 text-neutral-400 shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M14 5l7 7m0 0l-7 7m7-7H3"
+                            />
+                          </svg>
+                        </span>
+                        <RuleStatusPill status={rule.status} />
+                      </button>
+                    </li>
+                  ) : (
+                    <li
+                      key={rule.id}
+                      className="flex items-center justify-between gap-3 rounded-md border border-neutral-200 px-3 py-2"
+                    >
+                      <span className="text-sm text-neutral-900 truncate">{rule.name}</span>
+                      <RuleStatusPill status={rule.status} />
+                    </li>
+                  ),
+                )}
               </ul>
             )}
           </section>

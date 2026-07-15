@@ -21,6 +21,7 @@ describe('GroupCleanupPanel', () => {
       <GroupCleanupPanel
         groups={[group({ id: 'g1', name: 'Alpha' }), group({ id: 'g2', name: 'Beta' })]}
         onSelectGroups={() => {}}
+        onAnalyzeSource={() => {}}
         onClose={() => {}}
       />,
     );
@@ -36,6 +37,7 @@ describe('GroupCleanupPanel', () => {
           group({ id: 'g2', name: 'Healthy' }),
         ]}
         onSelectGroups={onSelectGroups}
+        onAnalyzeSource={() => {}}
         onClose={() => {}}
       />,
     );
@@ -55,6 +57,7 @@ describe('GroupCleanupPanel', () => {
           group({ id: 'g2', name: 'dup' }),
         ]}
         onSelectGroups={onSelectGroups}
+        onAnalyzeSource={() => {}}
         onClose={() => {}}
       />,
     );
@@ -68,11 +71,26 @@ describe('GroupCleanupPanel', () => {
       <GroupCleanupPanel
         groups={[group({ id: 'g1', name: 'Empty One', memberCount: 0 })]}
         onSelectGroups={() => {}}
+        onAnalyzeSource={() => {}}
         onClose={() => {}}
       />,
     );
     // No duplicate names here -> the Duplicate names tile is present but not a selector.
     expect(screen.getByText('Duplicate names')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Duplicate names/ })).not.toBeInTheDocument();
+  });
+
+  it('opens the membership-source insight from a flagged row (A1 → A2)', async () => {
+    const onAnalyzeSource = vi.fn();
+    render(
+      <GroupCleanupPanel
+        groups={[group({ id: 'g1', name: 'Empty One', memberCount: 0 })]}
+        onSelectGroups={() => {}}
+        onAnalyzeSource={onAnalyzeSource}
+        onClose={() => {}}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Why?' }));
+    expect(onAnalyzeSource).toHaveBeenCalledWith(expect.objectContaining({ id: 'g1' }));
   });
 });

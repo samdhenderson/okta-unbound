@@ -80,6 +80,27 @@ god component:
   hooks + `rules/` subcomponents, behind a fresh 9-test characterization oracle; raw filter
   buttons → `FilterPill`; the three `any`s cleared.
 
+## How the pieces connect (one feature set)
+
+The features were designed to flow as a single admin workflow — **triage → understand → act**
+— with explicit navigation rather than siloed tools:
+
+- **A1 Cleanup → A2 Source** — each flagged row in the Cleanup panel has a **"Why?"** button
+  that opens the membership-source insight for that group.
+- **A1 Cleanup → A3 Merge / Export / Compare** — selecting a triage category loads those groups
+  into the selection bar, where Merge/Compare/Export live (the panel spells this out inline).
+- **A2 Source → B Impact / A4 Consolidation** (the key cross-tab bridge) — a group's **feeding
+  rules are clickable** and deep-link into the Rules tab (reusing the existing
+  `handleNavigateToRule`), where the same rule can be impact-previewed (B), have a target group
+  added, or be consolidated (A4).
+- **B + A4 co-located** — every `RuleCard` carries Preview Impact, Add Target Group, and the
+  (impact-gated) Deactivate together; the merge-duplicates banner sits atop the same tab.
+- **A3 Merge → A1 Cleanup** — the merge result reminds the admin the emptied husks now surface
+  under Cleanup as empty groups, closing the loop.
+
+Not yet wired: the **reverse** Rules → Groups jump (e.g. from a rule's target group to that
+group's row) — it needs group deep-link infrastructure the Groups tab doesn't have yet.
+
 ## What to improve next (ranked)
 
 1. **A1 → true orphan detection (small).** `GroupSummary.hasRules`/`ruleCount` are still

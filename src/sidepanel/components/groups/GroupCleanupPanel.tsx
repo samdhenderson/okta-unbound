@@ -30,6 +30,8 @@ interface GroupCleanupPanelProps {
   groups: GroupSummary[];
   /** Replace the current selection with the given group ids. */
   onSelectGroups: (ids: string[]) => void;
+  /** Open the read-only membership-source insight for a flagged group (A1 → A2). */
+  onAnalyzeSource: (group: GroupSummary) => void;
   /** Close the panel. */
   onClose: () => void;
 }
@@ -42,6 +44,7 @@ interface GroupCleanupPanelProps {
 const GroupCleanupPanel: React.FC<GroupCleanupPanelProps> = ({
   groups,
   onSelectGroups,
+  onAnalyzeSource,
   onClose,
 }) => {
   const report = useMemo(() => analyzeClutter(groups), [groups]);
@@ -144,14 +147,24 @@ const GroupCleanupPanel: React.FC<GroupCleanupPanelProps> = ({
                     ))}
                   </div>
                 </div>
-                <span
-                  className={`shrink-0 px-2 py-0.5 rounded-md text-xs font-bold border ${reviewScoreColor(
-                    entry.reviewScore,
-                  )}`}
-                  title="Review confidence (fused signal, 0–100)"
-                >
-                  {entry.reviewScore}
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span
+                    className={`px-2 py-0.5 rounded-md text-xs font-bold border ${reviewScoreColor(
+                      entry.reviewScore,
+                    )}`}
+                    title="Review confidence (fused signal, 0–100)"
+                  >
+                    {entry.reviewScore}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onAnalyzeSource(entry.group)}
+                    title="Why does this group exist?"
+                  >
+                    Why?
+                  </Button>
+                </div>
               </div>
             ))}
             {overflow > 0 && (
@@ -162,9 +175,10 @@ const GroupCleanupPanel: React.FC<GroupCleanupPanelProps> = ({
           </div>
 
           <p className="text-xs text-neutral-400">
-            Detection is local over the loaded list (member counts, names, staleness). It does not
-            infer rule-orphan status. Nothing here deletes a group — selecting a category lets you
-            review or act on it with the existing tools.
+            Select a category to load those groups into the selection bar, then{' '}
+            <strong>Compare</strong>, <strong>Merge</strong>, or <strong>Export</strong> them — or
+            hit <strong>Why?</strong> to see what feeds a group first. Detection is local (member
+            counts, names, staleness); nothing here deletes a group.
           </p>
         </>
       )}

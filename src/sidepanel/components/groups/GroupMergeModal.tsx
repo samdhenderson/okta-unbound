@@ -209,7 +209,8 @@ const GroupMergeModal: React.FC<GroupMergeModalProps> = ({
             </p>
           )}
           <p className="text-xs text-neutral-400">
-            The emptied groups still exist — delete them in Okta if you no longer need them.
+            The emptied groups still exist — they now show up under <strong>Cleanup</strong> as
+            empty groups. Delete them in Okta if you no longer need them.
           </p>
         </div>
       )}

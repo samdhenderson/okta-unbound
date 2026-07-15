@@ -141,7 +141,11 @@ const App: React.FC = () => {
           />
         )}
         {activeTab === 'groups' && (
-          <GroupsTab targetTabId={targetTabId ?? null} oktaOrigin={oktaOrigin ?? undefined} />
+          <GroupsTab
+            targetTabId={targetTabId ?? null}
+            oktaOrigin={oktaOrigin ?? undefined}
+            onNavigateToRule={handleNavigateToRule}
+          />
         )}
         {activeTab === 'history' && (
           <div

@@ -90,4 +90,11 @@ describe('GroupSourceModal', () => {
     const { container } = render(<GroupSourceModal {...base} group={null} />);
     expect(container).toBeEmptyDOMElement();
   });
+
+  it('deep-links a feeding rule to the Rules tab when navigation is wired (A2 → B/A4)', async () => {
+    const onNavigateToRule = vi.fn();
+    render(<GroupSourceModal {...base} onNavigateToRule={onNavigateToRule} />);
+    await userEvent.click(screen.getByRole('button', { name: /Eng feeder/ }));
+    expect(onNavigateToRule).toHaveBeenCalledWith('r1');
+  });
 });
