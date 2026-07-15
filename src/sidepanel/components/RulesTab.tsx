@@ -1,30 +1,30 @@
 /**
  * @module sidepanel/components/RulesTab
- * @description Rules tab: load, search, filter, and activate/deactivate group rules.
+ * @description Rules tab shell: browse, search, filter, and manage group rules.
  *
- * Fetches rules through the content script (using {@link RulesCache} to avoid
- * redundant calls), persists its rules/stats/UI state and scroll position via
- * `TabStateManager`, renders stats plus a filterable list of {@link RuleCard}s, and
- * logs undo + audit entries when rules are activated or deactivated. Supports
- * deep-linking to a rule via `selectedRuleId`.
+ * A thin coordinator that owns cross-cutting shell state (search/filter, error,
+ * TabState persistence, deep-link navigation) and composes the rule hooks
+ * (`useRulesData` for load/cache, `useRuleLifecycle` for activate/deactivate,
+ * `useRuleImpact` for the impact preview) with presentational subcomponents
+ * (`RulesMetaRow`, `RulesStatsGrid`, `RulesToolbar`, `RulesListPanel`) plus the
+ * `RuleImpactModal`. Deactivation is gated behind that modal (Feature B).
  */
 import React, { useState, useEffect, useCallback } from 'react';
-import RuleCard from './RuleCard';
 import RuleImpactModal from './RuleImpactModal';
 import PageHeader from './shared/PageHeader';
 import Button from './shared/Button';
 import AlertMessage from './shared/AlertMessage';
-import LoadingSpinner from './shared/LoadingSpinner';
-import EmptyState from './shared/EmptyState';
-import type { FormattedRule, AuditLogEntry } from '../../shared/types';
+import RulesMetaRow from './rules/RulesMetaRow';
+import RulesStatsGrid from './rules/RulesStatsGrid';
+import RulesToolbar, { type RulesFilterType } from './rules/RulesToolbar';
+import RulesListPanel from './rules/RulesListPanel';
+import type { FormattedRule } from '../../shared/types';
 import { filterRules } from '../../shared/ruleUtils';
-import { useProgress } from '../contexts/ProgressContext';
 import { useOktaApi } from '../hooks/useOktaApi';
 import { useRuleImpact } from '../hooks/useRuleImpact';
+import { useRulesData } from '../hooks/useRulesData';
+import { useRuleLifecycle } from '../hooks/useRuleLifecycle';
 import type { RuleImpactInput } from '../hooks/useOktaApi/ruleImpact';
-import { logAction } from '../../shared/undoManager';
-import { auditStore } from '../../shared/storage/auditStore';
-import { RulesCache } from '../../shared/rulesCache';
 import { TabStateManager, saveRulesTabState } from '../../shared/tabState/tabStateManager';
 import type { RulesTabState } from '../../shared/tabState/types';
 import { createLogger } from '../../shared/utils/logger';
@@ -44,13 +44,9 @@ interface RulesTabProps {
   onRuleSelected?: () => void;
 }
 
-/** Client-side filter applied on top of the text search over loaded rules. */
-type FilterType = 'all' | 'active' | 'conflicts' | 'current-group';
-
 /**
- * Renders the Rules tab: manages rule loading/caching/persistence, the search and
- * filter controls, the stats overview, and the activate/deactivate flows (each of
- * which records undo and audit-trail entries).
+ * Renders the Rules tab, orchestrating the rule data/lifecycle/impact hooks and
+ * their presentational panels, plus search/filter state and TabState persistence.
  */
 const RulesTab: React.FC<RulesTabProps> = ({
   targetTabId,
@@ -59,44 +55,41 @@ const RulesTab: React.FC<RulesTabProps> = ({
   selectedRuleId,
   onRuleSelected,
 }) => {
-  const [rules, setRules] = useState<FormattedRule[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
-  const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0, conflicts: 0 });
-  const [apiCost, setApiCost] = useState<number | null>(null);
+  const [activeFilter, setActiveFilter] = useState<RulesFilterType>('all');
   const [error, setError] = useState<string | null>(null);
-  const [lastFetchTime, setLastFetchTime] = useState<string | null>(null);
-  const { startProgress, updateProgress, completeProgress } = useProgress();
 
-  // Route only errors from the API surface into this tab's error banner; must be
-  // stable so useOktaApi keeps its memoized operation identities.
-  const handleApiResult = useCallback(
-    (message: string, type: 'info' | 'success' | 'warning' | 'error') => {
-      if (type === 'error') setError(message);
-    },
-    [],
-  );
-  const api = useOktaApi({ targetTabId: targetTabId ?? null, onResult: handleApiResult });
+  // Single error channel; '' clears it. Stable so the hooks below keep their
+  // memoized identities (useOktaApi in particular memoizes on this callback).
+  const handleError = useCallback((message: string) => setError(message || null), []);
+
+  const api = useOktaApi({ targetTabId: targetTabId ?? null, onResult: handleError });
   const impact = useRuleImpact(api.captureRuleImpact);
+  const data = useRulesData({ targetTabId, onError: handleError });
+  const { rules, stats, loadRules } = data;
+  const lifecycle = useRuleLifecycle({
+    targetTabId,
+    rules,
+    reload: loadRules,
+    onError: handleError,
+  });
 
-  // Load rules and state from TabStateManager on mount
+  // Restore persisted rules + UI state on mount.
   useEffect(() => {
     const loadPersistedState = async () => {
       try {
         const savedState = await TabStateManager.loadTabState<RulesTabState>('rules');
         if (savedState) {
           log.debug('Loaded persisted state from TabStateManager');
-          if (savedState.cachedRules) setRules(savedState.cachedRules);
-          if (savedState.cachedStats) setStats(savedState.cachedStats);
-          if (savedState.lastFetchTime) setLastFetchTime(savedState.lastFetchTime);
+          data.hydrate({
+            rules: savedState.cachedRules,
+            stats: savedState.cachedStats,
+            lastFetchTime: savedState.lastFetchTime,
+          });
           if (savedState.searchQuery) setSearchQuery(savedState.searchQuery);
           if (savedState.activeFilter) setActiveFilter(savedState.activeFilter);
           if (savedState.scrollPosition) {
-            // Restore scroll position after a short delay
-            setTimeout(() => {
-              window.scrollTo(0, savedState.scrollPosition);
-            }, 100);
+            setTimeout(() => window.scrollTo(0, savedState.scrollPosition), 100);
           }
         }
       } catch (err) {
@@ -105,262 +98,44 @@ const RulesTab: React.FC<RulesTabProps> = ({
     };
 
     loadPersistedState();
-
-    // Mark tab as visited
     TabStateManager.markTabVisited('rules');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Handle selectedRuleId navigation
+  // Scroll to and highlight a deep-linked rule once it is in the DOM.
   useEffect(() => {
     if (selectedRuleId && rules.length > 0) {
       log.debug('Navigating to rule:', selectedRuleId);
-
-      // Find the rule and scroll to it
       const ruleElement = document.querySelector(`[data-rule-id="${selectedRuleId}"]`);
       if (ruleElement) {
         ruleElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Clear the selection after a delay
-        setTimeout(() => {
-          onRuleSelected?.();
-        }, 2000);
+        setTimeout(() => onRuleSelected?.(), 2000);
       } else {
         log.warn('Rule not found in DOM:', selectedRuleId);
       }
     }
   }, [selectedRuleId, rules, onRuleSelected]);
 
-  // Persist rules and UI state whenever they change
+  // Persist rules + UI state whenever they change.
   useEffect(() => {
     if (rules.length > 0) {
       saveRulesTabState({
         cachedRules: rules,
         cachedStats: stats,
-        lastFetchTime,
+        lastFetchTime: data.lastFetchTime,
         searchQuery,
         activeFilter,
         scrollPosition: window.scrollY,
-      }).catch((err) => {
-        log.error('Failed to persist state:', err);
-      });
+      }).catch((err) => log.error('Failed to persist state:', err));
     }
-  }, [rules, stats, lastFetchTime, searchQuery, activeFilter]);
+  }, [rules, stats, data.lastFetchTime, searchQuery, activeFilter]);
 
-  // Persist scroll position periodically
+  // Persist scroll position periodically.
   useEffect(() => {
-    const handleScroll = () => {
-      TabStateManager.updateScrollPosition('rules', window.scrollY);
-    };
-
+    const handleScroll = () => TabStateManager.updateScrollPosition('rules', window.scrollY);
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-
-  const handleLoadRules = async (force: boolean = false) => {
-    if (!targetTabId) {
-      setError('No Okta tab connected');
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-    setApiCost(null);
-
-    try {
-      log.debug('Fetching rules from tab:', targetTabId);
-
-      // Start progress - we don't know total yet, so use indeterminate progress
-      startProgress('Loading Rules', 'Loading group rules...', 1);
-
-      // Track API requests made
-      let apiRequestCount = 0;
-
-      // OPTIMIZED: Check global cache first (unless forced refresh)
-      if (!force) {
-        const cached = await RulesCache.get();
-        if (cached) {
-          log.debug('Using cached rules from global cache');
-          setRules(cached.rules);
-          setStats(cached.stats);
-          setLastFetchTime(new Date(cached.timestamp).toISOString());
-          setApiCost(0); // No API calls needed
-          updateProgress(1, 1, `Loaded ${cached.rules.length} rules from cache`);
-          setTimeout(() => completeProgress(), 500);
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      const response = await chrome.tabs.sendMessage(targetTabId, {
-        action: 'fetchGroupRules',
-      });
-
-      log.debug('Received response:', { success: response.success });
-
-      if (response.success) {
-        const rulesCount = response.rules?.length || 0;
-        updateProgress(1, 1, `Loaded ${rulesCount} rules successfully`);
-
-        setRules(response.rules || []);
-        setStats(response.stats || { total: 0, active: 0, inactive: 0, conflicts: 0 });
-        setLastFetchTime(new Date().toISOString());
-
-        // OPTIMIZED: Populate global cache for other components to use
-        await RulesCache.set(
-          response.rules || [],
-          [], // rawRules not available from formatted response
-          response.stats || { total: 0, active: 0, inactive: 0, conflicts: 0 },
-          response.conflicts || [],
-        );
-
-        // Calculate actual API cost based on response metadata
-        // The content script makes 1 request for rules fetch
-        apiRequestCount = 1;
-        setApiCost(apiRequestCount);
-
-        log.debug('Loaded rules successfully:', {
-          count: response.rules?.length,
-          stats: response.stats,
-          apiCost: apiRequestCount,
-        });
-
-        // Complete progress after a short delay to show success message
-        setTimeout(() => {
-          completeProgress();
-        }, 1000);
-      } else {
-        setError(response.error || 'Failed to fetch rules');
-        log.error('Error fetching rules:', response.error);
-        completeProgress();
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to communicate with Okta tab');
-      log.error('Exception:', err);
-      completeProgress();
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleActivateRule = async (ruleId: string) => {
-    if (!targetTabId) return;
-
-    const startTime = Date.now();
-    let currentUserEmail = 'unknown@unknown.com';
-
-    try {
-      log.debug('Activating rule:', ruleId);
-
-      // Get current user for audit logging
-      try {
-        const userResponse = await chrome.tabs.sendMessage(targetTabId, {
-          action: 'makeApiRequest',
-          endpoint: '/api/v1/users/me',
-          method: 'GET',
-        });
-        if (userResponse.success && userResponse.data) {
-          currentUserEmail = userResponse.data.profile?.email || 'unknown@unknown.com';
-        }
-      } catch (err) {
-        log.error('Failed to get current user:', err);
-      }
-
-      // Find the rule to get its name for undo logging
-      const rule = rules.find((r) => r.id === ruleId);
-      const ruleName = rule?.name || 'Unknown Rule';
-      const groupIds = rule?.groupIds || [];
-      const groupNames = rule?.groupNames || [];
-
-      const response = await chrome.tabs.sendMessage(targetTabId, {
-        action: 'activateRule',
-        ruleId,
-      });
-
-      if (response.success) {
-        // Log undo action
-        await logAction(`Activated rule: ${ruleName}`, {
-          type: 'ACTIVATE_RULE',
-          ruleId,
-          ruleName,
-        });
-
-        // Log to audit trail (fire-and-forget)
-        const auditEntry: AuditLogEntry = {
-          id: crypto.randomUUID(),
-          timestamp: new Date(),
-          action: 'activate_rule',
-          groupId: groupIds[0] || 'multiple',
-          groupName: groupNames.length > 0 ? groupNames.join(', ') : ruleName,
-          performedBy: currentUserEmail,
-          affectedUsers: [],
-          result: 'success',
-          details: {
-            usersSucceeded: 0,
-            usersFailed: 0,
-            apiRequestCount: 1,
-            durationMs: Date.now() - startTime,
-          },
-        };
-        auditStore.logOperation(auditEntry).catch((err) => {
-          log.error('Failed to log audit entry:', err);
-        });
-
-        // Reload rules to get updated status
-        await handleLoadRules();
-      } else {
-        setError(response.error || 'Failed to activate rule');
-
-        // Log failure to audit trail
-        const auditEntry: AuditLogEntry = {
-          id: crypto.randomUUID(),
-          timestamp: new Date(),
-          action: 'activate_rule',
-          groupId: groupIds[0] || 'multiple',
-          groupName: groupNames.length > 0 ? groupNames.join(', ') : ruleName,
-          performedBy: currentUserEmail,
-          affectedUsers: [],
-          result: 'failed',
-          details: {
-            usersSucceeded: 0,
-            usersFailed: 0,
-            apiRequestCount: 1,
-            durationMs: Date.now() - startTime,
-            errorMessages: [response.error || 'Unknown error'],
-          },
-        };
-        auditStore.logOperation(auditEntry).catch((err) => {
-          log.error('Failed to log audit entry:', err);
-        });
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to activate rule');
-      log.error('Activation error:', err);
-
-      // Log error to audit trail
-      const rule = rules.find((r) => r.id === ruleId);
-      const groupIds = rule?.groupIds || [];
-      const groupNames = rule?.groupNames || [];
-      const auditEntry: AuditLogEntry = {
-        id: crypto.randomUUID(),
-        timestamp: new Date(),
-        action: 'activate_rule',
-        groupId: groupIds[0] || 'unknown',
-        groupName: groupNames.length > 0 ? groupNames.join(', ') : 'Unknown',
-        performedBy: currentUserEmail,
-        affectedUsers: [],
-        result: 'failed',
-        details: {
-          usersSucceeded: 0,
-          usersFailed: 0,
-          apiRequestCount: 1,
-          durationMs: Date.now() - startTime,
-          errorMessages: [err.message || 'Unknown error'],
-        },
-      };
-      auditStore.logOperation(auditEntry).catch((e) => {
-        log.error('Failed to log audit entry:', e);
-      });
-    }
-  };
 
   /** Build the minimal rule shape the impact preview needs. */
   const toRuleImpactInput = (rule: FormattedRule): RuleImpactInput => ({
@@ -370,155 +145,24 @@ const RulesTab: React.FC<RulesTabProps> = ({
     groupNames: rule.groupNames,
   });
 
-  /** Open the read-only impact preview for a rule. */
-  const handlePreviewImpact = (rule: FormattedRule) => {
+  const handlePreviewImpact = (rule: FormattedRule) =>
     impact.open(toRuleImpactInput(rule), 'preview');
-  };
 
-  /**
-   * Gate deactivation behind the impact preview: instead of deactivating
-   * immediately, open the confirmation modal (which captures who loses access);
-   * `performDeactivate` runs only after the admin confirms.
-   */
+  /** Gate deactivation behind the impact preview; commit only after confirm. */
   const handleRequestDeactivate = (ruleId: string) => {
     const rule = rules.find((r) => r.id === ruleId);
-    if (!rule) return;
-    impact.open(toRuleImpactInput(rule), 'deactivate');
+    if (rule) impact.open(toRuleImpactInput(rule), 'deactivate');
   };
 
-  /** Commit the deactivation confirmed in the impact modal. */
   const handleConfirmDeactivate = () => {
     const ruleId = impact.rule?.id;
     impact.close();
-    if (ruleId) void performDeactivate(ruleId);
+    if (ruleId) void lifecycle.deactivateRule(ruleId);
   };
 
-  const performDeactivate = async (ruleId: string) => {
-    if (!targetTabId) return;
-
-    const startTime = Date.now();
-    let currentUserEmail = 'unknown@unknown.com';
-
-    try {
-      log.debug('Deactivating rule:', ruleId);
-
-      // Get current user for audit logging
-      try {
-        const userResponse = await chrome.tabs.sendMessage(targetTabId, {
-          action: 'makeApiRequest',
-          endpoint: '/api/v1/users/me',
-          method: 'GET',
-        });
-        if (userResponse.success && userResponse.data) {
-          currentUserEmail = userResponse.data.profile?.email || 'unknown@unknown.com';
-        }
-      } catch (err) {
-        log.error('Failed to get current user:', err);
-      }
-
-      // Find the rule to get its name for undo logging
-      const rule = rules.find((r) => r.id === ruleId);
-      const ruleName = rule?.name || 'Unknown Rule';
-      const groupIds = rule?.groupIds || [];
-      const groupNames = rule?.groupNames || [];
-
-      const response = await chrome.tabs.sendMessage(targetTabId, {
-        action: 'deactivateRule',
-        ruleId,
-      });
-
-      if (response.success) {
-        // Log undo action
-        await logAction(`Deactivated rule: ${ruleName}`, {
-          type: 'DEACTIVATE_RULE',
-          ruleId,
-          ruleName,
-        });
-
-        // Log to audit trail (fire-and-forget)
-        const auditEntry: AuditLogEntry = {
-          id: crypto.randomUUID(),
-          timestamp: new Date(),
-          action: 'deactivate_rule',
-          groupId: groupIds[0] || 'multiple',
-          groupName: groupNames.length > 0 ? groupNames.join(', ') : ruleName,
-          performedBy: currentUserEmail,
-          affectedUsers: [],
-          result: 'success',
-          details: {
-            usersSucceeded: 0,
-            usersFailed: 0,
-            apiRequestCount: 1,
-            durationMs: Date.now() - startTime,
-          },
-        };
-        auditStore.logOperation(auditEntry).catch((err) => {
-          log.error('Failed to log audit entry:', err);
-        });
-
-        // Reload rules to get updated status
-        await handleLoadRules();
-      } else {
-        setError(response.error || 'Failed to deactivate rule');
-
-        // Log failure to audit trail
-        const auditEntry: AuditLogEntry = {
-          id: crypto.randomUUID(),
-          timestamp: new Date(),
-          action: 'deactivate_rule',
-          groupId: groupIds[0] || 'multiple',
-          groupName: groupNames.length > 0 ? groupNames.join(', ') : ruleName,
-          performedBy: currentUserEmail,
-          affectedUsers: [],
-          result: 'failed',
-          details: {
-            usersSucceeded: 0,
-            usersFailed: 0,
-            apiRequestCount: 1,
-            durationMs: Date.now() - startTime,
-            errorMessages: [response.error || 'Unknown error'],
-          },
-        };
-        auditStore.logOperation(auditEntry).catch((err) => {
-          log.error('Failed to log audit entry:', err);
-        });
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to deactivate rule');
-      log.error('Deactivation error:', err);
-
-      // Log error to audit trail
-      const rule = rules.find((r) => r.id === ruleId);
-      const groupIds = rule?.groupIds || [];
-      const groupNames = rule?.groupNames || [];
-      const auditEntry: AuditLogEntry = {
-        id: crypto.randomUUID(),
-        timestamp: new Date(),
-        action: 'deactivate_rule',
-        groupId: groupIds[0] || 'unknown',
-        groupName: groupNames.length > 0 ? groupNames.join(', ') : 'Unknown',
-        performedBy: currentUserEmail,
-        affectedUsers: [],
-        result: 'failed',
-        details: {
-          usersSucceeded: 0,
-          usersFailed: 0,
-          apiRequestCount: 1,
-          durationMs: Date.now() - startTime,
-          errorMessages: [err.message || 'Unknown error'],
-        },
-      };
-      auditStore.logOperation(auditEntry).catch((e) => {
-        log.error('Failed to log audit entry:', e);
-      });
-    }
-  };
-
-  // Apply search and filters
+  // Apply search and the active filter chip.
   const filteredRules = React.useMemo(() => {
     let result = filterRules(rules, searchQuery);
-
-    // Apply active filter
     switch (activeFilter) {
       case 'active':
         result = result.filter((r) => r.status === 'ACTIVE');
@@ -530,16 +174,8 @@ const RulesTab: React.FC<RulesTabProps> = ({
         result = result.filter((r) => r.affectsCurrentGroup);
         break;
     }
-
     return result;
   }, [rules, searchQuery, activeFilter]);
-
-  const filterButtonClass = (filter: FilterType) =>
-    `px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-100 ${
-      activeFilter === filter
-        ? 'bg-primary text-white'
-        : 'bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-50 hover:border-neutral-500'
-    }`;
 
   return (
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
@@ -555,9 +191,9 @@ const RulesTab: React.FC<RulesTabProps> = ({
           <Button
             variant={rules.length > 0 ? 'secondary' : 'primary'}
             icon="refresh"
-            onClick={() => handleLoadRules(rules.length > 0)}
-            disabled={isLoading}
-            loading={isLoading}
+            onClick={() => loadRules(rules.length > 0)}
+            disabled={data.isLoading}
+            loading={data.isLoading}
           >
             {rules.length > 0 ? 'Refresh' : 'Load Rules'}
           </Button>
@@ -565,31 +201,12 @@ const RulesTab: React.FC<RulesTabProps> = ({
       />
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
-        {/* Metadata Row */}
-        {(apiCost !== null || (lastFetchTime && rules.length > 0)) && (
-          <div className="flex gap-3 flex-wrap">
-            {apiCost !== null && (
-              <div className="px-3 py-1.5 bg-neutral-50 border border-neutral-200 rounded-md flex items-center gap-2">
-                <span className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                  API Requests:
-                </span>
-                <span className="text-sm font-bold text-primary-text">{apiCost}</span>
-              </div>
-            )}
-            {lastFetchTime && rules.length > 0 && (
-              <div className="px-3 py-1.5 bg-neutral-50 border border-neutral-200 rounded-md flex items-center gap-2">
-                <span className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                  Cached:
-                </span>
-                <span className="text-sm font-mono text-neutral-700">
-                  {new Date(lastFetchTime).toLocaleString()}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
+        <RulesMetaRow
+          apiCost={data.apiCost}
+          lastFetchTime={data.lastFetchTime}
+          hasRules={rules.length > 0}
+        />
 
-        {/* Error Display */}
         {error && (
           <AlertMessage
             message={{ text: error, type: 'danger' }}
@@ -597,131 +214,30 @@ const RulesTab: React.FC<RulesTabProps> = ({
           />
         )}
 
-        {/* Stats Overview */}
+        {rules.length > 0 && <RulesStatsGrid stats={stats} />}
+
         {rules.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="rounded-md border border-neutral-200 p-4 bg-white">
-              <p className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
-                Total Rules
-              </p>
-              <p className="text-2xl font-bold text-neutral-900 mt-1">{stats.total}</p>
-            </div>
-            <div className="rounded-md border border-neutral-200 p-4 bg-white">
-              <p className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
-                Active
-              </p>
-              <p className="text-2xl font-bold text-success mt-1">{stats.active}</p>
-            </div>
-            <div className="rounded-md border border-neutral-200 p-4 bg-white">
-              <p className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
-                Inactive
-              </p>
-              <p className="text-2xl font-bold text-neutral-600 mt-1">{stats.inactive}</p>
-            </div>
-            <div className="rounded-md border border-neutral-200 p-4 bg-white">
-              <p className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
-                Conflicts
-              </p>
-              <p className="text-2xl font-bold text-warning mt-1">{stats.conflicts}</p>
-            </div>
-          </div>
+          <RulesToolbar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            activeFilter={activeFilter}
+            onFilterChange={setActiveFilter}
+            conflictsCount={stats.conflicts}
+            showCurrentGroup={Boolean(currentGroupId)}
+          />
         )}
 
-        {/* Search and Filters */}
-        {rules.length > 0 && (
-          <div className="space-y-3">
-            {/* Search Bar */}
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <svg
-                  className="h-5 w-5 text-neutral-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-              </div>
-              <input
-                type="text"
-                className="w-full pl-11 pr-4 py-2.5 bg-white border border-neutral-200 rounded-md text-sm placeholder-neutral-400 focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary transition-all duration-100"
-                placeholder="Search rules by name, condition, or attributes..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-
-            {/* Filter Buttons */}
-            <div className="flex flex-wrap gap-2">
-              <button className={filterButtonClass('all')} onClick={() => setActiveFilter('all')}>
-                All Rules
-              </button>
-              <button
-                className={filterButtonClass('active')}
-                onClick={() => setActiveFilter('active')}
-              >
-                Active Only
-              </button>
-              <button
-                className={`${filterButtonClass('conflicts')} disabled:opacity-50 disabled:cursor-not-allowed`}
-                onClick={() => setActiveFilter('conflicts')}
-                disabled={stats.conflicts === 0}
-              >
-                Conflicts ({stats.conflicts})
-              </button>
-              {currentGroupId && (
-                <button
-                  className={filterButtonClass('current-group')}
-                  onClick={() => setActiveFilter('current-group')}
-                >
-                  Current Group
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Rules List */}
-        <div className="min-h-[400px]">
-          {isLoading ? (
-            <LoadingSpinner size="lg" message="Loading rules..." centered />
-          ) : rules.length === 0 ? (
-            <EmptyState
-              icon="list"
-              title="No Rules Loaded"
-              description='Click "Load Rules" to analyze your Okta group rules'
-              actions={[
-                { label: 'Load Rules', onClick: () => handleLoadRules(false), variant: 'primary' },
-              ]}
-            />
-          ) : filteredRules.length === 0 ? (
-            <EmptyState
-              icon="search"
-              title="No Matching Rules"
-              description="No rules match your search or filter criteria"
-            />
-          ) : (
-            <div className="space-y-3">
-              {filteredRules.map((rule) => (
-                <div key={rule.id} data-rule-id={rule.id}>
-                  <RuleCard
-                    rule={rule}
-                    onActivate={handleActivateRule}
-                    onDeactivate={handleRequestDeactivate}
-                    onPreviewImpact={handlePreviewImpact}
-                    oktaOrigin={oktaOrigin}
-                    isHighlighted={selectedRuleId === rule.id}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <RulesListPanel
+          isLoading={data.isLoading}
+          hasRules={rules.length > 0}
+          filteredRules={filteredRules}
+          onLoad={() => loadRules(false)}
+          onActivate={lifecycle.activateRule}
+          onDeactivate={handleRequestDeactivate}
+          onPreviewImpact={handlePreviewImpact}
+          oktaOrigin={oktaOrigin}
+          selectedRuleId={selectedRuleId}
+        />
       </div>
 
       <RuleImpactModal
