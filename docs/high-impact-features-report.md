@@ -102,12 +102,29 @@ The features were designed to flow as a single admin workflow — **triage → u
   auto-expanding that group's row (new `selectedGroupId` plumbing in `App`/`GroupsTab`/
   `GroupListItem`, mirroring the rule deep-link). Navigation is now bidirectional.
 
+## Follow-up session — rule attribution, similarity sort, banner UX
+
+- **Accurate rule attribution (fixes the stale "No group rules" note).**
+  `useGroupsLoader` now attributes feeding rules to each group from `RulesCache`
+  (no extra API call) via the new pure `shared/rules/groupRuleIndex` helper, so
+  `GroupSummary.hasRules`/`ruleCount` are real. `calculateStaleness` takes a
+  `rulesKnown` flag and only claims "No group rules" when the rules payload was
+  actually available — previously every group falsely read as rule-less even when
+  the A2 source insight showed a feeding rule.
+- **"Group similar" rule sort.** New pure `shared/rules/similarity` clusters rules
+  by same/similar expression, shared attribute shape, or same/similar name
+  (union-find over a Jaccard/equality signature) and orders them so near-duplicates
+  sit adjacently. Wired as a sort selector in `RulesToolbar` (persisted in TabState).
+- **Collapsible merge banner.** `RulesMergeBanner` now collapses to one line and
+  each set expands to show the shared condition + member rules (name, status,
+  target count) with a **View** link that scrolls to the rule's card. The action is
+  relabeled **Review & merge** to make clear it opens the non-destructive preview.
+
 ## What to improve next (ranked)
 
-1. **A1 → true orphan detection (small).** `GroupSummary.hasRules`/`ruleCount` are still
-   hard-coded `false`/`0` in `groupSummary.ts`. Populate them in `useGroupsLoader` from
-   `RulesCache`; `analyzeClutter` can then add the real **orphan** signal. A2 already fetches
-   feeding rules per group, so the data path is proven.
+1. **A1 → orphan signal in triage (small).** Group rule attribution now lands in
+   `GroupSummary.hasRules`/`ruleCount` (see follow-up above), so `analyzeClutter`
+   could add a real **orphan** category/reason on top of the accurate counts.
 
 2. **Feature C — Bulk Attribute Editor (the remaining "Build").** Mutation-heavy (new
    `POST /api/v1/users/{id}` write + mastering detection + preflight + undo-restore). Build

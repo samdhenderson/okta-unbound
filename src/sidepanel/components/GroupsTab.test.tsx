@@ -729,8 +729,10 @@ describe('mount cache rehydrate', () => {
   it('a late storage callback overwrites freshly loaded groups (stale wins)', async () => {
     const uev = userEvent.setup();
     let storageCb: ((r: any) => void) | null = null;
-    storageGet.mockImplementation((_k: string[], cb: (r: any) => void) => {
-      storageCb = cb;
+    // Only capture the callback-style group-cache rehydrate; the loader also does a
+    // promise-style RulesCache read (no callback) which must not clobber storageCb.
+    storageGet.mockImplementation((_k: string[], cb?: (r: any) => void) => {
+      if (typeof cb === 'function') storageCb = cb;
     });
     route(/^\/api\/v1\/groups\?limit=200&expand=stats$/, () => ({
       success: true,

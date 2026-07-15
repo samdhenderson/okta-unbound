@@ -12,6 +12,8 @@ import type { Dispatch, SetStateAction } from 'react';
 import { useOktaApi } from './useOktaApi';
 import type { GroupSummary } from '../../shared/types';
 import { createLogger } from '../../shared/utils/logger';
+import { RulesCache } from '../../shared/rulesCache';
+import { annotateGroupsWithRuleCounts } from '../../shared/rules/groupRuleIndex';
 import { toGroupSummary } from '../components/groups/groupSummary';
 import {
   GROUPS_CACHE_KEY,
@@ -83,10 +85,20 @@ export function useGroupsLoader({
 
       let groupSummaries: GroupSummary[] = allGroups.map(toGroupSummary);
 
+      // Attribute feeding rules from the shared rules cache (no extra API call).
+      // Only when the cache is populated do we actually *know* a group's rule
+      // count — otherwise `hasRules`/`ruleCount` stay at their false/0 defaults
+      // and the staleness step must not read them as "no rule feeds this group".
+      const cachedRules = await RulesCache.get();
+      const rulesKnown = cachedRules !== null;
+      if (cachedRules) {
+        groupSummaries = annotateGroupsWithRuleCounts(groupSummaries, cachedRules.rules);
+      }
+
       // Calculate staleness for each group
       groupSummaries = groupSummaries.map((g) => ({
         ...g,
-        staleness: api.calculateStaleness(g),
+        staleness: api.calculateStaleness(g, rulesKnown),
       }));
 
       // Auto-detect and apply push group mappings

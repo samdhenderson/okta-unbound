@@ -23,6 +23,7 @@ import RuleConsolidationModal from './RuleConsolidationModal';
 import type { FormattedRule, OktaGroupRule } from '../../shared/types';
 import { filterRules } from '../../shared/ruleUtils';
 import { findMergeableRuleGroups, type MergeableRuleGroup } from '../../shared/rules/consolidation';
+import { sortRules, type RuleSortMode } from '../../shared/rules/similarity';
 import { useOktaApi } from '../hooks/useOktaApi';
 import { useRuleImpact } from '../hooks/useRuleImpact';
 import { useRulesData } from '../hooks/useRulesData';
@@ -64,7 +65,12 @@ const RulesTab: React.FC<RulesTabProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<RulesFilterType>('all');
+  const [sortMode, setSortMode] = useState<RuleSortMode>('default');
   const [error, setError] = useState<string | null>(null);
+  // Local "scroll to this rule" focus (e.g. from the merge banner's View link),
+  // combined with the cross-tab deep-link so both drive one highlight path.
+  const [focusRuleId, setFocusRuleId] = useState<string | null>(null);
+  const activeRuleId = selectedRuleId ?? focusRuleId;
 
   // Single error channel; '' clears it. Stable so the hooks below keep their
   // memoized identities (useOktaApi in particular memoizes on this callback).
@@ -131,6 +137,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
           });
           if (savedState.searchQuery) setSearchQuery(savedState.searchQuery);
           if (savedState.activeFilter) setActiveFilter(savedState.activeFilter);
+          if (savedState.sortMode) setSortMode(savedState.sortMode);
           if (savedState.scrollPosition) {
             setTimeout(() => window.scrollTo(0, savedState.scrollPosition), 100);
           }
@@ -145,19 +152,24 @@ const RulesTab: React.FC<RulesTabProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Scroll to and highlight a deep-linked rule once it is in the DOM.
+  // Scroll to and highlight the active rule (cross-tab deep-link or a local focus)
+  // once it is in the DOM.
   useEffect(() => {
-    if (selectedRuleId && rules.length > 0) {
-      log.debug('Navigating to rule:', selectedRuleId);
-      const ruleElement = document.querySelector(`[data-rule-id="${selectedRuleId}"]`);
+    if (activeRuleId && rules.length > 0) {
+      log.debug('Navigating to rule:', activeRuleId);
+      const ruleElement = document.querySelector(`[data-rule-id="${activeRuleId}"]`);
       if (ruleElement) {
-        ruleElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        setTimeout(() => onRuleSelected?.(), 2000);
+        ruleElement.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        const t = setTimeout(() => {
+          onRuleSelected?.();
+          setFocusRuleId(null);
+        }, 2000);
+        return () => clearTimeout(t);
       } else {
-        log.warn('Rule not found in DOM:', selectedRuleId);
+        log.warn('Rule not found in DOM:', activeRuleId);
       }
     }
-  }, [selectedRuleId, rules, onRuleSelected]);
+  }, [activeRuleId, rules, onRuleSelected]);
 
   // Persist rules + UI state whenever they change.
   useEffect(() => {
@@ -168,10 +180,11 @@ const RulesTab: React.FC<RulesTabProps> = ({
         lastFetchTime: data.lastFetchTime,
         searchQuery,
         activeFilter,
+        sortMode,
         scrollPosition: window.scrollY,
       }).catch((err) => log.error('Failed to persist state:', err));
     }
-  }, [rules, stats, data.lastFetchTime, searchQuery, activeFilter]);
+  }, [rules, stats, data.lastFetchTime, searchQuery, activeFilter, sortMode]);
 
   // Persist scroll position periodically.
   useEffect(() => {
@@ -203,7 +216,8 @@ const RulesTab: React.FC<RulesTabProps> = ({
     if (ruleId) void lifecycle.deactivateRule(ruleId);
   };
 
-  // Apply search and the active filter chip.
+  // Apply search, the active filter chip, then the chosen sort order (which can
+  // pair up similar rules so near-duplicates sit next to each other for review).
   const filteredRules = React.useMemo(() => {
     let result = filterRules(rules, searchQuery);
     switch (activeFilter) {
@@ -217,8 +231,8 @@ const RulesTab: React.FC<RulesTabProps> = ({
         result = result.filter((r) => r.affectsCurrentGroup);
         break;
     }
-    return result;
-  }, [rules, searchQuery, activeFilter]);
+    return sortRules(result, sortMode);
+  }, [rules, searchQuery, activeFilter, sortMode]);
 
   return (
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
@@ -260,7 +274,11 @@ const RulesTab: React.FC<RulesTabProps> = ({
         {rules.length > 0 && <RulesStatsGrid stats={stats} />}
 
         {rules.length > 0 && (
-          <RulesMergeBanner clusters={mergeableClusters} onMerge={handleMergeCluster} />
+          <RulesMergeBanner
+            clusters={mergeableClusters}
+            onMerge={handleMergeCluster}
+            onFocusRule={setFocusRuleId}
+          />
         )}
 
         {rules.length > 0 && (
@@ -271,6 +289,8 @@ const RulesTab: React.FC<RulesTabProps> = ({
             onFilterChange={setActiveFilter}
             conflictsCount={stats.conflicts}
             showCurrentGroup={Boolean(currentGroupId)}
+            sortMode={sortMode}
+            onSortChange={setSortMode}
           />
         )}
 

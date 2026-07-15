@@ -9,9 +9,14 @@
  */
 import React from 'react';
 import FilterPill from '../shared/FilterPill';
+import Select from '../shared/Select';
+import { RULE_SORT_LABELS, type RuleSortMode } from '../../../shared/rules/similarity';
 
 /** Client-side filter applied on top of the text search over loaded rules. */
 export type RulesFilterType = 'all' | 'active' | 'conflicts' | 'current-group';
+
+/** Order in which the sort options are offered. */
+const SORT_OPTIONS: RuleSortMode[] = ['default', 'similarity', 'name'];
 
 interface RulesToolbarProps {
   /** Current search text. */
@@ -24,9 +29,13 @@ interface RulesToolbarProps {
   conflictsCount: number;
   /** Whether to show the "Current Group" chip (a group is detected). */
   showCurrentGroup: boolean;
+  /** Active list sort mode. */
+  sortMode: RuleSortMode;
+  /** Change the list sort mode. */
+  onSortChange: (mode: RuleSortMode) => void;
 }
 
-/** Renders the Rules tab search field and its filter chips. */
+/** Renders the Rules tab search field, filter chips, and sort selector. */
 const RulesToolbar: React.FC<RulesToolbarProps> = ({
   searchQuery,
   onSearchChange,
@@ -34,6 +43,8 @@ const RulesToolbar: React.FC<RulesToolbarProps> = ({
   onFilterChange,
   conflictsCount,
   showCurrentGroup,
+  sortMode,
+  onSortChange,
 }) => (
   <div className="space-y-3">
     {/* Search Bar (documented composite: leading search glyph) */}
@@ -62,29 +73,42 @@ const RulesToolbar: React.FC<RulesToolbarProps> = ({
       />
     </div>
 
-    {/* Filter chips */}
-    <div className="flex flex-wrap gap-2">
-      <FilterPill active={activeFilter === 'all'} onClick={() => onFilterChange('all')}>
-        All Rules
-      </FilterPill>
-      <FilterPill active={activeFilter === 'active'} onClick={() => onFilterChange('active')}>
-        Active Only
-      </FilterPill>
-      <FilterPill
-        active={activeFilter === 'conflicts'}
-        onClick={() => onFilterChange('conflicts')}
-        disabled={conflictsCount === 0}
-      >
-        Conflicts ({conflictsCount})
-      </FilterPill>
-      {showCurrentGroup && (
-        <FilterPill
-          active={activeFilter === 'current-group'}
-          onClick={() => onFilterChange('current-group')}
-        >
-          Current Group
+    {/* Filter chips + sort selector */}
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap gap-2">
+        <FilterPill active={activeFilter === 'all'} onClick={() => onFilterChange('all')}>
+          All Rules
         </FilterPill>
-      )}
+        <FilterPill active={activeFilter === 'active'} onClick={() => onFilterChange('active')}>
+          Active Only
+        </FilterPill>
+        <FilterPill
+          active={activeFilter === 'conflicts'}
+          onClick={() => onFilterChange('conflicts')}
+          disabled={conflictsCount === 0}
+        >
+          Conflicts ({conflictsCount})
+        </FilterPill>
+        {showCurrentGroup && (
+          <FilterPill
+            active={activeFilter === 'current-group'}
+            onClick={() => onFilterChange('current-group')}
+          >
+            Current Group
+          </FilterPill>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-neutral-500">Sort</span>
+        <Select
+          value={sortMode}
+          onChange={(value) => onSortChange(value as RuleSortMode)}
+          options={SORT_OPTIONS.map((mode) => ({ value: mode, label: RULE_SORT_LABELS[mode] }))}
+          fullWidth={false}
+          ariaLabel="Sort rules"
+        />
+      </div>
     </div>
   </div>
 );
