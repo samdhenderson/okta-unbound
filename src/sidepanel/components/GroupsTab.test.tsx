@@ -1698,3 +1698,16 @@ describe('page header', () => {
     );
   });
 });
+
+describe('deep-link from the Rules tab', () => {
+  it('highlights and auto-expands the navigated group row', async () => {
+    renderCached(
+      [cachedGroup({ id: 'g1', name: 'Engineering' }), cachedGroup({ id: 'g2', name: 'Sales' })],
+      { selectedGroupId: 'g1', onGroupSelected: () => {} },
+    );
+    await waitFor(() => expect(screen.getByText('Engineering')).toBeInTheDocument());
+    // The highlighted group auto-expands, revealing its detail; others stay collapsed.
+    await waitFor(() => expect(screen.getByText('Group ID')).toBeInTheDocument());
+    expect(screen.getAllByText('Group ID')).toHaveLength(1);
+  });
+});

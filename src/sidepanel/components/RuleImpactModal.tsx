@@ -39,10 +39,15 @@ interface RuleImpactModalProps {
   onClose: () => void;
   /** Commit the deactivation (only used in `deactivate` mode). */
   onConfirmDeactivate?: () => void;
+  /** Jump to a target group in the Groups tab (reverse of A2's rule deep-link). */
+  onNavigateToGroup?: (groupId: string) => void;
 }
 
 /** One target-group row with an expandable list of members who would lose access. */
-const TargetGroupRow: React.FC<{ group: TargetGroupImpact }> = ({ group }) => {
+const TargetGroupRow: React.FC<{
+  group: TargetGroupImpact;
+  onNavigateToGroup?: (groupId: string) => void;
+}> = ({ group, onNavigateToGroup }) => {
   const [expanded, setExpanded] = useState(false);
   const hasLoss = group.losingCount > 0;
   const listed = group.losing.slice(0, MAX_LISTED);
@@ -50,26 +55,54 @@ const TargetGroupRow: React.FC<{ group: TargetGroupImpact }> = ({ group }) => {
   const lossPct =
     group.memberCount > 0 ? Math.round((group.losingCount / group.memberCount) * 100) : 0;
 
+  const memberLine = (
+    <>
+      <p className="text-sm font-medium text-neutral-900 truncate">{group.groupName}</p>
+      <p className="text-xs text-neutral-500">
+        {group.memberCount.toLocaleString()} member{group.memberCount === 1 ? '' : 's'}
+      </p>
+    </>
+  );
+
   return (
     <div
       className={`rounded-md border bg-white overflow-hidden ${
         hasLoss ? 'border-danger-light' : 'border-neutral-200'
       }`}
     >
-      <button
-        type="button"
-        onClick={() => hasLoss && setExpanded((v) => !v)}
-        className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left ${
-          hasLoss ? 'cursor-pointer hover:bg-neutral-50' : 'cursor-default'
-        }`}
-        aria-expanded={hasLoss ? expanded : undefined}
-      >
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-neutral-900 truncate">{group.groupName}</p>
-          <p className="text-xs text-neutral-500">
-            {group.memberCount.toLocaleString()} member{group.memberCount === 1 ? '' : 's'}
-          </p>
-        </div>
+      <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+        {/* Group name — deep-links to the Groups tab when navigation is wired. */}
+        {onNavigateToGroup ? (
+          <button
+            type="button"
+            onClick={() => onNavigateToGroup(group.groupId)}
+            title="View this group in the Groups tab"
+            className="min-w-0 text-left hover:opacity-80 transition-opacity"
+          >
+            <span className="flex items-center gap-1.5 min-w-0">
+              <p className="text-sm font-medium text-neutral-900 truncate">{group.groupName}</p>
+              <svg
+                className="w-3.5 h-3.5 text-neutral-400 shrink-0"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M14 5l7 7m0 0l-7 7m7-7H3"
+                />
+              </svg>
+            </span>
+            <p className="text-xs text-neutral-500">
+              {group.memberCount.toLocaleString()} member{group.memberCount === 1 ? '' : 's'}
+            </p>
+          </button>
+        ) : (
+          <div className="min-w-0">{memberLine}</div>
+        )}
+
         <div className="flex items-center gap-2 shrink-0">
           {hasLoss ? (
             <span className="px-2 py-0.5 rounded-md bg-danger-light text-danger-text text-xs font-bold border border-danger-light">
@@ -80,18 +113,33 @@ const TargetGroupRow: React.FC<{ group: TargetGroupImpact }> = ({ group }) => {
               No change
             </span>
           )}
-          <svg
-            className={`w-4 h-4 text-neutral-400 transition-transform duration-100 ${
-              expanded ? 'rotate-90' : ''
-            } ${hasLoss ? '' : 'invisible'}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
+          {hasLoss && (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              aria-expanded={expanded}
+              aria-label={`${expanded ? 'Hide' : 'Show'} members losing access in ${group.groupName}`}
+              className="p-1 rounded hover:bg-neutral-100"
+            >
+              <svg
+                className={`w-4 h-4 text-neutral-400 transition-transform duration-100 ${
+                  expanded ? 'rotate-90' : ''
+                }`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </button>
+          )}
         </div>
-      </button>
+      </div>
 
       {/* Loss-proportion bar: at-a-glance share of the group that would be removed. */}
       {hasLoss && (
@@ -137,6 +185,7 @@ const RuleImpactModal: React.FC<RuleImpactModalProps> = ({
   progress,
   onClose,
   onConfirmDeactivate,
+  onNavigateToGroup,
 }) => {
   const isDeactivate = mode === 'deactivate';
   const totalLosing = summary?.totalLosing ?? 0;
@@ -226,7 +275,11 @@ const RuleImpactModal: React.FC<RuleImpactModalProps> = ({
                   Target groups
                 </p>
                 {summary.targetGroups.map((group) => (
-                  <TargetGroupRow key={group.groupId} group={group} />
+                  <TargetGroupRow
+                    key={group.groupId}
+                    group={group}
+                    onNavigateToGroup={onNavigateToGroup}
+                  />
                 ))}
               </div>
             ) : (

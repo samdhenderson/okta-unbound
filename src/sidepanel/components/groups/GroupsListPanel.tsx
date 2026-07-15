@@ -38,6 +38,8 @@ interface GroupsListPanelProps {
   onClearFilters: () => void;
   /** Opens the read-only membership-source insight for a group (A2). */
   onAnalyzeSource?: (group: GroupSummary) => void;
+  /** Group id to highlight (deep-link target from the Rules tab). */
+  highlightedGroupId?: string;
 }
 
 /**
@@ -59,6 +61,7 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
   onLoadAllGroups,
   onClearFilters,
   onAnalyzeSource,
+  highlightedGroupId,
 }) => (
   <ScrollableList
     loading={loading}
@@ -94,6 +97,7 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
         onToggleSelect={onToggleSelect}
         oktaOrigin={oktaOrigin}
         onAnalyzeSource={onAnalyzeSource}
+        isHighlighted={highlightedGroupId === group.id}
       />
     ))}
   </ScrollableList>

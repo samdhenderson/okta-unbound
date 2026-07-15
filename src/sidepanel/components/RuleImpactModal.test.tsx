@@ -109,6 +109,15 @@ describe('RuleImpactModal', () => {
     expect(screen.getByText('Failed to fetch group rules')).toBeInTheDocument();
   });
 
+  it('deep-links a target group to the Groups tab when navigation is wired (B → A2)', async () => {
+    const onNavigateToGroup = vi.fn();
+    render(<RuleImpactModal {...baseProps} mode="preview" onNavigateToGroup={onNavigateToGroup} />);
+    // The group-name button (starts with the name) navigates; the expand toggle
+    // (aria-label starts with "Show") does not.
+    await userEvent.click(screen.getByRole('button', { name: /^Eng All/ }));
+    expect(onNavigateToGroup).toHaveBeenCalledWith('g1');
+  });
+
   it('reports zero loss cleanly', () => {
     render(
       <RuleImpactModal

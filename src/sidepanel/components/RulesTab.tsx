@@ -46,6 +46,8 @@ interface RulesTabProps {
   selectedRuleId?: string | null;
   /** Called once the highlighted rule has been shown, so the parent can clear it. */
   onRuleSelected?: () => void;
+  /** Deep-link to a group in the Groups tab (from a rule's target groups, B → A2). */
+  onNavigateToGroup?: (groupId: string) => void;
 }
 
 /**
@@ -58,6 +60,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
   oktaOrigin,
   selectedRuleId,
   onRuleSelected,
+  onNavigateToGroup,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<RulesFilterType>('all');
@@ -295,6 +298,14 @@ const RulesTab: React.FC<RulesTabProps> = ({
         progress={impact.progress}
         onClose={impact.close}
         onConfirmDeactivate={handleConfirmDeactivate}
+        onNavigateToGroup={
+          onNavigateToGroup
+            ? (groupId) => {
+                impact.close();
+                onNavigateToGroup(groupId);
+              }
+            : undefined
+        }
       />
 
       <RuleConsolidationModal

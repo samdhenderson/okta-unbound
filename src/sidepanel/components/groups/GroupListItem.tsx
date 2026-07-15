@@ -45,13 +45,20 @@ interface GroupListItemProps {
   oktaOrigin?: string;
   /** Opens the read-only membership-source insight for this group (A2). */
   onAnalyzeSource?: (group: GroupSummary) => void;
+  /** When true, the row auto-expands and shows a highlight ring (deep-link target). */
+  isHighlighted?: boolean;
 }
 
 /** Memoised expandable row for one group in the groups list. */
 const GroupListItem: React.FC<GroupListItemProps> = memo(
-  ({ group, selected, onToggleSelect, oktaOrigin, onAnalyzeSource }) => {
+  ({ group, selected, onToggleSelect, oktaOrigin, onAnalyzeSource, isHighlighted = false }) => {
     const [expanded, setExpanded] = useState(false);
     const [idCopied, setIdCopied] = useState(false);
+
+    // Auto-expand when highlighted (deep-linked from the Rules tab).
+    React.useEffect(() => {
+      if (isHighlighted) setExpanded(true);
+    }, [isHighlighted]);
 
     const getTypeBadge = (type: string) => {
       const configs = {
@@ -110,6 +117,7 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
 
     return (
       <div
+        data-group-id={group.id}
         className={`
         group/item relative overflow-hidden rounded-md border transition-all duration-100
         ${
@@ -117,6 +125,7 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
             ? 'border-primary bg-primary-light ring-1 ring-primary/20'
             : 'border-neutral-200 bg-white hover:border-neutral-500'
         }
+        ${isHighlighted ? 'ring-2 ring-primary ring-offset-2' : ''}
       `}
       >
         {/* Header */}
@@ -462,7 +471,8 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
       prevProps.group.pushMappings === nextProps.group.pushMappings &&
       prevProps.group.staleness?.score === nextProps.group.staleness?.score &&
       prevProps.selected === nextProps.selected &&
-      prevProps.oktaOrigin === nextProps.oktaOrigin
+      prevProps.oktaOrigin === nextProps.oktaOrigin &&
+      prevProps.isHighlighted === nextProps.isHighlighted
     );
   },
 );

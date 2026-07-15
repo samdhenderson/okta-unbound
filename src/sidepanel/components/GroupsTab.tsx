@@ -8,7 +8,7 @@
  * `useGroupMembersCache`) with presentational subcomponents (search bar, filter
  * panel, selection bar, list panel) plus the export and comparison modals.
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import PageHeader from './shared/PageHeader';
 import AlertMessage from './shared/AlertMessage';
 import Button from './shared/Button';
@@ -43,6 +43,10 @@ interface GroupsTabProps {
   oktaOrigin?: string;
   /** Deep-link to a rule in the Rules tab (from a group's feeding rules, A2 → B/A4). */
   onNavigateToRule?: (ruleId: string) => void;
+  /** Group id to scroll to and highlight when navigated here from the Rules tab. */
+  selectedGroupId?: string | null;
+  /** Called once the highlighted group has been shown, so the parent can clear it. */
+  onGroupSelected?: () => void;
 }
 
 /**
@@ -50,7 +54,13 @@ interface GroupsTabProps {
  * and their presentational panels. Also implements CSV export of the selected or
  * filtered groups and the show/hide toggling of the bulk/cross-search/collections panels.
  */
-const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin, onNavigateToRule }) => {
+const GroupsTab: React.FC<GroupsTabProps> = ({
+  targetTabId,
+  oktaOrigin,
+  onNavigateToRule,
+  selectedGroupId,
+  onGroupSelected,
+}) => {
   // Shell-owned state: error has three producers (loader, live search, useOktaApi
   // onResult) so it stays here; searchMode is read by three hooks so it stays above
   // them; showFilters and the modal/panel flags are pure UI.
@@ -99,6 +109,39 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin, onNaviga
   const { groups, loading, loadAllGroups } = loader;
   const { filteredGroups, activeFilterCount } = filters;
   const { selectedGroupIds, selectedGroups } = selection;
+
+  // Deep-link from the Rules tab: when a group id arrives and that group is in the
+  // loaded list, switch to cached mode, clear filters/search so it isn't hidden,
+  // then scroll to and highlight its row. Best-effort (mirrors the Rules deep-link):
+  // if the group isn't loaded, we wait for a later load rather than acting.
+  const navHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedGroupId) {
+      navHandledRef.current = null;
+      return;
+    }
+    if (navHandledRef.current === selectedGroupId) return;
+    if (!groups.some((g) => g.id === selectedGroupId)) return; // wait for groups to load
+    navHandledRef.current = selectedGroupId;
+
+    setSearchMode('cached');
+    filters.clearFilters();
+    filters.setSearchQuery('');
+
+    const scrollT = setTimeout(() => {
+      document
+        .querySelector(`[data-group-id="${selectedGroupId}"]`)
+        ?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    }, 150);
+    const clearT = setTimeout(() => onGroupSelected?.(), 2500);
+    return () => {
+      clearTimeout(scrollT);
+      clearTimeout(clearT);
+    };
+    // Setters (setSearchMode/filters/onGroupSelected) are stable enough; re-running
+    // only on id/groups changes avoids the unstable-filters-identity churn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGroupId, groups]);
 
   const handleExportSelection = useCallback(() => {
     if (selectedGroupIds.size === 0) {
@@ -298,6 +341,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin, onNaviga
             onLoadAllGroups={loadAllGroups}
             onClearFilters={filters.clearFilters}
             onAnalyzeSource={groupSource.open}
+            highlightedGroupId={selectedGroupId ?? undefined}
           />
         </div>
       </div>

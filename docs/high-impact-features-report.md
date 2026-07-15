@@ -97,9 +97,10 @@ The features were designed to flow as a single admin workflow — **triage → u
   (impact-gated) Deactivate together; the merge-duplicates banner sits atop the same tab.
 - **A3 Merge → A1 Cleanup** — the merge result reminds the admin the emptied husks now surface
   under Cleanup as empty groups, closing the loop.
-
-Not yet wired: the **reverse** Rules → Groups jump (e.g. from a rule's target group to that
-group's row) — it needs group deep-link infrastructure the Groups tab doesn't have yet.
+- **B Impact → A2 Source** (the reverse of the A2 bridge) — a rule's **target groups in the
+  impact modal are clickable** and deep-link into the Groups tab, scrolling to and
+  auto-expanding that group's row (new `selectedGroupId` plumbing in `App`/`GroupsTab`/
+  `GroupListItem`, mirroring the rule deep-link). Navigation is now bidirectional.
 
 ## What to improve next (ranked)
 
