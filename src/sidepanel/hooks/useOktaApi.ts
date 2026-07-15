@@ -21,6 +21,7 @@ import { createUserOperations } from './useOktaApi/userOperations';
 import { createExportOperations } from './useOktaApi/exportOperations';
 import { createPushGroupOperations } from './useOktaApi/pushGroupOps';
 import { createGroupAnalysisOperations } from './useOktaApi/groupAnalysis';
+import { createRuleImpactOperations } from './useOktaApi/ruleImpact';
 
 /**
  * Aggregate hook returning every Okta operation the side panel can invoke.
@@ -100,6 +101,10 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
     () => createGroupAnalysisOperations(groupMemberOps.getAllGroupMembers),
     [groupMemberOps],
   );
+  const ruleImpactOps = useMemo(
+    () => createRuleImpactOperations(coreApi, groupMemberOps.getAllGroupMembers),
+    [coreApi, groupMemberOps],
+  );
 
   const wrapOperation = useCallback(<A extends unknown[]>(fn: (...args: A) => Promise<void>) => {
     return async (...args: A) => {
@@ -172,6 +177,9 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       compareGroups: groupAnalysisOps.compareGroups,
       searchUserAcrossGroups: groupAnalysisOps.searchUserAcrossGroups,
       calculateStaleness: groupAnalysisOps.calculateStaleness,
+
+      // Rule impact preview (read-only)
+      captureRuleImpact: ruleImpactOps.captureRuleImpact,
     }),
     [
       isLoading,
@@ -185,6 +193,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       exportOps,
       pushGroupOps,
       groupAnalysisOps,
+      ruleImpactOps,
       removeDeprovisioned,
       exportMembers,
     ],

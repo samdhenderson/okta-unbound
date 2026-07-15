@@ -126,7 +126,7 @@ until the merged rule is created and active; audit every create/update/delete.
 
 ---
 
-## B. `[ ]` Rule Impact Preview — the cheap slice of the OEL sandbox
+## B. `[x]` Rule Impact Preview — the cheap slice of the OEL sandbox
 
 Admins want to know _who a rule affects_ before flipping it, without an EL interpreter
 (Okta exposes no evaluate-expression API — a true sandbox is high effort, Feature F).
@@ -142,6 +142,25 @@ access on a deactivate/edit (the scary case admins most need). No interpreter, n
   engine is exactly what A4 consumes.
 - Done when: selecting a rule shows its captured population and the access delta of
   toggling it, read-only, tests green.
+
+**Delivered** (branch `claude/high-impact-features`):
+
+- Pure, reusable population-diff engine at `shared/membership/ruleImpact.ts`
+  (`classifyGroupImpact` / `summarizeRuleImpact`) — I/O-free set math consistent with the
+  app's single-source membership-attribution heuristic (`membershipAnalysis`): a member is
+  attributed to a rule for a group when an ACTIVE rule targeting the group and not excluding
+  them is that rule; they **lose** access only if no _other_ active, non-excluding rule also
+  targets the group. `APP_GROUP` membership is application-managed and never attributed.
+  This is exactly the diff **A4** will consume.
+- Read-only capture op `useOktaApi/ruleImpact.ts::captureRuleImpact` — one rules listing +
+  one member fetch per target group over the scheduler path; **no per-member calls**, so the
+  "who loses access" answer needs no expensive user fan-out or uncertain internal endpoints.
+- UX woven into the existing Rules tab (no new tab): each `RuleCard` gains a read-only
+  **"Preview Impact"** action, and — closing a real safety gap — **deactivation is now gated**
+  behind an impact-aware confirmation (`RuleImpactModal`) that leads with the loss headline
+  before committing. State lives in the `useRuleImpact` hook.
+- Honest framing in the UI: loss is inferred from rule targets + exclusions and manual adds
+  can't always be distinguished — stated inline rather than over-claimed.
 
 ---
 

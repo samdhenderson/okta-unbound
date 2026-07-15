@@ -8,8 +8,9 @@
  * logs undo + audit entries when rules are activated or deactivated. Supports
  * deep-linking to a rule via `selectedRuleId`.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import RuleCard from './RuleCard';
+import RuleImpactModal from './RuleImpactModal';
 import PageHeader from './shared/PageHeader';
 import Button from './shared/Button';
 import AlertMessage from './shared/AlertMessage';
@@ -18,6 +19,9 @@ import EmptyState from './shared/EmptyState';
 import type { FormattedRule, AuditLogEntry } from '../../shared/types';
 import { filterRules } from '../../shared/ruleUtils';
 import { useProgress } from '../contexts/ProgressContext';
+import { useOktaApi } from '../hooks/useOktaApi';
+import { useRuleImpact } from '../hooks/useRuleImpact';
+import type { RuleImpactInput } from '../hooks/useOktaApi/ruleImpact';
 import { logAction } from '../../shared/undoManager';
 import { auditStore } from '../../shared/storage/auditStore';
 import { RulesCache } from '../../shared/rulesCache';
@@ -64,6 +68,17 @@ const RulesTab: React.FC<RulesTabProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [lastFetchTime, setLastFetchTime] = useState<string | null>(null);
   const { startProgress, updateProgress, completeProgress } = useProgress();
+
+  // Route only errors from the API surface into this tab's error banner; must be
+  // stable so useOktaApi keeps its memoized operation identities.
+  const handleApiResult = useCallback(
+    (message: string, type: 'info' | 'success' | 'warning' | 'error') => {
+      if (type === 'error') setError(message);
+    },
+    [],
+  );
+  const api = useOktaApi({ targetTabId: targetTabId ?? null, onResult: handleApiResult });
+  const impact = useRuleImpact(api.captureRuleImpact);
 
   // Load rules and state from TabStateManager on mount
   useEffect(() => {
@@ -347,7 +362,38 @@ const RulesTab: React.FC<RulesTabProps> = ({
     }
   };
 
-  const handleDeactivateRule = async (ruleId: string) => {
+  /** Build the minimal rule shape the impact preview needs. */
+  const toRuleImpactInput = (rule: FormattedRule): RuleImpactInput => ({
+    id: rule.id,
+    name: rule.name,
+    groupIds: rule.groupIds,
+    groupNames: rule.groupNames,
+  });
+
+  /** Open the read-only impact preview for a rule. */
+  const handlePreviewImpact = (rule: FormattedRule) => {
+    impact.open(toRuleImpactInput(rule), 'preview');
+  };
+
+  /**
+   * Gate deactivation behind the impact preview: instead of deactivating
+   * immediately, open the confirmation modal (which captures who loses access);
+   * `performDeactivate` runs only after the admin confirms.
+   */
+  const handleRequestDeactivate = (ruleId: string) => {
+    const rule = rules.find((r) => r.id === ruleId);
+    if (!rule) return;
+    impact.open(toRuleImpactInput(rule), 'deactivate');
+  };
+
+  /** Commit the deactivation confirmed in the impact modal. */
+  const handleConfirmDeactivate = () => {
+    const ruleId = impact.rule?.id;
+    impact.close();
+    if (ruleId) void performDeactivate(ruleId);
+  };
+
+  const performDeactivate = async (ruleId: string) => {
     if (!targetTabId) return;
 
     const startTime = Date.now();
@@ -666,7 +712,8 @@ const RulesTab: React.FC<RulesTabProps> = ({
                   <RuleCard
                     rule={rule}
                     onActivate={handleActivateRule}
-                    onDeactivate={handleDeactivateRule}
+                    onDeactivate={handleRequestDeactivate}
+                    onPreviewImpact={handlePreviewImpact}
                     oktaOrigin={oktaOrigin}
                     isHighlighted={selectedRuleId === rule.id}
                   />
@@ -676,6 +723,18 @@ const RulesTab: React.FC<RulesTabProps> = ({
           )}
         </div>
       </div>
+
+      <RuleImpactModal
+        isOpen={impact.rule !== null}
+        ruleName={impact.rule?.name ?? ''}
+        mode={impact.mode}
+        status={impact.status}
+        summary={impact.summary}
+        error={impact.error}
+        progress={impact.progress}
+        onClose={impact.close}
+        onConfirmDeactivate={handleConfirmDeactivate}
+      />
     </div>
   );
 };
