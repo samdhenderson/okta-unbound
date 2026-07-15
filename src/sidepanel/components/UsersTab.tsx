@@ -16,12 +16,11 @@ import Modal from './shared/Modal';
 import CollapsibleSection from './shared/CollapsibleSection';
 import EmptyState from './shared/EmptyState';
 import LoadingSpinner from './shared/LoadingSpinner';
-import type { OktaUser, GroupMembership } from '../../shared/types';
+import type { OktaUser } from '../../shared/types';
 import type { AlertMessageData } from './shared/AlertMessage';
-import { RulesCache } from '../../shared/rulesCache';
-import { analyzeMemberships } from '../../shared/utils/membershipAnalysis';
 import { getCustomProfileFields } from '../../shared/utils/profileFields';
 import { useUserContext } from '../hooks/useUserContext';
+import { useUserMemberships } from '../hooks/useUserMemberships';
 import { useOktaApi } from '../hooks/useOktaApi';
 import { createLogger } from '../../shared/utils/logger';
 
@@ -99,7 +98,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
   const [isLoadingMemberships, setIsLoadingMemberships] = useState(false);
   const [selectedUser, setSelectedUser] = useState<OktaUser | null>(null);
   const [searchResults, setSearchResults] = useState<OktaUser[]>([]);
-  const [memberships, setMemberships] = useState<GroupMembership[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [resultMessage, setResultMessage] = useState<AlertMessageData | null>(null);
   const [pendingLifecycleAction, setPendingLifecycleAction] = useState<LifecycleAction | null>(
@@ -125,6 +123,16 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
       targetTabId: targetTabId ?? null,
     });
 
+  // Membership loading + attribution lives in the shared hook (also used by
+  // UserOverview / user comparison). The orchestrator keeps owning the merged
+  // `error` banner and the `isLoadingMemberships` flag via the hook's callbacks,
+  // so last-write-wins across search / auto-load / lifecycle is preserved.
+  const { memberships, loadMemberships, clearMemberships } = useUserMemberships({
+    targetTabId,
+    onError: setError,
+    onLoadingChange: setIsLoadingMemberships,
+  });
+
   const handleSearch = useCallback(async () => {
     if (!targetTabId) {
       setError('No Okta tab connected');
@@ -139,7 +147,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     setIsSearching(true);
     setError(null);
     setSelectedUser(null);
-    setMemberships([]);
+    clearMemberships();
 
     try {
       log.debug('Searching for users', { queryLength: searchQuery.trim().length });
@@ -164,77 +172,13 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     } finally {
       setIsSearching(false);
     }
-  }, [targetTabId, searchQuery]);
+  }, [targetTabId, searchQuery, clearMemberships]);
 
   const handleSelectUser = async (user: OktaUser) => {
     if (!targetTabId) return;
 
     setSelectedUser(user);
-    setIsLoadingMemberships(true);
-    setError(null);
-
-    try {
-      log.debug('Loading memberships for user:', user.id);
-
-      // Fetch user's groups
-      const groupsResponse = await chrome.tabs.sendMessage(targetTabId, {
-        action: 'getUserGroups',
-        userId: user.id,
-      });
-
-      if (!groupsResponse.success) {
-        throw new Error(groupsResponse.error || 'Failed to fetch user groups');
-      }
-
-      // OPTIMIZED: Check cache for rules first
-      let rules: any[] = [];
-      const cachedRules = await RulesCache.get();
-
-      if (cachedRules) {
-        log.debug('Using cached rules from global cache');
-        rules = cachedRules.rules;
-        // No additional API call needed
-      } else {
-        // Cache miss - fetch rules
-        log.debug('Cache miss - fetching rules');
-        const rulesResponse = await chrome.tabs.sendMessage(targetTabId, {
-          action: 'fetchGroupRules',
-        });
-
-        if (!rulesResponse.success) {
-          log.warn('Could not fetch rules for analysis:', rulesResponse.error);
-        } else {
-          rules = rulesResponse.rules || [];
-          // Populate cache for future use
-          await RulesCache.set(
-            rules,
-            [],
-            rulesResponse.stats || { total: 0, active: 0, inactive: 0, conflicts: 0 },
-            rulesResponse.conflicts || [],
-          );
-        }
-      }
-
-      // Analyze memberships with improved heuristics
-      // Note: groupsResponse.data is an array of { group, membershipType, addedDate } objects
-      // We need to extract the raw groups for analysis
-      const membershipData = groupsResponse.data || [];
-      const rawGroups = membershipData.map((m: any) => m.group || m);
-      const analyzedMemberships = analyzeMemberships(rawGroups, rules, user);
-
-      setMemberships(analyzedMemberships);
-
-      log.debug('Loaded memberships:', {
-        count: analyzedMemberships.length,
-        usedCache: cachedRules !== null,
-      });
-    } catch (err: any) {
-      setError(err.message || 'Failed to load user memberships');
-      setMemberships([]);
-      log.error('Membership loading error:', err);
-    } finally {
-      setIsLoadingMemberships(false);
-    }
+    await loadMemberships(user);
   };
 
   // Live search with debouncing - trigger search as user types
@@ -305,52 +249,24 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
         const user: OktaUser = userResponse.data;
         setSelectedUser(user);
 
-        // Then fetch groups (same logic as handleSelectUser)
-        const groupsResponse = await chrome.tabs.sendMessage(targetTabId, {
-          action: 'getUserGroups',
-          userId: user.id,
-        });
-
-        if (!groupsResponse.success) {
-          throw new Error(groupsResponse.error || 'Failed to fetch user groups');
-        }
-
-        // Check cache for rules
-        let rules: any[] = [];
-        const cachedRules = await RulesCache.get();
-
-        if (cachedRules) {
-          rules = cachedRules.rules;
-        } else {
-          const rulesResponse = await chrome.tabs.sendMessage(targetTabId, {
-            action: 'fetchGroupRules',
-          });
-          if (rulesResponse.success) {
-            rules = rulesResponse.rules || [];
-            await RulesCache.set(
-              rules,
-              [],
-              rulesResponse.stats || { total: 0, active: 0, inactive: 0, conflicts: 0 },
-              rulesResponse.conflicts || [],
-            );
-          }
-        }
-
-        // Note: groupsResponse.data is an array of { group, membershipType, addedDate } objects
-        const membershipData = groupsResponse.data || [];
-        const rawGroups = membershipData.map((m: any) => m.group || m);
-        const analyzedMemberships = analyzeMemberships(rawGroups, rules, user);
-        setMemberships(analyzedMemberships);
-      } catch (err: any) {
-        setError(err.message || 'Failed to load detected user');
+        // Then load memberships (drives isLoadingMemberships/error via callbacks).
+        await loadMemberships(user);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to load detected user';
         setSelectedUser(null);
-        setMemberships([]);
-      } finally {
+        // clearMemberships() reports error=null via its callback; set the real
+        // message afterwards so it wins the merged channel (last-write-wins).
+        clearMemberships();
+        setError(message);
         setIsLoadingMemberships(false);
       }
     };
 
     autoLoadUser();
+    // loadMemberships/clearMemberships are stable (keyed off targetTabId); the
+    // guard `hasAutoLoadedUser` prevents re-entrancy, so they are intentionally
+    // omitted to keep the effect's re-run trigger to the detected user changing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userInfo?.userId, targetTabId, isLoadingUserContext, hasAutoLoadedUser]);
 
   const getStatusBadgeClass = (status: string) => {
@@ -387,7 +303,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     setSearchQuery('');
     setSearchResults([]);
     setSelectedUser(null);
-    setMemberships([]);
+    clearMemberships();
     setHasAutoLoadedUser(null);
     setError(null);
     setResultMessage(null);

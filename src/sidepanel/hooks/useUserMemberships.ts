@@ -8,7 +8,7 @@
  * Group rules are read from the shared `RulesCache` and refetched on a miss.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { OktaUser, GroupMembership, OktaGroup, FormattedRule } from '../../shared/types';
 import { RulesCache } from '../../shared/rulesCache';
 import { analyzeMemberships } from '../../shared/utils/membershipAnalysis';
@@ -20,6 +20,15 @@ const log = createLogger('useUserMemberships');
 interface UseUserMembershipsOptions {
   /** Tab whose content script fetches groups/rules; loading errors when undefined. */
   targetTabId: number | undefined;
+  /**
+   * Notified whenever the load error changes — `null` on start/success, the
+   * message on failure. Lets an orchestrator mirror this into a single merged
+   * error channel it owns (last-write-wins). Optional; consumers that read the
+   * returned `error` directly can omit it.
+   */
+  onError?: (message: string | null) => void;
+  /** Notified when a load starts (`true`) and settles (`false`). Optional. */
+  onLoadingChange?: (loading: boolean) => void;
 }
 
 /** Return shape of {@link useUserMemberships}. */
@@ -46,20 +55,37 @@ interface UseUserMembershipsReturn {
  */
 export function useUserMemberships({
   targetTabId,
+  onError,
+  onLoadingChange,
 }: UseUserMembershipsOptions): UseUserMembershipsReturn {
   const [memberships, setMemberships] = useState<GroupMembership[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Held in a ref so `loadMemberships` keeps a stable identity regardless of
+  // whether callers pass inline callbacks — the auto-load effect that depends
+  // on it must not re-run on every render.
+  const callbacksRef = useRef({ onError, onLoadingChange });
+  callbacksRef.current = { onError, onLoadingChange };
+
+  const reportError = useCallback((message: string | null) => {
+    setError(message);
+    callbacksRef.current.onError?.(message);
+  }, []);
+  const reportLoading = useCallback((loading: boolean) => {
+    setIsLoading(loading);
+    callbacksRef.current.onLoadingChange?.(loading);
+  }, []);
+
   const loadMemberships = useCallback(
     async (user: OktaUser) => {
       if (!targetTabId) {
-        setError('No Okta tab connected');
+        reportError('No Okta tab connected');
         return;
       }
 
-      setIsLoading(true);
-      setError(null);
+      reportLoading(true);
+      reportError(null);
 
       try {
         log.debug('Loading memberships for user:', user.id);
@@ -117,20 +143,20 @@ export function useUserMemberships({
           usedCache: cachedRules !== null,
         });
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load user memberships');
+        reportError(err instanceof Error ? err.message : 'Failed to load user memberships');
         setMemberships([]);
         log.error('Membership loading error:', err);
       } finally {
-        setIsLoading(false);
+        reportLoading(false);
       }
     },
-    [targetTabId],
+    [targetTabId, reportError, reportLoading],
   );
 
   const clearMemberships = useCallback(() => {
     setMemberships([]);
-    setError(null);
-  }, []);
+    reportError(null);
+  }, [reportError]);
 
   return {
     memberships,
