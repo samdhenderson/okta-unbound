@@ -1,14 +1,15 @@
 /**
  * @module shared/utils/membershipAnalysis
- * @description Group-membership attribution heuristic for the Users tab.
+ * @description Group-membership attribution heuristic — single source of truth.
  *
  * Okta's API does not directly say whether a user was placed in a group by a
  * group rule or added manually, so `analyzeMemberships` infers it. This is the
- * in-file heuristic extracted **verbatim** from `UsersTab`, preserved exactly as
- * it shipped: it does NOT consult rule exclusion lists (a separate, divergent
- * copy in `hooks/useUserMemberships.ts` does). Any change to the classification
- * behavior belongs in its own commit with the characterization assertions
- * flipped — do not "improve" it here.
+ * unified, exclusion-aware heuristic shared by `UsersTab` and
+ * `hooks/useUserMemberships.ts` (which powers `UserOverview` and the user
+ * comparison). It DOES consult rule exclusion lists: a user on the exclusion
+ * list of every rule targeting a group is treated as a manual (DIRECT) add.
+ * Any change to the classification behavior belongs in its own commit with the
+ * characterization assertions flipped — do not "improve" it here.
  */
 
 import type { OktaGroup, OktaUser, MembershipRule, GroupMembership } from '../types';
@@ -17,14 +18,26 @@ import { createLogger } from './logger';
 const log = createLogger('membershipAnalysis');
 
 /**
+ * Whether `userId` is explicitly excluded from a rule. Excluded users are not
+ * affected by the rule even if they otherwise match its conditions.
+ */
+function isUserExcludedFromRule(rule: MembershipRule, userId: string): boolean {
+  const excludedUsers = rule.conditions?.people?.users?.exclude || [];
+  return excludedUsers.includes(userId);
+}
+
+/**
  * Classify each of a user's groups as `RULE_BASED` or `DIRECT`.
  *
  * Heuristics, in order:
  * 1. `APP_GROUP`s are always application-managed → `RULE_BASED`.
- * 2. A group with no ACTIVE rule assigning it → `DIRECT`.
- * 3. Otherwise `RULE_BASED`; the attributed rule is the first ACTIVE match whose
- *    referenced user attributes appear in its condition expression (a coarse
- *    confidence check), falling back to the first ACTIVE match.
+ * 2. A group with no matching ACTIVE rule → `DIRECT`.
+ * 3. A user excluded from EVERY matching ACTIVE rule, yet still in the group →
+ *    `DIRECT` (they were added manually despite the rules).
+ * 4. Otherwise `RULE_BASED`; the attributed rule is the first non-excluding
+ *    ACTIVE match whose referenced user attributes appear in its condition
+ *    expression (a coarse confidence check), falling back to the first
+ *    non-excluding ACTIVE match.
  *
  * @param groups - The user's groups (raw Okta group objects).
  * @param rules - Candidate group rules to attribute memberships to.
@@ -76,11 +89,32 @@ export function analyzeMemberships(
       };
     }
 
+    // Check if user is excluded from ALL rules for this group.
+    // Excluded from every matching rule but still in the group = manual add.
+    const rulesWithoutExclusion = matchingRules.filter(
+      (rule) => !isUserExcludedFromRule(rule, user.id),
+    );
+
+    if (rulesWithoutExclusion.length === 0) {
+      log.debug(`Group ${group.id}: DIRECT (user excluded from all ${matchingRules.length} rules)`);
+      return {
+        group: group,
+        membershipType: 'DIRECT' as const,
+        rule: undefined,
+      };
+    }
+
+    // Log if user is excluded from some but not all rules
+    if (rulesWithoutExclusion.length < matchingRules.length) {
+      const excludedRules = matchingRules.filter((rule) => isUserExcludedFromRule(rule, user.id));
+      log.debug(`Group ${group.id}: User excluded from ${excludedRules.length} rule(s)`);
+    }
+
     // Try to evaluate which rule might have added the user
-    let bestMatchRule = matchingRules[0];
+    let bestMatchRule = rulesWithoutExclusion[0];
     let confidence = 'low';
 
-    for (const rule of matchingRules) {
+    for (const rule of rulesWithoutExclusion) {
       // Extract user attributes from rule condition
       const condition = rule.conditionExpression || rule.conditions?.expression?.value || '';
       const userAttrs = rule.userAttributes || [];

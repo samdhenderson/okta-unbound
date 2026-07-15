@@ -1,6 +1,6 @@
 /**
- * Unit tests for `analyzeMemberships`, pinning the in-file UsersTab heuristic
- * AS-IS (no rule-exclusion logic — that is the divergent useUserMemberships copy).
+ * Unit tests for `analyzeMemberships` — the unified, exclusion-aware heuristic
+ * shared by UsersTab, UserOverview, and the user comparison.
  */
 import { describe, it, expect } from 'vitest';
 import { analyzeMemberships } from './membershipAnalysis';
@@ -72,6 +72,25 @@ describe('analyzeMemberships', () => {
     const second = rule({ id: 'second' });
     const [m] = analyzeMemberships([group()], [first, second], user);
     expect(m.rule?.id).toBe('first');
+  });
+
+  it('classifies as DIRECT when the user is excluded from every matching rule', () => {
+    const excluding = rule({
+      id: 'exc',
+      conditions: { people: { users: { exclude: ['u1'] } } },
+    });
+    const [m] = analyzeMemberships([group()], [excluding], user);
+    expect(m.membershipType).toBe('DIRECT');
+    expect(m.rule).toBeUndefined();
+  });
+
+  it('stays RULE_BASED and attributes to a non-excluding rule when excluded from only some', () => {
+    const excluding = rule({ id: 'exc', conditions: { people: { users: { exclude: ['u1'] } } } });
+    const keeps = rule({ id: 'keeps' });
+    const [m] = analyzeMemberships([group()], [excluding, keeps], user);
+    expect(m.membershipType).toBe('RULE_BASED');
+    // attribution comes from the non-excluding set, not the first matching rule
+    expect(m.rule?.id).toBe('keeps');
   });
 
   it('prefers a rule whose referenced attribute value appears in its condition', () => {

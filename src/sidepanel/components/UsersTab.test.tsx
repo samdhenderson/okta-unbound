@@ -446,6 +446,23 @@ describe('membership classification (in-file heuristic)', () => {
     ).toBeInTheDocument();
   });
 
+  it('classifies an excluded user as DIRECT even when an active rule targets the group', async () => {
+    // Behavior adopted from useUserMemberships: a user on the exclusion list of
+    // every matching rule is a manual add (DIRECT), not RULE_BASED.
+    tabRoute('getUserGroups', () => ({ success: true, data: [rawGroup()] }));
+    rulesCacheGet.mockResolvedValue({
+      rules: [activeRule({ conditions: { people: { users: { exclude: ['u1'] } } } })],
+    });
+
+    render(<UsersTab targetTabId={1} />);
+    fireEvent.change(userSearchInput(), { target: { value: 'ada' } });
+    fireEvent.click(await screen.findByText('Ada Lovelace', {}, { timeout: 2000 }));
+
+    expect(await screen.findByText('Engineering')).toBeInTheDocument();
+    expect(screen.getByText('DIRECT')).toBeInTheDocument();
+    expect(screen.queryByText('Eng auto-assign')).not.toBeInTheDocument();
+  });
+
   it('CHARACTERIZED: degrades to all-DIRECT (no error) when rules cannot be fetched', async () => {
     tabRoute('getUserGroups', () => ({ success: true, data: [rawGroup()] }));
     rulesCacheGet.mockResolvedValue(null);
