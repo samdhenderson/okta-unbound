@@ -184,8 +184,10 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
     - `UserComparisonModal`'s load-effect `eslint-disable` (~L128) was load-bearing
       ONLY because of the non-memoization → likely retireable now. **Verify, don't
       assume.**
-    - `GroupOverview.tsx:67` has a ref workaround ("avoid re-triggering when
-      `useOktaApi` returns new function refs") for the same reason → likely removable.
+    - `GroupOverview.tsx:67` ref workaround — **DONE (5e60ed7).** Removed the
+      apiRef/scanMfaRef wrappers; verified `updateProgress` is `useCallback([])` so the
+      whole chain to `getAllGroupMembers`/`scanGroupMfa` is identity-stable, and added
+      `GroupOverview.test.tsx` with a no-reload-loop regression.
 - **Decision — `UserComparisonModal` is DECOMPOSE-ONLY** (behavior AND pixels
   identical). Its §3 raw-control work is the separate follow-up in §3 above.
 - **⚠️ Do NOT touch the scheduler/transport route during §7** (that is §8's behavior
