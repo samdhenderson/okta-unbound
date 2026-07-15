@@ -304,7 +304,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
           onPreviewImpact={handlePreviewImpact}
           onAddTargetGroup={consolidation.openAddTarget}
           oktaOrigin={oktaOrigin}
-          selectedRuleId={selectedRuleId}
+          selectedRuleId={activeRuleId}
         />
       </div>
 

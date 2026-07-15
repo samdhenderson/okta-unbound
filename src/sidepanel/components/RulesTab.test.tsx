@@ -31,8 +31,12 @@ vi.mock('./RuleCard', () => ({
     onActivate?: (id: string) => void;
     onDeactivate?: (id: string) => void;
     onPreviewImpact?: (rule: FormattedRule) => void;
+    isHighlighted?: boolean;
   }) => (
-    <div data-testid={`rule-${props.rule.id}`}>
+    <div
+      data-testid={`rule-${props.rule.id}`}
+      data-highlighted={String(Boolean(props.isHighlighted))}
+    >
       <span>{props.rule.name}</span>
       <button onClick={() => props.onActivate?.(props.rule.id)}>activate {props.rule.id}</button>
       <button onClick={() => props.onDeactivate?.(props.rule.id)}>
@@ -280,5 +284,29 @@ describe('RulesTab characterization', () => {
     renderTab();
     await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
     await waitFor(() => expect(screen.getByText('Okta said no')).toBeInTheDocument());
+  });
+
+  it('the merge banner "View" link highlights the rule card in the list', async () => {
+    // The two default fixtures share a condition, so they cluster in the banner.
+    renderTab();
+    await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
+    await waitFor(() => expect(screen.getByTestId('rule-r1')).toBeInTheDocument());
+    expect(screen.getByTestId('rule-r1')).toHaveAttribute('data-highlighted', 'false');
+
+    // Open the collapsed banner, then the cluster, then click View on the first rule.
+    await userEvent.click(screen.getByRole('button', { name: /duplicate-condition rules/ }));
+    await userEvent.click(screen.getByRole('button', { name: /rules → .* target group/ }));
+    // The rule name appears in both the stubbed card and the banner row; pick the
+    // banner row (inside an <li>) and click its View link.
+    const bannerRow = screen
+      .getAllByText('Engineering Rule')
+      .map((el) => el.closest('li'))
+      .find((li) => li !== null);
+    expect(bannerRow).toBeTruthy();
+    if (bannerRow) {
+      await userEvent.click(within(bannerRow).getByRole('button', { name: 'View' }));
+    }
+
+    expect(screen.getByTestId('rule-r1')).toHaveAttribute('data-highlighted', 'true');
   });
 });
