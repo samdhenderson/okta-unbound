@@ -38,6 +38,12 @@ describe('getRelativeTime', () => {
     expect(getRelativeTime(undefined)).toBeNull();
   });
 
+  it('returns null for an unparseable date (NaN guard)', () => {
+    // The UsersTab-local predecessor returned "NaN years ago" here; the shared
+    // util guards NaN and returns null so callers can fall back to a raw date.
+    expect(getRelativeTime('not-a-date')).toBeNull();
+  });
+
   it('describes relative distances from a fixed now', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-07-14T12:00:00Z'));

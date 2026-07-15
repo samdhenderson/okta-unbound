@@ -13,59 +13,17 @@ import PageHeader from './shared/PageHeader';
 import AlertMessage from './shared/AlertMessage';
 import Button from './shared/Button';
 import Modal from './shared/Modal';
-import CollapsibleSection from './shared/CollapsibleSection';
 import EmptyState from './shared/EmptyState';
 import LoadingSpinner from './shared/LoadingSpinner';
-import { GroupMembershipsList, UserSearchBar, UserSearchResults } from './users';
+import { GroupMembershipsList, UserProfileCard, UserSearchBar, UserSearchResults } from './users';
 import type { OktaUser } from '../../shared/types';
 import type { AlertMessageData } from './shared/AlertMessage';
-import { getCustomProfileFields } from '../../shared/utils/profileFields';
 import { useUserContext } from '../hooks/useUserContext';
 import { useUserMemberships } from '../hooks/useUserMemberships';
 import { useOktaApi } from '../hooks/useOktaApi';
 import { createLogger } from '../../shared/utils/logger';
 
 const log = createLogger('UsersTab');
-
-/** Formats an ISO date string as a localized date-time, or `'Never'` when absent. */
-const formatDate = (dateString: string | null | undefined): string => {
-  if (!dateString) return 'Never';
-  try {
-    const date = new Date(dateString);
-    return date.toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return dateString;
-  }
-};
-
-/**
- * Returns a coarse relative-time label (e.g. `'today'`, `'3 days ago'`,
- * `'2 months ago'`) for a date, or `null` when the input is absent/unparseable.
- */
-const getRelativeTime = (dateString: string | null | undefined): string | null => {
-  if (!dateString) return null;
-  try {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) return 'today';
-    if (diffDays === 1) return 'yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-    return `${Math.floor(diffDays / 365)} years ago`;
-  } catch {
-    return null;
-  }
-};
 
 interface UsersTabProps {
   /** Chrome tab id of the connected Okta tab; required for all user/group API calls. */
@@ -269,20 +227,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userInfo?.userId, targetTabId, isLoadingUserContext, hasAutoLoadedUser]);
 
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case 'ACTIVE':
-        return 'badge badge-success';
-      case 'DEPROVISIONED':
-        return 'badge badge-error';
-      case 'SUSPENDED':
-      case 'LOCKED_OUT':
-        return 'badge badge-warning';
-      default:
-        return 'badge badge-info';
-    }
-  };
-
   // Clear search and reset to initial state
   const handleClearSearch = () => {
     setSearchQuery('');
@@ -436,20 +380,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
         badge={
           selectedUser ? { text: `${memberships.length} Groups`, variant: 'primary' } : undefined
         }
-        actions={
-          oktaOrigin && selectedUser ? (
-            <Button
-              variant="primary"
-              icon="link"
-              onClick={() =>
-                window.open(`${oktaOrigin}/admin/user/profile/view/${selectedUser.id}`, '_blank')
-              }
-              title="Open user in Okta Admin"
-            >
-              Open in Okta
-            </Button>
-          ) : undefined
-        }
       />
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
@@ -512,131 +442,61 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
         {/* Selected User Details - Positioned directly under search */}
         {selectedUser && (
           <div className="space-y-6 animate-in slide-in-from-top-4 duration-500">
-            {/* Premium User ID Card */}
-            <div className="bg-white rounded-md border border-neutral-200 overflow-hidden">
-              <div className="p-6">
-                <div className="flex items-start gap-5">
-                  {/* Avatar */}
-                  <div className="shrink-0 w-16 h-16 rounded-full bg-primary flex items-center justify-center text-white text-xl font-bold ring-4 ring-primary-highlight">
-                    {selectedUser.profile.firstName?.[0]?.toUpperCase() || '?'}
-                    {selectedUser.profile.lastName?.[0]?.toUpperCase() || ''}
-                  </div>
-
-                  {/* User Info */}
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-xl font-bold text-neutral-900 mb-1">
-                      {selectedUser.profile.firstName} {selectedUser.profile.lastName}
-                    </h2>
-                    {(selectedUser.profile.title || selectedUser.profile.department) && (
-                      <div className="text-sm text-neutral-600 mb-2 flex items-center gap-2">
-                        {selectedUser.profile.title && <span>{selectedUser.profile.title}</span>}
-                        {selectedUser.profile.title && selectedUser.profile.department && (
-                          <span className="text-neutral-400">•</span>
-                        )}
-                        {selectedUser.profile.department && (
-                          <span>{selectedUser.profile.department}</span>
-                        )}
-                      </div>
-                    )}
-                    <div className="text-sm text-neutral-700 mb-1">
-                      {selectedUser.profile.email}
+            <UserProfileCard
+              user={selectedUser}
+              groupCount={memberships.length}
+              oktaOrigin={oktaOrigin}
+              afterCard={
+                selectedUser.status !== 'DEPROVISIONED' ? (
+                  <div className="bg-white rounded-md border border-neutral-200 px-5 py-4">
+                    <h3 className="text-xs font-semibold text-neutral-600 uppercase tracking-wide mb-3">
+                      Lifecycle Actions
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedUser.status === 'ACTIVE' && (
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          disabled={isLifecycleLoading}
+                          onClick={() => setPendingLifecycleAction('suspend')}
+                        >
+                          Suspend User
+                        </Button>
+                      )}
+                      {selectedUser.status === 'SUSPENDED' && (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          disabled={isLifecycleLoading}
+                          onClick={() => setPendingLifecycleAction('unsuspend')}
+                        >
+                          Unsuspend User
+                        </Button>
+                      )}
+                      {(selectedUser.status === 'ACTIVE' ||
+                        selectedUser.status === 'RECOVERY' ||
+                        selectedUser.status === 'LOCKED_OUT' ||
+                        selectedUser.status === 'PASSWORD_EXPIRED') && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={isLifecycleLoading}
+                          onClick={() => setPendingLifecycleAction('resetPassword')}
+                        >
+                          Reset Password
+                        </Button>
+                      )}
                     </div>
-                    {selectedUser.profile.genderPronouns && (
-                      <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-neutral-50 text-neutral-700 text-xs font-medium rounded-md border border-neutral-200 mt-2">
-                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                          <path
-                            fillRule="evenodd"
-                            d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        {selectedUser.profile.genderPronouns}
-                      </div>
-                    )}
                   </div>
-
-                  {/* Status Badge */}
-                  <div className="shrink-0">
-                    <span className={getStatusBadgeClass(selectedUser.status)}>
-                      {selectedUser.status}
-                    </span>
+                ) : (
+                  <div className="px-5 py-3 bg-neutral-50 rounded-md border border-neutral-200">
+                    <p className="text-xs text-neutral-500">
+                      No lifecycle actions are available for deprovisioned users.
+                    </p>
                   </div>
-                </div>
-              </div>
-
-              {/* Metadata */}
-              <div className="px-6 py-4 bg-neutral-50 border-t border-neutral-200 grid grid-cols-3 gap-4 text-sm">
-                <div className="flex flex-col">
-                  <span className="text-xs font-semibold text-neutral-600 mb-1">Last Login</span>
-                  <span className="text-neutral-900 font-medium">
-                    {selectedUser.lastLogin
-                      ? getRelativeTime(selectedUser.lastLogin) ||
-                        formatDate(selectedUser.lastLogin)
-                      : 'Never'}
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-xs font-semibold text-neutral-600 mb-1">Created</span>
-                  <span className="text-neutral-900 font-medium">
-                    {getRelativeTime(selectedUser.created) || formatDate(selectedUser.created)}
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-xs font-semibold text-neutral-600 mb-1">Groups</span>
-                  <span className="text-neutral-900 font-medium">{memberships.length}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Lifecycle Actions */}
-            {selectedUser.status !== 'DEPROVISIONED' ? (
-              <div className="bg-white rounded-md border border-neutral-200 px-5 py-4">
-                <h3 className="text-xs font-semibold text-neutral-600 uppercase tracking-wide mb-3">
-                  Lifecycle Actions
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {selectedUser.status === 'ACTIVE' && (
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      disabled={isLifecycleLoading}
-                      onClick={() => setPendingLifecycleAction('suspend')}
-                    >
-                      Suspend User
-                    </Button>
-                  )}
-                  {selectedUser.status === 'SUSPENDED' && (
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      disabled={isLifecycleLoading}
-                      onClick={() => setPendingLifecycleAction('unsuspend')}
-                    >
-                      Unsuspend User
-                    </Button>
-                  )}
-                  {(selectedUser.status === 'ACTIVE' ||
-                    selectedUser.status === 'RECOVERY' ||
-                    selectedUser.status === 'LOCKED_OUT' ||
-                    selectedUser.status === 'PASSWORD_EXPIRED') && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      disabled={isLifecycleLoading}
-                      onClick={() => setPendingLifecycleAction('resetPassword')}
-                    >
-                      Reset Password
-                    </Button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="px-5 py-3 bg-neutral-50 rounded-md border border-neutral-200">
-                <p className="text-xs text-neutral-500">
-                  No lifecycle actions are available for deprovisioned users.
-                </p>
-              </div>
-            )}
+                )
+              }
+            />
 
             {/* Confirmation modal for lifecycle actions */}
             <Modal
@@ -700,287 +560,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                 )}
               </p>
             </Modal>
-
-            {/* Collapsible Details Sections */}
-            <div className="space-y-4">
-              {/* Account Details */}
-              <CollapsibleSection title="Account Details" defaultOpen={false}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                  <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">Login</span>
-                    <span className="text-sm text-neutral-900 block">
-                      {selectedUser.profile.login}
-                    </span>
-                  </div>
-                  <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                      User ID
-                    </span>
-                    <span className="text-xs font-mono bg-neutral-100 px-1.5 py-0.5 rounded select-all">
-                      {selectedUser.id}
-                    </span>
-                  </div>
-                  {selectedUser.profile.secondEmail && (
-                    <div className="p-3 bg-white rounded-md border border-neutral-200">
-                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                        Secondary Email
-                      </span>
-                      <span className="text-sm text-neutral-900 block">
-                        {selectedUser.profile.secondEmail}
-                      </span>
-                    </div>
-                  )}
-                  {selectedUser.activated && (
-                    <div className="p-3 bg-white rounded-md border border-neutral-200">
-                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                        Activated
-                      </span>
-                      <span className="text-sm text-neutral-900 block">
-                        {formatDate(selectedUser.activated)}
-                      </span>
-                    </div>
-                  )}
-                  {selectedUser.statusChanged && (
-                    <div className="p-3 bg-white rounded-md border border-neutral-200">
-                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                        Status Changed
-                      </span>
-                      <span className="text-sm text-neutral-900 block">
-                        {formatDate(selectedUser.statusChanged)}
-                      </span>
-                    </div>
-                  )}
-                  {selectedUser.passwordChanged && (
-                    <div className="p-3 bg-white rounded-md border border-neutral-200">
-                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                        Password Changed
-                      </span>
-                      <span className="text-sm text-neutral-900 block">
-                        {formatDate(selectedUser.passwordChanged)}
-                      </span>
-                    </div>
-                  )}
-                  {selectedUser.lastUpdated && (
-                    <div className="p-3 bg-white rounded-md border border-neutral-200">
-                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                        Profile Updated
-                      </span>
-                      <span className="text-sm text-neutral-900 block">
-                        {formatDate(selectedUser.lastUpdated)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </CollapsibleSection>
-
-              {/* Organization - only show if any org fields exist */}
-              {(selectedUser.profile.title ||
-                selectedUser.profile.department ||
-                selectedUser.profile.division ||
-                selectedUser.profile.organization ||
-                selectedUser.profile.manager ||
-                selectedUser.profile.costCenter ||
-                selectedUser.profile.employeeNumber ||
-                selectedUser.profile.userType) && (
-                <CollapsibleSection title="Organization" defaultOpen={false}>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                    {selectedUser.profile.title && (
-                      <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                          Title
-                        </span>
-                        <span className="text-sm text-neutral-900 block">
-                          {selectedUser.profile.title}
-                        </span>
-                      </div>
-                    )}
-                    {selectedUser.profile.department && (
-                      <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                          Department
-                        </span>
-                        <span className="text-sm text-neutral-900 block">
-                          {selectedUser.profile.department}
-                        </span>
-                      </div>
-                    )}
-                    {selectedUser.profile.division && (
-                      <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                          Division
-                        </span>
-                        <span className="text-sm text-neutral-900 block">
-                          {selectedUser.profile.division}
-                        </span>
-                      </div>
-                    )}
-                    {selectedUser.profile.organization && (
-                      <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                          Organization
-                        </span>
-                        <span className="text-sm text-neutral-900 block">
-                          {selectedUser.profile.organization}
-                        </span>
-                      </div>
-                    )}
-                    {selectedUser.profile.manager && (
-                      <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                          Manager
-                        </span>
-                        <span className="text-sm text-neutral-900 block">
-                          {selectedUser.profile.manager}
-                        </span>
-                      </div>
-                    )}
-                    {selectedUser.profile.costCenter && (
-                      <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                          Cost Center
-                        </span>
-                        <span className="text-sm text-neutral-900 block">
-                          {selectedUser.profile.costCenter}
-                        </span>
-                      </div>
-                    )}
-                    {selectedUser.profile.employeeNumber && (
-                      <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                          Employee #
-                        </span>
-                        <span className="text-sm text-neutral-900 block">
-                          {selectedUser.profile.employeeNumber}
-                        </span>
-                      </div>
-                    )}
-                    {selectedUser.profile.userType && (
-                      <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                          User Type
-                        </span>
-                        <span className="text-sm text-neutral-900 block">
-                          {selectedUser.profile.userType}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </CollapsibleSection>
-              )}
-
-              {/* Contact - only show if any contact fields exist */}
-              {(selectedUser.profile.mobilePhone ||
-                selectedUser.profile.primaryPhone ||
-                selectedUser.profile.streetAddress ||
-                selectedUser.profile.city ||
-                selectedUser.profile.state ||
-                selectedUser.profile.zipCode ||
-                selectedUser.profile.countryCode) && (
-                <CollapsibleSection title="Contact" defaultOpen={false}>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                    {selectedUser.profile.primaryPhone && (
-                      <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                          Phone
-                        </span>
-                        <span className="text-sm text-neutral-900 block">
-                          {selectedUser.profile.primaryPhone}
-                        </span>
-                      </div>
-                    )}
-                    {selectedUser.profile.mobilePhone && (
-                      <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                          Mobile
-                        </span>
-                        <span className="text-sm text-neutral-900 block">
-                          {selectedUser.profile.mobilePhone}
-                        </span>
-                      </div>
-                    )}
-                    {(selectedUser.profile.streetAddress ||
-                      selectedUser.profile.city ||
-                      selectedUser.profile.state) && (
-                      <div className="p-3 bg-white rounded-md border border-neutral-200 md:col-span-2">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                          Location
-                        </span>
-                        <span className="text-sm text-neutral-900 block">
-                          {[
-                            selectedUser.profile.streetAddress,
-                            selectedUser.profile.city,
-                            selectedUser.profile.state,
-                            selectedUser.profile.zipCode,
-                            selectedUser.profile.countryCode,
-                          ]
-                            .filter(Boolean)
-                            .join(', ')}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </CollapsibleSection>
-              )}
-
-              {/* Preferences - only show if any exist */}
-              {(selectedUser.profile.locale || selectedUser.profile.timezone) && (
-                <CollapsibleSection title="Preferences" defaultOpen={false}>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                    {selectedUser.profile.locale && (
-                      <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                          Locale
-                        </span>
-                        <span className="text-sm text-neutral-900 block">
-                          {selectedUser.profile.locale}
-                        </span>
-                      </div>
-                    )}
-                    {selectedUser.profile.timezone && (
-                      <div className="p-3 bg-white rounded-md border border-neutral-200">
-                        <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                          Timezone
-                        </span>
-                        <span className="text-sm text-neutral-900 block">
-                          {selectedUser.profile.timezone}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </CollapsibleSection>
-              )}
-
-              {/* Custom Attributes - show any non-standard profile fields */}
-              {(() => {
-                const customFields = getCustomProfileFields(selectedUser.profile);
-
-                if (customFields.length === 0) return null;
-
-                return (
-                  <CollapsibleSection
-                    title="Custom Attributes"
-                    defaultOpen={false}
-                    itemCount={customFields.length}
-                  >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                      {customFields.map(([key, value]) => (
-                        <div
-                          className="p-3 bg-white rounded-md border border-neutral-200"
-                          key={key}
-                        >
-                          <span className="text-xs font-semibold text-neutral-600 mb-1 block">
-                            {key}
-                          </span>
-                          <span className="text-sm text-neutral-900 block">
-                            {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </CollapsibleSection>
-                );
-              })()}
-            </div>
 
             {/* Group Memberships */}
             <GroupMembershipsList
