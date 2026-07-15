@@ -8,7 +8,7 @@
  * flow, and per-group membership attribution (rule-based vs. direct) computed by
  * `analyzeMemberships`. Security-sensitive profile fields are never shown.
  */
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import PageHeader from './shared/PageHeader';
 import AlertMessage from './shared/AlertMessage';
 import Button from './shared/Button';
@@ -23,7 +23,7 @@ import { useUserMemberships } from '../hooks/useUserMemberships';
 import { useUsersTabSearch } from '../hooks/useUsersTabSearch';
 import { useDetectedUserAutoLoad } from '../hooks/useDetectedUserAutoLoad';
 import { useUserLifecycleActions } from '../hooks/useUserLifecycleActions';
-import { useOktaApi } from '../hooks/useOktaApi';
+import { useAddToGroup } from '../hooks/useAddToGroup';
 
 interface UsersTabProps {
   /** Chrome tab id of the connected Okta tab; required for all user/group API calls. */
@@ -32,14 +32,6 @@ interface UsersTabProps {
   currentGroupId?: string;
   /** Navigates to the Rules tab and deep-links to the rule that added a membership. */
   onNavigateToRule?: (ruleId: string) => void;
-}
-
-/** Shape returned by `searchGroups` in `groupDiscovery.ts` for the Add-to-Group flow. */
-interface GroupSearchResult {
-  id: string;
-  name: string;
-  description: string;
-  type: string;
 }
 
 /**
@@ -53,20 +45,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
   const [selectedUser, setSelectedUser] = useState<OktaUser | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resultMessage, setResultMessage] = useState<AlertMessageData | null>(null);
-
-  // Add to Group modal state
-  const [isAddToGroupModalOpen, setIsAddToGroupModalOpen] = useState(false);
-  const [groupSearchQuery, setGroupSearchQuery] = useState('');
-  const [groupSearchResults, setGroupSearchResults] = useState<GroupSearchResult[]>([]);
-  const [isSearchingGroups, setIsSearchingGroups] = useState(false);
-  const [selectedGroup, setSelectedGroup] = useState<GroupSearchResult | null>(null);
-  const [isAddingToGroup, setIsAddingToGroup] = useState(false);
-  const [showGroupDropdown, setShowGroupDropdown] = useState(false);
-  const groupDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const { searchGroups, addUserToGroup } = useOktaApi({
-    targetTabId: targetTabId ?? null,
-  });
 
   // Membership loading + attribution lives in the shared hook (also used by
   // UserOverview / user comparison). The orchestrator keeps owning the merged
@@ -90,12 +68,15 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
   const { searchQuery, setSearchQuery, searchResults, setSearchResults, isSearching } =
     useUsersTabSearch({ targetTabId, onError: setError, onSearchStart });
 
-  const handleSelectUser = async (user: OktaUser) => {
-    if (!targetTabId) return;
+  const handleSelectUser = useCallback(
+    async (user: OktaUser) => {
+      if (!targetTabId) return;
 
-    setSelectedUser(user);
-    await loadMemberships(user);
-  };
+      setSelectedUser(user);
+      await loadMemberships(user);
+    },
+    [targetTabId, loadMemberships],
+  );
 
   // Auto-load the user detected on the page. The raw `getUserDetails` read path (a
   // §8-preserved scheduler bypass) lives in the hook; every orchestrator write goes
@@ -147,89 +128,29 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     onUserStatusRefresh,
   });
 
-  // Debounced group search for the Add to Group modal
-  useEffect(() => {
-    if (groupDebounceTimerRef.current) {
-      clearTimeout(groupDebounceTimerRef.current);
-    }
-
-    if (groupSearchQuery.trim().length < 2) {
-      setGroupSearchResults([]);
-      setShowGroupDropdown(false);
-      return;
-    }
-
-    groupDebounceTimerRef.current = setTimeout(async () => {
-      setIsSearchingGroups(true);
-      try {
-        const results = await searchGroups(groupSearchQuery.trim());
-        setGroupSearchResults(results);
-        setShowGroupDropdown(results.length > 0);
-      } catch {
-        setGroupSearchResults([]);
-        setShowGroupDropdown(false);
-      } finally {
-        setIsSearchingGroups(false);
-      }
-    }, 300);
-
-    return () => {
-      if (groupDebounceTimerRef.current) {
-        clearTimeout(groupDebounceTimerRef.current);
-      }
-    };
-  }, [groupSearchQuery, searchGroups]);
-
-  const handleOpenAddToGroupModal = () => {
-    setGroupSearchQuery('');
-    setGroupSearchResults([]);
-    setSelectedGroup(null);
-    setShowGroupDropdown(false);
-    setIsAddToGroupModalOpen(true);
-  };
-
-  const handleCloseAddToGroupModal = () => {
-    setIsAddToGroupModalOpen(false);
-    setGroupSearchQuery('');
-    setGroupSearchResults([]);
-    setSelectedGroup(null);
-    setShowGroupDropdown(false);
-  };
-
-  const handleConfirmAddToGroup = async () => {
-    if (!selectedUser || !selectedGroup) return;
-
-    setIsAddingToGroup(true);
-    try {
-      const result = await addUserToGroup(selectedGroup.id, selectedGroup.name, {
-        id: selectedUser.id,
-        profile: {
-          login: selectedUser.profile.login,
-          firstName: selectedUser.profile.firstName,
-          lastName: selectedUser.profile.lastName,
-          email: selectedUser.profile.email,
-        },
-      });
-
-      if (result.success) {
-        handleCloseAddToGroupModal();
-        // Refresh memberships so the new group appears immediately
-        await handleSelectUser(selectedUser);
-      } else {
-        setResultMessage({
-          text: result.error || 'Failed to add user to group. Please try again.',
-          type: 'danger',
-        });
-        handleCloseAddToGroupModal();
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
-      setResultMessage({ text: message, type: 'danger' });
-      handleCloseAddToGroupModal();
-    } finally {
-      setIsAddingToGroup(false);
-    }
-  };
+  // Add-to-Group modal: debounced group type-ahead + the add itself. The hook owns
+  // its own scheduler slice; on success it refreshes memberships via handleSelectUser
+  // and reports failures through the tab's result banner.
+  const {
+    isOpen: isAddToGroupModalOpen,
+    groupSearchQuery,
+    setGroupSearchQuery,
+    groupSearchResults,
+    isSearchingGroups,
+    showGroupDropdown,
+    selectedGroup,
+    selectGroup,
+    clearSelectedGroup,
+    isAddingToGroup,
+    openModal: handleOpenAddToGroupModal,
+    closeModal: handleCloseAddToGroupModal,
+    confirmAddToGroup: handleConfirmAddToGroup,
+  } = useAddToGroup({
+    targetTabId,
+    selectedUser,
+    onResult: setResultMessage,
+    onAdded: handleSelectUser,
+  });
 
   return (
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
@@ -498,11 +419,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                 {groupSearchResults.map((group) => (
                   <button
                     key={group.id}
-                    onClick={() => {
-                      setSelectedGroup(group);
-                      setShowGroupDropdown(false);
-                      setGroupSearchQuery('');
-                    }}
+                    onClick={() => selectGroup(group)}
                     className="w-full text-left px-3 py-2 hover:bg-neutral-50 border-b border-neutral-100 last:border-0"
                   >
                     <div className="text-sm font-medium text-neutral-900">{group.name}</div>
@@ -520,14 +437,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                 <div className="text-sm font-medium text-neutral-900">{selectedGroup.name}</div>
                 <div className="text-xs text-neutral-500">{selectedGroup.type}</div>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSelectedGroup(null);
-                  setGroupSearchQuery('');
-                }}
-              >
+              <Button variant="ghost" size="sm" onClick={clearSelectedGroup}>
                 Clear
               </Button>
             </div>
