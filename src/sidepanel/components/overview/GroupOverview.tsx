@@ -7,7 +7,7 @@
  * bulk operations (remove deprovisioned, export) plus the in-group
  * {@link MemberExplorer} (search, composition reports, MFA scan).
  */
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useOktaApi } from '../../hooks/useOktaApi';
 import { useProgress } from '../../contexts/ProgressContext';
 import AlertMessage from '../shared/AlertMessage';
@@ -83,12 +83,6 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
     onProgress: handleProgress,
   });
 
-  // Use ref to avoid re-triggering the effect when useOktaApi returns new function refs
-  const apiRef = useRef(getAllGroupMembers);
-  apiRef.current = getAllGroupMembers;
-  const scanMfaRef = useRef(scanGroupMfa);
-  scanMfaRef.current = scanGroupMfa;
-
   const loadMembers = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -96,14 +90,14 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
     setMfaResults(null);
     setScanStatus('idle');
     try {
-      const result = await apiRef.current(groupId);
+      const result = await getAllGroupMembers(groupId);
       setMembers(result || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load members');
     } finally {
       setIsLoading(false);
     }
-  }, [groupId]);
+  }, [groupId, getAllGroupMembers]);
 
   useEffect(() => {
     loadMembers();
@@ -151,7 +145,7 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
     setScanStatus('scanning');
     startProgress('MFA Scan', `Scanning factors for ${members.length} members...`, members.length);
     try {
-      const result = await scanMfaRef.current(
+      const result = await scanGroupMfa(
         members.map((m) => m.id),
         (current, total) =>
           updateProgress(current, total, `Scanned ${current}/${total} members`, current),
@@ -164,7 +158,7 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
     } finally {
       completeProgress();
     }
-  }, [members, startProgress, updateProgress, completeProgress]);
+  }, [members, scanGroupMfa, startProgress, updateProgress, completeProgress]);
 
   const requestMfaConfirm = useCallback(() => setScanStatus('confirming'), []);
   const cancelMfaConfirm = useCallback(() => setScanStatus('idle'), []);
