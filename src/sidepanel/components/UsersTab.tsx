@@ -21,10 +21,8 @@ import type { AlertMessageData } from './shared/AlertMessage';
 import { useUserContext } from '../hooks/useUserContext';
 import { useUserMemberships } from '../hooks/useUserMemberships';
 import { useUsersTabSearch } from '../hooks/useUsersTabSearch';
+import { useDetectedUserAutoLoad } from '../hooks/useDetectedUserAutoLoad';
 import { useOktaApi } from '../hooks/useOktaApi';
-import { createLogger } from '../../shared/utils/logger';
-
-const log = createLogger('UsersTab');
 
 interface UsersTabProps {
   /** Chrome tab id of the connected Okta tab; required for all user/group API calls. */
@@ -61,7 +59,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     null,
   );
   const [isLifecycleLoading, setIsLifecycleLoading] = useState(false);
-  const [hasAutoLoadedUser, setHasAutoLoadedUser] = useState<string | null>(null);
 
   // Add to Group modal state
   const [isAddToGroupModalOpen, setIsAddToGroupModalOpen] = useState(false);
@@ -107,61 +104,25 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     await loadMemberships(user);
   };
 
-  // Auto-load detected user from page context
-  useEffect(() => {
-    if (!targetTabId || isLoadingUserContext) return;
-    if (!userInfo?.userId) {
-      // Not on a user page - reset auto-load state
-      if (hasAutoLoadedUser) {
-        setHasAutoLoadedUser(null);
-      }
-      return;
-    }
+  // Auto-load the user detected on the page. The raw `getUserDetails` read path (a
+  // §8-preserved scheduler bypass) lives in the hook; every orchestrator write goes
+  // through these callbacks so the load fires exactly once per detected id.
+  const onResetSearch = useCallback(() => {
+    setSearchResults([]);
+    setSearchQuery('');
+  }, [setSearchResults, setSearchQuery]);
 
-    // Only auto-load if we haven't already loaded this user
-    if (hasAutoLoadedUser === userInfo.userId) return;
-
-    const autoLoadUser = async () => {
-      log.debug('Auto-loading detected user:', userInfo.userId);
-      setHasAutoLoadedUser(userInfo.userId);
-      setIsLoadingMemberships(true);
-      setError(null);
-      setSearchResults([]); // Clear search results when auto-loading
-      setSearchQuery(''); // Clear search query
-
-      try {
-        // First fetch user details
-        const userResponse = await chrome.tabs.sendMessage(targetTabId, {
-          action: 'getUserDetails',
-          userId: userInfo.userId,
-        });
-
-        if (!userResponse.success) {
-          throw new Error(userResponse.error || 'Failed to fetch user details');
-        }
-
-        const user: OktaUser = userResponse.data;
-        setSelectedUser(user);
-
-        // Then load memberships (drives isLoadingMemberships/error via callbacks).
-        await loadMemberships(user);
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Failed to load detected user';
-        setSelectedUser(null);
-        // clearMemberships() reports error=null via its callback; set the real
-        // message afterwards so it wins the merged channel (last-write-wins).
-        clearMemberships();
-        setError(message);
-        setIsLoadingMemberships(false);
-      }
-    };
-
-    autoLoadUser();
-    // loadMemberships/clearMemberships are stable (keyed off targetTabId); the
-    // guard `hasAutoLoadedUser` prevents re-entrancy, so they are intentionally
-    // omitted to keep the effect's re-run trigger to the detected user changing.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userInfo?.userId, targetTabId, isLoadingUserContext, hasAutoLoadedUser]);
+  const { resetAutoLoad } = useDetectedUserAutoLoad({
+    targetTabId,
+    detectedUserId: userInfo?.userId,
+    isLoadingUserContext,
+    loadMemberships,
+    clearMemberships,
+    onSelectUser: setSelectedUser,
+    onError: setError,
+    onLoadingChange: setIsLoadingMemberships,
+    onResetSearch,
+  });
 
   // Clear search and reset to initial state
   const handleClearSearch = () => {
@@ -169,7 +130,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     setSearchResults([]);
     setSelectedUser(null);
     clearMemberships();
-    setHasAutoLoadedUser(null);
+    resetAutoLoad();
     setError(null);
     setResultMessage(null);
   };

@@ -112,12 +112,12 @@ export default [
       'src/sidepanel/hooks/useOktaTabContext.ts',
       'src/sidepanel/hooks/useUserSearch.ts',
       'src/sidepanel/hooks/useUsersTabSearch.ts',
+      'src/sidepanel/hooks/useDetectedUserAutoLoad.ts',
       'src/sidepanel/hooks/useUserMemberships.ts',
       'src/sidepanel/components/overview/UserOverview.tsx',
       // GroupsTab's live search moved into this hook during its §7 decomposition;
       // the bypass itself is untouched and still migrates in §8.
       'src/sidepanel/hooks/useGroupLiveSearch.ts',
-      'src/sidepanel/components/UsersTab.tsx',
       'src/sidepanel/components/RulesTab.tsx',
     ],
     rules: {
