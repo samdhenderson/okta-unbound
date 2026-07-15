@@ -22,6 +22,7 @@ import { useUserContext } from '../hooks/useUserContext';
 import { useUserMemberships } from '../hooks/useUserMemberships';
 import { useUsersTabSearch } from '../hooks/useUsersTabSearch';
 import { useDetectedUserAutoLoad } from '../hooks/useDetectedUserAutoLoad';
+import { useUserLifecycleActions } from '../hooks/useUserLifecycleActions';
 import { useOktaApi } from '../hooks/useOktaApi';
 
 interface UsersTabProps {
@@ -32,9 +33,6 @@ interface UsersTabProps {
   /** Navigates to the Rules tab and deep-links to the rule that added a membership. */
   onNavigateToRule?: (ruleId: string) => void;
 }
-
-/** User lifecycle operation triggered from the profile card. */
-type LifecycleAction = 'suspend' | 'unsuspend' | 'resetPassword';
 
 /** Shape returned by `searchGroups` in `groupDiscovery.ts` for the Add-to-Group flow. */
 interface GroupSearchResult {
@@ -55,10 +53,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
   const [selectedUser, setSelectedUser] = useState<OktaUser | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resultMessage, setResultMessage] = useState<AlertMessageData | null>(null);
-  const [pendingLifecycleAction, setPendingLifecycleAction] = useState<LifecycleAction | null>(
-    null,
-  );
-  const [isLifecycleLoading, setIsLifecycleLoading] = useState(false);
 
   // Add to Group modal state
   const [isAddToGroupModalOpen, setIsAddToGroupModalOpen] = useState(false);
@@ -70,10 +64,9 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
   const [showGroupDropdown, setShowGroupDropdown] = useState(false);
   const groupDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { suspendUser, unsuspendUser, resetPassword, getUserById, searchGroups, addUserToGroup } =
-    useOktaApi({
-      targetTabId: targetTabId ?? null,
-    });
+  const { searchGroups, addUserToGroup } = useOktaApi({
+    targetTabId: targetTabId ?? null,
+  });
 
   // Membership loading + attribution lives in the shared hook (also used by
   // UserOverview / user comparison). The orchestrator keeps owning the merged
@@ -135,55 +128,24 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     setResultMessage(null);
   };
 
-  const handleLifecycleAction = async () => {
-    if (!selectedUser || !pendingLifecycleAction) return;
+  // Lifecycle actions (suspend / unsuspend / reset password) behind the confirm
+  // modal. The hook owns its own scheduler slice; the orchestrator keeps the result
+  // banner and patches the selected user's status in place after a refresh.
+  const onUserStatusRefresh = useCallback((status: OktaUser['status']) => {
+    setSelectedUser((prev) => (prev ? { ...prev, status } : prev));
+  }, []);
 
-    // Capture before clearing so success message lookup still works
-    const action = pendingLifecycleAction;
-    setIsLifecycleLoading(true);
-    setPendingLifecycleAction(null);
-
-    try {
-      let result: { success: boolean; error?: string };
-
-      if (action === 'suspend') {
-        result = await suspendUser(selectedUser.id);
-      } else if (action === 'unsuspend') {
-        result = await unsuspendUser(selectedUser.id);
-      } else {
-        result = await resetPassword(selectedUser.id);
-      }
-
-      if (result.success) {
-        const successMessages: Record<LifecycleAction, string> = {
-          suspend: 'User suspended successfully. They can no longer sign in.',
-          unsuspend: 'User unsuspended successfully. They can now sign in.',
-          resetPassword: 'Password reset email sent successfully.',
-        };
-        setResultMessage({ text: successMessages[action], type: 'success' });
-
-        // Refresh user status cheaply without reloading memberships
-        if (action !== 'resetPassword') {
-          const refreshed = await getUserById(selectedUser.id);
-          if (refreshed) {
-            setSelectedUser((prev) =>
-              prev ? { ...prev, status: refreshed.status as OktaUser['status'] } : prev,
-            );
-          }
-        }
-      } else {
-        setResultMessage({
-          text: result.error || 'The operation failed. Please try again.',
-          type: 'danger',
-        });
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
-      setResultMessage({ text: message, type: 'danger' });
-    } finally {
-      setIsLifecycleLoading(false);
-    }
-  };
+  const {
+    pendingLifecycleAction,
+    setPendingLifecycleAction,
+    isLifecycleLoading,
+    confirmLifecycleAction,
+  } = useUserLifecycleActions({
+    targetTabId,
+    selectedUser,
+    onResult: setResultMessage,
+    onUserStatusRefresh,
+  });
 
   // Debounced group search for the Add to Group modal
   useEffect(() => {
@@ -419,7 +381,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
                   <Button
                     variant={pendingLifecycleAction === 'suspend' ? 'danger' : 'primary'}
                     size="sm"
-                    onClick={handleLifecycleAction}
+                    onClick={confirmLifecycleAction}
                   >
                     {pendingLifecycleAction === 'suspend'
                       ? 'Suspend'
