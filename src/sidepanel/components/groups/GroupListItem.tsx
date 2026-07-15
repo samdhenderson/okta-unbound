@@ -7,7 +7,7 @@
  * Memoised with a custom comparator so unaffected rows skip re-render in long lists.
  */
 import React, { useState, useCallback, memo } from 'react';
-import { IconButton, Checkbox } from '../shared';
+import { Button, IconButton, Checkbox } from '../shared';
 import type { GroupSummary, StalenessInfo } from '../../../shared/types';
 
 /**
@@ -43,11 +43,13 @@ interface GroupListItemProps {
   onToggleSelect: (groupId: string) => void;
   /** Okta origin, enabling the "Open in Okta" deep link when present. */
   oktaOrigin?: string;
+  /** Opens the read-only membership-source insight for this group (A2). */
+  onAnalyzeSource?: (group: GroupSummary) => void;
 }
 
 /** Memoised expandable row for one group in the groups list. */
 const GroupListItem: React.FC<GroupListItemProps> = memo(
-  ({ group, selected, onToggleSelect, oktaOrigin }) => {
+  ({ group, selected, onToggleSelect, oktaOrigin, onAnalyzeSource }) => {
     const [expanded, setExpanded] = useState(false);
     const [idCopied, setIdCopied] = useState(false);
 
@@ -297,6 +299,17 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
         {/* Expanded Details */}
         {expanded && (
           <div className="px-4 pb-4 pt-2 border-t border-neutral-100 space-y-3">
+            {onAnalyzeSource && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon="chart"
+                onClick={() => onAnalyzeSource(group)}
+              >
+                Why does this group exist?
+              </Button>
+            )}
+
             {group.description && (
               <div>
                 <div className="text-xs font-medium text-neutral-600 mb-1">Description</div>

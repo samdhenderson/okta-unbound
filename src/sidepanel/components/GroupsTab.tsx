@@ -18,6 +18,7 @@ import { useGroupLiveSearch } from '../hooks/useGroupLiveSearch';
 import { useGroupFilters } from '../hooks/useGroupFilters';
 import { useGroupSelection } from '../hooks/useGroupSelection';
 import { useGroupMembersCache } from '../hooks/useGroupMembersCache';
+import { useGroupSource } from '../hooks/useGroupSource';
 import type { GroupSummary } from '../../shared/types';
 import GroupExportModal from './groups/GroupExportModal';
 import GroupComparisonModal from './groups/GroupComparisonModal';
@@ -30,6 +31,7 @@ import GroupFilterToggle from './groups/GroupFilterToggle';
 import GroupFilterPanel from './groups/GroupFilterPanel';
 import GroupSelectionBar, { type ActivePanel } from './groups/GroupSelectionBar';
 import GroupsListPanel from './groups/GroupsListPanel';
+import GroupSourceModal from './groups/GroupSourceModal';
 import { getDateForFilename } from '../../shared/utils/csvUtils';
 
 interface GroupsTabProps {
@@ -81,6 +83,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
   });
   const selection = useGroupSelection(loader.groups);
   const membersCache = useGroupMembersCache(api, loader.groups);
+  const groupSource = useGroupSource(targetTabId ?? undefined);
 
   const { groups, loading, loadAllGroups } = loader;
   const { filteredGroups, activeFilterCount } = filters;
@@ -281,6 +284,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
             oktaOrigin={oktaOrigin}
             onLoadAllGroups={loadAllGroups}
             onClearFilters={filters.clearFilters}
+            onAnalyzeSource={groupSource.open}
           />
         </div>
       </div>
@@ -303,6 +307,18 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
         groups={selectedGroups}
         compareGroups={api.compareGroups}
         memberCache={membersCache.groupMembersCache}
+      />
+
+      {/* Membership-source insight (A2) */}
+      <GroupSourceModal
+        group={groupSource.group}
+        feedingRules={groupSource.feedingRules}
+        rulesStatus={groupSource.rulesStatus}
+        breakdown={groupSource.breakdown}
+        memberStatus={groupSource.memberStatus}
+        error={groupSource.error}
+        onClose={groupSource.close}
+        onAnalyzeMembers={groupSource.analyzeMembers}
       />
     </div>
   );

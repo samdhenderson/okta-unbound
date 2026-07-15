@@ -36,6 +36,8 @@ interface GroupsListPanelProps {
   onLoadAllGroups: () => void;
   /** Clears all filters (cached empty-state action). */
   onClearFilters: () => void;
+  /** Opens the read-only membership-source insight for a group (A2). */
+  onAnalyzeSource?: (group: GroupSummary) => void;
 }
 
 /**
@@ -56,6 +58,7 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
   oktaOrigin,
   onLoadAllGroups,
   onClearFilters,
+  onAnalyzeSource,
 }) => (
   <ScrollableList
     loading={loading}
@@ -90,6 +93,7 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
         selected={selectedGroupIds.has(group.id)}
         onToggleSelect={onToggleSelect}
         oktaOrigin={oktaOrigin}
+        onAnalyzeSource={onAnalyzeSource}
       />
     ))}
   </ScrollableList>
