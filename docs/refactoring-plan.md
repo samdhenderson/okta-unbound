@@ -86,15 +86,18 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
       vocabulary, intentionally untouched.)
 - Doc: `docs/design-system.md` / ADR-0002.
 
-### 5. `[~]` Adopt the shared utils everywhere
+### 5. `[x]` Adopt the shared utils everywhere
 
 - [x] `isOktaUrl` adopted everywhere, including the 3 context hooks (the inline
       checks were removed in the `useOktaTabContext` merge).
 - [x] `UserProfileCard` adopts `dateFormat` (`formatDateShort` added for date-only).
-- [ ] `UsersTab.tsx` inline `formatDate`/`getRelativeTime` — removed during its §7
-      decomposition. `csvUtils.formatDateForCSV` is a distinct CSV format — keep.
+- [x] `UsersTab.tsx` inline `formatDate`/`getRelativeTime` **removed** when UsersTab
+      adopted the shared `UserProfileCard` (§7). The footer now flows through the shared
+      `dateFormat` utils, so the `getRelativeTime` **NaN-guard** now applies (the old
+      local one produced `'NaN years ago'` on unparseable dates) — pinned in
+      `dateFormat.test.ts`. `csvUtils.formatDateForCSV` is a distinct CSV format — kept.
 - Doc: `docs/development.md`. Agent: `architecture-refactor`.
-- Done when: no duplicate implementations remain (UsersTab pending §7).
+- Done when: no duplicate implementations remain. ✔
 
 ### 6. `[~]` zod at the fetch boundary + `any` burndown
 
@@ -225,15 +228,25 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
       `[targetTabId]` identity and the auto-load guard holds); the orchestrator keeps owning
       the single `error` banner + `isLoadingMemberships` (last-write-wins). UsersTab 1572 →
       1333 lines, **0 `any`s**.
-- [ ] **UsersTab §7 remaining.** (a) Adopt the drifted orphan UI forks
-      (`users/{UserSearchBar,UserSearchResults,GroupMembershipsList,UserProfileCard}.tsx`) =
-      pixel change — **ui-reviewer sign-off required** (decided: adopt+reconcile), OR fresh
-      NEW subcomponents; (b) extract the remaining hooks (useUsersTabSearch /
-      useDetectedUserAutoLoad / useUserLifecycleActions / useAddToGroup) — the 6 raw
-      `chrome.tabs.sendMessage` read sites + their eslint grandfather entries carry into the
-      new hooks VERBATIM (migration is §8); (c) §5: adopt shared `formatDate`
-      (byte-identical) + `getRelativeTime` (NaN-guard behavior change on unparseable dates —
-      assert it). Goal: UsersTab under ~300 lines.
+- [~] **UsersTab §7 remaining.**
+  - [x] **(a) Adopted the four drifted orphan UI forks** (decided: adopt+reconcile), each
+        its own commit with ui-reviewer sign-off. `UserSearchResults` reconciled to
+        UsersTab's pixels (caller supplies the `!selectedUser` gate). `UserSearchBar` +
+        `GroupMembershipsList`'s open-group link now route their clear/open buttons through
+        the shared `IconButton` (best-long-term §3 wins; `UserSearchBar` docs updated).
+        `GroupMembershipsList` reconciled off its drifted non-token blue-_/amber-_ colors
+        back to Odyssey tokens + shared `LoadingSpinner`, and gained an `actions` header
+        slot for the Add-to-Group button. `UserProfileCard` (shared with UserOverview) was
+        adopted for the whole card: extended with an `afterCard` slot (holds UsersTab's
+        lifecycle actions) + ported Preferences + Custom Attributes sections
+        (UserOverview passes `showCollapsibleSections={false}`, so it is unaffected); the
+        duplicate PageHeader "Open in Okta" was removed. UsersTab 1333 → **682 lines**.
+  - [x] **(c) §5 done** — deleted UsersTab's local `formatDate`/`getRelativeTime`; the
+        card now uses the shared `dateFormat` utils (NaN-guard asserted). See §5.
+  - [ ] **(b) Extract the remaining hooks** (useUsersTabSearch / useDetectedUserAutoLoad /
+        useUserLifecycleActions / useAddToGroup) — the 6 raw `chrome.tabs.sendMessage` read
+        sites + their eslint grandfather entries carry into the new hooks VERBATIM
+        (migration is §8). Goal: UsersTab under ~300 lines.
 - Target: no component over ~300 lines.
 - Doc: `docs/state-management.md`. Agents: `test-writer` then `architecture-refactor`.
 - **Pre-computed asset:** deep per-component decomposition maps (state/effect
