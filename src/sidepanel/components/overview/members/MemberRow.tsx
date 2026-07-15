@@ -1,14 +1,27 @@
+/**
+ * @module sidepanel/components/overview/members/MemberRow
+ * @description Single member card: name, email, login, status badge, and MFA factor tags.
+ *
+ * Memoized (large lists). When an org origin is provided the whole row becomes a
+ * deep link to the member's Okta Admin Console profile. Factor tags (or a "No MFA"
+ * badge) render only once a scan has completed.
+ */
 import React from 'react';
 import type { OktaUser, MemberMfaResult } from '../../../../shared/types';
 
+/** Props for {@link MemberRow}. */
 interface MemberRowProps {
+  /** The member to render. */
   user: OktaUser;
+  /** This member's MFA scan result, if available. */
   mfa?: MemberMfaResult;
   /** True once an MFA scan has completed, so we can show "No MFA" for 0-factor users. */
   mfaScanned?: boolean;
+  /** Okta org origin; when set, the row links to the member's Admin Console profile. */
   oktaOrigin?: string | null;
 }
 
+/** Maps a user status to its badge color classes; unknown statuses fall back to neutral. */
 const statusBadge: Record<string, string> = {
   ACTIVE: 'bg-success-light text-success-text',
   DEPROVISIONED: 'bg-danger-light text-danger-text',
@@ -18,9 +31,11 @@ const statusBadge: Record<string, string> = {
   RECOVERY: 'bg-warning-light text-warning-text',
 };
 
+/** Renders one member card, optionally wrapped as an Admin Console deep link. */
 const MemberRow: React.FC<MemberRowProps> = ({ user, mfa, mfaScanned, oktaOrigin }) => {
   const badgeClass = statusBadge[user.status] || 'bg-neutral-100 text-neutral-700';
-  const fullName = `${user.profile.firstName || ''} ${user.profile.lastName || ''}`.trim() || user.profile.login;
+  const fullName =
+    `${user.profile.firstName || ''} ${user.profile.lastName || ''}`.trim() || user.profile.login;
 
   const content = (
     <div className="flex items-start justify-between gap-3">

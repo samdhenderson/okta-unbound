@@ -4,15 +4,31 @@
  */
 
 import type { CoreApi } from './core';
+import type { OktaGroup, OktaGroupRule, FormattedRule } from '../../../shared/types';
 import { RulesCache } from '../../../shared/rulesCache';
 import { parseNextLink } from './utilities';
+import { createLogger } from '../../../shared/utils/logger';
 
+const log = createLogger('useOktaApi');
+
+/**
+ * Build read-only group discovery/search operations.
+ *
+ * @param coreApi - Shared transport surface (see {@link CoreApi}).
+ * @returns Group listing, member-count, rules, search, and by-id lookups.
+ */
 export function createGroupDiscoveryOperations(coreApi: CoreApi) {
   /**
-   * Get all groups with pagination
+   * List every group, following `Link` pagination (200 per page, `expand=stats`).
+   *
+   * @param onProgress - Called after each page with the running loaded count.
+   * @returns All groups across all pages.
+   * @remarks Throws on the first failed page.
    */
-  const getAllGroups = async (onProgress?: (loaded: number, total: number) => void): Promise<any[]> => {
-    const allGroups: any[] = [];
+  const getAllGroups = async (
+    onProgress?: (loaded: number, total: number) => void,
+  ): Promise<OktaGroup[]> => {
+    const allGroups: OktaGroup[] = [];
     let nextUrl: string | null = '/api/v1/groups?limit=200&expand=stats';
 
     while (nextUrl) {
@@ -34,11 +50,18 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
   };
 
   /**
-   * Get member count for a group
+   * Approximate a group's member count from the first page of members.
+   *
+   * @param groupId - Group to size.
+   * @returns The first-page member count (max 200), or `0` on failure.
+   * @remarks Intentionally does NOT walk pagination — for groups larger than one
+   * page this returns the page size (200), i.e. a floor, not the exact total.
    */
   const getGroupMemberCount = async (groupId: string): Promise<number> => {
     try {
-      const usersResponse = await coreApi.makeApiRequest(`/api/v1/groups/${groupId}/users?limit=200`);
+      const usersResponse = await coreApi.makeApiRequest(
+        `/api/v1/groups/${groupId}/users?limit=200`,
+      );
       if (usersResponse.success && usersResponse.data) {
         const firstPageCount = usersResponse.data.length;
 
@@ -54,60 +77,72 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
 
       return 0;
     } catch (error) {
-      console.error(`[useOktaApi] Failed to get member count for group ${groupId}:`, error);
+      log.error(`Failed to get member count for group ${groupId}:`, error);
       return 0;
     }
   };
 
   /**
-   * Get group rules for a specific group
+   * Resolve the group rules that assign users to a given group.
+   *
+   * @param groupId - Group whose inbound assignment rules to find.
+   * @returns Matching rules, or `[]` on failure/none.
+   * @remarks Serves from {@link RulesCache} when populated or fresh; otherwise
+   * fetches all rules once (200 limit) and filters those targeting `groupId`.
    */
-  const getGroupRulesForGroup = async (groupId: string): Promise<any[]> => {
+  const getGroupRulesForGroup = async (
+    groupId: string,
+  ): Promise<FormattedRule[] | OktaGroupRule[]> => {
     try {
       // Check cache first
       const cachedRules = await RulesCache.getRulesForGroup(groupId);
       if (cachedRules.length > 0 || (await RulesCache.isFresh())) {
-        console.log(`[useOktaApi] Using cached rules for group ${groupId}:`, cachedRules.length);
+        log.debug(`Using cached rules for group ${groupId}:`, cachedRules.length);
         return cachedRules;
       }
 
       // Cache miss - fetch all group rules
-      console.log(`[useOktaApi] Cache miss - fetching all rules for group ${groupId}`);
+      log.debug(`Cache miss - fetching all rules for group ${groupId}`);
       const response = await coreApi.makeApiRequest('/api/v1/groups/rules?limit=200');
       if (!response.success) {
         return [];
       }
 
-      const allRules = response.data || [];
+      const allRules: OktaGroupRule[] = response.data || [];
 
       // Filter rules that target this group
-      const groupRules = allRules.filter((rule: any) => {
+      const groupRules = allRules.filter((rule) => {
         const targetGroupIds = rule.actions?.assignUserToGroups?.groupIds || [];
         return targetGroupIds.includes(groupId);
       });
 
       return groupRules;
     } catch (error) {
-      console.error(`[useOktaApi] Failed to get rules for group ${groupId}:`, error);
+      log.error(`Failed to get rules for group ${groupId}:`, error);
       return [];
     }
   };
 
   /**
-   * Search for groups by name
+   * Search groups by name via Okta's `q` query (capped at 20 results).
+   *
+   * @param query - Search text; queries shorter than 2 chars short-circuit to `[]`.
+   * @returns Lightweight `{ id, name, description, type }` records; `[]` on error.
    */
   const searchGroups = async (
-    query: string
+    query: string,
   ): Promise<Array<{ id: string; name: string; description: string; type: string }>> => {
     if (!query || query.length < 2) {
       return [];
     }
 
     try {
-      const response = await coreApi.makeApiRequest(`/api/v1/groups?q=${encodeURIComponent(query)}&limit=20`);
+      const response = await coreApi.makeApiRequest(
+        `/api/v1/groups?q=${encodeURIComponent(query)}&limit=20`,
+      );
 
       if (response.success && response.data) {
-        return response.data.map((group: any) => ({
+        return response.data.map((group: OktaGroup) => ({
           id: group.id,
           name: group.profile?.name || group.id,
           description: group.profile?.description || '',
@@ -116,16 +151,20 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
       }
       return [];
     } catch (error) {
-      console.error('[useOktaApi] searchGroups error:', error);
+      log.error('searchGroups error:', error);
       return [];
     }
   };
 
   /**
-   * Get group details by ID
+   * Fetch one group by id.
+   *
+   * @param groupId - Group id to look up.
+   * @returns A lightweight `{ id, name, description, type }` record, or `null` if
+   * not found / on error.
    */
   const getGroupById = async (
-    groupId: string
+    groupId: string,
   ): Promise<{ id: string; name: string; description: string; type: string } | null> => {
     try {
       const response = await coreApi.makeApiRequest(`/api/v1/groups/${groupId}`);
@@ -140,7 +179,7 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
       }
       return null;
     } catch (error) {
-      console.error('[useOktaApi] getGroupById error:', error);
+      log.error('getGroupById error:', error);
       return null;
     }
   };

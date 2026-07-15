@@ -1,3 +1,13 @@
+/**
+ * @module sidepanel/components/RulesTab
+ * @description Rules tab: load, search, filter, and activate/deactivate group rules.
+ *
+ * Fetches rules through the content script (using {@link RulesCache} to avoid
+ * redundant calls), persists its rules/stats/UI state and scroll position via
+ * `TabStateManager`, renders stats plus a filterable list of {@link RuleCard}s, and
+ * logs undo + audit entries when rules are activated or deactivated. Supports
+ * deep-linking to a rule via `selectedRuleId`.
+ */
 import React, { useState, useEffect } from 'react';
 import RuleCard from './RuleCard';
 import PageHeader from './shared/PageHeader';
@@ -13,23 +23,37 @@ import { auditStore } from '../../shared/storage/auditStore';
 import { RulesCache } from '../../shared/rulesCache';
 import { TabStateManager, saveRulesTabState } from '../../shared/tabState/tabStateManager';
 import type { RulesTabState } from '../../shared/tabState/types';
+import { createLogger } from '../../shared/utils/logger';
+
+const log = createLogger('RulesTab');
 
 interface RulesTabProps {
+  /** Chrome tab id of the connected Okta tab; required to fetch or mutate rules. */
   targetTabId?: number;
+  /** Id of the currently detected group; enables the "Current Group" filter. */
   currentGroupId?: string;
+  /** Okta org origin passed to each {@link RuleCard} for its "View in Okta" link. */
   oktaOrigin?: string | null;
+  /** Rule id to scroll to and highlight when navigated here from another tab. */
   selectedRuleId?: string | null;
+  /** Called once the highlighted rule has been shown, so the parent can clear it. */
   onRuleSelected?: () => void;
 }
 
+/** Client-side filter applied on top of the text search over loaded rules. */
 type FilterType = 'all' | 'active' | 'conflicts' | 'current-group';
 
+/**
+ * Renders the Rules tab: manages rule loading/caching/persistence, the search and
+ * filter controls, the stats overview, and the activate/deactivate flows (each of
+ * which records undo and audit-trail entries).
+ */
 const RulesTab: React.FC<RulesTabProps> = ({
   targetTabId,
   currentGroupId,
   oktaOrigin,
   selectedRuleId,
-  onRuleSelected
+  onRuleSelected,
 }) => {
   const [rules, setRules] = useState<FormattedRule[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -47,7 +71,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
       try {
         const savedState = await TabStateManager.loadTabState<RulesTabState>('rules');
         if (savedState) {
-          console.log('[RulesTab] Loaded persisted state from TabStateManager');
+          log.debug('Loaded persisted state from TabStateManager');
           if (savedState.cachedRules) setRules(savedState.cachedRules);
           if (savedState.cachedStats) setStats(savedState.cachedStats);
           if (savedState.lastFetchTime) setLastFetchTime(savedState.lastFetchTime);
@@ -61,7 +85,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
           }
         }
       } catch (err) {
-        console.error('[RulesTab] Failed to load persisted state:', err);
+        log.error('Failed to load persisted state:', err);
       }
     };
 
@@ -74,7 +98,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
   // Handle selectedRuleId navigation
   useEffect(() => {
     if (selectedRuleId && rules.length > 0) {
-      console.log('[RulesTab] Navigating to rule:', selectedRuleId);
+      log.debug('Navigating to rule:', selectedRuleId);
 
       // Find the rule and scroll to it
       const ruleElement = document.querySelector(`[data-rule-id="${selectedRuleId}"]`);
@@ -85,7 +109,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
           onRuleSelected?.();
         }, 2000);
       } else {
-        console.warn('[RulesTab] Rule not found in DOM:', selectedRuleId);
+        log.warn('Rule not found in DOM:', selectedRuleId);
       }
     }
   }, [selectedRuleId, rules, onRuleSelected]);
@@ -101,7 +125,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
         activeFilter,
         scrollPosition: window.scrollY,
       }).catch((err) => {
-        console.error('[RulesTab] Failed to persist state:', err);
+        log.error('Failed to persist state:', err);
       });
     }
   }, [rules, stats, lastFetchTime, searchQuery, activeFilter]);
@@ -127,7 +151,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
     setApiCost(null);
 
     try {
-      console.log('[RulesTab] Fetching rules from tab:', targetTabId);
+      log.debug('Fetching rules from tab:', targetTabId);
 
       // Start progress - we don't know total yet, so use indeterminate progress
       startProgress('Loading Rules', 'Loading group rules...', 1);
@@ -139,7 +163,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
       if (!force) {
         const cached = await RulesCache.get();
         if (cached) {
-          console.log('[RulesTab] Using cached rules from global cache');
+          log.debug('Using cached rules from global cache');
           setRules(cached.rules);
           setStats(cached.stats);
           setLastFetchTime(new Date(cached.timestamp).toISOString());
@@ -155,7 +179,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
         action: 'fetchGroupRules',
       });
 
-      console.log('[RulesTab] Received response:', response);
+      log.debug('Received response:', { success: response.success });
 
       if (response.success) {
         const rulesCount = response.rules?.length || 0;
@@ -170,7 +194,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
           response.rules || [],
           [], // rawRules not available from formatted response
           response.stats || { total: 0, active: 0, inactive: 0, conflicts: 0 },
-          response.conflicts || []
+          response.conflicts || [],
         );
 
         // Calculate actual API cost based on response metadata
@@ -178,10 +202,10 @@ const RulesTab: React.FC<RulesTabProps> = ({
         apiRequestCount = 1;
         setApiCost(apiRequestCount);
 
-        console.log('[RulesTab] Loaded rules successfully:', {
+        log.debug('Loaded rules successfully:', {
           count: response.rules?.length,
           stats: response.stats,
-          apiCost: apiRequestCount
+          apiCost: apiRequestCount,
         });
 
         // Complete progress after a short delay to show success message
@@ -190,12 +214,12 @@ const RulesTab: React.FC<RulesTabProps> = ({
         }, 1000);
       } else {
         setError(response.error || 'Failed to fetch rules');
-        console.error('[RulesTab] Error fetching rules:', response.error);
+        log.error('Error fetching rules:', response.error);
         completeProgress();
       }
     } catch (err: any) {
       setError(err.message || 'Failed to communicate with Okta tab');
-      console.error('[RulesTab] Exception:', err);
+      log.error('Exception:', err);
       completeProgress();
     } finally {
       setIsLoading(false);
@@ -209,7 +233,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
     let currentUserEmail = 'unknown@unknown.com';
 
     try {
-      console.log('[RulesTab] Activating rule:', ruleId);
+      log.debug('Activating rule:', ruleId);
 
       // Get current user for audit logging
       try {
@@ -222,11 +246,11 @@ const RulesTab: React.FC<RulesTabProps> = ({
           currentUserEmail = userResponse.data.profile?.email || 'unknown@unknown.com';
         }
       } catch (err) {
-        console.error('[RulesTab] Failed to get current user:', err);
+        log.error('Failed to get current user:', err);
       }
 
       // Find the rule to get its name for undo logging
-      const rule = rules.find(r => r.id === ruleId);
+      const rule = rules.find((r) => r.id === ruleId);
       const ruleName = rule?.name || 'Unknown Rule';
       const groupIds = rule?.groupIds || [];
       const groupNames = rule?.groupNames || [];
@@ -262,7 +286,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
           },
         };
         auditStore.logOperation(auditEntry).catch((err) => {
-          console.error('[RulesTab] Failed to log audit entry:', err);
+          log.error('Failed to log audit entry:', err);
         });
 
         // Reload rules to get updated status
@@ -289,15 +313,15 @@ const RulesTab: React.FC<RulesTabProps> = ({
           },
         };
         auditStore.logOperation(auditEntry).catch((err) => {
-          console.error('[RulesTab] Failed to log audit entry:', err);
+          log.error('Failed to log audit entry:', err);
         });
       }
     } catch (err: any) {
       setError(err.message || 'Failed to activate rule');
-      console.error('[RulesTab] Activation error:', err);
+      log.error('Activation error:', err);
 
       // Log error to audit trail
-      const rule = rules.find(r => r.id === ruleId);
+      const rule = rules.find((r) => r.id === ruleId);
       const groupIds = rule?.groupIds || [];
       const groupNames = rule?.groupNames || [];
       const auditEntry: AuditLogEntry = {
@@ -318,7 +342,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
         },
       };
       auditStore.logOperation(auditEntry).catch((e) => {
-        console.error('[RulesTab] Failed to log audit entry:', e);
+        log.error('Failed to log audit entry:', e);
       });
     }
   };
@@ -330,7 +354,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
     let currentUserEmail = 'unknown@unknown.com';
 
     try {
-      console.log('[RulesTab] Deactivating rule:', ruleId);
+      log.debug('Deactivating rule:', ruleId);
 
       // Get current user for audit logging
       try {
@@ -343,11 +367,11 @@ const RulesTab: React.FC<RulesTabProps> = ({
           currentUserEmail = userResponse.data.profile?.email || 'unknown@unknown.com';
         }
       } catch (err) {
-        console.error('[RulesTab] Failed to get current user:', err);
+        log.error('Failed to get current user:', err);
       }
 
       // Find the rule to get its name for undo logging
-      const rule = rules.find(r => r.id === ruleId);
+      const rule = rules.find((r) => r.id === ruleId);
       const ruleName = rule?.name || 'Unknown Rule';
       const groupIds = rule?.groupIds || [];
       const groupNames = rule?.groupNames || [];
@@ -383,7 +407,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
           },
         };
         auditStore.logOperation(auditEntry).catch((err) => {
-          console.error('[RulesTab] Failed to log audit entry:', err);
+          log.error('Failed to log audit entry:', err);
         });
 
         // Reload rules to get updated status
@@ -410,15 +434,15 @@ const RulesTab: React.FC<RulesTabProps> = ({
           },
         };
         auditStore.logOperation(auditEntry).catch((err) => {
-          console.error('[RulesTab] Failed to log audit entry:', err);
+          log.error('Failed to log audit entry:', err);
         });
       }
     } catch (err: any) {
       setError(err.message || 'Failed to deactivate rule');
-      console.error('[RulesTab] Deactivation error:', err);
+      log.error('Deactivation error:', err);
 
       // Log error to audit trail
-      const rule = rules.find(r => r.id === ruleId);
+      const rule = rules.find((r) => r.id === ruleId);
       const groupIds = rule?.groupIds || [];
       const groupNames = rule?.groupNames || [];
       const auditEntry: AuditLogEntry = {
@@ -439,7 +463,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
         },
       };
       auditStore.logOperation(auditEntry).catch((e) => {
-        console.error('[RulesTab] Failed to log audit entry:', e);
+        log.error('Failed to log audit entry:', e);
       });
     }
   };
@@ -476,7 +500,11 @@ const RulesTab: React.FC<RulesTabProps> = ({
       <PageHeader
         title="Group Rules"
         subtitle="Analyze group rules and detect potential conflicts"
-        badge={stats.conflicts > 0 ? { text: `${stats.conflicts} Conflicts`, variant: 'warning' } : undefined}
+        badge={
+          stats.conflicts > 0
+            ? { text: `${stats.conflicts} Conflicts`, variant: 'warning' }
+            : undefined
+        }
         actions={
           <Button
             variant={rules.length > 0 ? 'secondary' : 'primary'}
@@ -496,14 +524,20 @@ const RulesTab: React.FC<RulesTabProps> = ({
           <div className="flex gap-3 flex-wrap">
             {apiCost !== null && (
               <div className="px-3 py-1.5 bg-neutral-50 border border-neutral-200 rounded-md flex items-center gap-2">
-                <span className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">API Requests:</span>
+                <span className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                  API Requests:
+                </span>
                 <span className="text-sm font-bold text-primary-text">{apiCost}</span>
               </div>
             )}
             {lastFetchTime && rules.length > 0 && (
               <div className="px-3 py-1.5 bg-neutral-50 border border-neutral-200 rounded-md flex items-center gap-2">
-                <span className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Cached:</span>
-                <span className="text-sm font-mono text-neutral-700">{new Date(lastFetchTime).toLocaleString()}</span>
+                <span className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                  Cached:
+                </span>
+                <span className="text-sm font-mono text-neutral-700">
+                  {new Date(lastFetchTime).toLocaleString()}
+                </span>
               </div>
             )}
           </div>
@@ -512,7 +546,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
         {/* Error Display */}
         {error && (
           <AlertMessage
-            message={{ text: error, type: 'error' }}
+            message={{ text: error, type: 'danger' }}
             onDismiss={() => setError(null)}
           />
         )}
@@ -521,19 +555,27 @@ const RulesTab: React.FC<RulesTabProps> = ({
         {rules.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="rounded-md border border-neutral-200 p-4 bg-white">
-              <p className="text-xs font-bold uppercase tracking-wider text-neutral-600">Total Rules</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
+                Total Rules
+              </p>
               <p className="text-2xl font-bold text-neutral-900 mt-1">{stats.total}</p>
             </div>
             <div className="rounded-md border border-neutral-200 p-4 bg-white">
-              <p className="text-xs font-bold uppercase tracking-wider text-neutral-600">Active</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
+                Active
+              </p>
               <p className="text-2xl font-bold text-success mt-1">{stats.active}</p>
             </div>
             <div className="rounded-md border border-neutral-200 p-4 bg-white">
-              <p className="text-xs font-bold uppercase tracking-wider text-neutral-600">Inactive</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
+                Inactive
+              </p>
               <p className="text-2xl font-bold text-neutral-600 mt-1">{stats.inactive}</p>
             </div>
             <div className="rounded-md border border-neutral-200 p-4 bg-white">
-              <p className="text-xs font-bold uppercase tracking-wider text-neutral-600">Conflicts</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
+                Conflicts
+              </p>
               <p className="text-2xl font-bold text-warning mt-1">{stats.conflicts}</p>
             </div>
           </div>
@@ -545,8 +587,18 @@ const RulesTab: React.FC<RulesTabProps> = ({
             {/* Search Bar */}
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                <svg
+                  className="h-5 w-5 text-neutral-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
                 </svg>
               </div>
               <input
@@ -563,7 +615,10 @@ const RulesTab: React.FC<RulesTabProps> = ({
               <button className={filterButtonClass('all')} onClick={() => setActiveFilter('all')}>
                 All Rules
               </button>
-              <button className={filterButtonClass('active')} onClick={() => setActiveFilter('active')}>
+              <button
+                className={filterButtonClass('active')}
+                onClick={() => setActiveFilter('active')}
+              >
                 Active Only
               </button>
               <button
@@ -574,7 +629,10 @@ const RulesTab: React.FC<RulesTabProps> = ({
                 Conflicts ({stats.conflicts})
               </button>
               {currentGroupId && (
-                <button className={filterButtonClass('current-group')} onClick={() => setActiveFilter('current-group')}>
+                <button
+                  className={filterButtonClass('current-group')}
+                  onClick={() => setActiveFilter('current-group')}
+                >
                   Current Group
                 </button>
               )}
@@ -592,7 +650,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
               title="No Rules Loaded"
               description='Click "Load Rules" to analyze your Okta group rules'
               actions={[
-                { label: 'Load Rules', onClick: () => handleLoadRules(false), variant: 'primary' }
+                { label: 'Load Rules', onClick: () => handleLoadRules(false), variant: 'primary' },
               ]}
             />
           ) : filteredRules.length === 0 ? (

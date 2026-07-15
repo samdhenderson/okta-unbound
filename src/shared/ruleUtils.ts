@@ -1,4 +1,16 @@
-// Rule utilities for analysis, conflict detection, and formatting
+/**
+ * @module shared/ruleUtils
+ * @description Pure helpers for analysing, comparing, formatting, and filtering
+ * Okta group rules.
+ *
+ * Extracts the user attributes a rule references, detects conflicts between rules
+ * that target shared groups on overlapping attributes, shapes raw rules into the
+ * {@link FormattedRule} display model, and provides search/relative-time helpers.
+ * All functions are side-effect free.
+ *
+ * @see {@link detectConflicts}
+ * @see {@link formatRuleForDisplay}
+ */
 import type { OktaGroupRule, RuleConflict, FormattedRule } from '../shared/types';
 
 /**
@@ -85,12 +97,17 @@ export function detectConflicts(rules: OktaGroupRule[]): RuleConflict[] {
 }
 
 /**
- * Format rule for display in UI
+ * Format a raw rule into the {@link FormattedRule} display model: simplified
+ * condition text, extracted attributes, and any conflicts involving the rule.
+ *
+ * @param rule - The raw Okta group rule to format.
+ * @param currentGroupId - When provided, flags whether the rule targets this group.
+ * @param conflicts - Pre-computed conflicts to attribute back to this rule.
  */
 export function formatRuleForDisplay(
   rule: OktaGroupRule,
   currentGroupId?: string,
-  conflicts?: RuleConflict[]
+  conflicts?: RuleConflict[],
 ): FormattedRule {
   const groupIds = rule.actions?.assignUserToGroups?.groupIds || [];
   const userAttributes = extractUserAttributes(rule);
@@ -106,9 +123,8 @@ export function formatRuleForDisplay(
   const affectsCurrentGroup = currentGroupId ? groupIds.includes(currentGroupId) : false;
 
   // Find conflicts involving this rule
-  const ruleConflicts = conflicts?.filter(
-    (c) => c.rule1.id === rule.id || c.rule2.id === rule.id
-  ) || [];
+  const ruleConflicts =
+    conflicts?.filter((c) => c.rule1.id === rule.id || c.rule2.id === rule.id) || [];
 
   return {
     id: rule.id,
@@ -126,7 +142,10 @@ export function formatRuleForDisplay(
 }
 
 /**
- * Calculate time ago string from ISO date
+ * Render an ISO-8601 timestamp as a coarse relative-time string
+ * (e.g. `"just now"`, `"3 hours ago"`, `"2 months ago"`).
+ *
+ * @param isoString - An ISO-8601 date string.
  */
 export function timeAgo(isoString: string): string {
   const now = new Date();

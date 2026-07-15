@@ -5,18 +5,30 @@
 
 import type { CoreApi } from './core';
 import type { OktaUser, AuditLogEntry } from './types';
+import type { RequestResult } from '../../../shared/scheduler/types';
 import type { BulkUserInfo } from '../../../shared/undoTypes';
 import { logBulkRemoveAction } from '../../../shared/undoManager';
 import { auditStore } from '../../../shared/storage/auditStore';
 import { parseNextLink } from './utilities';
+import { createLogger } from '../../../shared/utils/logger';
+
+const log = createLogger('useOktaApi');
 
 /**
- * Fetch all members of a group with pagination
+ * Fetch all members of a group, following `Link` pagination (200 per page).
+ *
+ * @param coreApi - Shared transport surface (see {@link CoreApi}).
+ * @param groupId - Group whose members to load.
+ * @param onApiCall - Increments the caller's API-call counter per page and returns
+ * the running total (surfaced through `onProgress`).
+ * @returns All members across all pages.
+ * @remarks Module-local variant of {@link getAllGroupMembers} that threads the
+ * cleanup operation's API-call accounting; throws on the first failed page.
  */
 async function fetchAllMembers(
   coreApi: CoreApi,
   groupId: string,
-  onApiCall: () => number
+  onApiCall: () => number,
 ): Promise<OktaUser[]> {
   const allMembers: OktaUser[] = [];
   let nextUrl: string | null = `/api/v1/groups/${groupId}/users?limit=200`;
@@ -41,12 +53,36 @@ async function fetchAllMembers(
   return allMembers;
 }
 
+/**
+ * Build group-cleanup operations.
+ *
+ * @param coreApi - Shared transport surface (see {@link CoreApi}).
+ * @param removeUserFromGroup - Membership-removal primitive from
+ * `createGroupMemberOperations`; injected so cleanup can reuse it while
+ * suppressing per-user undo logging.
+ * @returns `{ removeDeprovisioned }`.
+ */
 export function createGroupCleanupOperations(
   coreApi: CoreApi,
-  removeUserFromGroup: (groupId: string, groupName: string, user: OktaUser, skipUndoLog?: boolean) => Promise<any>
+  removeUserFromGroup: (
+    groupId: string,
+    groupName: string,
+    user: OktaUser,
+    skipUndoLog?: boolean,
+  ) => Promise<RequestResult>,
 ) {
   /**
-   * Remove all deprovisioned users from a group
+   * Remove every `DEPROVISIONED` member from a group.
+   *
+   * @param groupId - Group to clean up.
+   * @remarks
+   * Refuses to modify `APP_GROUP`-type groups (membership is externally managed).
+   * Paginates all members, filters to `DEPROVISIONED`, and removes them one at a
+   * time with `skipUndoLog` set — logging a single aggregate undo action at the
+   * end via `logBulkRemoveAction`. Aborts the loop on the first `403` (likely a
+   * permissions wall). Honors {@link CoreApi.checkCancelled} between users, streams
+   * progress through the callbacks, and always writes an audit entry (success /
+   * partial / failed) in `finally`.
    */
   const removeDeprovisioned = async (groupId: string) => {
     const startTime = Date.now();
@@ -87,7 +123,10 @@ export function createGroupCleanupOperations(
       const allMembers = await fetchAllMembers(coreApi, groupId, trackApiCall);
 
       const deprovisionedUsers = allMembers.filter((u) => u.status === 'DEPROVISIONED');
-      coreApi.callbacks.onResult?.(`Found ${deprovisionedUsers.length} deprovisioned users`, 'warning');
+      coreApi.callbacks.onResult?.(
+        `Found ${deprovisionedUsers.length} deprovisioned users`,
+        'warning',
+      );
 
       if (deprovisionedUsers.length === 0) {
         coreApi.callbacks.onResult?.('No deprovisioned users to remove', 'success');
@@ -108,7 +147,7 @@ export function createGroupCleanupOperations(
           currentApiCall,
           totalApiCalls,
           `Removing ${user.profile.firstName} ${user.profile.lastName} (${i + 1}/${deprovisionedUsers.length})`,
-          currentApiCall
+          currentApiCall,
         );
 
         const result = await removeUserFromGroup(groupId, groupName, user, true);
@@ -122,14 +161,17 @@ export function createGroupCleanupOperations(
           });
           coreApi.callbacks.onResult?.(
             `Removed: ${user.profile.login} (${user.profile.firstName} ${user.profile.lastName})`,
-            'success'
+            'success',
           );
         } else {
           failed++;
           const errorMsg = `Failed: ${user.profile.login} - ${result.error}`;
           errorMessages.push(errorMsg);
           if (result.status === 403) {
-            coreApi.callbacks.onResult?.(`403 Forbidden: ${user.profile.login} - ${result.error}`, 'error');
+            coreApi.callbacks.onResult?.(
+              `403 Forbidden: ${user.profile.login} - ${result.error}`,
+              'error',
+            );
             coreApi.callbacks.onResult?.('Stopping after first 403 error', 'warning');
             break;
           } else {
@@ -148,14 +190,14 @@ export function createGroupCleanupOperations(
 
       coreApi.callbacks.onResult?.(
         `Complete: ${removed} removed, ${failed} failed`,
-        removed > 0 ? 'success' : 'warning'
+        removed > 0 ? 'success' : 'warning',
       );
     } catch (error) {
       const errorMsg = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
       errorMessages.push(errorMsg);
       coreApi.callbacks.onResult?.(
         errorMsg,
-        error instanceof Error && error.message === 'Operation cancelled' ? 'warning' : 'error'
+        error instanceof Error && error.message === 'Operation cancelled' ? 'warning' : 'error',
       );
     } finally {
       coreApi.callbacks.onProgress?.(apiCallsMade, apiCallsMade, 'Complete', apiCallsMade);
@@ -179,7 +221,7 @@ export function createGroupCleanupOperations(
           },
         };
         auditStore.logOperation(auditEntry).catch((err) => {
-          console.error('[useOktaApi] Failed to log audit entry:', err);
+          log.error('Failed to log audit entry:', err);
         });
       }
     }

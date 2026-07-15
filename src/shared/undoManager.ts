@@ -1,6 +1,17 @@
-// Undo Manager
-// Manages action history for audit logging
+/**
+ * @module shared/undoManager
+ * @description Persists a rolling history of mutating actions for audit/undo.
+ *
+ * Records each action (with typed {@link UndoActionMetadata}) in
+ * `chrome.storage.local`, newest-first, capped at 50 entries. Provides helpers to
+ * log generic and bulk-remove actions, clear history, and format timestamps for
+ * display. Type definitions live in `shared/undoTypes`.
+ *
+ * @see {@link logAction}
+ * @see {@link getUndoHistory}
+ */
 
+import { createLogger } from './utils/logger';
 import type {
   UndoAction,
   UndoActionMetadata,
@@ -8,6 +19,8 @@ import type {
   BulkRemoveUsersMetadata,
   BulkUserInfo,
 } from './undoTypes';
+
+const log = createLogger('UndoManager');
 
 const UNDO_STORAGE_KEY = 'undoHistory';
 const MAX_UNDO_SIZE = 50;
@@ -26,7 +39,7 @@ export async function getUndoHistory(): Promise<UndoHistory> {
 
     return { actions: [], maxSize: MAX_UNDO_SIZE };
   } catch (error) {
-    console.error('[UndoManager] Failed to get history:', error);
+    log.error('Failed to get history:', error);
     return { actions: [], maxSize: MAX_UNDO_SIZE };
   }
 }
@@ -38,7 +51,7 @@ async function saveUndoHistory(history: UndoHistory): Promise<void> {
   try {
     await chrome.storage.local.set({ [UNDO_STORAGE_KEY]: history });
   } catch (error) {
-    console.error('[UndoManager] Failed to save history:', error);
+    log.error('Failed to save history:', error);
   }
 }
 
@@ -50,11 +63,15 @@ function generateActionId(): string {
 }
 
 /**
- * Logs a new action to the history
+ * Append a completed action to the history (trimming to the 50-entry cap).
+ *
+ * @param description - Human-readable summary shown in the history UI.
+ * @param metadata - Typed, action-specific payload used for later inspection.
+ * @returns The stored {@link UndoAction}, including its generated id.
  */
 export async function logAction(
   description: string,
-  metadata: UndoActionMetadata
+  metadata: UndoActionMetadata,
 ): Promise<UndoAction> {
   const history = await getUndoHistory();
 
@@ -78,14 +95,22 @@ export async function logAction(
 }
 
 /**
- * Logs a bulk remove users action
+ * Log a bulk user-removal action, composing a human-readable description from
+ * the operation type and affected-user count.
+ *
+ * @param groupId - The group users were removed from.
+ * @param groupName - The group's display name (used in the description).
+ * @param users - The removed users.
+ * @param operationType - What drove the removal (e.g. deprovisioned, inactive).
+ * @param targetStatus - Status filter used, for custom/multi-status operations.
+ * @returns The stored {@link UndoAction}.
  */
 export async function logBulkRemoveAction(
   groupId: string,
   groupName: string,
   users: BulkUserInfo[],
   operationType: 'deprovisioned' | 'inactive' | 'custom_status' | 'multi_status',
-  targetStatus?: string
+  targetStatus?: string,
 ): Promise<UndoAction> {
   let description: string;
   if (operationType === 'deprovisioned') {

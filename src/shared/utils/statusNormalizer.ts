@@ -1,5 +1,5 @@
 /**
- * @module utils/statusNormalizer
+ * @module shared/utils/statusNormalizer
  * @description Centralized utility for normalizing Okta user status values from various API sources.
  *
  * ## Problem Context
@@ -46,7 +46,10 @@
  * ```
  */
 
+import { createLogger } from './logger';
 import type { UserStatus } from '../types';
+
+const log = createLogger('statusNormalizer');
 
 /**
  * Comprehensive mapping of all possible status variations to canonical UserStatus values.
@@ -59,54 +62,54 @@ const STATUS_MAP: Record<string, UserStatus> = {
   // ========================================
   // API Status Names (Canonical)
   // ========================================
-  'ACTIVE': 'ACTIVE',
-  'DEPROVISIONED': 'DEPROVISIONED',
-  'SUSPENDED': 'SUSPENDED',
-  'STAGED': 'STAGED',
-  'PROVISIONED': 'PROVISIONED',
-  'RECOVERY': 'RECOVERY',
-  'LOCKED_OUT': 'LOCKED_OUT',
-  'PASSWORD_EXPIRED': 'PASSWORD_EXPIRED',
+  ACTIVE: 'ACTIVE',
+  DEPROVISIONED: 'DEPROVISIONED',
+  SUSPENDED: 'SUSPENDED',
+  STAGED: 'STAGED',
+  PROVISIONED: 'PROVISIONED',
+  RECOVERY: 'RECOVERY',
+  LOCKED_OUT: 'LOCKED_OUT',
+  PASSWORD_EXPIRED: 'PASSWORD_EXPIRED',
 
   // ========================================
   // Admin Console UI Labels
   // ========================================
-  'DEACTIVATED': 'DEPROVISIONED',       // UI shows "Deactivated" for DEPROVISIONED
-  'PENDING_USER_ACTION': 'PROVISIONED', // UI shows "Pending User Action"
-  'PENDING USER ACTION': 'PROVISIONED',  // Space-separated variant
-  'PASSWORD_RESET': 'RECOVERY',         // UI shows "Password Reset"
-  'PASSWORD RESET': 'RECOVERY',          // Space-separated variant
+  DEACTIVATED: 'DEPROVISIONED', // UI shows "Deactivated" for DEPROVISIONED
+  PENDING_USER_ACTION: 'PROVISIONED', // UI shows "Pending User Action"
+  'PENDING USER ACTION': 'PROVISIONED', // Space-separated variant
+  PASSWORD_RESET: 'RECOVERY', // UI shows "Password Reset"
+  'PASSWORD RESET': 'RECOVERY', // Space-separated variant
 
   // ========================================
   // Common Variations (no underscores)
   // ========================================
-  'LOCKEDOUT': 'LOCKED_OUT',
+  LOCKEDOUT: 'LOCKED_OUT',
   'LOCKED OUT': 'LOCKED_OUT',
-  'PASSWORDEXPIRED': 'PASSWORD_EXPIRED',
+  PASSWORDEXPIRED: 'PASSWORD_EXPIRED',
   'PASSWORD EXPIRED': 'PASSWORD_EXPIRED',
 
   // ========================================
   // Mixed Case Variations
   // ========================================
-  'Active': 'ACTIVE',
-  'Deprovisioned': 'DEPROVISIONED',
-  'Deactivated': 'DEPROVISIONED',
-  'Suspended': 'SUSPENDED',
-  'Staged': 'STAGED',
-  'Provisioned': 'PROVISIONED',
-  'Recovery': 'RECOVERY',
+  Active: 'ACTIVE',
+  Deprovisioned: 'DEPROVISIONED',
+  Deactivated: 'DEPROVISIONED',
+  Suspended: 'SUSPENDED',
+  Staged: 'STAGED',
+  Provisioned: 'PROVISIONED',
+  Recovery: 'RECOVERY',
   'Locked Out': 'LOCKED_OUT',
-  'Locked_Out': 'LOCKED_OUT',
-  'LockedOut': 'LOCKED_OUT',
+  Locked_Out: 'LOCKED_OUT',
+  LockedOut: 'LOCKED_OUT',
   'Password Expired': 'PASSWORD_EXPIRED',
-  'Password_Expired': 'PASSWORD_EXPIRED',
-  'PasswordExpired': 'PASSWORD_EXPIRED',
+  Password_Expired: 'PASSWORD_EXPIRED',
+  PasswordExpired: 'PASSWORD_EXPIRED',
   'Password Reset': 'RECOVERY',
-  'Password_Reset': 'RECOVERY',
-  'PasswordReset': 'RECOVERY',
+  Password_Reset: 'RECOVERY',
+  PasswordReset: 'RECOVERY',
   'Pending User Action': 'PROVISIONED',
-  'Pending_User_Action': 'PROVISIONED',
-  'PendingUserAction': 'PROVISIONED',
+  Pending_User_Action: 'PROVISIONED',
+  PendingUserAction: 'PROVISIONED',
 };
 
 /**
@@ -166,7 +169,7 @@ export function normalizeUserStatus(statusValue: unknown, context?: string): Use
   // Handle null/undefined
   // ========================================
   if (statusValue == null) {
-    console.warn(`[statusNormalizer] Status is null/undefined${context ? ` for ${context}` : ''}`);
+    log.warn(`Status is null/undefined${context ? ` for ${context}` : ''}`);
     return DEFAULT_STATUS;
   }
 
@@ -186,7 +189,9 @@ export function normalizeUserStatus(statusValue: unknown, context?: string): Use
     }
 
     // Object doesn't have a recognizable status property
-    console.warn(`[statusNormalizer] Status is object without recognizable property${context ? ` for ${context}` : ''}`, statusValue);
+    log.warn(`Status is object without recognizable property${context ? ` for ${context}` : ''}`, {
+      keys: Object.keys(obj),
+    });
     return DEFAULT_STATUS;
   }
 
@@ -194,7 +199,7 @@ export function normalizeUserStatus(statusValue: unknown, context?: string): Use
   // Handle non-string primitives
   // ========================================
   if (typeof statusValue !== 'string') {
-    console.warn(`[statusNormalizer] Status is not a string${context ? ` for ${context}` : ''}`, typeof statusValue, statusValue);
+    log.warn(`Status is not a string${context ? ` for ${context}` : ''}`, typeof statusValue);
     return DEFAULT_STATUS;
   }
 
@@ -202,7 +207,7 @@ export function normalizeUserStatus(statusValue: unknown, context?: string): Use
   // Handle empty string
   // ========================================
   if (!statusValue.trim()) {
-    console.warn(`[statusNormalizer] Status is empty string${context ? ` for ${context}` : ''}`);
+    log.warn(`Status is empty string${context ? ` for ${context}` : ''}`);
     return DEFAULT_STATUS;
   }
 
@@ -212,7 +217,7 @@ export function normalizeUserStatus(statusValue: unknown, context?: string): Use
   let cleanStatus = statusValue;
   if (statusValue.includes('<') && statusValue.includes('>')) {
     cleanStatus = statusValue.replace(/<[^>]*>/g, '').trim();
-    console.debug(`[statusNormalizer] Extracted from HTML: "${statusValue}" => "${cleanStatus}"`);
+    log.debug(`Extracted from HTML: "${statusValue}" => "${cleanStatus}"`);
   }
 
   // ========================================
@@ -227,8 +232,8 @@ export function normalizeUserStatus(statusValue: unknown, context?: string): Use
 
   if (!result) {
     // Unknown status - log warning and return safe default
-    console.warn(
-      `[statusNormalizer] Unknown status after normalization: "${normalizedKey}" from original: "${statusValue}"${context ? ` for ${context}` : ''}`
+    log.warn(
+      `Unknown status after normalization: "${normalizedKey}" from original: "${statusValue}"${context ? ` for ${context}` : ''}`,
     );
     return DEFAULT_STATUS;
   }
@@ -286,7 +291,10 @@ export function isValidUserStatus(value: unknown): value is UserStatus {
  * // Warnings will include: "for group:00g123[0]", "for group:00g123[1]", etc.
  * ```
  */
-export function normalizeUserStatusBatch(statuses: unknown[], contextPrefix?: string): UserStatus[] {
+export function normalizeUserStatusBatch(
+  statuses: unknown[],
+  contextPrefix?: string,
+): UserStatus[] {
   return statuses.map((status, index) => {
     const context = contextPrefix ? `${contextPrefix}[${index}]` : `index:${index}`;
     return normalizeUserStatus(status, context);

@@ -1,3 +1,11 @@
+/**
+ * @module sidepanel/components/shared/ScrollableList
+ * @description Independently scrollable list container with built-in loading and empty states.
+ *
+ * Renders a {@link LoadingSpinner} while `loading`, the `emptyState` node when it
+ * has no children, otherwise a scroll region (its own scrollbar) that by default
+ * flex-grows to fill available space so surrounding chrome stays visible.
+ */
 import React from 'react';
 import LoadingSpinner from './LoadingSpinner';
 
@@ -72,10 +80,7 @@ const ScrollableList: React.FC<ScrollableListProps> = ({
   // Empty state
   if (isEmpty && emptyState) {
     return (
-      <div
-        className={fillAvailable ? 'flex-1' : ''}
-        data-testid={testId}
-      >
+      <div className={fillAvailable ? 'flex-1' : ''} data-testid={testId}>
         {emptyState}
       </div>
     );
@@ -96,22 +101,16 @@ const ScrollableList: React.FC<ScrollableListProps> = ({
     'scrollable-list',
     // User-provided classes
     className,
-  ].filter(Boolean).join(' ');
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   // Container style for explicit max-height
-  const containerStyle: React.CSSProperties | undefined = maxHeight
-    ? { maxHeight }
-    : undefined;
+  const containerStyle: React.CSSProperties | undefined = maxHeight ? { maxHeight } : undefined;
 
   return (
-    <div
-      className={containerClasses}
-      style={containerStyle}
-      data-testid={testId}
-    >
-      <div className="space-y-3">
-        {children}
-      </div>
+    <div className={containerClasses} style={containerStyle} data-testid={testId}>
+      <div className="space-y-3">{children}</div>
     </div>
   );
 };

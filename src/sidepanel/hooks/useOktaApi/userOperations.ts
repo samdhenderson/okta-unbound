@@ -4,12 +4,26 @@
  */
 
 import type { CoreApi } from './core';
-import type { OktaFactor, MemberMfaResult } from '../../../shared/types';
+import type { OktaFactor, MemberMfaResult, OktaUser } from '../../../shared/types';
 import { summarizeFactors } from '../../../shared/utils/mfaUtils';
+import { parseNextLink } from './utilities';
+import { createLogger } from '../../../shared/utils/logger';
 
+const log = createLogger('useOktaApi');
+
+/**
+ * Build per-user read and lifecycle operations.
+ *
+ * @param coreApi - Shared transport surface (see {@link CoreApi}).
+ * @returns Lookups (last login, app/group counts, apps, MFA, search, by-id) plus
+ * lifecycle actions (suspend/unsuspend/reset password).
+ */
 export function createUserOperations(coreApi: CoreApi) {
   /**
-   * Get user's last login date
+   * Read a user's last-login timestamp.
+   *
+   * @param userId - User to inspect.
+   * @returns The `lastLogin` as a `Date`, or `null` if never logged in / on error.
    */
   const getUserLastLogin = async (userId: string): Promise<Date | null> => {
     try {
@@ -19,18 +33,24 @@ export function createUserOperations(coreApi: CoreApi) {
       }
       return null;
     } catch (error) {
-      console.error(`[useOktaApi] Failed to get last login for user ${userId}:`, error);
+      log.error(`Failed to get last login for user ${userId}:`, error);
       return null;
     }
   };
 
   /**
-   * Get count of app assignments for a user
+   * Approximate how many apps a user is assigned, from the first page.
+   *
+   * @param userId - User to inspect.
+   * @returns First-page assignment count (max 200), or `0` on error.
+   * @remarks Does not walk pagination; a floor for users with >200 assignments.
    */
   const getUserAppAssignments = async (userId: string): Promise<number> => {
     try {
       // Fetch first page with limit=200 to get app assignments count
-      const response = await coreApi.makeApiRequest(`/api/v1/apps?filter=user.id+eq+"${userId}"&limit=200`);
+      const response = await coreApi.makeApiRequest(
+        `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=200`,
+      );
       if (response.success && response.data) {
         const firstPageCount = response.data.length;
 
@@ -46,34 +66,75 @@ export function createUserOperations(coreApi: CoreApi) {
       }
       return 0;
     } catch (error) {
-      console.error(`[useOktaApi] Failed to get app assignments for user ${userId}:`, error);
+      log.error(`Failed to get app assignments for user ${userId}:`, error);
       return 0;
     }
   };
 
   /**
-   * Batch get user details.
-   * Uses batch size of 3 to match scheduler maxConcurrent and low priority
-   * to avoid starving interactive requests.
+   * List all apps assigned to a user (id + display label).
+   *
+   * @param userId - User whose apps to list.
+   * @returns Every assigned app across all pages; `[]` on error.
+   * @remarks Reflects effective assignments (direct + via group) from the apps
+   * filter endpoint, following `Link` pagination (200 per page).
+   */
+  const getUserApps = async (userId: string): Promise<Array<{ id: string; label: string }>> => {
+    const apps: Array<{ id: string; label: string }> = [];
+    let nextUrl: string | null = `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=200`;
+
+    try {
+      while (nextUrl) {
+        const response = await coreApi.makeApiRequest(nextUrl);
+        if (!response.success || !response.data) {
+          break;
+        }
+
+        for (const app of response.data) {
+          apps.push({ id: app.id, label: app.label || app.name || app.id });
+        }
+
+        nextUrl = parseNextLink(response.headers?.link);
+      }
+    } catch (error) {
+      log.error(`Failed to list apps for user ${userId}:`, error);
+    }
+
+    return apps;
+  };
+
+  /**
+   * Fetch full details for many users, keyed by id.
+   *
+   * @param userIds - Users to load.
+   * @param onProgress - Called after each batch with `(processed, total)`.
+   * @returns Map of userId → {@link OktaUser}; ids that fail to load are omitted.
+   * @remarks Requests in batches of 3 (matching scheduler `maxConcurrent`) at
+   * `low` priority so it never starves interactive requests.
    */
   const batchGetUserDetails = async (
     userIds: string[],
-    onProgress?: (current: number, total: number) => void
-  ): Promise<Map<string, any>> => {
-    const userDetailsMap = new Map<string, any>();
+    onProgress?: (current: number, total: number) => void,
+  ): Promise<Map<string, OktaUser>> => {
+    const userDetailsMap = new Map<string, OktaUser>();
     const batchSize = 3; // Match scheduler maxConcurrent
 
     for (let i = 0; i < userIds.length; i += batchSize) {
       const batch = userIds.slice(i, i + batchSize);
       const batchPromises = batch.map(async (userId) => {
         try {
-          const response = await coreApi.makeApiRequest(`/api/v1/users/${userId}`, 'GET', undefined, 'low');
+          const response = await coreApi.makeApiRequest(
+            `/api/v1/users/${userId}`,
+            'GET',
+            undefined,
+            'low',
+          );
           if (response.success && response.data) {
             return { userId, data: response.data };
           }
           return { userId, data: null };
         } catch (error) {
-          console.error(`[useOktaApi] Failed to fetch user ${userId}:`, error);
+          log.error(`Failed to fetch user ${userId}:`, error);
           return { userId, data: null };
         }
       });
@@ -94,13 +155,16 @@ export function createUserOperations(coreApi: CoreApi) {
   /**
    * Scan MFA factor enrollment for a list of users.
    *
-   * Costs one API call per user (GET /api/v1/users/{id}/factors). Uses the same
-   * batching pattern as batchGetUserDetails (batch size 3, low priority) to avoid
-   * starving interactive requests. Returns a Map keyed by userId.
+   * @param userIds - Users to scan.
+   * @param onProgress - Called after each batch with `(processed, total)`.
+   * @returns Map of userId → {@link MemberMfaResult} (summarized via {@link summarizeFactors}).
+   * @remarks Costs one API call per user (`GET /api/v1/users/{id}/factors`). Uses the
+   * same batching as `batchGetUserDetails` (batch size 3, `low` priority) to
+   * avoid starving interactive requests.
    */
   const scanGroupMfa = async (
     userIds: string[],
-    onProgress?: (current: number, total: number) => void
+    onProgress?: (current: number, total: number) => void,
   ): Promise<Map<string, MemberMfaResult>> => {
     const resultMap = new Map<string, MemberMfaResult>();
     const batchSize = 3; // Match scheduler maxConcurrent convention
@@ -114,16 +178,16 @@ export function createUserOperations(coreApi: CoreApi) {
               `/api/v1/users/${userId}/factors`,
               'GET',
               undefined,
-              'low'
+              'low',
             );
             const factors: OktaFactor[] =
               response.success && Array.isArray(response.data) ? response.data : [];
             return { userId, factors };
           } catch (error) {
-            console.error(`[useOktaApi] Failed to fetch factors for user ${userId}:`, error);
+            log.error(`Failed to fetch factors for user ${userId}:`, error);
             return { userId, factors: [] as OktaFactor[] };
           }
-        })
+        }),
       );
 
       batchResults.forEach(({ userId, factors }) => {
@@ -137,7 +201,11 @@ export function createUserOperations(coreApi: CoreApi) {
   };
 
   /**
-   * Get user's group memberships count
+   * Count a user's group memberships.
+   *
+   * @param userId - User to inspect.
+   * @returns Exact membership count, read from the `x-total-count` header of a
+   * `limit=1` request (avoids paging the full list); `0` on error.
    */
   const getUserGroupMemberships = async (userId: string): Promise<number> => {
     try {
@@ -147,18 +215,28 @@ export function createUserOperations(coreApi: CoreApi) {
       }
       return 0;
     } catch (error) {
-      console.error(`[useOktaApi] Failed to get group memberships for user ${userId}:`, error);
+      log.error(`Failed to get group memberships for user ${userId}:`, error);
       return 0;
     }
   };
 
   /**
-   * Search for users by name, email, or login
+   * Search users by name, email, or login via Okta's `q` query (capped at 20).
+   *
+   * @param query - Search text; queries shorter than 2 chars short-circuit to `[]`.
+   * @returns Flattened `{ id, email, firstName, lastName, login, status }` records; `[]` on error.
    */
   const searchUsers = async (
-    query: string
+    query: string,
   ): Promise<
-    Array<{ id: string; email: string; firstName: string; lastName: string; login: string; status: string }>
+    Array<{
+      id: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+      login: string;
+      status: string;
+    }>
   > => {
     if (!query || query.length < 2) {
       return [];
@@ -166,10 +244,12 @@ export function createUserOperations(coreApi: CoreApi) {
 
     try {
       // Use Okta's search API with the q parameter for flexible search
-      const response = await coreApi.makeApiRequest(`/api/v1/users?q=${encodeURIComponent(query)}&limit=20`);
+      const response = await coreApi.makeApiRequest(
+        `/api/v1/users?q=${encodeURIComponent(query)}&limit=20`,
+      );
 
       if (response.success && response.data) {
-        return response.data.map((user: any) => ({
+        return response.data.map((user: OktaUser) => ({
           id: user.id,
           email: user.profile?.email || '',
           firstName: user.profile?.firstName || '',
@@ -180,17 +260,28 @@ export function createUserOperations(coreApi: CoreApi) {
       }
       return [];
     } catch (error) {
-      console.error('[useOktaApi] searchUsers error:', error);
+      log.error('searchUsers error:', error);
       return [];
     }
   };
 
   /**
-   * Get user details by ID
+   * Fetch one user by id.
+   *
+   * @param userId - User id to look up.
+   * @returns A flattened `{ id, email, firstName, lastName, login, status }`
+   * record, or `null` if not found / on error.
    */
   const getUserById = async (
-    userId: string
-  ): Promise<{ id: string; email: string; firstName: string; lastName: string; login: string; status: string } | null> => {
+    userId: string,
+  ): Promise<{
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    login: string;
+    status: string;
+  } | null> => {
     try {
       const response = await coreApi.makeApiRequest(`/api/v1/users/${userId}`);
       if (response.success && response.data) {
@@ -206,37 +297,53 @@ export function createUserOperations(coreApi: CoreApi) {
       }
       return null;
     } catch (error) {
-      console.error('[useOktaApi] getUserById error:', error);
+      log.error('getUserById error:', error);
       return null;
     }
   };
 
   /**
    * Suspend an active user, preventing them from signing in.
-   * Only valid for users in ACTIVE status.
+   *
+   * @param userId - User to suspend.
+   * @returns `{ success, error? }`.
+   * @remarks Only valid for users in `ACTIVE` status.
    */
   const suspendUser = async (userId: string): Promise<{ success: boolean; error?: string }> => {
-    const result = await coreApi.makeApiRequest(`/api/v1/users/${userId}/lifecycle/suspend`, 'POST');
+    const result = await coreApi.makeApiRequest(
+      `/api/v1/users/${userId}/lifecycle/suspend`,
+      'POST',
+    );
     return { success: result.success, error: result.error };
   };
 
   /**
    * Unsuspend a suspended user, restoring their ability to sign in.
-   * Only valid for users in SUSPENDED status.
+   *
+   * @param userId - User to unsuspend.
+   * @returns `{ success, error? }`.
+   * @remarks Only valid for users in `SUSPENDED` status.
    */
   const unsuspendUser = async (userId: string): Promise<{ success: boolean; error?: string }> => {
-    const result = await coreApi.makeApiRequest(`/api/v1/users/${userId}/lifecycle/unsuspend`, 'POST');
+    const result = await coreApi.makeApiRequest(
+      `/api/v1/users/${userId}/lifecycle/unsuspend`,
+      'POST',
+    );
     return { success: result.success, error: result.error };
   };
 
   /**
-   * Trigger a password reset email for the user.
-   * Sends an email with a one-time reset link. Valid for ACTIVE and RECOVERY status users.
+   * Trigger a password-reset email for the user.
+   *
+   * @param userId - User to send the reset link to.
+   * @returns `{ success, error? }`.
+   * @remarks Sends an email with a one-time reset link (`sendEmail=true`). Valid
+   * for `ACTIVE` and `RECOVERY` status users.
    */
   const resetPassword = async (userId: string): Promise<{ success: boolean; error?: string }> => {
     const result = await coreApi.makeApiRequest(
       `/api/v1/users/${userId}/lifecycle/reset_password?sendEmail=true`,
-      'POST'
+      'POST',
     );
     return { success: result.success, error: result.error };
   };
@@ -244,6 +351,7 @@ export function createUserOperations(coreApi: CoreApi) {
   return {
     getUserLastLogin,
     getUserAppAssignments,
+    getUserApps,
     batchGetUserDetails,
     scanGroupMfa,
     getUserGroupMemberships,

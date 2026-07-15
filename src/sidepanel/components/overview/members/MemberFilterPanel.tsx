@@ -1,31 +1,52 @@
+/**
+ * @module sidepanel/components/overview/members/MemberFilterPanel
+ * @description Expandable panel of status, MFA-factor, and sort controls for the member list.
+ *
+ * Presentational: it reflects the active {@link MemberFilter} set into pressed
+ * pill states and reports every change (status toggles, per-factor has/missing
+ * modes, quick MFA counts, sort field/direction) via callbacks. MFA controls stay
+ * disabled until scan results are supplied.
+ */
 import React from 'react';
 import type { MemberMfaResult } from '../../../../shared/types';
-import FilterPill from './FilterPill';
+import FilterPill from '../../shared/FilterPill';
 import ActiveFilterChips from './ActiveFilterChips';
-import {
-  type BreakdownRow,
-  type MemberFilter,
-  type SortField,
-} from './memberAnalytics';
+import { type BreakdownRow, type MemberFilter, type SortField } from './memberAnalytics';
 
+/** Per-factor filter intent: unset, require-present, or require-absent. */
 type FactorMode = 'off' | 'has' | 'missing';
 
+/** Props for {@link MemberFilterPanel}. */
 interface MemberFilterPanelProps {
+  /** Active facet filters, reflected into pressed pill states. */
   filters: MemberFilter[];
-  statusRows: BreakdownRow[]; // status distribution (value + count)
+  /** Status distribution (value + count) used to build status pills. */
+  statusRows: BreakdownRow[];
+  /** Per-member MFA scan results, or null before a scan has run. */
   mfaResults: Map<string, MemberMfaResult> | null;
-  factorLabels: string[]; // observed factor labels
+  /** Observed factor labels across the group, for per-factor toggles. */
+  factorLabels: string[];
+  /** Current sort field. */
   sortBy: SortField;
+  /** Whether the current sort is descending. */
   sortDesc: boolean;
+  /** Toggle a status value as a filter. */
   onToggleStatus: (row: BreakdownRow) => void;
+  /** Clear all status filters. */
   onClearStatus: () => void;
+  /** Toggle a count-based MFA value (e.g. 'none', 'multiple'). */
   onToggleMfaValue: (value: string, label: string) => void;
+  /** Set a per-factor has/missing/off mode. */
   onSetFactorMode: (label: string, mode: FactorMode) => void;
+  /** Toggle the sort field (or flip direction if already selected). */
   onToggleSort: (field: SortField) => void;
+  /** Remove a single active filter. */
   onRemoveFilter: (filter: MemberFilter) => void;
+  /** Clear every active filter. */
   onClearAll: () => void;
 }
 
+/** A sort pill that shows a directional caret when its field is active. */
 const SortButton: React.FC<{
   field: SortField;
   label: string;
@@ -35,30 +56,25 @@ const SortButton: React.FC<{
 }> = ({ field, label, sortBy, sortDesc, onToggle }) => {
   const active = sortBy === field;
   return (
-    <button
-      type="button"
-      onClick={() => onToggle(field)}
-      className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${
-        active
-          ? 'bg-primary text-white'
-          : 'bg-neutral-50 text-neutral-700 border border-neutral-200 hover:border-neutral-400'
-      }`}
-    >
-      {label}
-      {active && (
-        <svg
-          className={`w-3 h-3 transition-transform ${sortDesc ? 'rotate-180' : ''}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-        </svg>
-      )}
-    </button>
+    <FilterPill active={active} onClick={() => onToggle(field)}>
+      <span className="flex items-center gap-1">
+        {label}
+        {active && (
+          <svg
+            className={`w-3 h-3 transition-transform ${sortDesc ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+          </svg>
+        )}
+      </span>
+    </FilterPill>
   );
 };
 
+/** Renders the status / MFA-factor / sort controls for the member explorer. */
 const MemberFilterPanel: React.FC<MemberFilterPanelProps> = ({
   filters,
   statusRows,
@@ -115,7 +131,9 @@ const MemberFilterPanel: React.FC<MemberFilterPanelProps> = ({
       <div>
         <label className="block text-xs font-medium text-neutral-600 mb-1.5">MFA Factors</label>
         {!mfaResults ? (
-          <p className="text-xs text-neutral-500">Run the MFA scan above to filter by enrolled factors.</p>
+          <p className="text-xs text-neutral-500">
+            Run the MFA scan above to filter by enrolled factors.
+          </p>
         ) : (
           <div className="space-y-2">
             {/* Quick count-based toggles */}
@@ -157,7 +175,9 @@ const MemberFilterPanel: React.FC<MemberFilterPanelProps> = ({
                         </FilterPill>
                         <FilterPill
                           active={mode === 'missing'}
-                          onClick={() => onSetFactorMode(label, mode === 'missing' ? 'off' : 'missing')}
+                          onClick={() =>
+                            onSetFactorMode(label, mode === 'missing' ? 'off' : 'missing')
+                          }
                           title={`Show only members missing ${label}`}
                           inactiveClassName="bg-neutral-50 text-danger-text border border-neutral-200 hover:border-danger-text"
                         >
@@ -177,8 +197,20 @@ const MemberFilterPanel: React.FC<MemberFilterPanelProps> = ({
       <div>
         <label className="block text-xs font-medium text-neutral-600 mb-1.5">Sort by</label>
         <div className="flex flex-wrap gap-1.5">
-          <SortButton field="name" label="Name" sortBy={sortBy} sortDesc={sortDesc} onToggle={onToggleSort} />
-          <SortButton field="status" label="Status" sortBy={sortBy} sortDesc={sortDesc} onToggle={onToggleSort} />
+          <SortButton
+            field="name"
+            label="Name"
+            sortBy={sortBy}
+            sortDesc={sortDesc}
+            onToggle={onToggleSort}
+          />
+          <SortButton
+            field="status"
+            label="Status"
+            sortBy={sortBy}
+            sortDesc={sortDesc}
+            onToggle={onToggleSort}
+          />
           {mfaResults && (
             <SortButton
               field="factors"

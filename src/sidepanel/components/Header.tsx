@@ -1,9 +1,18 @@
+/**
+ * @module sidepanel/components/Header
+ * @description Fixed top app header showing the product name and connection status.
+ *
+ * Displays a colour-coded status dot and label reflecting the current Okta tab
+ * connection state.
+ */
 import React from 'react';
 
 interface HeaderProps {
+  /** Connection state to the Okta tab; drives the status dot colour and label. */
   status: 'connecting' | 'connected' | 'error';
 }
 
+/** Renders the side-panel header bar with the app title and connection indicator. */
 const Header: React.FC<HeaderProps> = ({ status }) => {
   const statusText = {
     connecting: 'Connecting...',
@@ -20,12 +29,17 @@ const Header: React.FC<HeaderProps> = ({ status }) => {
   return (
     <header className="bg-white border-b border-neutral-200 z-50">
       <div className="px-5 py-3 flex items-center justify-between">
-        <h1 className="text-base font-semibold text-neutral-900 tracking-tight" style={{ fontFamily: 'var(--font-heading)' }}>
+        <h1
+          className="text-base font-semibold text-neutral-900 tracking-tight"
+          style={{ fontFamily: 'var(--font-heading)' }}
+        >
           Okta <span className="font-normal text-neutral-600">Unbound</span>
         </h1>
 
         <div className="flex items-center gap-2 text-xs font-medium text-neutral-700">
-          <span className={`w-2 h-2 rounded-full ${statusDot} ${status === 'connecting' ? 'animate-pulse' : ''}`} />
+          <span
+            className={`w-2 h-2 rounded-full ${statusDot} ${status === 'connecting' ? 'animate-pulse' : ''}`}
+          />
           <span>{statusText}</span>
         </div>
       </div>

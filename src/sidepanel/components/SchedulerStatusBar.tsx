@@ -1,18 +1,20 @@
 /**
- * Scheduler Status Bar
+ * @module sidepanel/components/SchedulerStatusBar
+ * @description Fixed bottom bar reporting the global API scheduler's live state.
  *
- * Displays the global API scheduler status in a compact bar.
- * Shows:
- * - Current status (idle, processing, throttled, cooldown, paused)
- * - Queue length
- * - Active requests
- * - Rate limit information
- * - Cooldown countdown
+ * Subscribes to the SchedulerContext and shows the current status (idle /
+ * processing / throttled / cooldown / paused), queue length, active requests,
+ * rate-limit headroom, a live cooldown countdown, total processed/failed counts,
+ * and a confirm-gated "Cancel" action to clear the pending queue.
  */
-
 import React, { useState, useEffect } from 'react';
+import { Button } from './shared';
 import { useScheduler } from '../contexts/SchedulerContext';
 
+/**
+ * Renders the scheduler status bar from SchedulerContext state, or nothing until
+ * the scheduler state is available.
+ */
 const SchedulerStatusBar: React.FC = () => {
   const { state, metrics, clearQueue } = useScheduler();
   const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
@@ -39,17 +41,17 @@ const SchedulerStatusBar: React.FC = () => {
   const getStatusColor = (): string => {
     switch (state.status) {
       case 'idle':
-        return '#22c55e'; // Green-500 - ready/idle
+        return 'var(--color-success)'; // ready/idle
       case 'processing':
-        return '#2196f3'; // Blue
+        return 'var(--color-info)';
       case 'throttled':
-        return '#ff9800'; // Orange
+        return 'var(--color-warning)';
       case 'cooldown':
-        return '#f44336'; // Red
+        return 'var(--color-danger)';
       case 'paused':
-        return '#9e9e9e'; // Gray
+        return 'var(--color-neutral-500)';
       default:
-        return '#666';
+        return 'var(--color-neutral-600)';
     }
   };
 
@@ -137,7 +139,9 @@ const SchedulerStatusBar: React.FC = () => {
         {state.status === 'cooldown' && cooldownRemaining > 0 && (
           <div className="flex items-center gap-1.5 px-2.5 py-1 bg-danger-light border border-danger/20 rounded-md">
             <span className="text-danger-text font-semibold">Resuming in:</span>
-            <span className="font-bold text-danger font-mono">{formatCooldownTime(cooldownRemaining)}</span>
+            <span className="font-bold text-danger font-mono">
+              {formatCooldownTime(cooldownRemaining)}
+            </span>
           </div>
         )}
 
@@ -147,27 +151,35 @@ const SchedulerStatusBar: React.FC = () => {
             <span className="text-neutral-600">Processed:</span>
             <span className="font-bold text-neutral-900">{state.totalProcessed}</span>
             {metrics.failedRequests > 0 && (
-              <span className="font-semibold text-danger-text">({metrics.failedRequests} failed)</span>
+              <span className="font-semibold text-danger-text">
+                ({metrics.failedRequests} failed)
+              </span>
             )}
           </div>
         )}
 
         {/* Cancel/Clear Queue Button */}
         {state.queueLength > 0 && (
-          <button
-            onClick={async () => {
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={() => {
               if (confirm(`Cancel ${state.queueLength} pending API requests?`)) {
-                await clearQueue();
+                void clearQueue();
               }
             }}
-            className="px-3 py-1.5 bg-danger hover:bg-danger-text text-white text-xs font-bold rounded-md transition-all duration-100 flex items-center gap-1.5"
             title="Cancel all pending requests"
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
             <span>Cancel</span>
-          </button>
+          </Button>
         )}
       </div>
     </div>

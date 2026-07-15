@@ -1,12 +1,22 @@
-// Audit Log Viewer
-// Displays action history as a read-only audit trail
-
+/**
+ * @module sidepanel/components/AuditLogViewer
+ * @description Read-only audit trail of actions performed through the extension.
+ *
+ * Reads action history from the undo manager, live-refreshes on `chrome.storage`
+ * `undoHistory` changes, renders each entry as an expandable row with type-specific
+ * detail rows, and offers a confirm-gated "Clear History" action. Rendered inside
+ * the History tab.
+ */
 import React, { useState, useEffect, useCallback } from 'react';
 import type { UndoAction } from '../../shared/undoTypes';
 import { getUndoHistory, clearUndoHistory, formatActionTime } from '../../shared/undoManager';
 import Button from './shared/Button';
 import EmptyState from './shared/EmptyState';
 
+/**
+ * Displays the logged undo/audit action history as an expandable, clearable list.
+ * Falls back to an {@link EmptyState} when no actions have been recorded.
+ */
 const AuditLogViewer: React.FC = () => {
   const [actions, setActions] = useState<UndoAction[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -37,13 +47,20 @@ const AuditLogViewer: React.FC = () => {
 
   const getTypeLabel = (type: UndoAction['type']): string => {
     switch (type) {
-      case 'REMOVE_USER_FROM_GROUP': return 'User Removal';
-      case 'ADD_USER_TO_GROUP': return 'User Addition';
-      case 'BULK_REMOVE_USERS_FROM_GROUP': return 'Bulk Removal';
-      case 'BULK_ADD_USERS_TO_GROUP': return 'Bulk Addition';
-      case 'ACTIVATE_RULE': return 'Rule Activated';
-      case 'DEACTIVATE_RULE': return 'Rule Deactivated';
-      default: return 'Action';
+      case 'REMOVE_USER_FROM_GROUP':
+        return 'User Removal';
+      case 'ADD_USER_TO_GROUP':
+        return 'User Addition';
+      case 'BULK_REMOVE_USERS_FROM_GROUP':
+        return 'Bulk Removal';
+      case 'BULK_ADD_USERS_TO_GROUP':
+        return 'Bulk Addition';
+      case 'ACTIVATE_RULE':
+        return 'Rule Activated';
+      case 'DEACTIVATE_RULE':
+        return 'Rule Deactivated';
+      default:
+        return 'Action';
     }
   };
 
@@ -112,19 +129,30 @@ const AuditLogViewer: React.FC = () => {
               onClick={() => setExpandedId(expandedId === action.id ? null : action.id)}
             >
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-neutral-900 truncate">{action.description}</div>
+                <div className="text-sm font-medium text-neutral-900 truncate">
+                  {action.description}
+                </div>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="px-2 py-0.5 bg-neutral-100 text-neutral-600 text-xs font-medium rounded">
                     {getTypeLabel(action.type)}
                   </span>
-                  <span className="text-xs text-neutral-500">{formatActionTime(action.timestamp)}</span>
+                  <span className="text-xs text-neutral-500">
+                    {formatActionTime(action.timestamp)}
+                  </span>
                 </div>
               </div>
               <svg
                 className={`w-4 h-4 text-neutral-400 transition-transform ${expandedId === action.id ? 'rotate-90' : ''}`}
-                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
               </svg>
             </div>
             {expandedId === action.id && renderDetails(action)}

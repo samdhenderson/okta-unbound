@@ -1,25 +1,66 @@
+/**
+ * @module sidepanel/components/groups/BulkOperationsPanel
+ * @description Inline panel that runs a bulk operation across the selected groups.
+ *
+ * Offers three operations — clean inactive users, export all members, and remove a
+ * specific user from every selected group. Drives `executeBulkOperation`
+ * and renders live progress plus a success/failure summary.
+ */
 import React, { useState, useCallback } from 'react';
-import Button from '../shared/Button';
+import { Button, IconButton, Input } from '../shared';
 import type { GroupSummary, BulkOperationResult } from '../../../shared/types';
 
+/** The bulk operations this panel can launch. */
 type BulkOpType = 'cleanup_inactive' | 'export_all' | 'remove_user';
 
 interface BulkOperationsPanelProps {
+  /** Groups the operation runs against (the current selection). */
   selectedGroups: GroupSummary[];
+  /**
+   * Runs a bulk operation, reporting progress per group. Resolves with the
+   * per-group results used to render the summary.
+   */
   executeBulkOperation: (
     operation: any,
-    onProgress?: (current: number, total: number, currentGroupName: string) => void
+    onProgress?: (current: number, total: number, currentGroupName: string) => void,
   ) => Promise<any[]>;
+  /** Dismisses the panel. */
   onClose: () => void;
+  /** Opens the export flow (used by the "Export All Members" operation). */
   onExportSelection: () => void;
 }
 
-const OPERATIONS: Array<{ type: BulkOpType; label: string; description: string; icon: string; variant: 'secondary' | 'danger' }> = [
-  { type: 'cleanup_inactive', label: 'Clean Inactive Users', description: 'Remove deprovisioned, suspended, and locked users', icon: 'trash', variant: 'danger' },
-  { type: 'export_all', label: 'Export All Members', description: 'Export member lists for all selected groups', icon: 'download', variant: 'secondary' },
-  { type: 'remove_user', label: 'Remove User from All', description: 'Remove a specific user from all selected groups', icon: 'minus', variant: 'danger' },
+const OPERATIONS: Array<{
+  type: BulkOpType;
+  label: string;
+  description: string;
+  icon: string;
+  variant: 'secondary' | 'danger';
+}> = [
+  {
+    type: 'cleanup_inactive',
+    label: 'Clean Inactive Users',
+    description: 'Remove deprovisioned, suspended, and locked users',
+    icon: 'trash',
+    variant: 'danger',
+  },
+  {
+    type: 'export_all',
+    label: 'Export All Members',
+    description: 'Export member lists for all selected groups',
+    icon: 'download',
+    variant: 'secondary',
+  },
+  {
+    type: 'remove_user',
+    label: 'Remove User from All',
+    description: 'Remove a specific user from all selected groups',
+    icon: 'minus',
+    variant: 'danger',
+  },
 ];
 
+/** Inline panel for running clean/export/remove operations over selected groups. */
 const BulkOperationsPanel: React.FC<BulkOperationsPanelProps> = ({
   selectedGroups,
   executeBulkOperation,
@@ -33,38 +74,43 @@ const BulkOperationsPanel: React.FC<BulkOperationsPanelProps> = ({
   const [removeUserId, setRemoveUserId] = useState('');
   const [showRemoveInput, setShowRemoveInput] = useState(false);
 
-  const handleExecute = useCallback(async (type: BulkOpType, config?: any) => {
-    setRunning(true);
-    setCurrentOp(type);
-    setResults(null);
+  const handleExecute = useCallback(
+    async (type: BulkOpType, config?: any) => {
+      setRunning(true);
+      setCurrentOp(type);
+      setResults(null);
 
-    try {
-      const opResults = await executeBulkOperation(
-        {
-          id: `bulk_${Date.now()}`,
-          type,
-          targetGroups: selectedGroups.map((g) => g.id),
-          status: 'pending',
-          progress: 0,
-          results: [],
-          config,
-        },
-        (current, total, groupName) => setProgress({ current, total, groupName })
-      );
-      setResults(opResults);
-    } catch (err) {
-      setResults([{
-        groupId: 'error',
-        groupName: 'Operation failed',
-        status: 'failed',
-        itemsProcessed: 0,
-        errors: [err instanceof Error ? err.message : 'Unknown error'],
-      }]);
-    } finally {
-      setRunning(false);
-      setCurrentOp(null);
-    }
-  }, [selectedGroups, executeBulkOperation]);
+      try {
+        const opResults = await executeBulkOperation(
+          {
+            id: `bulk_${Date.now()}`,
+            type,
+            targetGroups: selectedGroups.map((g) => g.id),
+            status: 'pending',
+            progress: 0,
+            results: [],
+            config,
+          },
+          (current, total, groupName) => setProgress({ current, total, groupName }),
+        );
+        setResults(opResults);
+      } catch (err) {
+        setResults([
+          {
+            groupId: 'error',
+            groupName: 'Operation failed',
+            status: 'failed',
+            itemsProcessed: 0,
+            errors: [err instanceof Error ? err.message : 'Unknown error'],
+          },
+        ]);
+      } finally {
+        setRunning(false);
+        setCurrentOp(null);
+      }
+    },
+    [selectedGroups, executeBulkOperation],
+  );
 
   const handleRemoveUser = useCallback(() => {
     if (!removeUserId.trim()) return;
@@ -86,14 +132,16 @@ const BulkOperationsPanel: React.FC<BulkOperationsPanelProps> = ({
             {selectedGroups.length} group{selectedGroups.length !== 1 ? 's' : ''} selected
           </p>
         </div>
-        <button
-          onClick={onClose}
-          className="p-1 text-neutral-400 hover:text-neutral-700 rounded-md hover:bg-neutral-100 transition-colors"
-        >
+        <IconButton label="Close" onClick={onClose} variant="ghost" size="sm">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
           </svg>
-        </button>
+        </IconButton>
       </div>
 
       {/* Operations */}
@@ -117,8 +165,18 @@ const BulkOperationsPanel: React.FC<BulkOperationsPanelProps> = ({
                 <div className="text-sm font-medium text-neutral-900">{op.label}</div>
                 <div className="text-xs text-neutral-500 mt-0.5">{op.description}</div>
               </div>
-              <svg className="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              <svg
+                className="w-4 h-4 text-neutral-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
               </svg>
             </button>
           ))}
@@ -126,18 +184,29 @@ const BulkOperationsPanel: React.FC<BulkOperationsPanelProps> = ({
           {/* Remove User Input */}
           {showRemoveInput && (
             <div className="flex gap-2 mt-2">
-              <input
-                type="text"
+              <Input
                 placeholder="Enter user ID to remove..."
                 value={removeUserId}
-                onChange={(e) => setRemoveUserId(e.target.value)}
-                className="flex-1 px-3 py-2 text-sm border border-neutral-200 rounded-md focus:outline-none focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary"
+                onChange={setRemoveUserId}
+                className="flex-1"
                 autoFocus
               />
-              <Button variant="danger" size="sm" onClick={handleRemoveUser} disabled={!removeUserId.trim()}>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={handleRemoveUser}
+                disabled={!removeUserId.trim()}
+              >
                 Remove
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => { setShowRemoveInput(false); setRemoveUserId(''); }}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setShowRemoveInput(false);
+                  setRemoveUserId('');
+                }}
+              >
                 Cancel
               </Button>
             </div>
@@ -152,9 +221,12 @@ const BulkOperationsPanel: React.FC<BulkOperationsPanelProps> = ({
             <div className="w-5 h-5 border-2 border-neutral-200 border-t-primary rounded-full animate-spin shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="text-sm font-medium text-neutral-900">
-                {currentOp === 'cleanup_inactive' ? 'Cleaning inactive users' :
-                 currentOp === 'export_all' ? 'Exporting members' :
-                 'Removing user'} ...
+                {currentOp === 'cleanup_inactive'
+                  ? 'Cleaning inactive users'
+                  : currentOp === 'export_all'
+                    ? 'Exporting members'
+                    : 'Removing user'}{' '}
+                ...
               </div>
               <div className="text-xs text-neutral-500 mt-0.5 truncate">{progress.groupName}</div>
             </div>
@@ -165,7 +237,9 @@ const BulkOperationsPanel: React.FC<BulkOperationsPanelProps> = ({
           <div className="h-1.5 bg-neutral-100 rounded-full overflow-hidden">
             <div
               className="h-full bg-primary rounded-full transition-all duration-300"
-              style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }}
+              style={{
+                width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%`,
+              }}
             />
           </div>
         </div>
@@ -190,11 +264,16 @@ const BulkOperationsPanel: React.FC<BulkOperationsPanelProps> = ({
           </div>
 
           {/* Error details */}
-          {results.filter((r) => r.errors?.length).map((r) => (
-            <div key={r.groupId} className="p-2 bg-danger-light rounded-md text-xs text-danger-text">
-              <span className="font-medium">{r.groupName}:</span> {r.errors?.join(', ')}
-            </div>
-          ))}
+          {results
+            .filter((r) => r.errors?.length)
+            .map((r) => (
+              <div
+                key={r.groupId}
+                className="p-2 bg-danger-light rounded-md text-xs text-danger-text"
+              >
+                <span className="font-medium">{r.groupName}:</span> {r.errors?.join(', ')}
+              </div>
+            ))}
 
           <Button variant="secondary" size="sm" fullWidth onClick={() => setResults(null)}>
             Run Another Operation

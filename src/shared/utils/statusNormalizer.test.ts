@@ -86,12 +86,16 @@ describe('statusNormalizer', () => {
     describe('HTML content extraction', () => {
       it('should extract status from HTML span tags', () => {
         expect(normalizeUserStatus('<span class="badge">Active</span>')).toBe('ACTIVE');
-        expect(normalizeUserStatus('<span class="badge badge-success">Active</span>')).toBe('ACTIVE');
+        expect(normalizeUserStatus('<span class="badge badge-success">Active</span>')).toBe(
+          'ACTIVE',
+        );
         expect(normalizeUserStatus('<span>Deactivated</span>')).toBe('DEPROVISIONED');
       });
 
       it('should extract status from complex HTML', () => {
-        expect(normalizeUserStatus('<div class="status"><span>Suspended</span></div>')).toBe('SUSPENDED');
+        expect(normalizeUserStatus('<div class="status"><span>Suspended</span></div>')).toBe(
+          'SUSPENDED',
+        );
         expect(normalizeUserStatus('<strong>Locked Out</strong>')).toBe('LOCKED_OUT');
         expect(normalizeUserStatus('<em>Password Reset</em>')).toBe('RECOVERY');
       });
@@ -137,8 +141,9 @@ describe('statusNormalizer', () => {
       it('should return default for object without recognizable properties', () => {
         expect(normalizeUserStatus({ foo: 'bar' })).toBe('ACTIVE');
         expect(consoleWarnSpy).toHaveBeenCalledWith(
+          '[statusNormalizer]',
           expect.stringContaining('object without recognizable property'),
-          expect.anything()
+          expect.anything(),
         );
       });
     });
@@ -147,28 +152,32 @@ describe('statusNormalizer', () => {
       it('should return ACTIVE for null', () => {
         expect(normalizeUserStatus(null)).toBe('ACTIVE');
         expect(consoleWarnSpy).toHaveBeenCalledWith(
-          expect.stringContaining('null/undefined')
+          '[statusNormalizer]',
+          expect.stringContaining('null/undefined'),
         );
       });
 
       it('should return ACTIVE for undefined', () => {
         expect(normalizeUserStatus(undefined)).toBe('ACTIVE');
         expect(consoleWarnSpy).toHaveBeenCalledWith(
-          expect.stringContaining('null/undefined')
+          '[statusNormalizer]',
+          expect.stringContaining('null/undefined'),
         );
       });
 
       it('should return ACTIVE for empty string', () => {
         expect(normalizeUserStatus('')).toBe('ACTIVE');
         expect(consoleWarnSpy).toHaveBeenCalledWith(
-          expect.stringContaining('empty string')
+          '[statusNormalizer]',
+          expect.stringContaining('empty string'),
         );
       });
 
       it('should return ACTIVE for whitespace-only string', () => {
         expect(normalizeUserStatus('   ')).toBe('ACTIVE');
         expect(consoleWarnSpy).toHaveBeenCalledWith(
-          expect.stringContaining('empty string')
+          '[statusNormalizer]',
+          expect.stringContaining('empty string'),
         );
       });
 
@@ -183,7 +192,8 @@ describe('statusNormalizer', () => {
         expect(normalizeUserStatus('INVALID_STATUS')).toBe('ACTIVE');
         expect(normalizeUserStatus('UnknownValue')).toBe('ACTIVE');
         expect(consoleWarnSpy).toHaveBeenCalledWith(
-          expect.stringContaining('Unknown status after normalization')
+          '[statusNormalizer]',
+          expect.stringContaining('Unknown status after normalization'),
         );
       });
 
@@ -197,14 +207,16 @@ describe('statusNormalizer', () => {
       it('should include context in warning messages', () => {
         normalizeUserStatus(null, 'user:00u123');
         expect(consoleWarnSpy).toHaveBeenCalledWith(
-          expect.stringContaining('for user:00u123')
+          '[statusNormalizer]',
+          expect.stringContaining('for user:00u123'),
         );
       });
 
       it('should include context for unknown statuses', () => {
         normalizeUserStatus('InvalidStatus', 'api:/admin/users');
         expect(consoleWarnSpy).toHaveBeenCalledWith(
-          expect.stringContaining('for api:/admin/users')
+          '[statusNormalizer]',
+          expect.stringContaining('for api:/admin/users'),
         );
       });
 
@@ -256,7 +268,7 @@ describe('statusNormalizer', () => {
         'PASSWORD_EXPIRED',
       ];
 
-      validStatuses.forEach(status => {
+      validStatuses.forEach((status) => {
         expect(isValidUserStatus(status)).toBe(true);
       });
     });
@@ -310,23 +322,21 @@ describe('statusNormalizer', () => {
     it('should include index in context when no prefix provided', () => {
       normalizeUserStatusBatch([null, 'Active']);
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('for index:0')
+        '[statusNormalizer]',
+        expect.stringContaining('for index:0'),
       );
     });
 
     it('should use contextPrefix when provided', () => {
       normalizeUserStatusBatch([null], 'group:00g123');
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('for group:00g123[0]')
+        '[statusNormalizer]',
+        expect.stringContaining('for group:00g123[0]'),
       );
     });
 
     it('should handle HTML in batch', () => {
-      const input = [
-        '<span>Active</span>',
-        '<div>Deactivated</div>',
-        'Suspended',
-      ];
+      const input = ['<span>Active</span>', '<div>Deactivated</div>', 'Suspended'];
       const expected: UserStatus[] = ['ACTIVE', 'DEPROVISIONED', 'SUSPENDED'];
       expect(normalizeUserStatusBatch(input)).toEqual(expected);
     });
@@ -442,7 +452,7 @@ describe('statusNormalizer', () => {
           ['00u112', 'Password Reset', 'Charlie Wilson', 'charlie@example.com'],
         ];
 
-        const statuses = apiResponse.map(user => normalizeUserStatus(user[1], `user:${user[0]}`));
+        const statuses = apiResponse.map((user) => normalizeUserStatus(user[1], `user:${user[0]}`));
 
         expect(statuses).toEqual([
           'ACTIVE',
@@ -465,7 +475,9 @@ describe('statusNormalizer', () => {
           { id: '00u112', status: 'RECOVERY', profile: {} },
         ];
 
-        const statuses = apiResponse.map(user => normalizeUserStatus(user.status, `user:${user.id}`));
+        const statuses = apiResponse.map((user) =>
+          normalizeUserStatus(user.status, `user:${user.id}`),
+        );
 
         expect(statuses).toEqual([
           'ACTIVE',

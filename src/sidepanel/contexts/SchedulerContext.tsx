@@ -1,26 +1,58 @@
 /**
- * Scheduler Context
+ * @module sidepanel/contexts/SchedulerContext
+ * @description React context that mirrors the background {@link SchedulerState} and
+ * {@link SchedulerMetrics} into the side panel and exposes pause/resume/clear controls.
  *
- * Provides access to the global API scheduler state and controls
- * from React components. This allows the UI to display scheduler status,
- * queue information, rate limit warnings, and cooldown countdowns.
+ * All state lives in the background `ApiScheduler`; this context is a read-through
+ * view of it. State is refreshed on mount, polled every second (for smooth cooldown
+ * countdowns), and also pushed live via `schedulerStateChanged` runtime messages.
+ * The control methods (`pause`/`resume`/`clearQueue`) round-trip through
+ * `chrome.runtime.sendMessage` and re-read state afterwards.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  ReactNode,
+} from 'react';
 import type { SchedulerState, SchedulerMetrics } from '../../shared/scheduler/types';
+import { createLogger } from '../../shared/utils/logger';
 
+const log = createLogger('SchedulerContext');
+
+/**
+ * Value exposed by {@link SchedulerContext}: the latest scheduler snapshot plus
+ * controls for the background queue.
+ */
 interface SchedulerContextType {
+  /** Latest scheduler state (queue, cooldown, pause flag), or `null` before the first fetch. */
   state: SchedulerState | null;
+  /** Latest throughput/rate-limit metrics, or `null` before the first fetch. */
   metrics: SchedulerMetrics | null;
+  /** Ask the background scheduler to pause processing, then re-read state. */
   pause: () => Promise<void>;
+  /** Ask the background scheduler to resume processing, then re-read state. */
   resume: () => Promise<void>;
+  /** Drop all queued requests in the background scheduler, then re-read state. */
   clearQueue: () => Promise<void>;
+  /** Force an immediate re-fetch of {@link SchedulerContextType.state}. */
   refreshState: () => Promise<void>;
+  /** Force an immediate re-fetch of {@link SchedulerContextType.metrics}. */
   refreshMetrics: () => Promise<void>;
 }
 
 const SchedulerContext = createContext<SchedulerContextType | undefined>(undefined);
 
+/**
+ * Provides scheduler state and controls to the side panel. Polls the background for
+ * state once per second and subscribes to `schedulerStateChanged` push messages so
+ * cooldown countdowns and queue depth stay current.
+ *
+ * @param props.children - Subtree that may call {@link useScheduler}.
+ */
 export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, setState] = useState<SchedulerState | null>(null);
   const [metrics, setMetrics] = useState<SchedulerMetrics | null>(null);
@@ -35,7 +67,7 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
         setState(response.state);
       }
     } catch (error) {
-      console.error('[SchedulerContext] Failed to fetch scheduler state:', error);
+      log.error('Failed to fetch scheduler state:', error);
     }
   }, []);
 
@@ -49,7 +81,7 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
         setMetrics(response.metrics);
       }
     } catch (error) {
-      console.error('[SchedulerContext] Failed to fetch scheduler metrics:', error);
+      log.error('Failed to fetch scheduler metrics:', error);
     }
   }, []);
 
@@ -71,9 +103,9 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Listen for scheduler state changes from background
   useEffect(() => {
-    const listener = (message: any) => {
+    const listener = (message: { action?: string; state?: SchedulerState }) => {
       if (message.action === 'schedulerStateChanged') {
-        setState(message.state);
+        setState(message.state ?? null);
       }
     };
 
@@ -89,7 +121,7 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
       await chrome.runtime.sendMessage({ action: 'pauseScheduler' });
       await refreshState();
     } catch (error) {
-      console.error('[SchedulerContext] Failed to pause scheduler:', error);
+      log.error('Failed to pause scheduler:', error);
     }
   }, [refreshState]);
 
@@ -98,7 +130,7 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
       await chrome.runtime.sendMessage({ action: 'resumeScheduler' });
       await refreshState();
     } catch (error) {
-      console.error('[SchedulerContext] Failed to resume scheduler:', error);
+      log.error('Failed to resume scheduler:', error);
     }
   }, [refreshState]);
 
@@ -107,7 +139,7 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
       await chrome.runtime.sendMessage({ action: 'clearSchedulerQueue' });
       await refreshState();
     } catch (error) {
-      console.error('[SchedulerContext] Failed to clear queue:', error);
+      log.error('Failed to clear queue:', error);
     }
   }, [refreshState]);
 
@@ -128,6 +160,12 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
   );
 };
 
+/**
+ * Access the scheduler state and controls.
+ *
+ * @returns The `SchedulerContextType` value from the nearest {@link SchedulerProvider}.
+ * @throws If called outside a {@link SchedulerProvider}.
+ */
 export const useScheduler = (): SchedulerContextType => {
   const context = useContext(SchedulerContext);
   if (!context) {

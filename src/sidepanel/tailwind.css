@@ -1,7 +1,7 @@
 @theme {
   /* Odyssey Design System - Color Tokens */
   --color-primary: #546be7;
-  --color-primary-text: #4C64E1;
+  --color-primary-text: #4c64e1;
   --color-primary-dark: #2e40a5;
   --color-primary-light: #f2f3fd;
   --color-primary-highlight: #dbe0fa;
@@ -17,6 +17,13 @@
   --color-warning-light: #fdfad9;
   --color-info: #546be7;
   --color-info-light: #f2f3fd;
+
+  /* Accent — used to distinguish the "user page" context (ContextBanner) */
+  --color-accent: #9333ea;
+  --color-accent-dark: #7e22ce;
+
+  /* Page canvas — the off-white/gray backdrop white cards sit on (native Okta admin look) */
+  --color-canvas: #f4f4f4;
 
   --color-neutral-50: #f4f4f4;
   --color-neutral-100: #ededed;
@@ -34,7 +41,7 @@
   --font-mono: 'Roboto Mono', SFMono-Regular, Consolas, 'Liberation Mono', monospace;
 }
 
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @layer components {
   .tab-content {
@@ -47,8 +54,12 @@
   }
 
   @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 
   .scrollable-list::-webkit-scrollbar {

@@ -1,11 +1,19 @@
+/**
+ * @module sidepanel/components/users/UserSearchResults
+ * @description Clickable list of user search results with status badges.
+ */
 import React from 'react';
 import type { OktaUser } from '../../../shared/types';
 
+/** Props for {@link UserSearchResults}. */
 interface UserSearchResultsProps {
+  /** Matching users to render; an empty array renders nothing. */
   results: OktaUser[];
+  /** Invoked with the chosen user when a result row is clicked. */
   onSelectUser: (user: OktaUser) => void;
 }
 
+/** Maps an Okta user status to its badge Tailwind class. */
 const getStatusBadgeClass = (status: string) => {
   switch (status) {
     case 'ACTIVE':
@@ -21,12 +29,10 @@ const getStatusBadgeClass = (status: string) => {
 };
 
 /**
- * Displays a list of user search results.
+ * Displays a list of user search results as clickable cards; renders nothing when
+ * there are no results.
  */
-const UserSearchResults: React.FC<UserSearchResultsProps> = ({
-  results,
-  onSelectUser,
-}) => {
+const UserSearchResults: React.FC<UserSearchResultsProps> = ({ results, onSelectUser }) => {
   if (results.length === 0) {
     return null;
   }
@@ -35,12 +41,12 @@ const UserSearchResults: React.FC<UserSearchResultsProps> = ({
     <div className="space-y-4 animate-in slide-in-from-top-4 duration-500">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-neutral-900">Search Results</h3>
-        <span className="px-3 py-1 bg-neutral-100 text-neutral-700 text-sm font-medium rounded-full">
+        <span className="px-3 py-1 bg-neutral-100 text-neutral-700 text-sm font-medium rounded-md">
           {results.length} {results.length === 1 ? 'user' : 'users'}
         </span>
       </div>
       <div className="space-y-3">
-        {results.map(user => (
+        {results.map((user) => (
           <div
             key={user.id}
             className="group bg-white rounded-md border border-neutral-200 p-5 cursor-pointer transition-all duration-100 hover:border-neutral-500"
@@ -48,7 +54,7 @@ const UserSearchResults: React.FC<UserSearchResultsProps> = ({
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
-                <h4 className="font-semibold text-neutral-900 mb-1 group-hover:text-primary-text transition-colors">
+                <h4 className="font-semibold text-neutral-900 mb-1 group-hover:text-primary-text transition-colors duration-100">
                   {user.profile.firstName} {user.profile.lastName}
                 </h4>
                 <p className="text-sm text-neutral-600 mb-1">{user.profile.email}</p>

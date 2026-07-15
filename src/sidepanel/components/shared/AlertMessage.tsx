@@ -1,20 +1,36 @@
+/**
+ * @module sidepanel/components/shared/AlertMessage
+ * @description Inline alert/notification banner with a status icon and optional dismiss + action button.
+ *
+ * Colour and icon are driven by the canonical {@link StatusType} vocabulary
+ * (`success | warning | danger | info` — ADR-0002). Renders with `role="alert"`.
+ */
 import React from 'react';
+import { type StatusType } from './status';
 
+/** The content of an alert: display text plus its severity. */
 export interface AlertMessageData {
   text: string;
-  type: 'info' | 'success' | 'warning' | 'error';
+  /** Canonical status vocabulary — `success | warning | danger | info` (ADR-0002). Selects icon + colours. */
+  type: StatusType;
 }
 
+/** An optional inline call-to-action button rendered next to the message text. */
 export interface AlertAction {
   label: string;
   onClick: () => void;
+  /** Visual emphasis of the action button. Forced to `danger` styling when the message itself is `danger`. */
   variant?: 'primary' | 'danger';
 }
 
 interface AlertMessageProps {
+  /** The alert text + severity to display. */
   message: AlertMessageData;
+  /** When provided, renders a dismiss (×) button that invokes this callback. */
   onDismiss?: () => void;
+  /** Optional inline action button (e.g. "Retry", "Undo"). */
   action?: AlertAction;
+  /** Extra classes merged onto the outer container. */
   className?: string;
 }
 
@@ -34,7 +50,7 @@ const typeStyles = {
     icon: 'text-warning',
     text: 'text-warning-text',
   },
-  error: {
+  danger: {
     bg: 'bg-danger-light border-danger-light',
     icon: 'text-danger',
     text: 'text-danger-text',
@@ -42,7 +58,8 @@ const typeStyles = {
 };
 
 /**
- * Displays an alert/notification message with dismiss button.
+ * Displays an alert/notification message with a status icon and optional
+ * dismiss button and action. The icon and colour scheme follow `message.type`.
  *
  * @example
  * ```tsx
@@ -54,8 +71,14 @@ const typeStyles = {
  * )}
  * ```
  */
-const AlertMessage: React.FC<AlertMessageProps> = ({ message, onDismiss, action, className = '' }) => {
-  const styles = typeStyles[message.type];
+const AlertMessage: React.FC<AlertMessageProps> = ({
+  message,
+  onDismiss,
+  action,
+  className = '',
+}) => {
+  const status = message.type;
+  const styles = typeStyles[status];
 
   return (
     <div
@@ -70,21 +93,21 @@ const AlertMessage: React.FC<AlertMessageProps> = ({ message, onDismiss, action,
           stroke="currentColor"
           viewBox="0 0 24 24"
         >
-          {message.type === 'success' ? (
+          {status === 'success' ? (
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth={2}
               d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
             />
-          ) : message.type === 'error' ? (
+          ) : status === 'danger' ? (
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth={2}
               d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
             />
-          ) : message.type === 'warning' ? (
+          ) : status === 'warning' ? (
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -110,7 +133,7 @@ const AlertMessage: React.FC<AlertMessageProps> = ({ message, onDismiss, action,
             type="button"
             onClick={action.onClick}
             className={`ml-3 px-3 py-1.5 text-sm font-medium rounded-md transition-colors duration-100 ${
-              action.variant === 'danger' || message.type === 'error'
+              action.variant === 'danger' || status === 'danger'
                 ? 'bg-danger text-white hover:bg-danger-text'
                 : 'bg-primary text-white hover:bg-primary-dark'
             }`}
@@ -129,7 +152,12 @@ const AlertMessage: React.FC<AlertMessageProps> = ({ message, onDismiss, action,
           aria-label="Dismiss message"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
           </svg>
         </button>
       )}

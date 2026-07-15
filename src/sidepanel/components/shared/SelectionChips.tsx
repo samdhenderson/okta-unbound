@@ -1,9 +1,22 @@
+/**
+ * @module sidepanel/components/shared/SelectionChips
+ * @description Renders a set of selected items as removable chips — the display half of a multi-select.
+ *
+ * Generic over the item type `T`; `getKey`/`getLabel` project each item. Shows
+ * `emptyMessage` when empty, and a "Clear all" link when more than one is selected.
+ */
 interface SelectionChipsProps<T> {
+  /** Selected items to render as chips. */
   items: T[];
+  /** Stable React key for an item. */
   getKey: (item: T) => string;
+  /** Visible chip label for an item. */
   getLabel: (item: T) => string;
+  /** Called to remove a single item (its × button). */
   onRemove: (item: T) => void;
+  /** Optional "Clear all" handler; the link shows only when >1 item is selected. */
   onClearAll?: () => void;
+  /** Placeholder text shown when there are no items. */
   emptyMessage?: string;
   className?: string;
 }
@@ -35,9 +48,7 @@ function SelectionChips<T>({
 }: SelectionChipsProps<T>) {
   if (items.length === 0) {
     return (
-      <div className={`text-sm text-neutral-500 italic py-2 ${className}`}>
-        {emptyMessage}
-      </div>
+      <div className={`text-sm text-neutral-500 italic py-2 ${className}`}>{emptyMessage}</div>
     );
   }
 
@@ -57,7 +68,12 @@ function SelectionChips<T>({
               title={`Remove ${getLabel(item)}`}
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>

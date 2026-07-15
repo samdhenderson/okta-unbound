@@ -4,6 +4,7 @@ import typescriptParser from '@typescript-eslint/parser';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
+import prettier from 'eslint-config-prettier';
 
 export default [
   {
@@ -50,7 +51,7 @@ export default [
     },
     plugins: {
       '@typescript-eslint': typescript,
-      'react': react,
+      react: react,
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
     },
@@ -69,8 +70,23 @@ export default [
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
       'react-hooks/set-state-in-effect': 'warn', // Downgrade from error to warning
-      // Relax other common rules that cause CI failures
-      'no-console': 'off',
+      // Logging policy (ADR-0004): use the logger util (src/shared/utils/logger.ts),
+      // not raw console. Migration complete — logger.ts is the only production
+      // console.* holder (allowed via its own override); tests may spy on console.
+      'no-console': 'error',
+      // Architecture guard (docs/architecture.md): Okta API traffic must go through
+      // the ApiScheduler. Raw `chrome.tabs.sendMessage` is the direct side-panel→
+      // content path that bypasses rate limiting — forbid new call sites. Existing
+      // holders are grandfathered in the override block below.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "CallExpression[callee.property.name='sendMessage'][callee.object.property.name='tabs']",
+          message:
+            'Do not call chrome.tabs.sendMessage directly — it bypasses the ApiScheduler rate limiting. Route API traffic through useOktaApi (makeApiRequest) / coreApi.sendMessage. See docs/architecture.md.',
+        },
+      ],
       'no-debugger': 'warn',
       'no-undef': 'warn', // Downgrade from error to warning
       '@typescript-eslint/ban-ts-comment': 'warn',
@@ -83,4 +99,38 @@ export default [
       },
     },
   },
+  // Grandfathered holders of raw `chrome.tabs.sendMessage` (see the guard above).
+  // Sanctioned (keeps raw access): apiScheduler.ts (the rate-limited path's own
+  // dispatch to content — the endpoint the guard steers traffic toward),
+  // useOktaApi/core.ts, and useOktaTabContext.ts (lightweight page-context probes,
+  // not rate-limited API traffic). Legacy, pending migration onto the scheduler
+  // with §7/§8: the god components + useUserSearch/useUserMemberships/UserOverview.
+  {
+    files: [
+      'src/shared/scheduler/apiScheduler.ts',
+      'src/sidepanel/hooks/useOktaApi/core.ts',
+      'src/sidepanel/hooks/useOktaTabContext.ts',
+      'src/sidepanel/hooks/useUserSearch.ts',
+      'src/sidepanel/hooks/useUsersTabSearch.ts',
+      'src/sidepanel/hooks/useDetectedUser.ts',
+      'src/sidepanel/hooks/useUserMemberships.ts',
+      'src/sidepanel/components/overview/UserOverview.tsx',
+      // GroupsTab's live search moved into this hook during its §7 decomposition;
+      // the bypass itself is untouched and still migrates in §8.
+      'src/sidepanel/hooks/useGroupLiveSearch.ts',
+      'src/sidepanel/components/RulesTab.tsx',
+    ],
+    rules: {
+      'no-restricted-syntax': 'off',
+    },
+  },
+  // Tests may spy on / stub console (e.g. suppressing expected warnings).
+  {
+    files: ['**/*.test.{ts,tsx}', 'src/test/**/*.{ts,tsx}'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
+  // Disable ESLint rules that conflict with Prettier (must be last).
+  prettier,
 ];

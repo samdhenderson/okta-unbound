@@ -1,6 +1,15 @@
+/**
+ * @module sidepanel/components/groups/GroupExportModal
+ * @description Modal for exporting a set of groups (a selection or a saved collection)
+ * to CSV, with column selection and an optional member-list export.
+ *
+ * The groups CSV honours the enabled columns; enabling "Include member list" fetches
+ * each group's members and writes a second CSV. Uses the shared csvUtils helpers.
+ */
 import React, { useState, useCallback } from 'react';
 import Modal from '../shared/Modal';
 import Button from '../shared/Button';
+import { Checkbox } from '../shared';
 import type { GroupSummary, OktaUser } from '../../../shared/types';
 import {
   escapeCSV,
@@ -9,7 +18,11 @@ import {
   sanitizeFilename,
   getDateForFilename,
 } from '../../../shared/utils/csvUtils';
+import { createLogger } from '../../../shared/utils/logger';
 
+const log = createLogger('GroupExportModal');
+
+/** A selectable CSV column with its toggle state. */
 interface ExportColumn {
   id: string;
   label: string;
@@ -18,12 +31,19 @@ interface ExportColumn {
 }
 
 interface GroupExportModalProps {
+  /** Whether the modal is visible. */
   isOpen: boolean;
+  /** Closes the modal. */
   onClose: () => void;
+  /** Groups included in the export. */
   groups: GroupSummary[];
+  /** Connected Okta tab id; export is blocked when null. */
   targetTabId: number | null;
+  /** Whether the source is an ad-hoc selection or a saved collection (affects filename). */
   exportType: 'selection' | 'collection';
+  /** Collection name, used for the title/filename when {@link GroupExportModalProps.exportType} is `collection`. */
   collectionName?: string;
+  /** Fetches a group's members for the optional member-list CSV. */
   onFetchMembers: (groupId: string) => Promise<OktaUser[]>;
 }
 
@@ -39,6 +59,10 @@ const DEFAULT_COLUMNS: ExportColumn[] = [
   { id: 'lastUpdated', label: 'Last Updated', enabled: false },
 ];
 
+/**
+ * Resolve a group's value for a given column id as a CSV-ready string.
+ * @returns The stringified field value, or `''` for an unknown column id.
+ */
 function getColumnValue(group: GroupSummary, columnId: string): string {
   switch (columnId) {
     case 'groupName':
@@ -64,6 +88,7 @@ function getColumnValue(group: GroupSummary, columnId: string): string {
   }
 }
 
+/** Modal for exporting groups (and optionally their members) to CSV. */
 const GroupExportModal: React.FC<GroupExportModalProps> = ({
   isOpen,
   onClose,
@@ -80,7 +105,7 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
 
   const toggleColumn = useCallback((columnId: string) => {
     setColumns((prev) =>
-      prev.map((col) => (col.id === columnId ? { ...col, enabled: !col.enabled } : col))
+      prev.map((col) => (col.id === columnId ? { ...col, enabled: !col.enabled } : col)),
     );
   }, []);
 
@@ -103,11 +128,13 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
       // Generate groups CSV
       const headers = enabledColumns.map((col) => col.label);
       const rows = groups.map((group) =>
-        enabledColumns.map((col) => escapeCSV(getColumnValue(group, col.id)))
+        enabledColumns.map((col) => escapeCSV(getColumnValue(group, col.id))),
       );
 
       const groupsCSV =
-        headers.map((h) => escapeCSV(h)).join(',') + '\n' + rows.map((row) => row.join(',')).join('\n');
+        headers.map((h) => escapeCSV(h)).join(',') +
+        '\n' +
+        rows.map((row) => row.join(',')).join('\n');
 
       // Generate filename
       const date = getDateForFilename();
@@ -125,7 +152,15 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
       if (includeMemberList) {
         setExportProgress('Fetching group members...');
 
-        const memberHeaders = ['Group ID', 'Group Name', 'User ID', 'Email', 'First Name', 'Last Name', 'Status'];
+        const memberHeaders = [
+          'Group ID',
+          'Group Name',
+          'User ID',
+          'Email',
+          'First Name',
+          'Last Name',
+          'Status',
+        ];
         const memberRows: string[][] = [];
 
         for (let i = 0; i < groups.length; i++) {
@@ -146,7 +181,7 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
               ]);
             });
           } catch (err) {
-            console.error(`Failed to fetch members for group ${group.name}:`, err);
+            log.error(`Failed to fetch members for group ${group.id}:`, err);
             // Add error row
             memberRows.push([
               escapeCSV(group.id),
@@ -172,13 +207,22 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
       setExportProgress(null);
       onClose();
     } catch (err) {
-      console.error('Export failed:', err);
+      log.error('Export failed:', err);
       alert(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setIsExporting(false);
       setExportProgress(null);
     }
-  }, [columns, groups, includeMemberList, exportType, collectionName, targetTabId, onFetchMembers, onClose]);
+  }, [
+    columns,
+    groups,
+    includeMemberList,
+    exportType,
+    collectionName,
+    targetTabId,
+    onFetchMembers,
+    onClose,
+  ]);
 
   const enabledCount = columns.filter((c) => c.enabled).length;
 
@@ -193,7 +237,11 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
           <Button variant="secondary" onClick={onClose} disabled={isExporting}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={handleExport} disabled={isExporting || enabledCount === 0}>
+          <Button
+            variant="primary"
+            onClick={handleExport}
+            disabled={isExporting || enabledCount === 0}
+          >
             {isExporting ? 'Exporting...' : `Export (${groups.length})`}
           </Button>
         </>
@@ -205,18 +253,13 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
           <h4 className="text-sm font-medium text-neutral-700 mb-3">Select columns to include:</h4>
           <div className="grid grid-cols-2 gap-2">
             {columns.map((col) => (
-              <label
+              <Checkbox
                 key={col.id}
-                className="flex items-center gap-2 p-2 rounded-md hover:bg-neutral-50 cursor-pointer transition-colors"
-              >
-                <input
-                  type="checkbox"
-                  checked={col.enabled}
-                  onChange={() => toggleColumn(col.id)}
-                  className="w-4 h-4 text-primary border-neutral-300 rounded focus:outline-2 focus:outline-offset-2 focus:outline-primary"
-                />
-                <span className="text-sm text-neutral-700">{col.label}</span>
-              </label>
+                checked={col.enabled}
+                onChange={() => toggleColumn(col.id)}
+                label={col.label}
+                className="p-2 rounded-md hover:bg-neutral-50 transition-colors"
+              />
             ))}
           </div>
         </div>
@@ -226,28 +269,27 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
 
         {/* Member List Toggle */}
         <div>
-          <label className="flex items-start gap-3 p-3 rounded-md border border-neutral-200 hover:border-neutral-300 cursor-pointer transition-colors">
-            <input
-              type="checkbox"
-              checked={includeMemberList}
-              onChange={(e) => setIncludeMemberList(e.target.checked)}
-              className="w-4 h-4 mt-0.5 text-primary border-neutral-300 rounded focus:outline-2 focus:outline-offset-2 focus:outline-primary"
-            />
-            <div>
-              <span className="text-sm font-medium text-neutral-700">Include member list</span>
-              <p className="text-xs text-neutral-500 mt-0.5">
-                Generates a second CSV file with member details (Group ID, Group Name, User ID, Email, First
-                Name, Last Name, Status)
-              </p>
-            </div>
-          </label>
+          <Checkbox
+            checked={includeMemberList}
+            onChange={setIncludeMemberList}
+            label={<span className="font-medium">Include member list</span>}
+            description="Generates a second CSV file with member details (Group ID, Group Name, User ID, Email, First Name, Last Name, Status)"
+            className="p-3 rounded-md border border-neutral-200 hover:border-neutral-300 transition-colors"
+          />
         </div>
 
         {/* Progress */}
         {exportProgress && (
           <div className="flex items-center gap-2 p-3 bg-info-light rounded-md border border-primary/20">
             <svg className="w-4 h-4 text-primary animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
               <path
                 className="opacity-75"
                 fill="currentColor"
@@ -261,11 +303,22 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
         {/* Warning for large exports with members */}
         {includeMemberList && groups.length > 20 && (
           <div className="flex items-start gap-2 p-3 bg-warning-light rounded-md border border-warning/20">
-            <svg className="w-4 h-4 text-warning-text mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            <svg
+              className="w-4 h-4 text-warning-text mt-0.5 shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
             </svg>
             <p className="text-sm text-warning-text">
-              Exporting members for {groups.length} groups may take a while. Consider exporting fewer groups at a time.
+              Exporting members for {groups.length} groups may take a while. Consider exporting
+              fewer groups at a time.
             </p>
           </div>
         )}

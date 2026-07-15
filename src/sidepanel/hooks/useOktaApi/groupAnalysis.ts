@@ -3,19 +3,38 @@
  * @description Group comparison, cross-group user search, and staleness scoring
  */
 
-import type { OktaUser, GroupSummary, GroupComparisonResult, StalenessInfo } from '../../../shared/types';
+import type {
+  OktaUser,
+  GroupSummary,
+  GroupComparisonResult,
+  StalenessInfo,
+} from '../../../shared/types';
 
+/** Paginated group-member fetch injected into the analysis operations. */
 type GetAllGroupMembers = (groupId: string) => Promise<OktaUser[]>;
 
+/**
+ * Build group-analysis operations (comparison, cross-group search, staleness).
+ *
+ * @param getAllGroupMembers - Paginated member fetch (from
+ * `createGroupMemberOperations`); the only operation here that hits the API.
+ * @returns `{ compareGroups, searchUserAcrossGroups, calculateStaleness }`.
+ */
 export function createGroupAnalysisOperations(getAllGroupMembers: GetAllGroupMembers) {
   /**
-   * Compare 2-5 groups to find overlapping and unique users.
-   * Fetches members for each group, computes set intersection and per-group uniques.
+   * Compare 2-5 groups to find overlapping and unique members.
+   *
+   * @param groups - The 2-5 `{ id, name }` groups to compare (throws outside that range).
+   * @param onProgress - Called per group as members load with `(index, total, message)`.
+   * @param memberCache - Optional id → members cache; hits skip the fetch and misses populate it.
+   * @returns A {@link GroupComparisonResult} with the full intersection, per-group
+   * uniques, and total distinct user count.
+   * @remarks The only API cost is one paginated member fetch per uncached group.
    */
   const compareGroups = async (
     groups: Array<{ id: string; name: string }>,
     onProgress?: (current: number, total: number, message?: string) => void,
-    memberCache?: Map<string, OktaUser[]>
+    memberCache?: Map<string, OktaUser[]>,
   ): Promise<GroupComparisonResult> => {
     if (groups.length < 2 || groups.length > 5) {
       throw new Error('Select 2-5 groups to compare');
@@ -53,7 +72,9 @@ export function createGroupAnalysisOperations(getAllGroupMembers: GetAllGroupMem
         .filter(([id]) => id !== groupId)
         .map(([, s]) => s);
 
-      uniqueMembers[groupId] = [...members].filter((userId) => !otherSets.some((s) => s.has(userId)));
+      uniqueMembers[groupId] = [...members].filter(
+        (userId) => !otherSets.some((s) => s.has(userId)),
+      );
     }
 
     // Total unique users across all groups
@@ -73,13 +94,18 @@ export function createGroupAnalysisOperations(getAllGroupMembers: GetAllGroupMem
   };
 
   /**
-   * Search for a user across the local group members cache.
-   * Pure in-memory operation, no API calls.
+   * Find users matching a query across an already-loaded group-members cache.
+   *
+   * @param query - Case-insensitive substring matched against email/login/first/last/full name.
+   * @param groupMembersCache - Map of groupId → members to search.
+   * @param groupNames - Map of groupId → display name for labeling results.
+   * @returns One `{ groupId, groupName, user }` per user-in-group match, de-duplicated per pair.
+   * @remarks Pure in-memory operation — no API calls.
    */
   const searchUserAcrossGroups = (
     query: string,
     groupMembersCache: Map<string, OktaUser[]>,
-    groupNames: Map<string, string>
+    groupNames: Map<string, string>,
   ): Array<{ groupId: string; groupName: string; user: OktaUser }> => {
     const q = query.toLowerCase();
     const results: Array<{ groupId: string; groupName: string; user: OktaUser }> = [];
@@ -112,8 +138,13 @@ export function createGroupAnalysisOperations(getAllGroupMembers: GetAllGroupMem
   };
 
   /**
-   * Calculate a staleness score for a group (0-100, 100 = most stale).
-   * Pure calculation, no API calls.
+   * Score how "stale" a group looks, as a heuristic for cleanup review.
+   *
+   * @param group - Group summary to score.
+   * @returns `StalenessInfo` with a `score` clamped to 0-100 (100 = most stale)
+   * and the human-readable `factors` that contributed.
+   * @remarks Weighs emptiness/small size, absence of rules, age since last update,
+   * and missing description. Pure calculation — no API calls.
    */
   const calculateStaleness = (group: GroupSummary): StalenessInfo => {
     let score = 0;

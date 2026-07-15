@@ -1,17 +1,29 @@
 /**
- * Okta Rate Limit Detector
+ * @module shared/scheduler/rateLimitDetector
+ * @description Parses and tracks Okta rate-limit headers to keep the scheduler
+ * below API limits.
  *
- * Parses and tracks Okta rate limit headers to prevent hitting API limits.
- * Okta uses the following headers:
- * - X-Rate-Limit-Limit: Total requests allowed per window
- * - X-Rate-Limit-Remaining: Requests remaining in current window
- * - X-Rate-Limit-Reset: Unix timestamp (seconds) when window resets
+ * Okta returns these per response:
+ * - `X-Rate-Limit-Limit` — total requests allowed per window
+ * - `X-Rate-Limit-Remaining` — requests remaining in the current window
+ * - `X-Rate-Limit-Reset` — Unix timestamp (seconds) when the window resets
  *
- * Reference: https://developer.okta.com/docs/reference/rate-limits/
+ * Tracks limits per-endpoint and a most-restrictive global view, expiring entries
+ * once their reset time passes.
+ *
+ * @see {@link https://developer.okta.com/docs/reference/rate-limits/ | Okta rate limits}
+ * @see `ApiScheduler`
  */
 
+import { createLogger } from '../utils/logger';
 import type { RateLimitInfo } from './types';
 
+const log = createLogger('RateLimitDetector');
+
+/**
+ * Stateful tracker of Okta rate-limit headers. Owned by an `ApiScheduler`;
+ * not safe for concurrent mutation across instances.
+ */
 export class RateLimitDetector {
   private limits: Map<string, RateLimitInfo> = new Map();
   private globalLimit: RateLimitInfo | null = null;
@@ -25,7 +37,7 @@ export class RateLimitDetector {
     const reset = headers['x-rate-limit-reset'];
 
     if (!limit || !remaining || !reset) {
-      console.log('[RateLimitDetector] Missing rate limit headers for', endpoint);
+      log.debug('Missing rate limit headers for', endpoint.split('?')[0]);
       return null;
     }
 
@@ -45,8 +57,8 @@ export class RateLimitDetector {
       this.globalLimit = info;
     }
 
-    console.log('[RateLimitDetector] Rate limit updated:', {
-      endpoint,
+    log.debug('Rate limit updated:', {
+      endpoint: endpoint.split('?')[0],
       remaining: info.remaining,
       limit: info.limit,
       resetIn: this.getSecondsUntilReset(info),
@@ -94,7 +106,7 @@ export class RateLimitDetector {
     const approaching = percentRemaining <= thresholdPercent;
 
     if (approaching) {
-      console.warn('[RateLimitDetector] Approaching rate limit:', {
+      log.warn('Approaching rate limit:', {
         remaining: info.remaining,
         limit: info.limit,
         percentRemaining: percentRemaining.toFixed(1) + '%',
@@ -203,7 +215,7 @@ export class RateLimitDetector {
   reset(): void {
     this.limits.clear();
     this.globalLimit = null;
-    console.log('[RateLimitDetector] Reset all rate limit tracking');
+    log.debug('Reset all rate limit tracking');
   }
 
   /**

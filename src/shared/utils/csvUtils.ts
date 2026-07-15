@@ -1,9 +1,22 @@
 /**
- * Shared CSV utilities for export operations
+ * @module shared/utils/csvUtils
+ * @description Shared CSV building/download helpers for export operations.
+ *
+ * Covers value escaping ({@link escapeCSV}), row assembly ({@link generateCSV}),
+ * browser download ({@link downloadCSV}), and filename helpers
+ * ({@link sanitizeFilename}, {@link getDateForFilename}).
  */
 
 /**
- * Format a date for CSV export (YYYY-MM-DD format)
+ * Format a date for CSV export in `YYYY-MM-DD` form.
+ *
+ * @param date - A `Date`, an ISO/parseable date string, or nullish.
+ * @returns The date portion of the ISO string, or `'N/A'` for nullish or
+ *   unparseable input.
+ *
+ * @example
+ * formatDateForCSV('2026-03-05T14:30:00Z'); // => '2026-03-05'
+ * formatDateForCSV(null); // => 'N/A'
  */
 export function formatDateForCSV(date: Date | string | null | undefined): string {
   if (!date) return 'N/A';
@@ -13,8 +26,18 @@ export function formatDateForCSV(date: Date | string | null | undefined): string
 }
 
 /**
- * Escape a value for safe CSV inclusion
- * Handles commas, newlines, and double quotes
+ * Escape a single value for safe inclusion in a CSV field.
+ *
+ * Values containing a comma, newline, or double quote are wrapped in double
+ * quotes with embedded quotes doubled, per RFC 4180.
+ *
+ * @param value - The cell value to escape; nullish becomes an empty field.
+ * @returns The escaped field string.
+ *
+ * @example
+ * escapeCSV('a,b');   // => '"a,b"'
+ * escapeCSV('he "x"'); // => '"he ""x"""'
+ * escapeCSV(null);     // => ''
  */
 export function escapeCSV(value: string | number | boolean | null | undefined): string {
   if (value === null || value === undefined) return '';
@@ -27,16 +50,32 @@ export function escapeCSV(value: string | number | boolean | null | undefined): 
 }
 
 /**
- * Generate CSV content from headers and rows
+ * Assemble a full CSV document from a header row and data rows.
+ *
+ * Every cell (headers included) is passed through {@link escapeCSV}. Lines are
+ * joined with `\n`.
+ *
+ * @param headers - Column header labels.
+ * @param rows - Data rows; each is an array of cell values aligned to `headers`.
+ * @returns The complete CSV text.
  */
-export function generateCSV(headers: string[], rows: (string | number | boolean | null | undefined)[][]): string {
-  const headerLine = headers.map(h => escapeCSV(h)).join(',');
-  const dataLines = rows.map(row => row.map(cell => escapeCSV(cell)).join(','));
+export function generateCSV(
+  headers: string[],
+  rows: (string | number | boolean | null | undefined)[][],
+): string {
+  const headerLine = headers.map((h) => escapeCSV(h)).join(',');
+  const dataLines = rows.map((row) => row.map((cell) => escapeCSV(cell)).join(','));
   return [headerLine, ...dataLines].join('\n');
 }
 
 /**
- * Download CSV content as a file
+ * Trigger a browser download of CSV content as a file.
+ *
+ * Creates a temporary object URL and a hidden anchor, clicks it, then revokes
+ * the URL. Requires a DOM (runs in the side panel).
+ *
+ * @param content - The CSV text to download.
+ * @param filename - The suggested download filename (include the `.csv` extension).
  */
 export function downloadCSV(content: string, filename: string): void {
   const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
@@ -53,14 +92,24 @@ export function downloadCSV(content: string, filename: string): void {
 }
 
 /**
- * Sanitize a string for use in filenames
+ * Sanitize a string for use in a filename.
+ *
+ * Replaces every non-alphanumeric character with `_` and lower-cases the result.
+ *
+ * @param name - The raw name (e.g. a group name).
+ * @returns A filesystem-safe, lower-cased token.
+ *
+ * @example
+ * sanitizeFilename('Sales Team (EMEA)'); // => 'sales_team__emea_'
  */
 export function sanitizeFilename(name: string): string {
   return name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
 }
 
 /**
- * Get current date in YYYY-MM-DD format for filenames
+ * Current date in `YYYY-MM-DD` form, for stamping export filenames.
+ *
+ * @returns Today's date as an ISO date string (date portion only).
  */
 export function getDateForFilename(): string {
   return new Date().toISOString().split('T')[0];

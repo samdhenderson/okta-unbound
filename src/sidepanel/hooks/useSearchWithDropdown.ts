@@ -1,14 +1,34 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+/**
+ * @module sidepanel/hooks/useSearchWithDropdown
+ * @description Generic debounced type-ahead-with-dropdown state machine.
+ *
+ * Reusable across any entity: owns the query, debounced async results, dropdown
+ * visibility and the selected item. Search pauses while an item is selected,
+ * while `disabled`, or while the query is shorter than `minQueryLength`.
+ */
 
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { createLogger } from '../../shared/utils/logger';
+
+const log = createLogger('useSearchWithDropdown');
+
+/** Options for {@link useSearchWithDropdown}. */
 interface UseSearchWithDropdownOptions<T> {
+  /** Async fetcher run (debounced) for the current query. */
   searchFn: (query: string) => Promise<T[]>;
+  /** Debounce delay before searching. Defaults to 300ms. */
   debounceMs?: number;
+  /** Minimum query length before searching. Defaults to 2. */
   minQueryLength?: number;
+  /** Called when an item is chosen via `selectItem`. */
   onSelect?: (item: T) => void;
+  /** Post-process results, e.g. to exclude already-selected items. */
   filterFn?: (results: T[]) => T[];
+  /** When true, searching is suppressed entirely. */
   disabled?: boolean;
 }
 
+/** Return shape of {@link useSearchWithDropdown}. */
 interface UseSearchWithDropdownReturn<T> {
   query: string;
   setQuery: (q: string) => void;
@@ -16,7 +36,9 @@ interface UseSearchWithDropdownReturn<T> {
   isSearching: boolean;
   showDropdown: boolean;
   setShowDropdown: (show: boolean) => void;
+  /** Choose an item: sets it, hides the dropdown, clears results, fires `onSelect`. */
   selectItem: (item: T) => void;
+  /** Reset query, results, dropdown and selection back to empty. */
   clearSearch: () => void;
   selectedItem: T | null;
   setSelectedItem: (item: T | null) => void;
@@ -25,6 +47,11 @@ interface UseSearchWithDropdownReturn<T> {
 /**
  * Hook for managing search with dropdown functionality.
  * Handles debounced search, dropdown visibility, and selection.
+ *
+ * @typeParam T - The result/item type returned by `searchFn`.
+ * @param options - See `UseSearchWithDropdownOptions`.
+ * @returns Query state, debounced `results`, `isSearching` /`showDropdown` flags,
+ *   and `selectItem` / `clearSearch` / `setSelectedItem` controls.
  *
  * @example
  * ```tsx
@@ -96,7 +123,7 @@ export function useSearchWithDropdown<T>({
           setShowDropdown(searchResults.length > 0);
         }
       } catch (error) {
-        console.error('[useSearchWithDropdown] Search error:', error);
+        log.error('Search error:', error);
         if (isMounted.current) {
           setResults([]);
           setShowDropdown(false);
@@ -118,7 +145,7 @@ export function useSearchWithDropdown<T>({
       setResults([]);
       onSelect?.(item);
     },
-    [onSelect]
+    [onSelect],
   );
 
   const clearSearch = useCallback(() => {

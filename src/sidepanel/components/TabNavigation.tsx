@@ -1,12 +1,22 @@
+/**
+ * @module sidepanel/components/TabNavigation
+ * @description Sticky top tab bar for switching between the side panel's main views.
+ *
+ * Renders the Overview/Users/Groups/Rules/History tabs and highlights the active one.
+ */
 import React from 'react';
 
+/** Identifier for each top-level side-panel tab. */
 export type TabType = 'overview' | 'rules' | 'users' | 'groups' | 'history';
 
 interface TabNavigationProps {
+  /** Currently selected tab, rendered with the active styling and underline. */
   activeTab: TabType;
+  /** Called with the chosen tab id when a tab is clicked. */
   onTabChange: (tab: TabType) => void;
 }
 
+/** Renders the horizontal tab navigation and reports selection via `onTabChange`. */
 const TabNavigation: React.FC<TabNavigationProps> = ({ activeTab, onTabChange }) => {
   const tabConfig = [
     { id: 'overview', label: 'Overview' },
@@ -24,9 +34,10 @@ const TabNavigation: React.FC<TabNavigationProps> = ({ activeTab, onTabChange })
             key={tab.id}
             className={`
               relative px-4 py-2.5 text-sm font-medium transition-colors duration-100
-              ${activeTab === tab.id
-                ? 'text-primary-text'
-                : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+              ${
+                activeTab === tab.id
+                  ? 'text-primary-text'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
               }
             `}
             style={{ fontFamily: 'var(--font-heading)', minHeight: '40px' }}

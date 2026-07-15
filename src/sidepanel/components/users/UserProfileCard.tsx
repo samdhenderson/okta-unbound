@@ -1,23 +1,50 @@
+/**
+ * @module sidepanel/components/users/UserProfileCard
+ * @description Presentational card summarizing a single Okta user's profile.
+ *
+ * Shared by both UsersTab and UserOverview. Shows avatar, status badge, key
+ * metadata, and optional collapsible Account/Organization/Contact sections that
+ * self-hide when the user has no data for them.
+ */
 import React, { useState } from 'react';
 import type { OktaUser } from '../../../shared/types';
 import CollapsibleSection from '../shared/CollapsibleSection';
+import { IconButton } from '../shared';
+import { formatDateShort, getRelativeTime } from '../../../shared/utils/dateFormat';
+import { getCustomProfileFields } from '../../../shared/utils/profileFields';
 
+/** Props for {@link UserProfileCard}. */
 interface UserProfileCardProps {
+  /** The user to render. */
   user: OktaUser;
+  /** Group count shown in the metadata footer. */
   groupCount?: number;
+  /**
+   * When true (default), renders the collapsible Account / Organization / Contact /
+   * Preferences / Custom Attributes sections.
+   */
   showCollapsibleSections?: boolean;
+  /** Okta origin used to build the "Open in Okta" admin link; the link is hidden when absent. */
   oktaOrigin?: string | null;
+  /**
+   * Optional content rendered between the summary card and the collapsible sections
+   * (e.g. UsersTab's lifecycle-action controls). Renders regardless of
+   * `showCollapsibleSections`.
+   */
+  afterCard?: React.ReactNode;
 }
 
 /**
- * Shared user profile card component used in both UsersTab and UserOverview.
- * Displays user details with avatar, status badge, metadata, and optional collapsible sections.
+ * Shared user profile card used in both UsersTab and UserOverview. Displays user
+ * details with avatar, status badge, metadata footer, and optional collapsible
+ * sections. Includes copy-to-clipboard for the user id.
  */
 const UserProfileCard: React.FC<UserProfileCardProps> = ({
   user,
   groupCount = 0,
   showCollapsibleSections = true,
   oktaOrigin,
+  afterCard,
 }) => {
   const [idCopied, setIdCopied] = useState(false);
 
@@ -28,8 +55,10 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
     });
   };
 
+  /** Maps an Okta user status to its status-badge Tailwind classes (color-coded per status). */
   const getStatusBadgeClass = (status: string): string => {
-    const baseClasses = 'inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold shadow-sm';
+    const baseClasses =
+      'inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold shadow-sm';
     switch (status) {
       case 'ACTIVE':
         return `${baseClasses} bg-emerald-50 text-emerald-700 border border-emerald-200`;
@@ -52,37 +81,8 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
     }
   };
 
-  const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    } catch {
-      return dateString;
-    }
-  };
-
-  const getRelativeTime = (dateString: string): string | null => {
-    try {
-      const date = new Date(dateString);
-      const now = new Date();
-      const diffMs = now.getTime() - date.getTime();
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-      if (diffDays === 0) return 'Today';
-      if (diffDays === 1) return 'Yesterday';
-      if (diffDays < 7) return `${diffDays} days ago`;
-      if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-      if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-      return `${Math.floor(diffDays / 365)} years ago`;
-    } catch {
-      return null;
-    }
-  };
-
-  const hasOrgInfo = user.profile.title ||
+  const hasOrgInfo =
+    user.profile.title ||
     user.profile.department ||
     user.profile.division ||
     user.profile.organization ||
@@ -91,7 +91,8 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
     user.profile.employeeNumber ||
     user.profile.userType;
 
-  const hasContactInfo = user.profile.mobilePhone ||
+  const hasContactInfo =
+    user.profile.mobilePhone ||
     user.profile.primaryPhone ||
     user.profile.streetAddress ||
     user.profile.city ||
@@ -102,7 +103,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
   return (
     <div className="space-y-4">
       {/* Premium User ID Card */}
-      <div className="bg-white rounded-xl border border-neutral-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-md border border-neutral-200 overflow-hidden">
         <div className="p-6 bg-white">
           <div className="flex items-start gap-5">
             {/* Avatar */}
@@ -129,7 +130,11 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
               {user.profile.genderPronouns && (
                 <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-700 text-xs font-medium rounded-md border border-purple-200 mt-2">
                   <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                    <path
+                      fillRule="evenodd"
+                      d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+                      clipRule="evenodd"
+                    />
                   </svg>
                   {user.profile.genderPronouns}
                 </div>
@@ -138,9 +143,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
 
             {/* Status Badge + Admin Console Link */}
             <div className="shrink-0 flex flex-col items-end gap-2">
-              <span className={getStatusBadgeClass(user.status)}>
-                {user.status}
-              </span>
+              <span className={getStatusBadgeClass(user.status)}>{user.status}</span>
               {oktaOrigin && (
                 <a
                   href={`${oktaOrigin}/admin/user/profile/view/${user.id}`}
@@ -151,7 +154,12 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
                 >
                   <span>Open in Okta</span>
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                    />
                   </svg>
                 </a>
               )}
@@ -162,27 +170,29 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
         {/* Metadata Footer */}
         <div className="px-6 py-4 bg-neutral-50 border-t border-neutral-200 grid grid-cols-3 gap-4 text-sm">
           <div className="flex flex-col">
-            <span className="text-xs font-semibold text-neutral-600 mb-1">Last Login</span>
+            <span className="text-xs font-medium text-neutral-600 mb-1">Last Login</span>
             <span className="text-neutral-900 font-medium">
               {user.lastLogin
-                ? getRelativeTime(user.lastLogin) || formatDate(user.lastLogin)
+                ? getRelativeTime(user.lastLogin) || formatDateShort(user.lastLogin)
                 : 'Never'}
             </span>
           </div>
           <div className="flex flex-col">
-            <span className="text-xs font-semibold text-neutral-600 mb-1">Created</span>
+            <span className="text-xs font-medium text-neutral-600 mb-1">Created</span>
             <span className="text-neutral-900 font-medium">
               {user.created
-                ? getRelativeTime(user.created) || formatDate(user.created)
+                ? getRelativeTime(user.created) || formatDateShort(user.created)
                 : 'Unknown'}
             </span>
           </div>
           <div className="flex flex-col">
-            <span className="text-xs font-semibold text-neutral-600 mb-1">Groups</span>
+            <span className="text-xs font-medium text-neutral-600 mb-1">Groups</span>
             <span className="text-neutral-900 font-medium">{groupCount}</span>
           </div>
         </div>
       </div>
+
+      {afterCard}
 
       {/* Collapsible Detail Sections */}
       {showCollapsibleSections && (
@@ -191,58 +201,96 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
           <CollapsibleSection title="Account Details" defaultOpen={false}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
               <div className="p-3 bg-white rounded-md border border-neutral-200">
-                <span className="text-xs font-semibold text-neutral-600 mb-1 block">Login</span>
+                <span className="text-xs font-medium text-neutral-600 mb-1 block">Login</span>
                 <span className="text-sm text-neutral-900 block">{user.profile.login}</span>
               </div>
               <div className="p-3 bg-white rounded-md border border-neutral-200">
-                <span className="text-xs font-semibold text-neutral-600 mb-1 block">User ID</span>
+                <span className="text-xs font-medium text-neutral-600 mb-1 block">User ID</span>
                 <div className="flex items-center gap-1.5">
                   <span className="font-mono text-xs text-neutral-900 truncate">{user.id}</span>
-                  <button
+                  <IconButton
+                    label={idCopied ? 'Copied!' : 'Copy ID'}
                     onClick={handleCopyId}
-                    className="shrink-0 p-0.5 text-neutral-400 hover:text-primary-text rounded transition-colors duration-100"
-                    title={idCopied ? 'Copied!' : 'Copy ID'}
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0"
                   >
                     {idCopied ? (
-                      <svg className="w-3.5 h-3.5 text-success-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                      <svg
+                        className="w-3.5 h-3.5 text-success-text"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                        />
                       </svg>
                     ) : (
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M8 5a2 2 0 002 2h4a2 2 0 002-2M8 5a2 2 0 012-2h4a2 2 0 012 2" />
+                      <svg
+                        className="w-3.5 h-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M8 5a2 2 0 002 2h4a2 2 0 002-2M8 5a2 2 0 012-2h4a2 2 0 012 2"
+                        />
                       </svg>
                     )}
-                  </button>
+                  </IconButton>
                 </div>
               </div>
               {user.profile.secondEmail && (
                 <div className="p-3 bg-white rounded-md border border-neutral-200">
-                  <span className="text-xs font-semibold text-neutral-600 mb-1 block">Secondary Email</span>
+                  <span className="text-xs font-medium text-neutral-600 mb-1 block">
+                    Secondary Email
+                  </span>
                   <span className="text-sm text-neutral-900 block">{user.profile.secondEmail}</span>
                 </div>
               )}
               {user.activated && (
                 <div className="p-3 bg-white rounded-md border border-neutral-200">
-                  <span className="text-xs font-semibold text-neutral-600 mb-1 block">Activated</span>
-                  <span className="text-sm text-neutral-900 block">{formatDate(user.activated)}</span>
+                  <span className="text-xs font-medium text-neutral-600 mb-1 block">Activated</span>
+                  <span className="text-sm text-neutral-900 block">
+                    {formatDateShort(user.activated)}
+                  </span>
                 </div>
               )}
               {user.statusChanged && (
                 <div className="p-3 bg-white rounded-md border border-neutral-200">
-                  <span className="text-xs font-semibold text-neutral-600 mb-1 block">Status Changed</span>
-                  <span className="text-sm text-neutral-900 block">{formatDate(user.statusChanged)}</span>
+                  <span className="text-xs font-medium text-neutral-600 mb-1 block">
+                    Status Changed
+                  </span>
+                  <span className="text-sm text-neutral-900 block">
+                    {formatDateShort(user.statusChanged)}
+                  </span>
                 </div>
               )}
               {user.passwordChanged && (
                 <div className="p-3 bg-white rounded-md border border-neutral-200">
-                  <span className="text-xs font-semibold text-neutral-600 mb-1 block">Password Changed</span>
-                  <span className="text-sm text-neutral-900 block">{formatDate(user.passwordChanged)}</span>
+                  <span className="text-xs font-medium text-neutral-600 mb-1 block">
+                    Password Changed
+                  </span>
+                  <span className="text-sm text-neutral-900 block">
+                    {formatDateShort(user.passwordChanged)}
+                  </span>
                 </div>
               )}
               {user.lastUpdated && (
                 <div className="p-3 bg-white rounded-md border border-neutral-200">
-                  <span className="text-xs font-semibold text-neutral-600 mb-1 block">Profile Updated</span>
-                  <span className="text-sm text-neutral-900 block">{formatDate(user.lastUpdated)}</span>
+                  <span className="text-xs font-medium text-neutral-600 mb-1 block">
+                    Profile Updated
+                  </span>
+                  <span className="text-sm text-neutral-900 block">
+                    {formatDateShort(user.lastUpdated)}
+                  </span>
                 </div>
               )}
             </div>
@@ -254,49 +302,69 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                 {user.profile.title && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">Title</span>
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">Title</span>
                     <span className="text-sm text-neutral-900 block">{user.profile.title}</span>
                   </div>
                 )}
                 {user.profile.department && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">Department</span>
-                    <span className="text-sm text-neutral-900 block">{user.profile.department}</span>
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
+                      Department
+                    </span>
+                    <span className="text-sm text-neutral-900 block">
+                      {user.profile.department}
+                    </span>
                   </div>
                 )}
                 {user.profile.division && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">Division</span>
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
+                      Division
+                    </span>
                     <span className="text-sm text-neutral-900 block">{user.profile.division}</span>
                   </div>
                 )}
                 {user.profile.organization && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">Organization</span>
-                    <span className="text-sm text-neutral-900 block">{user.profile.organization}</span>
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
+                      Organization
+                    </span>
+                    <span className="text-sm text-neutral-900 block">
+                      {user.profile.organization}
+                    </span>
                   </div>
                 )}
                 {user.profile.manager && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">Manager</span>
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">Manager</span>
                     <span className="text-sm text-neutral-900 block">{user.profile.manager}</span>
                   </div>
                 )}
                 {user.profile.costCenter && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">Cost Center</span>
-                    <span className="text-sm text-neutral-900 block">{user.profile.costCenter}</span>
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
+                      Cost Center
+                    </span>
+                    <span className="text-sm text-neutral-900 block">
+                      {user.profile.costCenter}
+                    </span>
                   </div>
                 )}
                 {user.profile.employeeNumber && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">Employee #</span>
-                    <span className="text-sm text-neutral-900 block">{user.profile.employeeNumber}</span>
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
+                      Employee #
+                    </span>
+                    <span className="text-sm text-neutral-900 block">
+                      {user.profile.employeeNumber}
+                    </span>
                   </div>
                 )}
                 {user.profile.userType && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">User Type</span>
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
+                      User Type
+                    </span>
                     <span className="text-sm text-neutral-900 block">{user.profile.userType}</span>
                   </div>
                 )}
@@ -310,33 +378,90 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                 {user.profile.primaryPhone && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">Phone</span>
-                    <span className="text-sm text-neutral-900 block">{user.profile.primaryPhone}</span>
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">Phone</span>
+                    <span className="text-sm text-neutral-900 block">
+                      {user.profile.primaryPhone}
+                    </span>
                   </div>
                 )}
                 {user.profile.mobilePhone && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">Mobile</span>
-                    <span className="text-sm text-neutral-900 block">{user.profile.mobilePhone}</span>
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">Mobile</span>
+                    <span className="text-sm text-neutral-900 block">
+                      {user.profile.mobilePhone}
+                    </span>
                   </div>
                 )}
-                {(user.profile.streetAddress || user.profile.city || user.profile.state || user.profile.zipCode) && (
+                {(user.profile.streetAddress ||
+                  user.profile.city ||
+                  user.profile.state ||
+                  user.profile.zipCode) && (
                   <div className="p-3 bg-white rounded-md border border-neutral-200 md:col-span-2">
-                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">Address</span>
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">Address</span>
                     <span className="text-sm text-neutral-900 block">
                       {[
                         user.profile.streetAddress,
                         user.profile.city,
                         user.profile.state,
                         user.profile.zipCode,
-                        user.profile.countryCode
-                      ].filter(Boolean).join(', ')}
+                        user.profile.countryCode,
+                      ]
+                        .filter(Boolean)
+                        .join(', ')}
                     </span>
                   </div>
                 )}
               </div>
             </CollapsibleSection>
           )}
+
+          {/* Preferences - only show if any exist */}
+          {(user.profile.locale || user.profile.timezone) && (
+            <CollapsibleSection title="Preferences" defaultOpen={false}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                {user.profile.locale && (
+                  <div className="p-3 bg-white rounded-md border border-neutral-200">
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">Locale</span>
+                    <span className="text-sm text-neutral-900 block">{user.profile.locale}</span>
+                  </div>
+                )}
+                {user.profile.timezone && (
+                  <div className="p-3 bg-white rounded-md border border-neutral-200">
+                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
+                      Timezone
+                    </span>
+                    <span className="text-sm text-neutral-900 block">{user.profile.timezone}</span>
+                  </div>
+                )}
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {/* Custom Attributes - show any non-standard profile fields */}
+          {(() => {
+            const customFields = getCustomProfileFields(user.profile);
+
+            if (customFields.length === 0) return null;
+
+            return (
+              <CollapsibleSection
+                title="Custom Attributes"
+                defaultOpen={false}
+                itemCount={customFields.length}
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  {customFields.map(([key, value]) => (
+                    <div className="p-3 bg-white rounded-md border border-neutral-200" key={key}>
+                      <span className="text-xs font-medium text-neutral-600 mb-1 block">{key}</span>
+                      <span className="text-sm text-neutral-900 block">
+                        {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleSection>
+            );
+          })()}
         </div>
       )}
     </div>

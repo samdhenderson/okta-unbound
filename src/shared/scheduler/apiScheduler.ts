@@ -1,17 +1,19 @@
 /**
- * Okta API Scheduler
+ * @module shared/scheduler/apiScheduler
+ * @description Centralized scheduler for all Okta API requests.
  *
- * Centralized scheduler for all Okta API requests. Prevents rate limiting by:
- * - Queuing requests with priority levels
- * - Tracking rate limit headers
- * - Implementing intelligent backoff and cooldown
- * - Controlling concurrency
- * - Auto-retrying failed requests
+ * Runs in the background service worker and coordinates every Okta API call in the
+ * extension to prevent rate limiting. It:
+ * - Queues requests by priority (high &gt; normal &gt; low)
+ * - Bounds concurrency and dispatches each request to the content script
+ * - Parses rate-limit headers and enters cooldown near the limit
+ * - Auto-retries failures with exponential backoff
+ * - Tracks metrics and broadcasts state to subscribers
  *
- * This scheduler runs in the background service worker and coordinates ALL
- * Okta API calls across the entire extension.
+ * @see {@link RateLimitDetector}
  */
 
+import { createLogger } from '../utils/logger';
 import { RateLimitDetector } from './rateLimitDetector';
 import type {
   QueuedRequest,
@@ -24,6 +26,8 @@ import type {
   RateLimitInfo,
 } from './types';
 
+const log = createLogger('ApiScheduler');
+
 const DEFAULT_CONFIG: SchedulerConfig = {
   maxConcurrent: 5, // Max 5 parallel requests
   minRemainingThreshold: 10, // Cooldown when <10% remaining
@@ -33,9 +37,22 @@ const DEFAULT_CONFIG: SchedulerConfig = {
   requestTimeout: 30000, // 30 second timeout per request
 };
 
+/**
+ * Priority queue and executor for Okta API requests. One instance is created in
+ * the background worker; the processing loop starts in the constructor.
+ */
 export class ApiScheduler {
   private queue: QueuedRequest[] = [];
   private activeRequests: Map<string, QueuedRequest> = new Map();
+  // Identical in-flight/queued GETs coalesced onto one leader request. Extra
+  // callers wait for the leader's result instead of issuing their own fetch.
+  private coalescableGets: Map<
+    string,
+    {
+      request: QueuedRequest;
+      waiters: Array<{ resolve: (r: RequestResult) => void; reject: (e: Error) => void }>;
+    }
+  > = new Map();
   private rateLimitDetector: RateLimitDetector;
   private config: SchedulerConfig;
   private status: SchedulerStatus = 'idle';
@@ -50,6 +67,7 @@ export class ApiScheduler {
     failedRequests: 0,
     retriedRequests: 0,
     cacheHits: 0,
+    coalescedRequests: 0,
     averageWaitTime: 0,
     averageExecutionTime: 0,
     cooldownEvents: 0,
@@ -59,26 +77,52 @@ export class ApiScheduler {
   private lastError: string | null = null;
   private stateListeners: Set<(state: SchedulerState) => void> = new Set();
 
+  /**
+   * @param config - Partial overrides merged over `DEFAULT_CONFIG`.
+   */
   constructor(config: Partial<SchedulerConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.rateLimitDetector = new RateLimitDetector();
 
-    console.log('[ApiScheduler] Initialized with config:', this.config);
+    log.debug('Initialized with config:', this.config);
 
     // Start processing loop
     this.startProcessing();
   }
 
   /**
-   * Schedule an API request
+   * Enqueue an API request and resolve when it completes (or rejects after
+   * retries are exhausted).
+   *
+   * @param endpoint - Okta path (may include query string).
+   * @param method - HTTP method.
+   * @param body - Optional request body (ignored for GET).
+   * @param tabId - Tab whose content script executes the fetch.
+   * @param priority - Queue priority; higher runs first.
+   * @returns The {@link RequestResult} once the request settles.
    */
   async scheduleRequest(
     endpoint: string,
     method: string,
-    body: any | undefined,
+    body: unknown,
     tabId: number,
-    priority: RequestPriority = 'normal'
+    priority: RequestPriority = 'normal',
   ): Promise<RequestResult> {
+    const dedupKey = this.getGetDedupKey(method, endpoint);
+
+    // Coalesce an identical in-flight/queued GET: attach to the leader's result
+    // instead of issuing a second fetch. Reads are idempotent, so this is safe.
+    if (dedupKey) {
+      const existing = this.coalescableGets.get(dedupKey);
+      if (existing) {
+        this.metrics.coalescedRequests++;
+        log.debug('Coalescing duplicate GET onto in-flight request:', {
+          endpoint: endpoint.split('?')[0],
+        });
+        return new Promise((resolve, reject) => existing.waiters.push({ resolve, reject }));
+      }
+    }
+
     return new Promise((resolve, reject) => {
       const request: QueuedRequest = {
         id: this.generateRequestId(),
@@ -94,18 +138,47 @@ export class ApiScheduler {
         maxRetries: this.config.maxRetries,
       };
 
+      // Register this GET as the coalescing leader and fan its result out to any
+      // callers that joined while it was in flight, clearing the slot on settle.
+      if (dedupKey) {
+        const entry: {
+          request: QueuedRequest;
+          waiters: Array<{ resolve: (r: RequestResult) => void; reject: (e: Error) => void }>;
+        } = { request, waiters: [] };
+        this.coalescableGets.set(dedupKey, entry);
+        request.resolve = (result: RequestResult) => {
+          this.coalescableGets.delete(dedupKey);
+          resolve(result);
+          entry.waiters.forEach((w) => w.resolve(result));
+        };
+        request.reject = (error: Error) => {
+          this.coalescableGets.delete(dedupKey);
+          reject(error);
+          entry.waiters.forEach((w) => w.reject(error));
+        };
+      }
+
       this.addToQueue(request);
       this.metrics.totalRequests++;
       this.notifyStateChange();
 
-      console.log('[ApiScheduler] Scheduled request:', {
+      log.debug('Scheduled request:', {
         id: request.id,
-        endpoint,
+        endpoint: endpoint.split('?')[0],
         method,
         priority,
         queueLength: this.queue.length,
       });
     });
+  }
+
+  /**
+   * Coalescing key for an idempotent GET, or `null` for methods that must not be
+   * de-duplicated (mutations). Includes the full endpoint so differing query
+   * strings stay distinct.
+   */
+  private getGetDedupKey(method: string, endpoint: string): string | null {
+    return method.toUpperCase() === 'GET' ? `GET ${endpoint}` : null;
   }
 
   /**
@@ -138,7 +211,7 @@ export class ApiScheduler {
       this.processQueue();
     }, 50);
 
-    console.log('[ApiScheduler] Started processing loop');
+    log.debug('Started processing loop');
   }
 
   /**
@@ -149,7 +222,7 @@ export class ApiScheduler {
       clearInterval(this.processingInterval);
       this.processingInterval = null;
     }
-    console.log('[ApiScheduler] Stopped processing loop');
+    log.debug('Stopped processing loop');
   }
 
   /**
@@ -168,7 +241,7 @@ export class ApiScheduler {
       return;
     } else if (this.cooldownEndsAt) {
       // Cooldown ended
-      console.log('[ApiScheduler] Cooldown ended, resuming processing');
+      log.debug('Cooldown ended, resuming processing');
       this.cooldownEndsAt = null;
     }
 
@@ -179,7 +252,12 @@ export class ApiScheduler {
     }
 
     // Check rate limits (account for in-flight requests)
-    if (this.rateLimitDetector.isApproachingLimit(this.config.minRemainingThreshold, this.activeRequests.size)) {
+    if (
+      this.rateLimitDetector.isApproachingLimit(
+        this.config.minRemainingThreshold,
+        this.activeRequests.size,
+      )
+    ) {
       this.enterCooldown();
       return;
     }
@@ -204,9 +282,9 @@ export class ApiScheduler {
     const startTime = Date.now();
 
     try {
-      console.log('[ApiScheduler] Executing request:', {
+      log.debug('Executing request:', {
         id: request.id,
-        endpoint: request.endpoint,
+        endpoint: request.endpoint.split('?')[0],
         method: request.method,
         attempt: request.retryCount + 1,
       });
@@ -216,10 +294,7 @@ export class ApiScheduler {
 
       // Parse rate limit headers if present
       if (result.headers) {
-        const rateLimitInfo = this.rateLimitDetector.parseHeaders(
-          result.headers,
-          request.endpoint
-        );
+        const rateLimitInfo = this.rateLimitDetector.parseHeaders(result.headers, request.endpoint);
 
         // Check if we should enter cooldown after this request
         if (rateLimitInfo && this.shouldEnterCooldown(rateLimitInfo)) {
@@ -236,13 +311,13 @@ export class ApiScheduler {
       this.activeRequests.delete(request.id);
       request.resolve(result);
 
-      console.log('[ApiScheduler] Request completed:', {
+      log.debug('Request completed:', {
         id: request.id,
         success: result.success,
         executionTime: `${executionTime}ms`,
       });
     } catch (error) {
-      console.error('[ApiScheduler] Request failed:', {
+      log.error('Request failed:', {
         id: request.id,
         error: error instanceof Error ? error.message : 'Unknown error',
         attempt: request.retryCount + 1,
@@ -293,14 +368,14 @@ export class ApiScheduler {
   /**
    * Retry a failed request
    */
-  private async retryRequest(request: QueuedRequest, _error: any): Promise<void> {
+  private async retryRequest(request: QueuedRequest, _error: unknown): Promise<void> {
     request.retryCount++;
     this.metrics.retriedRequests++;
 
     // Calculate exponential backoff delay
     const backoffDelay = this.config.retryDelay * Math.pow(2, request.retryCount - 1);
 
-    console.log('[ApiScheduler] Retrying request:', {
+    log.debug('Retrying request:', {
       id: request.id,
       attempt: request.retryCount + 1,
       maxRetries: request.maxRetries,
@@ -334,14 +409,15 @@ export class ApiScheduler {
 
     // Use reset time if available and shorter, otherwise fall back to configured cooldown
     const resetWaitTime = this.rateLimitDetector.getMillisecondsUntilReset(info);
-    const cooldownDuration = resetWaitTime > 0
-      ? Math.min(this.config.cooldownDuration, resetWaitTime)
-      : this.config.cooldownDuration;
+    const cooldownDuration =
+      resetWaitTime > 0
+        ? Math.min(this.config.cooldownDuration, resetWaitTime)
+        : this.config.cooldownDuration;
 
     this.cooldownEndsAt = Date.now() + cooldownDuration;
     this.metrics.cooldownEvents++;
 
-    console.warn('[ApiScheduler] Entering cooldown mode:', {
+    log.warn('Entering cooldown mode:', {
       remaining: info.remaining,
       limit: info.limit,
       cooldownDuration: `${Math.ceil(cooldownDuration / 1000)}s`,
@@ -358,7 +434,7 @@ export class ApiScheduler {
   pause(): void {
     this.isPaused = true;
     this.updateStatus('paused');
-    console.log('[ApiScheduler] Paused');
+    log.debug('Paused');
   }
 
   /**
@@ -366,7 +442,7 @@ export class ApiScheduler {
    */
   resume(): void {
     this.isPaused = false;
-    console.log('[ApiScheduler] Resumed');
+    log.debug('Resumed');
   }
 
   /**
@@ -375,7 +451,7 @@ export class ApiScheduler {
   private updateStatus(status: SchedulerStatus): void {
     if (this.status !== status) {
       this.status = status;
-      console.log('[ApiScheduler] Status changed:', status);
+      log.debug('Status changed:', status);
     }
   }
 
@@ -403,7 +479,9 @@ export class ApiScheduler {
   }
 
   /**
-   * Subscribe to state changes
+   * Subscribe to scheduler state changes.
+   *
+   * @returns An unsubscribe function that removes the listener.
    */
   onStateChange(listener: (state: SchedulerState) => void): () => void {
     this.stateListeners.add(listener);
@@ -419,7 +497,7 @@ export class ApiScheduler {
       try {
         listener(state);
       } catch (error) {
-        console.error('[ApiScheduler] Error in state listener:', error);
+        log.error('Error in state listener:', error);
       }
     });
   }
@@ -453,7 +531,7 @@ export class ApiScheduler {
   clearQueue(): void {
     const queueLength = this.queue.length;
     this.queue = [];
-    console.log(`[ApiScheduler] Cleared ${queueLength} requests from queue`);
+    log.debug(`Cleared ${queueLength} requests from queue`);
     this.notifyStateChange();
   }
 
@@ -467,11 +545,12 @@ export class ApiScheduler {
       failedRequests: 0,
       retriedRequests: 0,
       cacheHits: 0,
+      coalescedRequests: 0,
       averageWaitTime: 0,
       averageExecutionTime: 0,
       cooldownEvents: 0,
       throttleEvents: 0,
     };
-    console.log('[ApiScheduler] Metrics reset');
+    log.debug('Metrics reset');
   }
 }

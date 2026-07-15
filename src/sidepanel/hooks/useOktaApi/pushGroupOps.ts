@@ -6,14 +6,34 @@
 import type { CoreApi } from './core';
 import type { PushGroupMapping, GroupSummary } from '../../../shared/types';
 import { parseNextLink } from './utilities';
+import { createLogger } from '../../../shared/utils/logger';
 
+const log = createLogger('pushGroupOps');
+
+/**
+ * Build push-group mapping operations.
+ *
+ * @param coreApi - Shared transport surface (see {@link CoreApi}).
+ * @returns `{ getAppPushGroupMappings, applyPushGroupMappings }`.
+ * @remarks Note: this factory is not currently re-exported from the barrel; it is
+ * wired up where push-group enrichment is needed.
+ */
 export function createPushGroupOperations(coreApi: CoreApi) {
   /**
-   * Fetch push group mappings for an app.
-   * Uses the Okta Apps API to get groups assigned to an application,
-   * then checks for push group configurations.
+   * Fetch the push-group mappings for a single app.
+   *
+   * @param appId - App to inspect.
+   * @param appName - Optional label to stamp onto each returned mapping.
+   * @returns One {@link PushGroupMapping} per assigned group across all pages; `[]` on error.
+   * @remarks Pages `/api/v1/apps/{id}/groups` (200 per page) at `low` priority so it
+   * yields to interactive work. Group id is recovered from each assignment's
+   * `_links.group.href`; `status` is inferred `ACTIVE` when a `priority` is present.
+   * Errors are swallowed (logged only) and truncate the result.
    */
-  const getAppPushGroupMappings = async (appId: string, appName?: string): Promise<PushGroupMapping[]> => {
+  const getAppPushGroupMappings = async (
+    appId: string,
+    appName?: string,
+  ): Promise<PushGroupMapping[]> => {
     const mappings: PushGroupMapping[] = [];
     let nextUrl: string | null = `/api/v1/apps/${appId}/groups?limit=200`;
 
@@ -24,7 +44,9 @@ export function createPushGroupOperations(coreApi: CoreApi) {
 
         for (const assignment of response.data) {
           mappings.push({
-            mappingId: assignment.id || `${appId}_${assignment._links?.group?.href?.split('/').pop() || 'unknown'}`,
+            mappingId:
+              assignment.id ||
+              `${appId}_${assignment._links?.group?.href?.split('/').pop() || 'unknown'}`,
             sourceUserGroupId: assignment._links?.group?.href?.split('/').pop() || '',
             targetGroupName: assignment.profile?.name || assignment.profile?.groupName || '',
             status: assignment.priority !== undefined ? 'ACTIVE' : 'INACTIVE',
@@ -36,19 +58,26 @@ export function createPushGroupOperations(coreApi: CoreApi) {
         nextUrl = parseNextLink(response.headers?.link);
       }
     } catch (error) {
-      console.error(`[pushGroupOps] Failed to fetch push mappings for app ${appId}:`, error);
+      log.error(`Failed to fetch push mappings for app ${appId}:`, error);
     }
 
     return mappings;
   };
 
   /**
-   * Auto-detect apps from APP_GROUP sources and fetch their push mappings,
-   * then apply those mappings to the provided groups.
+   * Enrich groups with push-mapping and resolved source-app-name data.
+   *
+   * @param groups - Groups to enrich (only `APP_GROUP`-type with a `sourceAppId` trigger lookups).
+   * @param onProgress - Called as each app's mappings resolve with `(processed, total)`.
+   * @returns A new array where matched groups gain `pushMappings` and/or a resolved
+   * `sourceAppName`; groups with no updates are returned unchanged (same reference).
+   * @remarks Resolves each unique app's label and fetches its mappings in parallel
+   * (one request per app, at `low` priority — the scheduler caps real concurrency).
+   * Returns `groups` untouched when no `APP_GROUP` sources are present.
    */
   const applyPushGroupMappings = async (
     groups: GroupSummary[],
-    onProgress?: (current: number, total: number) => void
+    onProgress?: (current: number, total: number) => void,
   ): Promise<GroupSummary[]> => {
     // Collect unique app IDs from APP_GROUP type groups
     const appIds = new Map<string, string>(); // appId -> appName
@@ -64,7 +93,12 @@ export function createPushGroupOperations(coreApi: CoreApi) {
     const resolvedNames = await Promise.all(
       Array.from(appIds.keys()).map(async (appId) => {
         try {
-          const response = await coreApi.makeApiRequest(`/api/v1/apps/${appId}`, 'GET', undefined, 'low');
+          const response = await coreApi.makeApiRequest(
+            `/api/v1/apps/${appId}`,
+            'GET',
+            undefined,
+            'low',
+          );
           if (response.success && response.data) {
             const label = response.data.label || response.data.name;
             if (label) return { appId, name: label };
@@ -73,7 +107,7 @@ export function createPushGroupOperations(coreApi: CoreApi) {
           // Keep existing name on failure
         }
         return null;
-      })
+      }),
     );
 
     // Update appIds map with resolved labels
@@ -94,7 +128,7 @@ export function createPushGroupOperations(coreApi: CoreApi) {
         processed++;
         onProgress?.(processed, total);
         return mappings;
-      })
+      }),
     );
 
     const allMappings = mappingResults.flat();

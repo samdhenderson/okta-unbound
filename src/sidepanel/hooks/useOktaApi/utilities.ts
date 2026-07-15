@@ -4,7 +4,12 @@
  */
 
 /**
- * Parse pagination link from Okta API response headers
+ * Extract the `rel="next"` pagination target from an Okta `Link` response header.
+ *
+ * @param linkHeader - Raw `Link` header value (may contain multiple comma-separated links).
+ * @returns The next page as an origin-relative `pathname + search` string, or `null`
+ * when there is no next page. Returning a relative path lets the caller re-issue it
+ * through `CoreApi.makeApiRequest` without leaking the absolute Okta origin.
  */
 export function parseNextLink(linkHeader?: string): string | null {
   if (!linkHeader) return null;
@@ -23,15 +28,22 @@ export function parseNextLink(linkHeader?: string): string | null {
 }
 
 /**
- * Deep merge utility for complex app profiles
- * Handles arrays (merge or replace based on strategy), nested objects, and null values
+ * Recursively merge one app profile over another.
+ *
+ * @param baseProfile - Starting profile; copied, never mutated.
+ * @param overrideProfile - Values layered on top of the base.
+ * @param arrayStrategy - How to combine array-valued fields: `'replace'` (default)
+ * swaps the whole array; `'merge'` unions and de-dupes with the base array.
+ * @returns A new profile object with overrides applied.
+ * @remarks `null`/`undefined` override values are skipped so the base value survives;
+ * nested plain objects recurse with the same strategy; all other values are replaced.
  */
 export function deepMergeProfiles(
-  baseProfile: Record<string, any>,
-  overrideProfile: Record<string, any>,
-  arrayStrategy: 'merge' | 'replace' = 'replace'
-): Record<string, any> {
-  const result: Record<string, any> = { ...baseProfile };
+  baseProfile: Record<string, unknown>,
+  overrideProfile: Record<string, unknown>,
+  arrayStrategy: 'merge' | 'replace' = 'replace',
+): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...baseProfile };
 
   for (const [key, overrideValue] of Object.entries(overrideProfile)) {
     const baseValue = result[key];
@@ -52,8 +64,16 @@ export function deepMergeProfiles(
       }
     }
     // Handle nested objects (not arrays)
-    else if (typeof overrideValue === 'object' && typeof baseValue === 'object' && !Array.isArray(baseValue)) {
-      result[key] = deepMergeProfiles(baseValue || {}, overrideValue, arrayStrategy);
+    else if (
+      typeof overrideValue === 'object' &&
+      typeof baseValue === 'object' &&
+      !Array.isArray(baseValue)
+    ) {
+      result[key] = deepMergeProfiles(
+        (baseValue as Record<string, unknown> | null) || {},
+        overrideValue as Record<string, unknown>,
+        arrayStrategy,
+      );
     }
     // Primitive values
     else {

@@ -1,46 +1,79 @@
+/**
+ * @module sidepanel/components/overview/shared/QuickActionsPanel
+ * @description Collapsible, sectioned list of action buttons used on the Overview tabs.
+ *
+ * A presentational panel: callers pass declarative {@link ActionSection}s and the
+ * panel renders each as a collapsible group of {@link ActionButton}s (icon,
+ * variant, badge, loading, disabled). All behavior lives in the button handlers.
+ */
 import React, { useState } from 'react';
 import Icon, { type IconType } from './Icon';
 
+/** One action row within a {@link ActionSection}. */
 export interface ActionButton {
+  /** Button text. */
   label: string;
+  /** Optional leading icon. */
   icon?: IconType;
+  /** Visual style; defaults to `secondary`. */
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
+  /** Invoked on click. */
   onClick: () => void;
+  /** Disables the button when true. */
   disabled?: boolean;
+  /** Shows a spinner and disables the button when true. */
   loading?: boolean;
+  /** Optional count/label pill shown on the right (e.g. a pending count). */
   badge?: string;
+  /** Native title tooltip. */
   tooltip?: string;
 }
 
+/** A titled, individually collapsible group of {@link ActionButton}s. */
 export interface ActionSection {
+  /** Section heading. */
   title: string;
+  /** Optional leading icon for the header. */
   icon?: IconType;
+  /** Initial expanded state; defaults to expanded (only `false` collapses it). */
   expanded?: boolean;
+  /** Actions rendered when the section is open. */
   actions: ActionButton[];
 }
 
+/** Props for {@link QuickActionsPanel}. */
 interface QuickActionsPanelProps {
+  /** Sections to render, in order. */
   sections: ActionSection[];
+  /** Extra classes for the outer container. */
   className?: string;
 }
 
 const variantClasses = {
   primary: 'bg-primary hover:bg-primary-dark text-white shadow-sm disabled:opacity-50',
-  secondary: 'bg-white hover:bg-neutral-50 text-neutral-700 border border-neutral-200 shadow-sm disabled:bg-neutral-50 disabled:text-neutral-400',
+  secondary:
+    'bg-white hover:bg-neutral-50 text-neutral-700 border border-neutral-200 shadow-sm disabled:bg-neutral-50 disabled:text-neutral-400',
   danger: 'bg-danger hover:bg-danger text-white shadow-sm disabled:opacity-50',
   ghost: 'bg-transparent hover:bg-neutral-100 text-neutral-700 disabled:text-neutral-400',
 };
 
+/**
+ * Renders the sections as collapsible cards. Expand/collapse state is local and
+ * seeded from each section's {@link ActionSection.expanded} flag.
+ */
 const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({ sections, className = '' }) => {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(
-    sections.reduce((acc, section, index) => ({
-      ...acc,
-      [index]: section.expanded !== false, // Default to expanded
-    }), {})
+    sections.reduce(
+      (acc, section, index) => ({
+        ...acc,
+        [index]: section.expanded !== false, // Default to expanded
+      }),
+      {},
+    ),
   );
 
   const toggleSection = (index: number) => {
-    setExpandedSections(prev => ({
+    setExpandedSections((prev) => ({
       ...prev,
       [index]: !prev[index],
     }));
@@ -51,7 +84,7 @@ const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({ sections, classNa
       {sections.map((section, sectionIndex) => (
         <div
           key={sectionIndex}
-          className="rounded-md border border-neutral-200 bg-white shadow-sm overflow-hidden transition-all duration-100"
+          className="rounded-md border border-neutral-200 bg-white overflow-hidden transition-all duration-100"
         >
           {/* Section Header */}
           <button
@@ -83,7 +116,12 @@ const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({ sections, classNa
               stroke="currentColor"
               viewBox="0 0 24 24"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
             </svg>
           </button>
 
@@ -106,8 +144,19 @@ const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({ sections, classNa
                   <div className="flex items-center gap-3">
                     {action.loading ? (
                       <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
                       </svg>
                     ) : action.icon ? (
                       <Icon type={action.icon} size="sm" />
@@ -115,10 +164,12 @@ const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({ sections, classNa
                     <span>{action.label}</span>
                   </div>
                   {action.badge && (
-                    <span className="
+                    <span
+                      className="
                       ml-2 px-2.5 py-1 rounded-full text-xs font-bold
                       bg-danger text-white shadow-sm
-                    ">
+                    "
+                    >
                       {action.badge}
                     </span>
                   )}

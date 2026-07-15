@@ -1,12 +1,26 @@
+/**
+ * @module sidepanel/components/overview/shared/StatCard
+ * @description Single metric tile (title, value, optional icon) used in the Overview stat grids.
+ *
+ * Presentational only: a colored, optionally clickable card. Numeric values are
+ * localized with `toLocaleString`; the `color` prop selects an icon/border token set.
+ */
 import React from 'react';
 import Icon, { type IconType } from './Icon';
 
+/** Props for {@link StatCard}. */
 interface StatCardProps {
+  /** Uppercase label above the value. */
   title: string;
+  /** The metric; numbers are rendered with thousands separators. */
   value: number | string;
+  /** Semantic color, selecting the icon and border token set; defaults to `neutral`. */
   color?: 'primary' | 'success' | 'warning' | 'error' | 'neutral';
+  /** Optional icon shown at the top-right. */
   icon?: IconType;
+  /** Optional caption below the value. */
   subtitle?: string;
+  /** When provided, makes the card a clickable button. */
   onClick?: () => void;
 }
 
@@ -48,6 +62,7 @@ const colorConfigs = {
   },
 };
 
+/** Renders one metric tile; the `color` prop maps to a token set in `colorConfigs`. */
 const StatCard: React.FC<StatCardProps> = ({
   title,
   value,
@@ -59,11 +74,10 @@ const StatCard: React.FC<StatCardProps> = ({
   const config = colorConfigs[color];
 
   const baseClasses = `
-    relative overflow-hidden rounded-md border p-6
+    relative overflow-hidden rounded-md border p-4
     transition-all duration-100 ease-out
     ${config.cardBg} ${config.border}
-    ${onClick ? 'cursor-pointer hover:shadow-sm' : ''}
-    shadow-sm
+    ${onClick ? 'cursor-pointer hover:border-neutral-300' : ''}
   `.trim();
 
   return (
@@ -73,22 +87,21 @@ const StatCard: React.FC<StatCardProps> = ({
       role={onClick ? 'button' : undefined}
       style={{ fontFamily: 'var(--font-primary)' }}
     >
-      <div className="relative flex items-start justify-between gap-4">
+      <div className="relative flex items-center justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <p className={`text-xs font-bold uppercase tracking-widest ${config.textColor} opacity-60`}>
-            {title}
-          </p>
-          <p className={`mt-3 text-4xl font-bold ${config.textColor} tracking-tight`} style={{ fontFamily: 'var(--font-primary)' }}>
+          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{title}</p>
+          <p
+            className={`mt-2 text-3xl font-bold ${config.textColor} tracking-tight truncate`}
+            style={{ fontFamily: 'var(--font-primary)' }}
+          >
             {typeof value === 'number' ? value.toLocaleString() : value}
           </p>
           {subtitle && (
-            <p className={`mt-2.5 text-xs font-medium ${config.textColor} opacity-70`}>
-              {subtitle}
-            </p>
+            <p className="mt-1.5 text-xs font-medium text-neutral-500 truncate">{subtitle}</p>
           )}
         </div>
         {icon && (
-          <div className={`${config.iconBg} p-3.5 rounded-md shadow-sm ring-1 ring-black/5`}>
+          <div className={`${config.iconBg} p-2.5 rounded-md flex-shrink-0`}>
             <Icon type={icon} className={config.iconColor} size="lg" />
           </div>
         )}

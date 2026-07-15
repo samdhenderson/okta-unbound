@@ -1,23 +1,47 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+/**
+ * @module sidepanel/components/overview/GroupOverview
+ * @description Overview tab for a single Okta group: quick stats, bulk actions, and the member explorer.
+ *
+ * Loads the group's full membership (via the scheduler/content-script path in
+ * {@link useOktaApi}), derives status counts for the stat cards, and hosts the
+ * bulk operations (remove deprovisioned, export) plus the in-group
+ * {@link MemberExplorer} (search, composition reports, MFA scan).
+ */
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useOktaApi } from '../../hooks/useOktaApi';
+import { useEntityQuery } from '../../cache/useEntityQuery';
+import { peek, setEntry, invalidate } from '../../cache/entityCache';
 import { useProgress } from '../../contexts/ProgressContext';
 import AlertMessage from '../shared/AlertMessage';
-import Button from '../shared/Button';
+import { Button, IconButton } from '../shared';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import Modal from '../shared/Modal';
 import StatCard from './shared/StatCard';
 import QuickActionsPanel, { type ActionSection } from './shared/QuickActionsPanel';
 import MemberExplorer from './members/MemberExplorer';
 import type { OktaUser, MemberMfaResult, MfaScanStatus } from '../../../shared/types';
+import { createLogger } from '../../../shared/utils/logger';
 
+const log = createLogger('GroupOverview');
+
+/** Props for {@link GroupOverview}. */
 interface GroupOverviewProps {
+  /** Okta group id whose members and stats are shown. */
   groupId: string;
+  /** Group display name (used in headings and the export filename). */
   groupName: string;
+  /** Browser tab hosting the Okta session; every API call is routed to it. */
   targetTabId: number;
+  /** Switch the side panel to another primary tab (optionally focusing a rule). */
   onTabChange: (tab: 'rules' | 'users' | 'groups', selectedRuleId?: string) => void;
+  /** Okta org origin, used to build Admin Console deep links (null when unknown). */
   oktaOrigin?: string | null;
 }
 
+/**
+ * Renders the group Overview tab. Fetches all members on mount / group change,
+ * shows status stat cards and quick actions, and embeds the member explorer.
+ */
 const GroupOverview: React.FC<GroupOverviewProps> = ({
   groupId,
   groupName,
@@ -26,54 +50,64 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
   oktaOrigin,
 }) => {
   const { startProgress, completeProgress, updateProgress } = useProgress();
-  const [members, setMembers] = useState<OktaUser[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv');
   const [idCopied, setIdCopied] = useState(false);
   const [mfaResults, setMfaResults] = useState<Map<string, MemberMfaResult> | null>(null);
   const [scanStatus, setScanStatus] = useState<MfaScanStatus>('idle');
 
-  const handleResult = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error') => {
-    console.log(`[GroupOverview] ${type}:`, message);
-  }, []);
+  const handleResult = useCallback(
+    (message: string, type: 'info' | 'success' | 'warning' | 'error') => {
+      log.debug(`${type}:`, message);
+    },
+    [],
+  );
 
-  const handleProgress = useCallback((current: number, total: number, message: string, apiCalls?: number) => {
-    updateProgress(current, total, message, apiCalls);
-  }, [updateProgress]);
+  const handleProgress = useCallback(
+    (current: number, total: number, message: string, apiCalls?: number) => {
+      updateProgress(current, total, message, apiCalls);
+    },
+    [updateProgress],
+  );
 
-  const { getAllGroupMembers, removeDeprovisioned, exportMembers, scanGroupMfa, isLoading: isApiLoading } = useOktaApi({
+  const {
+    getAllGroupMembers,
+    removeDeprovisioned,
+    exportMembers,
+    scanGroupMfa,
+    isLoading: isApiLoading,
+  } = useOktaApi({
     targetTabId,
     onResult: handleResult,
     onProgress: handleProgress,
   });
 
-  // Use ref to avoid re-triggering the effect when useOktaApi returns new function refs
-  const apiRef = useRef(getAllGroupMembers);
-  apiRef.current = getAllGroupMembers;
-  const scanMfaRef = useRef(scanGroupMfa);
-  scanMfaRef.current = scanGroupMfa;
+  // Members come from the shared entity cache, so switching tabs / re-navigating
+  // back to this group serves instantly with no refetch (5-min TTL, then revalidate).
+  const {
+    data: membersData,
+    isLoading,
+    error,
+    refetch: refetchMembers,
+  } = useEntityQuery<OktaUser[]>(
+    ['groupMembers', groupId],
+    async () => (await getAllGroupMembers(groupId)) ?? [],
+    { enabled: Boolean(targetTabId && groupId) },
+  );
+  const members = useMemo(() => membersData ?? [], [membersData]);
 
-  const loadMembers = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    // Reset any cached MFA scan when switching groups.
-    setMfaResults(null);
-    setScanStatus('idle');
-    try {
-      const result = await apiRef.current(groupId);
-      setMembers(result || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load members');
-    } finally {
-      setIsLoading(false);
+  // Restore any previous MFA scan for this group from the cache (so navigating
+  // away and back does not force a rescan). Reset to idle when none is cached.
+  useEffect(() => {
+    const cached = peek<Map<string, MemberMfaResult>>(['mfaScan', groupId]);
+    if (cached) {
+      setMfaResults(cached);
+      setScanStatus('complete');
+    } else {
+      setMfaResults(null);
+      setScanStatus('idle');
     }
   }, [groupId]);
-
-  useEffect(() => {
-    loadMembers();
-  }, [loadMembers]);
 
   // Compute status counts from members
   const statusCounts = members.reduce<Record<string, number>>((acc, user) => {
@@ -90,7 +124,9 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
     startProgress('Remove Deprovisioned', 'Removing deprovisioned users...');
     try {
       await removeDeprovisioned(groupId);
-      await loadMembers();
+      // Membership changed — drop the stale MFA scan and reload members.
+      invalidate(['mfaScan', groupId]);
+      await refetchMembers();
     } finally {
       completeProgress();
     }
@@ -117,19 +153,22 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
     setScanStatus('scanning');
     startProgress('MFA Scan', `Scanning factors for ${members.length} members...`, members.length);
     try {
-      const result = await scanMfaRef.current(
+      const result = await scanGroupMfa(
         members.map((m) => m.id),
-        (current, total) => updateProgress(current, total, `Scanned ${current}/${total} members`, current)
+        (current, total) =>
+          updateProgress(current, total, `Scanned ${current}/${total} members`, current),
       );
       setMfaResults(result);
       setScanStatus('complete');
+      // Cache the scan so navigating away and back restores it without rescanning.
+      setEntry(['mfaScan', groupId], result);
     } catch (err) {
-      console.error('[GroupOverview] MFA scan failed:', err);
+      log.error('MFA scan failed:', err);
       setScanStatus('error');
     } finally {
       completeProgress();
     }
-  }, [members, startProgress, updateProgress, completeProgress]);
+  }, [groupId, members, scanGroupMfa, startProgress, updateProgress, completeProgress]);
 
   const requestMfaConfirm = useCallback(() => setScanStatus('confirming'), []);
   const cancelMfaConfirm = useCallback(() => setScanStatus('idle'), []);
@@ -141,8 +180,8 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
   if (error) {
     return (
       <AlertMessage
-        message={{ text: error, type: 'error' }}
-        action={{ label: 'Retry', onClick: loadMembers }}
+        message={{ text: error, type: 'danger' }}
+        action={{ label: 'Retry', onClick: refetchMembers }}
       />
     );
   }
@@ -191,19 +230,9 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
   return (
     <div className="space-y-6">
       {/* Quick Stats Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Members"
-          value={members.length}
-          color="primary"
-          icon="users"
-        />
-        <StatCard
-          title="Active"
-          value={statusCounts['ACTIVE'] || 0}
-          color="success"
-          icon="check"
-        />
+      <div className="grid grid-cols-2 gap-3">
+        <StatCard title="Total Members" value={members.length} color="primary" icon="users" />
+        <StatCard title="Active" value={statusCounts['ACTIVE'] || 0} color="success" icon="check" />
         <StatCard
           title="Inactive"
           value={inactiveCount}
@@ -245,28 +274,49 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
           >
             <span>Open in Admin Console</span>
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+              />
             </svg>
           </a>
         )}
         <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-neutral-50 border border-neutral-200 rounded-md">
           <span className="text-xs text-neutral-500 font-medium">ID:</span>
           <code className="text-xs font-mono text-neutral-700">{groupId}</code>
-          <button
+          <IconButton
+            label={idCopied ? 'Copied!' : 'Copy group ID'}
             onClick={handleCopyId}
-            className="p-0.5 text-neutral-400 hover:text-primary-text rounded transition-colors duration-100"
-            title={idCopied ? 'Copied!' : 'Copy group ID'}
+            variant="ghost"
+            size="sm"
           >
             {idCopied ? (
-              <svg className="w-3.5 h-3.5 text-success-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              <svg
+                className="w-3.5 h-3.5 text-success-text"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                />
               </svg>
             ) : (
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M8 5a2 2 0 002 2h4a2 2 0 002-2M8 5a2 2 0 012-2h4a2 2 0 012 2" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M8 5a2 2 0 002 2h4a2 2 0 002-2M8 5a2 2 0 012-2h4a2 2 0 012 2"
+                />
               </svg>
             )}
-          </button>
+          </IconButton>
         </div>
       </div>
 
@@ -277,8 +327,12 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
         title="Export Group Members"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setExportModalOpen(false)}>Cancel</Button>
-            <Button variant="primary" onClick={handleExportConfirm}>Export</Button>
+            <Button variant="secondary" onClick={() => setExportModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={handleExportConfirm}>
+              Export
+            </Button>
           </>
         }
       >
@@ -295,7 +349,8 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
             </select>
           </div>
           <p className="text-sm text-neutral-600">
-            This will export all members from <strong>{groupName}</strong> to a {exportFormat.toUpperCase()} file.
+            This will export all members from <strong>{groupName}</strong> to a{' '}
+            {exportFormat.toUpperCase()} file.
           </p>
         </div>
       </Modal>

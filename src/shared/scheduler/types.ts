@@ -1,11 +1,15 @@
 /**
- * Okta API Scheduler Types
+ * @module shared/scheduler/types
+ * @description Type definitions for the centralized API scheduling system.
  *
- * Type definitions for the centralized API scheduling system that prevents
- * rate limiting and coordinates all Okta API requests across the extension.
+ * Shapes shared across `ApiScheduler`
+ * and `RateLimitDetector`: queued
+ * requests, rate-limit info, scheduler config/state/metrics, and results.
  */
 
+/** Queue priority for a scheduled request (`high` runs before `normal`/`low`). */
 export type RequestPriority = 'high' | 'normal' | 'low';
+/** Coarse lifecycle status of the scheduler, surfaced to the UI. */
 export type SchedulerStatus = 'idle' | 'processing' | 'throttled' | 'cooldown' | 'paused';
 
 /**
@@ -15,11 +19,11 @@ export interface QueuedRequest {
   id: string;
   endpoint: string;
   method: string;
-  body?: any;
+  body?: unknown;
   priority: RequestPriority;
   tabId: number;
   timestamp: number;
-  resolve: (response: any) => void;
+  resolve: (response: RequestResult) => void;
   reject: (error: Error) => void;
   retryCount: number;
   maxRetries: number;
@@ -83,6 +87,8 @@ export interface SchedulerMetrics {
   failedRequests: number;
   retriedRequests: number;
   cacheHits: number;
+  /** GET requests served by joining an identical in-flight request (de-duplicated). */
+  coalescedRequests: number;
   averageWaitTime: number;
   averageExecutionTime: number;
   cooldownEvents: number;
