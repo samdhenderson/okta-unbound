@@ -13,6 +13,16 @@ import CrossGroupSearch from './groups/CrossGroupSearch';
 import BulkOperationsPanel from './groups/BulkOperationsPanel';
 import GroupCollections from './groups/GroupCollections';
 import { createLogger } from '../../shared/utils/logger';
+import { getDateForFilename } from '../../shared/utils/csvUtils';
+import { toGroupSummary, liveSearchToGroupSummary } from './groups/groupSummary';
+import { GROUPS_CACHE_KEY, parseGroupsCache, serializeGroupsCache } from './groups/groupsCache';
+import {
+  filterAndSortGroups,
+  computeActiveFilterCount,
+  type SortField,
+  type StalenessLevel,
+  type PushFilter,
+} from './groups/groupFilters';
 
 const log = createLogger('GroupsTab');
 
@@ -21,13 +31,7 @@ interface GroupsTabProps {
   oktaOrigin?: string;
 }
 
-const GROUPS_CACHE_KEY = 'okta_unbound_groups_cache';
-const CACHE_DURATION = 24 * 60 * 60 * 1000; // 1 day
-
 type ActivePanel = 'none' | 'bulk' | 'crossSearch' | 'collections';
-type SortField = 'name' | 'memberCount' | 'lastUpdated' | 'staleness';
-type StalenessLevel = '' | 'healthy' | 'monitor' | 'stale' | 'very_stale';
-type PushFilter = '' | 'pushed' | 'not_pushed';
 
 const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
   const [groups, setGroups] = useState<GroupSummary[]>([]);
@@ -47,9 +51,13 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
   const [showFilters, setShowFilters] = useState(false);
 
   // Active filter count for badge
-  const activeFilterCount =
-    [typeFilter, sizeFilter, pushFilter, stalenessFilter].filter(Boolean).length +
-    (pushAppFilter.size > 0 ? 1 : 0);
+  const activeFilterCount = computeActiveFilterCount({
+    typeFilter,
+    sizeFilter,
+    pushFilter,
+    stalenessFilter,
+    pushAppFilter,
+  });
 
   // Hybrid search mode state
   const [searchMode, setSearchMode] = useState<'live' | 'cached'>('live');
@@ -86,15 +94,8 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
     chrome.storage.local.get([GROUPS_CACHE_KEY], (result) => {
       if (result[GROUPS_CACHE_KEY]) {
         try {
-          const cached = JSON.parse(result[GROUPS_CACHE_KEY] as string);
-          const age = Date.now() - cached.timestamp;
-
-          if (age < CACHE_DURATION) {
-            const parsedGroups = cached.groups.map((g: any) => ({
-              ...g,
-              lastUpdated: g.lastUpdated ? new Date(g.lastUpdated) : undefined,
-              created: g.created ? new Date(g.created) : undefined,
-            }));
+          const parsedGroups = parseGroupsCache(result[GROUPS_CACHE_KEY] as string, Date.now());
+          if (parsedGroups) {
             setGroups(parsedGroups);
             setSearchMode('cached');
           }
@@ -112,40 +113,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
     try {
       const allGroups = await api.getAllGroups(() => {});
 
-      let groupSummaries: GroupSummary[] = allGroups.map((group: any) => {
-        const memberCount = group._embedded?.stats?.usersCount ?? 0;
-
-        let sourceAppId: string | undefined;
-        let sourceAppName: string | undefined;
-
-        if (group.type === 'APP_GROUP') {
-          if (group._links?.apps?.href) {
-            const appIdMatch = group._links.apps.href.match(/\/apps\/([^/]+)/);
-            if (appIdMatch) sourceAppId = appIdMatch[1];
-          }
-          if (group.source) {
-            sourceAppId = group.source.id;
-            if (group.source.name && group.source.name !== group.source.id) {
-              sourceAppName = group.source.name;
-            }
-          }
-        }
-
-        return {
-          id: group.id,
-          name: group.profile?.name || group.id,
-          description: group.profile?.description,
-          type: group.type,
-          memberCount,
-          lastUpdated: group.lastUpdated ? new Date(group.lastUpdated) : undefined,
-          created: group.created ? new Date(group.created) : undefined,
-          hasRules: false,
-          ruleCount: 0,
-          selected: false,
-          sourceAppId,
-          sourceAppName,
-        };
-      });
+      let groupSummaries: GroupSummary[] = allGroups.map(toGroupSummary);
 
       // Calculate staleness for each group
       groupSummaries = groupSummaries.map((g) => ({
@@ -167,10 +135,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
 
       // Cache results
       chrome.storage.local.set({
-        [GROUPS_CACHE_KEY]: JSON.stringify({
-          groups: groupSummaries,
-          timestamp: Date.now(),
-        }),
+        [GROUPS_CACHE_KEY]: serializeGroupsCache(groupSummaries, Date.now()),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load groups');
@@ -202,18 +167,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
         });
 
         if (response.success) {
-          const results = (response.data || []).map((group: any) => ({
-            id: group.id,
-            name: group.profile?.name || group.id,
-            description: group.profile?.description,
-            type: group.type,
-            memberCount: group._embedded?.stats?.usersCount ?? 0,
-            lastUpdated: group.lastUpdated ? new Date(group.lastUpdated) : undefined,
-            created: group.created ? new Date(group.created) : undefined,
-            hasRules: false,
-            ruleCount: 0,
-            selected: false,
-          }));
+          const results = (response.data || []).map(liveSearchToGroupSummary);
           setLiveSearchResults(results);
         } else {
           setError(response.error || 'Failed to search groups');
@@ -251,106 +205,21 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
     });
   }, []);
 
-  // Filter and sort groups
+  // Filter and sort groups. Live mode returns the search results by reference
+  // (uncopied) — only the cached path copies before sorting.
   const filteredGroups = useMemo(() => {
     if (searchMode === 'live') return liveSearchResults;
 
-    let filtered = [...groups];
-
-    // Text search
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (g) =>
-          g.name.toLowerCase().includes(q) ||
-          g.description?.toLowerCase().includes(q) ||
-          g.id.toLowerCase().includes(q),
-      );
-    }
-
-    // Type filter
-    if (typeFilter) {
-      filtered = filtered.filter((g) => g.type === typeFilter);
-    }
-
-    // Size filter
-    if (sizeFilter) {
-      filtered = filtered.filter((g) => {
-        switch (sizeFilter) {
-          case 'empty':
-            return g.memberCount === 0;
-          case 'small':
-            return g.memberCount > 0 && g.memberCount < 50;
-          case 'medium':
-            return g.memberCount >= 50 && g.memberCount < 200;
-          case 'large':
-            return g.memberCount >= 200 && g.memberCount < 1000;
-          case 'xlarge':
-            return g.memberCount >= 1000;
-          default:
-            return true;
-        }
-      });
-    }
-
-    // Push filter
-    if (pushFilter) {
-      filtered = filtered.filter((g) => {
-        const hasPush = g.pushMappings && g.pushMappings.length > 0;
-        return pushFilter === 'pushed' ? hasPush : !hasPush;
-      });
-    }
-
-    // Push App filter
-    if (pushAppFilter.size > 0) {
-      filtered = filtered.filter((g) => {
-        if (!g.pushMappings || g.pushMappings.length === 0) return false;
-        return g.pushMappings.some((m) => pushAppFilter.has(m.appId));
-      });
-    }
-
-    // Staleness filter
-    if (stalenessFilter) {
-      filtered = filtered.filter((g) => {
-        const score = g.staleness?.score || 0;
-        switch (stalenessFilter) {
-          case 'healthy':
-            return score <= 25;
-          case 'monitor':
-            return score > 25 && score <= 50;
-          case 'stale':
-            return score > 50 && score <= 75;
-          case 'very_stale':
-            return score > 75;
-          default:
-            return true;
-        }
-      });
-    }
-
-    // Sort
-    filtered.sort((a, b) => {
-      let cmp = 0;
-      switch (sortBy) {
-        case 'name':
-          cmp = a.name.localeCompare(b.name);
-          break;
-        case 'memberCount':
-          cmp = a.memberCount - b.memberCount;
-          break;
-        case 'lastUpdated':
-          if (!a.lastUpdated) cmp = 1;
-          else if (!b.lastUpdated) cmp = -1;
-          else cmp = a.lastUpdated.getTime() - b.lastUpdated.getTime();
-          break;
-        case 'staleness':
-          cmp = (a.staleness?.score || 0) - (b.staleness?.score || 0);
-          break;
-      }
-      return sortDesc ? -cmp : cmp;
+    return filterAndSortGroups(groups, {
+      searchQuery,
+      typeFilter,
+      sizeFilter,
+      pushFilter,
+      pushAppFilter,
+      stalenessFilter,
+      sortBy,
+      sortDesc,
     });
-
-    return filtered;
   }, [
     searchMode,
     liveSearchResults,
@@ -400,7 +269,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `okta_groups_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `okta_groups_${getDateForFilename()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }, [filteredGroups]);
