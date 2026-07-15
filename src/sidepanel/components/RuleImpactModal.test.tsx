@@ -41,11 +41,14 @@ const baseProps = {
 };
 
 describe('RuleImpactModal', () => {
-  it('shows a loss headline and per-group breakdown when done', () => {
+  it('shows the summary tiles and per-group breakdown when done', () => {
     render(<RuleImpactModal {...baseProps} mode="preview" />);
-    expect(screen.getByText('2 users would lose access')).toBeInTheDocument();
+    // Summary metric tiles.
+    expect(screen.getByText('Lose access')).toBeInTheDocument();
+    expect(screen.getByText('Current members')).toBeInTheDocument();
+    // Per-group breakdown.
     expect(screen.getByText('Eng All')).toBeInTheDocument();
-    expect(screen.getByText('2 lose access')).toBeInTheDocument();
+    expect(screen.getByText('−2 lose access')).toBeInTheDocument();
     // The group with no loss is labeled "No change".
     expect(screen.getByText('No change')).toBeInTheDocument();
   });
@@ -120,6 +123,8 @@ describe('RuleImpactModal', () => {
         }}
       />,
     );
-    expect(screen.getByText('No users would lose access')).toBeInTheDocument();
+    // No danger loss badge, and every group reads "No change".
+    expect(screen.queryByText(/lose access$/)).not.toBeInTheDocument();
+    expect(screen.getByText('No change')).toBeInTheDocument();
   });
 });

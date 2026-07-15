@@ -12,6 +12,7 @@ import React, { useState } from 'react';
 import Modal from './shared/Modal';
 import Button from './shared/Button';
 import LoadingSpinner from './shared/LoadingSpinner';
+import StatCard from './overview/shared/StatCard';
 import type { RuleImpactSummary, TargetGroupImpact } from '../../shared/membership/ruleImpact';
 import type { RuleImpactMode, RuleImpactStatus, RuleImpactProgress } from '../hooks/useRuleImpact';
 import { userDisplayName } from '../../shared/utils/userDisplay';
@@ -46,9 +47,15 @@ const TargetGroupRow: React.FC<{ group: TargetGroupImpact }> = ({ group }) => {
   const hasLoss = group.losingCount > 0;
   const listed = group.losing.slice(0, MAX_LISTED);
   const overflow = group.losingCount - listed.length;
+  const lossPct =
+    group.memberCount > 0 ? Math.round((group.losingCount / group.memberCount) * 100) : 0;
 
   return (
-    <div className="rounded-md border border-neutral-200 bg-white overflow-hidden">
+    <div
+      className={`rounded-md border bg-white overflow-hidden ${
+        hasLoss ? 'border-danger-light' : 'border-neutral-200'
+      }`}
+    >
       <button
         type="button"
         onClick={() => hasLoss && setExpanded((v) => !v)}
@@ -66,25 +73,32 @@ const TargetGroupRow: React.FC<{ group: TargetGroupImpact }> = ({ group }) => {
         <div className="flex items-center gap-2 shrink-0">
           {hasLoss ? (
             <span className="px-2 py-0.5 rounded-md bg-danger-light text-danger-text text-xs font-bold border border-danger-light">
-              {group.losingCount.toLocaleString()} lose access
+              −{group.losingCount.toLocaleString()} lose access
             </span>
           ) : (
             <span className="px-2 py-0.5 rounded-md bg-success-light text-success-text text-xs font-medium border border-success-light">
               No change
             </span>
           )}
-          {hasLoss && (
-            <svg
-              className={`w-4 h-4 text-neutral-400 transition-transform duration-100 ${expanded ? 'rotate-90' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          )}
+          <svg
+            className={`w-4 h-4 text-neutral-400 transition-transform duration-100 ${
+              expanded ? 'rotate-90' : ''
+            } ${hasLoss ? '' : 'invisible'}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
         </div>
       </button>
+
+      {/* Loss-proportion bar: at-a-glance share of the group that would be removed. */}
+      {hasLoss && (
+        <div className="h-1 bg-neutral-100" title={`${lossPct}% of members`}>
+          <div className="h-full bg-danger" style={{ width: `${lossPct}%` }} />
+        </div>
+      )}
 
       {hasLoss && expanded && (
         <ul className="border-t border-neutral-100 divide-y divide-neutral-100 max-h-56 overflow-y-auto scrollable-list">
@@ -185,34 +199,32 @@ const RuleImpactModal: React.FC<RuleImpactModalProps> = ({
 
         {status === 'done' && summary && (
           <>
-            {/* Headline */}
-            <div
-              className={`rounded-md border p-3 ${
-                totalLosing > 0
-                  ? 'border-danger-light bg-danger-light'
-                  : 'border-success-light bg-success-light'
-              }`}
-            >
-              <p
-                className={`text-sm font-semibold ${
-                  totalLosing > 0 ? 'text-danger-text' : 'text-success-text'
+            {/* Summary metrics — mirrors the Overview stat tiles for cohesion. */}
+            <div className="grid grid-cols-2 gap-3">
+              <StatCard
+                title="Lose access"
+                value={totalLosing}
+                color={totalLosing > 0 ? 'error' : 'success'}
+                icon={totalLosing > 0 ? 'alert' : 'check'}
+                subtitle={`across ${summary.targetGroups.length} target group${
+                  summary.targetGroups.length === 1 ? '' : 's'
                 }`}
-              >
-                {totalLosing > 0
-                  ? `${totalLosing.toLocaleString()} user${totalLosing === 1 ? '' : 's'} would lose access`
-                  : 'No users would lose access'}
-              </p>
-              <p className="text-xs text-neutral-600 mt-0.5">
-                Across {summary.targetGroups.length} target group
-                {summary.targetGroups.length === 1 ? '' : 's'} ·{' '}
-                {summary.distinctMemberCount.toLocaleString()} distinct current member
-                {summary.distinctMemberCount === 1 ? '' : 's'}
-              </p>
+              />
+              <StatCard
+                title="Current members"
+                value={summary.distinctMemberCount}
+                color="neutral"
+                icon="users"
+                subtitle="distinct, across targets"
+              />
             </div>
 
             {/* Per-group breakdown */}
             {summary.targetGroups.length > 0 ? (
               <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
+                  Target groups
+                </p>
                 {summary.targetGroups.map((group) => (
                   <TargetGroupRow key={group.groupId} group={group} />
                 ))}

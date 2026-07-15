@@ -306,7 +306,7 @@ const RuleCard: React.FC<RuleCardProps> = memo(
                 </Button>
               )}
               {onPreviewImpact && rule.groupIds.length > 0 && (
-                <Button variant="secondary" size="sm" icon="search" onClick={handlePreviewImpact}>
+                <Button variant="secondary" size="sm" icon="users" onClick={handlePreviewImpact}>
                   Preview Impact
                 </Button>
               )}

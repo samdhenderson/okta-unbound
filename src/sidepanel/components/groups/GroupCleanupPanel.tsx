@@ -11,11 +11,19 @@
 import React, { useMemo } from 'react';
 import Button from '../shared/Button';
 import EmptyState from '../shared/EmptyState';
+import StatCard from '../overview/shared/StatCard';
 import type { GroupSummary } from '../../../shared/types';
 import { analyzeClutter } from './clutterAnalysis';
 
 /** How many flagged groups to preview before collapsing to a count. */
 const MAX_PREVIEW = 8;
+
+/** Grade a fused review score into the app's severity token set. */
+function reviewScoreColor(score: number): string {
+  if (score >= 70) return 'bg-danger-light text-danger-text border-danger-light';
+  if (score >= 40) return 'bg-warning-light text-warning-text border-warning-light';
+  return 'bg-neutral-100 text-neutral-600 border-neutral-200';
+}
 
 interface GroupCleanupPanelProps {
   /** The loaded (cached) groups to analyze. */
@@ -25,25 +33,6 @@ interface GroupCleanupPanelProps {
   /** Close the panel. */
   onClose: () => void;
 }
-
-/** A category selector button; disabled (with a zero) when the category is empty. */
-const CategoryButton: React.FC<{
-  label: string;
-  ids: string[];
-  onSelect: (ids: string[]) => void;
-}> = ({ label, ids, onSelect }) => (
-  <Button
-    variant="secondary"
-    size="sm"
-    onClick={() => onSelect(ids)}
-    disabled={ids.length === 0}
-    title={
-      ids.length === 0 ? `No ${label.toLowerCase()} groups` : `Select ${label.toLowerCase()} groups`
-    }
-  >
-    {label} ({ids.length})
-  </Button>
-);
 
 /**
  * Renders the clutter-triage summary: category selectors plus a ranked preview of
@@ -82,15 +71,47 @@ const GroupCleanupPanel: React.FC<GroupCleanupPanelProps> = ({
         />
       ) : (
         <>
-          {/* Category selectors -> drive the existing selection machinery */}
-          <div className="flex flex-wrap gap-2">
-            <CategoryButton label="Empty" ids={report.categories.empty} onSelect={onSelectGroups} />
-            <CategoryButton
-              label="Duplicate names"
-              ids={report.categories.duplicateName}
-              onSelect={onSelectGroups}
+          {/* Category tiles double as selectors — mirrors the Overview stat grid. */}
+          <div className="grid grid-cols-3 gap-3">
+            <StatCard
+              title="Empty"
+              value={report.categories.empty.length}
+              color="neutral"
+              icon="minus"
+              subtitle="no members"
+              onClick={
+                report.categories.empty.length > 0
+                  ? () => onSelectGroups(report.categories.empty)
+                  : undefined
+              }
             />
-            <CategoryButton label="Stale" ids={report.categories.stale} onSelect={onSelectGroups} />
+            <StatCard
+              title="Duplicate names"
+              value={report.categories.duplicateName.length}
+              color="warning"
+              icon="clipboard"
+              subtitle="shared name"
+              onClick={
+                report.categories.duplicateName.length > 0
+                  ? () => onSelectGroups(report.categories.duplicateName)
+                  : undefined
+              }
+            />
+            <StatCard
+              title="Stale"
+              value={report.categories.stale.length}
+              color="warning"
+              icon="pause"
+              subtitle="no recent activity"
+              onClick={
+                report.categories.stale.length > 0
+                  ? () => onSelectGroups(report.categories.stale)
+                  : undefined
+              }
+            />
+          </div>
+
+          <div className="flex justify-end">
             <Button
               variant="primary"
               size="sm"
@@ -124,7 +145,9 @@ const GroupCleanupPanel: React.FC<GroupCleanupPanelProps> = ({
                   </div>
                 </div>
                 <span
-                  className="shrink-0 px-2 py-0.5 rounded-md bg-warning-light text-warning-text text-xs font-bold border border-warning-light"
+                  className={`shrink-0 px-2 py-0.5 rounded-md text-xs font-bold border ${reviewScoreColor(
+                    entry.reviewScore,
+                  )}`}
                   title="Review confidence (fused signal, 0–100)"
                 >
                   {entry.reviewScore}

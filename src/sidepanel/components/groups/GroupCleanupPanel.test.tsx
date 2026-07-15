@@ -41,7 +41,8 @@ describe('GroupCleanupPanel', () => {
     );
     // Reason chip is previewed.
     expect(screen.getByText('No members')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /^Empty \(1\)/ }));
+    // The Empty category tile is a clickable selector.
+    await userEvent.click(screen.getByRole('button', { name: /Empty/ }));
     expect(onSelectGroups).toHaveBeenCalledWith(['g1']);
   });
 
@@ -62,7 +63,7 @@ describe('GroupCleanupPanel', () => {
     expect(onSelectGroups).toHaveBeenCalledWith(expect.arrayContaining(['g1', 'g2']));
   });
 
-  it('disables a category with no members', () => {
+  it('renders an empty category as a non-interactive tile', () => {
     render(
       <GroupCleanupPanel
         groups={[group({ id: 'g1', name: 'Empty One', memberCount: 0 })]}
@@ -70,7 +71,8 @@ describe('GroupCleanupPanel', () => {
         onClose={() => {}}
       />,
     );
-    // No duplicate names here -> the Duplicate names selector is disabled.
-    expect(screen.getByRole('button', { name: /Duplicate names \(0\)/ })).toBeDisabled();
+    // No duplicate names here -> the Duplicate names tile is present but not a selector.
+    expect(screen.getByText('Duplicate names')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Duplicate names/ })).not.toBeInTheDocument();
   });
 });
