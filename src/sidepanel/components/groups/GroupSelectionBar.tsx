@@ -9,7 +9,7 @@ import React from 'react';
 import Button from '../shared/Button';
 
 /** Which inline panel (if any) is currently open below the bar. */
-export type ActivePanel = 'none' | 'bulk' | 'crossSearch' | 'collections';
+export type ActivePanel = 'none' | 'bulk' | 'crossSearch' | 'collections' | 'cleanup';
 
 interface GroupSelectionBarProps {
   /** Number of currently selected groups. */
@@ -105,6 +105,17 @@ const GroupSelectionBar: React.FC<GroupSelectionBarProps> = ({
         className={activePanel === 'collections' ? 'ring-2 ring-primary/20' : ''}
       >
         Collections
+      </Button>
+
+      {/* Cleanup triage */}
+      <Button
+        variant="secondary"
+        size="sm"
+        icon="sparkles"
+        onClick={() => onTogglePanel('cleanup')}
+        className={activePanel === 'cleanup' ? 'ring-2 ring-primary/20' : ''}
+      >
+        Cleanup
       </Button>
 
       {/* Export buttons */}

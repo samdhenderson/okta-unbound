@@ -75,7 +75,7 @@ Two new shared primitives are worth building **once** and reusing across A/C/D:
 Directories accumulate duplicate-name, empty, and rule-orphaned groups; admins have no
 consolidated view, and Okta's UI blocks adding target groups to an existing rule.
 
-**A1 — Clutter scan dashboard** _(Effort: L)_
+**A1 — Clutter scan dashboard** _(Effort: L)_ — `[x]` delivered (read-only triage)
 Detection is mostly **local** over the already-fetched group list, so few/no extra
 calls. Reuse `getAllGroups({expand:'stats'})`, `calculateStaleness`, `compareGroups`,
 `getGroupRulesForGroup`. Detects: exact/normalized-duplicate names; empty groups (0
@@ -85,6 +85,17 @@ category cards → each expands to a **selectable results table** (`useGroupSele
 `Checkbox`) → selection bar → bulk action.
 _Enhancement:_ a single sortable **"safe to remove" confidence badge** that fuses the
 signals, so admins triage on one column instead of four.
+
+**Delivered** (branch `claude/high-impact-features`): a **Cleanup** panel _inside_ the
+Groups tab (a new selection-bar toggle beside Compare/Bulk/Collections — no new top-level
+tab, no clutter). `clutterAnalysis.analyzeClutter` is a pure, tested classifier over the
+loaded `GroupSummary[]` that fuses empty / duplicate-name / stale / missing-description
+into one 0–100 **review score** with reasons — the "single confidence" enhancement. The
+category counts are one-click **selectors** that feed the existing selection → bulk/export
+machinery, so cleanup reuses everything and adds no new mutation surface. Scoped honestly
+to what's knowable locally: it flags empty/duplicate/stale but does **not** yet claim
+rule-orphan status (needs the rules payload — a clean follow-up). A2 (per-group "why does
+this exist / who feeds it") and A3/A4 (merge + rule writes) remain open.
 
 **A2 — Membership-source insight** _(Effort: L–M)_
 Per group, answer **"why does this exist / who feeds it?"** — feeding rules

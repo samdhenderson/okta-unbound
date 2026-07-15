@@ -24,6 +24,7 @@ import GroupComparisonModal from './groups/GroupComparisonModal';
 import CrossGroupSearch from './groups/CrossGroupSearch';
 import BulkOperationsPanel from './groups/BulkOperationsPanel';
 import GroupCollections from './groups/GroupCollections';
+import GroupCleanupPanel from './groups/GroupCleanupPanel';
 import GroupSearchBar from './groups/GroupSearchBar';
 import GroupFilterToggle from './groups/GroupFilterToggle';
 import GroupFilterPanel from './groups/GroupFilterPanel';
@@ -246,6 +247,14 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
                 selectedGroupIds={selectedGroupIds}
                 groups={groups}
                 onLoadCollection={selection.replaceSelection}
+                onClose={() => setActivePanel('none')}
+              />
+            )}
+
+            {activePanel === 'cleanup' && (
+              <GroupCleanupPanel
+                groups={groups}
+                onSelectGroups={selection.replaceSelection}
                 onClose={() => setActivePanel('none')}
               />
             )}
