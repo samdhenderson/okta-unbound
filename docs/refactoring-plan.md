@@ -204,24 +204,34 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
       failure banner); membership DIRECT/RULE_BASED via the in-file heuristic +
       rules-fetch-failure degradation. The session-4 suite stays parked/unused.
 - [~] **UsersTab §7 pure-extraction phase (session 7, decompose-only, oracle green).**
-  Landed as small sequential commits: `analyzeMemberships` → tested
-  `shared/utils/membershipAnalysis.ts` (the AS-IS in-file heuristic, NOT the
-  drifted `useUserMemberships` exclusion variant); `EXCLUDED_PROFILE_FIELDS` +
-  the per-render `standardFields` Set → tested `shared/utils/profileFields.ts`
-  (`getCustomProfileFields`, security filter pinned); deleted the dead
-  `requestCount` locals. UsersTab 1572 → ~1417 lines.
-- [ ] **UsersTab §7 remaining — BLOCKED ON DECISIONS (do not fold into decompose-only).**
-      Next moves each need a call + their own commit with a flipped assertion:
-      (a) adopt `hooks/useUserMemberships.ts` = output change (rule-exclusion
-      reclassifies RULE_BASED→DIRECT) — product decision; (b) adopt the drifted
-      orphan components (`users/{UserSearchBar,UserSearchResults,GroupMembershipsList,
-  UserProfileCard}.tsx`) = pixel change — ui-reviewer sign-off, OR extract fresh
-      NEW subcomponents with verbatim markup (safe); (c) adopt shared `getRelativeTime`
-      = NaN-guard behavior change on unparseable dates (§5) — assert it; (d) the hook
-      split (useDetectedUserAutoLoad/useAddToGroup/useUserLifecycleActions/
-      useUsersTabSearch) carries the merged-error-channel + re-entrancy-guard +
-      abort-guard traps. The 6 raw `chrome.tabs.sendMessage` read sites + their eslint
-      grandfather entries carry into the new hooks VERBATIM (migration is §8).
+  Small sequential commits: `analyzeMemberships` → tested
+  `shared/utils/membershipAnalysis.ts`; `EXCLUDED_PROFILE_FIELDS` + the per-render
+  `standardFields` Set → tested `shared/utils/profileFields.ts`
+  (`getCustomProfileFields`, security filter pinned); deleted the dead `requestCount`
+  locals.
+- [x] **Adopted exclusion-aware membership classification (session 7, decided behavior
+      change).** `membershipAnalysis.ts` is now the single source of truth (gained
+      `isUserExcludedFromRule` + rules-without-exclusion filtering, ported verbatim from
+      `useUserMemberships`, which now imports it). A user excluded from every matching rule
+      is now DIRECT — unifying UsersTab with UserOverview / user comparison (which already
+      shipped it). Pinned in unit tests + a flipped UsersTab oracle assertion;
+      UserComparisonModal's 38 tests stayed green.
+- [x] **Adopted the `useUserMemberships` hook in UsersTab (session 7).** Replaced both
+      inline getUserGroups→rules→analyze chains with the hook (−~120 lines, last inline
+      `any`s gone). Reconciled the merged-error trap per the map: the hook gained optional
+      ref-held `onError`/`onLoadingChange` callbacks (so `loadMemberships` keeps its stable
+      `[targetTabId]` identity and the auto-load guard holds); the orchestrator keeps owning
+      the single `error` banner + `isLoadingMemberships` (last-write-wins). UsersTab 1572 →
+      1333 lines, **0 `any`s**.
+- [ ] **UsersTab §7 remaining.** (a) Adopt the drifted orphan UI forks
+      (`users/{UserSearchBar,UserSearchResults,GroupMembershipsList,UserProfileCard}.tsx`) =
+      pixel change — **ui-reviewer sign-off required** (decided: adopt+reconcile), OR fresh
+      NEW subcomponents; (b) extract the remaining hooks (useUsersTabSearch /
+      useDetectedUserAutoLoad / useUserLifecycleActions / useAddToGroup) — the 6 raw
+      `chrome.tabs.sendMessage` read sites + their eslint grandfather entries carry into the
+      new hooks VERBATIM (migration is §8); (c) §5: adopt shared `formatDate`
+      (byte-identical) + `getRelativeTime` (NaN-guard behavior change on unparseable dates —
+      assert it). Goal: UsersTab under ~300 lines.
 - Target: no component over ~300 lines.
 - Doc: `docs/state-management.md`. Agents: `test-writer` then `architecture-refactor`.
 - **Pre-computed asset:** deep per-component decomposition maps (state/effect
