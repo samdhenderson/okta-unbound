@@ -11,6 +11,7 @@ import type { OktaUser } from '../../../shared/types';
 import CollapsibleSection from '../shared/CollapsibleSection';
 import { IconButton } from '../shared';
 import { formatDateShort, getRelativeTime } from '../../../shared/utils/dateFormat';
+import { getCustomProfileFields } from '../../../shared/utils/profileFields';
 
 /** Props for {@link UserProfileCard}. */
 interface UserProfileCardProps {
@@ -18,10 +19,19 @@ interface UserProfileCardProps {
   user: OktaUser;
   /** Group count shown in the metadata footer. */
   groupCount?: number;
-  /** When true (default), renders the collapsible Account/Organization/Contact sections. */
+  /**
+   * When true (default), renders the collapsible Account / Organization / Contact /
+   * Preferences / Custom Attributes sections.
+   */
   showCollapsibleSections?: boolean;
   /** Okta origin used to build the "Open in Okta" admin link; the link is hidden when absent. */
   oktaOrigin?: string | null;
+  /**
+   * Optional content rendered between the summary card and the collapsible sections
+   * (e.g. UsersTab's lifecycle-action controls). Renders regardless of
+   * `showCollapsibleSections`.
+   */
+  afterCard?: React.ReactNode;
 }
 
 /**
@@ -34,6 +44,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
   groupCount = 0,
   showCollapsibleSections = true,
   oktaOrigin,
+  afterCard,
 }) => {
   const [idCopied, setIdCopied] = useState(false);
 
@@ -180,6 +191,8 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
           </div>
         </div>
       </div>
+
+      {afterCard}
 
       {/* Collapsible Detail Sections */}
       {showCollapsibleSections && (
@@ -409,6 +422,58 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
               </div>
             </CollapsibleSection>
           )}
+
+          {/* Preferences - only show if any exist */}
+          {(user.profile.locale || user.profile.timezone) && (
+            <CollapsibleSection title="Preferences" defaultOpen={false}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                {user.profile.locale && (
+                  <div className="p-3 bg-white rounded-md border border-neutral-200">
+                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                      Locale
+                    </span>
+                    <span className="text-sm text-neutral-900 block">{user.profile.locale}</span>
+                  </div>
+                )}
+                {user.profile.timezone && (
+                  <div className="p-3 bg-white rounded-md border border-neutral-200">
+                    <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                      Timezone
+                    </span>
+                    <span className="text-sm text-neutral-900 block">{user.profile.timezone}</span>
+                  </div>
+                )}
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {/* Custom Attributes - show any non-standard profile fields */}
+          {(() => {
+            const customFields = getCustomProfileFields(user.profile);
+
+            if (customFields.length === 0) return null;
+
+            return (
+              <CollapsibleSection
+                title="Custom Attributes"
+                defaultOpen={false}
+                itemCount={customFields.length}
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  {customFields.map(([key, value]) => (
+                    <div className="p-3 bg-white rounded-md border border-neutral-200" key={key}>
+                      <span className="text-xs font-semibold text-neutral-600 mb-1 block">
+                        {key}
+                      </span>
+                      <span className="text-sm text-neutral-900 block">
+                        {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleSection>
+            );
+          })()}
         </div>
       )}
     </div>
