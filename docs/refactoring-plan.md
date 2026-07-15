@@ -193,12 +193,35 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
 - **⚠️ Do NOT touch the scheduler/transport route during §7** (that is §8's behavior
   change). Tell every extraction agent this explicitly — `architecture-refactor.md`'s
   own guardrails contradict its "without changing behavior" charter here.
-- [ ] **UsersTab characterization tests must be re-pinned FRESH.** Session 4's suite
-      hangs — not from the product loop (that's fixed; proven by the `useOktaApi`
-      identity tests) but from its own fake-timer handling (`vi.runToLast` spinning).
-      Parked for reference only at
-      `…/wf_5f5c654e-d8d/UsersTab.test.tsx.HANGS.parked`; writing fresh is cheaper than
-      debugging its 1409 lines.
+- [x] **UsersTab characterization oracle re-pinned FRESH (session 7).**
+      `UsersTab.test.tsx` — 20 CHARACTERIZED tests, no hang (fakes only
+      setTimeout/clearTimeout, drives the REAL useOktaApi). Pins: 600ms user-search
+      debounce (bounded, min-2-char, mid-render-stable, the <2-char stale-results
+      quirk, the §8 scheduler bypass); 300ms add-to-group search bounded to ONE call
+      (locks in the memoized-searchGroups fix 6863313); detected-user auto-load
+      single chain + re-entrancy guard + Clear re-trigger; lifecycle confirm (exact
+      copy, one getUserById refresh, resetPassword skips it, status-only patch,
+      failure banner); membership DIRECT/RULE_BASED via the in-file heuristic +
+      rules-fetch-failure degradation. The session-4 suite stays parked/unused.
+- [~] **UsersTab §7 pure-extraction phase (session 7, decompose-only, oracle green).**
+  Landed as small sequential commits: `analyzeMemberships` → tested
+  `shared/utils/membershipAnalysis.ts` (the AS-IS in-file heuristic, NOT the
+  drifted `useUserMemberships` exclusion variant); `EXCLUDED_PROFILE_FIELDS` +
+  the per-render `standardFields` Set → tested `shared/utils/profileFields.ts`
+  (`getCustomProfileFields`, security filter pinned); deleted the dead
+  `requestCount` locals. UsersTab 1572 → ~1417 lines.
+- [ ] **UsersTab §7 remaining — BLOCKED ON DECISIONS (do not fold into decompose-only).**
+      Next moves each need a call + their own commit with a flipped assertion:
+      (a) adopt `hooks/useUserMemberships.ts` = output change (rule-exclusion
+      reclassifies RULE_BASED→DIRECT) — product decision; (b) adopt the drifted
+      orphan components (`users/{UserSearchBar,UserSearchResults,GroupMembershipsList,
+  UserProfileCard}.tsx`) = pixel change — ui-reviewer sign-off, OR extract fresh
+      NEW subcomponents with verbatim markup (safe); (c) adopt shared `getRelativeTime`
+      = NaN-guard behavior change on unparseable dates (§5) — assert it; (d) the hook
+      split (useDetectedUserAutoLoad/useAddToGroup/useUserLifecycleActions/
+      useUsersTabSearch) carries the merged-error-channel + re-entrancy-guard +
+      abort-guard traps. The 6 raw `chrome.tabs.sendMessage` read sites + their eslint
+      grandfather entries carry into the new hooks VERBATIM (migration is §8).
 - Target: no component over ~300 lines.
 - Doc: `docs/state-management.md`. Agents: `test-writer` then `architecture-refactor`.
 - **Pre-computed asset:** deep per-component decomposition maps (state/effect
