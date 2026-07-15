@@ -16,6 +16,7 @@ import Modal from './shared/Modal';
 import CollapsibleSection from './shared/CollapsibleSection';
 import EmptyState from './shared/EmptyState';
 import LoadingSpinner from './shared/LoadingSpinner';
+import { UserSearchResults } from './users';
 import type { OktaUser } from '../../shared/types';
 import type { AlertMessageData } from './shared/AlertMessage';
 import { getCustomProfileFields } from '../../shared/utils/profileFields';
@@ -560,38 +561,9 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
           />
         )}
 
-        {/* Search Results */}
-        {searchResults.length > 0 && !selectedUser && (
-          <div className="space-y-4 animate-in slide-in-from-top-4 duration-500">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-neutral-900">Search Results</h3>
-              <span className="px-3 py-1 bg-neutral-100 text-neutral-700 text-sm font-medium rounded-md">
-                {searchResults.length} {searchResults.length === 1 ? 'user' : 'users'}
-              </span>
-            </div>
-            <div className="space-y-3">
-              {searchResults.map((user) => (
-                <div
-                  key={user.id}
-                  className="group bg-white rounded-md border border-neutral-200 p-5 cursor-pointer transition-all duration-100 hover:border-neutral-500 hover:shadow-sm"
-                  onClick={() => handleSelectUser(user)}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold text-neutral-900 mb-1 group-hover:text-primary-text transition-colors duration-100">
-                        {user.profile.firstName} {user.profile.lastName}
-                      </h4>
-                      <p className="text-sm text-neutral-600 mb-1">{user.profile.email}</p>
-                      <p className="text-xs text-neutral-500 font-mono">
-                        Login: {user.profile.login}
-                      </p>
-                    </div>
-                    <span className={getStatusBadgeClass(user.status)}>{user.status}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+        {/* Search Results (the component self-hides when empty; caller gates on selection) */}
+        {!selectedUser && (
+          <UserSearchResults results={searchResults} onSelectUser={handleSelectUser} />
         )}
 
         {/* Selected User Details - Positioned directly under search */}

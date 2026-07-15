@@ -41,7 +41,7 @@ const UserSearchResults: React.FC<UserSearchResultsProps> = ({ results, onSelect
     <div className="space-y-4 animate-in slide-in-from-top-4 duration-500">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-neutral-900">Search Results</h3>
-        <span className="px-3 py-1 bg-neutral-100 text-neutral-700 text-sm font-medium rounded-full">
+        <span className="px-3 py-1 bg-neutral-100 text-neutral-700 text-sm font-medium rounded-md">
           {results.length} {results.length === 1 ? 'user' : 'users'}
         </span>
       </div>
@@ -49,12 +49,12 @@ const UserSearchResults: React.FC<UserSearchResultsProps> = ({ results, onSelect
         {results.map((user) => (
           <div
             key={user.id}
-            className="group bg-white rounded-md border border-neutral-200 p-5 cursor-pointer transition-all duration-100 hover:border-neutral-500"
+            className="group bg-white rounded-md border border-neutral-200 p-5 cursor-pointer transition-all duration-100 hover:border-neutral-500 hover:shadow-sm"
             onClick={() => onSelectUser(user)}
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
-                <h4 className="font-semibold text-neutral-900 mb-1 group-hover:text-primary-text transition-colors">
+                <h4 className="font-semibold text-neutral-900 mb-1 group-hover:text-primary-text transition-colors duration-100">
                   {user.profile.firstName} {user.profile.lastName}
                 </h4>
                 <p className="text-sm text-neutral-600 mb-1">{user.profile.email}</p>
