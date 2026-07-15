@@ -136,6 +136,15 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
 - Order (current line counts): `UserComparisonModal.tsx` (963, 10 useState, 3 useEffect)
   → `GroupsTab.tsx` (1075, 23 useState, 3 useRef) → `UsersTab.tsx` (1550, 18 useState +
   2 useRef, 4 useEffect) → `content/index.ts` (1417).
+- [x] **`UserComparisonModal` DONE (session 5, 2 commits).** 963 → 213-line
+      presentational shell + 3 concern hooks (`useComparisonApps`, `useGroupCopy`,
+      `useUserComparison`) + 5 subcomponents (`comparison/`) + pure
+      `comparisonAnalytics.ts` and `shared/utils/userDisplay.ts` (each with unit tests).
+      Decompose-only: all 38 CHARACTERIZED tests pass; the global add-lock, the two
+      divergent resets, the uncancellable membership load, the dead `appsError` branch
+      and the `[comparedUser]`-only eslint-disable are all preserved verbatim. The
+      raw-control migration (§3) and the eslint-disable retirement are deliberate
+      follow-ups, NOT done here.
 - Per file: (1) pin behavior with RTL/MSW tests; (2) extract logic into `use*` hooks
   (mirror the `useOktaApi/` module split); (3) move pure helpers to `shared/utils`;
   (4) split UI into subcomponents (like `overview/members/`); (5) re-verify.
