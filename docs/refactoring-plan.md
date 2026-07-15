@@ -61,6 +61,14 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
 - [ ] **God-component buttons** (`GroupsTab` 10, `RulesTab` 4, `UsersTab` 3,
       `UserComparisonModal` 2) + their raw text inputs (`GroupsTab` 2, `UsersTab` 2,
       `RulesTab` 1, `UserComparisonModal` 1) → migrate during their §7 decomposition.
+  - **`UserComparisonModal` correction (session 5):** its raw-control migration is a
+    **separate follow-up commit** after its §7 decompose-only pass, and 2 of its 3
+    controls **cannot migrate cleanly** — so its true migratable count is **1**, not 2+1:
+    - `L597` is a `role="tab"` tablist item → already a documented §3 tab-bar exception.
+    - `L710` needs a **new chevron `IconType`** that does not exist yet.
+    - `L429` → shared `Input` is **NOT pixel-neutral** (`py-3`/`border-200`/`shadow-sm`
+      vs the shared base's `px-3 py-2`/`border-300`/no shadow). Needs a design call, not
+      a mechanical swap.
 - [ ] **`AttributeFacet`** (4) → with the §9 chart tokenization.
 - Doc: `docs/components.md`. Agent: `component-builder`; verify with `ui-reviewer`.
 - Done when: no raw `<button>` in feature components except documented exceptions;
@@ -96,6 +104,19 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
       `getUserGroups` return lists (throwing on one sparse item would nuke the whole
       result — needs a resilient per-item parse decision first); `getUserContext` hits
       the non-standard `/admin/users/search` `aaData` DataTables shape (own schema).
+  - **⚠️ session-5 correction — do NOT wire the strict schemas into the list paths.**
+    The premise was wrong. `oktaGroupSchema` (`shared/schemas/okta.ts:64-70`) is a bare
+    `z.object` with **no `.passthrough()`**, so parsing a list item **strips**
+    `type`/`_embedded`/`lastUpdated`/`created` — silently zeroing member counts and
+    misclassifying every `APP_GROUP` as `DIRECT`. That is **silent corruption, worse
+    than throwing**. Also there is still **no single fetch boundary**: search exists
+    twice, on two transports. Revisit list-path validation only **after §8** unifies the
+    transport, and add `.passthrough()` (or explicit fields) before it touches any list.
+  - **Bounded items safe to do now (session 5):**
+    - Delete the **dead `oktaUserListSchema`** (`okta.ts:72`, zero call sites).
+    - Fix `parseOkta` interpolating **zod's error message into `log.warn`** — it echoes
+      received values, so it becomes a PII leak the moment anyone adds a `z.enum` over a
+      PII field. Log the issue _paths/codes_, never the value.
 - [x] Burned down the message/API-layer `any`s (60→4): typing-only, precise types
       across content/useOktaApi/scheduler/tabState/rulesCache (introduced
       `MembershipRule`; reused existing rule/group/`RequestResult` types). Repo-wide
@@ -110,10 +131,11 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
   (schema tests), `security-logging-reviewer`.
 - Done when: hot-path responses validated; `any` count near zero; rule flipped.
 
-### 7. `[ ]` Decompose the god components (tests-first)
+### 7. `[~]` Decompose the god components (tests-first)
 
-- Order: `UserComparisonModal.tsx` (967) → `GroupsTab.tsx` (935, 23 useState) →
-  `UsersTab.tsx` (1364, 19 useState) → `content/index.ts` (1344).
+- Order (current line counts): `UserComparisonModal.tsx` (963, 10 useState, 3 useEffect)
+  → `GroupsTab.tsx` (1075, 23 useState, 3 useRef) → `UsersTab.tsx` (1550, 18 useState +
+  2 useRef, 4 useEffect) → `content/index.ts` (1417).
 - Per file: (1) pin behavior with RTL/MSW tests; (2) extract logic into `use*` hooks
   (mirror the `useOktaApi/` module split); (3) move pure helpers to `shared/utils`;
   (4) split UI into subcomponents (like `overview/members/`); (5) re-verify.
@@ -121,8 +143,42 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
       `useOktaPageContext` into a shared generic `useOktaTabContext<T>` base (thin
       wrappers, public APIs unchanged; first tests added). Done ahead of the god-
       component work since it was self-contained.
+- [x] **Session 4 — characterization tests pinning the §7 targets (the pass/fail
+      ORACLE for the decomposition).** Additive only, named `CHARACTERIZED: …`; several
+      pin **existing BUGS as-is**. **Do not "fix" a CHARACTERIZED test** — if one fails,
+      the refactor is wrong. Landed: `UserComparisonModal.test.tsx` (38),
+      `GroupsTab.test.tsx` (71), `content/index.test.ts` (111).
+- [x] **Session 4 — root-cause fix that UNBLOCKS the decomposition (`6863313`).**
+      `useOktaApi` rebuilt `coreApi` + all 9 operation objects every render, so every
+      returned fn had a fresh identity → any effect depending on one re-ran forever
+      (UsersTab's Add-to-Group debounced search re-queried `/api/v1/groups` ~3×/sec
+      while the modal was open, draining rate-limit quota). Fixed with `useMemo` over
+      `coreApi`, the 9 op objects, both `wrapOperation` results, and the returned object.
+      Regression tests in `useOktaApi.test.ts` pin identity stability — **keep them**.
+  - **Consequence — now unblocked (do each deliberately, with a test proving no loop):**
+    - `UserComparisonModal`'s load-effect `eslint-disable` (~L128) was load-bearing
+      ONLY because of the non-memoization → likely retireable now. **Verify, don't
+      assume.**
+    - `GroupOverview.tsx:67` has a ref workaround ("avoid re-triggering when
+      `useOktaApi` returns new function refs") for the same reason → likely removable.
+- **Decision — `UserComparisonModal` is DECOMPOSE-ONLY** (behavior AND pixels
+  identical). Its §3 raw-control work is the separate follow-up in §3 above.
+- **⚠️ Do NOT touch the scheduler/transport route during §7** (that is §8's behavior
+  change). Tell every extraction agent this explicitly — `architecture-refactor.md`'s
+  own guardrails contradict its "without changing behavior" charter here.
+- [ ] **UsersTab characterization tests must be re-pinned FRESH.** Session 4's suite
+      hangs — not from the product loop (that's fixed; proven by the `useOktaApi`
+      identity tests) but from its own fake-timer handling (`vi.runToLast` spinning).
+      Parked for reference only at
+      `…/wf_5f5c654e-d8d/UsersTab.test.tsx.HANGS.parked`; writing fresh is cheaper than
+      debugging its 1409 lines.
 - Target: no component over ~300 lines.
 - Doc: `docs/state-management.md`. Agents: `test-writer` then `architecture-refactor`.
+- **Pre-computed asset:** deep per-component decomposition maps (state/effect
+  inventory, API call sites, pure helpers, proposed hook + subcomponent split, ranked
+  `riskyBits`, blockers) live as a 4-object JSON stream at
+  `…/wf_5f5c654e-d8d/maps.json` — `jq` it (172K), read the map for a component before
+  touching it. **Do not regenerate** (~430k tokens / 12 min).
 - Done when: each target is decomposed with tests, behavior unchanged.
 
 ### 8. `[ ]` Raise coverage + enable the coverage gate
@@ -131,6 +187,18 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
   add the coverage step to CI (see §1).
 - Also standardize on the single content-script path (drop the direct
   side-panel→content route that bypasses the scheduler — `useOktaApi/core.ts`).
+- **⚠️ session-5 sequencing corrections:**
+  - The scheduler migration **depends on §7's `content/index.ts` item**. The semantic
+    content-script handlers are **compound** (unbounded `while(nextUrl)` pagination + a
+    1–3 request fallback chain live inside the content script) and do **not** map 1:1
+    onto a scheduler whose unit of work is one fetch. Decompose them first.
+  - `UserComparisonModal` has **ZERO direct `sendMessage` calls** (the earlier
+    assumption was wrong — its hooks are already decomposed and could migrate now).
+  - **Honest regression to surface, not absorb:** `processQueue` checks the cooldown
+    **before** priority, so a typed search would stall up to 30s where today it is
+    instant. Needs a new **`interactive` tier exempt from the cooldown gate**.
+  - `src/shared/scheduler/` has **ZERO tests** and `clearQueue()` **leaks promises** —
+    test it (and fix the leak) **before** migrating anything onto it.
 - Doc: `docs/testing.md` / `docs/architecture.md`. Agent: `test-writer`.
 
 ### 9. `[ ]` Small cleanups
@@ -140,11 +208,27 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
 
 ---
 
+## Known debt surfaced, not yet actioned (session 4/5)
+
+- The 269 characterization tests added ~34 `any`s (repo-wide `no-explicit-any` 26→60),
+  **all in test files**. The §6 `warn`→`error` flip needs a **test-file override** for
+  `no-explicit-any` (mirror the existing `no-console` test override).
+- `npm run lint` does **not** cover `scripts/`. `npx eslint .` finds a live **parsing
+  error at `scripts/build.js:109`** — pre-existing; the current gate can't see it.
+- Guardrail (learned the hard way): **always put a hard external timeout around any
+  vitest run** — `perl -e 'alarm 180; exec @ARGV' npx vitest run <file>` and
+  `pkill -9 -f vitest` after. `--testTimeout` does NOT stop a render loop (an infinite
+  loop starves the timer); session 4 pinned a vitest process at 100% CPU / 2.1GB RSS.
+  Husky pre-commit runs `vitest related --run` on staged `*.{ts,tsx}`, resolving imports
+  **on disk** — a hanging test file in the tree poisons unrelated commits.
+
+---
+
 ## Suggested first session after a context clear
 
-> "Read docs/refactoring-plan.md and CLAUDE.md. Start with item 2 (console→logger
-> migration) for `src/content/index.ts` only: migrate its console calls to the
-> logger with no payload/token logging, keep tests/lint/type-check green, and have
-> the security-logging-reviewer agent verify no leaks."
+> "Read docs/refactoring-plan.md and CLAUDE.md. Continue §7: read the pre-computed map
+> for the top unchecked target from `…/wf_5f5c654e-d8d/maps.json`, decompose it
+> tests-first behind the existing `CHARACTERIZED:` oracle, keep the scheduler route
+> untouched (that's §8), verify green, and commit ONE component per commit."
 
 Pick one item, keep it small, verify green, repeat.
