@@ -243,10 +243,21 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
         duplicate PageHeader "Open in Okta" was removed. UsersTab 1333 → **682 lines**.
   - [x] **(c) §5 done** — deleted UsersTab's local `formatDate`/`getRelativeTime`; the
         card now uses the shared `dateFormat` utils (NaN-guard asserted). See §5.
-  - [ ] **(b) Extract the remaining hooks** (useUsersTabSearch / useDetectedUserAutoLoad /
-        useUserLifecycleActions / useAddToGroup) — the 6 raw `chrome.tabs.sendMessage` read
-        sites + their eslint grandfather entries carry into the new hooks VERBATIM
-        (migration is §8). Goal: UsersTab under ~300 lines.
+  - [x] **(b) Extracted the four concern hooks** (session 8), one commit each, oracle
+        21/21 green after each: `useUsersTabSearch` (query/results/isSearching + 600ms
+        debounce + the `searchUsers` read), `useDetectedUserAutoLoad` (hasAutoLoadedUser
+        guard + the `getUserDetails` auto-load effect), `useUserLifecycleActions`
+        (suspend/unsuspend/reset + confirm, owns its own `useOktaApi` slice), and
+        `useAddToGroup` (modal + 300ms group type-ahead + add, owns its own `useOktaApi`
+        slice). UsersTab no longer calls `useOktaApi` directly. The two raw
+        `chrome.tabs.sendMessage` read sites moved VERBATIM into the two search/auto-load
+        hooks; the eslint grandfather list gained those two files and dropped `UsersTab.tsx`
+        (now clean). UsersTab 682 → **451 lines**.
+  - [ ] **(d) Presentational split to reach ~300** — remaining bulk is JSX. Extract the
+        Add-to-Group modal (still holds a raw `<input>` + raw `<button>` dropdown — the §3
+        god-component button/input debt) and the lifecycle actions + confirm modal into
+        presentational components under `components/users/`. One component per commit, pixel
+        review, oracle green.
 - Target: no component over ~300 lines.
 - Doc: `docs/state-management.md`. Agents: `test-writer` then `architecture-refactor`.
 - **Pre-computed asset:** deep per-component decomposition maps (state/effect
