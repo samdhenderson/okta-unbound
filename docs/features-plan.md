@@ -70,7 +70,11 @@ Two new shared primitives are worth building **once** and reusing across A/C/D:
 
 ---
 
-## A. `[ ]` Orphan / Clutter Remediation + Rule Consolidation — flagship
+## A. `[x]` Orphan / Clutter Remediation + Rule Consolidation — flagship
+
+**All four sub-features delivered** on branch `claude/high-impact-features` (A1 read-only
+triage, A2 membership-source insight, A3 group merge, A4 rule consolidation). Per-feature
+"Delivered" notes are inline below.
 
 Directories accumulate duplicate-name, empty, and rule-orphaned groups; admins have no
 consolidated view, and Okta's UI blocks adding target groups to an existing rule.
@@ -97,11 +101,17 @@ to what's knowable locally: it flags empty/duplicate/stale but does **not** yet 
 rule-orphan status (needs the rules payload — a clean follow-up). A2 (per-group "why does
 this exist / who feeds it") and A3/A4 (merge + rule writes) remain open.
 
-**A2 — Membership-source insight** _(Effort: L–M)_
+**A2 — Membership-source insight** _(Effort: L–M)_ — `[x]` delivered
 Per group, answer **"why does this exist / who feeds it?"** — feeding rules
 (`getGroupRulesForGroup`), app push mappings (`getAppPushGroupMappings`), and the
 manual-vs-rule member split. Expandable detail panel per row; this is the safety
 context an admin needs before removing anything.
+
+**Delivered:** `GroupSourceModal` opened from the group row ("Why does this group exist?").
+Feeding rules + app-push targets load cheaply; the manual-vs-rule split is a gated
+one-paginated-read analysis (`useGroupSource`) computed by the pure
+`shared/membership/groupSource.summarizeMemberSources`, which delegates per-member
+classification to the app's single-source `analyzeMemberships` heuristic. Read-only.
 
 **A3 — Merge / consolidate groups** _(Effort: M)_
 Pick a **survivor**, copy source members in (`addUserToGroup` loop via scheduler +
@@ -110,6 +120,15 @@ Pick a **survivor**, copy source members in (`addUserToGroup` loop via scheduler
 _Enhancement:_ a **"what breaks" preview** listing every rule/app pointing at the source
 before retiring it.
 _Safeguard:_ never delete a group with a feeding rule until that rule is repointed/removed.
+
+**Delivered** (`[x]`): a merge wizard from the selection bar ("Merge", 2+ selected). Because
+the extension can't delete groups, "merge" = **membership consolidation** — copy each
+source's members into a chosen survivor, then empty the sources (the empty husks are left
+for the admin to delete in Okta, which handles dependencies safely). Fully reversible via
+the member add/remove writes. Pure `shared/membership/mergePlan.planGroupMerge` computes the
+distinct copies + per-source removals and **blocks** any source fed by an active rule
+(emptying would be futile — the "what breaks" safeguard). `useGroupMerge` runs it through the
+scheduler with `ProgressContext`, one bulk undo per affected group, and two audit entries.
 
 **A4 — Rule consolidation (the sharp one)** _(Effort: M, needs new writes)_
 Okta lets you set multiple target groups only at rule **creation**, not on edit. Work
@@ -127,6 +146,22 @@ _Safeguard:_ show a **dry-run diff** (expression + resulting groupIds) before wr
 merging _similar_ (not identical) expressions changes who gets access, so require B's
 population delta ("+12 gain, −3 lose") before committing; never delete the source rule
 until the merged rule is created and active; audit every create/update/delete.
+
+**Delivered** (`[x]`): new rule writes in `useOktaApi/ruleWrites` (create/read-raw/delete/
+(de)activate, all on the scheduler path, create/read responses **zod-validated** —
+`oktaGroupRuleSchema`, ADR-0006). `shared/rules/consolidation` is the pure core:
+`buildConsolidatedRulePayload` (copy conditions verbatim, union target groups, length-capped
+unique name) and `findMergeableRuleGroups` (cluster identical-expression rules). `useRule
+Consolidation` runs the **safe sequence — create → activate (if a source was active) → only
+then retire (delete) sources** — aborting before any delete if create/activate fails, and
+captures each retired rule's definition in a new `CONSOLIDATE_RULE` undo entry. UX:
+`RuleCard` → "Add Target Group" (search-select + `RuleConsolidationModal` dry-run diff) and a
+`RulesMergeBanner` surfacing duplicate-condition rule sets to merge. **Scope note:** the
+dry-run shows the structural diff honestly (resulting expression unchanged + resulting target
+groups); I did **not** fabricate a population delta for add-target because Okta exposes no
+expression-evaluate API (Feature F), so who a rule _matches_ isn't computable — for
+identical-expression merges the access change is genuinely nil and is labeled as such. Only
+identical (not fuzzy "similar") expressions are offered for merge.
 
 - Reuse: `groupBulkOps.ts`, `groupAnalysis.ts`, `groupDiscovery.ts`, `content/index.ts`
   rule handlers, `ProgressContext`, `Modal`, `undoManager`.

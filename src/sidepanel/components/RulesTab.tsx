@@ -18,12 +18,16 @@ import RulesMetaRow from './rules/RulesMetaRow';
 import RulesStatsGrid from './rules/RulesStatsGrid';
 import RulesToolbar, { type RulesFilterType } from './rules/RulesToolbar';
 import RulesListPanel from './rules/RulesListPanel';
-import type { FormattedRule } from '../../shared/types';
+import RulesMergeBanner from './rules/RulesMergeBanner';
+import RuleConsolidationModal from './RuleConsolidationModal';
+import type { FormattedRule, OktaGroupRule } from '../../shared/types';
 import { filterRules } from '../../shared/ruleUtils';
+import { findMergeableRuleGroups, type MergeableRuleGroup } from '../../shared/rules/consolidation';
 import { useOktaApi } from '../hooks/useOktaApi';
 import { useRuleImpact } from '../hooks/useRuleImpact';
 import { useRulesData } from '../hooks/useRulesData';
 import { useRuleLifecycle } from '../hooks/useRuleLifecycle';
+import { useRuleConsolidation } from '../hooks/useRuleConsolidation';
 import type { RuleImpactInput } from '../hooks/useOktaApi/ruleImpact';
 import { TabStateManager, saveRulesTabState } from '../../shared/tabState/tabStateManager';
 import type { RulesTabState } from '../../shared/tabState/types';
@@ -73,6 +77,42 @@ const RulesTab: React.FC<RulesTabProps> = ({
     reload: loadRules,
     onError: handleError,
   });
+  // Consolidation genuinely changes the rule set, so it force-refreshes (bypass cache).
+  const consolidation = useRuleConsolidation({
+    targetTabId,
+    reload: () => loadRules(true),
+    onError: handleError,
+  });
+
+  // Detect rules that share an identical condition (mergeable). FormattedRule
+  // carries the expression + target groups the detector needs.
+  const mergeableClusters = React.useMemo<MergeableRuleGroup[]>(
+    () =>
+      findMergeableRuleGroups(
+        rules.map(
+          (r) =>
+            ({
+              id: r.id,
+              name: r.name,
+              status: r.status,
+              type: 'group_rule',
+              created: r.created,
+              lastUpdated: r.lastUpdated,
+              conditions: { expression: { value: r.conditionExpression || '', type: '' } },
+              actions: { assignUserToGroups: { groupIds: r.groupIds } },
+            }) as OktaGroupRule,
+        ),
+      ),
+    [rules],
+  );
+
+  const handleMergeCluster = (cluster: MergeableRuleGroup) => {
+    consolidation.openMerge(
+      cluster.rules[0].id,
+      cluster.rules.map((r) => ({ id: r.id, name: r.name, status: r.status })),
+      cluster.unionGroupIds,
+    );
+  };
 
   // Restore persisted rules + UI state on mount.
   useEffect(() => {
@@ -217,6 +257,10 @@ const RulesTab: React.FC<RulesTabProps> = ({
         {rules.length > 0 && <RulesStatsGrid stats={stats} />}
 
         {rules.length > 0 && (
+          <RulesMergeBanner clusters={mergeableClusters} onMerge={handleMergeCluster} />
+        )}
+
+        {rules.length > 0 && (
           <RulesToolbar
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
@@ -235,6 +279,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
           onActivate={lifecycle.activateRule}
           onDeactivate={handleRequestDeactivate}
           onPreviewImpact={handlePreviewImpact}
+          onAddTargetGroup={consolidation.openAddTarget}
           oktaOrigin={oktaOrigin}
           selectedRuleId={selectedRuleId}
         />
@@ -250,6 +295,17 @@ const RulesTab: React.FC<RulesTabProps> = ({
         progress={impact.progress}
         onClose={impact.close}
         onConfirmDeactivate={handleConfirmDeactivate}
+      />
+
+      <RuleConsolidationModal
+        phase={consolidation.phase}
+        preview={consolidation.preview}
+        result={consolidation.result}
+        error={consolidation.error}
+        searchGroups={api.searchGroups}
+        onChooseGroup={consolidation.chooseGroup}
+        onExecute={consolidation.execute}
+        onClose={consolidation.close}
       />
     </div>
   );

@@ -71,6 +71,32 @@ export const oktaGroupSchema = z.object({
   }),
 });
 
+/**
+ * A group rule as returned by `POST`/`GET /api/v1/groups/rules`. Only the fields
+ * the consolidation flow relies on are typed; org-specific extras pass through.
+ */
+export const oktaGroupRuleSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    status: z.enum(['ACTIVE', 'INACTIVE']),
+    type: z.string().optional(),
+    conditions: z
+      .object({
+        expression: z.object({ value: z.string(), type: z.string() }).partial().optional(),
+        people: z.unknown().optional(),
+      })
+      .passthrough()
+      .optional(),
+    actions: z
+      .object({
+        assignUserToGroups: z.object({ groupIds: z.array(z.string()) }).optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
 /** An array of users, e.g. from a search or group-members listing. */
 export const oktaUserListSchema = z.array(oktaUserSchema);
 
@@ -78,6 +104,8 @@ export const oktaUserListSchema = z.array(oktaUserSchema);
 export type OktaUserResponse = z.infer<typeof oktaUserSchema>;
 /** Inferred type of a validated {@link oktaGroupSchema} response. */
 export type OktaGroupResponse = z.infer<typeof oktaGroupSchema>;
+/** Inferred type of a validated {@link oktaGroupRuleSchema} response. */
+export type OktaGroupRuleResponse = z.infer<typeof oktaGroupRuleSchema>;
 
 /**
  * Parse an Okta response with a schema, throwing a descriptive error on mismatch.

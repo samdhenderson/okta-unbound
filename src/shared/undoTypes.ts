@@ -15,7 +15,8 @@ export type ActionType =
   | 'BULK_REMOVE_USERS_FROM_GROUP'
   | 'BULK_ADD_USERS_TO_GROUP'
   | 'ACTIVATE_RULE'
-  | 'DEACTIVATE_RULE';
+  | 'DEACTIVATE_RULE'
+  | 'CONSOLIDATE_RULE';
 
 /** A single recorded action in the history. */
 export interface UndoAction {
@@ -40,7 +41,8 @@ export type UndoActionMetadata =
   | BulkRemoveUsersMetadata
   | BulkAddUsersMetadata
   | ActivateRuleMetadata
-  | DeactivateRuleMetadata;
+  | DeactivateRuleMetadata
+  | ConsolidateRuleMetadata;
 
 /** Metadata for removing a single user from a group. */
 export interface RemoveUserMetadata {
@@ -101,6 +103,33 @@ export interface DeactivateRuleMetadata {
   type: 'DEACTIVATE_RULE';
   ruleId: string;
   ruleName: string;
+}
+
+/** A retired rule's definition, captured so a consolidation can be restored. */
+export interface RetiredRuleSnapshot {
+  id: string;
+  name: string;
+  /** The match expression, for recreating the rule if needed. */
+  expression: string;
+  /** The rule's target group ids at retirement. */
+  groupIds: string[];
+}
+
+/**
+ * Metadata for a rule consolidation (A4): a new rule was created carrying the
+ * union of target groups, and one or more source rules were retired (deleted).
+ * The retired rules' definitions are captured so prior state can be restored.
+ */
+export interface ConsolidateRuleMetadata {
+  type: 'CONSOLIDATE_RULE';
+  /** Id of the newly created consolidated rule. */
+  createdRuleId: string;
+  /** Name of the newly created consolidated rule. */
+  createdRuleName: string;
+  /** Target group ids of the consolidated rule. */
+  createdGroupIds: string[];
+  /** The source rules that were deleted, with enough to recreate them. */
+  retiredRules: RetiredRuleSnapshot[];
 }
 
 /** The persisted history container: recent actions plus its size cap. */

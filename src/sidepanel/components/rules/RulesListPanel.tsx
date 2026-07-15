@@ -27,6 +27,8 @@ interface RulesListPanelProps {
   onDeactivate: (ruleId: string) => void;
   /** Open the read-only impact preview for a rule. */
   onPreviewImpact: (rule: FormattedRule) => void;
+  /** Start the "add target group" consolidation for a rule (A4). */
+  onAddTargetGroup: (rule: FormattedRule) => void;
   /** Okta origin for each card's "View in Okta" link. */
   oktaOrigin?: string | null;
   /** Rule id to highlight/scroll to (deep-link target). */
@@ -42,6 +44,7 @@ const RulesListPanel: React.FC<RulesListPanelProps> = ({
   onActivate,
   onDeactivate,
   onPreviewImpact,
+  onAddTargetGroup,
   oktaOrigin,
   selectedRuleId,
 }) => (
@@ -70,6 +73,7 @@ const RulesListPanel: React.FC<RulesListPanelProps> = ({
               onActivate={onActivate}
               onDeactivate={onDeactivate}
               onPreviewImpact={onPreviewImpact}
+              onAddTargetGroup={onAddTargetGroup}
               oktaOrigin={oktaOrigin}
               isHighlighted={selectedRuleId === rule.id}
             />
