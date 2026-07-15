@@ -98,8 +98,8 @@ into one 0–100 **review score** with reasons — the "single confidence" enhan
 category counts are one-click **selectors** that feed the existing selection → bulk/export
 machinery, so cleanup reuses everything and adds no new mutation surface. Scoped honestly
 to what's knowable locally: it flags empty/duplicate/stale but does **not** yet claim
-rule-orphan status (needs the rules payload — a clean follow-up). A2 (per-group "why does
-this exist / who feeds it") and A3/A4 (merge + rule writes) remain open.
+rule-orphan status (needs the rules payload — a clean follow-up now that A2 fetches
+feeding rules per group).
 
 **A2 — Membership-source insight** _(Effort: L–M)_ — `[x]` delivered
 Per group, answer **"why does this exist / who feeds it?"** — feeding rules

@@ -61,40 +61,52 @@ _"Which of my groups are worth reviewing?"_ — one fused signal instead of four
   distinguished) and clutter detection is local (no rule-orphan claim). Both say so inline
   rather than implying more certainty than the data supports.
 
+## Update — Feature A completed + RulesTab decomposed
+
+Beyond B and A1, the session went on to finish the whole flagship and decompose the last
+god component:
+
+- **A2 — Membership-source insight** (`GroupSourceModal` + `useGroupSource` +
+  `shared/membership/groupSource.ts`): per-group "why does this exist / who feeds it" —
+  feeding rules, app-push targets, and a gated manual-vs-rule split. Read-only.
+- **A3 — Group merge** (`GroupMergeModal` + `useGroupMerge` + `shared/membership/mergePlan.ts`):
+  membership consolidation from the selection bar — copy sources into a survivor, empty the
+  sources, block sources fed by an active rule; fully reversible; audited.
+- **A4 — Rule consolidation** (`RuleConsolidationModal` + `useRuleConsolidation` +
+  `useOktaApi/ruleWrites.ts` + `shared/rules/consolidation.ts`): new create/delete rule writes
+  (zod-validated) to add a target group or merge identical-condition rules, via the safe
+  create → activate → retire sequence with `CONSOLIDATE_RULE` undo capture.
+- **RulesTab decomposition** (§7): ~730 → 258-line shell + `useRulesData`/`useRuleLifecycle`
+  hooks + `rules/` subcomponents, behind a fresh 9-test characterization oracle; raw filter
+  buttons → `FilterPill`; the three `any`s cleared.
+
 ## What to improve next (ranked)
 
-1. **A1 → true orphan detection (small, high value).** `GroupSummary.hasRules`/`ruleCount` are
-   never populated (`groupSummary.ts` hard-codes `false`/`0`). Populate them in
-   `useGroupsLoader` from `RulesCache` when rules are loaded, then `analyzeClutter` can add the
-   real **orphan** signal (no feeding rule + no app push + 0 members) the plan calls for. This
-   also improves the review-score fusion. Cheap and local.
+1. **A1 → true orphan detection (small).** `GroupSummary.hasRules`/`ruleCount` are still
+   hard-coded `false`/`0` in `groupSummary.ts`. Populate them in `useGroupsLoader` from
+   `RulesCache`; `analyzeClutter` can then add the real **orphan** signal. A2 already fetches
+   feeding rules per group, so the data path is proven.
 
-2. **A2 — Membership-source insight (read-only, natural next step).** Per group, "why does this
-   exist / who feeds it": feeding rules (`getGroupRulesForGroup`), app-push mappings
-   (`getAppPushGroupMappings`), and the manual-vs-rule split (`analyzeMemberships`). Best shape:
-   an on-demand, gated per-group detail (mirror `MfaScanPanel`'s large-group confirm, since the
-   manual/rule split needs a member fetch). Pairs directly with A1's triage as the "before you
-   remove anything" context.
+2. **Feature C — Bulk Attribute Editor (the remaining "Build").** Mutation-heavy (new
+   `POST /api/v1/users/{id}` write + mastering detection + preflight + undo-restore). Build
+   `BulkTargetList` + `PreflightSummary` as the shared primitives the plan calls for (C and D
+   reuse them), capture prior values so undo can _restore_, and skip externally-mastered
+   profiles with listed reasons.
 
-3. **Feature C — Bulk Attribute Editor (deliberately deferred).** The one "Build" feature not
-   attempted this session, because it is mutation-heavy (new `POST /api/v1/users/{id}` write +
-   mastering detection + preflight + undo-restore) and deserves its own careful, reviewed pass
-   rather than an overnight autonomous one. When picked up: build `BulkTargetList` +
-   `PreflightSummary` as the shared primitives the plan calls for (C, D, and A3 all reuse them),
-   capture prior values so undo can _restore_, and skip externally-mastered profiles with
-   listed reasons.
+3. **A4 hardening before heavy use.** The rule create/delete path is the highest-risk code in
+   the repo and could not be exercised against a live tenant here. Add a `useRuleConsolidation`
+   hook test (mock the write ops) to pin the create→activate→retire sequencing and the
+   abort-before-delete guarantees, and consider a post-create verification read.
 
-4. **A3/A4 — Merge groups + rule consolidation (writes).** A4 needs the new rule
-   create/update/delete endpoints; the **impact engine shipped here is its diff dependency**
-   (the "+12 gain / −3 lose" population delta the plan requires before committing a merge). Do
-   A2 first so the "what breaks" preview has its data.
+4. **A3/A4 audit attribution.** Both use a placeholder `performedBy: 'unknown@unknown.com'` in
+   their audit entries (they don't fetch `/users/me` like the rule lifecycle does). Thread the
+   current user through for accurate audit trails.
 
 ## Codebase observations (not blocking, surfaced while working)
 
-- **`RulesTab.tsx` is a ~700-line god component** with three near-identical activate/deactivate
-  audit/undo blocks. New impact logic was pushed into `useRuleImpact` to avoid growing it, but
-  the activate/deactivate flows themselves are ripe for extraction into a `useRuleActions` hook
-  (dedupes ~200 lines). Tracked spiritually by `refactoring-plan.md`.
+- **`RulesTab.tsx` god component — now decomposed** (§7, done this session): ~730 → 258-line
+  shell + `useRulesData`/`useRuleLifecycle` (the two ~120-line activate/deactivate blocks
+  unified) + `rules/` subcomponents, behind a characterization oracle.
 - **`RulesCache` stores `rawRules: []`.** `RulesTab` caches formatted rules with an empty
   `rawRules`, so anything needing exclusion lists (like the impact engine) must re-fetch raw
   rules. Populating `rawRules` once would let the impact capture skip its rules fetch entirely.
