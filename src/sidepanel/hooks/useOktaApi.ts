@@ -1,6 +1,13 @@
 /**
- * @module hooks/useOktaApi
- * @description Primary hook for interacting with the Okta API.
+ * @module sidepanel/hooks/useOktaApi
+ * @description Facade hook that exposes the whole Okta API surface to the side panel.
+ *
+ * Composes the per-concern operation modules under `useOktaApi/` (core, group
+ * members/cleanup/bulk/discovery/analysis, users, exports, push groups) into a
+ * single memoized object. No request is issued here directly: every call routes
+ * through the extension's rate-limited path — side panel → background
+ * `ApiScheduler` → content script `fetch` against the live Okta session. This hook
+ * only owns cross-cutting run state (loading, cancellation via `AbortController`).
  */
 
 import { useState, useCallback, useMemo } from 'react';
@@ -15,6 +22,33 @@ import { createExportOperations } from './useOktaApi/exportOperations';
 import { createPushGroupOperations } from './useOktaApi/pushGroupOps';
 import { createGroupAnalysisOperations } from './useOktaApi/groupAnalysis';
 
+/**
+ * Aggregate hook returning every Okta operation the side panel can invoke.
+ *
+ * Each returned function ultimately posts a message to the background
+ * `ApiScheduler`, which rate-limits and forwards it to the content script that
+ * performs the actual authenticated `fetch` — the side panel never calls Okta
+ * directly. Long-running operations (`removeDeprovisioned`, `exportMembers`) are
+ * wrapped so they toggle `isLoading` and can be aborted via `cancelOperation`.
+ *
+ * @remarks
+ * The options (see `UseOktaApiOptions`) scope every operation to
+ * `targetTabId`'s content script and wire the result/progress callbacks.
+ * `onResult` reports user-facing messages (status is `success` / `warning` /
+ * `danger`, never `error`). Both `onResult` and `onProgress` must be stable
+ * (`useCallback`) — they are memo dependencies, so an unstable value defeats the
+ * memoization and gives every returned function a new identity each render.
+ *
+ * @returns A memoized object of run state (`isLoading`, `isCancelled`,
+ *   `cancelOperation`) plus the core, group, user, export, push-group and
+ *   group-analysis operations.
+ *
+ * @example
+ * ```tsx
+ * const api = useOktaApi({ targetTabId, onResult, onProgress });
+ * await api.addUserToGroup(userId, groupId);
+ * ```
+ */
 export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOptions) {
   const [isLoading, setIsLoading] = useState(false);
   const [abortController, setAbortController] = useState<AbortController | null>(null);

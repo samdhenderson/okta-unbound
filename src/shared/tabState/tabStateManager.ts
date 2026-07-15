@@ -1,14 +1,15 @@
 /**
- * Tab State Manager
+ * @module shared/tabState/tabStateManager
+ * @description Persists and restores per-tab UI state across side-panel navigation.
  *
- * Manages persistence and restoration of UI state across tab navigation.
- * Prevents unnecessary re-fetching and maintains user context when switching tabs.
+ * Stores each tab's state in `chrome.storage.local` under a per-tab key with
+ * embedded `_metadata` (version, last-updated, expiry), providing:
+ * - Per-tab isolation and TTL-based expiration
+ * - Automatic cleanup of stale/versioned-out state
+ * - Version-mismatch invalidation as lightweight migration
  *
- * State is stored in chrome.storage.local with:
- * - Per-tab state isolation
- * - TTL-based expiration
- * - Automatic cleanup of stale state
- * - Migration support for schema changes
+ * @see {@link TabStateManager}
+ * @see `shared/tabState/types`
  */
 
 import { createLogger } from '../utils/logger';
@@ -27,6 +28,10 @@ const STORAGE_KEY_PREFIX = 'tab_state_';
 const STATE_VERSION = 1;
 const DEFAULT_TTL = 30 * 60 * 1000; // 30 minutes
 
+/**
+ * Static API for reading and writing persisted per-tab UI state. All methods are
+ * keyed by {@link TabName} and operate on `chrome.storage.local`.
+ */
 export class TabStateManager {
   /**
    * Save state for a specific tab
@@ -279,6 +284,12 @@ export class TabStateManager {
 
 // Convenience functions for specific tab types
 
+/**
+ * Merge a partial update into the persisted Rules-tab state, filling defaults for
+ * any fields not already stored.
+ *
+ * @param state - Fields to update; unspecified fields keep their current value.
+ */
 export async function saveRulesTabState(state: Partial<RulesTabState>): Promise<void> {
   const currentState = await TabStateManager.loadTabState<RulesTabState>('rules');
   const newState: RulesTabState = {

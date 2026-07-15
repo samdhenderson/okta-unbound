@@ -1,3 +1,11 @@
+/**
+ * @module sidepanel/hooks/useOktaPageContext
+ * @description Detects whether the active Okta tab is a group / user / app / admin page.
+ *
+ * A thin wrapper over `useOktaTabContext` that probes the content script for all
+ * three entity kinds at once and exposes whichever one matched.
+ */
+
 import { useCallback } from 'react';
 import type { GroupInfo, UserInfo } from '../../shared/types';
 import {
@@ -8,6 +16,7 @@ import {
 
 type PageType = 'group' | 'user' | 'app' | 'admin' | 'unknown';
 
+/** Identifying details for an Okta application page. */
 export interface AppInfo {
   appId: string;
   appName: string;
@@ -22,6 +31,7 @@ interface PageDetection {
   appInfo: AppInfo | null;
 }
 
+/** Detected page entity merged with the shared tab-context connection state. */
 export interface OktaPageContext extends PageDetection {
   connectionStatus: ConnectionStatus;
   targetTabId: number | null;
@@ -42,8 +52,14 @@ const ADMIN: PageDetection = { pageType: 'admin', groupInfo: null, userInfo: nul
 
 /**
  * Detects which kind of Okta entity page (group / user / app) the active tab is
- * on by probing the content script for all three, and exposes the matching info.
- * Thin wrapper over {@link useOktaTabContext}.
+ * on by probing the content script for all three in parallel, and exposes the
+ * matching info. Falls back to `admin` when none match. Thin wrapper over
+ * {@link useOktaTabContext}.
+ *
+ * @returns The detected `pageType` with the corresponding `groupInfo` /
+ *   `userInfo` / `appInfo` (the others `null`), plus shared connection state
+ *   (`connectionStatus`, `targetTabId`, `error`, `isLoading`, `refetch`,
+ *   `oktaOrigin`).
  */
 export function useOktaPageContext(): OktaPageContext {
   const loadEntity = useCallback(

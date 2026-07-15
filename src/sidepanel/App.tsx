@@ -1,3 +1,13 @@
+/**
+ * @module sidepanel/App
+ * @description Root side-panel component: wires page context to the tabbed UI shell.
+ *
+ * Owns the active-tab selection (persisted to `chrome.storage.local` with legacy-tab
+ * migration) and the highlighted rule id. Reads live Okta page context via
+ * `useGroupContext`/`useOktaPageContext` and renders the {@link Header},
+ * {@link ContextBanner}, {@link TabNavigation}, the per-tab content, and the fixed
+ * {@link LoadingBar}/{@link SchedulerStatusBar}, all inside the SchedulerProvider.
+ */
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import ContextBanner from './components/ContextBanner';
@@ -14,8 +24,17 @@ import { useGroupContext } from './hooks/useGroupContext';
 import { useOktaPageContext } from './hooks/useOktaPageContext';
 import { SchedulerProvider } from './contexts/SchedulerContext';
 
+/** Storage key under which the last-active tab is persisted in `chrome.storage.local`. */
 const SELECTED_TAB_KEY = 'okta_unbound_selected_tab';
 
+/**
+ * Root application shell for the Okta Unbound side panel.
+ *
+ * Restores the saved tab on mount (migrating retired tab ids such as
+ * `dashboard`/`operations`/`undo` to their current equivalents), routes tab
+ * changes, and supports cross-tab navigation to a specific rule via
+ * `handleNavigateToRule`.
+ */
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);

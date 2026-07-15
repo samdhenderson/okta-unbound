@@ -1,3 +1,11 @@
+/**
+ * @module sidepanel/components/overview/members/CompositionReports
+ * @description Collapsible grid of {@link AttributeFacet} cards — the group's attribute composition.
+ *
+ * Lays out one facet per discovered profile attribute and, once past a threshold,
+ * offers a quick attribute-name filter. Value clicks bubble up as member-list
+ * facet toggles; "View all" requests the full-distribution modal for an attribute.
+ */
 import React, { useMemo, useState } from 'react';
 import CollapsibleSection from '../../shared/CollapsibleSection';
 import { Input } from '../../shared';
@@ -10,10 +18,13 @@ import {
   type MemberFilter,
 } from './memberAnalytics';
 
+/** Props for {@link CompositionReports}. */
 interface CompositionReportsProps {
   /** Discovered profile attributes with their value distributions. */
   attributes: AttributeSummary[];
+  /** Active member-list filters, used to highlight selected values per facet. */
   filters: MemberFilter[];
+  /** Toggle a value within an attribute as a member-list filter. */
   onToggle: (dimension: Dimension, row: BreakdownRow) => void;
   /** Open the full-distribution details view for an attribute. */
   onExpand: (key: string) => void;
@@ -22,6 +33,7 @@ interface CompositionReportsProps {
 /** Above this many attributes, offer a quick filter to jump to one. */
 const SEARCH_THRESHOLD = 6;
 
+/** Renders the attribute-composition section as a collapsible grid of facets. */
 const CompositionReports: React.FC<CompositionReportsProps> = ({
   attributes,
   filters,

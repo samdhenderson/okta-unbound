@@ -1,3 +1,16 @@
+/**
+ * @module shared/ruleEvaluator
+ * @description Best-effort client-side evaluator for Okta group-rule expressions.
+ *
+ * Transpiles the supported subset of Okta Expression Language (profile-attribute
+ * comparisons joined by AND/OR) to JavaScript and evaluates it against a user
+ * profile. Group-membership and app-context expressions cannot be resolved
+ * client-side — gate calls with {@link canEvaluateClientSide} first.
+ *
+ * @see {@link evaluateRuleExpression}
+ * @see {@link canEvaluateClientSide}
+ */
+
 import { createLogger } from './utils/logger';
 import type { OktaUser } from './types';
 

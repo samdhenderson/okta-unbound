@@ -1,11 +1,19 @@
+/**
+ * @module sidepanel/components/groups/GroupSearchBar
+ * @description The groups search input row; swaps its bound query by search mode.
+ */
 import React from 'react';
 
 interface GroupSearchBarProps {
+  /** `live` queries Okta directly; `cached` filters the loaded list. */
   searchMode: 'live' | 'cached';
+  /** Query bound in live mode. */
   liveSearchQuery: string;
   onLiveSearchQueryChange: (value: string) => void;
+  /** Query bound in cached mode. */
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
+  /** Whether a live search is in flight (shows the trailing spinner). */
   isLiveSearching: boolean;
 }
 

@@ -1,15 +1,28 @@
+/**
+ * @module sidepanel/hooks/useUserSearch
+ * @description Debounced Okta user search bound to a specific tab.
+ *
+ * Sends `searchUsers` to the target tab's content script (never Okta directly) as
+ * the query changes, enforcing a minimum length and debounce.
+ */
+
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { OktaUser } from '../../shared/types';
 import { createLogger } from '../../shared/utils/logger';
 
 const log = createLogger('useUserSearch');
 
+/** Options for {@link useUserSearch}. */
 interface UseUserSearchOptions {
+  /** Tab whose content script performs the search; searches error out when undefined. */
   targetTabId: number | undefined;
+  /** Debounce delay before searching. Defaults to 600ms. */
   debounceMs?: number;
+  /** Minimum query length before searching. Defaults to 2. */
   minQueryLength?: number;
 }
 
+/** Return shape of {@link useUserSearch}. */
 interface UseUserSearchReturn {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
@@ -27,6 +40,10 @@ interface UseUserSearchReturn {
  * - Minimum query length enforcement
  * - Error handling
  * - Clear search functionality
+ *
+ * @param options - See `UseUserSearchOptions`.
+ * @returns `searchQuery` / `setSearchQuery` (which drives the debounced search),
+ *   `searchResults`, `isSearching`, `error`, and `clearSearch`.
  */
 export function useUserSearch({
   targetTabId,

@@ -30,6 +30,10 @@ const isDev = (() => {
   }
 })();
 
+/**
+ * A scoped logging surface. `debug`/`info` emit only in dev builds; `warn`/`error`
+ * always emit. Each method accepts arbitrary args (subject to the no-secrets rule).
+ */
 export interface Logger {
   debug: (...args: LogArgs) => void;
   info: (...args: LogArgs) => void;
@@ -40,6 +44,9 @@ export interface Logger {
 /**
  * Create a logger scoped to a subsystem. The scope is prefixed to every line,
  * e.g. `createLogger('ApiScheduler')` → `[ApiScheduler] …`.
+ *
+ * @param scope - Subsystem name used as the bracketed line prefix.
+ * @returns A {@link Logger} bound to `scope`.
  */
 export function createLogger(scope: string): Logger {
   const prefix = `[${scope}]`;

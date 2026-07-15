@@ -1,3 +1,11 @@
+/**
+ * @module sidepanel/components/ErrorBoundary
+ * @description Top-level React error boundary for the side panel.
+ *
+ * Catches render/lifecycle errors from its subtree, logs them via the shared
+ * logger, and shows a recoverable fallback with expandable error details plus
+ * "Try Again" (reset state) and "Reload Extension" actions.
+ */
 import { Component, ErrorInfo, ReactNode } from 'react';
 import { Button } from './shared';
 import { createLogger } from '../../shared/utils/logger';
@@ -5,15 +13,23 @@ import { createLogger } from '../../shared/utils/logger';
 const log = createLogger('ErrorBoundary');
 
 interface Props {
+  /** Subtree to render and guard against uncaught errors. */
   children: ReactNode;
 }
 
 interface State {
+  /** Whether an error has been caught and the fallback UI should render. */
   hasError: boolean;
+  /** The caught error, if any. */
   error: Error | null;
+  /** React-provided component stack for the caught error. */
   errorInfo: ErrorInfo | null;
 }
 
+/**
+ * Class-based error boundary that renders a fallback UI when its children throw,
+ * and lets the user reset the boundary or reload the extension to recover.
+ */
 class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,

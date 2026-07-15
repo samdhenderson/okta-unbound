@@ -1,20 +1,34 @@
+/**
+ * @module sidepanel/components/groups/CrossGroupSearch
+ * @description Finds a user across all locally-cached group memberships and lets you
+ * bulk-remove them from selected groups.
+ *
+ * Operates purely over the in-memory member cache (no API fetch to search); matches
+ * are grouped by user, and the admin toggles per-group removals before committing.
+ */
 import React, { useState, useMemo, useCallback } from 'react';
 import { Button, IconButton, Input } from '../shared';
 import Icon from '../overview/shared/Icon';
 import type { OktaUser } from '../../../shared/types';
 
 interface CrossGroupSearchProps {
+  /** Cached members keyed by group id — the corpus searched. */
   groupMembersCache: Map<string, OktaUser[]>;
+  /** Group id → display name, used to label matches. */
   groupNames: Map<string, string>;
+  /** Returns every (group, user) match for the query against the cache. */
   searchUserAcrossGroups: (
     query: string,
     cache: Map<string, OktaUser[]>,
     names: Map<string, string>,
   ) => Array<{ groupId: string; groupName: string; user: OktaUser }>;
+  /** Removes a user from the given groups (called per user during bulk remove). */
   onRemoveUserFromGroups: (userId: string, groupIds: string[]) => Promise<void>;
+  /** Dismisses the panel. */
   onClose: () => void;
 }
 
+/** Search-and-bulk-remove panel operating over cached group memberships. */
 const CrossGroupSearch: React.FC<CrossGroupSearchProps> = ({
   groupMembersCache,
   groupNames,

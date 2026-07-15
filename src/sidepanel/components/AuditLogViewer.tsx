@@ -1,12 +1,22 @@
-// Audit Log Viewer
-// Displays action history as a read-only audit trail
-
+/**
+ * @module sidepanel/components/AuditLogViewer
+ * @description Read-only audit trail of actions performed through the extension.
+ *
+ * Reads action history from the undo manager, live-refreshes on `chrome.storage`
+ * `undoHistory` changes, renders each entry as an expandable row with type-specific
+ * detail rows, and offers a confirm-gated "Clear History" action. Rendered inside
+ * the History tab.
+ */
 import React, { useState, useEffect, useCallback } from 'react';
 import type { UndoAction } from '../../shared/undoTypes';
 import { getUndoHistory, clearUndoHistory, formatActionTime } from '../../shared/undoManager';
 import Button from './shared/Button';
 import EmptyState from './shared/EmptyState';
 
+/**
+ * Displays the logged undo/audit action history as an expandable, clearable list.
+ * Falls back to an {@link EmptyState} when no actions have been recorded.
+ */
 const AuditLogViewer: React.FC = () => {
   const [actions, setActions] = useState<UndoAction[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);

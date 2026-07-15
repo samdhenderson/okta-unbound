@@ -1,3 +1,11 @@
+/**
+ * @module sidepanel/components/OverviewTab
+ * @description Context-aware landing tab that adapts to the detected Okta page.
+ *
+ * Reads page context via `useOktaPageContext` and renders {@link GroupOverview} or
+ * {@link UserOverview} when a group/user page is detected, a retry/quick-start
+ * error state when disconnected, or a guidance {@link EmptyState} otherwise.
+ */
 import React from 'react';
 import { useOktaPageContext } from '../hooks/useOktaPageContext';
 import PageHeader from './shared/PageHeader';
@@ -9,9 +17,14 @@ import GroupOverview from './overview/GroupOverview';
 import UserOverview from './overview/UserOverview';
 
 interface OverviewTabProps {
+  /** Navigates to another tab, optionally deep-linking to a specific rule id. */
   onTabChange: (tab: 'rules' | 'users' | 'groups' | 'history', selectedRuleId?: string) => void;
 }
 
+/**
+ * Renders the Overview tab, switching between group/user overviews, an error/retry
+ * state, and a waiting-for-context empty state based on the detected page type.
+ */
 const OverviewTab: React.FC<OverviewTabProps> = ({ onTabChange }) => {
   const {
     pageType,

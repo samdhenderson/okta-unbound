@@ -1,3 +1,13 @@
+/**
+ * @module sidepanel/components/RulesTab
+ * @description Rules tab: load, search, filter, and activate/deactivate group rules.
+ *
+ * Fetches rules through the content script (using {@link RulesCache} to avoid
+ * redundant calls), persists its rules/stats/UI state and scroll position via
+ * `TabStateManager`, renders stats plus a filterable list of {@link RuleCard}s, and
+ * logs undo + audit entries when rules are activated or deactivated. Supports
+ * deep-linking to a rule via `selectedRuleId`.
+ */
 import React, { useState, useEffect } from 'react';
 import RuleCard from './RuleCard';
 import PageHeader from './shared/PageHeader';
@@ -18,15 +28,26 @@ import { createLogger } from '../../shared/utils/logger';
 const log = createLogger('RulesTab');
 
 interface RulesTabProps {
+  /** Chrome tab id of the connected Okta tab; required to fetch or mutate rules. */
   targetTabId?: number;
+  /** Id of the currently detected group; enables the "Current Group" filter. */
   currentGroupId?: string;
+  /** Okta org origin passed to each {@link RuleCard} for its "View in Okta" link. */
   oktaOrigin?: string | null;
+  /** Rule id to scroll to and highlight when navigated here from another tab. */
   selectedRuleId?: string | null;
+  /** Called once the highlighted rule has been shown, so the parent can clear it. */
   onRuleSelected?: () => void;
 }
 
+/** Client-side filter applied on top of the text search over loaded rules. */
 type FilterType = 'all' | 'active' | 'conflicts' | 'current-group';
 
+/**
+ * Renders the Rules tab: manages rule loading/caching/persistence, the search and
+ * filter controls, the stats overview, and the activate/deactivate flows (each of
+ * which records undo and audit-trail entries).
+ */
 const RulesTab: React.FC<RulesTabProps> = ({
   targetTabId,
   currentGroupId,

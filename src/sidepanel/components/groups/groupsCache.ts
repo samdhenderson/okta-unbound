@@ -1,6 +1,15 @@
+/**
+ * @module sidepanel/components/groups/groupsCache
+ * @description Pure serialize/parse helpers for the `chrome.storage.local` groups cache.
+ *
+ * Handles the Date⇄ISO-string round-trip and the {@link CACHE_DURATION} freshness
+ * check. `now` is injected into the pure functions so they stay deterministic.
+ */
 import type { GroupSummary } from '../../../shared/types';
 
+/** `chrome.storage.local` key for the cached groups payload. */
 export const GROUPS_CACHE_KEY = 'okta_unbound_groups_cache';
+/** Max age before a cache entry is considered stale (1 day, in ms). */
 export const CACHE_DURATION = 24 * 60 * 60 * 1000; // 1 day
 
 /** The serialized cache payload written to `chrome.storage.local`. */

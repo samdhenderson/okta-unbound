@@ -1,21 +1,48 @@
+/**
+ * @module sidepanel/components/shared/Select
+ * @description Controlled native `<select>` dropdown built from an options array, with label + error state.
+ *
+ * `onChange` receives the chosen option value (not the event). Use over a raw
+ * `<select>`; for free text use `Input`.
+ */
 import React from 'react';
 
+/** A single `<option>`: `value` is the submitted value, `label` the visible text. */
 interface SelectOption {
   value: string;
   label: string;
 }
 
 interface SelectProps {
+  /** Controlled selected value. */
   value: string;
+  /** Called with the newly selected option value. */
   onChange: (value: string) => void;
+  /** Options to render. */
   options: SelectOption[];
+  /** Optional label rendered above the control. */
   label?: string;
+  /** Error message; when set, applies danger styling and shows the message below. */
   error?: string;
   disabled?: boolean;
+  /** Stretch to fill the container width. Defaults to `true`. */
   fullWidth?: boolean;
   className?: string;
 }
 
+/**
+ * The shared controlled dropdown. Prefer this over a hand-rolled `<select>`.
+ *
+ * @example
+ * ```tsx
+ * <Select
+ *   label="Status"
+ *   value={status}
+ *   onChange={setStatus}
+ *   options={[{ value: 'ACTIVE', label: 'Active' }, { value: 'STAGED', label: 'Staged' }]}
+ * />
+ * ```
+ */
 const Select: React.FC<SelectProps> = ({
   value,
   onChange,

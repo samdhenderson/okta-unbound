@@ -1,3 +1,8 @@
+/**
+ * @module sidepanel/components/users
+ * @description Barrel for the Users feature components (search, profile, memberships, comparison).
+ */
+
 // User-related components
 export { default as UserSearchBar } from './UserSearchBar';
 export { default as UserSearchResults } from './UserSearchResults';

@@ -1,22 +1,42 @@
+/**
+ * @module sidepanel/components/shared/Button
+ * @description The primary text button primitive — the default choice for any clickable CTA.
+ *
+ * Five variants and three sizes, with optional leading/trailing icon, loading
+ * spinner, badge, and full-width layout. For icon-only affordances use
+ * `IconButton`; for filter toggles use `FilterPill`.
+ */
 import React from 'react';
 import Icon, { type IconType } from '../overview/shared/Icon';
 
+/** Visual treatments: `secondary` is the default; `danger`/`success` carry semantic colour; `ghost` is chromeless. */
 export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'success';
+/** Height/padding scale — `sm` ≈ 36px, `md` ≈ 40px, `lg` ≈ 56px. */
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 interface ButtonProps {
+  /** Button label content. */
   children: React.ReactNode;
+  /** Visual treatment. Defaults to `secondary`. */
   variant?: ButtonVariant;
+  /** Size scale. Defaults to `md`. */
   size?: ButtonSize;
+  /** Optional icon glyph rendered alongside the label (hidden while `loading`). */
   icon?: IconType;
+  /** Which side of the label the icon sits on. Defaults to `left`. */
   iconPosition?: 'left' | 'right';
   disabled?: boolean;
+  /** When true, shows a spinner and disables the button (also disabled when `disabled`). */
   loading?: boolean;
   onClick?: () => void;
+  /** Native button type. Defaults to `button` (does not submit forms). */
   type?: 'button' | 'submit' | 'reset';
   className?: string;
+  /** Stretch to fill the container width. */
   fullWidth?: boolean;
+  /** Optional count/badge pill rendered at the trailing edge (e.g. unread count). */
   badge?: string;
+  /** Native `title` tooltip. */
   title?: string;
 }
 
@@ -55,6 +75,16 @@ const sizeClasses: Record<ButtonSize, string> = {
   lg: 'px-4 py-3 text-base min-h-14', // 56px
 };
 
+/**
+ * The shared text button. Prefer this over a hand-rolled `<button>`.
+ *
+ * @example
+ * ```tsx
+ * <Button variant="primary" icon="plus" onClick={handleAdd}>
+ *   Add group
+ * </Button>
+ * ```
+ */
 const Button: React.FC<ButtonProps> = ({
   children,
   variant = 'secondary',

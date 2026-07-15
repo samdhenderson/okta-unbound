@@ -1,11 +1,20 @@
+/**
+ * @module sidepanel/components/users/comparison/ComparisonTabBar
+ * @description Tab bar (Overview / Groups / Apps) with per-tab diff-count badges.
+ */
 import React from 'react';
 import Icon from '../../overview/shared/Icon';
 import type { TabKey } from './comparisonAnalytics';
 
+/** Props for {@link ComparisonTabBar}. */
 interface ComparisonTabBarProps {
+  /** Currently selected tab. */
   activeTab: TabKey;
+  /** Invoked with the newly selected tab key. */
   onChange: (t: TabKey) => void;
+  /** Number of differing groups, shown as a badge on the Groups tab (hidden when 0). */
   groupDiff: number;
+  /** Number of differing apps, shown as a badge on the Apps tab (hidden when 0). */
   appDiff: number;
 }
 

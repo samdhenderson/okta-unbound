@@ -1,7 +1,19 @@
+/**
+ * @module sidepanel/components/groups/GroupListItem
+ * @description A single expandable row in the groups list.
+ *
+ * Collapsed, it shows the name, type/source/push/staleness badges, and metadata;
+ * expanded, it reveals description, ids, dates, push mappings, and staleness factors.
+ * Memoised with a custom comparator so unaffected rows skip re-render in long lists.
+ */
 import React, { useState, useCallback, memo } from 'react';
 import { IconButton, Checkbox } from '../shared';
 import type { GroupSummary, StalenessInfo } from '../../../shared/types';
 
+/**
+ * Map a staleness score (0–100) to its badge colors and label.
+ * @returns Tailwind bg/text token classes plus the human-readable bucket label.
+ */
 function getStalenessColor(score: number): { bg: string; text: string; label: string } {
   if (score <= 25) return { bg: 'bg-success-light', text: 'text-success-text', label: 'Healthy' };
   if (score <= 50) return { bg: 'bg-warning-light', text: 'text-warning-text', label: 'Monitor' };
@@ -9,6 +21,7 @@ function getStalenessColor(score: number): { bg: string; text: string; label: st
   return { bg: 'bg-danger-light', text: 'text-danger-text', label: 'Very Stale' };
 }
 
+/** Colored pill showing a group's staleness label and score, with factors in the tooltip. */
 const StalenessIndicator: React.FC<{ staleness: StalenessInfo }> = ({ staleness }) => {
   const color = getStalenessColor(staleness.score);
   return (
@@ -22,12 +35,17 @@ const StalenessIndicator: React.FC<{ staleness: StalenessInfo }> = ({ staleness 
 };
 
 interface GroupListItemProps {
+  /** The group to render. */
   group: GroupSummary;
+  /** Whether this row is selected. */
   selected: boolean;
+  /** Toggles selection for this group's id. */
   onToggleSelect: (groupId: string) => void;
+  /** Okta origin, enabling the "Open in Okta" deep link when present. */
   oktaOrigin?: string;
 }
 
+/** Memoised expandable row for one group in the groups list. */
 const GroupListItem: React.FC<GroupListItemProps> = memo(
   ({ group, selected, onToggleSelect, oktaOrigin }) => {
     const [expanded, setExpanded] = useState(false);

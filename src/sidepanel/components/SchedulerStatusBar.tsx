@@ -1,19 +1,20 @@
 /**
- * Scheduler Status Bar
+ * @module sidepanel/components/SchedulerStatusBar
+ * @description Fixed bottom bar reporting the global API scheduler's live state.
  *
- * Displays the global API scheduler status in a compact bar.
- * Shows:
- * - Current status (idle, processing, throttled, cooldown, paused)
- * - Queue length
- * - Active requests
- * - Rate limit information
- * - Cooldown countdown
+ * Subscribes to the SchedulerContext and shows the current status (idle /
+ * processing / throttled / cooldown / paused), queue length, active requests,
+ * rate-limit headroom, a live cooldown countdown, total processed/failed counts,
+ * and a confirm-gated "Cancel" action to clear the pending queue.
  */
-
 import React, { useState, useEffect } from 'react';
 import { Button } from './shared';
 import { useScheduler } from '../contexts/SchedulerContext';
 
+/**
+ * Renders the scheduler status bar from SchedulerContext state, or nothing until
+ * the scheduler state is available.
+ */
 const SchedulerStatusBar: React.FC = () => {
   const { state, metrics, clearQueue } = useScheduler();
   const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);

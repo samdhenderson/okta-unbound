@@ -1,9 +1,22 @@
+/**
+ * @module sidepanel/components/shared/SelectionChips
+ * @description Renders a set of selected items as removable chips — the display half of a multi-select.
+ *
+ * Generic over the item type `T`; `getKey`/`getLabel` project each item. Shows
+ * `emptyMessage` when empty, and a "Clear all" link when more than one is selected.
+ */
 interface SelectionChipsProps<T> {
+  /** Selected items to render as chips. */
   items: T[];
+  /** Stable React key for an item. */
   getKey: (item: T) => string;
+  /** Visible chip label for an item. */
   getLabel: (item: T) => string;
+  /** Called to remove a single item (its × button). */
   onRemove: (item: T) => void;
+  /** Optional "Clear all" handler; the link shows only when >1 item is selected. */
   onClearAll?: () => void;
+  /** Placeholder text shown when there are no items. */
   emptyMessage?: string;
   className?: string;
 }

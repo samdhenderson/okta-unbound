@@ -1,15 +1,31 @@
+/**
+ * @module sidepanel/components/shared/Input
+ * @description Controlled single-line text field with optional label, hint, leading icon, and error state.
+ *
+ * `onChange` receives the string value (not the event). When `error` is set the
+ * field turns red and the error message replaces the hint. Use over a raw
+ * `<input>`; for multi-line use `Textarea`, for choices use `Select`.
+ */
 import React from 'react';
 
 interface InputProps {
+  /** Controlled value. */
   value: string;
+  /** Called with the new string value on each change. */
   onChange: (value: string) => void;
   placeholder?: string;
+  /** Native input type. Defaults to `text`. */
   type?: 'text' | 'email' | 'password' | 'number' | 'search';
   disabled?: boolean;
+  /** Error message; when set, applies danger styling and hides `hint`. */
   error?: string;
+  /** Optional field label rendered above the input. */
   label?: string;
+  /** Helper text below the input, shown only when there is no `error`. */
   hint?: string;
+  /** Stretch to fill the container width. Defaults to `true`. */
   fullWidth?: boolean;
+  /** Optional leading icon rendered inside the field. */
   icon?: React.ReactNode;
   className?: string;
   /** Focus the input on mount. */
@@ -20,6 +36,14 @@ interface InputProps {
   inputRef?: React.Ref<HTMLInputElement>;
 }
 
+/**
+ * The shared controlled text input. Prefer this over a hand-rolled `<input>`.
+ *
+ * @example
+ * ```tsx
+ * <Input label="Search" type="search" value={query} onChange={setQuery} error={err} />
+ * ```
+ */
 const Input: React.FC<InputProps> = ({
   value,
   onChange,

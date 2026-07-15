@@ -1,15 +1,27 @@
+/**
+ * @module sidepanel/components/users/comparison/ComparisonSearchPhase
+ * @description Phase 1 of the comparison modal: search for and pick the second user.
+ */
 import React from 'react';
 import Icon from '../../overview/shared/Icon';
 import UserSearchResults from '../UserSearchResults';
 import type { OktaUser } from '../../../../shared/types';
 
+/** Props for {@link ComparisonSearchPhase}. */
 interface ComparisonSearchPhaseProps {
+  /** The context user; excluded from results so users can't compare with themselves. */
   contextUser: OktaUser;
+  /** Display name of the context user, shown in the intro copy. */
   contextName: string;
+  /** Current search text (controlled). */
   searchQuery: string;
+  /** Updates the search text. */
   setSearchQuery: (v: string) => void;
+  /** When true, shows the "Searching directory…" indicator. */
   isSearching: boolean;
+  /** Raw search results; the context user is filtered out before rendering. */
   searchResults: OktaUser[];
+  /** Invoked with the chosen user to enter the comparison phase. */
   onSelectUser: (u: OktaUser) => void;
 }
 

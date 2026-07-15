@@ -1,13 +1,25 @@
+/**
+ * @module sidepanel/components/overview/members/ActiveFilterChips
+ * @description Removable chips summarizing the member explorer's active facet filters.
+ *
+ * Renders one chip per active {@link MemberFilter} (each with a remove button)
+ * plus a "Clear all" action. Renders nothing when no filters are active.
+ */
 import React from 'react';
 import { IconButton } from '../../shared';
 import type { MemberFilter } from './memberAnalytics';
 
+/** Props for {@link ActiveFilterChips}. */
 interface ActiveFilterChipsProps {
+  /** Currently active facet filters. */
   filters: MemberFilter[];
+  /** Remove a single filter. */
   onRemove: (filter: MemberFilter) => void;
+  /** Remove every active filter. */
   onClearAll: () => void;
 }
 
+/** Renders active-filter chips; collapses to nothing when `filters` is empty. */
 const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({ filters, onRemove, onClearAll }) => {
   if (filters.length === 0) return null;
 

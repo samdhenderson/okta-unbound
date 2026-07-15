@@ -1,7 +1,17 @@
+/**
+ * @module sidepanel/components/groups/groupFilters
+ * @description Pure filter/sort helpers for the cached-mode groups list.
+ *
+ * Bucket predicates, the sort comparator, the combined {@link filterAndSortGroups}
+ * pipeline, and the {@link computeActiveFilterCount} badge helper — all side-effect free.
+ */
 import type { GroupSummary } from '../../../shared/types';
 
+/** Field the groups list can be sorted by. */
 export type SortField = 'name' | 'memberCount' | 'lastUpdated' | 'staleness';
+/** Health/staleness bucket filter (`''` = all). */
 export type StalenessLevel = '' | 'healthy' | 'monitor' | 'stale' | 'very_stale';
+/** Push-status filter (`''` = all). */
 export type PushFilter = '' | 'pushed' | 'not_pushed';
 
 /** The full cached-mode filter/sort state driving {@link filterAndSortGroups}. */

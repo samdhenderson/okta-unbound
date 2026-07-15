@@ -1,8 +1,17 @@
+/**
+ * @module sidepanel/components/shared/FilterPill
+ * @description Small toggle pill for filter panels — solid primary when active, outlined when not.
+ *
+ * A two-state toggle button that reflects its state as `aria-pressed`. For
+ * icon-only buttons use `IconButton`; for text CTAs use `Button`.
+ */
 import React from 'react';
 
 interface FilterPillProps {
+  /** Toggle state; when true the pill is filled and `aria-pressed` is set. */
   active: boolean;
   onClick: () => void;
+  /** Pill label content. */
   children: React.ReactNode;
   title?: string;
   /** Optional custom classes for the inactive state (e.g. semantic colors). */
@@ -12,7 +21,14 @@ interface FilterPillProps {
 /**
  * A small pill/toggle used inside filter panels: solid primary when active,
  * neutral outline when inactive. Reflects its state as `aria-pressed`.
- * For icon-only buttons use {@link IconButton}; for text CTAs use {@link Button}.
+ * For icon-only buttons use `IconButton`; for text CTAs use `Button`.
+ *
+ * @example
+ * ```tsx
+ * <FilterPill active={showActiveOnly} onClick={() => setShowActiveOnly((v) => !v)}>
+ *   Active only
+ * </FilterPill>
+ * ```
  */
 const FilterPill: React.FC<FilterPillProps> = ({
   active,

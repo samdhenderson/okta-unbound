@@ -1,17 +1,33 @@
+/**
+ * @module sidepanel/components/groups/GroupComparisonModal
+ * @description Modal that compares membership across 2–5 selected groups.
+ *
+ * Runs the comparison automatically on open, then renders summary stats, a per-group
+ * unique/shared/overlap breakdown, and (for 3+ groups) a pairwise-overlap matrix
+ * computed from the member cache. Results are exportable to CSV.
+ */
 import React, { useState, useEffect, useCallback } from 'react';
 import Modal from '../shared/Modal';
 import Button from '../shared/Button';
 import type { GroupSummary, GroupComparisonResult, OktaUser } from '../../../shared/types';
 
 interface GroupComparisonModalProps {
+  /** Whether the modal is visible; opening triggers the comparison. */
   isOpen: boolean;
+  /** Closes the modal. */
   onClose: () => void;
+  /** Groups to compare (expects 2–5). */
   groups: GroupSummary[];
+  /**
+   * Fetches members and computes the {@link GroupComparisonResult}, reporting
+   * progress; may reuse the passed member cache to avoid refetching.
+   */
   compareGroups: (
     groups: Array<{ id: string; name: string }>,
     onProgress?: (current: number, total: number, message?: string) => void,
     memberCache?: Map<string, OktaUser[]>,
   ) => Promise<GroupComparisonResult>;
+  /** Cached members keyed by group id; also used to build the pairwise matrix. */
   memberCache: Map<string, OktaUser[]>;
 }
 
@@ -30,6 +46,7 @@ const BG_COLORS = [
   'bg-neutral-50',
 ];
 
+/** Modal presenting membership overlap analysis across selected groups. */
 const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
   isOpen,
   onClose,

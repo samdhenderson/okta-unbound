@@ -1,5 +1,18 @@
+/**
+ * @module sidepanel/components/overview/shared/Icon
+ * @description Inline SVG icon registry shared across the Overview tab components.
+ *
+ * A single stateless component that maps an {@link IconType} name to a
+ * Tailwind-sized, `currentColor` stroked SVG. Keeping the set here lets stat
+ * cards, quick actions, and facets reference icons by name without importing an
+ * external icon library.
+ */
 import React from 'react';
 
+/**
+ * The set of icon names this registry can render. Add a name here and a matching
+ * entry in the `icons` map inside {@link Icon} to introduce a new glyph.
+ */
 export type IconType =
   | 'users'
   | 'user'
@@ -27,12 +40,17 @@ export type IconType =
   | 'clipboard'
   | 'clipboard-check';
 
+/** Props for {@link Icon}. */
 interface IconProps {
+  /** Which glyph to render (see {@link IconType}). */
   type: IconType;
+  /** Extra classes merged after the size class (e.g. a color token). */
   className?: string;
+  /** Preset square dimensions: sm=16px, md=20px, lg=24px, xl=32px. */
   size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
+/** Maps a {@link IconProps.size} to its Tailwind width/height classes. */
 const sizeClasses = {
   sm: 'w-4 h-4',
   md: 'w-5 h-5',
@@ -40,6 +58,10 @@ const sizeClasses = {
   xl: 'w-8 h-8',
 };
 
+/**
+ * Renders the named inline SVG icon. Returns `null` for an unknown `type`.
+ * Color follows `currentColor`, so set it via `className` or an ancestor.
+ */
 const Icon: React.FC<IconProps> = ({ type, className = '', size = 'md' }) => {
   const baseClasses = `${sizeClasses[size]} ${className}`;
 

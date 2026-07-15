@@ -1,16 +1,29 @@
+/**
+ * @module sidepanel/components/users/comparison/ComparisonOverviewTab
+ * @description Summary tab with two proportion cards (groups + apps) and jump-to-detail links.
+ */
 import React from 'react';
 import Icon from '../../overview/shared/Icon';
 import type { OktaGroup } from '../../../../shared/types';
 import type { AppEntry } from './comparisonAnalytics';
 
+/** Props for {@link ComparisonOverviewTab}. */
 interface ComparisonOverviewTabProps {
+  /** Display name for the context user. */
   contextName: string;
+  /** Display name for the compared user. */
   comparedName: string;
+  /** Bucketed group memberships (only-compared / shared / only-context). */
   groupBuckets: { onlyCompared: OktaGroup[]; shared: OktaGroup[]; onlyContext: OktaGroup[] };
+  /** Bucketed app assignments (only-compared / shared / only-context). */
   appBuckets: { onlyCompared: AppEntry[]; shared: AppEntry[]; onlyContext: AppEntry[] };
+  /** Group overlap as a whole percent (0–100). */
   groupSimilarity: number;
+  /** App overlap as a whole percent (0–100). */
   appSimilarity: number;
+  /** Jumps to the Groups detail tab. */
   onJumpToGroups: () => void;
+  /** Jumps to the Apps detail tab. */
   onJumpToApps: () => void;
 }
 
@@ -51,18 +64,32 @@ const ComparisonOverviewTab: React.FC<ComparisonOverviewTabProps> = ({
   </div>
 );
 
+/** Props for the internal {@link OverviewCard}. */
 interface OverviewCardProps {
+  /** Icon glyph identifying the category. */
   icon: 'users' | 'app';
+  /** Card heading (e.g. "Group memberships"). */
   heading: string;
+  /** Overlap as a whole percent (0–100). */
   similarity: number;
+  /** Display name for the context user. */
   contextName: string;
+  /** Display name for the compared user. */
   comparedName: string;
+  /** Count unique to the context user. */
   onlyContext: number;
+  /** Count shared by both users. */
   shared: number;
+  /** Count unique to the compared user. */
   onlyCompared: number;
+  /** Navigates to this category's detail tab. */
   onJump: () => void;
 }
 
+/**
+ * One category card: proportion bar, three count stats, and an overlap summary.
+ * For groups, also hints how many groups can be copied over.
+ */
 const OverviewCard: React.FC<OverviewCardProps> = ({
   icon,
   heading,
@@ -120,6 +147,7 @@ const OverviewCard: React.FC<OverviewCardProps> = ({
   );
 };
 
+/** A single count stat (value + color-dot label), optionally emphasized for the shared bucket. */
 const Stat: React.FC<{
   value: number;
   label: string;
@@ -143,6 +171,7 @@ const Stat: React.FC<{
   </div>
 );
 
+/** Horizontal stacked bar showing the relative sizes of the three buckets. */
 const ProportionStack: React.FC<{
   onlyContext: number;
   shared: number;

@@ -1,15 +1,18 @@
 /**
- * Date formatting — single source of truth.
+ * @module shared/utils/dateFormat
+ * @description Date formatting — single source of truth.
  *
  * Replaces the ~3 independent `formatDate`/`getRelativeTime` implementations in
- * `UsersTab`, `UserProfileCard`, and `csvUtils`.
- *
- * @module dateFormat
+ * `UsersTab`, `UserProfileCard`, and `csvUtils`. Uses the runtime locale
+ * (`toLocaleDateString(undefined, …)`), so rendered output varies by user locale.
  */
 
 /**
- * Human-friendly absolute date, e.g. "Mar 5, 2026, 02:30 PM".
- * Returns "Never" for empty input and the raw string if parsing fails.
+ * Human-friendly absolute date with time, e.g. "Mar 5, 2026, 02:30 PM".
+ *
+ * @param dateString - An ISO/parseable date string, or nullish.
+ * @returns The localized date-time string; `'Never'` for nullish input, or the
+ *   raw input string if `Date` construction throws.
  */
 export function formatDate(dateString: string | null | undefined): string {
   if (!dateString) return 'Never';
@@ -28,8 +31,11 @@ export function formatDate(dateString: string | null | undefined): string {
 
 /**
  * Date-only variant, e.g. "Mar 5, 2026" (no time). Used where a compact date is
- * preferred over the full timestamp. Returns "Never"/the raw string on the same
- * conditions as {@link formatDate}.
+ * preferred over the full timestamp.
+ *
+ * @param dateString - An ISO/parseable date string, or nullish.
+ * @returns The localized date string; `'Never'`/the raw input on the same
+ *   conditions as {@link formatDate}.
  */
 export function formatDateShort(dateString: string | null | undefined): string {
   if (!dateString) return 'Never';
@@ -45,7 +51,16 @@ export function formatDateShort(dateString: string | null | undefined): string {
 }
 
 /**
- * Relative time from now, e.g. "3 days ago". Returns `null` for empty/invalid input.
+ * Coarse relative time from now, bucketed by days/weeks/months/years.
+ *
+ * Buckets: `'today'`, `'yesterday'`, then `N days ago`, `N weeks ago`,
+ * `N months ago`, `N years ago`.
+ *
+ * @param dateString - An ISO/parseable date string, or nullish.
+ * @returns The relative-time label, or `null` for nullish/unparseable input.
+ *
+ * @example
+ * getRelativeTime(new Date(Date.now() - 3 * 864e5).toISOString()); // => '3 days ago'
  */
 export function getRelativeTime(dateString: string | null | undefined): string | null {
   if (!dateString) return null;

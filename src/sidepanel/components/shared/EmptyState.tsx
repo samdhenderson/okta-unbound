@@ -1,23 +1,36 @@
+/**
+ * @module sidepanel/components/shared/EmptyState
+ * @description Centered "no content" placeholder — icon, title, description, and optional action buttons.
+ *
+ * Use for empty lists, no-search-results, and first-run states. Each action
+ * renders as a shared {@link Button}.
+ */
 import React from 'react';
 import Icon, { type IconType } from '../overview/shared/Icon';
 import Button from './Button';
 
+/** A button rendered beneath the empty-state copy (e.g. "Clear filters"). */
 export interface EmptyStateAction {
   label: string;
   onClick: () => void;
+  /** Button variant. Defaults to `primary`. */
   variant?: 'primary' | 'secondary';
 }
 
 interface EmptyStateProps {
+  /** Icon glyph shown in the circular badge. */
   icon: IconType;
+  /** Bold headline. */
   title: string;
+  /** Supporting explanatory copy. */
   description: string;
+  /** Optional action buttons (rendered only when non-empty). */
   actions?: EmptyStateAction[];
   className?: string;
 }
 
 /**
- * A standardized empty state component for displaying when there's no content.
+ * A standardized empty-state placeholder for when a view has no content to show.
  *
  * @example
  * ```tsx

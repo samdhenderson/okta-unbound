@@ -11,9 +11,19 @@ import { createLogger } from '../../../shared/utils/logger';
 
 const log = createLogger('useOktaApi');
 
+/**
+ * Build read-only group discovery/search operations.
+ *
+ * @param coreApi - Shared transport surface (see {@link CoreApi}).
+ * @returns Group listing, member-count, rules, search, and by-id lookups.
+ */
 export function createGroupDiscoveryOperations(coreApi: CoreApi) {
   /**
-   * Get all groups with pagination
+   * List every group, following `Link` pagination (200 per page, `expand=stats`).
+   *
+   * @param onProgress - Called after each page with the running loaded count.
+   * @returns All groups across all pages.
+   * @remarks Throws on the first failed page.
    */
   const getAllGroups = async (
     onProgress?: (loaded: number, total: number) => void,
@@ -40,7 +50,12 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
   };
 
   /**
-   * Get member count for a group
+   * Approximate a group's member count from the first page of members.
+   *
+   * @param groupId - Group to size.
+   * @returns The first-page member count (max 200), or `0` on failure.
+   * @remarks Intentionally does NOT walk pagination — for groups larger than one
+   * page this returns the page size (200), i.e. a floor, not the exact total.
    */
   const getGroupMemberCount = async (groupId: string): Promise<number> => {
     try {
@@ -68,7 +83,12 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
   };
 
   /**
-   * Get group rules for a specific group
+   * Resolve the group rules that assign users to a given group.
+   *
+   * @param groupId - Group whose inbound assignment rules to find.
+   * @returns Matching rules, or `[]` on failure/none.
+   * @remarks Serves from {@link RulesCache} when populated or fresh; otherwise
+   * fetches all rules once (200 limit) and filters those targeting `groupId`.
    */
   const getGroupRulesForGroup = async (
     groupId: string,
@@ -104,7 +124,10 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
   };
 
   /**
-   * Search for groups by name
+   * Search groups by name via Okta's `q` query (capped at 20 results).
+   *
+   * @param query - Search text; queries shorter than 2 chars short-circuit to `[]`.
+   * @returns Lightweight `{ id, name, description, type }` records; `[]` on error.
    */
   const searchGroups = async (
     query: string,
@@ -134,7 +157,11 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
   };
 
   /**
-   * Get group details by ID
+   * Fetch one group by id.
+   *
+   * @param groupId - Group id to look up.
+   * @returns A lightweight `{ id, name, description, type }` record, or `null` if
+   * not found / on error.
    */
   const getGroupById = async (
     groupId: string,

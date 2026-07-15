@@ -1,6 +1,16 @@
+/**
+ * @module sidepanel/components/shared/IconButton
+ * @description Icon-only button primitive (close, remove, clear, expand) — requires an accessible `label`.
+ *
+ * Three low-emphasis variants and two sizes. Can act as a toggle via `active`
+ * (reflected as `aria-pressed`). For text CTAs use `Button`; for filter
+ * chips use `FilterPill`.
+ */
 import React from 'react';
 
+/** Low-emphasis treatments: `ghost` and `subtle` differ in hover intensity; `danger` hovers red. */
 export type IconButtonVariant = 'ghost' | 'subtle' | 'danger';
+/** `sm` (p-1) or `md` (p-1.5) padding around the glyph. */
 export type IconButtonSize = 'sm' | 'md';
 
 interface IconButtonProps {
@@ -33,8 +43,15 @@ const sizeClasses: Record<IconButtonSize, string> = {
 
 /**
  * Icon-only button primitive for feature components (close, remove, clear, expand).
- * Requires a `label` for accessibility. For chunky text CTAs use {@link Button};
- * for filter chips use {@link FilterPill}.
+ * Requires a `label` for accessibility. For chunky text CTAs use `Button`;
+ * for filter chips use `FilterPill`.
+ *
+ * @example
+ * ```tsx
+ * <IconButton label="Remove" variant="danger" onClick={() => onRemove(item)}>
+ *   <Icon type="trash" />
+ * </IconButton>
+ * ```
  */
 const IconButton: React.FC<IconButtonProps> = ({
   label,

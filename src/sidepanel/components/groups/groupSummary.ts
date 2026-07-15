@@ -1,7 +1,15 @@
+/**
+ * @module sidepanel/components/groups/groupSummary
+ * @description Pure mappers from raw Okta group responses to the app's `GroupSummary`.
+ *
+ * {@link toGroupSummary} handles full `/api/v1/groups` payloads (incl. app-group
+ * source); {@link liveSearchToGroupSummary} is a narrower variant for live-search hits.
+ * Neither computes staleness — the loader applies that separately.
+ */
 import type { GroupSummary, GroupType } from '../../../shared/types';
 
 /**
- * Raw Okta group as returned by the API — a superset of the typed {@link OktaGroup}
+ * Raw Okta group as returned by the API — a superset of the typed `OktaGroup`
  * (which only models id/type/profile). The extra fields (`_embedded` stats, the
  * `_links.apps` href, `source`, and the ISO date strings) are present at runtime on
  * the `/api/v1/groups` responses but not in the narrow shared type, which is why the

@@ -1,5 +1,5 @@
 /**
- * @module contexts/ProgressContext
+ * @module sidepanel/contexts/ProgressContext
  * @description React context for managing progress state across bulk operations in the application.
  * Provides centralized progress tracking with support for operation names, progress percentages,
  * API call counting, and cancellation capabilities.

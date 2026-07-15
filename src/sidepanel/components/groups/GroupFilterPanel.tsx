@@ -1,23 +1,41 @@
+/**
+ * @module sidepanel/components/groups/GroupFilterPanel
+ * @description Expandable cached-mode filter + sort panel for the groups list.
+ *
+ * A controlled component: all filter/sort state lives in the parent hook and is passed
+ * down with its setters. See `filterAndSortGroups` for how these axes are applied.
+ */
 import React from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { SortField, StalenessLevel, PushFilter } from './groupFilters';
 
 interface GroupFilterPanelProps {
+  /** Number of active filters (drives the active-chips row). */
   activeFilterCount: number;
+  /** Selected group-type filter (`''` = all). */
   typeFilter: string;
   setTypeFilter: (value: string) => void;
+  /** Selected member-count bucket (`''` = all). */
   sizeFilter: string;
   setSizeFilter: (value: string) => void;
+  /** Push-status filter. */
   pushFilter: PushFilter;
   setPushFilter: (value: PushFilter) => void;
+  /** Set of push-target app ids to filter by (empty = all). */
   pushAppFilter: Set<string>;
   setPushAppFilter: Dispatch<SetStateAction<Set<string>>>;
+  /** Selected health/staleness bucket (`''` = all). */
   stalenessFilter: StalenessLevel;
   setStalenessFilter: (value: StalenessLevel) => void;
+  /** Push-target apps available as filter chips. */
   availablePushApps: { id: string; name: string }[];
+  /** Active sort field. */
   sortBy: SortField;
+  /** Whether the active sort is descending. */
   sortDesc: boolean;
+  /** Toggles the sort field (or flips direction if already active). */
   toggleSort: (field: SortField) => void;
+  /** Resets all filters (and the search query). */
   clearFilters: () => void;
 }
 

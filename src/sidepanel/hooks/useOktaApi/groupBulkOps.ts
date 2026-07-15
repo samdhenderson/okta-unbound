@@ -13,6 +13,15 @@ interface BulkGroupResult extends BulkOperationResult {
   members?: OktaUser[];
 }
 
+/**
+ * Build the multi-group bulk-operation runner.
+ *
+ * @param coreApi - Shared transport surface (see {@link CoreApi}).
+ * @param removeUserFromGroup - Membership-removal primitive (from
+ * `createGroupMemberOperations`), reused by `cleanup_inactive`.
+ * @param getAllGroupMembers - Paginated member fetch, reused by member-reading ops.
+ * @returns `{ executeBulkOperation }`.
+ */
 export function createGroupBulkOperations(
   coreApi: CoreApi,
   removeUserFromGroup: (
@@ -24,7 +33,18 @@ export function createGroupBulkOperations(
   getAllGroupMembers: (groupId: string) => Promise<OktaUser[]>,
 ) {
   /**
-   * Execute bulk operation across multiple groups
+   * Apply one {@link BulkOperation} across each of its target groups.
+   *
+   * @param operation - The operation type + target group ids (+ optional config).
+   * @param onProgress - Called per group with `(index, total, currentGroupName)`.
+   * @returns One `BulkGroupResult` per target group, in input order.
+   * @remarks
+   * Groups are processed sequentially with a 50 ms pause between them to ease
+   * scheduler pressure. Supported `type`s: `cleanup_inactive` (remove
+   * `DEPROVISIONED`/`SUSPENDED`/`LOCKED_OUT` members), `export_all` (attach the
+   * member list to the result), and `remove_user` (drop one user by
+   * `config.userId`); unknown types yield a `failed` result. A thrown error for
+   * one group is captured as that group's failed result and does not abort the rest.
    */
   const executeBulkOperation = async (
     operation: BulkOperation,

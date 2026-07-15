@@ -1,3 +1,12 @@
+/**
+ * @module sidepanel/components/overview/UserOverview
+ * @description Overview tab for a single Okta user: profile, membership stats, and quick actions.
+ *
+ * Fetches the user's details from the content script and their group
+ * memberships via {@link useUserMemberships} (which classifies each as direct
+ * vs. rule-based), then renders stat cards, a membership distribution, recent
+ * groups, and the {@link UserComparisonModal} launcher.
+ */
 import React, { useState, useEffect } from 'react';
 import StatCard from './shared/StatCard';
 import QuickActionsPanel, { type ActionSection } from './shared/QuickActionsPanel';
@@ -8,14 +17,24 @@ import Button from '../shared/Button';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import type { OktaUser } from '../../../shared/types';
 
+/** Props for {@link UserOverview}. */
 interface UserOverviewProps {
+  /** Okta user id to load and summarize. */
   userId: string;
+  /** Optional display name (currently informational; not read in render). */
   userName?: string;
+  /** Browser tab hosting the Okta session; every API call is routed to it. */
   targetTabId: number;
+  /** Switch the side panel to the users tab (e.g. to view full memberships). */
   onTabChange: (tab: 'users') => void;
+  /** Okta org origin, used to build Admin Console deep links (null when unknown). */
   oktaOrigin?: string | null;
 }
 
+/**
+ * Renders the user Overview tab. Loads user details + memberships on mount /
+ * user change and drives the profile card, stat grid, and comparison modal.
+ */
 const UserOverview: React.FC<UserOverviewProps> = ({
   userId,
   targetTabId,

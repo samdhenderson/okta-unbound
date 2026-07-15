@@ -1,3 +1,13 @@
+/**
+ * @module sidepanel/components/UsersTab
+ * @description Users tab: search users and analyse their group memberships.
+ *
+ * Debounced live search over Okta users (or auto-loading the user detected on the
+ * page), a rich profile card with collapsible detail sections, lifecycle actions
+ * (suspend / unsuspend / reset password) behind confirm modals, an "Add to Group"
+ * flow, and per-group membership attribution (rule-based vs. direct) computed by
+ * `analyzeMemberships`. Security-sensitive profile fields are never shown.
+ */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PageHeader from './shared/PageHeader';
 import AlertMessage from './shared/AlertMessage';
@@ -15,7 +25,7 @@ import { createLogger } from '../../shared/utils/logger';
 
 const log = createLogger('UsersTab');
 
-// Helper to format dates in a readable way
+/** Formats an ISO date string as a localized date-time, or `'Never'` when absent. */
 const formatDate = (dateString: string | null | undefined): string => {
   if (!dateString) return 'Never';
   try {
@@ -32,7 +42,10 @@ const formatDate = (dateString: string | null | undefined): string => {
   }
 };
 
-// Helper to calculate relative time (e.g., "3 days ago")
+/**
+ * Returns a coarse relative-time label (e.g. `'today'`, `'3 days ago'`,
+ * `'2 months ago'`) for a date, or `null` when the input is absent/unparseable.
+ */
 const getRelativeTime = (dateString: string | null | undefined): string | null => {
   if (!dateString) return null;
   try {
@@ -52,7 +65,7 @@ const getRelativeTime = (dateString: string | null | undefined): string | null =
   }
 };
 
-// Fields to explicitly exclude from display (security sensitive)
+/** Security-sensitive profile field names that must never be rendered in the UI. */
 const EXCLUDED_PROFILE_FIELDS = new Set([
   'securityQuestion',
   'securityQuestionAnswer',
@@ -65,14 +78,18 @@ const EXCLUDED_PROFILE_FIELDS = new Set([
 ]);
 
 interface UsersTabProps {
+  /** Chrome tab id of the connected Okta tab; required for all user/group API calls. */
   targetTabId?: number;
+  /** Id of the currently detected group; highlights that group in the membership list. */
   currentGroupId?: string;
+  /** Navigates to the Rules tab and deep-links to the rule that added a membership. */
   onNavigateToRule?: (ruleId: string) => void;
 }
 
+/** User lifecycle operation triggered from the profile card. */
 type LifecycleAction = 'suspend' | 'unsuspend' | 'resetPassword';
 
-// Shape returned by searchGroups in groupDiscovery.ts
+/** Shape returned by `searchGroups` in `groupDiscovery.ts` for the Add-to-Group flow. */
 interface GroupSearchResult {
   id: string;
   name: string;
@@ -80,6 +97,11 @@ interface GroupSearchResult {
   type: string;
 }
 
+/**
+ * Renders the Users tab: user search/auto-load, the detailed profile card and its
+ * collapsible sections, lifecycle actions, the Add-to-Group modal, and the analysed
+ * group-membership list.
+ */
 const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavigateToRule }) => {
   const { userInfo, isLoading: isLoadingUserContext, oktaOrigin } = useUserContext();
   const [searchQuery, setSearchQuery] = useState('');

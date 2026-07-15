@@ -1,8 +1,16 @@
+/**
+ * @module sidepanel/components/groups/GroupFilterToggle
+ * @description The "Filters" toggle button with its active-filter count badge, shown
+ * beside the search bar in cached mode.
+ */
 import React from 'react';
 
 interface GroupFilterToggleProps {
+  /** Whether the filter panel is currently expanded (drives the active styling). */
   showFilters: boolean;
+  /** Active-filter count shown in the badge (hidden at 0). */
   activeFilterCount: number;
+  /** Toggles the filter panel open/closed. */
   onToggle: () => void;
 }
 

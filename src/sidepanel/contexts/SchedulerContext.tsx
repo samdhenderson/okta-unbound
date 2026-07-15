@@ -1,9 +1,13 @@
 /**
- * Scheduler Context
+ * @module sidepanel/contexts/SchedulerContext
+ * @description React context that mirrors the background {@link SchedulerState} and
+ * {@link SchedulerMetrics} into the side panel and exposes pause/resume/clear controls.
  *
- * Provides access to the global API scheduler state and controls
- * from React components. This allows the UI to display scheduler status,
- * queue information, rate limit warnings, and cooldown countdowns.
+ * All state lives in the background `ApiScheduler`; this context is a read-through
+ * view of it. State is refreshed on mount, polled every second (for smooth cooldown
+ * countdowns), and also pushed live via `schedulerStateChanged` runtime messages.
+ * The control methods (`pause`/`resume`/`clearQueue`) round-trip through
+ * `chrome.runtime.sendMessage` and re-read state afterwards.
  */
 
 import React, {
@@ -19,18 +23,36 @@ import { createLogger } from '../../shared/utils/logger';
 
 const log = createLogger('SchedulerContext');
 
+/**
+ * Value exposed by {@link SchedulerContext}: the latest scheduler snapshot plus
+ * controls for the background queue.
+ */
 interface SchedulerContextType {
+  /** Latest scheduler state (queue, cooldown, pause flag), or `null` before the first fetch. */
   state: SchedulerState | null;
+  /** Latest throughput/rate-limit metrics, or `null` before the first fetch. */
   metrics: SchedulerMetrics | null;
+  /** Ask the background scheduler to pause processing, then re-read state. */
   pause: () => Promise<void>;
+  /** Ask the background scheduler to resume processing, then re-read state. */
   resume: () => Promise<void>;
+  /** Drop all queued requests in the background scheduler, then re-read state. */
   clearQueue: () => Promise<void>;
+  /** Force an immediate re-fetch of {@link SchedulerContextType.state}. */
   refreshState: () => Promise<void>;
+  /** Force an immediate re-fetch of {@link SchedulerContextType.metrics}. */
   refreshMetrics: () => Promise<void>;
 }
 
 const SchedulerContext = createContext<SchedulerContextType | undefined>(undefined);
 
+/**
+ * Provides scheduler state and controls to the side panel. Polls the background for
+ * state once per second and subscribes to `schedulerStateChanged` push messages so
+ * cooldown countdowns and queue depth stay current.
+ *
+ * @param props.children - Subtree that may call {@link useScheduler}.
+ */
 export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, setState] = useState<SchedulerState | null>(null);
   const [metrics, setMetrics] = useState<SchedulerMetrics | null>(null);
@@ -138,6 +160,12 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
   );
 };
 
+/**
+ * Access the scheduler state and controls.
+ *
+ * @returns The `SchedulerContextType` value from the nearest {@link SchedulerProvider}.
+ * @throws If called outside a {@link SchedulerProvider}.
+ */
 export const useScheduler = (): SchedulerContextType => {
   const context = useContext(SchedulerContext);
   if (!context) {

@@ -1,5 +1,5 @@
 /**
- * @module components/overview/members/memberAnalytics
+ * @module sidepanel/components/overview/members/memberAnalytics
  * @description Pure, memoizable helpers for the group Member Explorer: composition
  * breakdowns, MFA facet breakdowns, and member filtering. Kept free of React so the
  * heavy work over large groups (up to ~64k members) is easy to test and reason about.
@@ -96,7 +96,11 @@ const PREFERRED_ATTRIBUTE_ORDER = [
   'countryCode',
 ];
 
-/** Convert a camelCase / snake_case / kebab-case attribute key into a sentence-case label. */
+/**
+ * Convert a camelCase / snake_case / kebab-case attribute key into a sentence-case label.
+ * @param key - Raw profile attribute key.
+ * @returns A human-readable label (falls back to the original key if empty).
+ */
 export function humanizeAttributeKey(key: string): string {
   const spaced = key
     .replace(/[_-]+/g, ' ')
@@ -109,7 +113,11 @@ export function humanizeAttributeKey(key: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
-/** Display title for any dimension: a curated name if known, else the humanized key. */
+/**
+ * Display title for any dimension: a curated name if known, else the humanized key.
+ * @param dim - Dimension / attribute key.
+ * @returns The display title for the dimension.
+ */
 export function dimensionTitle(dim: string): string {
   return DIMENSION_TITLES[dim] ?? humanizeAttributeKey(dim);
 }
@@ -143,7 +151,12 @@ function coerceScalar(raw: unknown): string {
   return '';
 }
 
-/** Get a member's value for a profile dimension ('' when missing). */
+/**
+ * Get a member's value for a profile dimension.
+ * @param user - The member.
+ * @param dim - The profile attribute key, or the special `'status'`.
+ * @returns The coerced scalar value, or `''` when missing.
+ */
 export function getMemberDimensionValue(user: OktaUser, dim: ProfileDimension): string {
   if (dim === 'status') return user.status || '';
   return coerceScalar(user.profile?.[dim]);
@@ -185,6 +198,10 @@ function mapToRows(counts: Map<string, number>, total: number, maxRows: number):
 /**
  * Compute the full breakdown for a single dimension (no "Other" aggregation by
  * default). Used to reveal the values hidden behind an aggregated "Other" row.
+ * @param members - Members to tally.
+ * @param dim - The dimension to break down.
+ * @param maxRows - Named values to keep before collapsing the rest into "Other" (default: unlimited).
+ * @returns Sorted breakdown rows for the dimension.
  */
 export function computeDimensionBreakdown(
   members: OktaUser[],
@@ -200,7 +217,11 @@ export function computeDimensionBreakdown(
 }
 
 /**
- * Compute breakdown rows for every profile dimension in a single pass over members.
+ * Compute breakdown rows for every {@link PROFILE_DIMENSIONS} dimension in a
+ * single pass over members.
+ * @param members - Members to tally.
+ * @param maxRows - Named values kept per dimension before collapsing into "Other" (default: 8).
+ * @returns A map from each profile dimension to its sorted breakdown rows.
  */
 export function computeAllBreakdowns(
   members: OktaUser[],
@@ -259,6 +280,9 @@ export interface DiscoverOptions {
  * person (e.g. employee IDs) are dropped so only fields with a meaningful spread
  * remain. Results are ordered with common organizational attributes first, then by
  * fill rate.
+ * @param members - The full member set to scan.
+ * @param options - Tuning knobs (see {@link DiscoverOptions}).
+ * @returns One {@link AttributeSummary} per surfaced attribute, pre-ordered.
  */
 export function discoverAttributeBreakdowns(
   members: OktaUser[],
@@ -329,6 +353,9 @@ export function discoverAttributeBreakdowns(
 /**
  * Evaluate whether an MFA result matches a given mfa-dimension filter value.
  * Supported values: 'none', 'multiple', 'enrolled', 'has:<label>', 'missing:<label>'.
+ * @param result - The member's scan result, or undefined if unscanned.
+ * @param value - The mfa filter value to test against.
+ * @returns True when the member satisfies the filter value.
  */
 export function memberMatchesMfaValue(result: MemberMfaResult | undefined, value: string): boolean {
   if (value.startsWith('missing:')) {
@@ -346,6 +373,9 @@ export function memberMatchesMfaValue(result: MemberMfaResult | undefined, value
 /**
  * Build MFA facet rows from scan results: "No factors", "Multiple factors", and
  * one "Has X" row per observed factor label.
+ * @param members - Members to tally.
+ * @param mfaResults - Per-member scan results, or null before a scan has run.
+ * @returns Breakdown rows for the MFA facet (empty when `mfaResults` is null).
  */
 export function computeMfaBreakdown(
   members: OktaUser[],
@@ -388,7 +418,11 @@ export function computeMfaBreakdown(
   return rows;
 }
 
-/** Collect the sorted set of factor labels observed across all scan results. */
+/**
+ * Collect the sorted set of factor labels observed across all scan results.
+ * @param mfaResults - Per-member scan results, or null before a scan has run.
+ * @returns Alphabetically sorted distinct factor labels (empty when null).
+ */
 export function getObservedFactorLabels(mfaResults: Map<string, MemberMfaResult> | null): string[] {
   if (!mfaResults) return [];
   const labels = new Set<string>();
@@ -410,7 +444,13 @@ function matchesQuery(user: OktaUser, lowerQuery: string): boolean {
 
 /**
  * Filter members by search query and active facet filters.
- * Semantics: OR within a dimension, AND across dimensions.
+ * Semantics: OR within a dimension, AND across dimensions. (Per-factor MFA
+ * constraints are the exception: each is an independent AND requirement.)
+ * @param members - The full member set.
+ * @param query - Free-text search over name/email/login (trimmed, case-insensitive).
+ * @param filters - Active facet filters.
+ * @param mfaResults - Per-member scan results, needed to evaluate mfa filters.
+ * @returns The subset of members matching the query and all filter dimensions.
  */
 export function filterMembers(
   members: OktaUser[],
@@ -453,13 +493,24 @@ export function filterMembers(
   });
 }
 
-/** Display name for a member ("First Last", falling back to login). */
+/**
+ * Display name for a member.
+ * @param user - The member.
+ * @returns "First Last", falling back to the login, or `''` if neither is set.
+ */
 export function memberFullName(user: OktaUser): string {
   const name = `${user.profile.firstName || ''} ${user.profile.lastName || ''}`.trim();
   return name || user.profile.login || '';
 }
 
-/** Sort members by the given field. Returns a new array. */
+/**
+ * Sort members by the given field, with a stable name tie-break.
+ * @param members - Members to sort (not mutated).
+ * @param sortBy - Field to sort by.
+ * @param sortDesc - Reverse the order when true.
+ * @param mfaResults - Per-member scan results, required for the `'factors'` field.
+ * @returns A new, sorted array.
+ */
 export function sortMembers(
   members: OktaUser[],
   sortBy: SortField,

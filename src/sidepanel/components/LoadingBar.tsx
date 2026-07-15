@@ -1,6 +1,18 @@
+/**
+ * @module sidepanel/components/LoadingBar
+ * @description Fixed bottom progress bar for long-running, multi-step operations.
+ *
+ * Subscribes to the ProgressContext and renders only while an operation is in
+ * flight, showing the operation name, elapsed/estimated-remaining time, API-call
+ * count, a current/total counter, and a percentage progress bar.
+ */
 import React, { useState, useEffect, useCallback } from 'react';
 import { useProgress } from '../contexts/ProgressContext';
 
+/**
+ * Renders the global operation progress bar driven by ProgressContext, or nothing
+ * when no operation is loading.
+ */
 const LoadingBar: React.FC = () => {
   const { progress } = useProgress();
   const [elapsedTime, setElapsedTime] = useState(0);

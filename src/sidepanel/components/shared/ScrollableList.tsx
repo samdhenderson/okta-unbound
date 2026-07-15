@@ -1,3 +1,11 @@
+/**
+ * @module sidepanel/components/shared/ScrollableList
+ * @description Independently scrollable list container with built-in loading and empty states.
+ *
+ * Renders a {@link LoadingSpinner} while `loading`, the `emptyState` node when it
+ * has no children, otherwise a scroll region (its own scrollbar) that by default
+ * flex-grows to fill available space so surrounding chrome stays visible.
+ */
 import React from 'react';
 import LoadingSpinner from './LoadingSpinner';
 

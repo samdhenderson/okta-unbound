@@ -1,8 +1,13 @@
 /**
- * Global Rules Cache Service
+ * @module shared/rulesCache
+ * @description Global, single-slot cache for the org-wide group-rules payload.
  *
- * Provides centralized caching for Okta group rules to avoid redundant API calls.
- * Rules are cached with a configurable TTL and can be shared across all components.
+ * Backed by `chrome.storage.local` under one key, so every component shares the
+ * same cached rules, stats, and conflicts instead of re-fetching. Entries carry a
+ * configurable TTL and are lazily evicted on read. Provides convenience selectors
+ * for the rules affecting a given group.
+ *
+ * @see {@link RulesCache}
  */
 
 import { createLogger } from './utils/logger';
@@ -10,20 +15,31 @@ import type { FormattedRule, OktaGroupRule, RuleConflict } from './types';
 
 const log = createLogger('RulesCache');
 
+/** The single cached rules payload plus its freshness metadata. */
 interface RulesCacheEntry {
+  /** Rules shaped for display. */
   rules: FormattedRule[];
+  /** Original rules exactly as returned by Okta. */
   rawRules: OktaGroupRule[];
+  /** Aggregate counts across the cached rules. */
   stats: {
     total: number;
     active: number;
     inactive: number;
     conflicts: number;
   };
+  /** Detected conflicts across the cached rules. */
   conflicts: RuleConflict[];
+  /** Epoch millis when the entry was written. */
   timestamp: number;
+  /** Lifetime in milliseconds before the entry is treated as stale. */
   ttl: number;
 }
 
+/**
+ * Static facade over the single global rules cache entry. All methods read and
+ * write the same `chrome.storage.local` slot; there is no per-instance state.
+ */
 class RulesCache {
   private static readonly CACHE_KEY = 'global_rules_cache';
   private static readonly DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes

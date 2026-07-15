@@ -1,24 +1,44 @@
-// Simple caching utility for Okta data
-// Uses chrome.storage.local with expiration times
+/**
+ * @module shared/cache
+ * @description Generic TTL cache backed by `chrome.storage.local`.
+ *
+ * Stores arbitrary serialisable values keyed by string, each with an expiry
+ * timestamp. Reads transparently evict and skip expired entries. Failures are
+ * logged and swallowed so caching never breaks a caller's happy path.
+ *
+ * @see {@link setCacheEntry}
+ * @see {@link getCacheEntry}
+ */
 
 import { createLogger } from './utils/logger';
 
 const log = createLogger('Cache');
 
+/** A stored cache record: the payload plus its write time and expiry. */
 export interface CacheEntry<T> {
+  /** The cached value. */
   data: T;
+  /** Epoch millis when the entry was written. */
   timestamp: number;
+  /** Epoch millis after which the entry is considered stale. */
   expiresAt: number;
 }
 
+/** Options controlling how a value is cached. */
 export interface CacheOptions {
-  ttl?: number; // Time to live in milliseconds (default: 5 minutes)
+  /** Time to live in milliseconds (default: 5 minutes). */
+  ttl?: number;
 }
 
 const DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Sets a cache entry with expiration
+ * Write a value to the cache with an expiry derived from `options.ttl`.
+ *
+ * @param key - Storage key to write under.
+ * @param data - Value to cache (must be structured-clone serialisable).
+ * @param options - Optional TTL override; defaults to 5 minutes.
+ * @remarks Never throws — storage errors are logged and swallowed.
  */
 export async function setCacheEntry<T>(
   key: string,
@@ -43,7 +63,11 @@ export async function setCacheEntry<T>(
 }
 
 /**
- * Gets a cache entry if it exists and hasn't expired
+ * Read a value from the cache, returning `null` if it is missing or expired.
+ * Expired entries are removed as a side effect.
+ *
+ * @param key - Storage key to read.
+ * @returns The cached value, or `null` on miss/expiry/error.
  */
 export async function getCacheEntry<T>(key: string): Promise<T | null> {
   try {

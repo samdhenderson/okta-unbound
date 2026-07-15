@@ -1,10 +1,21 @@
+/**
+ * @module sidepanel/components/shared/LoadingSpinner
+ * @description Spinning loading indicator with `role="status"`; optional message and centering.
+ *
+ * With neither `message` nor `centered`, renders a bare inline spinner; otherwise
+ * it is wrapped in a centered column with the message beneath.
+ */
 import React from 'react';
 
+/** Spinner diameter — `sm` (16px), `md` (32px), `lg` (48px). */
 export type SpinnerSize = 'sm' | 'md' | 'lg';
 
 interface LoadingSpinnerProps {
+  /** Spinner size. Defaults to `md`. */
   size?: SpinnerSize;
+  /** Optional caption rendered below the spinner. */
   message?: string;
+  /** Center the spinner (and message) within a padded flex block. */
   centered?: boolean;
   className?: string;
 }

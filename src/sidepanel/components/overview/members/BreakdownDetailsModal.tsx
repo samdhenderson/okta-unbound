@@ -1,3 +1,11 @@
+/**
+ * @module sidepanel/components/overview/members/BreakdownDetailsModal
+ * @description Modal showing the full value distribution for one composition dimension.
+ *
+ * Displays every value (including those collapsed into "Other" in the summary) as
+ * a scrollable {@link BreakdownReport}, with a "Copy all" of the real value labels.
+ * Each row toggles a member-list filter.
+ */
 import React from 'react';
 import Modal from '../../shared/Modal';
 import Button from '../../shared/Button';
@@ -6,13 +14,19 @@ import ScrollableList from '../../shared/ScrollableList';
 import BreakdownReport from './BreakdownReport';
 import { type BreakdownRow, NONE_VALUE, OTHER_VALUE } from './memberAnalytics';
 
+/** Props for {@link BreakdownDetailsModal}. */
 interface BreakdownDetailsModalProps {
+  /** Whether the modal is open. */
   isOpen: boolean;
+  /** Close the modal. */
   onClose: () => void;
+  /** Modal heading (usually the dimension's display title). */
   title: string;
   /** The complete (un-aggregated) value distribution for the dimension. */
   rows: BreakdownRow[];
+  /** Canonical values currently active as filters, for row highlighting. */
   activeValues: Set<string>;
+  /** Toggle a value as a member-list filter. */
   onRowClick: (row: BreakdownRow) => void;
 }
 

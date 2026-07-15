@@ -13,6 +13,7 @@
 
 import { z } from 'zod';
 
+/** Enum of valid Okta account lifecycle statuses. */
 export const userStatusSchema = z.enum([
   'ACTIVE',
   'DEPROVISIONED',
@@ -43,6 +44,7 @@ export const oktaProfileSchema = z
   })
   .passthrough();
 
+/** A user from `GET /api/v1/users/{id}` — identity, status, and profile. */
 export const oktaUserSchema = z.object({
   id: z.string(),
   status: userStatusSchema,
@@ -69,9 +71,12 @@ export const oktaGroupSchema = z.object({
   }),
 });
 
+/** An array of users, e.g. from a search or group-members listing. */
 export const oktaUserListSchema = z.array(oktaUserSchema);
 
+/** Inferred type of a validated {@link oktaUserSchema} response. */
 export type OktaUserResponse = z.infer<typeof oktaUserSchema>;
+/** Inferred type of a validated {@link oktaGroupSchema} response. */
 export type OktaGroupResponse = z.infer<typeof oktaGroupSchema>;
 
 /**

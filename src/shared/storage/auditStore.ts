@@ -1,3 +1,14 @@
+/**
+ * @module shared/storage/auditStore
+ * @description IndexedDB-backed store for the operation audit trail.
+ *
+ * Persists {@link AuditLogEntry} records (indexed by timestamp, group, action,
+ * actor, and result) plus a single settings row. Supports filtered queries,
+ * statistics, CSV export, retention-based and full clears. Logging is
+ * fire-and-forget: failures are logged and never propagate to callers. Exposed as
+ * the {@link auditStore} singleton.
+ */
+
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { createLogger } from '../utils/logger';
 import type { AuditLogEntry, AuditFilters, AuditStats, AuditSettings } from '../types';
@@ -27,6 +38,11 @@ const DB_VERSION = 1;
 const STORE_NAME = 'operations';
 const SETTINGS_STORE = 'settings';
 
+/**
+ * IndexedDB audit-trail store. Lazily opens the database on first use and reuses
+ * the connection. Prefer the shared {@link auditStore} singleton over constructing
+ * new instances.
+ */
 class AuditStore {
   private dbPromise: Promise<IDBPDatabase<AuditDB>> | null = null;
 
@@ -327,6 +343,6 @@ class AuditStore {
   }
 }
 
-// Export singleton instance
+/** Shared audit-trail store singleton — use this rather than `new AuditStore()`. */
 export const auditStore = new AuditStore();
 export default auditStore;

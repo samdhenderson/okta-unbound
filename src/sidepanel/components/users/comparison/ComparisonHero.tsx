@@ -1,14 +1,25 @@
+/**
+ * @module sidepanel/components/users/comparison/ComparisonHero
+ * @description Split-screen header showing both users and their overall Jaccard match %.
+ */
 import React from 'react';
 import { initialsOf, hueFromId } from '../../../../shared/utils/userDisplay';
 import { similarityColor } from './comparisonAnalytics';
 import type { OktaUser } from '../../../../shared/types';
 
+/** Props for {@link ComparisonHero}. */
 interface ComparisonHeroProps {
+  /** The context user (left side). */
   contextUser: OktaUser;
+  /** The compared user (right side). */
   comparedUser: OktaUser;
+  /** Display name for the context user. */
   contextName: string;
+  /** Display name for the compared user. */
   comparedName: string;
+  /** Overall similarity as a whole percent (0–100), shown in the center chip. */
   similarity: number;
+  /** When true, renders placeholder glyphs instead of the match percentage. */
   isLoading: boolean;
 }
 
@@ -55,6 +66,10 @@ const ComparisonHero: React.FC<ComparisonHeroProps> = ({
   </div>
 );
 
+/**
+ * One side of the hero: a per-user gradient avatar (hue derived from the user id)
+ * plus label, name, and email/login. Mirrored to the right when `align` is `right`.
+ */
 const UserSide: React.FC<{
   user: OktaUser;
   name: string;

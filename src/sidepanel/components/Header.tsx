@@ -1,9 +1,18 @@
+/**
+ * @module sidepanel/components/Header
+ * @description Fixed top app header showing the product name and connection status.
+ *
+ * Displays a colour-coded status dot and label reflecting the current Okta tab
+ * connection state.
+ */
 import React from 'react';
 
 interface HeaderProps {
+  /** Connection state to the Okta tab; drives the status dot colour and label. */
   status: 'connecting' | 'connected' | 'error';
 }
 
+/** Renders the side-panel header bar with the app title and connection indicator. */
 const Header: React.FC<HeaderProps> = ({ status }) => {
   const statusText = {
     connecting: 'Connecting...',

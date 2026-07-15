@@ -1,16 +1,32 @@
+/**
+ * @module sidepanel/components/groups/BulkOperationsPanel
+ * @description Inline panel that runs a bulk operation across the selected groups.
+ *
+ * Offers three operations — clean inactive users, export all members, and remove a
+ * specific user from every selected group. Drives `executeBulkOperation`
+ * and renders live progress plus a success/failure summary.
+ */
 import React, { useState, useCallback } from 'react';
 import { Button, IconButton, Input } from '../shared';
 import type { GroupSummary, BulkOperationResult } from '../../../shared/types';
 
+/** The bulk operations this panel can launch. */
 type BulkOpType = 'cleanup_inactive' | 'export_all' | 'remove_user';
 
 interface BulkOperationsPanelProps {
+  /** Groups the operation runs against (the current selection). */
   selectedGroups: GroupSummary[];
+  /**
+   * Runs a bulk operation, reporting progress per group. Resolves with the
+   * per-group results used to render the summary.
+   */
   executeBulkOperation: (
     operation: any,
     onProgress?: (current: number, total: number, currentGroupName: string) => void,
   ) => Promise<any[]>;
+  /** Dismisses the panel. */
   onClose: () => void;
+  /** Opens the export flow (used by the "Export All Members" operation). */
   onExportSelection: () => void;
 }
 
@@ -44,6 +60,7 @@ const OPERATIONS: Array<{
   },
 ];
 
+/** Inline panel for running clean/export/remove operations over selected groups. */
 const BulkOperationsPanel: React.FC<BulkOperationsPanelProps> = ({
   selectedGroups,
   executeBulkOperation,

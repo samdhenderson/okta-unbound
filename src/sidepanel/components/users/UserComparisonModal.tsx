@@ -1,3 +1,11 @@
+/**
+ * @module sidepanel/components/users/UserComparisonModal
+ * @description Side-by-side comparison of two Okta users' groups and app assignments.
+ *
+ * A thin shell: all state (search, load, bucketing, similarity, optimistic
+ * group-add) lives in {@link useUserComparison}; this component wires that state
+ * into the search phase and the hero/tab-bar/overview/diff subcomponents.
+ */
 import React from 'react';
 import Modal from '../shared/Modal';
 import Button from '../shared/Button';
@@ -11,15 +19,27 @@ import ComparisonDiffTab from './comparison/ComparisonDiffTab';
 import { useUserComparison } from '../../hooks/useUserComparison';
 import type { OktaUser, GroupMembership } from '../../../shared/types';
 
+/** Props for {@link UserComparisonModal}. */
 interface UserComparisonModalProps {
+  /** Whether the modal is open. */
   isOpen: boolean;
+  /** Closes the modal. */
   onClose: () => void;
+  /** The "context" user being compared from (the user currently in focus). */
   contextUser: OktaUser;
+  /** The context user's group memberships, used as the left-hand comparison baseline. */
   contextGroups: GroupMembership[];
+  /** Tab id of the Okta admin tab; API calls are scheduled against it. */
   targetTabId: number;
+  /** Called after a group is successfully copied onto the context user so the parent can refresh. */
   onGroupsChanged: () => void;
 }
 
+/**
+ * Modal that compares the context user against a second, searched-for user,
+ * showing shared/unique groups and app assignments and allowing missing groups
+ * to be copied onto the context user.
+ */
 const UserComparisonModal: React.FC<UserComparisonModalProps> = ({
   isOpen,
   onClose,

@@ -29,9 +29,9 @@
  * **Audit Retention:**
  * Automatically cleans up old audit logs daily based on retention settings.
  *
- * @see {@link module:shared/scheduler/apiScheduler|ApiScheduler} for rate limiting details
- * @see {@link module:shared/tabState/tabStateManager|TabStateManager} for state persistence
- * @see {@link module:shared/storage/auditStore|AuditStore} for audit logging
+ * @see {@link ApiScheduler} for rate limiting details
+ * @see {@link TabStateManager} for state persistence
+ * @see {@link auditStore} for audit logging
  */
 
 // Background service worker for Okta Unbound extension

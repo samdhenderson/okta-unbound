@@ -1,19 +1,33 @@
+/**
+ * @module sidepanel/components/users/UserProfileCard
+ * @description Presentational card summarizing a single Okta user's profile.
+ *
+ * Shared by both UsersTab and UserOverview. Shows avatar, status badge, key
+ * metadata, and optional collapsible Account/Organization/Contact sections that
+ * self-hide when the user has no data for them.
+ */
 import React, { useState } from 'react';
 import type { OktaUser } from '../../../shared/types';
 import CollapsibleSection from '../shared/CollapsibleSection';
 import { IconButton } from '../shared';
 import { formatDateShort, getRelativeTime } from '../../../shared/utils/dateFormat';
 
+/** Props for {@link UserProfileCard}. */
 interface UserProfileCardProps {
+  /** The user to render. */
   user: OktaUser;
+  /** Group count shown in the metadata footer. */
   groupCount?: number;
+  /** When true (default), renders the collapsible Account/Organization/Contact sections. */
   showCollapsibleSections?: boolean;
+  /** Okta origin used to build the "Open in Okta" admin link; the link is hidden when absent. */
   oktaOrigin?: string | null;
 }
 
 /**
- * Shared user profile card component used in both UsersTab and UserOverview.
- * Displays user details with avatar, status badge, metadata, and optional collapsible sections.
+ * Shared user profile card used in both UsersTab and UserOverview. Displays user
+ * details with avatar, status badge, metadata footer, and optional collapsible
+ * sections. Includes copy-to-clipboard for the user id.
  */
 const UserProfileCard: React.FC<UserProfileCardProps> = ({
   user,
@@ -30,6 +44,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
     });
   };
 
+  /** Maps an Okta user status to its status-badge Tailwind classes (color-coded per status). */
   const getStatusBadgeClass = (status: string): string => {
     const baseClasses =
       'inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold shadow-sm';

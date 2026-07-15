@@ -1,3 +1,13 @@
+/**
+ * @module sidepanel/hooks/useOktaTabContext
+ * @description Generic engine behind the side panel's per-entity page-context hooks.
+ *
+ * Finds the active Okta tab, resolves its origin, delegates entity detection to a
+ * caller-supplied `loadEntity`, and refetches (debounced) as the user navigates or
+ * switches tabs. Retries transient content-script failures with exponential backoff
+ * and guards against stale responses clobbering newer ones.
+ */
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { MessageResponse } from '../../shared/types';
 import { createLogger } from '../../shared/utils/logger';
@@ -47,8 +57,16 @@ const DEBOUNCE_MS = 150;
  * Shared machinery for the side panel's page-context hooks: find the active Okta
  * tab, resolve its origin, delegate entity detection to `loadEntity`, and refetch
  * (debounced) as the user navigates. The per-entity hooks
- * ({@link useGroupContext}, {@link useUserContext}, {@link useOktaPageContext})
- * are thin wrappers that supply `loadEntity` and rename `data`.
+ * (`useGroupContext`, `useUserContext`, `useOktaPageContext`) are thin wrappers
+ * that supply `loadEntity` and rename `data`.
+ *
+ * @typeParam T - The entity-detection shape produced by `loadEntity` and exposed
+ *   as `data`.
+ * @param config - Logger scope, initial / comms-failed fallbacks, and the
+ *   `loadEntity` fetcher. All fields must be stable per hook instance (they are
+ *   effect dependencies).
+ * @returns The detected `data` plus connection status, target tab id, error /
+ *   loading flags, a `refetch` trigger, and the resolved `oktaOrigin`.
  */
 export function useOktaTabContext<T>(config: OktaTabContextConfig<T>): OktaTabContext<T> {
   const { scope, initialData, commsFailedData, loadEntity } = config;

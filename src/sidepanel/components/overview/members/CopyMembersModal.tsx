@@ -1,3 +1,11 @@
+/**
+ * @module sidepanel/components/overview/members/CopyMembersModal
+ * @description Modal for copying the current member list as a chosen identifier, one per line.
+ *
+ * The user picks a format (full name, email, username, or "name &lt;email&gt;"); the
+ * modal renders a live preview and copies the full list via the shared CopyButton.
+ * Blank identifiers are dropped so the count reflects only copyable lines.
+ */
 import React, { useMemo, useState } from 'react';
 import type { OktaUser } from '../../../../shared/types';
 import Modal from '../../shared/Modal';
@@ -5,22 +13,32 @@ import Button from '../../shared/Button';
 import CopyButton from '../../shared/CopyButton';
 import { memberFullName } from './memberAnalytics';
 
+/** Props for {@link CopyMembersModal}. */
 interface CopyMembersModalProps {
+  /** Whether the modal is open. */
   isOpen: boolean;
+  /** Close the modal. */
   onClose: () => void;
   /** The members to copy (already filtered/sorted by the caller). */
   members: OktaUser[];
 }
 
+/** Identifier of a copy format offered by the modal. */
 type FormatId = 'name' | 'email' | 'login' | 'nameEmail';
 
+/** A selectable copy format: how one member maps to a single output line. */
 interface Format {
+  /** Stable format identifier. */
   id: FormatId;
+  /** Radio label. */
   label: string;
+  /** Example rendering shown under the label. */
   hint: string;
+  /** Extract the line for one member. */
   get: (user: OktaUser) => string;
 }
 
+/** The available copy formats, in display order. */
 const FORMATS: Format[] = [
   { id: 'name', label: 'Full name', hint: 'Jane Doe', get: (u) => memberFullName(u) },
   {
@@ -42,6 +60,7 @@ const FORMATS: Format[] = [
   },
 ];
 
+/** Maximum lines shown in the preview before an "…and N more" summary. */
 const PREVIEW_LINES = 12;
 
 /**

@@ -1,26 +1,51 @@
+/**
+ * @module sidepanel/components/overview/shared/QuickActionsPanel
+ * @description Collapsible, sectioned list of action buttons used on the Overview tabs.
+ *
+ * A presentational panel: callers pass declarative {@link ActionSection}s and the
+ * panel renders each as a collapsible group of {@link ActionButton}s (icon,
+ * variant, badge, loading, disabled). All behavior lives in the button handlers.
+ */
 import React, { useState } from 'react';
 import Icon, { type IconType } from './Icon';
 
+/** One action row within a {@link ActionSection}. */
 export interface ActionButton {
+  /** Button text. */
   label: string;
+  /** Optional leading icon. */
   icon?: IconType;
+  /** Visual style; defaults to `secondary`. */
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
+  /** Invoked on click. */
   onClick: () => void;
+  /** Disables the button when true. */
   disabled?: boolean;
+  /** Shows a spinner and disables the button when true. */
   loading?: boolean;
+  /** Optional count/label pill shown on the right (e.g. a pending count). */
   badge?: string;
+  /** Native title tooltip. */
   tooltip?: string;
 }
 
+/** A titled, individually collapsible group of {@link ActionButton}s. */
 export interface ActionSection {
+  /** Section heading. */
   title: string;
+  /** Optional leading icon for the header. */
   icon?: IconType;
+  /** Initial expanded state; defaults to expanded (only `false` collapses it). */
   expanded?: boolean;
+  /** Actions rendered when the section is open. */
   actions: ActionButton[];
 }
 
+/** Props for {@link QuickActionsPanel}. */
 interface QuickActionsPanelProps {
+  /** Sections to render, in order. */
   sections: ActionSection[];
+  /** Extra classes for the outer container. */
   className?: string;
 }
 
@@ -32,6 +57,10 @@ const variantClasses = {
   ghost: 'bg-transparent hover:bg-neutral-100 text-neutral-700 disabled:text-neutral-400',
 };
 
+/**
+ * Renders the sections as collapsible cards. Expand/collapse state is local and
+ * seeded from each section's {@link ActionSection.expanded} flag.
+ */
 const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({ sections, className = '' }) => {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(
     sections.reduce(

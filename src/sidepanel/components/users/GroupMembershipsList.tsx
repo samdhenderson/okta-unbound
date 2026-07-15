@@ -1,15 +1,30 @@
+/**
+ * @module sidepanel/components/users/GroupMembershipsList
+ * @description Renders a user's group memberships, distinguishing direct vs rule-based membership.
+ *
+ * Direct/rule-based classification is heuristic — the Okta API does not expose
+ * which rule (if any) added a user — so the UI surfaces caveats and, for
+ * rule-based rows, the matched rule name plus its condition expression.
+ */
 import React from 'react';
 import { Button, IconButton } from '../shared';
 import type { GroupMembership } from '../../../shared/types';
 
+/** Props for {@link GroupMembershipsList}. */
 interface GroupMembershipsListProps {
+  /** The user's group memberships, each already classified as direct or rule-based. */
   memberships: GroupMembership[];
+  /** When true, shows a spinner instead of the list. */
   isLoading: boolean;
+  /** Group id to visually highlight as the "current" group, if any. */
   currentGroupId?: string;
+  /** Okta origin used to build admin-console deep links; links are hidden when absent. */
   oktaOrigin?: string;
+  /** Invoked with a rule id to navigate to that rule in the Rules tab. */
   onNavigateToRule?: (ruleId: string) => void;
 }
 
+/** Maps a membership type to its Tailwind badge class (rule-based, direct, or fallback). */
 const getMembershipTypeBadge = (type: string) => {
   switch (type) {
     case 'RULE_BASED':
@@ -22,7 +37,8 @@ const getMembershipTypeBadge = (type: string) => {
 };
 
 /**
- * Displays a list of group memberships for a user.
+ * Displays a list of group memberships for a user, with direct/rule-based badges,
+ * rule-condition detail for rule-based rows, and optional admin-console deep links.
  */
 const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
   memberships,

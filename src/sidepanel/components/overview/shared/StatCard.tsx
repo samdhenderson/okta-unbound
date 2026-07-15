@@ -1,12 +1,26 @@
+/**
+ * @module sidepanel/components/overview/shared/StatCard
+ * @description Single metric tile (title, value, optional icon) used in the Overview stat grids.
+ *
+ * Presentational only: a colored, optionally clickable card. Numeric values are
+ * localized with `toLocaleString`; the `color` prop selects an icon/border token set.
+ */
 import React from 'react';
 import Icon, { type IconType } from './Icon';
 
+/** Props for {@link StatCard}. */
 interface StatCardProps {
+  /** Uppercase label above the value. */
   title: string;
+  /** The metric; numbers are rendered with thousands separators. */
   value: number | string;
+  /** Semantic color, selecting the icon and border token set; defaults to `neutral`. */
   color?: 'primary' | 'success' | 'warning' | 'error' | 'neutral';
+  /** Optional icon shown at the top-right. */
   icon?: IconType;
+  /** Optional caption below the value. */
   subtitle?: string;
+  /** When provided, makes the card a clickable button. */
   onClick?: () => void;
 }
 
@@ -48,6 +62,7 @@ const colorConfigs = {
   },
 };
 
+/** Renders one metric tile; the `color` prop maps to a token set in `colorConfigs`. */
 const StatCard: React.FC<StatCardProps> = ({
   title,
   value,

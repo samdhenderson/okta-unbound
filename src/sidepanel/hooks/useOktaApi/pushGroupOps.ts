@@ -10,11 +10,25 @@ import { createLogger } from '../../../shared/utils/logger';
 
 const log = createLogger('pushGroupOps');
 
+/**
+ * Build push-group mapping operations.
+ *
+ * @param coreApi - Shared transport surface (see {@link CoreApi}).
+ * @returns `{ getAppPushGroupMappings, applyPushGroupMappings }`.
+ * @remarks Note: this factory is not currently re-exported from the barrel; it is
+ * wired up where push-group enrichment is needed.
+ */
 export function createPushGroupOperations(coreApi: CoreApi) {
   /**
-   * Fetch push group mappings for an app.
-   * Uses the Okta Apps API to get groups assigned to an application,
-   * then checks for push group configurations.
+   * Fetch the push-group mappings for a single app.
+   *
+   * @param appId - App to inspect.
+   * @param appName - Optional label to stamp onto each returned mapping.
+   * @returns One {@link PushGroupMapping} per assigned group across all pages; `[]` on error.
+   * @remarks Pages `/api/v1/apps/{id}/groups` (200 per page) at `low` priority so it
+   * yields to interactive work. Group id is recovered from each assignment's
+   * `_links.group.href`; `status` is inferred `ACTIVE` when a `priority` is present.
+   * Errors are swallowed (logged only) and truncate the result.
    */
   const getAppPushGroupMappings = async (
     appId: string,
@@ -51,8 +65,15 @@ export function createPushGroupOperations(coreApi: CoreApi) {
   };
 
   /**
-   * Auto-detect apps from APP_GROUP sources and fetch their push mappings,
-   * then apply those mappings to the provided groups.
+   * Enrich groups with push-mapping and resolved source-app-name data.
+   *
+   * @param groups - Groups to enrich (only `APP_GROUP`-type with a `sourceAppId` trigger lookups).
+   * @param onProgress - Called as each app's mappings resolve with `(processed, total)`.
+   * @returns A new array where matched groups gain `pushMappings` and/or a resolved
+   * `sourceAppName`; groups with no updates are returned unchanged (same reference).
+   * @remarks Resolves each unique app's label and fetches its mappings in parallel
+   * (one request per app, at `low` priority — the scheduler caps real concurrency).
+   * Returns `groups` untouched when no `APP_GROUP` sources are present.
    */
   const applyPushGroupMappings = async (
     groups: GroupSummary[],

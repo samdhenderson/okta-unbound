@@ -1,5 +1,5 @@
 /**
- * @module utils/statusNormalizer
+ * @module shared/utils/statusNormalizer
  * @description Centralized utility for normalizing Okta user status values from various API sources.
  *
  * ## Problem Context

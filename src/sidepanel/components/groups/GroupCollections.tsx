@@ -1,3 +1,11 @@
+/**
+ * @module sidepanel/components/groups/GroupCollections
+ * @description Save, load, rename, and delete named sets of group ids ("collections")
+ * persisted in `chrome.storage.local`.
+ *
+ * A collection captures the current selection so it can be re-selected later or
+ * exported. Storage is local-only (no Okta API involved).
+ */
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button, IconButton, Input } from '../shared';
 import type { GroupCollection, GroupSummary } from '../../../shared/types';
@@ -5,19 +13,26 @@ import { createLogger } from '../../../shared/utils/logger';
 
 const log = createLogger('GroupCollections');
 
+/** `chrome.storage.local` key under which the collections array is persisted. */
 const COLLECTIONS_STORAGE_KEY = 'okta_unbound_group_collections';
 
 interface GroupCollectionsProps {
+  /** Currently selected group ids — the payload saved into a new/updated collection. */
   selectedGroupIds: Set<string>;
+  /** All loaded groups, used to resolve ids to display names. */
   groups: GroupSummary[];
+  /** Applies a saved collection by selecting its group ids. */
   onLoadCollection: (groupIds: string[]) => void;
+  /** Dismisses the panel. */
   onClose: () => void;
 }
 
+/** Generate a locally-unique collection id (`col_<time>_<rand>`). */
 function generateId(): string {
   return `col_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** Panel for managing saved collections of group selections. */
 const GroupCollections: React.FC<GroupCollectionsProps> = ({
   selectedGroupIds,
   groups,

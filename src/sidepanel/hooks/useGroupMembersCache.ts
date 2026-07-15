@@ -1,3 +1,12 @@
+/**
+ * @module sidepanel/hooks/useGroupMembersCache
+ * @description Shared, lazily-populated cache of group members for the Groups tab.
+ *
+ * A single member cache (`groupId → OktaUser[]`) that the export, compare, and
+ * cross-search features all read from and fill in, plus helpers to fetch members and
+ * bulk-remove a user from groups.
+ */
+
 import { useState, useRef, useCallback, useMemo } from 'react';
 import { useOktaApi } from './useOktaApi';
 import type { GroupSummary, OktaUser } from '../../shared/types';
@@ -9,6 +18,10 @@ type OktaApi = ReturnType<typeof useOktaApi>;
 
 /**
  * Owns the shared `groupMembersCache` that export/compare/cross-search build up.
+ *
+ * @param api - The Okta API surface from {@link useOktaApi} (captured in a render-time ref; see below).
+ * @param groups - Current group summaries, used to derive the `groupId → name` lookup.
+ * @returns `groupMembersCache`, a `groupNames` map, `fetchMembers`, and `removeUserFromGroups`.
  *
  * `apiRef` is assigned during render (NOT in an effect): `useOktaApi` returns a
  * fresh object with fresh method identities every render, so a ref updated in an

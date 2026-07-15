@@ -1,3 +1,11 @@
+/**
+ * @module sidepanel/hooks/useUserContext
+ * @description Tracks the Okta user shown in the active tab.
+ *
+ * Thin wrapper over `useOktaTabContext` whose `loadEntity` asks the content
+ * script for the current page's user info.
+ */
+
 import { useCallback } from 'react';
 import type { UserInfo } from '../../shared/types';
 import {
@@ -6,6 +14,7 @@ import {
   type EntityLoadContext,
 } from './useOktaTabContext';
 
+/** Return shape of {@link useUserContext}. */
 interface UseUserContextReturn {
   userInfo: UserInfo | null;
   connectionStatus: ConnectionStatus;
@@ -19,6 +28,10 @@ interface UseUserContextReturn {
 /**
  * Tracks the Okta user (if any) shown in the active tab. Thin wrapper over
  * {@link useOktaTabContext}.
+ *
+ * @returns `userInfo` (the current page's user, or `null` when the tab is not a
+ *   user page) plus shared connection state (`connectionStatus`, `targetTabId`,
+ *   `error`, `isLoading`, `refetch`, `oktaOrigin`).
  */
 export function useUserContext(): UseUserContextReturn {
   const loadEntity = useCallback(

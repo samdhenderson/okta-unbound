@@ -1,15 +1,33 @@
+/**
+ * @module sidepanel/components/shared/CollapsibleSection
+ * @description Bordered card whose header toggles the body open/closed.
+ *
+ * Manages its own open/closed state internally (uncontrolled), seeded by
+ * `defaultOpen`. A chevron rotates and an optional count badge shows in the header.
+ */
 import React, { useState } from 'react';
 
 interface CollapsibleSectionProps {
+  /** Header label. */
   title: string;
+  /** Whether the section starts expanded. Defaults to `true`. */
   defaultOpen?: boolean;
+  /** Body content, rendered only while expanded. */
   children: React.ReactNode;
+  /** Optional count rendered as a small badge next to the title. */
   itemCount?: number;
 }
 
 /**
- * A collapsible section component with a header that can be clicked to expand/collapse.
- * Used for organizing content into expandable groups.
+ * A collapsible section with a clickable header that expands/collapses its body.
+ * Open state is managed internally (uncontrolled).
+ *
+ * @example
+ * ```tsx
+ * <CollapsibleSection title="Advanced filters" itemCount={activeFilters.length}>
+ *   <FilterControls />
+ * </CollapsibleSection>
+ * ```
  */
 const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   title,

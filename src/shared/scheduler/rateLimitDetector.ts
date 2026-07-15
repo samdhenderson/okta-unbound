@@ -1,13 +1,18 @@
 /**
- * Okta Rate Limit Detector
+ * @module shared/scheduler/rateLimitDetector
+ * @description Parses and tracks Okta rate-limit headers to keep the scheduler
+ * below API limits.
  *
- * Parses and tracks Okta rate limit headers to prevent hitting API limits.
- * Okta uses the following headers:
- * - X-Rate-Limit-Limit: Total requests allowed per window
- * - X-Rate-Limit-Remaining: Requests remaining in current window
- * - X-Rate-Limit-Reset: Unix timestamp (seconds) when window resets
+ * Okta returns these per response:
+ * - `X-Rate-Limit-Limit` — total requests allowed per window
+ * - `X-Rate-Limit-Remaining` — requests remaining in the current window
+ * - `X-Rate-Limit-Reset` — Unix timestamp (seconds) when the window resets
  *
- * Reference: https://developer.okta.com/docs/reference/rate-limits/
+ * Tracks limits per-endpoint and a most-restrictive global view, expiring entries
+ * once their reset time passes.
+ *
+ * @see {@link https://developer.okta.com/docs/reference/rate-limits/ | Okta rate limits}
+ * @see `ApiScheduler`
  */
 
 import { createLogger } from '../utils/logger';
@@ -15,6 +20,10 @@ import type { RateLimitInfo } from './types';
 
 const log = createLogger('RateLimitDetector');
 
+/**
+ * Stateful tracker of Okta rate-limit headers. Owned by an `ApiScheduler`;
+ * not safe for concurrent mutation across instances.
+ */
 export class RateLimitDetector {
   private limits: Map<string, RateLimitInfo> = new Map();
   private globalLimit: RateLimitInfo | null = null;

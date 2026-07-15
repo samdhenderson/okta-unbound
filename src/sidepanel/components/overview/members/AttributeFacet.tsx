@@ -1,8 +1,18 @@
+/**
+ * @module sidepanel/components/overview/members/AttributeFacet
+ * @description Compact card visualizing one profile attribute's value distribution as clickable filters.
+ *
+ * Shows a segmented "spread bar" plus a short legend of the leading values; every
+ * segment/legend entry toggles a member-list filter, and "View all" opens the
+ * full distribution. Named values use an indigo ramp; "(none)"/"Other" use neutrals.
+ */
 import React from 'react';
 import type { AttributeSummary, BreakdownRow } from './memberAnalytics';
 import { NONE_VALUE, OTHER_VALUE } from './memberAnalytics';
 
+/** Props for {@link AttributeFacet}. */
 interface AttributeFacetProps {
+  /** The attribute and its precomputed value distribution. */
   summary: AttributeSummary;
   /** Canonical values currently active as filters for this attribute. */
   activeValues: Set<string>;

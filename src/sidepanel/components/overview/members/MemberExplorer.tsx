@@ -1,3 +1,14 @@
+/**
+ * @module sidepanel/components/overview/members/MemberExplorer
+ * @description Orchestrator for in-group member search, faceting, composition, MFA, and listing.
+ *
+ * Owns the explorer's client-side state — debounced search, the active
+ * {@link MemberFilter} set, sort field/direction, and the paged visible window —
+ * and derives the filtered/sorted list via the pure helpers in
+ * `memberAnalytics`. Composes the search bar, filter panel, MFA scan panel,
+ * composition reports, member list, and the details/copy modals. MFA scan results
+ * are owned by the parent overview and passed in.
+ */
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { OktaUser, MemberMfaResult, MfaScanStatus } from '../../../../shared/types';
 import Button from '../../shared/Button';
@@ -21,20 +32,34 @@ import {
   dimensionTitle,
 } from './memberAnalytics';
 
+/** Per-factor filter intent: unset, require-present, or require-absent. */
 type FactorMode = 'off' | 'has' | 'missing';
 
+/** Props for {@link MemberExplorer}. */
 interface MemberExplorerProps {
+  /** The group's full member set (the explorer filters/sorts locally). */
   members: OktaUser[];
+  /** Per-member MFA scan results, or null before a scan has run. */
   mfaResults: Map<string, MemberMfaResult> | null;
+  /** Current MFA scan lifecycle status. */
   scanStatus: MfaScanStatus;
+  /** Start the MFA scan. */
   onRunScan: () => void;
+  /** Request the confirmation gate (used for large groups). */
   onRequestConfirm: () => void;
+  /** Dismiss the confirmation gate. */
   onCancelConfirm: () => void;
+  /** Okta org origin for member Admin Console links (null when unknown). */
   oktaOrigin?: string | null;
 }
 
+/** Number of member rows revealed per page / "Load more". */
 const PAGE = 50;
 
+/**
+ * Renders the member explorer and owns its search/filter/sort/pagination state.
+ * All list derivation is delegated to the pure `memberAnalytics` helpers.
+ */
 const MemberExplorer: React.FC<MemberExplorerProps> = ({
   members,
   mfaResults,

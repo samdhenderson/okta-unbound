@@ -1,18 +1,33 @@
+/**
+ * @module sidepanel/components/overview/members/MemberList
+ * @description Windowed, auto-paging scrollable list of member rows.
+ *
+ * Mounts only the first `visibleCount` rows and grows via a "Load more" footer and
+ * an IntersectionObserver sentinel, capping DOM size for very large groups.
+ */
 import React, { useEffect, useRef } from 'react';
 import type { OktaUser, MemberMfaResult } from '../../../../shared/types';
 import ScrollableList from '../../shared/ScrollableList';
 import { Button } from '../../shared';
 import MemberRow from './MemberRow';
 
+/** Props for {@link MemberList}. */
 interface MemberListProps {
-  members: OktaUser[]; // already filtered
+  /** Members to display, already filtered and sorted by the caller. */
+  members: OktaUser[];
+  /** Per-member MFA scan results, or null before a scan has run. */
   mfaResults: Map<string, MemberMfaResult> | null;
+  /** True once a scan completed, so rows can render "No MFA" for 0-factor users. */
   mfaScanned: boolean;
+  /** How many rows are currently mounted. */
   visibleCount: number;
+  /** Reveal the next page of rows. */
   onLoadMore: () => void;
+  /** Okta org origin for per-member Admin Console links (null when unknown). */
   oktaOrigin?: string | null;
 }
 
+/** Number of additional rows revealed per "Load more". */
 const PAGE = 50;
 
 /**

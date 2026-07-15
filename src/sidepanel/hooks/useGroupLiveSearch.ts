@@ -1,10 +1,22 @@
+/**
+ * @module sidepanel/hooks/useGroupLiveSearch
+ * @description Server-side, per-keystroke group search with a 300ms debounce.
+ *
+ * Owns the live search query, its results, and the searching spinner for the Groups
+ * tab. When `searchMode` is `live`, each query change is debounced and sent straight
+ * to the content script's `searchGroups` action.
+ */
+
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { GroupSummary } from '../../shared/types';
 import { liveSearchToGroupSummary } from '../components/groups/groupSummary';
 
+/** Inputs to {@link useGroupLiveSearch}. */
 interface UseGroupLiveSearchOptions {
+  /** Tab id of the Okta session to search against, or `null` when disconnected. */
   targetTabId: number | null;
+  /** Only debounces/fires while this is `live`. */
   searchMode: 'live' | 'cached';
   /** The shell's single error setter — three producers write it, so it stays there. */
   setError: Dispatch<SetStateAction<string | null>>;
@@ -23,6 +35,9 @@ interface UseGroupLiveSearchOptions {
  * CHARACTERIZED: this goes DIRECT to the content script (bypassing the scheduler)
  * and has no stale-response guard — the last-resolving request wins. Both are §8
  * concerns, preserved verbatim here.
+ *
+ * @returns `liveSearchQuery` + `setLiveSearchQuery` (drives the debounce),
+ * `liveSearchResults`, the `isLiveSearching` flag, and `resetLiveSearch`.
  */
 export function useGroupLiveSearch({
   targetTabId,

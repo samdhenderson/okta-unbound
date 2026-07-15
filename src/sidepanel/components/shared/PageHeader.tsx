@@ -1,11 +1,24 @@
+/**
+ * @module sidepanel/components/shared/PageHeader
+ * @description Top-of-view header bar — title with optional subtitle, status badge, and trailing actions.
+ */
 import React from 'react';
 
 interface PageHeaderProps {
+  /** Page/section heading. */
   title: string;
+  /** Optional secondary line under the title. */
   subtitle?: string;
+  /** Optional trailing action node(s), right-aligned (e.g. a {@link Button}). */
   actions?: React.ReactNode;
+  /** Optional coloured badge next to the title. Defaults to `neutral`. */
   badge?: {
     text: string;
+    /**
+     * Badge colour. Note: this is PageHeader's own local badge palette and still
+     * uses `error` as a key; it is distinct from the canonical {@link StatusType}
+     * vocabulary (which uses `danger`, per ADR-0002).
+     */
     variant?: 'primary' | 'success' | 'warning' | 'error' | 'neutral';
   };
 }
@@ -18,6 +31,19 @@ const badgeVariants = {
   neutral: 'bg-neutral-50 text-neutral-600 border-neutral-200',
 };
 
+/**
+ * Standardized header bar rendered at the top of a tab/view.
+ *
+ * @example
+ * ```tsx
+ * <PageHeader
+ *   title="Groups"
+ *   subtitle="Manage Okta group membership"
+ *   badge={{ text: 'Beta', variant: 'primary' }}
+ *   actions={<Button icon="plus">New</Button>}
+ * />
+ * ```
+ */
 const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, actions, badge }) => {
   return (
     <div className="bg-white border-b border-neutral-200">

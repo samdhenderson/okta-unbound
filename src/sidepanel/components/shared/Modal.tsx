@@ -1,11 +1,25 @@
+/**
+ * @module sidepanel/components/shared/Modal
+ * @description Accessible modal dialog — the canonical overlay for all pop-up UI.
+ *
+ * Provides `role="dialog"` + `aria-modal`, a Tab focus-trap, autofocus into the
+ * panel, focus restoration on close, and Escape / overlay-click to dismiss.
+ * Always use this rather than a bespoke overlay. See docs/ux-guidelines.md.
+ */
 import React, { useCallback, useEffect, useId, useRef } from 'react';
 
 interface ModalProps {
+  /** When false the modal renders nothing (unmounted). */
   isOpen: boolean;
+  /** Invoked on Escape, overlay click, or the header close button. */
   onClose: () => void;
+  /** Dialog title; wired to `aria-labelledby`. */
   title: string;
+  /** Body content. */
   children: React.ReactNode;
+  /** Optional footer node (typically action buttons), shown in a styled footer bar. */
   footer?: React.ReactNode;
+  /** Max-width preset for the panel. Defaults to `md`. */
   size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
@@ -23,6 +37,18 @@ const FOCUSABLE =
  * Accessible modal dialog. Provides `role="dialog"` + `aria-modal`, closes on
  * Escape or overlay click, traps Tab focus within the panel, and restores focus
  * to the previously-focused element on close. See docs/ux-guidelines.md.
+ *
+ * @example
+ * ```tsx
+ * <Modal
+ *   isOpen={open}
+ *   onClose={() => setOpen(false)}
+ *   title="Confirm removal"
+ *   footer={<Button variant="danger" onClick={confirm}>Remove</Button>}
+ * >
+ *   <p>This cannot be undone.</p>
+ * </Modal>
+ * ```
  */
 const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer, size = 'md' }) => {
   const panelRef = useRef<HTMLDivElement>(null);

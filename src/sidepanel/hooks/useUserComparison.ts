@@ -1,3 +1,13 @@
+/**
+ * @module sidepanel/hooks/useUserComparison
+ * @description Orchestrator for the two-user comparison modal.
+ *
+ * Composes the search, memberships, apps and group-copy hooks, owns the phase
+ * switch (`comparedUser`) and `activeTab`, drives the two reset paths (modal
+ * close and change-user), and derives the shared/only buckets plus Jaccard
+ * similarity for groups and apps.
+ */
+
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useUserSearch } from './useUserSearch';
 import { useUserMemberships } from './useUserMemberships';
@@ -12,11 +22,17 @@ import {
 } from '../components/users/comparison/comparisonAnalytics';
 import type { OktaUser, GroupMembership } from '../../shared/types';
 
+/** Options for {@link useUserComparison}. */
 interface UseUserComparisonOptions {
+  /** Whether the comparison modal is open; going false triggers a full reset. */
   isOpen: boolean;
+  /** The anchor user being compared against (left-hand side). */
   contextUser: OktaUser;
+  /** The context user's memberships, used to build the group buckets. */
   contextGroups: GroupMembership[];
+  /** Tab whose content script performs all comparison API calls. */
   targetTabId: number;
+  /** Called after groups are copied so the parent can refresh context data. */
   onGroupsChanged: () => void;
 }
 
@@ -25,6 +41,13 @@ interface UseUserComparisonOptions {
  * group-copy concern; owns `comparedUser` (the phase switch) and `activeTab`, plus
  * the two reset paths and the derived buckets/similarity. This is the single place
  * that knows the reset ordering.
+ *
+ * @param options - See `UseUserComparisonOptions`.
+ * @returns The comparison view model: `comparedUser` and search state, `activeTab`
+ *   control, `groupBuckets` / `appBuckets` with their diff counts and per-facet
+ *   plus `overallSimilarity`, aggregated `isLoading` / `loadError`, group-copy
+ *   state (`addedGroupIds`, `addingGroupId`, `addError`, `addGroup`), display
+ *   names, and the `selectUser` / `changeUser` actions.
  */
 export function useUserComparison({
   isOpen,

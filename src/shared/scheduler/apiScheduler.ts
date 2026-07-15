@@ -1,15 +1,16 @@
 /**
- * Okta API Scheduler
+ * @module shared/scheduler/apiScheduler
+ * @description Centralized scheduler for all Okta API requests.
  *
- * Centralized scheduler for all Okta API requests. Prevents rate limiting by:
- * - Queuing requests with priority levels
- * - Tracking rate limit headers
- * - Implementing intelligent backoff and cooldown
- * - Controlling concurrency
- * - Auto-retrying failed requests
+ * Runs in the background service worker and coordinates every Okta API call in the
+ * extension to prevent rate limiting. It:
+ * - Queues requests by priority (high &gt; normal &gt; low)
+ * - Bounds concurrency and dispatches each request to the content script
+ * - Parses rate-limit headers and enters cooldown near the limit
+ * - Auto-retries failures with exponential backoff
+ * - Tracks metrics and broadcasts state to subscribers
  *
- * This scheduler runs in the background service worker and coordinates ALL
- * Okta API calls across the entire extension.
+ * @see {@link RateLimitDetector}
  */
 
 import { createLogger } from '../utils/logger';
@@ -36,6 +37,10 @@ const DEFAULT_CONFIG: SchedulerConfig = {
   requestTimeout: 30000, // 30 second timeout per request
 };
 
+/**
+ * Priority queue and executor for Okta API requests. One instance is created in
+ * the background worker; the processing loop starts in the constructor.
+ */
 export class ApiScheduler {
   private queue: QueuedRequest[] = [];
   private activeRequests: Map<string, QueuedRequest> = new Map();
@@ -62,6 +67,9 @@ export class ApiScheduler {
   private lastError: string | null = null;
   private stateListeners: Set<(state: SchedulerState) => void> = new Set();
 
+  /**
+   * @param config - Partial overrides merged over `DEFAULT_CONFIG`.
+   */
   constructor(config: Partial<SchedulerConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.rateLimitDetector = new RateLimitDetector();
@@ -73,7 +81,15 @@ export class ApiScheduler {
   }
 
   /**
-   * Schedule an API request
+   * Enqueue an API request and resolve when it completes (or rejects after
+   * retries are exhausted).
+   *
+   * @param endpoint - Okta path (may include query string).
+   * @param method - HTTP method.
+   * @param body - Optional request body (ignored for GET).
+   * @param tabId - Tab whose content script executes the fetch.
+   * @param priority - Queue priority; higher runs first.
+   * @returns The {@link RequestResult} once the request settles.
    */
   async scheduleRequest(
     endpoint: string,
@@ -409,7 +425,9 @@ export class ApiScheduler {
   }
 
   /**
-   * Subscribe to state changes
+   * Subscribe to scheduler state changes.
+   *
+   * @returns An unsubscribe function that removes the listener.
    */
   onStateChange(listener: (state: SchedulerState) => void): () => void {
     this.stateListeners.add(listener);

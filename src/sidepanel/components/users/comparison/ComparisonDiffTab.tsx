@@ -1,17 +1,36 @@
+/**
+ * @module sidepanel/components/users/comparison/ComparisonDiffTab
+ * @description Three tone-coded buckets (only-compared / shared / only-context) for a groups or apps diff.
+ *
+ * Reused for both the Groups and Apps tabs; `noun` and the empty-state strings
+ * are supplied by the parent. `renderAction` (used only on the Groups tab)
+ * injects the per-row "Add" affordance.
+ */
 import React from 'react';
 import Icon from '../../overview/shared/Icon';
 import type { DiffItem } from './comparisonAnalytics';
 
+/** Props for {@link ComparisonDiffTab}. */
 interface ComparisonDiffTabProps {
+  /** Display name of the context user (baseline). */
   contextName: string;
+  /** Display name of the compared user. */
   comparedName: string;
+  /** Items unique to the compared user (the "add" bucket). */
   comparedItems: DiffItem[];
+  /** Items both users share. */
   sharedItems: DiffItem[];
+  /** Items unique to the context user. */
   contextItems: DiffItem[];
+  /** Empty-state text for the only-compared bucket. */
   emptyComparedText: string;
+  /** Empty-state text for the shared bucket. */
   emptySharedText: string;
+  /** Empty-state text for the only-context bucket. */
   emptyContextText: string;
+  /** Singular noun for the items ("group" or "app"), used in subtitles. */
   noun: string;
+  /** Optional per-row action renderer (e.g. an Add button); only wired for groups. */
   renderAction?: (item: DiffItem) => React.ReactNode;
 }
 
@@ -57,18 +76,28 @@ const ComparisonDiffTab: React.FC<ComparisonDiffTabProps> = ({
   </div>
 );
 
+/** Visual tone of a bucket: add (compared-only), shared (in common), or neutral (context-only). */
 type Tone = 'add' | 'shared' | 'neutral';
 
+/** Props for the internal {@link BucketCard}. */
 interface BucketCardProps {
+  /** Tone controlling the accent color, icon, and badge styling. */
   tone: Tone;
+  /** Card title (e.g. "Shared" or "Only Jane"). */
   title: string;
+  /** Secondary line under the title. */
   subtitle: string;
+  /** Item count shown in the badge. */
   count: number;
+  /** Rows to render. */
   items: DiffItem[];
+  /** Text shown when `items` is empty. */
   emptyText: string;
+  /** Optional per-row action renderer. */
   renderAction?: (item: DiffItem) => React.ReactNode;
 }
 
+/** Per-tone accent styles (border, bar, icon, badge) keyed by {@link Tone}. */
 const toneStyles: Record<
   Tone,
   {
@@ -106,6 +135,7 @@ const toneStyles: Record<
   },
 };
 
+/** One tone-coded bucket: header (icon, title, subtitle, count) plus a scrollable item list. */
 const BucketCard: React.FC<BucketCardProps> = ({
   tone,
   title,

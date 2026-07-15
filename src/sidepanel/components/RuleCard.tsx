@@ -1,22 +1,39 @@
+/**
+ * @module sidepanel/components/RuleCard
+ * @description Expandable card summarising a single Okta group rule.
+ *
+ * Collapsed view shows the rule name, status dot, current-group/conflict badges,
+ * and condition; the expanded view adds the condition expression (with group-name
+ * badges), referenced user attributes, target groups, conflict details, metadata,
+ * and activate/deactivate plus "View in Okta" actions. Memoised for list rendering.
+ */
 import React, { useState, useCallback, memo } from 'react';
 import type { FormattedRule } from '../../shared/types';
 import { timeAgo } from '../../shared/ruleUtils';
 import { Button, IconButton } from './shared';
 
 interface RuleCardProps {
+  /** The formatted rule to display. */
   rule: FormattedRule;
+  /** Called with the rule id when the user activates an inactive rule. */
   onActivate?: (ruleId: string) => void;
+  /** Called with the rule id when the user deactivates an active rule. */
   onDeactivate?: (ruleId: string) => void;
+  /** Okta org origin used to build the "View in Okta" rules-page link. */
   oktaOrigin?: string | null;
+  /** When true, the card auto-expands and shows a highlight ring (deep-link target). */
   isHighlighted?: boolean;
 }
 
 /**
- * Memoized card component for displaying rule information.
- * Uses React.memo to prevent unnecessary re-renders when list updates.
+ * Renders an Okta group-id token inside a rule condition expression, replacing
+ * recognised 20-char group ids (`00g…`) with an inline group-name badge when a
+ * name is available in `allGroupNamesMap`; other text is returned unchanged.
+ *
+ * @param expression - The raw condition expression to render.
+ * @param allGroupNamesMap - Optional map of group id to display name for badge lookup.
+ * @returns React nodes for the expression, with group-name badges interleaved.
  */
-
-// Helper function to render condition expression with group name badges
 const renderConditionWithGroupBadges = (
   expression: string,
   allGroupNamesMap?: Record<string, string>,
@@ -69,6 +86,10 @@ const renderConditionWithGroupBadges = (
   return parts.length > 0 ? parts : expression;
 };
 
+/**
+ * Memoised card displaying a single group rule with an expandable detail view.
+ * A custom comparator limits re-renders to changes in the fields it actually shows.
+ */
 const RuleCard: React.FC<RuleCardProps> = memo(
   ({ rule, onActivate, onDeactivate, oktaOrigin, isHighlighted = false }) => {
     const [isExpanded, setIsExpanded] = useState(false);

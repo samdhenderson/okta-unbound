@@ -10,9 +10,24 @@ import { createLogger } from '../../../shared/utils/logger';
 
 const log = createLogger('useOktaApi');
 
+/**
+ * Build the group-member export operation.
+ *
+ * @param coreApi - Shared transport surface (see {@link CoreApi}).
+ * @returns `{ exportMembers }`.
+ */
 export function createExportOperations(coreApi: CoreApi) {
   /**
-   * Export group members to CSV or JSON format
+   * Export a group's members to CSV or JSON, then record the outcome to the audit trail.
+   *
+   * @param groupId - Group whose members to export.
+   * @param groupName - Human-readable group name (used in audit + result messages).
+   * @param format - Output format: `'csv'` or `'json'`.
+   * @param statusFilter - Optional {@link UserStatus} to include only matching members; `''`/omitted = all.
+   * @remarks Delegates the fetch-and-serialize to the content script via
+   * {@link CoreApi.sendMessage} (`exportGroupMembers`), which streams the file to
+   * download. Success and failure are logged to {@link auditStore} as fire-and-forget
+   * audit entries; audit-write failures are swallowed (logged only).
    */
   const exportMembers = async (
     groupId: string,

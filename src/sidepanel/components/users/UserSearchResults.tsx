@@ -1,11 +1,19 @@
+/**
+ * @module sidepanel/components/users/UserSearchResults
+ * @description Clickable list of user search results with status badges.
+ */
 import React from 'react';
 import type { OktaUser } from '../../../shared/types';
 
+/** Props for {@link UserSearchResults}. */
 interface UserSearchResultsProps {
+  /** Matching users to render; an empty array renders nothing. */
   results: OktaUser[];
+  /** Invoked with the chosen user when a result row is clicked. */
   onSelectUser: (user: OktaUser) => void;
 }
 
+/** Maps an Okta user status to its badge Tailwind class. */
 const getStatusBadgeClass = (status: string) => {
   switch (status) {
     case 'ACTIVE':
@@ -21,7 +29,8 @@ const getStatusBadgeClass = (status: string) => {
 };
 
 /**
- * Displays a list of user search results.
+ * Displays a list of user search results as clickable cards; renders nothing when
+ * there are no results.
  */
 const UserSearchResults: React.FC<UserSearchResultsProps> = ({ results, onSelectUser }) => {
   if (results.length === 0) {

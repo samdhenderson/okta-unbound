@@ -1,3 +1,12 @@
+/**
+ * @module sidepanel/components/overview/GroupOverview
+ * @description Overview tab for a single Okta group: quick stats, bulk actions, and the member explorer.
+ *
+ * Loads the group's full membership (via the scheduler/content-script path in
+ * {@link useOktaApi}), derives status counts for the stat cards, and hosts the
+ * bulk operations (remove deprovisioned, export) plus the in-group
+ * {@link MemberExplorer} (search, composition reports, MFA scan).
+ */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useOktaApi } from '../../hooks/useOktaApi';
 import { useProgress } from '../../contexts/ProgressContext';
@@ -13,14 +22,24 @@ import { createLogger } from '../../../shared/utils/logger';
 
 const log = createLogger('GroupOverview');
 
+/** Props for {@link GroupOverview}. */
 interface GroupOverviewProps {
+  /** Okta group id whose members and stats are shown. */
   groupId: string;
+  /** Group display name (used in headings and the export filename). */
   groupName: string;
+  /** Browser tab hosting the Okta session; every API call is routed to it. */
   targetTabId: number;
+  /** Switch the side panel to another primary tab (optionally focusing a rule). */
   onTabChange: (tab: 'rules' | 'users' | 'groups', selectedRuleId?: string) => void;
+  /** Okta org origin, used to build Admin Console deep links (null when unknown). */
   oktaOrigin?: string | null;
 }
 
+/**
+ * Renders the group Overview tab. Fetches all members on mount / group change,
+ * shows status stat cards and quick actions, and embeds the member explorer.
+ */
 const GroupOverview: React.FC<GroupOverviewProps> = ({
   groupId,
   groupName,

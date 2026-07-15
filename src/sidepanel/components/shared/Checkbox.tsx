@@ -1,7 +1,17 @@
+/**
+ * @module sidepanel/components/shared/Checkbox
+ * @description Controlled checkbox primitive — renders bare or with a label + description.
+ *
+ * When no `label` is given it emits a bare styled `<input>` so the caller owns
+ * layout (in that case supply `aria-label`); with a `label` it wraps the box in
+ * a clickable `<label>` plus optional helper text.
+ */
 import React from 'react';
 
 interface CheckboxProps {
+  /** Controlled checked state. */
   checked: boolean;
+  /** Called with the new checked value on toggle. */
   onChange: (checked: boolean) => void;
   /** Visible label. When omitted, pass `aria-label` so the control has an accessible name. */
   label?: React.ReactNode;
@@ -22,6 +32,16 @@ const inputClasses =
  * Checkbox primitive for feature components. Renders a bare styled `<input>` when
  * no `label` is given (caller controls layout), or a clickable `<label>` wrapping
  * the box plus label/description text. For text fields use {@link Input}.
+ *
+ * @example
+ * ```tsx
+ * <Checkbox
+ *   checked={includeDeprovisioned}
+ *   onChange={setIncludeDeprovisioned}
+ *   label="Include deprovisioned users"
+ *   description="Also match users whose Okta status is DEPROVISIONED"
+ * />
+ * ```
  */
 const Checkbox: React.FC<CheckboxProps> = ({
   checked,

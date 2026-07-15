@@ -1,18 +1,41 @@
+/**
+ * @module sidepanel/components/shared/Textarea
+ * @description Controlled multi-line text field with label, hint, and error state; vertically resizable.
+ *
+ * The multi-line sibling of `Input`. `onChange` receives the string value
+ * (not the event); when `error` is set the field turns red and the message
+ * replaces the hint.
+ */
 import React from 'react';
 
 interface TextareaProps {
+  /** Controlled value. */
   value: string;
+  /** Called with the new string value on each change. */
   onChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  /** Error message; when set, applies danger styling and hides `hint`. */
   error?: string;
+  /** Optional label rendered above the field. */
   label?: string;
+  /** Helper text below the field, shown only when there is no `error`. */
   hint?: string;
+  /** Visible row count. Defaults to `4`. */
   rows?: number;
+  /** Stretch to fill the container width. Defaults to `true`. */
   fullWidth?: boolean;
   className?: string;
 }
 
+/**
+ * The shared controlled multi-line input. Prefer this over a raw `<textarea>`.
+ *
+ * @example
+ * ```tsx
+ * <Textarea label="Notes" value={notes} onChange={setNotes} rows={6} />
+ * ```
+ */
 const Textarea: React.FC<TextareaProps> = ({
   value,
   onChange,

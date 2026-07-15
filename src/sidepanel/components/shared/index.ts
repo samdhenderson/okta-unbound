@@ -1,3 +1,13 @@
+/**
+ * @module sidepanel/components/shared
+ * @description Barrel for the shared design-system UI primitives.
+ *
+ * Import buttons, inputs, modal, and other reusable components from here rather
+ * than reaching into individual files. Per the project hard rules, always reuse
+ * these primitives instead of hand-rolling `<button>/<input>/<select>/<textarea>`.
+ * Also re-exports the commonly used variant/data types.
+ */
+
 // Shared UI components following Overview tab design standards
 export { default as Button } from './Button';
 export { default as IconButton } from './IconButton';

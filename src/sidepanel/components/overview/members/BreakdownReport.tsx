@@ -1,7 +1,16 @@
+/**
+ * @module sidepanel/components/overview/members/BreakdownReport
+ * @description Dependency-free list of horizontal proportion bars for a value distribution.
+ *
+ * Each row is a clickable filter toggle (except the aggregated "Other" row, which
+ * can instead reveal its hidden values). Bars are plain divs sized by percentage
+ * using existing color tokens.
+ */
 import React from 'react';
 import type { BreakdownRow } from './memberAnalytics';
 import { OTHER_VALUE } from './memberAnalytics';
 
+/** Props for {@link BreakdownReport}. */
 interface BreakdownReportProps {
   /** Pre-computed, sorted rows (top-N + optional "Other"). */
   rows: BreakdownRow[];

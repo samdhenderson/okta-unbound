@@ -8,8 +8,19 @@
 import type { OktaFactor, MemberMfaResult } from '../types';
 
 /**
- * Map an Okta factor (factorType + provider) to a friendly display label.
- * Falls back to a prettified version of the raw factorType for unknown types.
+ * Map an Okta factor (`factorType` + `provider`) to a friendly display label.
+ *
+ * Known types get curated labels (e.g. `push` → "Okta Verify Push"); TOTP labels
+ * are further disambiguated by provider. Unknown types fall back to a prettified
+ * version of the raw `factorType`.
+ *
+ * @param factorType - The Okta factor type, e.g. `'push'` or `'token:software:totp'`.
+ * @param provider - Optional Okta provider, e.g. `'GOOGLE'` or `'OKTA'`.
+ * @returns A human-friendly label; `'Unknown'` if `factorType` is empty.
+ *
+ * @example
+ * factorLabel('token:software:totp', 'GOOGLE'); // => 'Google Authenticator'
+ * factorLabel('webauthn'); // => 'Security Key (WebAuthn)'
  */
 export function factorLabel(factorType: string, provider?: string): string {
   const type = (factorType || '').toLowerCase();
@@ -55,14 +66,25 @@ export function factorLabel(factorType: string, provider?: string): string {
 /**
  * Whether a factor counts toward MFA enrollment. Excludes the `password`
  * factor (which is base credentials, not a second factor) and only counts
- * ACTIVE factors.
+ * `ACTIVE` factors.
+ *
+ * @param factor - The Okta factor to test.
+ * @returns `true` if the factor is active and is not a password factor.
  */
 export function isActiveMfaFactor(factor: OktaFactor): boolean {
   return factor.status === 'ACTIVE' && (factor.factorType || '').toLowerCase() !== 'password';
 }
 
 /**
- * Summarize a user's factors into a MemberMfaResult. Pure function.
+ * Summarize a user's factors into a {@link MemberMfaResult}. Pure function.
+ *
+ * Counts only {@link isActiveMfaFactor | active MFA factors} and collects their
+ * de-duplicated, sorted {@link factorLabel | labels}. The full `factors` array is
+ * preserved on the result unchanged.
+ *
+ * @param userId - The Okta user id the factors belong to.
+ * @param factors - The user's factors (nullish is treated as empty).
+ * @returns The per-member MFA summary (`enrolled`, `factorCount`, `factorLabels`).
  */
 export function summarizeFactors(userId: string, factors: OktaFactor[]): MemberMfaResult {
   const active = (factors || []).filter(isActiveMfaFactor);

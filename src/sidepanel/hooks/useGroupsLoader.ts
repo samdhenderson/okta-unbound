@@ -1,3 +1,12 @@
+/**
+ * @module sidepanel/hooks/useGroupsLoader
+ * @description Loads the full group list for the Groups tab and caches it in storage.
+ *
+ * On mount it rehydrates the last cached list from `chrome.storage.local`; `loadAllGroups`
+ * runs the full pipeline (fetch → map to summaries → staleness → non-fatal push-mapping
+ * enrichment → cache write) and switches the tab into cached mode.
+ */
+
 import { useState, useEffect } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useOktaApi } from './useOktaApi';
@@ -14,9 +23,13 @@ const log = createLogger('useGroupsLoader');
 
 type OktaApi = ReturnType<typeof useOktaApi>;
 
+/** Inputs to {@link useGroupsLoader}. */
 interface UseGroupsLoaderOptions {
+  /** The Okta API surface used to fetch/enrich groups. */
   api: OktaApi;
+  /** The shell's shared error setter (shows the banner on a fatal load failure). */
   setError: Dispatch<SetStateAction<string | null>>;
+  /** Switches the tab between live-search and cached-list modes. */
   setSearchMode: Dispatch<SetStateAction<'live' | 'cached'>>;
   /** Called after a successful full load to clear live-search state. */
   onLoaded: () => void;
@@ -32,6 +45,8 @@ interface UseGroupsLoaderOptions {
  * push-mapping enrichment is a NESTED non-fatal try/catch: a push failure logs a
  * warning and lets the load complete + cache; a `getAllGroups` failure banners and
  * caches nothing. Both are preserved verbatim.
+ *
+ * @returns The `groups` list, a `loading` flag, and the `loadAllGroups` trigger.
  */
 export function useGroupsLoader({
   api,

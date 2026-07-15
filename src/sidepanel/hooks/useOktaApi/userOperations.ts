@@ -11,9 +11,19 @@ import { createLogger } from '../../../shared/utils/logger';
 
 const log = createLogger('useOktaApi');
 
+/**
+ * Build per-user read and lifecycle operations.
+ *
+ * @param coreApi - Shared transport surface (see {@link CoreApi}).
+ * @returns Lookups (last login, app/group counts, apps, MFA, search, by-id) plus
+ * lifecycle actions (suspend/unsuspend/reset password).
+ */
 export function createUserOperations(coreApi: CoreApi) {
   /**
-   * Get user's last login date
+   * Read a user's last-login timestamp.
+   *
+   * @param userId - User to inspect.
+   * @returns The `lastLogin` as a `Date`, or `null` if never logged in / on error.
    */
   const getUserLastLogin = async (userId: string): Promise<Date | null> => {
     try {
@@ -29,7 +39,11 @@ export function createUserOperations(coreApi: CoreApi) {
   };
 
   /**
-   * Get count of app assignments for a user
+   * Approximate how many apps a user is assigned, from the first page.
+   *
+   * @param userId - User to inspect.
+   * @returns First-page assignment count (max 200), or `0` on error.
+   * @remarks Does not walk pagination; a floor for users with >200 assignments.
    */
   const getUserAppAssignments = async (userId: string): Promise<number> => {
     try {
@@ -58,10 +72,12 @@ export function createUserOperations(coreApi: CoreApi) {
   };
 
   /**
-   * Get the list of apps assigned to a user (id + display label).
+   * List all apps assigned to a user (id + display label).
    *
-   * Reflects effective assignments (direct + via group) as returned by the
-   * apps filter endpoint. Follows pagination via the Link header.
+   * @param userId - User whose apps to list.
+   * @returns Every assigned app across all pages; `[]` on error.
+   * @remarks Reflects effective assignments (direct + via group) from the apps
+   * filter endpoint, following `Link` pagination (200 per page).
    */
   const getUserApps = async (userId: string): Promise<Array<{ id: string; label: string }>> => {
     const apps: Array<{ id: string; label: string }> = [];
@@ -88,9 +104,13 @@ export function createUserOperations(coreApi: CoreApi) {
   };
 
   /**
-   * Batch get user details.
-   * Uses batch size of 3 to match scheduler maxConcurrent and low priority
-   * to avoid starving interactive requests.
+   * Fetch full details for many users, keyed by id.
+   *
+   * @param userIds - Users to load.
+   * @param onProgress - Called after each batch with `(processed, total)`.
+   * @returns Map of userId → {@link OktaUser}; ids that fail to load are omitted.
+   * @remarks Requests in batches of 3 (matching scheduler `maxConcurrent`) at
+   * `low` priority so it never starves interactive requests.
    */
   const batchGetUserDetails = async (
     userIds: string[],
@@ -135,9 +155,12 @@ export function createUserOperations(coreApi: CoreApi) {
   /**
    * Scan MFA factor enrollment for a list of users.
    *
-   * Costs one API call per user (GET /api/v1/users/{id}/factors). Uses the same
-   * batching pattern as batchGetUserDetails (batch size 3, low priority) to avoid
-   * starving interactive requests. Returns a Map keyed by userId.
+   * @param userIds - Users to scan.
+   * @param onProgress - Called after each batch with `(processed, total)`.
+   * @returns Map of userId → {@link MemberMfaResult} (summarized via {@link summarizeFactors}).
+   * @remarks Costs one API call per user (`GET /api/v1/users/{id}/factors`). Uses the
+   * same batching as `batchGetUserDetails` (batch size 3, `low` priority) to
+   * avoid starving interactive requests.
    */
   const scanGroupMfa = async (
     userIds: string[],
@@ -178,7 +201,11 @@ export function createUserOperations(coreApi: CoreApi) {
   };
 
   /**
-   * Get user's group memberships count
+   * Count a user's group memberships.
+   *
+   * @param userId - User to inspect.
+   * @returns Exact membership count, read from the `x-total-count` header of a
+   * `limit=1` request (avoids paging the full list); `0` on error.
    */
   const getUserGroupMemberships = async (userId: string): Promise<number> => {
     try {
@@ -194,7 +221,10 @@ export function createUserOperations(coreApi: CoreApi) {
   };
 
   /**
-   * Search for users by name, email, or login
+   * Search users by name, email, or login via Okta's `q` query (capped at 20).
+   *
+   * @param query - Search text; queries shorter than 2 chars short-circuit to `[]`.
+   * @returns Flattened `{ id, email, firstName, lastName, login, status }` records; `[]` on error.
    */
   const searchUsers = async (
     query: string,
@@ -236,7 +266,11 @@ export function createUserOperations(coreApi: CoreApi) {
   };
 
   /**
-   * Get user details by ID
+   * Fetch one user by id.
+   *
+   * @param userId - User id to look up.
+   * @returns A flattened `{ id, email, firstName, lastName, login, status }`
+   * record, or `null` if not found / on error.
    */
   const getUserById = async (
     userId: string,
@@ -270,7 +304,10 @@ export function createUserOperations(coreApi: CoreApi) {
 
   /**
    * Suspend an active user, preventing them from signing in.
-   * Only valid for users in ACTIVE status.
+   *
+   * @param userId - User to suspend.
+   * @returns `{ success, error? }`.
+   * @remarks Only valid for users in `ACTIVE` status.
    */
   const suspendUser = async (userId: string): Promise<{ success: boolean; error?: string }> => {
     const result = await coreApi.makeApiRequest(
@@ -282,7 +319,10 @@ export function createUserOperations(coreApi: CoreApi) {
 
   /**
    * Unsuspend a suspended user, restoring their ability to sign in.
-   * Only valid for users in SUSPENDED status.
+   *
+   * @param userId - User to unsuspend.
+   * @returns `{ success, error? }`.
+   * @remarks Only valid for users in `SUSPENDED` status.
    */
   const unsuspendUser = async (userId: string): Promise<{ success: boolean; error?: string }> => {
     const result = await coreApi.makeApiRequest(
@@ -293,8 +333,12 @@ export function createUserOperations(coreApi: CoreApi) {
   };
 
   /**
-   * Trigger a password reset email for the user.
-   * Sends an email with a one-time reset link. Valid for ACTIVE and RECOVERY status users.
+   * Trigger a password-reset email for the user.
+   *
+   * @param userId - User to send the reset link to.
+   * @returns `{ success, error? }`.
+   * @remarks Sends an email with a one-time reset link (`sendEmail=true`). Valid
+   * for `ACTIVE` and `RECOVERY` status users.
    */
   const resetPassword = async (userId: string): Promise<{ success: boolean; error?: string }> => {
     const result = await coreApi.makeApiRequest(

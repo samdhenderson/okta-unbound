@@ -1,22 +1,36 @@
+/**
+ * @module sidepanel/components/shared/AlertMessage
+ * @description Inline alert/notification banner with a status icon and optional dismiss + action button.
+ *
+ * Colour and icon are driven by the canonical {@link StatusType} vocabulary
+ * (`success | warning | danger | info` — ADR-0002). Renders with `role="alert"`.
+ */
 import React from 'react';
 import { type StatusType } from './status';
 
+/** The content of an alert: display text plus its severity. */
 export interface AlertMessageData {
   text: string;
-  /** Canonical status vocabulary — `success | warning | danger | info` (ADR-0002). */
+  /** Canonical status vocabulary — `success | warning | danger | info` (ADR-0002). Selects icon + colours. */
   type: StatusType;
 }
 
+/** An optional inline call-to-action button rendered next to the message text. */
 export interface AlertAction {
   label: string;
   onClick: () => void;
+  /** Visual emphasis of the action button. Forced to `danger` styling when the message itself is `danger`. */
   variant?: 'primary' | 'danger';
 }
 
 interface AlertMessageProps {
+  /** The alert text + severity to display. */
   message: AlertMessageData;
+  /** When provided, renders a dismiss (×) button that invokes this callback. */
   onDismiss?: () => void;
+  /** Optional inline action button (e.g. "Retry", "Undo"). */
   action?: AlertAction;
+  /** Extra classes merged onto the outer container. */
   className?: string;
 }
 
@@ -44,7 +58,8 @@ const typeStyles = {
 };
 
 /**
- * Displays an alert/notification message with dismiss button.
+ * Displays an alert/notification message with a status icon and optional
+ * dismiss button and action. The icon and colour scheme follow `message.type`.
  *
  * @example
  * ```tsx

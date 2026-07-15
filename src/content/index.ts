@@ -34,8 +34,8 @@
  * - Credentials are never stored or transmitted
  * - Only operates on official Okta domains
  *
- * @see {@link module:background/index|Background Worker} for request scheduling
- * @see {@link module:hooks/useOktaApi|useOktaApi} for sidepanel integration
+ * @see `background service worker` for request scheduling
+ * @see `useOktaApi` for sidepanel integration
  */
 
 // Content script for Okta Unbound

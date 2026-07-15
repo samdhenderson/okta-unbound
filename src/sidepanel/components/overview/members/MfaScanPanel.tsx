@@ -1,3 +1,11 @@
+/**
+ * @module sidepanel/components/overview/members/MfaScanPanel
+ * @description Trigger + results panel for the group MFA factor scan.
+ *
+ * Kicks off the per-member factor scan (one API call per member), gating large
+ * groups behind a confirmation modal. Once results arrive it shows the enrolled
+ * count and an MFA {@link BreakdownReport} whose rows toggle member-list filters.
+ */
 import React from 'react';
 import type { OktaUser, MemberMfaResult, MfaScanStatus } from '../../../../shared/types';
 import Button from '../../shared/Button';
@@ -8,17 +16,30 @@ import { type BreakdownRow, type MemberFilter, computeMfaBreakdown } from './mem
 /** Above this member count, scanning requires explicit confirmation. */
 export const MFA_AUTO_THRESHOLD = 500;
 
+/** Props for {@link MfaScanPanel}. */
 interface MfaScanPanelProps {
+  /** The group's members (drives the count and per-factor breakdown). */
   members: OktaUser[];
+  /** Per-member MFA scan results, or null before a scan has run. */
   mfaResults: Map<string, MemberMfaResult> | null;
+  /** Current MFA scan lifecycle status. */
   scanStatus: MfaScanStatus;
+  /** Active facet filters, used to highlight selected MFA rows. */
   filters: MemberFilter[];
+  /** Start the scan immediately (small groups, or "Scan anyway"). */
   onRunScan: () => void;
+  /** Open the confirmation gate (large groups). */
   onRequestConfirm: () => void;
+  /** Dismiss the confirmation gate. */
   onCancelConfirm: () => void;
+  /** Toggle an MFA breakdown row as a member-list filter. */
   onToggleMfaFilter: (row: BreakdownRow) => void;
 }
 
+/**
+ * Renders the MFA scan trigger and, once scanned, the factor distribution.
+ * Routes large groups through the confirmation modal before scanning.
+ */
 const MfaScanPanel: React.FC<MfaScanPanelProps> = ({
   members,
   mfaResults,

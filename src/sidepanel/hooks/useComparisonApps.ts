@@ -1,19 +1,37 @@
+/**
+ * @module sidepanel/hooks/useComparisonApps
+ * @description Loads and holds the app-assignment side of the user-comparison view.
+ *
+ * Extracted from `UserComparisonModal`; owns fetching both users' app lists whenever
+ * the compared user changes and exposing them plus load/error state to the modal.
+ */
+
 import { useState, useEffect, useCallback } from 'react';
 import { useOktaApi } from './useOktaApi';
 import type { OktaUser } from '../../shared/types';
 import type { AppEntry } from '../components/users/comparison/comparisonAnalytics';
 
+/** Inputs to {@link useComparisonApps}. */
 interface UseComparisonAppsOptions {
+  /** Tab id of the Okta session to query through. */
   targetTabId: number;
+  /** The fixed "context" user (left-hand side of the comparison). */
   contextUserId: string;
+  /** The user currently being compared against, or `null` when none is selected. */
   comparedUser: OktaUser | null;
 }
 
+/** Value returned by {@link useComparisonApps}. */
 interface UseComparisonAppsReturn {
+  /** App assignments for the context user. */
   contextApps: AppEntry[];
+  /** App assignments for the compared user. */
   comparedApps: AppEntry[];
+  /** True while both users' app lists are being (re)fetched. */
   isLoadingApps: boolean;
+  /** Error message from the load, or `null`. See the note below about this being effectively dead. */
   appsError: string | null;
+  /** Clears both app lists and the error (but not the loading flag). */
   resetApps: () => void;
 }
 

@@ -1,3 +1,11 @@
+/**
+ * @module sidepanel/components/shared/CopyButton
+ * @description Copy-to-clipboard button that briefly confirms success by swapping its icon + label.
+ *
+ * Wraps the shared {@link Button}. Text is produced lazily via `getText()` on
+ * click, and clipboard failures (blocked permissions / insecure context) fail
+ * silently rather than throwing.
+ */
 import React, { useState } from 'react';
 import Button, { type ButtonVariant, type ButtonSize } from './Button';
 
@@ -10,14 +18,21 @@ interface CopyButtonProps {
   copiedLabel?: string;
   disabled?: boolean;
   title?: string;
+  /** Idle-state button variant (the confirmed state always uses `success`). Defaults to `secondary`. */
   variant?: ButtonVariant;
+  /** Button size passed through to {@link Button}. Defaults to `sm`. */
   size?: ButtonSize;
   className?: string;
 }
 
 /**
  * A copy-to-clipboard button that briefly confirms the copy by swapping its icon
- * and label. Wraps the shared {@link Button} so it inherits the app's button styles.
+ * and label (to `success` styling) for ~1.5s. Wraps the shared {@link Button}.
+ *
+ * @example
+ * ```tsx
+ * <CopyButton label="Copy emails" getText={() => users.map((u) => u.email).join('\n')} />
+ * ```
  */
 const CopyButton: React.FC<CopyButtonProps> = ({
   getText,

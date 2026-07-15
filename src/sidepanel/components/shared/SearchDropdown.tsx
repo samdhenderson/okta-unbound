@@ -1,19 +1,39 @@
+/**
+ * @module sidepanel/components/shared/SearchDropdown
+ * @description Generic search input with a live results dropdown and a selected-item summary state.
+ *
+ * Fully controlled and presentational — the caller owns query state, async
+ * searching, and the results array (typically via a search hook). Generic over
+ * the result type `T`; `renderResult` / `renderSelected` project each item to UI.
+ */
 import React, { useRef } from 'react';
 
 interface SearchDropdownProps<T> {
   placeholder?: string;
+  /** Controlled query text. */
   query: string;
+  /** Called with the new query on each keystroke. */
   onQueryChange: (q: string) => void;
+  /** When true, shows a spinner in the field (search in flight). */
   isSearching: boolean;
+  /** Result items to render in the dropdown. */
   results: T[];
+  /** Whether the results dropdown is visible (also requires non-empty `results`). */
   showDropdown: boolean;
+  /** Called when a result is clicked. */
   onSelect: (item: T) => void;
+  /** Renders a single result row. */
   renderResult: (item: T) => React.ReactNode;
+  /** Currently selected item; when set (with `renderSelected`) the picker shows its summary state instead of the input. */
   selectedItem?: T | null;
+  /** Renders the selected item's summary; required to show the selected state. */
   renderSelected?: (item: T) => React.ReactNode;
+  /** Clears the query or selection; renders the clear affordance when provided. */
   onClear?: () => void;
   disabled?: boolean;
+  /** Optional field label. */
   label?: string;
+  /** Optional helper text below the field. */
   hint?: string;
 }
 

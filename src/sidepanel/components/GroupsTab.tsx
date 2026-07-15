@@ -1,3 +1,13 @@
+/**
+ * @module sidepanel/components/GroupsTab
+ * @description Groups tab shell: browse, search, filter, and bulk-manage Okta groups.
+ *
+ * Acts as a thin coordinator that owns cross-cutting shell state (error, live vs.
+ * cached search mode, filter/panel visibility) and composes the group hooks
+ * (`useGroupsLoader`, `useGroupLiveSearch`, `useGroupFilters`, `useGroupSelection`,
+ * `useGroupMembersCache`) with presentational subcomponents (search bar, filter
+ * panel, selection bar, list panel) plus the export and comparison modals.
+ */
 import React, { useState, useCallback } from 'react';
 import PageHeader from './shared/PageHeader';
 import AlertMessage from './shared/AlertMessage';
@@ -22,10 +32,17 @@ import GroupsListPanel from './groups/GroupsListPanel';
 import { getDateForFilename } from '../../shared/utils/csvUtils';
 
 interface GroupsTabProps {
+  /** Chrome tab id of the connected Okta tab; API/search actions are disabled when null. */
   targetTabId: number | null;
+  /** Okta org origin used to build deep links to group admin pages. */
   oktaOrigin?: string;
 }
 
+/**
+ * Renders the Groups tab and orchestrates the group loading/search/selection hooks
+ * and their presentational panels. Also implements CSV export of the selected or
+ * filtered groups and the show/hide toggling of the bulk/cross-search/collections panels.
+ */
 const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
   // Shell-owned state: error has three producers (loader, live search, useOktaApi
   // onResult) so it stays here; searchMode is read by three hooks so it stays above

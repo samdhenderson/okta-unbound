@@ -1,19 +1,36 @@
+/**
+ * @module sidepanel/components/groups/GroupSelectionBar
+ * @description The selection summary + action bar above the groups list.
+ *
+ * Surfaces the selected/filtered counts and the Compare / Bulk / Cross-Search /
+ * Collections / Export actions, each gated by the current selection size.
+ */
 import React from 'react';
 import Button from '../shared/Button';
 
+/** Which inline panel (if any) is currently open below the bar. */
 export type ActivePanel = 'none' | 'bulk' | 'crossSearch' | 'collections';
 
 interface GroupSelectionBarProps {
+  /** Number of currently selected groups. */
   selectedCount: number;
+  /** Number of groups after filtering (the "of M" denominator). */
   filteredCount: number;
+  /** Which inline panel is open, used to highlight its trigger. */
   activePanel: ActivePanel;
   /** groupMembersCache.size — shown as the Cross-Search badge when > 0. */
   crossSearchBadge: number;
+  /** Selects every filtered group. */
   onSelectAll: () => void;
+  /** Clears the selection. */
   onDeselectAll: () => void;
+  /** Opens the comparison modal (shown only for 2–5 selections). */
   onCompare: () => void;
+  /** Toggles the given inline panel open/closed. */
   onTogglePanel: (panel: ActivePanel) => void;
+  /** Exports the selected groups. */
   onExportSelection: () => void;
+  /** Exports the current (filtered) groups list. */
   onExportGroupsList: () => void;
 }
 

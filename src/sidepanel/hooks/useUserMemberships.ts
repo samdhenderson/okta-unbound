@@ -1,3 +1,13 @@
+/**
+ * @module sidepanel/hooks/useUserMemberships
+ * @description Loads a user's groups and classifies each membership as DIRECT or RULE_BASED.
+ *
+ * Okta's API does not report how a user landed in a group, so this module infers
+ * it heuristically (APP_GROUP → rule, rule-exclusion → direct, matching active
+ * rules → rule with confidence, otherwise direct). See OKTA_API_LIMITATIONS.md §2.
+ * Group rules are read from the shared `RulesCache` and refetched on a miss.
+ */
+
 import { useState, useCallback } from 'react';
 import type {
   OktaUser,
@@ -11,10 +21,13 @@ import { createLogger } from '../../shared/utils/logger';
 
 const log = createLogger('useUserMemberships');
 
+/** Options for {@link useUserMemberships}. */
 interface UseUserMembershipsOptions {
+  /** Tab whose content script fetches groups/rules; loading errors when undefined. */
   targetTabId: number | undefined;
 }
 
+/** Return shape of {@link useUserMemberships}. */
 interface UseUserMembershipsReturn {
   memberships: GroupMembership[];
   isLoading: boolean;
@@ -172,6 +185,11 @@ function analyzeMemberships(
  * - Fetches user's groups from Okta API
  * - Uses cached rules when available
  * - Analyzes membership types (DIRECT vs RULE_BASED)
+ *
+ * @param options - See `UseUserMembershipsOptions`.
+ * @returns `memberships` (each annotated with its inferred type), `isLoading`,
+ *   `error`, `loadMemberships(user)` to (re)load for a user, and
+ *   `clearMemberships` to reset.
  */
 export function useUserMemberships({
   targetTabId,

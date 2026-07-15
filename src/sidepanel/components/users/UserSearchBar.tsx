@@ -1,17 +1,29 @@
+/**
+ * @module sidepanel/components/users/UserSearchBar
+ * @description Controlled search input for user search, with inline spinner and clear button.
+ */
 import React, { useRef } from 'react';
 import { IconButton } from '../shared';
 
+/** Props for {@link UserSearchBar}. */
 interface UserSearchBarProps {
+  /** Current search text (controlled). */
   searchQuery: string;
+  /** Called with the new query on every keystroke. */
   onSearchChange: (query: string) => void;
+  /** Clears the query; also refocuses the input. */
   onClear: () => void;
+  /** When true, shows the inline loading spinner. */
   isSearching: boolean;
+  /** When true, shows the clear (×) button. */
   showClearButton: boolean;
+  /** Placeholder text; defaults to a generic email/name/login hint. */
   placeholder?: string;
 }
 
 /**
- * Search bar component for user search with loading indicator and clear button.
+ * Search bar for user search with an inline loading indicator and a clear button
+ * that refocuses the input.
  */
 const UserSearchBar: React.FC<UserSearchBarProps> = ({
   searchQuery,

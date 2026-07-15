@@ -1,18 +1,40 @@
+/**
+ * @module sidepanel/hooks/useGroupCopy
+ * @description Copies groups the compared user has onto the context user, one at a time.
+ *
+ * Backs the "add missing group" action in the user-comparison view: adds the context
+ * user to a chosen group, tracks which adds have succeeded, and enforces a global
+ * single-flight lock so only one add runs at a time.
+ */
+
 import { useState, useCallback } from 'react';
 import { useOktaApi } from './useOktaApi';
 import type { OktaUser, OktaGroup } from '../../shared/types';
 
+/** Inputs to {@link useGroupCopy}. */
 interface UseGroupCopyOptions {
+  /** Tab id of the Okta session to query through. */
   targetTabId: number;
+  /** The user that groups are being copied onto. */
   contextUser: OktaUser;
+  /** Invoked after each successful add so the parent can refetch group membership. */
   onGroupsChanged: () => void;
 }
 
+/** Value returned by {@link useGroupCopy}. */
 interface UseGroupCopyReturn {
+  /** Ids of groups successfully added during this session (for optimistic re-bucketing). */
   addedGroupIds: Set<string>;
+  /**
+   * Id of the group whose add is in flight, or `null`. This is a GLOBAL single-flight
+   * lock — gate every Add button on `disabled={addingGroupId !== null}`, not per-row.
+   */
   addingGroupId: string | null;
+  /** Error message from the last add, or `null`. */
   addError: string | null;
+  /** Setter for {@link UseGroupCopyReturn.addError} (lets the parent clear/set it). */
   setAddError: (v: string | null) => void;
+  /** Add the context user to `group`, updating added-ids/lock/error accordingly. */
   addGroup: (group: OktaGroup) => Promise<void>;
   /** Full reset (modal close): also clears the in-flight lock. */
   resetCopyState: () => void;

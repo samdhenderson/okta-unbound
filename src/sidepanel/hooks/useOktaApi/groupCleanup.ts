@@ -15,7 +15,15 @@ import { createLogger } from '../../../shared/utils/logger';
 const log = createLogger('useOktaApi');
 
 /**
- * Fetch all members of a group with pagination
+ * Fetch all members of a group, following `Link` pagination (200 per page).
+ *
+ * @param coreApi - Shared transport surface (see {@link CoreApi}).
+ * @param groupId - Group whose members to load.
+ * @param onApiCall - Increments the caller's API-call counter per page and returns
+ * the running total (surfaced through `onProgress`).
+ * @returns All members across all pages.
+ * @remarks Module-local variant of {@link getAllGroupMembers} that threads the
+ * cleanup operation's API-call accounting; throws on the first failed page.
  */
 async function fetchAllMembers(
   coreApi: CoreApi,
@@ -45,6 +53,15 @@ async function fetchAllMembers(
   return allMembers;
 }
 
+/**
+ * Build group-cleanup operations.
+ *
+ * @param coreApi - Shared transport surface (see {@link CoreApi}).
+ * @param removeUserFromGroup - Membership-removal primitive from
+ * `createGroupMemberOperations`; injected so cleanup can reuse it while
+ * suppressing per-user undo logging.
+ * @returns `{ removeDeprovisioned }`.
+ */
 export function createGroupCleanupOperations(
   coreApi: CoreApi,
   removeUserFromGroup: (
@@ -55,7 +72,17 @@ export function createGroupCleanupOperations(
   ) => Promise<RequestResult>,
 ) {
   /**
-   * Remove all deprovisioned users from a group
+   * Remove every `DEPROVISIONED` member from a group.
+   *
+   * @param groupId - Group to clean up.
+   * @remarks
+   * Refuses to modify `APP_GROUP`-type groups (membership is externally managed).
+   * Paginates all members, filters to `DEPROVISIONED`, and removes them one at a
+   * time with `skipUndoLog` set — logging a single aggregate undo action at the
+   * end via `logBulkRemoveAction`. Aborts the loop on the first `403` (likely a
+   * permissions wall). Honors {@link CoreApi.checkCancelled} between users, streams
+   * progress through the callbacks, and always writes an audit entry (success /
+   * partial / failed) in `finally`.
    */
   const removeDeprovisioned = async (groupId: string) => {
     const startTime = Date.now();

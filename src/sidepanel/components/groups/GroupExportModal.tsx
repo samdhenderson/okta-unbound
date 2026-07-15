@@ -1,3 +1,11 @@
+/**
+ * @module sidepanel/components/groups/GroupExportModal
+ * @description Modal for exporting a set of groups (a selection or a saved collection)
+ * to CSV, with column selection and an optional member-list export.
+ *
+ * The groups CSV honours the enabled columns; enabling "Include member list" fetches
+ * each group's members and writes a second CSV. Uses the shared csvUtils helpers.
+ */
 import React, { useState, useCallback } from 'react';
 import Modal from '../shared/Modal';
 import Button from '../shared/Button';
@@ -14,6 +22,7 @@ import { createLogger } from '../../../shared/utils/logger';
 
 const log = createLogger('GroupExportModal');
 
+/** A selectable CSV column with its toggle state. */
 interface ExportColumn {
   id: string;
   label: string;
@@ -22,12 +31,19 @@ interface ExportColumn {
 }
 
 interface GroupExportModalProps {
+  /** Whether the modal is visible. */
   isOpen: boolean;
+  /** Closes the modal. */
   onClose: () => void;
+  /** Groups included in the export. */
   groups: GroupSummary[];
+  /** Connected Okta tab id; export is blocked when null. */
   targetTabId: number | null;
+  /** Whether the source is an ad-hoc selection or a saved collection (affects filename). */
   exportType: 'selection' | 'collection';
+  /** Collection name, used for the title/filename when {@link GroupExportModalProps.exportType} is `collection`. */
   collectionName?: string;
+  /** Fetches a group's members for the optional member-list CSV. */
   onFetchMembers: (groupId: string) => Promise<OktaUser[]>;
 }
 
@@ -43,6 +59,10 @@ const DEFAULT_COLUMNS: ExportColumn[] = [
   { id: 'lastUpdated', label: 'Last Updated', enabled: false },
 ];
 
+/**
+ * Resolve a group's value for a given column id as a CSV-ready string.
+ * @returns The stringified field value, or `''` for an unknown column id.
+ */
 function getColumnValue(group: GroupSummary, columnId: string): string {
   switch (columnId) {
     case 'groupName':
@@ -68,6 +88,7 @@ function getColumnValue(group: GroupSummary, columnId: string): string {
   }
 }
 
+/** Modal for exporting groups (and optionally their members) to CSV. */
 const GroupExportModal: React.FC<GroupExportModalProps> = ({
   isOpen,
   onClose,

@@ -1,27 +1,52 @@
+/**
+ * @module sidepanel/components/overview/members/MemberFilterPanel
+ * @description Expandable panel of status, MFA-factor, and sort controls for the member list.
+ *
+ * Presentational: it reflects the active {@link MemberFilter} set into pressed
+ * pill states and reports every change (status toggles, per-factor has/missing
+ * modes, quick MFA counts, sort field/direction) via callbacks. MFA controls stay
+ * disabled until scan results are supplied.
+ */
 import React from 'react';
 import type { MemberMfaResult } from '../../../../shared/types';
 import FilterPill from '../../shared/FilterPill';
 import ActiveFilterChips from './ActiveFilterChips';
 import { type BreakdownRow, type MemberFilter, type SortField } from './memberAnalytics';
 
+/** Per-factor filter intent: unset, require-present, or require-absent. */
 type FactorMode = 'off' | 'has' | 'missing';
 
+/** Props for {@link MemberFilterPanel}. */
 interface MemberFilterPanelProps {
+  /** Active facet filters, reflected into pressed pill states. */
   filters: MemberFilter[];
-  statusRows: BreakdownRow[]; // status distribution (value + count)
+  /** Status distribution (value + count) used to build status pills. */
+  statusRows: BreakdownRow[];
+  /** Per-member MFA scan results, or null before a scan has run. */
   mfaResults: Map<string, MemberMfaResult> | null;
-  factorLabels: string[]; // observed factor labels
+  /** Observed factor labels across the group, for per-factor toggles. */
+  factorLabels: string[];
+  /** Current sort field. */
   sortBy: SortField;
+  /** Whether the current sort is descending. */
   sortDesc: boolean;
+  /** Toggle a status value as a filter. */
   onToggleStatus: (row: BreakdownRow) => void;
+  /** Clear all status filters. */
   onClearStatus: () => void;
+  /** Toggle a count-based MFA value (e.g. 'none', 'multiple'). */
   onToggleMfaValue: (value: string, label: string) => void;
+  /** Set a per-factor has/missing/off mode. */
   onSetFactorMode: (label: string, mode: FactorMode) => void;
+  /** Toggle the sort field (or flip direction if already selected). */
   onToggleSort: (field: SortField) => void;
+  /** Remove a single active filter. */
   onRemoveFilter: (filter: MemberFilter) => void;
+  /** Clear every active filter. */
   onClearAll: () => void;
 }
 
+/** A sort pill that shows a directional caret when its field is active. */
 const SortButton: React.FC<{
   field: SortField;
   label: string;
@@ -49,6 +74,7 @@ const SortButton: React.FC<{
   );
 };
 
+/** Renders the status / MFA-factor / sort controls for the member explorer. */
 const MemberFilterPanel: React.FC<MemberFilterPanelProps> = ({
   filters,
   statusRows,

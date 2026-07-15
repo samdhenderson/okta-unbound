@@ -1,16 +1,35 @@
+/**
+ * @module sidepanel/components/ContextBanner
+ * @description Banner summarising the Okta entity detected on the active tab.
+ *
+ * Shows the current group/user/app name, its id (or contextual guidance when
+ * absent), a loading/connected/error status indicator, and an "Edit in Okta"
+ * button that navigates the Okta tab to the entity's admin page. Colour scheme is
+ * derived from the page type using Odyssey tokens.
+ */
 import React from 'react';
 import { isOktaUrl } from '@/shared/utils/oktaUrl';
 
+/** Kind of Okta page the side panel has detected for the active tab. */
 type PageType = 'group' | 'user' | 'app' | 'admin' | 'unknown';
 
 interface ContextBannerProps {
+  /** Detected page type; drives labels, colour scheme, and the edit target URL. */
   pageType: PageType;
+  /** Display name of the detected entity, if resolved. */
   entityName?: string;
+  /** Okta id of the detected entity; presence gates the "Edit in Okta" button. */
   entityId?: string;
+  /** Whether page context is still being resolved. */
   isLoading: boolean;
+  /** Connection/context error message, or `null` when healthy. */
   error: string | null;
 }
 
+/**
+ * Renders the contextual header banner for the currently detected Okta entity,
+ * including a deep-link button into the Okta admin console for that entity.
+ */
 const ContextBanner: React.FC<ContextBannerProps> = ({
   pageType,
   entityName,
