@@ -19,6 +19,7 @@ import LoadingSpinner from './shared/LoadingSpinner';
 import type { OktaUser, GroupMembership } from '../../shared/types';
 import type { AlertMessageData } from './shared/AlertMessage';
 import { RulesCache } from '../../shared/rulesCache';
+import { analyzeMemberships } from '../../shared/utils/membershipAnalysis';
 import { useUserContext } from '../hooks/useUserContext';
 import { useOktaApi } from '../hooks/useOktaApi';
 import { createLogger } from '../../shared/utils/logger';
@@ -253,109 +254,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     } finally {
       setIsLoadingMemberships(false);
     }
-  };
-
-  /**
-   * IMPROVED: Better heuristics for determining membership attribution
-   *
-   * Okta API doesn't directly indicate if a user was added via rule or manually.
-   * We use advanced heuristics:
-   *
-   * 1. Check if ACTIVE rules exist for this group
-   * 2. Attempt basic rule condition evaluation (check attributes referenced in rule)
-   * 3. For groups with rules:
-   *    - If user attributes match patterns in rule, likely RULE_BASED
-   *    - If user attributes don't match AND rule uses specific attributes, likely DIRECT
-   * 4. For APP_GROUP types, always RULE_BASED (managed by application)
-   * 5. For groups without rules, DIRECT
-   */
-  const analyzeMemberships = (groups: any[], rules: any[], user: OktaUser): GroupMembership[] => {
-    log.debug('Analyzing memberships for user:', user.id);
-    log.debug(
-      'Total rules:',
-      rules.length,
-      'Active rules:',
-      rules.filter((r: any) => r.status === 'ACTIVE').length,
-    );
-    log.debug('Total groups:', groups.length);
-
-    return groups.map((group) => {
-      // APP_GROUPs are always managed by the application (rule-based)
-      if (group.type === 'APP_GROUP') {
-        log.debug(`Group ${group.id}: APP_GROUP (application managed)`);
-        return {
-          group: group,
-          membershipType: 'RULE_BASED' as const,
-          rule: undefined,
-        };
-      }
-
-      // Find ACTIVE rules that assign users to this group
-      const matchingRules = rules.filter((rule: any) => {
-        if (rule.status !== 'ACTIVE') return false;
-        const groupIds = rule.groupIds || rule.actions?.assignUserToGroups?.groupIds || [];
-        return groupIds.includes(group.id);
-      });
-
-      log.debug(`Group ${group.id}: Found ${matchingRules.length} active rules`);
-
-      if (matchingRules.length === 0) {
-        // No active rules for this group - must be direct assignment
-        log.debug(`Group ${group.id}: DIRECT (no active rules)`);
-        return {
-          group: group,
-          membershipType: 'DIRECT' as const,
-          rule: undefined,
-        };
-      }
-
-      // Try to evaluate which rule might have added the user
-      let bestMatchRule = matchingRules[0];
-      let confidence = 'low';
-
-      for (const rule of matchingRules) {
-        // Extract user attributes from rule condition
-        const condition = rule.conditionExpression || rule.conditions?.expression?.value || '';
-        const userAttrs = rule.userAttributes || [];
-
-        // Basic heuristic: check if referenced attributes exist in user profile
-        let attributesMatch = 0;
-        let attributesChecked = 0;
-
-        for (const attr of userAttrs) {
-          attributesChecked++;
-          const userValue = user.profile[attr];
-
-          // If attribute exists and is non-empty, it's a potential match
-          if (userValue !== undefined && userValue !== null && userValue !== '') {
-            // Check if the condition references this attribute value
-            const valueStr = String(userValue).toLowerCase();
-            const conditionLower = condition.toLowerCase();
-
-            if (conditionLower.includes(valueStr) || conditionLower.includes(`"${valueStr}"`)) {
-              attributesMatch++;
-            }
-          }
-        }
-
-        // If we found attribute matches, this rule is more likely
-        if (attributesChecked > 0 && attributesMatch >= attributesChecked * 0.5) {
-          bestMatchRule = rule;
-          confidence = attributesMatch === attributesChecked ? 'high' : 'medium';
-          break;
-        }
-      }
-
-      log.debug(
-        `Group ${group.id}: RULE_BASED (rule: ${bestMatchRule.id}, confidence: ${confidence})`,
-      );
-
-      return {
-        group: group,
-        membershipType: 'RULE_BASED' as const,
-        rule: bestMatchRule,
-      };
-    });
   };
 
   // Live search with debouncing - trigger search as user types
