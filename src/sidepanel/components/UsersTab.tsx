@@ -20,6 +20,7 @@ import type { OktaUser } from '../../shared/types';
 import type { AlertMessageData } from './shared/AlertMessage';
 import { useUserContext } from '../hooks/useUserContext';
 import { useUserMemberships } from '../hooks/useUserMemberships';
+import { useUsersTabSearch } from '../hooks/useUsersTabSearch';
 import { useOktaApi } from '../hooks/useOktaApi';
 import { createLogger } from '../../shared/utils/logger';
 
@@ -52,18 +53,14 @@ interface GroupSearchResult {
  */
 const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavigateToRule }) => {
   const { userInfo, isLoading: isLoadingUserContext, oktaOrigin } = useUserContext();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
   const [isLoadingMemberships, setIsLoadingMemberships] = useState(false);
   const [selectedUser, setSelectedUser] = useState<OktaUser | null>(null);
-  const [searchResults, setSearchResults] = useState<OktaUser[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [resultMessage, setResultMessage] = useState<AlertMessageData | null>(null);
   const [pendingLifecycleAction, setPendingLifecycleAction] = useState<LifecycleAction | null>(
     null,
   );
   const [isLifecycleLoading, setIsLifecycleLoading] = useState(false);
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [hasAutoLoadedUser, setHasAutoLoadedUser] = useState<string | null>(null);
 
   // Add to Group modal state
@@ -91,46 +88,17 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     onLoadingChange: setIsLoadingMemberships,
   });
 
-  const handleSearch = useCallback(async () => {
-    if (!targetTabId) {
-      setError('No Okta tab connected');
-      return;
-    }
-
-    if (!searchQuery.trim()) {
-      setError('Please enter a search query');
-      return;
-    }
-
-    setIsSearching(true);
-    setError(null);
+  // Debounced user search. The raw `searchUsers` read path (a §8-preserved
+  // scheduler bypass) lives in the hook; a fresh search clears the selected user
+  // and its memberships via `onSearchStart` and reports failures through the tab's
+  // single merged `error` channel.
+  const onSearchStart = useCallback(() => {
     setSelectedUser(null);
     clearMemberships();
+  }, [clearMemberships]);
 
-    try {
-      log.debug('Searching for users', { queryLength: searchQuery.trim().length });
-
-      const response = await chrome.tabs.sendMessage(targetTabId, {
-        action: 'searchUsers',
-        query: searchQuery.trim(),
-      });
-
-      if (response.success) {
-        setSearchResults(response.data || []);
-        log.debug('Found users:', response.data?.length);
-      } else {
-        setError(response.error || 'Failed to search users');
-        setSearchResults([]);
-      }
-    } catch (err: unknown) {
-      const error = err as Error;
-      setError(error.message || 'Failed to communicate with Okta tab');
-      setSearchResults([]);
-      log.error('Search error:', err);
-    } finally {
-      setIsSearching(false);
-    }
-  }, [targetTabId, searchQuery, clearMemberships]);
+  const { searchQuery, setSearchQuery, searchResults, setSearchResults, isSearching } =
+    useUsersTabSearch({ targetTabId, onError: setError, onSearchStart });
 
   const handleSelectUser = async (user: OktaUser) => {
     if (!targetTabId) return;
@@ -138,38 +106,6 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     setSelectedUser(user);
     await loadMemberships(user);
   };
-
-  // Live search with debouncing - trigger search as user types
-  useEffect(() => {
-    // Clear any existing timer
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-
-    // Don't search if query is empty or too short
-    if (searchQuery.trim().length === 0) {
-      setSearchResults([]);
-      setError(null);
-      return;
-    }
-
-    // Don't search if query is too short (minimum 2 characters for efficiency)
-    if (searchQuery.trim().length < 2) {
-      return;
-    }
-
-    // Debounce the search - wait 600ms after user stops typing
-    debounceTimerRef.current = setTimeout(() => {
-      handleSearch();
-    }, 600);
-
-    // Cleanup function
-    return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-    };
-  }, [searchQuery, targetTabId, handleSearch]);
 
   // Auto-load detected user from page context
   useEffect(() => {

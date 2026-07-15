@@ -111,6 +111,7 @@ export default [
       'src/sidepanel/hooks/useOktaApi/core.ts',
       'src/sidepanel/hooks/useOktaTabContext.ts',
       'src/sidepanel/hooks/useUserSearch.ts',
+      'src/sidepanel/hooks/useUsersTabSearch.ts',
       'src/sidepanel/hooks/useUserMemberships.ts',
       'src/sidepanel/components/overview/UserOverview.tsx',
       // GroupsTab's live search moved into this hook during its §7 decomposition;
