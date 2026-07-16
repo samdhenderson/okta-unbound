@@ -1,8 +1,7 @@
 # Plan: Unified Activity Bar + working cancellation
 
-Status: **implemented** (see ADR-0008) · Owner: side-panel · Replaced `LoadingBar`
-
-- `SchedulerStatusBar` with a single `ActivityBar`.
+Status: **implemented** (see ADR-0008) · Owner: side-panel · Replaced the
+`LoadingBar` + `SchedulerStatusBar` pair with a single `ActivityBar`.
 
 ## Problem
 
@@ -116,6 +115,3 @@ hook.
   `useOktaApi.ts`, operation drivers (`groupBulkOps`, `groupCleanup`, exports,
   `useGroupMerge`), `ProgressContext`/`SchedulerContext` as needed.
 - Remove: `LoadingBar.tsx`, `SchedulerStatusBar.tsx` (after `ActivityBar` lands).
-</content>
-
-</invoke>
