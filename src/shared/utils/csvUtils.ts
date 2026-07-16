@@ -29,7 +29,12 @@ export function formatDateForCSV(date: Date | string | null | undefined): string
  * Escape a single value for safe inclusion in a CSV field.
  *
  * Values containing a comma, newline, or double quote are wrapped in double
- * quotes with embedded quotes doubled, per RFC 4180.
+ * quotes with embedded quotes doubled, per RFC 4180. String values beginning
+ * with a formula trigger character (`=`, `+`, `-`, `@`, tab, or CR) are
+ * prefixed with a single quote so spreadsheet apps render them as text instead
+ * of executing them as formulas (CSV/formula injection). Exports contain
+ * Okta profile data that end users control, so every cell must go through
+ * this function.
  *
  * @param value - The cell value to escape; nullish becomes an empty field.
  * @returns The escaped field string.
@@ -37,11 +42,17 @@ export function formatDateForCSV(date: Date | string | null | undefined): string
  * @example
  * escapeCSV('a,b');   // => '"a,b"'
  * escapeCSV('he "x"'); // => '"he ""x"""'
+ * escapeCSV('=SUM(A1)'); // => "'=SUM(A1)"
  * escapeCSV(null);     // => ''
  */
 export function escapeCSV(value: string | number | boolean | null | undefined): string {
   if (value === null || value === undefined) return '';
-  const stringValue = String(value);
+  let stringValue = String(value);
+  // Neutralize spreadsheet formula injection. Only string inputs are prefixed
+  // so numeric cells (e.g. -5) stay numeric.
+  if (typeof value === 'string' && /^[=+\-@\t\r]/.test(stringValue)) {
+    stringValue = `'${stringValue}`;
+  }
   // Escape double quotes and wrap in quotes if contains comma, newline, or quote
   if (stringValue.includes(',') || stringValue.includes('\n') || stringValue.includes('"')) {
     return `"${stringValue.replace(/"/g, '""')}"`;

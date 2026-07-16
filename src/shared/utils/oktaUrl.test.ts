@@ -13,6 +13,24 @@ describe('isOktaUrl', () => {
     expect(isOktaUrl('https://notokta.evil.com')).toBe(false);
   });
 
+  it('rejects lookalike hosts and URLs that merely contain an Okta domain', () => {
+    expect(isOktaUrl('https://okta.com.evil.com/')).toBe(false);
+    expect(isOktaUrl('https://evilokta.com/')).toBe(false);
+    expect(isOktaUrl('https://evil.com/?redirect=okta.com')).toBe(false);
+    expect(isOktaUrl('https://evil.com/acme.okta.com')).toBe(false);
+  });
+
+  it('accepts the bare Okta apex domains', () => {
+    expect(isOktaUrl('https://okta.com/')).toBe(true);
+    expect(isOktaUrl('https://oktapreview.com/')).toBe(true);
+  });
+
+  it('rejects non-HTTPS and unparseable input', () => {
+    expect(isOktaUrl('http://acme.okta.com/admin')).toBe(false);
+    expect(isOktaUrl('acme.okta.com')).toBe(false);
+    expect(isOktaUrl('not a url')).toBe(false);
+  });
+
   it('tolerates null/undefined/empty input', () => {
     expect(isOktaUrl(null)).toBe(false);
     expect(isOktaUrl(undefined)).toBe(false);
