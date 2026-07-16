@@ -8,7 +8,7 @@
  * flow, and per-group membership attribution (rule-based vs. direct) computed by
  * `analyzeMemberships`. Security-sensitive profile fields are never shown.
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import PageHeader from './shared/PageHeader';
 import AlertMessage from './shared/AlertMessage';
 import Button from './shared/Button';
@@ -33,6 +33,14 @@ interface UsersTabProps {
   currentGroupId?: string;
   /** Navigates to the Rules tab and deep-links to the rule that added a membership. */
   onNavigateToRule?: (ruleId: string) => void;
+  /**
+   * One-shot request to open a specific user (e.g. from the Overview's "View all
+   * groups"): the tab fetches that user + their memberships, then calls
+   * {@link UsersTabProps.onUserSelected} to clear the request.
+   */
+  selectedUserId?: string | null;
+  /** Invoked once {@link UsersTabProps.selectedUserId} has been consumed. */
+  onUserSelected?: () => void;
 }
 
 /**
@@ -40,7 +48,13 @@ interface UsersTabProps {
  * collapsible sections, lifecycle actions, the Add-to-Group modal, and the analysed
  * group-membership list.
  */
-const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavigateToRule }) => {
+const UsersTab: React.FC<UsersTabProps> = ({
+  targetTabId,
+  currentGroupId,
+  onNavigateToRule,
+  selectedUserId,
+  onUserSelected,
+}) => {
   const { userInfo, oktaOrigin } = useUserContext();
   const [isLoadingMemberships, setIsLoadingMemberships] = useState(false);
   const [selectedUser, setSelectedUser] = useState<OktaUser | null>(null);
@@ -100,7 +114,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     setSearchQuery('');
   }, [setSearchResults, setSearchQuery]);
 
-  const { loadDetectedUser } = useDetectedUser({
+  const { loadDetectedUser, loadUserById } = useDetectedUser({
     targetTabId,
     detectedUserId: userInfo?.userId,
     loadMemberships,
@@ -109,6 +123,21 @@ const UsersTab: React.FC<UsersTabProps> = ({ targetTabId, currentGroupId, onNavi
     onLoadingChange: setIsLoadingMemberships,
     onResetSearch,
   });
+
+  // Fulfil a one-shot `selectedUserId` request (e.g. Overview's "View all groups")
+  // exactly once — load that user + memberships, then clear the request so it can
+  // fire again for a repeat navigation.
+  const requestedUserRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedUserId) {
+      requestedUserRef.current = null;
+      return;
+    }
+    if (selectedUserId === requestedUserRef.current) return;
+    requestedUserRef.current = selectedUserId;
+    loadUserById(selectedUserId);
+    onUserSelected?.();
+  }, [selectedUserId, loadUserById, onUserSelected]);
 
   // Show the detected-user banner only when the page's user differs from the one
   // explicitly selected and hasn't been dismissed — never while searching.

@@ -26,9 +26,9 @@ interface UserOverviewProps {
   userName?: string;
   /** Browser tab hosting the Okta session; every API call is routed to it. */
   targetTabId: number;
-  /** Switch the side panel to the users tab (e.g. to view full memberships). */
-  onTabChange: (tab: 'users') => void;
-  /** Okta org origin, used to build Admin Console deep links (null when unknown). */
+  /** Open this user in the Users tab with their full membership list loaded. */
+  onViewAllGroups: () => void;
+  /** Okta org origin (unused for links here — the overview omits the Okta deep link). */
   oktaOrigin?: string | null;
 }
 
@@ -39,7 +39,7 @@ interface UserOverviewProps {
 const UserOverview: React.FC<UserOverviewProps> = ({
   userId,
   targetTabId,
-  onTabChange,
+  onViewAllGroups,
   oktaOrigin,
 }) => {
   const [isCompareOpen, setIsCompareOpen] = useState(false);
@@ -126,6 +126,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
           groupCount={totalGroups}
           showCollapsibleSections={false}
           oktaOrigin={oktaOrigin}
+          showOktaLink={false}
         />
       )}
 
@@ -161,8 +162,8 @@ const UserOverview: React.FC<UserOverviewProps> = ({
               variant="secondary"
               size="sm"
               icon="list"
-              onClick={() => onTabChange('users')}
-              title="See the full list of group memberships"
+              onClick={onViewAllGroups}
+              title="Open this user in the Users tab with all groups loaded"
             >
               View all
             </Button>
@@ -214,7 +215,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
             {totalGroups > PREVIEW_LIMIT && (
               <button
                 type="button"
-                onClick={() => onTabChange('users')}
+                onClick={onViewAllGroups}
                 className="mt-3 w-full text-center text-xs font-medium text-primary-text hover:underline"
               >
                 Showing {PREVIEW_LIMIT} of {totalGroups} — view all

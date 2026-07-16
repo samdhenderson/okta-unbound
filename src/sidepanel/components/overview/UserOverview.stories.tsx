@@ -35,7 +35,7 @@ const meta = {
     userId: 'user1',
     userName: 'Ada Lovelace',
     targetTabId: 1,
-    onTabChange: fn(),
+    onViewAllGroups: fn(),
     oktaOrigin: 'https://example.okta.com',
   },
 } satisfies Meta<typeof UserOverview>;

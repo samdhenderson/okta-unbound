@@ -41,6 +41,12 @@ interface UseDetectedUserReturn {
    * their memberships. No-op when there is no detected user / connected tab.
    */
   loadDetectedUser: () => Promise<void>;
+  /**
+   * Load an explicit user id into the tab (fetch details, select, load memberships).
+   * Used to fulfil a deep link such as the Overview's "View all groups". No-op when
+   * no tab is connected or `userId` is empty.
+   */
+  loadUserById: (userId: string) => Promise<void>;
 }
 
 /**
@@ -69,40 +75,48 @@ export function useDetectedUser({
   });
   depsRef.current = { loadMemberships, onSelectUser, onError, onLoadingChange, onResetSearch };
 
-  const loadDetectedUser = useCallback(async () => {
-    if (!targetTabId || !detectedUserId) return;
+  const loadUserById = useCallback(
+    async (userId: string) => {
+      if (!targetTabId || !userId) return;
 
-    const { loadMemberships, onSelectUser, onError, onLoadingChange, onResetSearch } =
-      depsRef.current;
+      const { loadMemberships, onSelectUser, onError, onLoadingChange, onResetSearch } =
+        depsRef.current;
 
-    log.debug('Loading detected user on request:', detectedUserId);
-    onLoadingChange(true);
-    onError(null);
-    onResetSearch(); // Clear search results + query when loading the detected user.
+      log.debug('Loading user on request:', userId);
+      onLoadingChange(true);
+      onError(null);
+      onResetSearch(); // Clear search results + query when loading a specific user.
 
-    try {
-      // First fetch user details
-      const userResponse = await chrome.tabs.sendMessage(targetTabId, {
-        action: 'getUserDetails',
-        userId: detectedUserId,
-      });
+      try {
+        // First fetch user details
+        const userResponse = await chrome.tabs.sendMessage(targetTabId, {
+          action: 'getUserDetails',
+          userId,
+        });
 
-      if (!userResponse.success) {
-        throw new Error(userResponse.error || 'Failed to fetch user details');
+        if (!userResponse.success) {
+          throw new Error(userResponse.error || 'Failed to fetch user details');
+        }
+
+        const user: OktaUser = userResponse.data;
+        onSelectUser(user);
+
+        // Then load memberships (drives isLoadingMemberships/error via callbacks).
+        await loadMemberships(user);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to load user';
+        onSelectUser(null);
+        onError(message);
+        onLoadingChange(false);
       }
+    },
+    [targetTabId],
+  );
 
-      const user: OktaUser = userResponse.data;
-      onSelectUser(user);
+  const loadDetectedUser = useCallback(async () => {
+    if (!detectedUserId) return;
+    await loadUserById(detectedUserId);
+  }, [detectedUserId, loadUserById]);
 
-      // Then load memberships (drives isLoadingMemberships/error via callbacks).
-      await loadMemberships(user);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to load detected user';
-      onSelectUser(null);
-      onError(message);
-      onLoadingChange(false);
-    }
-  }, [targetTabId, detectedUserId]);
-
-  return { loadDetectedUser };
+  return { loadDetectedUser, loadUserById };
 }

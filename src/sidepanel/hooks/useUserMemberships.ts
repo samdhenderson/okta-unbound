@@ -98,6 +98,10 @@ export function useUserMemberships({
         const cached = peek<GroupMembership[]>(['userMemberships', user.id]);
         if (cached) {
           setMemberships(cached);
+          // Own the loading lifecycle fully: a caller (e.g. the Users tab's detected-
+          // user "Load") may have flipped loading on before calling us, so clear it
+          // here too — otherwise a cache hit leaves the spinner stuck on forever.
+          reportLoading(false);
           return;
         }
       }

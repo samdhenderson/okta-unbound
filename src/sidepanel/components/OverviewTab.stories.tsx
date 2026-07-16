@@ -33,6 +33,7 @@ const meta = {
     isLoading: false,
     oktaOrigin: 'https://example.okta.com',
     onRetry: fn(),
+    onViewAllGroups: fn(),
   },
 } satisfies Meta<typeof OverviewTab>;
 

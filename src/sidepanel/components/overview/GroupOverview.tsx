@@ -13,7 +13,7 @@ import { useEntityQuery } from '../../cache/useEntityQuery';
 import { peek, setEntry, invalidate } from '../../cache/entityCache';
 import { useProgress } from '../../contexts/ProgressContext';
 import AlertMessage from '../shared/AlertMessage';
-import { Button, Modal, OpenInOktaLink } from '../shared';
+import { Button, Modal } from '../shared';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import StatCard from './shared/StatCard';
 import MemberExplorer from './members/MemberExplorer';
@@ -227,14 +227,9 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
         />
       </div>
 
-      {/* Secondary navigation + Admin Console link (group id lives in the context bar) */}
+      {/* Secondary navigation (you're already on this group's page, so no Okta link;
+          the group id lives in the context bar). */}
       <div className="flex flex-wrap items-center gap-2">
-        <OpenInOktaLink
-          oktaOrigin={oktaOrigin}
-          entityType="group"
-          entityId={groupId}
-          label="Open in Admin Console"
-        />
         <Button
           variant="secondary"
           size="sm"

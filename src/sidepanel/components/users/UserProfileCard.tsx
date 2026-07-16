@@ -27,6 +27,12 @@ interface UserProfileCardProps {
   /** Okta origin used to build the "Open in Okta" admin link; the link is hidden when absent. */
   oktaOrigin?: string | null;
   /**
+   * Whether to render the "Open in Okta" deep link. Defaults to `true`. The
+   * Overview passes `false` — you're already on that entity's page, so the link is
+   * redundant there.
+   */
+  showOktaLink?: boolean;
+  /**
    * Optional content rendered between the summary card and the collapsible sections
    * (e.g. UsersTab's lifecycle-action controls). Renders regardless of
    * `showCollapsibleSections`.
@@ -44,6 +50,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
   groupCount = 0,
   showCollapsibleSections = true,
   oktaOrigin,
+  showOktaLink = true,
   afterCard,
 }) => {
   const [idCopied, setIdCopied] = useState(false);
@@ -144,7 +151,9 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
             {/* Status Badge + Admin Console Link */}
             <div className="shrink-0 flex flex-col items-end gap-2">
               <span className={getStatusBadgeClass(user.status)}>{user.status}</span>
-              <OpenInOktaLink oktaOrigin={oktaOrigin} entityType="user" entityId={user.id} />
+              {showOktaLink && (
+                <OpenInOktaLink oktaOrigin={oktaOrigin} entityType="user" entityId={user.id} />
+              )}
             </div>
           </div>
         </div>

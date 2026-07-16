@@ -39,6 +39,8 @@ interface OverviewTabProps {
   oktaOrigin: string | null;
   /** Re-detect the live context (used by the disconnected retry action). */
   onRetry: () => void;
+  /** Open the current user in the Users tab with all groups loaded. */
+  onViewAllGroups: () => void;
 }
 
 /**
@@ -57,6 +59,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
   isLoading,
   oktaOrigin,
   onRetry,
+  onViewAllGroups,
 }) => {
   if (isLoading) {
     return (
@@ -106,7 +109,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
             userId={userInfo.userId}
             userName={userInfo.userName}
             targetTabId={targetTabId}
-            onTabChange={onTabChange}
+            onViewAllGroups={onViewAllGroups}
             oktaOrigin={oktaOrigin}
           />
         )}

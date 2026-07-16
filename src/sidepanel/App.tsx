@@ -55,6 +55,9 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  // A one-shot request to open a specific user in the Users tab (e.g. from the
+  // Overview's "View all groups"); cleared by the tab once consumed.
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   // The pinned snapshot (null = following the live tab). Persisted across reopen.
   const [pinned, setPinned] = useState<PinnedContext | null>(null);
   const isPinned = pinned !== null;
@@ -187,6 +190,12 @@ const App: React.FC = () => {
     chrome.storage.local.set({ [SELECTED_TAB_KEY]: 'groups' });
   };
 
+  const handleNavigateToUser = (userId: string) => {
+    setSelectedUserId(userId);
+    setActiveTab('users');
+    chrome.storage.local.set({ [SELECTED_TAB_KEY]: 'users' });
+  };
+
   return (
     <SchedulerProvider>
       <div className="flex flex-col h-screen overflow-y-auto pb-14 bg-canvas">
@@ -220,6 +229,9 @@ const App: React.FC = () => {
             isLoading={effective.isLoading}
             oktaOrigin={effective.oktaOrigin}
             onRetry={page.refetch}
+            onViewAllGroups={() => {
+              if (effective.userInfo) handleNavigateToUser(effective.userInfo.userId);
+            }}
           />
         )}
         {activeTab === 'rules' && (
@@ -237,6 +249,8 @@ const App: React.FC = () => {
             targetTabId={targetTabId ?? undefined}
             currentGroupId={groupInfo?.groupId}
             onNavigateToRule={handleNavigateToRule}
+            selectedUserId={selectedUserId}
+            onUserSelected={() => setSelectedUserId(null)}
           />
         )}
         {activeTab === 'groups' && (
