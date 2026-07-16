@@ -59,3 +59,7 @@ manifest.v2.json
 *.bak
 *.backup
 *~.nib
+
+*storybook.log
+storybook-static
+.storybook/generated

@@ -32,3 +32,39 @@ jobs:
         run: npm run test:run
       # Coverage gate (npm run test:coverage, thresholds 80/75) is added here once
       # component tests land (Phase 4). Enabling it now would fail on legacy debt.
+
+  # Component explorer build gate (ADR-0010). Runs in parallel with `verify` (no
+  # `needs:`), so it never delays the fast lint/type/test feedback. A broken or
+  # mis-imported story fails the PR.
+  storybook:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Storybook build cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/storybook
+          key: storybook-${{ hashFiles('package-lock.json', '.storybook/**') }}
+          restore-keys: |
+            storybook-
+
+      - name: Build Storybook
+        run: npm run build-storybook -- --quiet
+
+      # Run every story as a headless-browser render test (9 have play/assert fns).
+      # VITEST_BROWSER_EXECUTABLE is intentionally unset here so Playwright uses the
+      # browser installed below (the pinned-sandbox path only exists locally).
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Story browser tests
+        run: npm run test:storybook

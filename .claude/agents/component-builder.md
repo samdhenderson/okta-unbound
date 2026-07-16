@@ -35,5 +35,6 @@ You build and edit React components for this Chrome MV3 side panel to spec.
 
 `npm run type-check` and `npm run lint` are clean; the component is exported from the
 barrel; it carries its TypeDoc header + prop-level comments; a Testing Library test
-exists (delegate to `test-writer` or write it). Run `npx prettier --write` on touched
-files.
+exists (delegate to `test-writer` or write it); a co-located `.stories.tsx` exists
+(Template A/B per `docs/component-explorer.md`) for a new or changed `shared`/leaf
+component. Run `npx prettier --write` on touched files.

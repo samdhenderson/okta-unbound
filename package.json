@@ -8,18 +8,21 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist/",
-    "test": "vitest",
+    "test": "vitest --project unit",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest run --coverage",
-    "test:run": "vitest run",
+    "test:coverage": "vitest run --project unit --coverage",
+    "test:run": "vitest run --project unit",
+    "test:storybook": "vitest run --project storybook",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives",
     "lint:fix": "eslint src --ext ts,tsx --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"*.{json,js,ts}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"*.{json,js,ts}\"",
     "prepare": "husky",
-    "docs": "typedoc",
-    "docs:clean": "rm -rf docs/api"
+    "docs": "typedoc && node .storybook/scripts/bundle-internals.mjs",
+    "docs:clean": "rm -rf .storybook/generated",
+    "storybook": "node .storybook/scripts/gen-doc-pages.mjs && storybook dev -p 6006",
+    "build-storybook": "npm run docs && node .storybook/scripts/gen-doc-pages.mjs && storybook build"
   },
   "keywords": [
     "okta",
@@ -38,6 +41,10 @@
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.2.1",
     "@eslint/js": "^9.39.1",
+    "@storybook/addon-a11y": "^10.5.2",
+    "@storybook/addon-docs": "^10.5.2",
+    "@storybook/addon-vitest": "^10.5.2",
+    "@storybook/react-vite": "^10.5.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
@@ -47,6 +54,7 @@
     "@typescript-eslint/eslint-plugin": "^8.47.0",
     "@typescript-eslint/parser": "^8.47.0",
     "@vitejs/plugin-react": "^5.1.1",
+    "@vitest/browser-playwright": "4.0.10",
     "@vitest/coverage-v8": "^4.0.10",
     "@vitest/ui": "^4.0.10",
     "esbuild": "^0.19.0",
@@ -60,8 +68,12 @@
     "jsdom": "^27.2.0",
     "lint-staged": "^16.2.6",
     "msw": "^2.12.2",
+    "playwright": "^1.61.1",
     "prettier": "^3.4.2",
+    "storybook": "^10.5.2",
+    "storybook-addon-pseudo-states": "^10.5.2",
     "typedoc": "^0.28.15",
+    "typedoc-plugin-markdown": "^4.12.0",
     "typescript": "^5.9.3",
     "vite": "^7.2.2",
     "vitest": "^4.0.10"
@@ -89,7 +101,7 @@
     "*.{ts,tsx}": [
       "eslint --fix",
       "prettier --write",
-      "vitest related --run"
+      "vitest related --run --project unit"
     ],
     "*.{json,css,md}": [
       "prettier --write"

@@ -134,6 +134,15 @@ export default [
       'no-console': 'off',
     },
   },
+  // Storybook stories: CSF requires a default export (the `meta`) alongside the
+  // named story exports, which trips react-refresh/only-export-components. Disable
+  // it for stories (mirrors the test-file override). See docs/component-explorer.md.
+  {
+    files: ['**/*.stories.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
   // Disable ESLint rules that conflict with Prettier (must be last).
   prettier,
 ];
