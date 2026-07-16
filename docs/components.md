@@ -55,6 +55,10 @@ barrel (`../shared`), not deep paths.
 - Build a new shared component only for a genuinely new primitive; put it in
   `shared/`, follow the variant/size convention, add it to the barrel, and note it
   here. Delegate this to the `component-builder` agent.
+- New or changed `shared`/leaf components ship a co-located `.stories.tsx` — see
+  [component-explorer.md](./component-explorer.md) for the two templates. Use
+  Storybook to develop and visually review the component in isolation before
+  wiring it into a feature.
 - Composition over configuration: large feature UIs (e.g. a comparison modal) are
   built by composing primitives, and should be split into subcomponents rather than
   growing past ~300 lines (see [state-management.md](./state-management.md)).

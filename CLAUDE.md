@@ -20,7 +20,9 @@ npm run lint          # eslint (0 errors required; warnings are legacy debt)
 npm run format        # prettier --write
 npm run test:run      # vitest once
 npm run test:coverage # coverage (thresholds 80/75)
-npm run docs          # regenerate docs/api (TypeDoc from source comments)
+npm run docs             # regenerate docs/api (TypeDoc from source comments)
+npm run storybook        # component explorer dev server (:6006)
+npm run build-storybook  # static Storybook build (CI gate)
 ```
 
 ## Message-passing model (the one thing to know)
@@ -52,6 +54,8 @@ Details: `docs/architecture.md`.
 - **Document exports with TypeDoc JSDoc.** Every module opens with a
   `@module`/`@description` header; exported functions/hooks/components/types get doc
   comments (feeds `npm run docs`). (`docs/development.md`)
+- **Every new/changed `shared` or leaf feature component ships a co-located
+  `.stories.tsx`.** (`docs/component-explorer.md`)
 
 ## Routing table — read ONLY the matching row(s)
 
@@ -59,6 +63,7 @@ Details: `docs/architecture.md`.
 | ---------------------------------------------- | -------------------------------------------------- | --------------------------- |
 | Styling / colors / tokens / typography         | `docs/design-system.md`                            | `ui-reviewer`               |
 | Building / using a shared component            | `docs/components.md`, `docs/design-system.md`      | `component-builder`         |
+| Building / exploring a component visually      | `docs/component-explorer.md`                       | `component-builder`         |
 | Modal / a11y / loading-empty-error UX          | `docs/ux-guidelines.md`                            | `ui-reviewer`               |
 | Refactoring a god component / pipeline / hooks | `docs/architecture.md`, `docs/state-management.md` | `architecture-refactor`     |
 | Adding / fixing tests                          | `docs/testing.md`                                  | `test-writer`               |

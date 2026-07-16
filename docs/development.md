@@ -13,6 +13,8 @@
 | `npm run test:coverage`     | Coverage against 80/75 thresholds                      |
 | `npm run docs`              | Regenerate `docs/api/` (TypeDoc from source comments)  |
 | `npm run docs:clean`        | Delete the generated `docs/api/`                       |
+| `npm run storybook`         | Component explorer dev server (`:6006`)                |
+| `npm run build-storybook`   | Static Storybook build (`storybook-static/`, CI gate)  |
 
 ## Logging policy (hard rule)
 
@@ -57,7 +59,9 @@ the same change — treat it like the type-check gate, not a follow-up.
 - **Husky + lint-staged** run `eslint --fix`, `prettier --write`, and
   `vitest related --run` on staged `*.{ts,tsx}`.
 - **PR CI** (`.github/workflows/ci.yml`, ADR-0005) runs lint (`--max-warnings=0`) +
-  type-check + test + coverage on every PR. Green CI is required to merge.
+  type-check + test + coverage on every PR, plus a parallel `build-storybook` job
+  (ADR-0010) — a story that fails to type-check or build fails the PR. Green CI is
+  required to merge.
 - `beta-release.yml` remains tag-triggered for releases — don't repurpose it for PRs.
 
 ## Versioning
