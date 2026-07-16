@@ -9,12 +9,7 @@ import UsersTab from './UsersTab';
 const meta = {
   title: 'Components/UsersTab',
   component: UsersTab,
-  // `!test` excludes UsersTab from the Vitest browser runner while keeping it in
-  // the explorer + autodocs. UsersTab is the heaviest still-undecomposed god
-  // component (refactoring-plan §7); its mount-time async + debounce timers
-  // destabilise the headless browser test (the page closes mid-run). Re-enable
-  // once §7 decomposes it into testable pieces.
-  tags: ['autodocs', '!test'],
+  tags: ['autodocs'],
   parameters: { layout: 'fullscreen' },
   args: {
     targetTabId: 1,

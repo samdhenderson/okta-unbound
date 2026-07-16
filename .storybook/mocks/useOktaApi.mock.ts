@@ -96,8 +96,21 @@ export function makeUseOktaApiValue(overrides: UseOktaApiValue = {}): UseOktaApi
 }
 
 /**
- * The mocked `useOktaApi` hook. Aliased in over the real facade. Returns the
- * benign default value; override per-story with
- * `useOktaApi.mockReturnValue(makeUseOktaApiValue({ ... }))`.
+ * A single benign default value, built once. The real `useOktaApi` facade returns
+ * one *memoized* object whose operation identities are STABLE across renders; the
+ * mock must honour that contract. If the default implementation instead built a
+ * fresh object on every call, every op (e.g. `searchGroups`) would get a new
+ * identity each render — and any consumer effect that lists an op in its dependency
+ * array (e.g. `useAddToGroup`'s debounced group search) would re-run + setState on
+ * every render, looping until React throws "Maximum update depth exceeded" and the
+ * story canvas crashes. Returning this singleton keeps identities constant.
  */
-export const useOktaApi = fn((_options?: unknown) => makeUseOktaApiValue()).mockName('useOktaApi');
+const defaultValue = makeUseOktaApiValue();
+
+/**
+ * The mocked `useOktaApi` hook. Aliased in over the real facade. Returns the
+ * stable benign default value; override per-story with
+ * `useOktaApi.mockReturnValue(makeUseOktaApiValue({ ... }))` (`mockReturnValue`
+ * hands back one object, so overrides keep stable identities too).
+ */
+export const useOktaApi = fn((_options?: unknown) => defaultValue).mockName('useOktaApi');

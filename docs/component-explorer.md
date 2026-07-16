@@ -94,6 +94,15 @@ here. Mocking is done one layer up, at the `useOktaApi` facade boundary itself
 (a Vite `resolveId` alias in `main.ts`), plus a fake `chrome` global for the
 providers that poll it on mount. Do not wire up MSW in stories.
 
+**Mock stability matters.** The real facade returns one _memoized_ object whose
+operation identities are stable across renders. The mock must honour that: its
+default value is built **once** and returned as a singleton (and
+`mockReturnValue` hands back a single object too). If the mock instead returned a
+fresh object per render, any consumer effect that lists an op in its dependency
+array (e.g. `useAddToGroup`'s debounced group search) would re-run and `setState`
+every render, looping until React throws "Maximum update depth exceeded" and the
+story canvas crashes. Keep the mock's identities stable.
+
 ## Coverage expectation
 
 Every new or changed `shared`/leaf feature component ships a co-located story in
@@ -119,8 +128,8 @@ npm run test:storybook   # the browser story suite
 
 CI runs both (the `storybook` job installs Chromium). Locally, set
 `VITEST_BROWSER_EXECUTABLE` to a Chromium path to skip the download. A story that
-can't run headless (e.g. `UsersTab`, or a deliberately-throwing one) is opted out
-with the `!test` tag — `tags: ['autodocs', '!test']` — and stays in the explorer.
+genuinely can't run headless (e.g. a deliberately-throwing one) is opted out with
+the `!test` tag — `tags: ['autodocs', '!test']` — and stays in the explorer.
 a11y runs in report-only mode (`preview.tsx` `a11y.test: 'todo'`).
 
 ## One docs site: Components + Internals + Documentation (ADR-0011)

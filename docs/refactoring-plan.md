@@ -317,10 +317,13 @@ pages, deployed to GitHub Pages. Going forward, any `shared`/leaf feature compon
 touched without a co-located `.stories.tsx` is backlog — add one in the same change
 per `docs/component-explorer.md`'s templates.
 
-- [x] Full catalog covered (77/77). `UsersTab` is `!test`-excluded from the browser
-      runner until its §7 decomposition (it stays in the explorer).
+- [x] Full catalog covered (77/77), all stories run as browser tests (423 passing).
+      `UsersTab` is included in the runner: its story-canvas crash was an infinite
+      render loop from the `useOktaApi` mock returning a fresh object per render (see
+      `docs/component-explorer.md` → "Mock stability matters"), not the component
+      itself, so no `!test` exclusion is needed.
 - Remaining follow-ups (deferred): promote a11y `test: 'todo'` → `'error'` after an
-  a11y cleanup pass; re-enable `UsersTab` in the runner once §7 decomposes it.
+  a11y cleanup pass.
 - Doc: `docs/component-explorer.md`. Agent: `component-builder`.
 
 ---
