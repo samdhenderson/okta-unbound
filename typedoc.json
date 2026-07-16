@@ -3,7 +3,7 @@
   "entryPoints": ["src"],
   "entryPointStrategy": "expand",
   "out": "docs/api",
-  "exclude": ["**/*+(test|spec).+(ts|tsx)", "**/node_modules/**"],
+  "exclude": ["**/*+(test|spec).+(ts|tsx)", "**/*.stories.+(ts|tsx)", "**/node_modules/**"],
   "excludePrivate": false,
   "excludeProtected": false,
   "excludeExternals": true,
