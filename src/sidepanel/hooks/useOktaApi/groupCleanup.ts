@@ -134,26 +134,36 @@ export function createGroupCleanupOperations(
         return;
       }
 
-      const totalApiCalls = apiCallsMade + deprovisionedUsers.length;
+      // Remove deprovisioned users concurrently through the shared operation runner:
+      // rate-limit-safe (each DELETE still routes through the scheduler), with a live
+      // done/active/failed view and one Cancel. Stops on the first 403 (a permissions
+      // wall), matching the prior sequential behavior.
+      const outcome = await coreApi.runOperation(
+        'Remove deprovisioned users',
+        deprovisionedUsers,
+        async (user) => {
+          const result = await removeUserFromGroup(groupId, groupName, user, true);
+          if (!result.success) {
+            const err = new Error(result.error || 'Failed to remove user') as Error & {
+              status?: number;
+            };
+            err.status = result.status;
+            throw err;
+          }
+          return user;
+        },
+        {
+          stopOnError: (error) => (error as { status?: number }).status === 403,
+          message: (p) => `Removing deprovisioned users (${p.completed}/${p.total})`,
+        },
+      );
 
-      // Remove each deprovisioned user
-      for (let i = 0; i < deprovisionedUsers.length; i++) {
-        coreApi.checkCancelled();
-
-        const user = deprovisionedUsers[i];
+      for (const r of outcome.results) {
+        if (r.status === 'skipped') continue;
+        const user = r.item;
         affectedUserIds.push(user.id);
 
-        const currentApiCall = apiCallsMade + i + 1;
-        coreApi.callbacks.onProgress?.(
-          currentApiCall,
-          totalApiCalls,
-          `Removing ${user.profile.firstName} ${user.profile.lastName} (${i + 1}/${deprovisionedUsers.length})`,
-          currentApiCall,
-        );
-
-        const result = await removeUserFromGroup(groupId, groupName, user, true);
-
-        if (result.success) {
+        if (r.status === 'fulfilled') {
           removed++;
           removedUsers.push({
             userId: user.id,
@@ -166,24 +176,26 @@ export function createGroupCleanupOperations(
           );
         } else {
           failed++;
-          const errorMsg = `Failed: ${user.profile.login} - ${result.error}`;
-          errorMessages.push(errorMsg);
-          if (result.status === 403) {
-            coreApi.callbacks.onResult?.(
-              `403 Forbidden: ${user.profile.login} - ${result.error}`,
-              'error',
-            );
-            coreApi.callbacks.onResult?.('Stopping after first 403 error', 'warning');
-            break;
-          } else {
-            coreApi.callbacks.onResult?.(errorMsg, 'error');
-          }
+          const status = (r.error as { status?: number })?.status;
+          const errText = r.error instanceof Error ? r.error.message : 'Unknown error';
+          errorMessages.push(`Failed: ${user.profile.login} - ${errText}`);
+          coreApi.callbacks.onResult?.(
+            status === 403
+              ? `403 Forbidden: ${user.profile.login} - ${errText}`
+              : `Failed: ${user.profile.login} - ${errText}`,
+            'error',
+          );
         }
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
       }
 
-      apiCallsMade += deprovisionedUsers.length;
+      apiCallsMade += outcome.completed + outcome.failed;
+
+      if (outcome.stoppedByError) {
+        coreApi.callbacks.onResult?.('Stopping after first 403 error', 'warning');
+      }
+      if (outcome.cancelled) {
+        coreApi.callbacks.onResult?.('Cancelled — stopped removing users', 'warning');
+      }
 
       if (removedUsers.length > 0) {
         await logBulkRemoveAction(groupId, groupName, removedUsers, 'deprovisioned');

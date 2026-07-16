@@ -84,3 +84,56 @@ describe('ProgressContext cancellation', () => {
     expect(result.current.throwIfCancelled).toBe(first);
   });
 });
+
+describe('ProgressContext operation model', () => {
+  it('starts an operation with zeroed batch counts', () => {
+    const { result } = renderHook(() => useProgress(), { wrapper });
+
+    act(() => result.current.startProgress('Removing users', 'Working…', 30));
+
+    expect(result.current.progress).toMatchObject({
+      isLoading: true,
+      total: 30,
+      completed: 0,
+      active: 0,
+      failed: 0,
+    });
+  });
+
+  it('updateBatch records completed / active / failed and rolls up to current', () => {
+    const { result } = renderHook(() => useProgress(), { wrapper });
+
+    act(() => result.current.startProgress('Removing users', 'Working…', 30));
+    act(() =>
+      result.current.updateBatch(
+        { total: 30, completed: 12, active: 5, failed: 2 },
+        'Removed 12 of 30',
+      ),
+    );
+
+    expect(result.current.progress).toMatchObject({
+      isLoading: true,
+      total: 30,
+      completed: 12,
+      active: 5,
+      failed: 2,
+      current: 14, // completed + failed
+      message: 'Removed 12 of 30',
+    });
+  });
+
+  it('completeProgress clears the batch counts', () => {
+    const { result } = renderHook(() => useProgress(), { wrapper });
+
+    act(() => result.current.startProgress('Op', 'Working…', 30));
+    act(() => result.current.updateBatch({ total: 30, completed: 30, active: 0, failed: 0 }));
+    act(() => result.current.completeProgress());
+
+    expect(result.current.progress).toMatchObject({
+      isLoading: false,
+      completed: 0,
+      active: 0,
+      failed: 0,
+    });
+  });
+});

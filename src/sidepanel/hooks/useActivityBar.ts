@@ -40,6 +40,12 @@ export interface ActivityView {
   etaLabel?: string;
   /** API calls made during the current operation. */
   apiCalls?: number;
+  /** Items settled successfully in the current batch operation. */
+  opCompleted: number;
+  /** Items currently in flight in the current batch operation. */
+  opActive: number;
+  /** Items settled with an error in the current batch operation. */
+  opFailed: number;
   /** Queued (not yet dispatched) requests. */
   queueLength: number;
   /** In-flight requests. */
@@ -169,6 +175,9 @@ export function useActivityBar(): UseActivityBar {
     elapsedLabel: operationActive ? clock(elapsed) : undefined,
     etaLabel,
     apiCalls: progress.apiCalls,
+    opCompleted: progress.completed ?? 0,
+    opActive: progress.active ?? 0,
+    opFailed: progress.failed ?? 0,
     queueLength,
     activeRequests: state?.activeRequests ?? 0,
     rateLimit,

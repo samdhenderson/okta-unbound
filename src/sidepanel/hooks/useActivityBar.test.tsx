@@ -68,6 +68,23 @@ describe('useActivityBar', () => {
     expect(result.current.bar.view.canCancel).toBe(true);
   });
 
+  it('surfaces the operation breakdown from updateBatch', () => {
+    const { result } = renderHook(() => ({ bar: useActivityBar(), progress: useProgress() }), {
+      wrapper,
+    });
+
+    act(() => result.current.progress.startProgress('Removing users', 'Working…', 30));
+    act(() =>
+      result.current.progress.updateBatch({ total: 30, completed: 18, active: 5, failed: 2 }),
+    );
+
+    expect(result.current.bar.view.total).toBe(30);
+    expect(result.current.bar.view.opCompleted).toBe(18);
+    expect(result.current.bar.view.opActive).toBe(5);
+    expect(result.current.bar.view.opFailed).toBe(2);
+    expect(result.current.bar.view.current).toBe(20); // completed + failed
+  });
+
   it('cancel() drains the queue AND cancels the operation', async () => {
     const { result } = renderHook(() => ({ bar: useActivityBar(), progress: useProgress() }), {
       wrapper,

@@ -35,6 +35,7 @@ import React, {
   ReactNode,
 } from 'react';
 import { createCancellation } from '../../shared/scheduler/cancellation';
+import type { BatchProgress } from '../../shared/scheduler/runBatch';
 
 /**
  * @interface ProgressState
@@ -59,6 +60,12 @@ export interface ProgressState {
   canCancel?: boolean;
   /** True from the moment the user cancels until the operation unwinds. */
   isCancelling?: boolean;
+  /** Items settled successfully in the current batch operation. */
+  completed?: number;
+  /** Items currently in flight in the current batch operation. */
+  active?: number;
+  /** Items settled with an error in the current batch operation. */
+  failed?: number;
 }
 
 /**
@@ -79,6 +86,11 @@ interface ProgressContextType {
     canCancel?: boolean,
   ) => void;
   updateProgress: (current: number, total?: number, message?: string, apiCalls?: number) => void;
+  /**
+   * Report a batch operation's live counts (total / completed / active / failed).
+   * Rolls `current` up to `completed + failed` so the progress bar stays correct.
+   */
+  updateBatch: (progress: BatchProgress, message?: string) => void;
   incrementApiCalls: () => void;
   completeProgress: () => void;
   /**
@@ -144,10 +156,26 @@ export const ProgressProvider: React.FC<{ children: ReactNode }> = ({ children }
         startTime: Date.now(),
         canCancel,
         isCancelling: false,
+        completed: 0,
+        active: 0,
+        failed: 0,
       });
     },
     [],
   );
+
+  const updateBatch = useCallback((batch: BatchProgress, message?: string) => {
+    setProgress((prev) => ({
+      ...prev,
+      isLoading: true,
+      total: batch.total,
+      completed: batch.completed,
+      active: batch.active,
+      failed: batch.failed,
+      current: batch.completed + batch.failed,
+      message: message ?? prev.message,
+    }));
+  }, []);
 
   const updateProgress = useCallback(
     (current: number, total?: number, message?: string, apiCalls?: number) => {
@@ -178,6 +206,9 @@ export const ProgressProvider: React.FC<{ children: ReactNode }> = ({ children }
       current: 0,
       total: 100,
       message: '',
+      completed: 0,
+      active: 0,
+      failed: 0,
     });
   }, []);
 
@@ -203,6 +234,7 @@ export const ProgressProvider: React.FC<{ children: ReactNode }> = ({ children }
       progress,
       startProgress,
       updateProgress,
+      updateBatch,
       incrementApiCalls,
       completeProgress,
       cancel,
@@ -214,6 +246,7 @@ export const ProgressProvider: React.FC<{ children: ReactNode }> = ({ children }
       progress,
       startProgress,
       updateProgress,
+      updateBatch,
       incrementApiCalls,
       completeProgress,
       cancel,

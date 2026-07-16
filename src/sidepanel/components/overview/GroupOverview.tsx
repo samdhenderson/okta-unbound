@@ -121,15 +121,12 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
   const inactiveCount = deprovisionedCount + suspendedCount + lockedOutCount;
 
   const handleRemoveDeprovisioned = async () => {
-    startProgress('Remove Deprovisioned', 'Removing deprovisioned users...');
-    try {
-      await removeDeprovisioned(groupId);
-      // Membership changed — drop the stale MFA scan and reload members.
-      invalidate(['mfaScan', groupId]);
-      await refetchMembers();
-    } finally {
-      completeProgress();
-    }
+    // removeDeprovisioned drives the global activity bar itself (via runOperation),
+    // so no manual start/completeProgress here.
+    await removeDeprovisioned(groupId);
+    // Membership changed — drop the stale MFA scan and reload members.
+    invalidate(['mfaScan', groupId]);
+    await refetchMembers();
   };
 
   const handleCopyId = () => {
@@ -151,13 +148,9 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
 
   const runMfaScan = useCallback(async () => {
     setScanStatus('scanning');
-    startProgress('MFA Scan', `Scanning factors for ${members.length} members...`, members.length);
+    // scanGroupMfa drives the global activity bar itself (via runOperation).
     try {
-      const result = await scanGroupMfa(
-        members.map((m) => m.id),
-        (current, total) =>
-          updateProgress(current, total, `Scanned ${current}/${total} members`, current),
-      );
+      const result = await scanGroupMfa(members.map((m) => m.id));
       setMfaResults(result);
       setScanStatus('complete');
       // Cache the scan so navigating away and back restores it without rescanning.
@@ -165,10 +158,8 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
     } catch (err) {
       log.error('MFA scan failed:', err);
       setScanStatus('error');
-    } finally {
-      completeProgress();
     }
-  }, [groupId, members, scanGroupMfa, startProgress, updateProgress, completeProgress]);
+  }, [groupId, members, scanGroupMfa]);
 
   const requestMfaConfirm = useCallback(() => setScanStatus('confirming'), []);
   const cancelMfaConfirm = useCallback(() => setScanStatus('idle'), []);

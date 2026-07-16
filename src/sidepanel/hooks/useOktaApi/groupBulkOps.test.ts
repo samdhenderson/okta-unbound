@@ -26,6 +26,7 @@ function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
     getCurrentUser: vi.fn().mockResolvedValue({ email: 'admin', id: 'admin' }),
     checkCancelled: vi.fn(),
     resetCancellation: vi.fn(),
+    runOperation: vi.fn(),
     callbacks: {},
     ...overrides,
   } as CoreApi;

@@ -35,6 +35,9 @@ function idleView(overrides: Partial<ActivityView> = {}): ActivityView {
     cooldownLabel: undefined,
     processed: 0,
     failed: 0,
+    opCompleted: 0,
+    opActive: 0,
+    opFailed: 0,
     isCancelling: false,
     canCancel: false,
     ...overrides,
@@ -106,6 +109,31 @@ describe('ActivityBarView', () => {
     expect(screen.getByTestId('activity-progress-counter')).toHaveTextContent('4 / 20');
     expect(screen.getByTestId('activity-eta')).toHaveTextContent('0:48');
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '20');
+  });
+
+  it('shows the operation breakdown (done / active / failed) while running', () => {
+    renderView(
+      idleView({
+        operationActive: true,
+        operationName: 'Removing deprovisioned users',
+        busy: true,
+        current: 20,
+        total: 30,
+        percentage: 67,
+        opCompleted: 18,
+        opActive: 5,
+        opFailed: 2,
+      }),
+    );
+    const breakdown = screen.getByTestId('activity-op-breakdown');
+    expect(breakdown).toHaveTextContent('18 done');
+    expect(breakdown).toHaveTextContent('5 active');
+    expect(breakdown).toHaveTextContent('2 failed');
+  });
+
+  it('omits the operation breakdown when idle', () => {
+    renderView(idleView());
+    expect(screen.queryByTestId('activity-op-breakdown')).not.toBeInTheDocument();
   });
 
   it('shows queue and active counts when present', () => {

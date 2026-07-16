@@ -106,14 +106,22 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({ view, onCancel }) => 
           {etaContent}
         </MetricSlot>
 
-        {/* Progress counter — only meaningful mid-operation */}
+        {/* Operation breakdown — the full "removing X · Y done · Z active" story */}
         {view.operationActive && view.total > 0 && (
-          <span
-            data-testid="activity-progress-counter"
-            className="ml-auto font-medium text-neutral-600"
+          <div
+            data-testid="activity-op-breakdown"
+            className="ml-auto flex items-center gap-2 font-medium text-neutral-600"
           >
-            {view.current} / {view.total}
-          </span>
+            <span data-testid="activity-progress-counter" className="text-neutral-900">
+              {view.current} / {view.total}
+            </span>
+            <span aria-hidden="true" className="text-neutral-300">
+              |
+            </span>
+            <span className="text-success-text">{view.opCompleted} done</span>
+            <span className="text-info">{view.opActive} active</span>
+            {view.opFailed > 0 && <span className="text-danger-text">{view.opFailed} failed</span>}
+          </div>
         )}
 
         {/* Processed tally — fills the flexible gap when idle */}

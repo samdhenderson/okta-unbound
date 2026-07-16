@@ -93,14 +93,47 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
     cancelFns.current.reset();
   }, []);
 
+  // Stable ProgressBridge for coreApi.runOperation. Ref-indirection keeps these
+  // identities constant even though the progress context value changes on every
+  // tick (which would otherwise rebuild the memoized coreApi mid-operation).
+  const progressFns = useRef({
+    start: (_name: string, _total: number) => {},
+    reportBatch: (
+      _p: { total: number; completed: number; active: number; failed: number },
+      _m?: string,
+    ) => {},
+    complete: () => {},
+  });
+  progressFns.current.start = progressCtx
+    ? (name, total) => progressCtx.startProgress(name, `${name}…`, total)
+    : () => {};
+  progressFns.current.reportBatch = progressCtx ? progressCtx.updateBatch : () => {};
+  progressFns.current.complete = progressCtx ? progressCtx.completeProgress : () => {};
+
+  const progressBridge = useMemo(
+    () => ({
+      start: (name: string, total: number) => progressFns.current.start(name, total),
+      reportBatch: (
+        p: { total: number; completed: number; active: number; failed: number },
+        m?: string,
+      ) => progressFns.current.reportBatch(p, m),
+      complete: () => progressFns.current.complete(),
+    }),
+    [],
+  );
+
   // Every operation object below is memoized. Without this, each render rebuilds
   // coreApi and all nine operation objects, so every function this hook returns has
   // a fresh identity on every render — and any effect that lists one in its deps
   // re-runs forever. Callers must pass stable onResult/onProgress (useCallback) or
   // these memos are defeated.
   const coreApi = useMemo(
-    () => createCoreApi(targetTabId, checkCancelled, resetCancellation, { onResult, onProgress }),
-    [targetTabId, checkCancelled, resetCancellation, onResult, onProgress],
+    () =>
+      createCoreApi(targetTabId, checkCancelled, resetCancellation, progressBridge, {
+        onResult,
+        onProgress,
+      }),
+    [targetTabId, checkCancelled, resetCancellation, progressBridge, onResult, onProgress],
   );
 
   const groupMemberOps = useMemo(() => createGroupMemberOperations(coreApi), [coreApi]);
