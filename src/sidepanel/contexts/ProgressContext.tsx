@@ -25,7 +25,16 @@
  * ```
  */
 
-import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+  ReactNode,
+} from 'react';
+import { createCancellation } from '../../shared/scheduler/cancellation';
 
 /**
  * @interface ProgressState
@@ -48,6 +57,8 @@ export interface ProgressState {
   apiCalls?: number;
   startTime?: number;
   canCancel?: boolean;
+  /** True from the moment the user cancels until the operation unwinds. */
+  isCancelling?: boolean;
 }
 
 /**
@@ -70,6 +81,26 @@ interface ProgressContextType {
   updateProgress: (current: number, total?: number, message?: string, apiCalls?: number) => void;
   incrementApiCalls: () => void;
   completeProgress: () => void;
+  /**
+   * Cancel the current operation: trip the shared cancellation token (so operation
+   * loops stop between iterations via {@link ProgressContextType.throwIfCancelled})
+   * and flag `isCancelling` for the UI. Callers that also own the request queue
+   * (the Activity Bar) drain it separately.
+   */
+  cancel: () => void;
+  /**
+   * Throw {@link OperationCancelledError} if the current operation was cancelled.
+   * Stable identity across renders — safe to thread into memoized transports.
+   */
+  throwIfCancelled: () => void;
+  /**
+   * Clear a prior cancel so the next operation runs. `startProgress`/
+   * `completeProgress` already reset; call this directly from operation entry
+   * points that don't drive the global progress bar (e.g. bulk ops).
+   */
+  resetCancellation: () => void;
+  /** Whether the current operation has been cancelled. */
+  isCancelled: boolean;
 }
 
 const ProgressContext = createContext<ProgressContextType | undefined>(undefined);
@@ -93,8 +124,16 @@ export const ProgressProvider: React.FC<{ children: ReactNode }> = ({ children }
     message: '',
   });
 
+  // One cancellation token per provider. Held in a ref so the control callbacks
+  // below keep stable identities (useOktaApi threads throwIfCancelled into a
+  // memoized transport), while start/complete reset it for each new operation.
+  const cancellationRef = useRef(createCancellation());
+  const [isCancelled, setIsCancelled] = useState(false);
+
   const startProgress = useCallback(
     (operationName: string, message: string, total: number = 100, canCancel: boolean = true) => {
+      cancellationRef.current.reset();
+      setIsCancelled(false);
       setProgress({
         isLoading: true,
         current: 0,
@@ -104,6 +143,7 @@ export const ProgressProvider: React.FC<{ children: ReactNode }> = ({ children }
         apiCalls: 0,
         startTime: Date.now(),
         canCancel,
+        isCancelling: false,
       });
     },
     [],
@@ -131,12 +171,31 @@ export const ProgressProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, []);
 
   const completeProgress = useCallback(() => {
+    cancellationRef.current.reset();
+    setIsCancelled(false);
     setProgress({
       isLoading: false,
       current: 0,
       total: 100,
       message: '',
     });
+  }, []);
+
+  // Stable across renders — cancellationRef never changes identity.
+  const cancel = useCallback(() => {
+    cancellationRef.current.cancel();
+    setIsCancelled(true);
+    setProgress((prev) => ({ ...prev, isCancelling: true }));
+  }, []);
+
+  const throwIfCancelled = useCallback(() => {
+    cancellationRef.current.throwIfCancelled();
+  }, []);
+
+  const resetCancellation = useCallback(() => {
+    cancellationRef.current.reset();
+    setIsCancelled(false);
+    setProgress((prev) => (prev.isCancelling ? { ...prev, isCancelling: false } : prev));
   }, []);
 
   const contextValue = useMemo(
@@ -146,8 +205,22 @@ export const ProgressProvider: React.FC<{ children: ReactNode }> = ({ children }
       updateProgress,
       incrementApiCalls,
       completeProgress,
+      cancel,
+      throwIfCancelled,
+      resetCancellation,
+      isCancelled,
     }),
-    [progress, startProgress, updateProgress, incrementApiCalls, completeProgress],
+    [
+      progress,
+      startProgress,
+      updateProgress,
+      incrementApiCalls,
+      completeProgress,
+      cancel,
+      throwIfCancelled,
+      resetCancellation,
+      isCancelled,
+    ],
   );
 
   return <ProgressContext.Provider value={contextValue}>{children}</ProgressContext.Provider>;
@@ -180,3 +253,16 @@ export const useProgress = (): ProgressContextType => {
   }
   return context;
 };
+
+/**
+ * Access the progress context if one is mounted, else `undefined`.
+ *
+ * Unlike {@link useProgress} this never throws, so utilities that only *optionally*
+ * participate in global progress/cancellation (e.g. `useOktaApi`, which falls back
+ * to a local cancellation token) can call it safely outside a
+ * {@link ProgressProvider}.
+ *
+ * @returns The `ProgressContextType`, or `undefined` when no provider is present.
+ */
+export const useProgressOptional = (): ProgressContextType | undefined =>
+  useContext(ProgressContext);

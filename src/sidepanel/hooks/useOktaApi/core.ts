@@ -42,6 +42,8 @@ export interface CoreApi {
   getCurrentUser: () => Promise<{ email: string; id: string }>;
   /** Throws if the caller has requested cancellation; call between iterations in long loops. */
   checkCancelled: () => void;
+  /** Clear any prior cancellation; call once at the start of a cancellable operation. */
+  resetCancellation: () => void;
   /** Progress/result callbacks used to surface operation feedback to the UI. */
   callbacks: OperationCallbacks;
 }
@@ -51,6 +53,7 @@ export interface CoreApi {
  *
  * @param targetTabId - Content-script tab holding the live Okta session, or `null` if not connected.
  * @param checkCancelled - Cancellation guard threaded through to long-running operations.
+ * @param resetCancellation - Clears a prior cancel; operations call it at their start.
  * @param callbacks - Progress/result callbacks forwarded to operations.
  * @returns The {@link CoreApi} consumed by every `create*Operations` factory.
  * @remarks `sendMessage` and `makeApiRequest` both throw if `targetTabId` is `null`.
@@ -58,6 +61,7 @@ export interface CoreApi {
 export function createCoreApi(
   targetTabId: number | null,
   checkCancelled: () => void,
+  resetCancellation: () => void,
   callbacks: OperationCallbacks,
 ): CoreApi {
   /**
@@ -142,6 +146,7 @@ export function createCoreApi(
     makeApiRequest,
     getCurrentUser,
     checkCancelled,
+    resetCancellation,
     callbacks,
   };
 }

@@ -26,6 +26,12 @@ Side panel (useOktaApi)  →  Background (ApiScheduler: rate limit, retry, backo
   do not add new direct calls; migrate existing ones onto the scheduler.
 - `ApiScheduler` (`shared/scheduler/apiScheduler.ts`): priority queue, concurrency
   cap (5), cooldowns, exponential backoff, rate-limit detection.
+- **Cancellation** is one signal end to end (ADR-0008):
+  `OperationCancelledError` + `createCancellation()` (`shared/scheduler/cancellation.ts`).
+  `ProgressContext` owns the current operation's token; `useOktaApi.checkCancelled`
+  polls it (loops must call it between iterations and let the error propagate);
+  `ApiScheduler.clearQueue()` rejects dropped/coalesced requests with it. The
+  `ActivityBar`'s Cancel trips the token **and** drains the queue.
 
 ## The API client: `useOktaApi/`
 

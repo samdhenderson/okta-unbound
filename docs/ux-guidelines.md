@@ -35,7 +35,15 @@ Every async view handles all three explicitly — never a blank panel:
 
 `success` (completed/healthy), `warning` (caution/attention), `danger`
 (failure/destructive), `info` (neutral note). Use tokens, never raw hex
-(`SchedulerStatusBar`/`ContextBanner` currently violate this).
+(`ContextBanner` currently violates this).
+
+### Activity bar
+
+Scheduler state and operation progress live in one fixed bottom bar (`ActivityBar`
+→ pure `ActivityBarView` + `useActivityBar`, ADR-0008), not two overlapping ones.
+Keep its layout **stable**: the status region, the metric slots, and the action
+area stay mounted so values swap in place instead of reflowing the row. Cancel is a
+single control that stops the operation and drains the queue.
 
 ## Keyboard & focus
 

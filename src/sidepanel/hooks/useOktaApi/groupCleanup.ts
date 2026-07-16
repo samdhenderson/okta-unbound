@@ -10,6 +10,7 @@ import type { BulkUserInfo } from '../../../shared/undoTypes';
 import { logBulkRemoveAction } from '../../../shared/undoManager';
 import { auditStore } from '../../../shared/storage/auditStore';
 import { parseNextLink } from './utilities';
+import { OperationCancelledError } from '../../../shared/scheduler/cancellation';
 import { createLogger } from '../../../shared/utils/logger';
 
 const log = createLogger('useOktaApi');
@@ -197,7 +198,7 @@ export function createGroupCleanupOperations(
       errorMessages.push(errorMsg);
       coreApi.callbacks.onResult?.(
         errorMsg,
-        error instanceof Error && error.message === 'Operation cancelled' ? 'warning' : 'error',
+        error instanceof OperationCancelledError ? 'warning' : 'error',
       );
     } finally {
       coreApi.callbacks.onProgress?.(apiCallsMade, apiCallsMade, 'Complete', apiCallsMade);

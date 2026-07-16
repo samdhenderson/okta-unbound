@@ -7,11 +7,14 @@
  * single memoized object. No request is issued here directly: every call routes
  * through the extension's rate-limited path — side panel → background
  * `ApiScheduler` → content script `fetch` against the live Okta session. This hook
- * only owns cross-cutting run state (loading, cancellation via `AbortController`).
+ * only owns cross-cutting run state (loading, plus cancellation shared through
+ * `ProgressContext` so a single control can stop the running operation).
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import type { UseOktaApiOptions } from './useOktaApi/types';
+import { useProgressOptional } from '../contexts/ProgressContext';
+import { createCancellation } from '../../shared/scheduler/cancellation';
 import { createCoreApi } from './useOktaApi/core';
 import { createGroupMemberOperations } from './useOktaApi/groupMembers';
 import { createGroupCleanupOperations } from './useOktaApi/groupCleanup';
@@ -53,22 +56,42 @@ import { createRuleWriteOperations } from './useOktaApi/ruleWrites';
  */
 export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOptions) {
   const [isLoading, setIsLoading] = useState(false);
-  const [abortController, setAbortController] = useState<AbortController | null>(null);
-  const [isCancelled, setIsCancelled] = useState(false);
+
+  // Cancellation is shared through ProgressContext so a single global control (the
+  // Activity Bar) can stop whichever operation is running. Outside a provider
+  // (some unit tests) we fall back to a local token. Ref-indirection keeps
+  // `checkCancelled`/`cancelOperation` identities stable across renders even though
+  // the progress context value changes on every progress tick — essential because
+  // `checkCancelled` is threaded into the memoized `coreApi` below.
+  const progressCtx = useProgressOptional();
+  const localToken = useRef(createCancellation());
+  const cancelFns = useRef({
+    check: () => {},
+    cancel: () => {},
+    reset: () => {},
+  });
+  cancelFns.current.check = progressCtx
+    ? progressCtx.throwIfCancelled
+    : () => localToken.current.throwIfCancelled();
+  cancelFns.current.cancel = progressCtx ? progressCtx.cancel : () => localToken.current.cancel();
+  cancelFns.current.reset = progressCtx
+    ? progressCtx.resetCancellation
+    : () => localToken.current.reset();
+
+  const isCancelled = progressCtx ? progressCtx.isCancelled : localToken.current.isCancelled;
 
   const cancelOperation = useCallback(() => {
-    setIsCancelled(true);
-    if (abortController) {
-      abortController.abort();
-    }
+    cancelFns.current.cancel();
     onResult?.('Operation cancelled by user', 'warning');
-  }, [abortController, onResult]);
+  }, [onResult]);
 
   const checkCancelled = useCallback(() => {
-    if (isCancelled) {
-      throw new Error('Operation cancelled');
-    }
-  }, [isCancelled]);
+    cancelFns.current.check();
+  }, []);
+
+  const resetCancellation = useCallback(() => {
+    cancelFns.current.reset();
+  }, []);
 
   // Every operation object below is memoized. Without this, each render rebuilds
   // coreApi and all nine operation objects, so every function this hook returns has
@@ -76,8 +99,8 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
   // re-runs forever. Callers must pass stable onResult/onProgress (useCallback) or
   // these memos are defeated.
   const coreApi = useMemo(
-    () => createCoreApi(targetTabId, checkCancelled, { onResult, onProgress }),
-    [targetTabId, checkCancelled, onResult, onProgress],
+    () => createCoreApi(targetTabId, checkCancelled, resetCancellation, { onResult, onProgress }),
+    [targetTabId, checkCancelled, resetCancellation, onResult, onProgress],
   );
 
   const groupMemberOps = useMemo(() => createGroupMemberOperations(coreApi), [coreApi]);
@@ -110,16 +133,12 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
   const wrapOperation = useCallback(<A extends unknown[]>(fn: (...args: A) => Promise<void>) => {
     return async (...args: A) => {
-      setIsCancelled(false);
-      const controller = new AbortController();
-      setAbortController(controller);
+      cancelFns.current.reset();
       setIsLoading(true);
       try {
         await fn(...args);
       } finally {
         setIsLoading(false);
-        setAbortController(null);
-        setIsCancelled(false);
       }
     };
   }, []);

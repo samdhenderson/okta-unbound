@@ -1,16 +1,17 @@
 # Plan: Unified Activity Bar + working cancellation
 
-Status: **proposed** · Owner: side-panel · Supersedes: `LoadingBar` +
-`SchedulerStatusBar` as two separate bars.
+Status: **implemented** (see ADR-0008) · Owner: side-panel · Replaced `LoadingBar`
+
+- `SchedulerStatusBar` with a single `ActivityBar`.
 
 ## Problem
 
 The side panel renders **two** independent fixed bottom bars:
 
-| Bar                   | File                     | Source            | z-index | Content                                                                                          |
-| --------------------- | ------------------------ | ----------------- | ------- | ------------------------------------------------------------------------------------------------ |
-| `LoadingBar`          | `LoadingBar.tsx`         | `ProgressContext` | `z-50`  | operation name, spinner, elapsed / ETA, API-call count, `current/total`, % progress bar          |
-| `SchedulerStatusBar`  | `SchedulerStatusBar.tsx` | `SchedulerContext`| `z-999` | status dot, queue length, active, rate-limit headroom, cooldown countdown, processed/failed, Cancel |
+| Bar                  | File                     | Source             | z-index | Content                                                                                             |
+| -------------------- | ------------------------ | ------------------ | ------- | --------------------------------------------------------------------------------------------------- |
+| `LoadingBar`         | `LoadingBar.tsx`         | `ProgressContext`  | `z-50`  | operation name, spinner, elapsed / ETA, API-call count, `current/total`, % progress bar             |
+| `SchedulerStatusBar` | `SchedulerStatusBar.tsx` | `SchedulerContext` | `z-999` | status dot, queue length, active, rate-limit headroom, cooldown countdown, processed/failed, Cancel |
 
 Both are `fixed bottom-0 left-0 right-0` and are rendered unconditionally in
 `App.tsx`. Confirmed issues:
@@ -18,7 +19,7 @@ Both are `fixed bottom-0 left-0 right-0` and are rendered unconditionally in
 1. **Overlap.** Two `fixed bottom-0` elements with different z-indexes; the
    scheduler bar (`z-999`) paints over the loading bar (`z-50`). The shell only
    reserves `pb-14` — one bar's worth of space.
-2. **Layout jank.** Every chip is conditionally *mounted/unmounted*
+2. **Layout jank.** Every chip is conditionally _mounted/unmounted_
    (`{state.queueLength > 0 && …}`, the Cancel button, rate-limit, cooldown,
    processed). As requests flow, chips pop in/out and the row reflows; the Cancel
    button appears/disappears on the right edge. Nothing reserves space.
@@ -27,7 +28,7 @@ Both are `fixed bottom-0 left-0 right-0` and are rendered unconditionally in
      but never **rejects** dropped requests' promises, never clears the
      `coalescableGets` waiters, and never touches `activeRequests`. Awaiting
      callers hang; nothing tells the driver loop to stop.
-   - **`useOktaApi.cancelOperation`**: sets a *local* `isCancelled` state and
+   - **`useOktaApi.cancelOperation`**: sets a _local_ `isCancelled` state and
      calls `abortController.abort()`, but the signal is never passed into any
      operation and `checkCancelled` closes over a **stale** `isCancelled`, so the
      running loop never observes `true`. Not surfaced in either bar.
@@ -95,7 +96,7 @@ hook.
    drivers stop enqueuing, (2) call `clearQueue()` to reject in-flight/queued work.
    Operations catch `OperationCancelledError` and report "cancelled" (status
    `warning`) via existing `onResult`.
-4. **Cancel affordance:** show whenever an operation is active *or* the queue is
+4. **Cancel affordance:** show whenever an operation is active _or_ the queue is
    non-empty; name the consequence ("Cancel operation — N requests pending").
 
 ## Phase 3 — Tests + docs
@@ -116,4 +117,5 @@ hook.
   `useGroupMerge`), `ProgressContext`/`SchedulerContext` as needed.
 - Remove: `LoadingBar.tsx`, `SchedulerStatusBar.tsx` (after `ActivityBar` lands).
 </content>
+
 </invoke>
