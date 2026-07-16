@@ -69,7 +69,17 @@ const meta = {
   title: 'Components/RuleImpactModal',
   component: RuleImpactModal,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Read-only "who loses access?" preview for a group rule.\n\n' +
+          "Shows a rule's target groups with live member counts and, crucially, how many members would lose access if the rule were deactivated (the members held by this rule alone). Doubles as the confirmation gate for a deactivation: in `deactivate` mode it leads with the loss headline and its footer commits the change. Computation is read-only — see `shared/membership/ruleImpact`.\n\n" +
+          '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs), [Shared utilities](?path=/docs/internals-shared-utilities--docs)',
+      },
+    },
+  },
   args: {
     isOpen: true,
     ruleName: 'Engineering - US',

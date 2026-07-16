@@ -57,7 +57,17 @@ const meta = {
   title: 'Groups/GroupSourceModal',
   component: GroupSourceModal,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Read-only "why does this group exist?" detail for one group.\n\n' +
+          'Surfaces the safety context an admin needs before removing/merging a group: the rules that feed it, the apps it is pushed to, and — on demand — the manual-vs-rule split of its current membership. No mutations.\n\n' +
+          '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs), [Types](?path=/docs/internals-types--docs)',
+      },
+    },
+  },
   args: {
     group: baseGroup,
     feedingRules,

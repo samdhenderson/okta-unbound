@@ -10,7 +10,19 @@ const meta = {
   title: 'Components/RulesTab',
   component: RulesTab,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Rules tab shell: browse, search, filter, and manage group rules.\n\n' +
+          '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs), ' +
+          '[Contexts](?path=/docs/internals-contexts--docs), ' +
+          '[Rules engine](?path=/docs/internals-rules-engine--docs), ' +
+          '[Scheduler & messaging](?path=/docs/internals-scheduler-messaging--docs)',
+      },
+    },
+  },
   args: {
     targetTabId: 1,
     currentGroupId: undefined,

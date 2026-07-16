@@ -13,7 +13,22 @@ const meta = {
   title: 'Overview/UserOverview',
   component: UserOverview,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Overview tab for a single Okta user: profile, membership stats, and quick actions.\n\n' +
+          "Fetches the user's details from the content script and their group " +
+          'memberships via {@link useUserMemberships} (which classifies each as direct ' +
+          'vs. rule-based), then renders stat cards, a membership distribution, recent ' +
+          'groups, and the {@link UserComparisonModal} launcher.\n\n' +
+          '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs), ' +
+          '[Storage & cache](?path=/docs/internals-storage-cache--docs), ' +
+          '[Types](?path=/docs/internals-types--docs)',
+      },
+    },
+  },
   args: {
     // Matches the fixture user the chrome fake returns for `getUserDetails`.
     userId: 'user1',

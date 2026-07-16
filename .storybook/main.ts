@@ -42,7 +42,12 @@ function stripCrx(plugins: readonly unknown[]): unknown[] {
 }
 
 const config: StorybookConfig = {
-  stories: ['../src/**/*.mdx', '../src/**/*.stories.@(ts|tsx)'],
+  stories: [
+    './docs/**/*.mdx',
+    './generated/docs/**/*.mdx',
+    '../src/**/*.mdx',
+    '../src/**/*.stories.@(ts|tsx)',
+  ],
   addons: [
     '@storybook/addon-docs',
     '@storybook/addon-a11y',

@@ -10,7 +10,16 @@ const meta = {
   title: 'Components/ContextBanner',
   component: ContextBanner,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Banner summarising the Okta entity detected on the active tab.\n\n' +
+          '**Related internals:** [Shared utilities](?path=/docs/internals-shared-utilities--docs)',
+      },
+    },
+  },
   args: {
     pageType: 'group',
     entityName: 'Engineering Team',

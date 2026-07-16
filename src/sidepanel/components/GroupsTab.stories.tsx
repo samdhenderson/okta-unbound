@@ -10,7 +10,18 @@ const meta = {
   title: 'Components/GroupsTab',
   component: GroupsTab,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Groups tab shell: browse, search, filter, and bulk-manage Okta groups.\n\n' +
+          '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs), ' +
+          '[Scheduler & messaging](?path=/docs/internals-scheduler-messaging--docs), ' +
+          '[Shared utilities](?path=/docs/internals-shared-utilities--docs)',
+      },
+    },
+  },
   args: {
     targetTabId: 42,
     oktaOrigin: 'https://example.okta.com',

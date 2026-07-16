@@ -12,7 +12,23 @@ const meta = {
   title: 'Overview/GroupOverview',
   component: GroupOverview,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Overview tab for a single Okta group: quick stats, bulk actions, and the member explorer.\n\n' +
+          "Loads the group's full membership (via the scheduler/content-script path in " +
+          '{@link useOktaApi}), derives status counts for the stat cards, and hosts the ' +
+          'bulk operations (remove deprovisioned, export) plus the in-group ' +
+          '{@link MemberExplorer} (search, composition reports, MFA scan).\n\n' +
+          '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs), ' +
+          '[Contexts](?path=/docs/internals-contexts--docs), ' +
+          '[Storage & cache](?path=/docs/internals-storage-cache--docs), ' +
+          '[Shared utilities](?path=/docs/internals-shared-utilities--docs)',
+      },
+    },
+  },
   args: {
     groupId: 'group-default',
     groupName: 'Engineering Team',

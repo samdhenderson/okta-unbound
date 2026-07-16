@@ -60,7 +60,17 @@ const meta = {
   title: 'Components/RuleConsolidationModal',
   component: RuleConsolidationModal,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Wizard for rule consolidation (Feature A4).\n\n' +
+          'Add-target flow: search-select a group to add → dry-run diff → confirm. Merge flow: opens straight to the diff for a cluster of identical-expression rules. The confirm step creates the union rule, activates it if needed, then retires the source rule(s). All writes are audited and captured for undo.\n\n' +
+          '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs)',
+      },
+    },
+  },
   args: {
     phase: 'select',
     preview: null,

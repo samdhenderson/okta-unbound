@@ -77,7 +77,22 @@ const meta = {
   title: 'Groups/GroupMergeModal',
   component: GroupMergeModal,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Wizard to consolidate (merge) 2+ selected groups.\n\n' +
+          'Choose a survivor → preview the member delta and "what breaks" (feeding rules / ' +
+          'app push on the sources) → confirm → copy source members into the survivor and ' +
+          'empty the sources. Emptying is blocked when a source is fed by an active rule. ' +
+          'Every run is audited and recorded for undo; group deletion is intentionally not ' +
+          'performed (the emptied husks are left for the admin to delete in Okta).\n\n' +
+          '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs), ' +
+          '[Types](?path=/docs/internals-types--docs)',
+      },
+    },
+  },
   args: {
     isOpen: true,
     selectedGroups,

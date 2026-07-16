@@ -1,0 +1,31 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Overview" />
+
+# Okta Unbound — component explorer & docs
+
+One place for everything: the UI component library, the backend/internals API
+reference, and the project's written specs.
+
+## Sections
+
+- **Components** — every shared primitive and feature component, with live
+  variants, controls, and autodocs generated from their TSDoc. Hook-coupled
+  containers render against a mocked `useOktaApi` + a fake `chrome`.
+- **Internals** — the auto-generated API reference for the non-component code
+  (hooks, scheduler & messaging, cache, shared utilities, types, background,
+  content script), produced from the source TSDoc by TypeDoc and refreshed with
+  `npm run docs`.
+- **Documentation** — the project specs (architecture, design system, testing,
+  …) and the Architecture Decision Records (ADRs), rendered from `docs/`.
+
+## Running & testing
+
+```
+npm run storybook        # this explorer, on http://localhost:6006
+npm run build-storybook  # static build (deployed to GitHub Pages)
+npm run test:storybook   # run every story as a headless-browser render test
+```
+
+Every new or changed shared/leaf component ships a co-located `.stories.tsx`
+(see **Documentation → Component Explorer**).

@@ -40,7 +40,20 @@ const meta = {
   title: 'Groups/GroupCollections',
   component: GroupCollections,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'Save, load, rename, and delete named sets of group ids ("collections")\n' +
+          'persisted in `chrome.storage.local`.\n\n' +
+          'A collection captures the current selection so it can be re-selected later or ' +
+          'exported. Storage is local-only (no Okta API involved).\n\n' +
+          '**Related internals:** [Shared utilities](?path=/docs/internals-shared-utilities--docs), ' +
+          '[Types](?path=/docs/internals-types--docs)',
+      },
+    },
+  },
   args: {
     groups: sampleGroups,
     selectedGroupIds: new Set([mockGroup.id, 'group456']),

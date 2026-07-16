@@ -310,15 +310,18 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
 
 ### 10. `[ ]` Component-explorer (Storybook) story-coverage backlog
 
-Storybook landed (ADR-0010, `docs/component-explorer.md`); `Button.stories.tsx` is
-the only story so far. Going forward, any `shared`/leaf feature component touched
-without a co-located `.stories.tsx` is backlog — add one in the same change per
-`docs/component-explorer.md`'s templates, don't defer it here. Use this item only
-to track a sweep of the **existing, untouched** catalog (`docs/components.md`'s
-list) that predates the convention.
+Storybook landed (ADR-0010) and **all 77 components now have co-located stories**
+(run as browser tests via `@storybook/addon-vitest`, ADR-0011). The docs site also
+hosts the auto-generated `Internals` API reference and the `Documentation`/ADR
+pages, deployed to GitHub Pages. Going forward, any `shared`/leaf feature component
+touched without a co-located `.stories.tsx` is backlog — add one in the same change
+per `docs/component-explorer.md`'s templates.
 
+- [x] Full catalog covered (77/77). `UsersTab` is `!test`-excluded from the browser
+      runner until its §7 decomposition (it stays in the explorer).
+- Remaining follow-ups (deferred): promote a11y `test: 'todo'` → `'error'` after an
+  a11y cleanup pass; re-enable `UsersTab` in the runner once §7 decomposes it.
 - Doc: `docs/component-explorer.md`. Agent: `component-builder`.
-- Done when: every catalog entry in `docs/components.md` has a co-located story.
 
 ---
 

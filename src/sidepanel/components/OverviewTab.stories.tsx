@@ -10,7 +10,16 @@ const meta = {
   title: 'Components/OverviewTab',
   component: OverviewTab,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Context-aware landing tab that adapts to the detected Okta page.\n\n' +
+          '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs)',
+      },
+    },
+  },
   args: {
     onTabChange: fn(),
   },

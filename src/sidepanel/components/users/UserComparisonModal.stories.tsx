@@ -21,7 +21,20 @@ const meta = {
   title: 'Users/UserComparisonModal',
   component: UserComparisonModal,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          "Side-by-side comparison of two Okta users' groups and app assignments.\n\n" +
+          'A thin shell: all state (search, load, bucketing, similarity, optimistic ' +
+          'group-add) lives in {@link useUserComparison}; this component wires that state ' +
+          'into the search phase and the hero/tab-bar/overview/diff subcomponents.\n\n' +
+          '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs), ' +
+          '[Types](?path=/docs/internals-types--docs)',
+      },
+    },
+  },
   args: {
     isOpen: true,
     onClose: fn(),

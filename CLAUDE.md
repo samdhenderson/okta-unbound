@@ -18,11 +18,12 @@ npm run build         # production build
 npm run type-check    # tsc --noEmit
 npm run lint          # eslint (0 errors required; warnings are legacy debt)
 npm run format        # prettier --write
-npm run test:run      # vitest once
+npm run test:run      # vitest jsdom unit project (browser-free)
+npm run test:storybook   # run every story as a headless-browser test
 npm run test:coverage # coverage (thresholds 80/75)
-npm run docs             # regenerate docs/api (TypeDoc from source comments)
-npm run storybook        # component explorer dev server (:6006)
-npm run build-storybook  # static Storybook build (CI gate)
+npm run docs             # TypeDoc → Markdown for the Storybook Internals section
+npm run storybook        # component + docs explorer dev server (:6006)
+npm run build-storybook  # static docs site (components + Internals + Documentation)
 ```
 
 ## Message-passing model (the one thing to know)
