@@ -44,14 +44,31 @@ const chromeFake = {
     lastError: undefined as unknown,
   },
   tabs: {
-    query: (_q?: any) => Promise.resolve([]),
+    // Return one active Okta admin tab so useOktaTabContext resolves to a
+    // connected context (instead of the "please open an Okta page" state).
+    query: (_q?: any) =>
+      Promise.resolve([
+        {
+          id: 1,
+          active: true,
+          windowId: 1,
+          url: 'https://example.okta.com/admin/getting-started',
+        },
+      ]),
+    getCurrent: () => Promise.resolve({ id: 1 }),
     sendMessage: (_tabId?: number, _message?: any) => Promise.resolve({ ok: true }),
     onActivated: listenerSlot,
     onUpdated: listenerSlot,
   },
+  // useOktaTabContext resolves the active tab via the current window.
+  windows: {
+    getCurrent: () => Promise.resolve({ id: 1, focused: true, tabs: [] }),
+  },
   storage: {
     local: storageArea,
     sync: storageArea,
+    // AuditLogViewer live-refreshes on storage changes.
+    onChanged: listenerSlot,
   },
 };
 
