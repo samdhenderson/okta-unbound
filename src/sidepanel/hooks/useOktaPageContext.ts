@@ -14,7 +14,8 @@ import {
   type EntityLoadContext,
 } from './useOktaTabContext';
 
-type PageType = 'group' | 'user' | 'app' | 'admin' | 'unknown';
+/** Kind of Okta page the side panel detects for the active tab. */
+export type PageType = 'group' | 'user' | 'app' | 'admin' | 'unknown';
 
 /** Identifying details for an Okta application page. */
 export interface AppInfo {
@@ -39,6 +40,8 @@ export interface OktaPageContext extends PageDetection {
   isLoading: boolean;
   refetch: () => Promise<void>;
   oktaOrigin: string | null;
+  /** See {@link OktaTabContext.resyncPending}. */
+  resyncPending: boolean;
 }
 
 // Stable references (used as effect deps inside the base hook).

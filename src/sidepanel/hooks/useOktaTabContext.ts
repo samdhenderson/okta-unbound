@@ -55,6 +55,13 @@ export interface OktaTabContext<T> {
   isLoading: boolean;
   refetch: () => Promise<void>;
   oktaOrigin: string | null;
+  /**
+   * `true` when a navigation to a different entity was observed while detection
+   * was suppressed (hook disabled or panel hidden) and has not yet been applied.
+   * Lets a caller that intentionally holds context (e.g. a pinned Overview) surface
+   * a "live page changed" hint. Cleared once a fetch runs.
+   */
+  resyncPending: boolean;
 }
 
 const MAX_RETRIES = 3;
@@ -105,6 +112,9 @@ export function useOktaTabContext<T>(config: OktaTabContextConfig<T>): OktaTabCo
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [oktaOrigin, setOktaOrigin] = useState<string | null>(null);
+  // Surfaced to callers that deliberately hold context (pinned Overview): true once
+  // a navigation is observed while suppressed, so a "live page changed" hint can show.
+  const [resyncPending, setResyncPending] = useState(false);
 
   // Track in-flight requests so a stale fetch can't clobber a newer one.
   const fetchIdRef = useRef(0);
@@ -118,6 +128,8 @@ export function useOktaTabContext<T>(config: OktaTabContextConfig<T>): OktaTabCo
     async (retryCount = 0) => {
       const currentFetchId = ++fetchIdRef.current;
       const isStale = () => currentFetchId !== fetchIdRef.current;
+      // A fresh fetch applies the latest context, clearing any owed resync hint.
+      setResyncPending(false);
 
       try {
         log.debug('Fetching context', { attempt: retryCount + 1 });
@@ -225,6 +237,9 @@ export function useOktaTabContext<T>(config: OktaTabContextConfig<T>): OktaTabCo
       }
       if (!enabledRef.current || document.hidden) {
         pendingResyncRef.current = true;
+        // A genuine entity change was observed but is being held back — flag it so
+        // a pinned caller can offer to switch.
+        setResyncPending(true);
         return;
       }
       debouncedFetch();
@@ -288,5 +303,6 @@ export function useOktaTabContext<T>(config: OktaTabContextConfig<T>): OktaTabCo
     isLoading,
     refetch: fetchContext,
     oktaOrigin,
+    resyncPending,
   };
 }
