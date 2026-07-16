@@ -22,6 +22,8 @@ interface SelectProps {
   options: SelectOption[];
   /** Optional label rendered above the control. */
   label?: string;
+  /** Accessible name for the control when no visible `label` is rendered (e.g. an inline selector). */
+  ariaLabel?: string;
   /** Error message; when set, applies danger styling and shows the message below. */
   error?: string;
   disabled?: boolean;
@@ -48,6 +50,7 @@ const Select: React.FC<SelectProps> = ({
   onChange,
   options,
   label,
+  ariaLabel,
   error,
   disabled = false,
   fullWidth = true,
@@ -73,6 +76,7 @@ const Select: React.FC<SelectProps> = ({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
+        aria-label={ariaLabel}
         className={selectClasses}
         style={{ fontFamily: 'var(--font-primary)' }}
       >

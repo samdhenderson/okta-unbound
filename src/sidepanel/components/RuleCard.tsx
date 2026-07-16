@@ -19,6 +19,10 @@ interface RuleCardProps {
   onActivate?: (ruleId: string) => void;
   /** Called with the rule id when the user deactivates an active rule. */
   onDeactivate?: (ruleId: string) => void;
+  /** Called with the rule when the user opens its read-only impact preview. */
+  onPreviewImpact?: (rule: FormattedRule) => void;
+  /** Called with the rule to start the "add target group" consolidation (A4). */
+  onAddTargetGroup?: (rule: FormattedRule) => void;
   /** Okta org origin used to build the "View in Okta" rules-page link. */
   oktaOrigin?: string | null;
   /** When true, the card auto-expands and shows a highlight ring (deep-link target). */
@@ -91,7 +95,15 @@ const renderConditionWithGroupBadges = (
  * A custom comparator limits re-renders to changes in the fields it actually shows.
  */
 const RuleCard: React.FC<RuleCardProps> = memo(
-  ({ rule, onActivate, onDeactivate, oktaOrigin, isHighlighted = false }) => {
+  ({
+    rule,
+    onActivate,
+    onDeactivate,
+    onPreviewImpact,
+    onAddTargetGroup,
+    oktaOrigin,
+    isHighlighted = false,
+  }) => {
     const [isExpanded, setIsExpanded] = useState(false);
 
     // Auto-expand if highlighted
@@ -112,6 +124,14 @@ const RuleCard: React.FC<RuleCardProps> = memo(
     const handleDeactivate = useCallback(() => {
       onDeactivate?.(rule.id);
     }, [onDeactivate, rule.id]);
+
+    const handlePreviewImpact = useCallback(() => {
+      onPreviewImpact?.(rule);
+    }, [onPreviewImpact, rule]);
+
+    const handleAddTargetGroup = useCallback(() => {
+      onAddTargetGroup?.(rule);
+    }, [onAddTargetGroup, rule]);
 
     const hasConflicts = rule.conflicts && rule.conflicts.length > 0;
 
@@ -297,6 +317,16 @@ const RuleCard: React.FC<RuleCardProps> = memo(
               ) : (
                 <Button variant="primary" size="sm" onClick={handleActivate}>
                   Activate Rule
+                </Button>
+              )}
+              {onPreviewImpact && rule.groupIds.length > 0 && (
+                <Button variant="secondary" size="sm" icon="users" onClick={handlePreviewImpact}>
+                  Preview Impact
+                </Button>
+              )}
+              {onAddTargetGroup && (
+                <Button variant="secondary" size="sm" icon="plus" onClick={handleAddTargetGroup}>
+                  Add Target Group
                 </Button>
               )}
               {oktaOrigin && (

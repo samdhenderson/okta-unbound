@@ -14,9 +14,29 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, within, act, waitFor, fireEvent } from '@testing-library/react';
+import {
+  render as rtlRender,
+  screen,
+  within,
+  act,
+  waitFor,
+  fireEvent,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactElement, ReactNode } from 'react';
 import GroupsTab from './GroupsTab';
+import { ProgressProvider } from '../contexts/ProgressContext';
+
+// GroupsTab now consumes ProgressContext (the merge flow reports progress), so
+// every render wraps it in a ProgressProvider — the same provider main.tsx gives
+// the app. This only supplies the context; no assertions change.
+const render = (ui: ReactElement, options?: Parameters<typeof rtlRender>[1]) =>
+  rtlRender(ui, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <ProgressProvider>{children}</ProgressProvider>
+    ),
+    ...options,
+  });
 
 // ---------------------------------------------------------------------------
 // Child test doubles — the feature children are separately-owned units; we stub
@@ -709,8 +729,10 @@ describe('mount cache rehydrate', () => {
   it('a late storage callback overwrites freshly loaded groups (stale wins)', async () => {
     const uev = userEvent.setup();
     let storageCb: ((r: any) => void) | null = null;
-    storageGet.mockImplementation((_k: string[], cb: (r: any) => void) => {
-      storageCb = cb;
+    // Only capture the callback-style group-cache rehydrate; the loader also does a
+    // promise-style RulesCache read (no callback) which must not clobber storageCb.
+    storageGet.mockImplementation((_k: string[], cb?: (r: any) => void) => {
+      if (typeof cb === 'function') storageCb = cb;
     });
     route(/^\/api\/v1\/groups\?limit=200&expand=stats$/, () => ({
       success: true,
@@ -1676,5 +1698,18 @@ describe('page header', () => {
     await waitFor(() =>
       expect(screen.queryByText('Loading groups from Okta...')).not.toBeInTheDocument(),
     );
+  });
+});
+
+describe('deep-link from the Rules tab', () => {
+  it('highlights and auto-expands the navigated group row', async () => {
+    renderCached(
+      [cachedGroup({ id: 'g1', name: 'Engineering' }), cachedGroup({ id: 'g2', name: 'Sales' })],
+      { selectedGroupId: 'g1', onGroupSelected: () => {} },
+    );
+    await waitFor(() => expect(screen.getByText('Engineering')).toBeInTheDocument());
+    // The highlighted group auto-expands, revealing its detail; others stay collapsed.
+    await waitFor(() => expect(screen.getByText('Group ID')).toBeInTheDocument());
+    expect(screen.getAllByText('Group ID')).toHaveLength(1);
   });
 });

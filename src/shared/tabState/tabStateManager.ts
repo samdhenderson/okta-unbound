@@ -297,6 +297,7 @@ export async function saveRulesTabState(state: Partial<RulesTabState>): Promise<
     scrollPosition: 0,
     searchQuery: '',
     activeFilter: 'all',
+    sortMode: 'default',
     cachedRules: null,
     cachedStats: null,
     lastFetchTime: null,

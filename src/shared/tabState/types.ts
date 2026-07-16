@@ -8,6 +8,7 @@
  */
 
 import type { FormattedRule, RuleStats, GroupSummary } from '../types';
+import type { RuleSortMode } from '../rules/similarity';
 
 /** Identifiers for the side-panel tabs whose state is persisted. */
 export type TabName = 'overview' | 'rules' | 'users' | 'groups' | 'history';
@@ -18,10 +19,11 @@ export interface BaseTabState {
   scrollPosition: number;
 }
 
-/** Persisted state for the Rules tab (search, filter, and cached rules). */
+/** Persisted state for the Rules tab (search, filter, sort, and cached rules). */
 export interface RulesTabState extends BaseTabState {
   searchQuery: string;
   activeFilter: 'all' | 'active' | 'conflicts' | 'current-group';
+  sortMode: RuleSortMode;
   cachedRules: FormattedRule[] | null;
   cachedStats: RuleStats | null;
   lastFetchTime: string | null;

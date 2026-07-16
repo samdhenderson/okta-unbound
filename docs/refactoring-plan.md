@@ -166,6 +166,22 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
       The live-search `chrome.tabs.sendMessage` §8 bypass moved into
       `useGroupLiveSearch` (its eslint grandfather entry followed it); no scheduler
       change and no §3 raw-control migration here.
+- [x] **`RulesTab` DONE (high-impact-features branch, 2 commits).** ~730 → 258-line
+      presentational shell + 2 concern hooks (`useRulesData` for the load/RulesCache
+      pipeline, `useRuleLifecycle` which unifies the two near-identical ~120-line
+      activate/deactivate audit+undo blocks behind one `runLifecycle(id, kind)`) + 4
+      subcomponents (`rules/RulesStatsGrid` on the shared `StatCard`, `RulesToolbar`,
+      `RulesMetaRow`, `RulesListPanel`). Also cleared RulesTab's 3 `any`s (catch blocks
+      narrow via `err instanceof Error`) and did the §3 raw-control migration: filter
+      buttons → shared `FilterPill` (gained an optional `disabled` prop), search input
+      kept as a documented leading-glyph composite (same call as `GroupSearchBar`).
+      Decompose-behind-oracle: a fresh 9-test `RulesTab.test.tsx` CHARACTERIZED oracle
+      (load/cache, immediate activate, deactivate gated behind the impact modal, preview,
+      search + active-only filter, empty/error) stayed green throughout; the
+      post-mutation `loadRules()` cache-first reload is preserved verbatim. The
+      `chrome.tabs.sendMessage` §8 bypass moved into `useRulesData`/`useRuleLifecycle`
+      (their eslint grandfather entries followed them; `RulesTab.tsx` dropped from the
+      list); no scheduler change.
 - Per file: (1) pin behavior with RTL/MSW tests; (2) extract logic into `use*` hooks
   (mirror the `useOktaApi/` module split); (3) move pure helpers to `shared/utils`;
   (4) split UI into subcomponents (like `overview/members/`); (5) re-verify.

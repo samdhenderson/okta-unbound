@@ -19,4 +19,6 @@ export { createGroupBulkOperations } from './groupBulkOps';
 export { createGroupDiscoveryOperations } from './groupDiscovery';
 export { createUserOperations } from './userOperations';
 export { createExportOperations } from './exportOperations';
+export { createRuleImpactOperations } from './ruleImpact';
+export { createRuleWriteOperations } from './ruleWrites';
 export { parseNextLink, deepMergeProfiles } from './utilities';

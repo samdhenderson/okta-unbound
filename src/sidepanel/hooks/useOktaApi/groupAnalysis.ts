@@ -140,13 +140,20 @@ export function createGroupAnalysisOperations(getAllGroupMembers: GetAllGroupMem
   /**
    * Score how "stale" a group looks, as a heuristic for cleanup review.
    *
-   * @param group - Group summary to score.
+   * @param group - Group summary to score. Its `hasRules`/`ruleCount` are trusted
+   * only when `rulesKnown` is true (they default to `false`/`0` until the loader
+   * attributes the rules payload).
+   * @param rulesKnown - Whether the feeding-rules payload was actually available
+   * to populate `hasRules`/`ruleCount`. When false, the "No group rules" factor is
+   * skipped rather than asserted from the unpopulated defaults — otherwise every
+   * group would falsely read as rule-less even when the source insight shows a
+   * rule feeding it. Defaults to `true` so existing callers keep prior behavior.
    * @returns `StalenessInfo` with a `score` clamped to 0-100 (100 = most stale)
    * and the human-readable `factors` that contributed.
    * @remarks Weighs emptiness/small size, absence of rules, age since last update,
    * and missing description. Pure calculation — no API calls.
    */
-  const calculateStaleness = (group: GroupSummary): StalenessInfo => {
+  const calculateStaleness = (group: GroupSummary, rulesKnown: boolean = true): StalenessInfo => {
     let score = 0;
     const factors: string[] = [];
 
@@ -159,8 +166,10 @@ export function createGroupAnalysisOperations(getAllGroupMembers: GetAllGroupMem
       factors.push('Very few members');
     }
 
-    // No rules
-    if (!group.hasRules && group.ruleCount === 0) {
+    // No rules — only a signal once we actually know a group's feeding rules.
+    // Without the rules payload, `hasRules`/`ruleCount` are unpopulated defaults,
+    // so claiming "No group rules" here would contradict the source insight.
+    if (rulesKnown && !group.hasRules && group.ruleCount === 0) {
       score += 20;
       factors.push('No group rules');
     }

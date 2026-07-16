@@ -8,7 +8,7 @@
  * `useGroupMembersCache`) with presentational subcomponents (search bar, filter
  * panel, selection bar, list panel) plus the export and comparison modals.
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import PageHeader from './shared/PageHeader';
 import AlertMessage from './shared/AlertMessage';
 import Button from './shared/Button';
@@ -18,17 +18,22 @@ import { useGroupLiveSearch } from '../hooks/useGroupLiveSearch';
 import { useGroupFilters } from '../hooks/useGroupFilters';
 import { useGroupSelection } from '../hooks/useGroupSelection';
 import { useGroupMembersCache } from '../hooks/useGroupMembersCache';
+import { useGroupSource } from '../hooks/useGroupSource';
+import { useGroupMerge } from '../hooks/useGroupMerge';
 import type { GroupSummary } from '../../shared/types';
 import GroupExportModal from './groups/GroupExportModal';
 import GroupComparisonModal from './groups/GroupComparisonModal';
 import CrossGroupSearch from './groups/CrossGroupSearch';
 import BulkOperationsPanel from './groups/BulkOperationsPanel';
 import GroupCollections from './groups/GroupCollections';
+import GroupCleanupPanel from './groups/GroupCleanupPanel';
 import GroupSearchBar from './groups/GroupSearchBar';
 import GroupFilterToggle from './groups/GroupFilterToggle';
 import GroupFilterPanel from './groups/GroupFilterPanel';
 import GroupSelectionBar, { type ActivePanel } from './groups/GroupSelectionBar';
 import GroupsListPanel from './groups/GroupsListPanel';
+import GroupSourceModal from './groups/GroupSourceModal';
+import GroupMergeModal from './groups/GroupMergeModal';
 import { getDateForFilename } from '../../shared/utils/csvUtils';
 
 interface GroupsTabProps {
@@ -36,6 +41,12 @@ interface GroupsTabProps {
   targetTabId: number | null;
   /** Okta org origin used to build deep links to group admin pages. */
   oktaOrigin?: string;
+  /** Deep-link to a rule in the Rules tab (from a group's feeding rules, A2 → B/A4). */
+  onNavigateToRule?: (ruleId: string) => void;
+  /** Group id to scroll to and highlight when navigated here from the Rules tab. */
+  selectedGroupId?: string | null;
+  /** Called once the highlighted group has been shown, so the parent can clear it. */
+  onGroupSelected?: () => void;
 }
 
 /**
@@ -43,7 +54,13 @@ interface GroupsTabProps {
  * and their presentational panels. Also implements CSV export of the selected or
  * filtered groups and the show/hide toggling of the bulk/cross-search/collections panels.
  */
-const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
+const GroupsTab: React.FC<GroupsTabProps> = ({
+  targetTabId,
+  oktaOrigin,
+  onNavigateToRule,
+  selectedGroupId,
+  onGroupSelected,
+}) => {
   // Shell-owned state: error has three producers (loader, live search, useOktaApi
   // onResult) so it stays here; searchMode is read by three hooks so it stays above
   // them; showFilters and the modal/panel flags are pure UI.
@@ -54,6 +71,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportGroups, setExportGroups] = useState<GroupSummary[]>([]);
   const [showComparisonModal, setShowComparisonModal] = useState(false);
+  const [showMergeModal, setShowMergeModal] = useState(false);
   const [activePanel, setActivePanel] = useState<ActivePanel>('none');
 
   // Must be stable: useOktaApi memoizes its operations on this callback's identity.
@@ -80,10 +98,50 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
   });
   const selection = useGroupSelection(loader.groups);
   const membersCache = useGroupMembersCache(api, loader.groups);
+  const groupSource = useGroupSource(targetTabId ?? undefined);
+  const merge = useGroupMerge(targetTabId ?? undefined);
+
+  const handleCloseMerge = useCallback(() => {
+    setShowMergeModal(false);
+    merge.reset();
+  }, [merge]);
 
   const { groups, loading, loadAllGroups } = loader;
   const { filteredGroups, activeFilterCount } = filters;
   const { selectedGroupIds, selectedGroups } = selection;
+
+  // Deep-link from the Rules tab: when a group id arrives and that group is in the
+  // loaded list, switch to cached mode, clear filters/search so it isn't hidden,
+  // then scroll to and highlight its row. Best-effort (mirrors the Rules deep-link):
+  // if the group isn't loaded, we wait for a later load rather than acting.
+  const navHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedGroupId) {
+      navHandledRef.current = null;
+      return;
+    }
+    if (navHandledRef.current === selectedGroupId) return;
+    if (!groups.some((g) => g.id === selectedGroupId)) return; // wait for groups to load
+    navHandledRef.current = selectedGroupId;
+
+    setSearchMode('cached');
+    filters.clearFilters();
+    filters.setSearchQuery('');
+
+    const scrollT = setTimeout(() => {
+      document
+        .querySelector(`[data-group-id="${selectedGroupId}"]`)
+        ?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    }, 150);
+    const clearT = setTimeout(() => onGroupSelected?.(), 2500);
+    return () => {
+      clearTimeout(scrollT);
+      clearTimeout(clearT);
+    };
+    // Setters (setSearchMode/filters/onGroupSelected) are stable enough; re-running
+    // only on id/groups changes avoids the unstable-filters-identity churn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGroupId, groups]);
 
   const handleExportSelection = useCallback(() => {
     if (selectedGroupIds.size === 0) {
@@ -215,6 +273,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
                 onSelectAll={() => selection.replaceSelection(filteredGroups.map((g) => g.id))}
                 onDeselectAll={selection.deselectAll}
                 onCompare={() => setShowComparisonModal(true)}
+                onMerge={() => setShowMergeModal(true)}
                 onTogglePanel={togglePanel}
                 onExportSelection={handleExportSelection}
                 onExportGroupsList={handleExportGroupsList}
@@ -250,6 +309,15 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
               />
             )}
 
+            {activePanel === 'cleanup' && (
+              <GroupCleanupPanel
+                groups={groups}
+                onSelectGroups={selection.replaceSelection}
+                onAnalyzeSource={groupSource.open}
+                onClose={() => setActivePanel('none')}
+              />
+            )}
+
             {error && (
               <AlertMessage
                 message={{ text: error, type: 'danger' }}
@@ -272,6 +340,8 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
             oktaOrigin={oktaOrigin}
             onLoadAllGroups={loadAllGroups}
             onClearFilters={filters.clearFilters}
+            onAnalyzeSource={groupSource.open}
+            highlightedGroupId={selectedGroupId ?? undefined}
           />
         </div>
       </div>
@@ -294,6 +364,39 @@ const GroupsTab: React.FC<GroupsTabProps> = ({ targetTabId, oktaOrigin }) => {
         groups={selectedGroups}
         compareGroups={api.compareGroups}
         memberCache={membersCache.groupMembersCache}
+      />
+
+      {/* Membership-source insight (A2) */}
+      <GroupSourceModal
+        group={groupSource.group}
+        feedingRules={groupSource.feedingRules}
+        rulesStatus={groupSource.rulesStatus}
+        breakdown={groupSource.breakdown}
+        memberStatus={groupSource.memberStatus}
+        error={groupSource.error}
+        onClose={groupSource.close}
+        onAnalyzeMembers={groupSource.analyzeMembers}
+        onNavigateToRule={
+          onNavigateToRule
+            ? (ruleId) => {
+                groupSource.close();
+                onNavigateToRule(ruleId);
+              }
+            : undefined
+        }
+      />
+
+      {/* Merge wizard (A3) */}
+      <GroupMergeModal
+        isOpen={showMergeModal}
+        selectedGroups={selectedGroups}
+        phase={merge.phase}
+        plan={merge.plan}
+        results={merge.results}
+        error={merge.error}
+        onPreview={merge.preview}
+        onExecute={merge.execute}
+        onClose={handleCloseMerge}
       />
     </div>
   );
