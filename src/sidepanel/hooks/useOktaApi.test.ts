@@ -394,7 +394,7 @@ describe('useOktaApi', () => {
       expect(map.get('bob')).toMatchObject({ enrolled: false, factorCount: 0, factorLabels: [] });
     });
 
-    it('reports progress and tolerates failed factor requests', async () => {
+    it('tolerates failed factor requests (summarizes as no factors)', async () => {
       mockRuntimeSendMessage
         .mockResolvedValueOnce({ success: false, error: 'boom' })
         .mockResolvedValueOnce({
@@ -402,18 +402,18 @@ describe('useOktaApi', () => {
           data: [{ id: 'f1', factorType: 'push', provider: 'OKTA', status: 'ACTIVE' }],
         });
 
-      const onProgress = vi.fn();
       const { result } = renderHook(() =>
         useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
       );
 
+      // Progress now flows through the shared operation runner (ProgressContext),
+      // not a per-call callback; here we just assert the scan tolerates failures.
       const map = await act(async () => {
-        return result.current.scanGroupMfa(['x', 'y'], onProgress);
+        return result.current.scanGroupMfa(['x', 'y']);
       });
 
       expect(map.get('x')).toMatchObject({ enrolled: false, factorCount: 0 });
       expect(map.get('y')).toMatchObject({ enrolled: true, factorLabels: ['Okta Verify Push'] });
-      expect(onProgress).toHaveBeenCalledWith(2, 2);
     });
   });
 
@@ -476,13 +476,10 @@ describe('useOktaApi', () => {
 
       await waitFor(() => {
         expect(mockOnResult).toHaveBeenCalledWith('Found 1 deprovisioned users', 'warning');
-        // Progress now shows user name and format: "Removing FirstName LastName (n/total)"
-        expect(mockOnProgress).toHaveBeenCalledWith(
-          expect.any(Number),
-          expect.any(Number),
-          expect.stringMatching(/Removing .+ \(1\/1\)/),
-          expect.any(Number),
-        );
+        // The removal now runs through the shared operation runner; assert the
+        // user-facing outcome rather than the (now context-routed) progress ticks.
+        expect(mockOnResult).toHaveBeenCalledWith(expect.stringContaining('Removed:'), 'success');
+        expect(mockOnResult).toHaveBeenCalledWith('Complete: 1 removed, 0 failed', 'success');
       });
     });
 
@@ -529,12 +526,11 @@ describe('useOktaApi', () => {
         headers: {},
       });
 
-      // Mock 403 error on first remove
-      mockRuntimeSendMessage.mockResolvedValueOnce({
-        success: false,
-        status: 403,
-        error: 'Forbidden',
-      });
+      // Both removes return 403 (a blanket permissions wall). Under the concurrent
+      // runner both in-flight removes settle, then stop-on-403 halts any further work.
+      mockRuntimeSendMessage
+        .mockResolvedValueOnce({ success: false, status: 403, error: 'Forbidden' })
+        .mockResolvedValueOnce({ success: false, status: 403, error: 'Forbidden' });
 
       const { result } = renderHook(() =>
         useOktaApi({ targetTabId, onResult: mockOnResult, onProgress: mockOnProgress }),
@@ -550,10 +546,9 @@ describe('useOktaApi', () => {
           'error',
         );
         expect(mockOnResult).toHaveBeenCalledWith('Stopping after first 403 error', 'warning');
+        // Nothing was removed; the halt is reported in the completion tally.
+        expect(mockOnResult).toHaveBeenCalledWith('Complete: 0 removed, 2 failed', 'warning');
       });
-
-      // Should only attempt to remove one user due to 403 stopping
-      expect(mockRuntimeSendMessage).toHaveBeenCalledTimes(4); // getCurrentUser + group details + get members + 1 remove attempt
     });
 
     it('should not allow modification of APP_GROUP', async () => {

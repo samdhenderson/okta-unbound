@@ -34,17 +34,17 @@ Status legend: `[ ]` todo · `[~]` partially done · `[x]` done.
 
 ## Reuse map (build on these, don't reinvent)
 
-| Need                                    | Reuse                                                                  | Path                                                     |
-| --------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------- |
-| Bulk loop + per-item error capture      | `executeBulkOperation`, `removeDeprovisioned`                          | `hooks/useOktaApi/groupBulkOps.ts`, `groupCleanup.ts`    |
-| Progress UI (count / % / ETA / cancel)  | `ProgressContext` + `LoadingBar`                                       | `contexts/ProgressContext.tsx`                           |
-| Multi-select state (survives filtering) | `useGroupSelection`, `Checkbox`                                        | `hooks/useGroupSelection.ts`                             |
-| List entry (paste/search → chips)       | `Textarea`, `Input`, `SelectionChips`, `ComparisonSearchPhase`         | `components/shared/`, `users/comparison/`                |
-| Confirm / destructive gate              | shared `Modal`                                                         | `components/shared/Modal.tsx`                            |
-| Audit + undo                            | `logAction`, `logBulkRemoveAction`, `AuditLogViewer`                   | `shared/undoManager.ts`, `components/AuditLogViewer.tsx` |
-| Action CTAs                             | `QuickActionsPanel`                                                    | `components/overview/shared/QuickActionsPanel.tsx`       |
-| Group analysis (overlap/staleness)      | `compareGroups`, `calculateStaleness`, `getAllGroups` (`expand=stats`) | `hooks/useOktaApi/groupAnalysis.ts`, `groupDiscovery.ts` |
-| Rule read + activate/deactivate         | `getGroupRulesForGroup`; `handleActivateRule/DeactivateRule`           | `groupDiscovery.ts`, `content/index.ts`                  |
+| Need                                    | Reuse                                                                  | Path                                                         |
+| --------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Bulk loop + per-item error capture      | `executeBulkOperation`, `removeDeprovisioned`                          | `hooks/useOktaApi/groupBulkOps.ts`, `groupCleanup.ts`        |
+| Progress UI (count / % / ETA / cancel)  | `ProgressContext` + `ActivityBar`                                      | `contexts/ProgressContext.tsx`, `components/ActivityBar.tsx` |
+| Multi-select state (survives filtering) | `useGroupSelection`, `Checkbox`                                        | `hooks/useGroupSelection.ts`                                 |
+| List entry (paste/search → chips)       | `Textarea`, `Input`, `SelectionChips`, `ComparisonSearchPhase`         | `components/shared/`, `users/comparison/`                    |
+| Confirm / destructive gate              | shared `Modal`                                                         | `components/shared/Modal.tsx`                                |
+| Audit + undo                            | `logAction`, `logBulkRemoveAction`, `AuditLogViewer`                   | `shared/undoManager.ts`, `components/AuditLogViewer.tsx`     |
+| Action CTAs                             | `QuickActionsPanel`                                                    | `components/overview/shared/QuickActionsPanel.tsx`           |
+| Group analysis (overlap/staleness)      | `compareGroups`, `calculateStaleness`, `getAllGroups` (`expand=stats`) | `hooks/useOktaApi/groupAnalysis.ts`, `groupDiscovery.ts`     |
+| Rule read + activate/deactivate         | `getGroupRulesForGroup`; `handleActivateRule/DeactivateRule`           | `groupDiscovery.ts`, `content/index.ts`                      |
 
 Two new shared primitives are worth building **once** and reusing across A/C/D:
 

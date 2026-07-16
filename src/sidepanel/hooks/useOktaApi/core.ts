@@ -14,9 +14,33 @@
 
 import type { MessageRequest, MessageResponse, OperationCallbacks } from './types';
 import type { RequestResult } from '@/shared/scheduler/types';
+import { runBatch, type BatchProgress, type BatchOutcome } from '@/shared/scheduler/runBatch';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('useOktaApi');
+
+/**
+ * Global progress lifecycle hooks the operation runner drives. Supplied by
+ * `useOktaApi` from `ProgressContext` (or no-ops outside a provider).
+ */
+export interface ProgressBridge {
+  /** Begin a named operation over `total` items. */
+  start: (name: string, total: number) => void;
+  /** Report live batch counts. */
+  reportBatch: (progress: BatchProgress, message?: string) => void;
+  /** End the operation. */
+  complete: () => void;
+}
+
+/** Options for {@link CoreApi.runOperation}. */
+export interface RunOperationOptions<T> {
+  /** Max concurrent tasks; defaults to the scheduler cap (5). */
+  concurrency?: number;
+  /** Return `true` from a settled error to stop launching further work (e.g. a 403 wall). */
+  stopOnError?: (error: unknown, item: T, index: number) => boolean;
+  /** Derive the status message shown in the activity bar from the live counts. */
+  message?: (progress: BatchProgress) => string;
+}
 
 /**
  * Shared transport surface passed into every operation factory.
@@ -42,6 +66,28 @@ export interface CoreApi {
   getCurrentUser: () => Promise<{ email: string; id: string }>;
   /** Throws if the caller has requested cancellation; call between iterations in long loops. */
   checkCancelled: () => void;
+  /** Clear any prior cancellation; call once at the start of a cancellable operation. */
+  resetCancellation: () => void;
+  /**
+   * Run a list of Okta calls as one tracked, cancellable operation.
+   *
+   * Owns the global progress lifecycle (start → live counts → complete) and runs
+   * the work through {@link runBatch} with bounded concurrency and the shared
+   * cancellation guard, so every operation gets the full activity view and one
+   * Cancel. This is the standard way to perform any multi-call read or write.
+   *
+   * @param name - Operation label shown in the activity bar.
+   * @param items - Work items.
+   * @param task - Per-item worker; issues its own scheduler request(s).
+   * @param options - See {@link RunOperationOptions}.
+   * @returns The {@link BatchOutcome}; never throws for cancellation (inspect `cancelled`).
+   */
+  runOperation: <T, R>(
+    name: string,
+    items: T[],
+    task: (item: T, index: number) => Promise<R>,
+    options?: RunOperationOptions<T>,
+  ) => Promise<BatchOutcome<T, R>>;
   /** Progress/result callbacks used to surface operation feedback to the UI. */
   callbacks: OperationCallbacks;
 }
@@ -51,6 +97,8 @@ export interface CoreApi {
  *
  * @param targetTabId - Content-script tab holding the live Okta session, or `null` if not connected.
  * @param checkCancelled - Cancellation guard threaded through to long-running operations.
+ * @param resetCancellation - Clears a prior cancel; operations call it at their start.
+ * @param progress - Global progress lifecycle bridge used by {@link CoreApi.runOperation}.
  * @param callbacks - Progress/result callbacks forwarded to operations.
  * @returns The {@link CoreApi} consumed by every `create*Operations` factory.
  * @remarks `sendMessage` and `makeApiRequest` both throw if `targetTabId` is `null`.
@@ -58,6 +106,8 @@ export interface CoreApi {
 export function createCoreApi(
   targetTabId: number | null,
   checkCancelled: () => void,
+  resetCancellation: () => void,
+  progress: ProgressBridge,
   callbacks: OperationCallbacks,
 ): CoreApi {
   /**
@@ -136,12 +186,38 @@ export function createCoreApi(
     }
   };
 
+  /**
+   * Run `items` through `task` as one tracked, cancellable operation. See
+   * {@link CoreApi.runOperation}.
+   */
+  const runOperation = async <T, R>(
+    name: string,
+    items: T[],
+    task: (item: T, index: number) => Promise<R>,
+    options: RunOperationOptions<T> = {},
+  ): Promise<BatchOutcome<T, R>> => {
+    resetCancellation();
+    progress.start(name, items.length);
+    try {
+      return await runBatch(items, task, {
+        concurrency: options.concurrency,
+        stopOnError: options.stopOnError,
+        throwIfCancelled: checkCancelled,
+        onProgress: (p) => progress.reportBatch(p, options.message?.(p)),
+      });
+    } finally {
+      progress.complete();
+    }
+  };
+
   return {
     targetTabId,
     sendMessage,
     makeApiRequest,
     getCurrentUser,
     checkCancelled,
+    resetCancellation,
+    runOperation,
     callbacks,
   };
 }

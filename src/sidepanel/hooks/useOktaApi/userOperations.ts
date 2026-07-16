@@ -164,38 +164,35 @@ export function createUserOperations(coreApi: CoreApi) {
    */
   const scanGroupMfa = async (
     userIds: string[],
-    onProgress?: (current: number, total: number) => void,
+    _onProgress?: (current: number, total: number) => void,
   ): Promise<Map<string, MemberMfaResult>> => {
     const resultMap = new Map<string, MemberMfaResult>();
-    const batchSize = 3; // Match scheduler maxConcurrent convention
 
-    for (let i = 0; i < userIds.length; i += batchSize) {
-      const batch = userIds.slice(i, i + batchSize);
-      const batchResults = await Promise.all(
-        batch.map(async (userId) => {
-          try {
-            const response = await coreApi.makeApiRequest(
-              `/api/v1/users/${userId}/factors`,
-              'GET',
-              undefined,
-              'low',
-            );
-            const factors: OktaFactor[] =
-              response.success && Array.isArray(response.data) ? response.data : [];
-            return { userId, factors };
-          } catch (error) {
-            log.error(`Failed to fetch factors for user ${userId}:`, error);
-            return { userId, factors: [] as OktaFactor[] };
-          }
-        }),
-      );
-
-      batchResults.forEach(({ userId, factors }) => {
-        resultMap.set(userId, summarizeFactors(userId, factors));
-      });
-
-      onProgress?.(Math.min(i + batchSize, userIds.length), userIds.length);
-    }
+    // Scan through the shared operation runner: rate-limit-safe (each factor GET is
+    // a `low`-priority scheduler request so it never starves interactive work), with
+    // a live done/active view and cancellation. A per-user fetch failure summarizes
+    // as "no factors" rather than aborting the scan.
+    await coreApi.runOperation(
+      'MFA scan',
+      userIds,
+      async (userId) => {
+        try {
+          const response = await coreApi.makeApiRequest(
+            `/api/v1/users/${userId}/factors`,
+            'GET',
+            undefined,
+            'low',
+          );
+          const factors: OktaFactor[] =
+            response.success && Array.isArray(response.data) ? response.data : [];
+          resultMap.set(userId, summarizeFactors(userId, factors));
+        } catch (error) {
+          log.error(`Failed to fetch factors for user ${userId}:`, error);
+          resultMap.set(userId, summarizeFactors(userId, []));
+        }
+      },
+      { message: (p) => `Scanned ${p.completed}/${p.total} members` },
+    );
 
     return resultMap;
   };

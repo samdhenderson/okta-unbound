@@ -7,6 +7,7 @@ import type { CoreApi } from './core';
 import type { OktaUser } from './types';
 import type { BulkOperation, BulkOperationResult } from '../../../shared/types';
 import type { RequestResult } from '../../../shared/scheduler/types';
+import { OperationCancelledError } from '../../../shared/scheduler/cancellation';
 
 /** A bulk-operation result, extended with the member list some operations return. */
 interface BulkGroupResult extends BulkOperationResult {
@@ -50,10 +51,18 @@ export function createGroupBulkOperations(
     operation: BulkOperation,
     onProgress?: (current: number, total: number, currentGroupName: string) => void,
   ): Promise<BulkGroupResult[]> => {
+    // Clear any prior cancel so this run starts clean (this path doesn't drive the
+    // global progress bar, which would otherwise have reset it).
+    coreApi.resetCancellation();
+
     const results: BulkGroupResult[] = [];
     const totalGroups = operation.targetGroups.length;
 
     for (let i = 0; i < totalGroups; i++) {
+      // Between groups, bail immediately if the user cancelled — this is what
+      // stops the loop from starting the "next action" after a cancel.
+      coreApi.checkCancelled();
+
       const groupId = operation.targetGroups[i];
 
       try {
@@ -114,6 +123,13 @@ export function createGroupBulkOperations(
 
         results.push(result);
       } catch (error) {
+        // A cancellation raised mid-group (e.g. the scheduler rejecting an
+        // in-flight request when the queue is cleared) must abort the whole
+        // operation, not be recorded as this group's "failed" result.
+        if (error instanceof OperationCancelledError) {
+          throw error;
+        }
+
         results.push({
           groupId,
           groupName: groupId,

@@ -14,6 +14,7 @@
  */
 
 import { createLogger } from '../utils/logger';
+import { OperationCancelledError } from './cancellation';
 import { RateLimitDetector } from './rateLimitDetector';
 import type {
   QueuedRequest,
@@ -526,13 +527,30 @@ export class ApiScheduler {
   }
 
   /**
-   * Clear the queue (useful for testing or emergency stop)
+   * Drop every queued request and reject its callers.
+   *
+   * @returns The number of requests dropped.
+   * @remarks
+   * This is the queue half of a user "Cancel". Each dropped request is **rejected**
+   * with {@link OperationCancelledError} (not silently discarded) so the operation
+   * loop awaiting it unwinds instead of hanging; for a coalesced GET the leader's
+   * reject also fans the error out to every joined waiter and clears the coalescing
+   * slot. In-flight requests already dispatched to the content script are left to
+   * settle. Cancelled requests are not retried and are not counted as failures.
    */
-  clearQueue(): void {
-    const queueLength = this.queue.length;
+  clearQueue(): number {
+    const dropped = this.queue;
     this.queue = [];
-    log.debug(`Cleared ${queueLength} requests from queue`);
+
+    for (const request of dropped) {
+      // request.reject is the coalescing-aware wrapper for GETs, so this also
+      // rejects any waiters and deletes the coalescing entry.
+      request.reject(new OperationCancelledError());
+    }
+
+    log.debug(`Cleared ${dropped.length} requests from queue`);
     this.notifyStateChange();
+    return dropped.length;
   }
 
   /**

@@ -39,8 +39,8 @@ Native-Okta model: a **gray canvas** with **white cards** floating on it.
   comes from the border alone — **no drop shadow on cards** (Okta doesn't shadow them).
   Hover feedback on interactive cards is a border shift (`hover:border-neutral-300`),
   not a shadow.
-- Shadows are reserved for **true overlays** that lift above the canvas — the `Modal`,
-  dropdowns/popovers, and the fixed `LoadingBar`.
+- Shadows are reserved for **true overlays** that lift above the canvas — the `Modal`
+  and dropdowns/popovers. The fixed `ActivityBar` sits on a top border, not a shadow.
 - Field labels (label-above-value) are `text-xs font-medium text-neutral-600`; uppercase
   section eyebrows are `text-xs font-semibold uppercase tracking-wide`.
 
@@ -74,6 +74,7 @@ size props, not ad-hoc padding.
 
 ## Known violations to fix
 
-See [audit §1](./audit/2026-07-audit.md): `SchedulerStatusBar.tsx`,
-`ContextBanner.tsx`. (`AttributeFacet.tsx` resolved — palette moved to
+See [audit §1](./audit/2026-07-audit.md): `ContextBanner.tsx`.
+(`SchedulerStatusBar.tsx` resolved — replaced by the token-based `ActivityBar`
+(ADR-0008); `AttributeFacet.tsx` resolved — palette moved to
 `theme/chartPalette.ts`.)
