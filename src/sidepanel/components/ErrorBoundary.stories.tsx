@@ -32,8 +32,13 @@ type Story = StoryObj<typeof meta>;
 /** No error — children render normally. */
 export const Default: Story = {};
 
-/** A descendant throws during render, triggering the fallback UI with error details. */
+/**
+ * A descendant throws during render, triggering the fallback UI with error
+ * details. Excluded from the Vitest runner (`!test`) — it deliberately throws,
+ * which the runner would surface as an unhandled error; it stays in the explorer.
+ */
 export const CaughtError: Story = {
+  tags: ['!test'],
   args: {
     children: <Thrower />,
   },

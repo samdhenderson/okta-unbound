@@ -59,3 +59,12 @@ jobs:
 
       - name: Build Storybook
         run: npm run build-storybook -- --quiet
+
+      # Run every story as a headless-browser render test (9 have play/assert fns).
+      # VITEST_BROWSER_EXECUTABLE is intentionally unset here so Playwright uses the
+      # browser installed below (the pinned-sandbox path only exists locally).
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Story browser tests
+        run: npm run test:storybook

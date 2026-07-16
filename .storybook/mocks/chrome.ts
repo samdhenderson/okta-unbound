@@ -35,6 +35,77 @@ const storageArea = {
 
 const listenerSlot = { addListener: noop, removeListener: noop, hasListener: () => false };
 
+// --- Inline fixtures for the content-script message contract -----------------
+// Defined here (not imported from src/test/mocks) so the preview bundle stays
+// free of msw. Enough shape for the overview/context components to render a
+// populated state instead of a "failed to load" error.
+const sampleUser = {
+  id: 'user1',
+  status: 'ACTIVE',
+  profile: {
+    login: 'ada.lovelace@example.com',
+    email: 'ada.lovelace@example.com',
+    firstName: 'Ada',
+    lastName: 'Lovelace',
+    department: 'Engineering',
+    title: 'Principal Engineer',
+  },
+};
+const sampleGroups = [
+  {
+    id: 'g-eng',
+    type: 'OKTA_GROUP',
+    profile: { name: 'Engineering', description: 'All engineers' },
+  },
+  {
+    id: 'g-admins',
+    type: 'APP_GROUP',
+    profile: { name: 'Okta Admins', description: 'Admin console' },
+  },
+];
+
+/**
+ * Simulate the content script's `{ success, data }` responses for the read
+ * actions that components/hooks post directly via `chrome.tabs.sendMessage`
+ * (the ones that bypass `useOktaApi`). Unknown actions fall through to the
+ * benign `{ ok: true }` default so nothing throws.
+ */
+function respondToTabAction(message?: { action?: string }): unknown {
+  switch (message?.action) {
+    case 'getOktaOrigin':
+      return { success: true, data: 'https://example.okta.com' };
+
+    // Explicit fetches by id (a component was handed an id and asks for it) →
+    // return fixture data so those components render a populated state.
+    case 'getUserDetails':
+      return { success: true, data: sampleUser };
+    case 'getUserGroups':
+      return {
+        success: true,
+        data: sampleGroups.map((group) => ({
+          group,
+          membershipType: 'DIRECT',
+          addedDate: '2024-01-01',
+        })),
+      };
+    case 'fetchGroupRules':
+      return { success: true, data: [], conflicts: [] };
+
+    // Page-context DETECTION ("what entity is the current Okta page showing?") →
+    // there is no real page in the explorer, so report no entity detected. This
+    // keeps container tabs (e.g. UsersTab) in their default empty/search state
+    // rather than auto-loading a phantom detected user in a re-entrant loop.
+    case 'getUserInfo':
+    case 'getUserContext':
+    case 'getGroupInfo':
+    case 'getAppInfo':
+      return { success: true, data: null };
+
+    default:
+      return { ok: true };
+  }
+}
+
 const chromeFake = {
   runtime: {
     // Scheduler/provider round-trips resolve to a benign, well-formed payload.
@@ -56,7 +127,7 @@ const chromeFake = {
         },
       ]),
     getCurrent: () => Promise.resolve({ id: 1 }),
-    sendMessage: (_tabId?: number, _message?: any) => Promise.resolve({ ok: true }),
+    sendMessage: (_tabId?: number, message?: any) => Promise.resolve(respondToTabAction(message)),
     onActivated: listenerSlot,
     onUpdated: listenerSlot,
   },

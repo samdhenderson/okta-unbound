@@ -56,3 +56,15 @@ export const ActiveInactivePair: Story = {
     </div>
   ),
 };
+
+/** Hover state (forced via the pseudo-states addon). */
+export const Hover: Story = {
+  args: { active: false },
+  parameters: { pseudo: { hover: true } },
+};
+
+/** Focus-visible state (forced via the pseudo-states addon). */
+export const Focus: Story = {
+  args: { active: false },
+  parameters: { pseudo: { focusVisible: true } },
+};

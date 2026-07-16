@@ -43,7 +43,12 @@ function stripCrx(plugins: readonly unknown[]): unknown[] {
 
 const config: StorybookConfig = {
   stories: ['../src/**/*.mdx', '../src/**/*.stories.@(ts|tsx)'],
-  addons: ['@storybook/addon-docs', '@storybook/addon-a11y'],
+  addons: [
+    '@storybook/addon-docs',
+    '@storybook/addon-a11y',
+    '@storybook/addon-vitest',
+    'storybook-addon-pseudo-states',
+  ],
   framework: '@storybook/react-vite',
   docs: { autodocs: 'tag' },
   typescript: {

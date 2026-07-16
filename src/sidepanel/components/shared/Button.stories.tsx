@@ -53,6 +53,18 @@ export const WithBadge: Story = {
   args: { variant: 'primary', badge: '3' },
 };
 
+/** Hover state (forced via the pseudo-states addon). */
+export const Hover: Story = {
+  args: { variant: 'primary' },
+  parameters: { pseudo: { hover: true } },
+};
+
+/** Focus-visible state (forced via the pseudo-states addon). */
+export const Focus: Story = {
+  args: { variant: 'primary' },
+  parameters: { pseudo: { focusVisible: true } },
+};
+
 /** The three size steps side by side. */
 export const Sizes: Story = {
   render: (args) => (

@@ -1,12 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { fn, expect, within, waitFor } from 'storybook/test';
 import UserOverview from './UserOverview';
-import { mockUsers } from '../../../test/mocks/handlers';
 
 /**
  * Overview tab for a single Okta user: profile card, stat grid, quick actions,
  * and the user-comparison launcher. Loads user details + memberships via
- * `chrome.tabs.sendMessage` directly on mount (not through `useOktaApi`).
+ * `chrome.tabs.sendMessage` directly on mount (not through `useOktaApi`); the
+ * Storybook `chrome` fake answers those `getUserDetails`/`getUserGroups` reads
+ * with fixture data, so the loaded state renders.
  */
 const meta = {
   title: 'Overview/UserOverview',
@@ -14,8 +15,9 @@ const meta = {
   tags: ['autodocs'],
   parameters: { layout: 'fullscreen' },
   args: {
-    userId: mockUsers[0].id,
-    userName: `${mockUsers[0].profile.firstName} ${mockUsers[0].profile.lastName}`,
+    // Matches the fixture user the chrome fake returns for `getUserDetails`.
+    userId: 'user1',
+    userName: 'Ada Lovelace',
     targetTabId: 1,
     onTabChange: fn(),
     oktaOrigin: 'https://example.okta.com',
@@ -26,11 +28,14 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /**
- * Default render. This component fetches through `chrome.tabs.sendMessage`
- * directly rather than `useOktaApi`, so there is no per-story hook to inject a
- * successful `{ success, data }` envelope — the story environment's benign
- * `chrome.tabs.sendMessage` fake resolves `{ ok: true }`, which this component
- * treats as a failed fetch and renders as a danger `AlertMessage`. That settled
- * error state is what this story compiles and renders.
+ * Loaded overview: profile card, group stat grid, and quick actions, populated
+ * from the fixture user + memberships the `chrome` fake returns. The `play`
+ * asserts the loaded state renders (not the "failed to load" danger alert).
  */
-export const Default: Story = {};
+export const Default: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() => expect(canvas.getByText('Ada Lovelace')).toBeInTheDocument());
+    expect(canvas.queryByText(/failed to load/i)).not.toBeInTheDocument();
+  },
+};
