@@ -51,7 +51,6 @@ import type {
   GroupInfo,
   UserInfo,
   UserStatus,
-  ApiResponse,
 } from '../shared/types';
 import { getCacheEntry, setCacheEntry } from '../shared/cache';
 import { createLogger } from '../shared/utils/logger';
@@ -65,6 +64,7 @@ import {
   extractAppIdFromUrl,
   extractAppNameFromPage,
 } from './pageContext';
+import { handleMakeApiRequest } from './apiRequest';
 
 const log = createLogger('Content');
 
@@ -187,142 +187,6 @@ chrome.runtime.onMessage.addListener(
     }
   },
 );
-
-// ============================================================================
-// API Request Handler
-// ============================================================================
-
-const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
-
-/**
- * Whether `endpoint` is a plain same-origin path (`/api/...`). Rejects absolute
- * URLs and protocol-relative `//host` forms so a malformed or hostile message
- * can never redirect the authenticated fetch off the Okta org.
- */
-function isSameOriginPath(endpoint: string): boolean {
-  if (typeof endpoint !== 'string' || !endpoint.startsWith('/') || endpoint.startsWith('//')) {
-    return false;
-  }
-  try {
-    return new URL(endpoint, window.location.origin).origin === window.location.origin;
-  } catch {
-    return false;
-  }
-}
-
-async function handleMakeApiRequest(
-  endpoint: string,
-  method: string = 'GET',
-  body?: unknown,
-): Promise<ApiResponse> {
-  log.debug('makeApiRequest called', {
-    endpoint: endpoint.split('?')[0],
-    method,
-    hasBody: !!body,
-  });
-
-  if (!isSameOriginPath(endpoint)) {
-    log.warn('Rejected API request: endpoint is not a same-origin path');
-    return { success: false, error: 'Rejected request: endpoint must be a same-origin path' };
-  }
-
-  const normalizedMethod = (method || 'GET').toUpperCase();
-  if (!ALLOWED_METHODS.has(normalizedMethod)) {
-    log.warn('Rejected API request: unsupported HTTP method', { method: normalizedMethod });
-    return { success: false, error: 'Rejected request: unsupported HTTP method' };
-  }
-
-  try {
-    const url = window.location.origin + endpoint;
-
-    // Extract XSRF token from the page
-    const xsrfToken = getXsrfToken();
-    // Never log the token or any preview of it — only whether one was found.
-    log.debug('XSRF token check', { present: xsrfToken.length > 0 });
-
-    const options: RequestInit = {
-      method: normalizedMethod,
-      headers: {
-        Accept: 'application/json, text/javascript, */*; q=0.01',
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache, no-store',
-        'X-Requested-With': 'XMLHttpRequest',
-        ...(xsrfToken && { 'X-Okta-Xsrftoken': xsrfToken }),
-      },
-      credentials: 'include',
-      cache: 'no-store',
-      mode: 'cors',
-      redirect: 'follow',
-    };
-
-    if (body && normalizedMethod !== 'GET') {
-      options.body = JSON.stringify(body);
-    }
-
-    log.debug('About to call fetch()');
-    const response = await fetch(url, options);
-    log.debug('fetch() completed');
-
-    log.debug('Okta API response', {
-      endpoint: endpoint.split('?')[0],
-      status: response.status,
-      ok: response.ok,
-    });
-
-    // Parse response headers
-    const headers: Record<string, string> = {};
-    response.headers.forEach((value, key) => {
-      headers[key] = value;
-    });
-
-    // Handle DELETE requests (empty response)
-    if (normalizedMethod === 'DELETE' && response.ok) {
-      return {
-        success: true,
-        data: null,
-        headers,
-        status: response.status,
-      };
-    }
-
-    // Try to parse JSON
-    let data: unknown = null;
-    const contentType = response.headers.get('content-type');
-    if (contentType?.includes('application/json')) {
-      try {
-        data = await response.json();
-      } catch {
-        log.warn('Failed to parse JSON response');
-      }
-    }
-
-    if (!response.ok) {
-      const errorBody = data as { errorSummary?: string; message?: string } | null;
-      return {
-        success: false,
-        error:
-          errorBody?.errorSummary ||
-          errorBody?.message ||
-          `Request failed with status ${response.status}`,
-        status: response.status,
-        data,
-      };
-    }
-
-    return {
-      success: true,
-      data,
-      headers,
-      status: response.status,
-    };
-  } catch (error) {
-    log.error('makeApiRequest error', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
-  }
-}
 
 // ============================================================================
 // Group Info Handler
@@ -1097,11 +961,6 @@ async function handleGetUserDetails(userId: string): Promise<MessageResponse> {
 // ============================================================================
 // Utility Functions
 // ============================================================================
-
-function getXsrfToken(): string {
-  const xsrfElement = document.getElementById('_xsrfToken');
-  return xsrfElement ? xsrfElement.textContent || '' : '';
-}
 
 async function fetchAllGroupMembers(groupId: string): Promise<OktaUser[]> {
   let allMembers: OktaUser[] = [];
