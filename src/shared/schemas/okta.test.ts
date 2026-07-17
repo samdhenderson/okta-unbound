@@ -30,6 +30,25 @@ describe('oktaUserSchema / parseOkta', () => {
     const bad = { id: '00u1', status: 'ACTIVE', profile: { login: 'x' } };
     expect(() => parseOkta(oktaUserSchema, bad, 'test')).toThrow(/validation failed/);
   });
+
+  it('reports issue paths and codes but never the offending (potentially PII) value', () => {
+    // status is an enum over a value; the received value must NOT appear in the error.
+    const offendingValue = '00gFAKE-SECRET-STATUS';
+    const bad = { ...validUser, status: offendingValue };
+
+    let message = '';
+    try {
+      parseOkta(oktaUserSchema, bad, 'GET /users/{id}');
+    } catch (err) {
+      message = (err as Error).message;
+    }
+
+    // paths + codes are surfaced for debugging…
+    expect(message).toContain('"path":"status"');
+    expect(message).toContain('"code":"invalid_enum_value"');
+    // …but the received value is never echoed (no PII leak).
+    expect(message).not.toContain(offendingValue);
+  });
 });
 
 describe('oktaGroupSchema', () => {
