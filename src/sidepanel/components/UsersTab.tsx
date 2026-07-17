@@ -12,11 +12,11 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import PageHeader from './shared/PageHeader';
 import AlertMessage from './shared/AlertMessage';
 import Button from './shared/Button';
-import Modal from './shared/Modal';
 import EmptyState from './shared/EmptyState';
 import {
   AddToGroupModal,
   GroupMembershipsList,
+  UserLifecycleActions,
   UserProfileCard,
   UserSearchBar,
   UserSearchResults,
@@ -298,119 +298,16 @@ const UsersTab: React.FC<UsersTabProps> = ({
               groupCount={memberships.length}
               oktaOrigin={oktaOrigin}
               afterCard={
-                selectedUser.status !== 'DEPROVISIONED' ? (
-                  <div className="bg-white rounded-md border border-neutral-200 px-5 py-4">
-                    <h3 className="text-xs font-semibold text-neutral-600 uppercase tracking-wide mb-3">
-                      Lifecycle Actions
-                    </h3>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedUser.status === 'ACTIVE' && (
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          disabled={isLifecycleLoading}
-                          onClick={() => setPendingLifecycleAction('suspend')}
-                        >
-                          Suspend User
-                        </Button>
-                      )}
-                      {selectedUser.status === 'SUSPENDED' && (
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          disabled={isLifecycleLoading}
-                          onClick={() => setPendingLifecycleAction('unsuspend')}
-                        >
-                          Unsuspend User
-                        </Button>
-                      )}
-                      {(selectedUser.status === 'ACTIVE' ||
-                        selectedUser.status === 'RECOVERY' ||
-                        selectedUser.status === 'LOCKED_OUT' ||
-                        selectedUser.status === 'PASSWORD_EXPIRED') && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          disabled={isLifecycleLoading}
-                          onClick={() => setPendingLifecycleAction('resetPassword')}
-                        >
-                          Reset Password
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="px-5 py-3 bg-neutral-50 rounded-md border border-neutral-200">
-                    <p className="text-xs text-neutral-500">
-                      No lifecycle actions are available for deprovisioned users.
-                    </p>
-                  </div>
-                )
+                <UserLifecycleActions
+                  user={selectedUser}
+                  isLifecycleLoading={isLifecycleLoading}
+                  pendingLifecycleAction={pendingLifecycleAction}
+                  onRequestAction={setPendingLifecycleAction}
+                  onCancel={() => setPendingLifecycleAction(null)}
+                  onConfirm={confirmLifecycleAction}
+                />
               }
             />
-
-            {/* Confirmation modal for lifecycle actions */}
-            <Modal
-              isOpen={pendingLifecycleAction !== null}
-              onClose={() => setPendingLifecycleAction(null)}
-              title={
-                pendingLifecycleAction === 'suspend'
-                  ? 'Suspend User'
-                  : pendingLifecycleAction === 'unsuspend'
-                    ? 'Unsuspend User'
-                    : 'Reset Password'
-              }
-              size="sm"
-              footer={
-                <>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setPendingLifecycleAction(null)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant={pendingLifecycleAction === 'suspend' ? 'danger' : 'primary'}
-                    size="sm"
-                    onClick={confirmLifecycleAction}
-                  >
-                    {pendingLifecycleAction === 'suspend'
-                      ? 'Suspend'
-                      : pendingLifecycleAction === 'unsuspend'
-                        ? 'Unsuspend'
-                        : 'Send Reset Email'}
-                  </Button>
-                </>
-              }
-            >
-              <p className="text-sm text-neutral-700">
-                {pendingLifecycleAction === 'suspend' && (
-                  <>
-                    Are you sure you want to suspend{' '}
-                    <strong className="text-neutral-900">
-                      {selectedUser.profile.firstName} {selectedUser.profile.lastName}
-                    </strong>
-                    ? They will be unable to sign in until unsuspended.
-                  </>
-                )}
-                {pendingLifecycleAction === 'unsuspend' && (
-                  <>
-                    Unsuspend{' '}
-                    <strong className="text-neutral-900">
-                      {selectedUser.profile.firstName} {selectedUser.profile.lastName}
-                    </strong>
-                    ? They will regain the ability to sign in.
-                  </>
-                )}
-                {pendingLifecycleAction === 'resetPassword' && (
-                  <>
-                    Send a password reset email to{' '}
-                    <strong className="text-neutral-900">{selectedUser.profile.email}</strong>?
-                  </>
-                )}
-              </p>
-            </Modal>
 
             {/* Group Memberships */}
             <GroupMembershipsList
