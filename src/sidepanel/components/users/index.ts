@@ -11,3 +11,4 @@ export { default as UserProfileCard } from './UserProfileCard';
 export { default as UserComparisonModal } from './UserComparisonModal';
 export { default as AddToGroupModal } from './AddToGroupModal';
 export { default as UserLifecycleActions } from './UserLifecycleActions';
+export { default as DetectedUserBanner } from './DetectedUserBanner';

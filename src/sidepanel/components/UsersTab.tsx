@@ -15,6 +15,7 @@ import Button from './shared/Button';
 import EmptyState from './shared/EmptyState';
 import {
   AddToGroupModal,
+  DetectedUserBanner,
   GroupMembershipsList,
   UserLifecycleActions,
   UserProfileCard,
@@ -229,41 +230,12 @@ const UsersTab: React.FC<UsersTabProps> = ({
 
           {/* Detected-user banner: manual load only, so the tab is never hijacked. */}
           {showDetectedBanner && userInfo && (
-            <div className="px-4 py-2.5 bg-primary-light border border-primary-highlight rounded-md flex items-center gap-2">
-              <span className="text-sm text-neutral-700">
-                Detected in admin: <strong className="text-neutral-900">{userInfo.userName}</strong>
-              </span>
-              {userInfo.userStatus && (
-                <span
-                  className={`px-2.5 py-0.5 text-xs font-bold rounded-md ${
-                    userInfo.userStatus === 'ACTIVE'
-                      ? 'bg-success-light text-success-text'
-                      : userInfo.userStatus === 'DEPROVISIONED'
-                        ? 'bg-danger-light text-danger-text'
-                        : 'bg-warning-light text-warning-text'
-                  }`}
-                >
-                  {userInfo.userStatus}
-                </span>
-              )}
-              <div className="ml-auto flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={loadDetectedUser}
-                  disabled={isLoadingMemberships}
-                >
-                  Load
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setDismissedDetectedId(userInfo.userId)}
-                >
-                  Dismiss
-                </Button>
-              </div>
-            </div>
+            <DetectedUserBanner
+              userInfo={userInfo}
+              isLoading={isLoadingMemberships}
+              onLoad={loadDetectedUser}
+              onDismiss={() => setDismissedDetectedId(userInfo.userId)}
+            />
           )}
         </div>
 
