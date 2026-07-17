@@ -9,3 +9,4 @@ export { default as UserSearchResults } from './UserSearchResults';
 export { default as GroupMembershipsList } from './GroupMembershipsList';
 export { default as UserProfileCard } from './UserProfileCard';
 export { default as UserComparisonModal } from './UserComparisonModal';
+export { default as AddToGroupModal } from './AddToGroupModal';
