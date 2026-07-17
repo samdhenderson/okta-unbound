@@ -58,6 +58,49 @@ Details: `docs/architecture.md`.
 - **Every new/changed `shared` or leaf feature component ships a co-located
   `.stories.tsx`.** (`docs/component-explorer.md`)
 
+## Security hardening rules (non-negotiable)
+
+These govern every future change, human- or AI-authored. Any change touching
+messaging, the manifest, storage, exports, logging, or Okta-response handling
+should be reviewed with `security-logging-reviewer`.
+
+- **No secrets in the repo — ever.** Never hardcode or commit Okta API tokens
+  (`SSWS …`), session cookies, XSRF tokens, passwords, or real org URLs/IDs —
+  including in tests, stories, fixtures, and docs. Use obviously fake
+  placeholders (`00gFAKE…`, `user@example.com`).
+- **The XSRF token lives only in the content script, per request.** Read it from
+  the page DOM at fetch time; never persist it (`chrome.storage` / IndexedDB /
+  `localStorage`), never send it across extension messages, never log it.
+- **No dynamic code execution.** `eval`, `new Function`, string-arg
+  `setTimeout`, and remotely loaded scripts are banned (MV3 CSP enforces this —
+  never weaken `content_security_policy` in the manifest). Parse untrusted
+  expressions with a real parser (`shared/ruleEvaluator.ts` is the pattern).
+- **Treat every Okta response as untrusted input.** Validate at the
+  content-script boundary with zod (`src/shared/schemas/okta.ts`, ADR-0006)
+  before rendering or branching. Rule expressions, profile attributes, and
+  group names are end-user-controllable — sanitize accordingly.
+- **Message passing stays validated.** The background listener rejects foreign
+  senders and tab-originated `scheduleApiRequest`; the content script only
+  fetches same-origin paths with an allow-listed HTTP method. Every new message
+  action must validate sender + message structure the same way. Never add
+  `externally_connectable` or an `onMessageExternal` listener without an ADR.
+- **Host checks parse hostnames.** Use `shared/utils/oktaUrl.ts` for every "is
+  this Okta?" decision; substring-matching URLs is banned.
+- **Least privilege in the manifest.** Adding any permission, host permission,
+  API scope, or broader match pattern requires an ADR justifying why the
+  narrowest alternative is insufficient; remove permissions when the last
+  feature using them goes.
+- **Escape all export output.** Every CSV cell goes through
+  `csvUtils.escapeCSV` (RFC 4180 quoting + spreadsheet-formula-injection
+  guard); never string-interpolate cells into export content.
+- **Rendering stays XSS-safe.** Rely on React's escaping;
+  `dangerouslySetInnerHTML` and hand-built HTML strings are banned. External
+  links must be built from the validated `oktaOrigin` plus a validated ID, with
+  `rel="noopener noreferrer"`.
+- **Store no more than needed.** `chrome.storage` and IndexedDB are plaintext:
+  never put credentials or session material there; keep cached PII minimal and
+  TTL'd (`shared/cache.ts`), and respect audit retention settings.
+
 ## Routing table — read ONLY the matching row(s)
 
 | If the task is…                                | Read                                               | Consider delegating to      |

@@ -4,12 +4,12 @@
  *
  * Fetches the user's details from the content script and their group
  * memberships via {@link useUserMemberships} (which classifies each as direct
- * vs. rule-based), then renders stat cards, a membership distribution, recent
- * groups, and the {@link UserComparisonModal} launcher.
+ * vs. rule-based), then renders the profile card, stat cards, an alphabetical
+ * groups preview (with Compare / View all), and the {@link UserComparisonModal}
+ * launcher.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import StatCard from './shared/StatCard';
-import QuickActionsPanel, { type ActionSection } from './shared/QuickActionsPanel';
 import { UserProfileCard, UserComparisonModal } from '../users';
 import { useUserMemberships } from '../../hooks/useUserMemberships';
 import { useEntityQuery } from '../../cache/useEntityQuery';
@@ -26,9 +26,9 @@ interface UserOverviewProps {
   userName?: string;
   /** Browser tab hosting the Okta session; every API call is routed to it. */
   targetTabId: number;
-  /** Switch the side panel to the users tab (e.g. to view full memberships). */
-  onTabChange: (tab: 'users') => void;
-  /** Okta org origin, used to build Admin Console deep links (null when unknown). */
+  /** Open this user in the Users tab with their full membership list loaded. */
+  onViewAllGroups: () => void;
+  /** Okta org origin (unused for links here — the overview omits the Okta deep link). */
   oktaOrigin?: string | null;
 }
 
@@ -39,7 +39,7 @@ interface UserOverviewProps {
 const UserOverview: React.FC<UserOverviewProps> = ({
   userId,
   targetTabId,
-  onTabChange,
+  onViewAllGroups,
   oktaOrigin,
 }) => {
   const [isCompareOpen, setIsCompareOpen] = useState(false);
@@ -75,6 +75,18 @@ const UserOverview: React.FC<UserOverviewProps> = ({
 
   const isLoading = isLoadingUser || isLoadingMemberships;
 
+  // Preview list: alphabetical by group name (a stable, honest ordering — the old
+  // "Recent Groups" box was just the unsorted first five). Full list lives one tap
+  // away via "View all". Kept above the early returns so hook order stays stable.
+  const PREVIEW_LIMIT = 8;
+  const sortedGroups = useMemo(
+    () =>
+      [...groups].sort((a, b) =>
+        (a.group?.profile?.name || '').localeCompare(b.group?.profile?.name || ''),
+      ),
+    [groups],
+  );
+
   // Load memberships once the user details are available (served from cache on
   // revisit). `userDetails`/`loadMemberships` are stable across renders.
   useEffect(() => {
@@ -92,48 +104,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
 
   const directGroups = groups.filter((g) => g.membershipType === 'DIRECT').length;
   const ruleBasedGroups = groups.filter((g) => g.membershipType === 'RULE_BASED').length;
-  const unknownGroups = groups.filter((g) => g.membershipType === 'UNKNOWN').length;
   const totalGroups = groups.length;
-
-  // Only include actions that actually work - removed "coming soon" placeholders
-  const actionSections: ActionSection[] = [
-    {
-      title: 'Group Management',
-      icon: 'users',
-      expanded: true,
-      actions: [
-        {
-          label: 'View All Groups',
-          icon: 'list',
-          variant: 'primary',
-          onClick: () => onTabChange('users'),
-          badge: `${totalGroups}`,
-          tooltip: 'See full list of group memberships',
-        },
-        {
-          label: 'Compare with User',
-          icon: 'users',
-          variant: 'secondary',
-          onClick: () => setIsCompareOpen(true),
-          tooltip: 'Compare group & app access with another user',
-        },
-      ],
-    },
-    {
-      title: 'Analysis',
-      icon: 'search',
-      expanded: false,
-      actions: [
-        {
-          label: 'Trace Memberships',
-          icon: 'link',
-          variant: 'ghost',
-          onClick: () => onTabChange('users'),
-          tooltip: 'Analyze how user got into each group',
-        },
-      ],
-    },
-  ];
 
   const statusColors: Record<string, 'success' | 'warning' | 'error' | 'neutral'> = {
     ACTIVE: 'success',
@@ -155,6 +126,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
           groupCount={totalGroups}
           showCollapsibleSections={false}
           oktaOrigin={oktaOrigin}
+          showOktaLink={false}
         />
       )}
 
@@ -171,88 +143,65 @@ const UserOverview: React.FC<UserOverviewProps> = ({
         />
       </div>
 
-      {/* Two Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Column */}
-        <div className="space-y-6">
-          {/* Quick Actions */}
-          <div>
-            <h3 className="text-lg font-semibold text-neutral-900 mb-3">Quick Actions</h3>
-            <QuickActionsPanel sections={actionSections} />
+      {/* Groups preview — the stat grid above already carries the Direct/Rule-Based
+          split, so this is a concrete, alphabetical list (not another count box). */}
+      <div className="bg-white rounded-md border border-neutral-200 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <h3 className="text-lg font-semibold text-neutral-900">Groups</h3>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon="users"
+              onClick={() => setIsCompareOpen(true)}
+              title="Compare group & app access with another user"
+            >
+              Compare
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon="list"
+              onClick={onViewAllGroups}
+              title="Open this user in the Users tab with all groups loaded"
+            >
+              View all
+            </Button>
           </div>
         </div>
 
-        {/* Right Column */}
-        <div className="space-y-6">
-          {/* Group Membership Chart */}
-          <div className="bg-white rounded-md border border-neutral-200 p-6">
-            <h3 className="text-lg font-semibold text-neutral-900 mb-4">
-              Group Membership Distribution
-            </h3>
-            <div className="flex items-center justify-center h-48">
-              <div className="text-center">
-                <div className="text-5xl font-bold text-primary">{totalGroups}</div>
-                <div className="text-neutral-600 mt-2">Total Groups</div>
-                <div className="mt-4 flex gap-4 justify-center text-sm">
-                  {unknownGroups === totalGroups ? (
-                    <div>
-                      <span className="font-semibold text-neutral-900">{totalGroups}</span>
-                      <span className="text-neutral-600"> Total</span>
-                    </div>
-                  ) : (
-                    <>
-                      <div>
-                        <span className="font-semibold text-neutral-900">{directGroups}</span>
-                        <span className="text-neutral-600"> Direct</span>
-                      </div>
-                      <div>
-                        <span className="font-semibold text-neutral-900">{ruleBasedGroups}</span>
-                        <span className="text-neutral-600"> Rule-Based</span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
+        {groups.length === 0 ? (
+          <div className="text-center py-8 text-neutral-500 text-sm">
+            No group memberships found
           </div>
-
-          {/* Recent Groups */}
-          <div className="bg-white rounded-md border border-neutral-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-neutral-900">Recent Groups</h3>
-              <Button variant="ghost" size="sm" onClick={() => onTabChange('users')}>
-                View All
-              </Button>
-            </div>
+        ) : (
+          <>
             <div className="space-y-2">
-              {groups.slice(0, 5).map((membership, index) => (
+              {sortedGroups.slice(0, PREVIEW_LIMIT).map((membership, index) => (
                 <div
-                  key={index}
-                  className="flex items-center justify-between p-2 hover:bg-neutral-50 rounded"
+                  key={membership.group?.id || index}
+                  className="flex items-center justify-between p-2 hover:bg-neutral-50 rounded-md"
                 >
-                  <div className="flex-1">
-                    <div className="font-medium text-neutral-900 text-sm">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-neutral-900 text-sm truncate">
                       {membership.group?.profile?.name || 'Unknown Group'}
                     </div>
                     <div className="text-xs text-neutral-500">
                       {membership.membershipType === 'DIRECT'
-                        ? 'Direct Assignment'
+                        ? 'Direct assignment'
                         : membership.membershipType === 'RULE_BASED'
-                          ? 'Rule-Based'
-                          : 'Group'}
+                          ? 'Rule-based'
+                          : 'Membership'}
                     </div>
                   </div>
                   <span
-                    className={`
-                    px-2 py-1 rounded text-xs font-medium
-                    ${
+                    className={`shrink-0 px-2 py-1 rounded-md text-xs font-medium ${
                       membership.membershipType === 'DIRECT'
                         ? 'bg-primary-light text-primary-text'
                         : membership.membershipType === 'RULE_BASED'
                           ? 'bg-success-light text-success-text'
                           : 'bg-neutral-100 text-neutral-700'
-                    }
-                  `}
+                    }`}
                   >
                     {membership.membershipType === 'DIRECT'
                       ? 'Manual'
@@ -262,14 +211,18 @@ const UserOverview: React.FC<UserOverviewProps> = ({
                   </span>
                 </div>
               ))}
-              {groups.length === 0 && (
-                <div className="text-center py-8 text-neutral-500 text-sm">
-                  No group memberships found
-                </div>
-              )}
             </div>
-          </div>
-        </div>
+            {totalGroups > PREVIEW_LIMIT && (
+              <button
+                type="button"
+                onClick={onViewAllGroups}
+                className="mt-3 w-full text-center text-xs font-medium text-primary-text hover:underline"
+              >
+                Showing {PREVIEW_LIMIT} of {totalGroups} — view all
+              </button>
+            )}
+          </>
+        )}
       </div>
 
       {/* User comparison modal */}

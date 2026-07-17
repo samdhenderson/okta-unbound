@@ -13,11 +13,9 @@ import { useEntityQuery } from '../../cache/useEntityQuery';
 import { peek, setEntry, invalidate } from '../../cache/entityCache';
 import { useProgress } from '../../contexts/ProgressContext';
 import AlertMessage from '../shared/AlertMessage';
-import { Button, IconButton } from '../shared';
+import { Button, Modal } from '../shared';
 import LoadingSpinner from '../shared/LoadingSpinner';
-import Modal from '../shared/Modal';
 import StatCard from './shared/StatCard';
-import QuickActionsPanel, { type ActionSection } from './shared/QuickActionsPanel';
 import MemberExplorer from './members/MemberExplorer';
 import type { OktaUser, MemberMfaResult, MfaScanStatus } from '../../../shared/types';
 import { createLogger } from '../../../shared/utils/logger';
@@ -52,7 +50,7 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
   const { startProgress, completeProgress, updateProgress } = useProgress();
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv');
-  const [idCopied, setIdCopied] = useState(false);
+  const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
   const [mfaResults, setMfaResults] = useState<Map<string, MemberMfaResult> | null>(null);
   const [scanStatus, setScanStatus] = useState<MfaScanStatus>('idle');
 
@@ -121,19 +119,13 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
   const inactiveCount = deprovisionedCount + suspendedCount + lockedOutCount;
 
   const handleRemoveDeprovisioned = async () => {
+    setConfirmRemoveOpen(false);
     // removeDeprovisioned drives the global activity bar itself (via runOperation),
     // so no manual start/completeProgress here.
     await removeDeprovisioned(groupId);
     // Membership changed — drop the stale MFA scan and reload members.
     invalidate(['mfaScan', groupId]);
     await refetchMembers();
-  };
-
-  const handleCopyId = () => {
-    navigator.clipboard.writeText(groupId).then(() => {
-      setIdCopied(true);
-      setTimeout(() => setIdCopied(false), 1500);
-    });
   };
 
   const handleExportConfirm = async () => {
@@ -177,47 +169,6 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
     );
   }
 
-  const actionSections: ActionSection[] = [
-    {
-      title: 'Member Operations',
-      icon: 'users',
-      expanded: true,
-      actions: [
-        {
-          label: 'Remove Deprovisioned',
-          icon: 'trash',
-          variant: 'primary',
-          onClick: handleRemoveDeprovisioned,
-          disabled: deprovisionedCount === 0 || isApiLoading,
-          badge: deprovisionedCount > 0 ? `${deprovisionedCount}` : undefined,
-          tooltip: 'Remove only deprovisioned users',
-        },
-        {
-          label: 'Export Members',
-          icon: 'download',
-          variant: 'secondary',
-          onClick: () => setExportModalOpen(true),
-          disabled: isApiLoading,
-          tooltip: 'Export member list to CSV or JSON',
-        },
-      ],
-    },
-    {
-      title: 'Navigation',
-      icon: 'search',
-      expanded: false,
-      actions: [
-        {
-          label: 'View Rules',
-          icon: 'list',
-          variant: 'ghost',
-          onClick: () => onTabChange('rules'),
-          tooltip: 'View group rules affecting this group',
-        },
-      ],
-    },
-  ];
-
   return (
     <div className="space-y-6">
       {/* Quick Stats Grid */}
@@ -238,77 +189,56 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
         />
       </div>
 
-      {/* Quick Actions */}
-      <QuickActionsPanel sections={actionSections} />
-
-      {/* In-group member explorer: search, composition reports, MFA scan */}
-      <MemberExplorer
-        members={members}
-        mfaResults={mfaResults}
-        scanStatus={scanStatus}
-        onRunScan={runMfaScan}
-        onRequestConfirm={requestMfaConfirm}
-        onCancelConfirm={cancelMfaConfirm}
-        oktaOrigin={oktaOrigin}
-      />
-
-      {/* Admin Console Link and Group ID */}
-      <div className="flex flex-wrap items-center gap-2">
-        {oktaOrigin && (
-          <a
-            href={`${oktaOrigin}/admin/group/${groupId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-white text-neutral-900 border border-neutral-200 rounded-md hover:bg-neutral-50 hover:border-neutral-500 transition-colors duration-100"
-            style={{ fontFamily: 'var(--font-heading)' }}
-            title="Open this group in the Okta Admin Console"
-          >
-            <span>Open in Admin Console</span>
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-              />
-            </svg>
-          </a>
-        )}
-        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-neutral-50 border border-neutral-200 rounded-md">
-          <span className="text-xs text-neutral-500 font-medium">ID:</span>
-          <code className="text-xs font-mono text-neutral-700">{groupId}</code>
-          <IconButton
-            label={idCopied ? 'Copied!' : 'Copy group ID'}
-            onClick={handleCopyId}
-            variant="ghost"
+      {/* Member operations act directly on the list below, so they sit atop it as a
+          flat toolbar (no collapsible panel). */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="danger"
             size="sm"
+            icon="trash"
+            onClick={() => setConfirmRemoveOpen(true)}
+            disabled={deprovisionedCount === 0 || isApiLoading}
+            title="Remove only deprovisioned users from this group"
           >
-            {idCopied ? (
-              <svg
-                className="w-3.5 h-3.5 text-success-text"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                />
-              </svg>
-            ) : (
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M8 5a2 2 0 002 2h4a2 2 0 002-2M8 5a2 2 0 012-2h4a2 2 0 012 2"
-                />
-              </svg>
-            )}
-          </IconButton>
+            Remove Deprovisioned
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon="download"
+            onClick={() => setExportModalOpen(true)}
+            disabled={isApiLoading}
+            title="Export member list to CSV or JSON"
+          >
+            Export Members
+          </Button>
         </div>
+
+        {/* In-group member explorer: search, composition reports, MFA scan */}
+        <MemberExplorer
+          members={members}
+          mfaResults={mfaResults}
+          scanStatus={scanStatus}
+          onRunScan={runMfaScan}
+          onRequestConfirm={requestMfaConfirm}
+          onCancelConfirm={cancelMfaConfirm}
+          oktaOrigin={oktaOrigin}
+        />
+      </div>
+
+      {/* Secondary navigation (you're already on this group's page, so no Okta link;
+          the group id lives in the context bar). */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          icon="list"
+          onClick={() => onTabChange('rules')}
+          title="View group rules affecting this group"
+        >
+          View Rules
+        </Button>
       </div>
 
       {/* Export Modal */}
@@ -344,6 +274,29 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
             {exportFormat.toUpperCase()} file.
           </p>
         </div>
+      </Modal>
+
+      {/* Confirm destructive bulk removal */}
+      <Modal
+        isOpen={confirmRemoveOpen}
+        onClose={() => setConfirmRemoveOpen(false)}
+        title="Remove Deprovisioned Members"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmRemoveOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={handleRemoveDeprovisioned}>
+              Remove {deprovisionedCount}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-neutral-600">
+          This will remove <strong>{deprovisionedCount}</strong> deprovisioned{' '}
+          {deprovisionedCount === 1 ? 'member' : 'members'} from <strong>{groupName}</strong>. This
+          action cannot be undone.
+        </p>
       </Modal>
     </div>
   );

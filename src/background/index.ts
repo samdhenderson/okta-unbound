@@ -89,14 +89,68 @@ setInterval(
 // Message Handlers for Scheduler and Tab State
 // ============================================================================
 
-chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
+const ALLOWED_PRIORITIES = new Set(['high', 'normal', 'low']);
+
+/**
+ * Validate the structure of a `scheduleApiRequest` message before it reaches the
+ * scheduler: endpoint must be a plain same-origin path (no absolute or
+ * protocol-relative URLs), method/priority must come from the closed allow-lists,
+ * and tabId must be a number.
+ */
+function isValidScheduleRequest(request: {
+  endpoint?: unknown;
+  tabId?: unknown;
+  method?: unknown;
+  priority?: unknown;
+}): boolean {
+  if (
+    typeof request.endpoint !== 'string' ||
+    !request.endpoint.startsWith('/') ||
+    request.endpoint.startsWith('//')
+  ) {
+    return false;
+  }
+  if (typeof request.tabId !== 'number' || !Number.isInteger(request.tabId)) {
+    return false;
+  }
+  if (request.method !== undefined && !ALLOWED_METHODS.has(String(request.method).toUpperCase())) {
+    return false;
+  }
+  if (request.priority !== undefined && !ALLOWED_PRIORITIES.has(String(request.priority))) {
+    return false;
+  }
+  return true;
+}
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // Only trust messages from this extension's own contexts. `onMessage` never
+  // fires for other extensions or web pages unless externally_connectable is
+  // added later — this guard keeps that invariant explicit and future-proof.
+  if (sender.id !== chrome.runtime.id) {
+    log.warn('Ignoring message from foreign sender');
+    return false;
+  }
+
   log.debug('Received message', { action: request.action });
 
   switch (request.action) {
     case 'scheduleApiRequest':
-      // Schedule an API request through the global scheduler
+      // API scheduling is driven only by extension pages (the side panel).
+      // Content scripts run inside web pages and must never be able to drive
+      // authenticated Okta API calls — reject any tab-originated request.
+      if (sender.tab) {
+        sendResponse({ success: false, error: 'scheduleApiRequest not allowed from tabs' });
+        return true;
+      }
+
       if (!request.endpoint || !request.tabId) {
         sendResponse({ success: false, error: 'Missing endpoint or tabId' });
+        return true;
+      }
+
+      if (!isValidScheduleRequest(request)) {
+        sendResponse({ success: false, error: 'Invalid scheduleApiRequest message' });
         return true;
       }
 

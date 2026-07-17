@@ -39,11 +39,11 @@ info`) — never `error`.
 
 ## Catalog
 
-`shared/`: `Button`, `IconButton`, `FilterPill`, `CopyButton`, `Modal`, `Input`,
-`Checkbox`, `Select`, `Textarea`, `PageHeader`, `CollapsibleSection`,
-`AlertMessage`, `EmptyState`, `LoadingSpinner`, `ScrollableList`, `SearchDropdown`,
-`SelectionChips`.
-`overview/shared/`: `Icon`, `StatCard`, `QuickActionsPanel`.
+`shared/`: `Button`, `IconButton`, `FilterPill`, `CopyButton`, `OpenInOktaLink`,
+`Modal`, `Input`, `Checkbox`, `Select`, `Textarea`, `PageHeader`,
+`CollapsibleSection`, `AlertMessage`, `EmptyState`, `LoadingSpinner`,
+`ScrollableList`, `SearchDropdown`, `SelectionChips`.
+`overview/shared/`: `Icon`, `StatCard`.
 
 **Barrel:** `shared/index.ts` now exports the full catalog above — import from the
 barrel (`../shared`), not deep paths.

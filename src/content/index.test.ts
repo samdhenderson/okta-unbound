@@ -1892,7 +1892,7 @@ describe('exportGroupMembers', () => {
     } as Partial<OktaUser>),
   ];
 
-  it('produces golden CSV bytes — every cell quoted, embedded quotes NOT escaped', async () => {
+  it('produces golden CSV bytes — RFC 4180 escaping via escapeCSV', async () => {
     vi.setSystemTime(new Date('2026-07-14T10:00:00Z'));
     routeFetch([[url, () => res(members)]]);
 
@@ -1904,13 +1904,13 @@ describe('exportGroupMembers', () => {
     }).response;
 
     expect(result).toEqual({ success: true, count: 2 });
-    // BUG (pinned): `Bob "The Builder"` breaks the CSV — quotes are wrapped, never
-    // doubled. csvUtils.generateCSV escapes correctly, so adopting it CHANGES bytes.
+    // Cells route through csvUtils.escapeCSV: only cells containing a comma,
+    // newline, or quote are wrapped, and embedded quotes are doubled.
     expect(downloaded!.content).toBe(
       [
         'ID,Email,First Name,Last Name,Status',
-        '"u1","a@x.com","Ada","Lovelace","ACTIVE"',
-        '"u2","b@x.com","Bob "The Builder"","Smith, Jr.","SUSPENDED"',
+        'u1,a@x.com,Ada,Lovelace,ACTIVE',
+        'u2,b@x.com,"Bob ""The Builder""","Smith, Jr.",SUSPENDED',
       ].join('\n'),
     );
     expect(downloaded!.mimeType).toBe('text/csv');
@@ -1918,7 +1918,36 @@ describe('exportGroupMembers', () => {
     vi.useRealTimers();
   });
 
-  it('the header row is NOT quoted (asymmetric with the data rows)', async () => {
+  it('neutralizes spreadsheet formula injection in profile fields', async () => {
+    routeFetch([
+      [
+        url,
+        () =>
+          res([
+            makeUser({
+              id: 'u3',
+              profile: {
+                login: 'c@x.com',
+                email: 'c@x.com',
+                firstName: '=HYPERLINK("https://evil.example","x")',
+                lastName: '+Payload',
+              },
+            } as Partial<OktaUser>),
+          ]),
+      ],
+    ]);
+
+    await send({ action: 'exportGroupMembers', groupId: GROUP_ID, groupName: 'G', format: 'csv' })
+      .response;
+
+    const dataRow = downloaded!.content.split('\n')[1];
+    // Leading formula trigger characters are prefixed with a single quote.
+    expect(dataRow).toBe(
+      `u3,c@x.com,"'=HYPERLINK(""https://evil.example"",""x"")",'+Payload,ACTIVE`,
+    );
+  });
+
+  it('the header row is NOT quoted (plain cells stay unquoted)', async () => {
     routeFetch([[url, () => res([makeUser({ id: 'u1' })])]]);
 
     await send({ action: 'exportGroupMembers', groupId: GROUP_ID, groupName: 'G', format: 'csv' })
@@ -1984,8 +2013,8 @@ describe('exportGroupMembers', () => {
     }).response;
 
     expect(result).toEqual({ success: true, count: 1 });
-    expect(downloaded!.content).toContain('"u2"');
-    expect(downloaded!.content).not.toContain('"u1"');
+    expect(downloaded!.content).toContain('u2,');
+    expect(downloaded!.content).not.toContain('u1,');
   });
 
   it('an empty-string statusFilter is falsy → no filtering', async () => {

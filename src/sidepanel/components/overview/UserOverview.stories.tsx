@@ -18,11 +18,12 @@ const meta = {
     docs: {
       description: {
         component:
-          'Overview tab for a single Okta user: profile, membership stats, and quick actions.\n\n' +
+          'Overview tab for a single Okta user: profile, membership stats, and an ' +
+          'alphabetical groups preview.\n\n' +
           "Fetches the user's details from the content script and their group " +
           'memberships via {@link useUserMemberships} (which classifies each as direct ' +
-          'vs. rule-based), then renders stat cards, a membership distribution, recent ' +
-          'groups, and the {@link UserComparisonModal} launcher.\n\n' +
+          'vs. rule-based), then renders the profile card, stat cards, a groups preview ' +
+          '(Compare / View all), and the {@link UserComparisonModal} launcher.\n\n' +
           '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs), ' +
           '[Storage & cache](?path=/docs/internals-storage-cache--docs), ' +
           '[Types](?path=/docs/internals-types--docs)',
@@ -34,7 +35,7 @@ const meta = {
     userId: 'user1',
     userName: 'Ada Lovelace',
     targetTabId: 1,
-    onTabChange: fn(),
+    onViewAllGroups: fn(),
     oktaOrigin: 'https://example.okta.com',
   },
 } satisfies Meta<typeof UserOverview>;
