@@ -97,9 +97,6 @@ export const oktaGroupRuleSchema = z
   })
   .passthrough();
 
-/** An array of users, e.g. from a search or group-members listing. */
-export const oktaUserListSchema = z.array(oktaUserSchema);
-
 /** Inferred type of a validated {@link oktaUserSchema} response. */
 export type OktaUserResponse = z.infer<typeof oktaUserSchema>;
 /** Inferred type of a validated {@link oktaGroupSchema} response. */
