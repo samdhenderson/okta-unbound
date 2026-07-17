@@ -76,6 +76,7 @@ const AttributeFacet: React.FC<AttributeFacetProps> = ({
             {label}
           </span>
         </div>
+        {/* Raw <button> (§3 exception): chromeless 11px count/"view all" text-link — no shared text-link primitive; Button's padded 36px CTA chrome would change its pixels. */}
         <button
           type="button"
           onClick={onExpand}
@@ -96,6 +97,7 @@ const AttributeFacet: React.FC<AttributeFacetProps> = ({
           const dimmed = hasActive && !isActive;
           const clickable = row.value !== OTHER_VALUE;
           return (
+            // Raw <button> (§3 data-viz-bar exception): a spread-bar segment sized by flex-grow/count; not restyled.
             <button
               key={row.value}
               type="button"
@@ -118,6 +120,7 @@ const AttributeFacet: React.FC<AttributeFacetProps> = ({
           const isActive = activeValues.has(row.value);
           const clickable = row.value !== OTHER_VALUE;
           return (
+            // Raw <button> (§3 data-viz-legend exception): a chart swatch + label + pct row; FilterPill's pill chrome would change its pixels.
             <button
               key={row.value}
               type="button"
@@ -148,6 +151,7 @@ const AttributeFacet: React.FC<AttributeFacetProps> = ({
           );
         })}
         {moreCount > 0 && (
+          // Raw <button> (§3 exception): chromeless 11px "+N more" text-link — no shared text-link primitive; Button's padded 36px CTA chrome would change its pixels.
           <button
             type="button"
             onClick={onExpand}
