@@ -54,7 +54,6 @@ import type {
 } from '../shared/types';
 import { getCacheEntry, setCacheEntry } from '../shared/cache';
 import { createLogger } from '../shared/utils/logger';
-import { escapeCSV } from '../shared/utils/csvUtils';
 import { oktaUserSchema, oktaGroupSchema, parseOkta } from '../shared/schemas/okta';
 import {
   extractGroupIdFromUrl,
@@ -65,6 +64,7 @@ import {
   extractAppNameFromPage,
 } from './pageContext';
 import { handleMakeApiRequest } from './apiRequest';
+import { convertToCSV, downloadFile } from './exportHelpers';
 
 const log = createLogger('Content');
 
@@ -993,38 +993,6 @@ async function fetchAllGroupMembers(groupId: string): Promise<OktaUser[]> {
   }
 
   return allMembers;
-}
-
-function convertToCSV(users: OktaUser[]): string {
-  if (users.length === 0) return '';
-
-  const headers = ['ID', 'Email', 'First Name', 'Last Name', 'Status'];
-  const rows = users.map((u) => [
-    u.id,
-    u.profile.login,
-    u.profile.firstName,
-    u.profile.lastName,
-    u.status,
-  ]);
-
-  // Profile fields are end-user-controlled: every cell goes through escapeCSV
-  // (RFC 4180 quoting + formula-injection neutralization).
-  const csvContent = [
-    headers.join(','),
-    ...rows.map((row) => row.map((cell) => escapeCSV(cell)).join(',')),
-  ].join('\n');
-
-  return csvContent;
-}
-
-function downloadFile(filename: string, content: string, mimeType: string): void {
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 // ============================================================================
