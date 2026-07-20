@@ -362,24 +362,27 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
       the caller's promise instead of unwinding. Fixed with a `cancelGeneration` counter
       (`clearQueue` bumps it; `retryRequest` rejects on wake if it moved). Regression test
       added to `apiScheduler.cancel.test.ts`.
-- [~] **Transport migration — 2 of ~8 bypass sites done (this session).** The recipe
-  (proven twice, oracle green each): give the hook its own `useOktaApi({ targetTabId })`
+- [~] **Transport migration — 4 of ~8 bypass sites done (this session).** The recipe
+  (proven four times, oracle green each): give the hook its own `useOktaApi({ targetTabId })`
   slice, replace `chrome.tabs.sendMessage(...)` with `makeApiRequest(endpoint, method,
-  body, priority)` (use `'interactive'` for typed searches), drop the file from the
+body, priority)` (use `'interactive'` for typed searches), drop the file from the
   `eslint.config.js` `no-restricted-syntax` grandfather list, and flip the matching
   oracle assertions from the direct message to the scheduled endpoint (these component
   tests short-circuit `chrome.runtime.sendMessage` via a `route()` mock — assert on
-  `endpoint`/`priority`, not the old `{action}`).
+  `endpoint`/`priority`, not the old `{action}`). **Storybook note:** the story runner
+  aliases the `useOktaApi` FACADE to `.storybook/mocks/useOktaApi.mock.ts`, so a migrated
+  read is answered by that mock's `makeApiRequest` (now endpoint-aware), NOT the chrome fake.
   - [x] **`useRuleLifecycle`** → `/api/v1/users/me` via `makeApiRequest` + activate/deactivate
         via the existing `ruleWrites` ops. Audit/undo/attribution/reload unchanged.
         RulesTab oracle 10/10.
   - [x] **`useGroupLiveSearch`** → single `GET /api/v1/groups?q=…&limit=20&expand=stats` at
         `'interactive'` priority (first real user of the tier). GroupsTab oracle 81/81.
-  - [ ] **Remaining 6 sites** (see the precise per-site mapping from the swarm agent below):
-    - **Trivial single-fetch:** `getUserDetails` in `useDetectedUser.ts:92` (UsersTab oracle)
-      and `overview/UserOverview.tsx:56` (Storybook chrome fake — no `.test.tsx`) →
-      `makeApiRequest('/api/v1/users/'+userId)`, use `response.data` (raw `OktaUser` — do NOT
-      use `userOperations.getUserById`, which flattens the shape).
+  - [x] **`getUserDetails` (both consumers)** → `makeApiRequest('/api/v1/users/'+id)`, raw
+        `response.data`. `overview/UserOverview.tsx` (storybook suite 438/438; taught the
+        mock's `makeApiRequest` to answer `/api/v1/users/{id}`) and `useDetectedUser.ts`
+        (UsersTab oracle 21/21 — its harness router now prefers the last-registered route
+        since getUserDetails shares `/api/v1/users/{id}` with the getUserById refresh).
+  - [ ] **Remaining 4 sites** (precise per-site mapping from the swarm agent below):
     - **Compound — reproduce the loop in the side panel over `makeApiRequest`:**
       - `searchUsers` (`useUserSearch.ts:77`, `useUsersTabSearch.ts:92`): reproduce the **1–3
         request fallback** (`q=` → `search=` → email-`filter` only when the query has `@` and
