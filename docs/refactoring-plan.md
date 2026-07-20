@@ -19,14 +19,15 @@ Status legend: `[ ]` todo · `[~]` partially done · `[x]` done.
 
 ## Order of work (do top-to-bottom; each is independently shippable)
 
-### 1. `[~]` One-time repo-wide format, then turn on the gates
+### 1. `[x]` One-time repo-wide format, then turn on the gates
 
 - [x] Run `npm run format` as its own dedicated commit (ADR-0003).
 - [x] Re-enable the `format:check` CI step in
       [.github/workflows/ci.yml](../.github/workflows/ci.yml).
-- [ ] Add the coverage CI step (only once §5/§8 has raised coverage to 80/75).
+- [x] Added the coverage CI step (§8 raised coverage to 80/75): the `verify` job's
+      test step now runs `npm run test:coverage`, so the 80/75 gate is enforced.
 - Doc: `docs/development.md`. Agent: none (mechanical).
-- Done when: `npm run format:check` passes in CI. ✔ (coverage gate pending §8)
+- Done when: `npm run format:check` + the coverage gate pass in CI. ✔
 
 ### 2. `[x] `console.* → logger` migration
 
@@ -334,12 +335,20 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
   touching it. **Do not regenerate** (~430k tokens / 12 min).
 - Done when: each target is decomposed with tests, behavior unchanged.
 
-### 8. `[ ]` Raise coverage + enable the coverage gate
+### 8. `[~]` Raise coverage + enable the coverage gate
 
-- Add component tests as §7 proceeds until `npm run test:coverage` meets 80/75, then
-  add the coverage step to CI (see §1).
-- Also standardize on the single content-script path (drop the direct
-  side-panel→content route that bypasses the scheduler — `useOktaApi/core.ts`).
+- [x] **Coverage raised to 80/75 and the CI gate enabled (this session).** Added
+      co-located unit tests for the lowest-coverage pure-logic modules —
+      `shared/scheduler/rateLimitDetector`, `shared/utils/csvUtils`, `shared/rulesCache`,
+      and the `useOktaApi` factories `ruleWrites`, `utilities`, `groupDiscovery`,
+      `userOperations`, `exportOperations` (+ extended `groupBulkOps`) — taking global
+      coverage from 78.4/70.2 to **≥80 lines/funcs/stmts and ≥75 branches**. Wired the
+      `verify` CI job's test step to `npm run test:coverage` (was bare `test:run`), so the
+      80/75 thresholds in `vitest.config.ts` are now enforced on every PR (closes §1's
+      pending item). Tests only — no production source changed.
+- [ ] **Remaining:** standardize on the single content-script path (drop the direct
+      side-panel→content route that bypasses the scheduler — `useOktaApi/core.ts`), plus
+      the scheduler `interactive` tier + `clearQueue` re-audit below.
 - **⚠️ session-5 sequencing corrections:**
   - The scheduler migration **depends on §7's `content/index.ts` item**. The semantic
     content-script handlers are **compound** (unbounded `while(nextUrl)` pagination + a
