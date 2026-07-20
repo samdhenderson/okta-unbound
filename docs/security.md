@@ -18,14 +18,14 @@ signed-in administrator, only against that administrator's own Okta tenant, only
 life of the browser session**. It has no backend, stores no credentials, and opens no
 external message surface.
 
-| Domain | Posture |
-| --- | --- |
-| Authentication | Reuses the existing Okta session; no credentials requested, stored, or transmitted |
-| Secret handling | XSRF token read from the page DOM per request, never persisted/logged/messaged |
-| Trust boundary | Same-origin + method allow-list enforced **independently** at the background entry and the content-script fetch site |
-| Code execution | No `eval`/`new Function`/`innerHTML`/`dangerouslySetInnerHTML` in production; rule expressions use a real parser; MV3 default CSP |
-| Data at rest | No credentials in storage; TTL'd caches, capped undo history, user-configurable audit retention |
-| External surface | No `externally_connectable`, no `onMessageExternal`; host access scoped to three Okta domains |
+| Domain           | Posture                                                                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Authentication   | Reuses the existing Okta session; no credentials requested, stored, or transmitted                                                    |
+| Secret handling  | XSRF token read from the page DOM per request, never persisted/logged/messaged                                                        |
+| Trust boundary   | Same-origin + method allow-list enforced **independently** at the background entry and the content-script fetch site                  |
+| Code execution   | No `eval`/`new Function`/`innerHTML`/`dangerouslySetInnerHTML` in production; rule expressions use a real parser; explicit pinned CSP |
+| Data at rest     | No credentials in storage; TTL'd caches, capped undo history, user-configurable audit retention                                       |
+| External surface | No `externally_connectable`, no `onMessageExternal`; host access scoped to three Okta domains                                         |
 
 Substantive gaps a reviewer should weigh are collected in
 [§8 Residual risks & known gaps](#8-residual-risks--known-gaps); none are credential- or
@@ -66,11 +66,13 @@ integrity of admin operations (group/user/rule writes); cached tenant data (grou
 names, emails, memberships, audit history).
 
 **Trust boundaries:**
+
 - Web page (the Okta admin console DOM) ↔ content script.
 - Content script ↔ background ↔ side panel (extension-internal messaging).
 - Extension ↔ Okta API (network).
 
 **Adversaries considered:**
+
 - A **malicious or compromised web page** attempting to drive authenticated Okta calls or
   read the session/XSRF token through the extension.
 - **Another installed extension** attempting to message this extension.
@@ -137,17 +139,19 @@ Enforced at the single fetch choke point,
 - **Boundary validation (zod).** [`shared/schemas/okta.ts`](../src/shared/schemas/okta.ts)
   defines schemas for users, groups, and group rules; `parseOkta()` uses `safeParse` and
   throws on failure, logging only issue `path`/`code` (never the received value — a
-  deliberate PII guard). Applied on the hot single-entity read/write paths (user info,
-  group name, rule read, rule create). **Coverage is partial by design** — see
-  [§8](#8-residual-risks--known-gaps) and [ADR-0006](./adr/0006-zod-boundary-validation.md).
+  deliberate PII guard). Single-entity reads/writes validate strictly; list, search, and
+  membership responses validate through `parseOktaList()`, which drops-and-logs malformed
+  items rather than failing the whole response (degrade-not-crash). See
+  [ADR-0006](./adr/0006-zod-boundary-validation.md).
 - **No dynamic code execution.** Rule expressions are evaluated by a hand-written
   lexer + recursive-descent parser
   ([`shared/ruleEvaluator.ts`](../src/shared/ruleEvaluator.ts)): input outside the grammar
   throws, function-call tokens resolve to `false` rather than executing, and
   `canEvaluateClientSide` gates unsupported expressions. Grep confirms **zero**
   `eval`/`new Function`/string-`setTimeout`/`innerHTML`/`document.write`/
-  `dangerouslySetInnerHTML` in production code. MV3's default CSP (`script-src 'self'`)
-  blocks dynamic execution at runtime.
+  `dangerouslySetInnerHTML` in production code. The manifest pins an explicit CSP
+  (`script-src 'self'; object-src 'self'`) matching the hardened MV3 default, so
+  dynamic execution and remote scripts are blocked at runtime.
 - **Okta-origin validation.** [`shared/utils/oktaUrl.ts`](../src/shared/utils/oktaUrl.ts)
   `isOktaUrl()` **parses the hostname** (`new URL`), requires `https:`, and matches against
   a hardcoded domain list by exact or dot-suffix equality — never substring matching.
@@ -155,8 +159,8 @@ Enforced at the single fetch choke point,
 - **CSV / export injection.** [`shared/utils/csvUtils.ts`](../src/shared/utils/csvUtils.ts)
   `escapeCSV()` applies both RFC 4180 quoting **and** a spreadsheet-formula-injection guard
   (prefixes values leading with `= + - @ tab CR` with a quote); `generateCSV()` routes
-  every cell and header through it. **One export path bypasses this** — see
-  [§8](#8-residual-risks--known-gaps).
+  every cell and header through it, and every export path builds its output via
+  `generateCSV`/`downloadCSV` — no export string-interpolates cells.
 - **XSS-safe rendering.** Rendering relies on React's escaping. External Okta links use the
   canonical builder
   [`OpenInOktaLink`](../src/sidepanel/components/shared/OpenInOktaLink.tsx) — a validated
@@ -170,8 +174,9 @@ Enforced at the single fetch choke point,
 - **Least-privilege manifest.** [`manifest.json`](../manifest.json) scopes content-script
   `matches` and `host_permissions` to `*.okta.com`, `*.oktapreview.com`, `*.okta-emea.com`
   only — no `<all_urls>`. `permissions` are `activeTab, storage, contextMenus,
-  notifications, sidePanel, alarms`, each mapped to a real consumer (with one review
-  candidate — see [§8](#8-residual-risks--known-gaps)).
+notifications, sidePanel, alarms`, each mapped to a real consumer (`activeTab` backs the
+  toolbar-click flow that reads the active tab's URL on non-Okta pages to prompt navigation
+  to Okta). The manifest pins an explicit `content_security_policy` for extension pages.
 - **No secrets at rest.** No credential, cookie, session, or XSRF value is written to any
   storage API (grep-verified across every `chrome.storage.*.set` / IndexedDB write). Only
   cache payloads, group/rule/tab UI state, audit entries, and non-sensitive prefs are
@@ -195,21 +200,22 @@ Enforced at the single fetch choke point,
 
 ## 8. Residual risks & known gaps
 
-Ranked by severity. This section is deliberately not marketing-clean — it is what a
-reviewer should scrutinize. Items marked **fix candidate** are tracked in
-[`features-plan.md`](./features-plan.md) / the issue tracker.
+This assessment is deliberately not marketing-clean — it is what a reviewer should
+scrutinize. The findings below were surfaced by reading the code; findings 1–8 were
+**remediated on 2026-07-20** (each fix ships with tests; the full suite, strict
+type-check, lint, and format gates pass). Finding 9 is an accepted platform property.
 
-| # | Severity | Finding | Location | Status |
-| --- | --- | --- | --- | --- |
-| 1 | **Medium** | **CSV formula-injection bypass.** One export path hand-builds CSV with RFC 4180 quoting but **no** formula-injection guard, interpolating the end-user-controllable `group.name`. A group named `=HYPERLINK(...)` exports a live formula. Violates the repo's own CSV hard rule. | [`GroupComparisonModal.tsx`](../src/sidepanel/components/groups/GroupComparisonModal.tsx) `handleExportResults` | **Fix candidate** — route through `generateCSV`/`escapeCSV` |
-| 2 | Low–Med | **Content-script `onMessage` authenticates no sender.** Unlike the background, [`content/index.ts`](../src/content/index.ts) does not check `sender.id`/`sender.tab`. Mitigated by MV3 messaging semantics (no web-page delivery) and downstream same-origin/method re-validation, so no live exploit — but an asymmetry and the surface that would be exposed if `externally_connectable` were ever added. | [`content/index.ts`](../src/content/index.ts) | **Fix candidate** — add the `sender.id` guard for symmetry |
-| 3 | Low | **Background "not-from-tabs" guard is API-only.** The `sender.tab` rejection covers `scheduleApiRequest` but not the scheduler-control (`pause`/`resume`/`clearQueue`) or tab-state actions. Impact is UI-state/DoS-style disruption, not data exposure. | [`background/index.ts`](../src/background/index.ts) | **Fix candidate** |
-| 4 | Low | **List/search/membership/export paths bypass zod** (accepted [ADR-0006](./adr/0006-zod-boundary-validation.md) deferral). The highest-volume, end-user-controllable data — including the member data that feeds exports — is not schema-validated. | [`content/userHandlers.ts`](../src/content/userHandlers.ts), [`content/groupHandlers.ts`](../src/content/groupHandlers.ts) | **Deferred** (documented) |
-| 5 | Low | **Non-attributable audit entries.** Rule-consolidation and group-merge audit records use a placeholder `performedBy: 'unknown@unknown.com'` instead of the real actor (other operations record the real user). | `useRuleConsolidation.ts`, `useGroupMerge.ts` | **Fix candidate** |
-| 6 | Low | **Two `window.open` deep links omit `noopener`**, inconsistent with the `OpenInOktaLink` standard. Target is first-party Okta, so tabnabbing risk is minimal. | `groups/GroupListItem.tsx`, `users/GroupMembershipsList.tsx` | **Fix candidate** |
-| 7 | Info | **`activeTab` has no strict consumer** beyond what the granted Okta `host_permissions` already cover — a least-privilege review candidate. | [`manifest.json`](../manifest.json) | Review |
-| 8 | Info | **CSP is default-inherited, not explicitly pinned.** The MV3 default is the hardened posture; an explicit `content_security_policy` entry would guard against accidental future weakening. | [`manifest.json`](../manifest.json) | Consider |
-| 9 | Accepted | **Plaintext at rest (platform-inherent).** `chrome.storage.local` and IndexedDB are unencrypted; cached emails/names and the audit trail are readable with local profile access. Not eliminable within MV3; mitigated by TTL, undo cap, retention, and the exclusion filter. | Chrome platform | Accepted |
+| #   | Severity | Finding                                                                                                                                                                                                                                                                      | Location                                                                                                                                   | Status                                                                                                                              |
+| --- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Medium   | **CSV formula-injection bypass** — an export hand-built CSV with no formula-injection guard, interpolating the end-user-controllable `group.name` (a group named `=HYPERLINK(...)` exported a live formula).                                                                 | [`GroupComparisonModal.tsx`](../src/sidepanel/components/groups/GroupComparisonModal.tsx) `handleExportResults`                            | **Fixed** — now routes through `generateCSV`/`downloadCSV` (every cell escaped); regression test added                              |
+| 2   | Low–Med  | **Content-script `onMessage` authenticated no sender** — asymmetry with the background listener.                                                                                                                                                                             | [`content/index.ts`](../src/content/index.ts)                                                                                              | **Fixed** — added `sender.id === chrome.runtime.id` guard; test added                                                               |
+| 3   | Low      | **Background "not-from-tabs" guard was API-only** — scheduler-control and tab-state actions were not tab-rejected.                                                                                                                                                           | [`background/index.ts`](../src/background/index.ts)                                                                                        | **Fixed** — `rejectIfFromTab` now guards `pause`/`resume`/`clearQueue` + `save`/`load`/`clearTabState`; tests added                 |
+| 4   | Low      | **List/search/membership paths bypassed zod** ([ADR-0006](./adr/0006-zod-boundary-validation.md) deferral) — the highest-volume, end-user-controllable data (incl. export member data).                                                                                      | [`content/userHandlers.ts`](../src/content/userHandlers.ts), [`content/groupHandlers.ts`](../src/content/groupHandlers.ts)                 | **Fixed** — `parseOktaList()` validates each item, drops-and-logs malformed ones (degrade-not-crash); ADR-0006 updated; tests added |
+| 5   | Low      | **Non-attributable audit entries** — rule-consolidation and group-merge records used a placeholder `performedBy`.                                                                                                                                                            | [`useRuleConsolidation.ts`](../src/sidepanel/hooks/useRuleConsolidation.ts), [`useGroupMerge.ts`](../src/sidepanel/hooks/useGroupMerge.ts) | **Fixed** — both resolve the real actor via `/api/v1/users/me` (matching `useRuleLifecycle`); tests added                           |
+| 6   | Low      | **Two `window.open` deep links omitted `noopener`**, inconsistent with the `OpenInOktaLink` standard.                                                                                                                                                                        | `groups/GroupListItem.tsx`, `users/GroupMembershipsList.tsx`                                                                               | **Fixed** — `'noopener,noreferrer'` added to both                                                                                   |
+| 7   | Info     | **`activeTab` permission** — verified it IS required: the `action.onClicked` handler reads `tab.url` on non-Okta tabs (host permissions cover only Okta), so it is not a dead permission.                                                                                    | [`manifest.json`](../manifest.json)                                                                                                        | **Resolved** — required; retained                                                                                                   |
+| 8   | Info     | **CSP was default-inherited, not explicitly pinned.**                                                                                                                                                                                                                        | [`manifest.json`](../manifest.json)                                                                                                        | **Fixed** — explicit `content_security_policy` (`script-src 'self'; object-src 'self'`) pinned                                      |
+| 9   | Accepted | **Plaintext at rest (platform-inherent).** `chrome.storage.local` and IndexedDB are unencrypted; cached emails/names and the audit trail are readable with local profile access. Not eliminable within MV3; mitigated by TTL, undo cap, retention, and the exclusion filter. | Chrome platform                                                                                                                            | **Accepted**                                                                                                                        |
 
 ---
 

@@ -100,7 +100,11 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
                       <IconButton
                         label="Open group in Okta admin"
                         onClick={() =>
-                          window.open(`${oktaOrigin}/admin/group/${membership.group.id}`, '_blank')
+                          window.open(
+                            `${oktaOrigin}/admin/group/${membership.group.id}`,
+                            '_blank',
+                            'noopener,noreferrer',
+                          )
                         }
                         variant="ghost"
                         size="md"

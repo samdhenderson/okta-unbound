@@ -7,8 +7,9 @@
  * reduce to the same safe sequence: **create** a replacement rule carrying the
  * union of target groups, **activate** it (if any source was active), and only
  * then **retire** (delete) the source rule(s). If the create or activate step
- * fails, no source is touched. Every run is audited and captures the retired
- * rules' definitions for undo.
+ * fails, no source is touched. Every run is audited (attributed to the signed-in
+ * admin resolved via `/api/v1/users/me`) and captures the retired rules'
+ * definitions for undo.
  */
 
 import { useCallback, useState } from 'react';
@@ -112,6 +113,7 @@ export function useRuleConsolidation({
     deleteGroupRule,
     activateGroupRule,
     deactivateGroupRule,
+    makeApiRequest,
   } = api;
 
   const [phase, setPhase] = useState<ConsolidationPhase>('idle');
@@ -205,6 +207,19 @@ export function useRuleConsolidation({
     setError(null);
     const startTime = Date.now();
 
+    // Resolve the signed-in admin for audit attribution (same pattern as
+    // useRuleLifecycle). Falls back to a labeled placeholder only if the
+    // `/api/v1/users/me` lookup fails.
+    let currentUserEmail = 'unknown@unknown.com';
+    try {
+      const userResponse = await makeApiRequest('/api/v1/users/me');
+      if (userResponse.success && userResponse.data) {
+        currentUserEmail = userResponse.data.profile?.email || 'unknown@unknown.com';
+      }
+    } catch (err) {
+      log.error('Failed to get current user:', err);
+    }
+
     try {
       // 1) Create the consolidated rule (INACTIVE). Nothing is retired if this fails.
       const addGroupIds =
@@ -272,7 +287,7 @@ export function useRuleConsolidation({
         action: 'activate_rule',
         groupId: preview.resultingGroupIds[0] || 'multiple',
         groupName: created.rule.name,
-        performedBy: 'unknown@unknown.com',
+        performedBy: currentUserEmail,
         affectedUsers: [],
         result: retireFailed === 0 ? 'success' : 'partial',
         details: {
@@ -307,6 +322,7 @@ export function useRuleConsolidation({
     deactivateGroupRule,
     deleteGroupRule,
     getRawGroupRule,
+    makeApiRequest,
     onError,
     reload,
   ]);

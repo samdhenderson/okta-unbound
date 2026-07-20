@@ -52,3 +52,29 @@ shape — are **intentionally not validated yet**, and must not be wired naively
   the schemas gain `.passthrough()` (or explicit fields).
 
 Revisit as its own change with those two guards in place.
+
+## Update (2026-07-20): list-path validation implemented
+
+The deferral above is now **closed**. Both guards it required are in place, and the
+list/search/membership paths validate at the content-script boundary.
+
+- **Degrade, never crash.** A new lenient helper, `parseOktaList(itemSchema, data,
+context)`, validates each row with `safeParse`, keeps the valid ones, and drops
+  (does not throw on) malformed ones. A single bad row can no longer nuke an entire
+  search/membership result — the highest-traffic paths fail _open_ on individual
+  items, not closed on the whole response. A non-array payload logs a warning and
+  returns `[]`. Logs carry only `{ context, dropped, total }` and path/code style
+  metadata — never field values or PII.
+- **Resilient per-item shapes with `.passthrough()`.** Two list-item schemas back
+  the helper: `oktaUserListItemSchema` (`oktaUserSchema.passthrough()`) and
+  `oktaGroupListItemSchema`. The group list schema deliberately **keeps `type`** and
+  passes unknown fields through, so `APP_GROUP`/`BUILT_IN` classification and
+  `_embedded` member counts are preserved rather than silently zeroed — the exact
+  corruption this ADR warned against. `description` is normalized `null → undefined`
+  to match the `OktaGroup` domain type.
+- **Applied at the flagged raw `response.data` seams:** `handleSearchUsers`,
+  `handleGetUserGroups`, and `fetchAllGroupMembers` now flow through
+  `parseOktaList`; `handleSearchGroups` likewise. `handleGetUserDetails` (a
+  single-entity read) uses strict `parseOkta` like `handleGetUserInfo`. The
+  `/admin/users/search` DataTables (`aaData`) hand-parse in `handleGetUserContext`
+  is a different, non-standard shape and remains out of scope.

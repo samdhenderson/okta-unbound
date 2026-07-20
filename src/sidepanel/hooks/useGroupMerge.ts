@@ -5,9 +5,10 @@
  * Loads a {@link MergePlan} preview (members + feeding rules for the survivor and
  * sources), then executes it: copy distinct source members into the survivor and
  * empty each source, all through the rate-limited scheduler with live progress.
- * Every run records an audit entry and a bulk undo action per affected group so
- * the operation can be inspected and reversed. Emptying is blocked when a source
- * is fed by an active rule.
+ * Every run records an audit entry (attributed to the signed-in admin resolved
+ * via `/api/v1/users/me`) and a bulk undo action per affected group so the
+ * operation can be inspected and reversed. Emptying is blocked when a source is
+ * fed by an active rule.
  */
 
 import { useCallback, useState } from 'react';
@@ -124,6 +125,19 @@ export function useGroupMerge(targetTabId?: number): UseGroupMergeReturn {
     let done = 0;
     const res: MergeResults = { copied: 0, copyFailed: 0, removed: 0, removeFailed: 0 };
 
+    // Resolve the signed-in admin for audit attribution (same pattern as
+    // useRuleLifecycle). Falls back to a labeled placeholder only if the
+    // `/api/v1/users/me` lookup fails.
+    let currentUserEmail = 'unknown@unknown.com';
+    try {
+      const userResponse = await makeApiRequest('/api/v1/users/me');
+      if (userResponse.success && userResponse.data) {
+        currentUserEmail = userResponse.data.profile?.email || 'unknown@unknown.com';
+      }
+    } catch (err) {
+      log.error('Failed to get current user:', err);
+    }
+
     startProgress('Merging groups', `Copying members into ${plan.survivor.name}…`, total, false);
 
     try {
@@ -190,7 +204,7 @@ export function useGroupMerge(targetTabId?: number): UseGroupMergeReturn {
 
       // Audit trail: one add entry (survivor) + one aggregate remove entry (sources).
       const auditBase = {
-        performedBy: 'unknown@unknown.com',
+        performedBy: currentUserEmail,
         affectedUsers: [] as string[],
       };
       const addEntry: AuditLogEntry = {

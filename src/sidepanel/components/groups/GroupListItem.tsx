@@ -88,7 +88,7 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
       (e: React.MouseEvent) => {
         e.stopPropagation();
         if (oktaOrigin) {
-          window.open(`${oktaOrigin}/admin/group/${group.id}`, '_blank');
+          window.open(`${oktaOrigin}/admin/group/${group.id}`, '_blank', 'noopener,noreferrer');
         }
       },
       [oktaOrigin, group.id],

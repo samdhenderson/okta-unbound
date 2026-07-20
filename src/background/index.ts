@@ -123,6 +123,26 @@ function isValidScheduleRequest(request: {
   return true;
 }
 
+/**
+ * Reject actions that must originate from an extension page (the side panel),
+ * never from a tab / content-script context. Extension pages have no
+ * `sender.tab`; a content script always does. Returns `true` (and answers via
+ * `sendResponse`) when the message came from a tab and must be dropped, so the
+ * caller can `return true` to close the channel; `false` when the sender is a
+ * legitimate extension page and handling should proceed.
+ */
+function rejectIfFromTab(
+  sender: chrome.runtime.MessageSender,
+  action: string,
+  sendResponse: (response: { success: false; error: string }) => void,
+): boolean {
+  if (sender.tab) {
+    sendResponse({ success: false, error: `${action} not allowed from tabs` });
+    return true;
+  }
+  return false;
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // Only trust messages from this extension's own contexts. `onMessage` never
   // fires for other extensions or web pages unless externally_connectable is
@@ -139,8 +159,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       // API scheduling is driven only by extension pages (the side panel).
       // Content scripts run inside web pages and must never be able to drive
       // authenticated Okta API calls — reject any tab-originated request.
-      if (sender.tab) {
-        sendResponse({ success: false, error: 'scheduleApiRequest not allowed from tabs' });
+      if (rejectIfFromTab(sender, 'scheduleApiRequest', sendResponse)) {
         return true;
       }
 
@@ -185,24 +204,38 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
 
     case 'pauseScheduler':
-      // Pause the scheduler
+      // Scheduler control is a side-panel-only action — never let a tab pause it.
+      if (rejectIfFromTab(sender, 'pauseScheduler', sendResponse)) {
+        return true;
+      }
       globalScheduler.pause();
       sendResponse({ success: true });
       return true;
 
     case 'resumeScheduler':
-      // Resume the scheduler
+      // Scheduler control is a side-panel-only action — never let a tab resume it.
+      if (rejectIfFromTab(sender, 'resumeScheduler', sendResponse)) {
+        return true;
+      }
       globalScheduler.resume();
       sendResponse({ success: true });
       return true;
 
     case 'clearSchedulerQueue':
-      // Clear the scheduler queue
+      // Scheduler control is a side-panel-only action — never let a tab clear it.
+      if (rejectIfFromTab(sender, 'clearSchedulerQueue', sendResponse)) {
+        return true;
+      }
       globalScheduler.clearQueue();
       sendResponse({ success: true });
       return true;
 
     case 'saveTabState':
+      // Tab-state persistence belongs to the side panel; a content script must
+      // not be able to read or write another tab's UI state.
+      if (rejectIfFromTab(sender, 'saveTabState', sendResponse)) {
+        return true;
+      }
       // Save tab state
       if (!request.tabName || !request.state) {
         sendResponse({ success: false, error: 'Missing tabName or state' });
@@ -220,6 +253,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
 
     case 'loadTabState':
+      // Tab-state persistence belongs to the side panel; a content script must
+      // not be able to read or write another tab's UI state.
+      if (rejectIfFromTab(sender, 'loadTabState', sendResponse)) {
+        return true;
+      }
       // Load tab state
       if (!request.tabName) {
         sendResponse({ success: false, error: 'Missing tabName' });
@@ -237,6 +275,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
 
     case 'clearTabState':
+      // Tab-state persistence belongs to the side panel; a content script must
+      // not be able to read or write another tab's UI state.
+      if (rejectIfFromTab(sender, 'clearTabState', sendResponse)) {
+        return true;
+      }
       // Clear tab state
       if (!request.tabName) {
         sendResponse({ success: false, error: 'Missing tabName' });
