@@ -112,6 +112,7 @@ should be reviewed with `security-logging-reviewer`.
 | Refactoring a god component / pipeline / hooks | `docs/architecture.md`, `docs/state-management.md` | `architecture-refactor`     |
 | Adding / fixing tests                          | `docs/testing.md`                                  | `test-writer`               |
 | Logging / secrets / validation / `any` removal | `docs/development.md`                              | `security-logging-reviewer` |
+| Security posture / threat model / controls     | `docs/security.md`                                 | `security-logging-reviewer` |
 | Build / lint / CI / release / versioning       | `docs/development.md`                              | —                           |
 | Documenting code / TypeDoc / API comments      | `docs/development.md`                              | `docs-maintainer`           |
 | Writing / updating a spec or ADR               | `docs/README.md` + the affected doc                | `docs-maintainer`           |

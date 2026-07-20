@@ -6,6 +6,7 @@ the same routing `CLAUDE.md` enforces, to keep context lean.
 | Doc                                              | Read it when you are…                                                     |
 | ------------------------------------------------ | ------------------------------------------------------------------------- |
 | [architecture.md](./architecture.md)             | Understanding the message-passing pipeline, contexts, or `useOktaApi/`    |
+| [security.md](./security.md)                     | Reviewing the security posture, threat model, controls, or residual risks |
 | [design-system.md](./design-system.md)           | Touching colors, spacing, typography, or tokens                           |
 | [components.md](./components.md)                 | Building or using a shared/feature component                              |
 | [component-explorer.md](./component-explorer.md) | Running Storybook, writing a `.stories.tsx`, or checking story coverage   |

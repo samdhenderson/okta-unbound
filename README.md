@@ -115,6 +115,10 @@ This section is written for reviewers evaluating the extension before enterprise
 Each control is enforced in code and covered by the repo's non-negotiable hardening rules
 ([`CLAUDE.md`](CLAUDE.md)); the *why* behind each decision lives in [`docs/adr/`](docs/adr/).
 
+> **Full assessment:** [`docs/security.md`](docs/security.md) — trust model, threat model,
+> control-by-control evidence with links into the code, an honest residual-risk register,
+> and steps to verify the claims independently.
+
 | Control | How it's enforced |
 | --- | --- |
 | **Session-based auth, no stored credentials** | The extension reuses the admin's existing Okta session; it never asks for, stores, or transmits API tokens or passwords. |
@@ -253,6 +257,8 @@ GitHub Pages ([`deploy-pages.yml`](.github/workflows/deploy-pages.yml)).
 
 ## Documentation
 
+- **Security assessment:** [`docs/security.md`](docs/security.md) — posture, threat model,
+  controls, and residual risks for security reviewers.
 - **Specs & contributor docs:** [`docs/`](docs/README.md) — a routing index of small,
   single-purpose specs (architecture, design system, components, testing, UX, state).
 - **Architecture Decision Records:** [`docs/adr/`](docs/adr/README.md) — the *why* behind
