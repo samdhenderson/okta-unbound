@@ -362,7 +362,7 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
       the caller's promise instead of unwinding. Fixed with a `cancelGeneration` counter
       (`clearQueue` bumps it; `retryRequest` rejects on wake if it moved). Regression test
       added to `apiScheduler.cancel.test.ts`.
-- [~] **Transport migration — 6 of ~8 bypass sites done (this session).** The recipe
+- [~] **Transport migration — 7 of ~8 bypass sites done.** The recipe
   (proven six times, oracle green each): give the hook its own `useOktaApi({ targetTabId })`
   slice, replace `chrome.tabs.sendMessage(...)` with `makeApiRequest(endpoint, method,
 body, priority)` (use `'interactive'` for typed searches), drop the file from the
@@ -388,14 +388,20 @@ body, priority)` (use `'interactive'` for typed searches), drop the file from th
         helper (+ co-located test) running each request at `'interactive'` priority; the
         `{success,data,count}` shape is preserved so `useUserSearch` + `useUsersTabSearch`
         change only their transport line. UsersTab oracle 21/21, UserComparisonModal 38/38.
-  - [ ] **Remaining 2 sites** (precise per-site mapping from the swarm agent below):
-    - **Compound — reproduce the loop in the side panel over `makeApiRequest`:**
-      - `getUserGroups` (`useUserMemberships.ts:120`): add a paginating op mirroring
-        `groupMembers.getAllGroupMembers` but against `/api/v1/users/{id}/groups?limit=200`
-        (follow `rel="next"`), then apply the `{group, membershipType:'UNKNOWN', addedDate}`
-        wrapper in-panel. No existing op does this.
-      - `fetchGroupRules` (`useUserMemberships.ts:139`, `useRulesData.ts:111`) — **biggest,
-        own session.** Reproduce the 4-stage pipeline (paginate `/api/v1/groups/rules`;
+  - [x] **`getUserGroups` (`useUserMemberships.ts`)** → shared
+        `getUserGroupsRequest(makeApiRequest, userId)` helper (+ co-located test): the
+        unbounded `rel="next"` pagination and the `{group, membershipType:'UNKNOWN',
+    addedDate:undefined}` wrapper ported verbatim from `content/userHandlers.ts`,
+        running at default priority (a selection-driven read, not a typed search); the
+        `{success, data, count}` shape is preserved so `useUserMemberships` changes only
+        its transport line. `useUserMemberships` gained a `useOktaApi` slice. Oracles flipped
+        from the `getUserGroups` tab message to the scheduled `/api/v1/users/{id}/groups`
+        endpoint: UsersTab 21/21, UserComparisonModal 38/38, `useUserMemberships` cache-hit
+        test green; storybook `makeApiRequest` mock taught to answer the groups endpoint with
+        the raw fixture groups. `useUserMemberships` stays grandfathered until `fetchGroupRules`
+        (its other bypass) migrates below.
+  - [ ] **`fetchGroupRules` (`useUserMemberships.ts:139`, `useRulesData.ts:111`) — biggest,
+        last site.** Reproduce the 4-stage pipeline (paginate `/api/v1/groups/rules`;
         parallel `/api/v1/groups/{id}` name resolution w/ 5-min cache; O(n²) conflict
         detection; format to `{rules, stats, conflicts}` **top-level**, not under `data`).
     - **Note:** `UserComparisonModal` has ZERO direct `sendMessage` (already scheduler-routed).

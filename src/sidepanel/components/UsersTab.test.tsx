@@ -8,9 +8,9 @@
  * Do NOT "fix" a test here — if the behavior should change, change it in its own
  * commit and flip the matching assertion there.
  *
- * Harness: UsersTab's remaining direct-content reads (getUserGroups /
- * fetchGroupRules) use raw `chrome.tabs.sendMessage` and bypass the scheduler, so
- * MSW does not apply. Its scheduler path (searchUsers + getUserDetails —
+ * Harness: UsersTab's remaining direct-content read (fetchGroupRules) uses raw
+ * `chrome.tabs.sendMessage` and bypasses the scheduler, so MSW does not apply. Its
+ * scheduler path (searchUsers + getUserDetails + the membership groups read —
  * §8-migrated — plus the write path: suspend / unsuspend / resetPassword /
  * getUserById / searchGroups / addUserToGroup) goes through the REAL `useOktaApi`
  * → `chrome.runtime.sendMessage({ action: 'scheduleApiRequest', endpoint })`. We
@@ -111,6 +111,12 @@ function userSearchCalls() {
   return schedulerEndpoints().filter((e) => /^\/api\/v1\/users\?q=/.test(e));
 }
 
+/** §8: scheduler GETs for a user's group memberships, e.g. `/api/v1/users/u1/groups`. */
+const USER_GROUPS = /^\/api\/v1\/users\/[^/?]+\/groups/;
+function userGroupsCalls() {
+  return schedulerEndpoints().filter((e) => USER_GROUPS.test(e));
+}
+
 // ---------------------------------------------------------------------------
 // fixtures
 // ---------------------------------------------------------------------------
@@ -198,7 +204,7 @@ beforeEach(() => {
   // sensible defaults; individual tests override.
   // §8: searchUsers is a scheduler read now (`GET /api/v1/users?q=|search=|filter=`).
   route(/^\/api\/v1\/users\?/, () => ({ success: true, data: [] }));
-  tabRoute('getUserGroups', () => ({ success: true, data: [] }));
+  route(USER_GROUPS, () => ({ success: true, data: [] }));
   tabRoute('fetchGroupRules', () => ({ success: true, rules: [], stats: {}, conflicts: [] }));
   // §8: getUserDetails is now a scheduler read (`GET /api/v1/users/{id}`); the
   // detected-user tests that actually Load route it explicitly (no blanket default,
@@ -373,9 +379,9 @@ describe('detected user: manual-load banner', () => {
     });
 
     expect(await screen.findByRole('heading', { name: 'Ada Lovelace' })).toBeInTheDocument();
-    // §8: the details read now routes through the scheduler.
+    // §8: the details read and the membership groups read now route through the scheduler.
     expect(userDetailCalls()).toEqual(['/api/v1/users/u1']);
-    expect(tabCalls('getUserGroups')).toHaveLength(1);
+    expect(userGroupsCalls()).toHaveLength(1);
   });
 
   it('never auto-fetches across parent re-renders', async () => {
@@ -430,7 +436,7 @@ describe('membership classification (in-file heuristic)', () => {
   });
 
   it('classifies an APP_GROUP as RULE_BASED regardless of rules', async () => {
-    tabRoute('getUserGroups', () => ({
+    route(USER_GROUPS, () => ({
       success: true,
       data: [rawGroup({ id: 'g2', type: 'APP_GROUP', profile: { name: 'Salesforce' } })],
     }));
@@ -447,7 +453,7 @@ describe('membership classification (in-file heuristic)', () => {
   });
 
   it('classifies a group with a matching ACTIVE rule as RULE_BASED and shows the rule', async () => {
-    tabRoute('getUserGroups', () => ({ success: true, data: [rawGroup()] }));
+    route(USER_GROUPS, () => ({ success: true, data: [rawGroup()] }));
     rulesCacheGet.mockResolvedValue({ rules: [activeRule()] });
 
     render(<UsersTab targetTabId={1} />);
@@ -460,7 +466,7 @@ describe('membership classification (in-file heuristic)', () => {
   });
 
   it('classifies a group with no active rules as DIRECT', async () => {
-    tabRoute('getUserGroups', () => ({ success: true, data: [rawGroup()] }));
+    route(USER_GROUPS, () => ({ success: true, data: [rawGroup()] }));
     rulesCacheGet.mockResolvedValue({ rules: [] });
 
     render(<UsersTab targetTabId={1} />);
@@ -477,7 +483,7 @@ describe('membership classification (in-file heuristic)', () => {
   it('classifies an excluded user as DIRECT even when an active rule targets the group', async () => {
     // Behavior adopted from useUserMemberships: a user on the exclusion list of
     // every matching rule is a manual add (DIRECT), not RULE_BASED.
-    tabRoute('getUserGroups', () => ({ success: true, data: [rawGroup()] }));
+    route(USER_GROUPS, () => ({ success: true, data: [rawGroup()] }));
     rulesCacheGet.mockResolvedValue({
       rules: [activeRule({ conditions: { people: { users: { exclude: ['u1'] } } } })],
     });
@@ -492,7 +498,7 @@ describe('membership classification (in-file heuristic)', () => {
   });
 
   it('CHARACTERIZED: degrades to all-DIRECT (no error) when rules cannot be fetched', async () => {
-    tabRoute('getUserGroups', () => ({ success: true, data: [rawGroup()] }));
+    route(USER_GROUPS, () => ({ success: true, data: [rawGroup()] }));
     rulesCacheGet.mockResolvedValue(null);
     tabRoute('fetchGroupRules', () => ({ success: false, error: 'nope' }));
 
@@ -517,7 +523,7 @@ describe('lifecycle actions', () => {
       isLoading: false,
       oktaOrigin: null,
     };
-    tabRoute('getUserGroups', () => ({ success: true, data: [] }));
+    route(USER_GROUPS, () => ({ success: true, data: [] }));
     // §8: the banner Load fetches details through the scheduler (getUserDetails).
     route(/^\/api\/v1\/users\/u1$/, () => ({ success: true, data: oktaUser() }));
     render(<UsersTab targetTabId={1} />);
@@ -570,7 +576,7 @@ describe('lifecycle actions', () => {
     expect(await screen.findByText('Password reset email sent successfully.')).toBeInTheDocument();
     expect(schedulerEndpoints()).not.toContain('/api/v1/users/u1');
     // no membership reload after reset.
-    expect(tabCalls('getUserGroups')).toHaveLength(0);
+    expect(userGroupsCalls()).toHaveLength(0);
   });
 
   it('shows a danger result message when the lifecycle call fails', async () => {
@@ -599,7 +605,7 @@ describe('add-to-group: 300ms group search (memoized searchGroups)', () => {
       isLoading: false,
       oktaOrigin: null,
     };
-    tabRoute('getUserGroups', () => ({ success: true, data: [] }));
+    route(USER_GROUPS, () => ({ success: true, data: [] }));
     // §8: the banner Load fetches details through the scheduler (getUserDetails).
     route(/^\/api\/v1\/users\/u1$/, () => ({ success: true, data: oktaUser() }));
     render(<UsersTab targetTabId={1} />);

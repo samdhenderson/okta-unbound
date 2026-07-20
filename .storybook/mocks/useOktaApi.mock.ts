@@ -38,16 +38,37 @@ const sampleUser = {
   },
 };
 
+/** Fixture groups returned for a user's group-membership read (mirrors the chrome fake). */
+const sampleGroups = [
+  {
+    id: 'g-eng',
+    type: 'OKTA_GROUP',
+    profile: { name: 'Engineering', description: 'All engineers' },
+  },
+  {
+    id: 'g-admins',
+    type: 'APP_GROUP',
+    profile: { name: 'Okta Admins', description: 'Admin console' },
+  },
+];
+
 /**
  * Endpoint-aware `makeApiRequest` spy. Returns a well-formed `RequestResult`
  * (`{ success, data }`) so §8-migrated reads render a populated state instead of
  * the "failed to load" branch: a single-user read (`GET /api/v1/users/{id}`)
- * yields the fixture user; every other endpoint yields a benign empty success.
+ * yields the fixture user, a user's groups read (`GET /api/v1/users/{id}/groups`)
+ * yields the raw fixture groups (the hook wraps + classifies them), and every other
+ * endpoint yields a benign empty success.
  */
 const makeApiRequestFn = () =>
   fn(async (endpoint?: string) => {
-    if (typeof endpoint === 'string' && /^\/api\/v1\/users\/[^/?]+$/.test(endpoint)) {
-      return { success: true, data: sampleUser };
+    if (typeof endpoint === 'string') {
+      if (/^\/api\/v1\/users\/[^/?]+\/groups/.test(endpoint)) {
+        return { success: true, data: sampleGroups };
+      }
+      if (/^\/api\/v1\/users\/[^/?]+$/.test(endpoint)) {
+        return { success: true, data: sampleUser };
+      }
     }
     return { success: true, data: [] };
   });

@@ -111,11 +111,11 @@ const APPS: Record<string, AppFixture[]> = {
 interface Scenario {
   /** Apps returned per user id by the scheduled /api/v1/apps request. */
   apps: Record<string, AppFixture[]>;
-  /** Compared user's groups, returned by the direct `getUserGroups` message. */
+  /** Compared user's groups, returned (raw) by the scheduled `/api/v1/users/{id}/groups` read. */
   comparedGroups: OktaGroup[];
   /** Override the whole scheduled apps response (to simulate failure). */
   appsResponse?: () => Promise<unknown>;
-  /** Override the `getUserGroups` response. */
+  /** Override the scheduled `/api/v1/users/{id}/groups` response. */
   groupsResponse?: () => Promise<unknown>;
   /** Override the `fetchGroupRules` response. */
   rulesResponse?: () => Promise<unknown>;
@@ -176,16 +176,20 @@ beforeEach(() => {
       return { success: true, data: scenario.searchResults, headers: {} };
     }
 
+    // §8: the compared user's group memberships now route through the scheduler
+    // (`GET /api/v1/users/{id}/groups`). getUserGroupsRequest wraps the RAW groups,
+    // so this returns raw groups (not the old `{ group }` membership wrapper).
+    if (/^\/api\/v1\/users\/[^/?]+\/groups/.test(endpoint)) {
+      if (scenario.groupsResponse) return scenario.groupsResponse();
+      return { success: true, data: scenario.comparedGroups };
+    }
+
     return { success: true, data: [], headers: {} };
   });
 
   // Legacy direct path: chrome.tabs.sendMessage — still the transport for the
-  // membership reads (getUserGroups / fetchGroupRules), which §8 has not migrated yet.
+  // membership rule read (fetchGroupRules), which §8 has not migrated yet.
   mockTabsSendMessage.mockImplementation(async (_tabId: number, msg: Record<string, unknown>) => {
-    if (msg.action === 'getUserGroups') {
-      if (scenario.groupsResponse) return scenario.groupsResponse();
-      return { success: true, data: scenario.comparedGroups.map((g) => ({ group: g })) };
-    }
     if (msg.action === 'fetchGroupRules') {
       if (scenario.rulesResponse) return scenario.rulesResponse();
       return {
@@ -307,7 +311,11 @@ const getUserAppsCalls = () =>
   );
 
 const getUserGroupsCalls = () =>
-  mockTabsSendMessage.mock.calls.filter(([, m]) => m.action === 'getUserGroups');
+  mockRuntimeSendMessage.mock.calls.filter(
+    (c) =>
+      (c[0] as Record<string, unknown>).action === 'scheduleApiRequest' &&
+      /^\/api\/v1\/users\/[^/?]+\/groups/.test(String((c[0] as Record<string, unknown>).endpoint)),
+  );
 
 const addUserToGroupCalls = () =>
   mockRuntimeSendMessage.mock.calls.filter(([m]) => m.method === 'PUT');
@@ -681,7 +689,7 @@ describe('UserComparisonModal', () => {
       expect(screen.getByText('— —')).toBeInTheDocument();
       expect(screen.queryByText('Match')).not.toBeInTheDocument();
 
-      releaseGroups({ success: true, data: scenario.comparedGroups.map((g) => ({ group: g })) });
+      releaseGroups({ success: true, data: scenario.comparedGroups });
       await waitForLoadToSettle();
       expect(screen.getByText('Match')).toBeInTheDocument();
     });
@@ -708,7 +716,7 @@ describe('UserComparisonModal', () => {
       expect(screen.getByRole('tablist')).toBeInTheDocument();
       expect(screen.queryByText('Group memberships')).not.toBeInTheDocument();
 
-      releaseGroups({ success: true, data: scenario.comparedGroups.map((g) => ({ group: g })) });
+      releaseGroups({ success: true, data: scenario.comparedGroups });
       await waitForLoadToSettle();
       expect(screen.getByText('Group memberships')).toBeInTheDocument();
     });

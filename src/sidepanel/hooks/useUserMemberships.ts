@@ -14,6 +14,8 @@ import { RulesCache } from '../../shared/rulesCache';
 import { getOrFetch, peek } from '../cache/entityCache';
 import { analyzeMemberships } from '../../shared/utils/membershipAnalysis';
 import { createLogger } from '../../shared/utils/logger';
+import { useOktaApi } from './useOktaApi';
+import { getUserGroupsRequest } from './getUserGroupsRequest';
 
 const log = createLogger('useUserMemberships');
 
@@ -68,6 +70,11 @@ export function useUserMemberships({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // §8: own a useOktaApi slice so the group fetch routes through the background
+  // scheduler. `makeApiRequest` is stable per `targetTabId`, so it does not widen
+  // `loadMemberships`'s dependency surface (the auto-load guard still holds).
+  const { makeApiRequest } = useOktaApi({ targetTabId: targetTabId ?? null });
+
   // Held in a ref so `loadMemberships` keeps a stable identity regardless of
   // whether callers pass inline callbacks — the auto-load effect that depends
   // on it must not re-run on every render.
@@ -116,11 +123,8 @@ export function useUserMemberships({
           async () => {
             log.debug('Loading memberships for user:', user.id);
 
-            // Fetch user's groups
-            const groupsResponse = await chrome.tabs.sendMessage(targetTabId, {
-              action: 'getUserGroups',
-              userId: user.id,
-            });
+            // Fetch user's groups (§8: scheduler-routed, was a direct getUserGroups message)
+            const groupsResponse = await getUserGroupsRequest(makeApiRequest, user.id);
 
             if (!groupsResponse.success) {
               throw new Error(groupsResponse.error || 'Failed to fetch user groups');
@@ -175,7 +179,7 @@ export function useUserMemberships({
         reportLoading(false);
       }
     },
-    [targetTabId, reportError, reportLoading],
+    [targetTabId, reportError, reportLoading, makeApiRequest],
   );
 
   const clearMemberships = useCallback(() => {
