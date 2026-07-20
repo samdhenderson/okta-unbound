@@ -186,8 +186,8 @@ export class ApiScheduler {
    * Add request to queue with priority ordering
    */
   private addToQueue(request: QueuedRequest): void {
-    // Insert based on priority (high > normal > low)
-    const priorityOrder = { high: 0, normal: 1, low: 2 };
+    // Insert based on priority (interactive > high > normal > low)
+    const priorityOrder = { interactive: 0, high: 1, normal: 2, low: 3 };
     const requestPriorityValue = priorityOrder[request.priority];
 
     let insertIndex = this.queue.length;
@@ -236,10 +236,20 @@ export class ApiScheduler {
       return;
     }
 
+    // An `interactive` request at the head of the (priority-ordered) queue may
+    // jump the soft rate-limit gates — but only while there is genuine hard
+    // headroom left, so it can never force a 429. See {@link RequestPriority}.
+    const interactiveBypass =
+      this.queue[0]?.priority === 'interactive' && !this.rateLimitDetector.isLimitExceeded();
+
     // Check cooldown
     if (this.cooldownEndsAt && Date.now() < this.cooldownEndsAt) {
-      this.updateStatus('cooldown');
-      return;
+      if (!interactiveBypass) {
+        this.updateStatus('cooldown');
+        return;
+      }
+      // Fall through to dispatch the interactive request; the cooldown stays
+      // armed for every other tier (we do not clear `cooldownEndsAt`).
     } else if (this.cooldownEndsAt) {
       // Cooldown ended
       log.debug('Cooldown ended, resuming processing');
@@ -259,8 +269,12 @@ export class ApiScheduler {
         this.activeRequests.size,
       )
     ) {
-      this.enterCooldown();
-      return;
+      // An interactive request with hard headroom dispatches without arming a
+      // cooldown; any other tier trips the soft threshold and cools down.
+      if (!interactiveBypass) {
+        this.enterCooldown();
+        return;
+      }
     }
 
     // Get next request from queue

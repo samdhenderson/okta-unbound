@@ -7,8 +7,18 @@
  * requests, rate-limit info, scheduler config/state/metrics, and results.
  */
 
-/** Queue priority for a scheduled request (`high` runs before `normal`/`low`). */
-export type RequestPriority = 'high' | 'normal' | 'low';
+/**
+ * Queue priority for a scheduled request. Ordered
+ * `interactive` &gt; `high` &gt; `normal` &gt; `low`.
+ *
+ * `interactive` is reserved for latency-sensitive, user-initiated work (e.g. a
+ * type-ahead search). Beyond sorting to the front of the queue, it is the only
+ * tier that bypasses the **soft** rate-limit gates — it dispatches during a soft
+ * cooldown and past the approaching-limit threshold — so a typed search never
+ * stalls up to 30s. It still respects `maxConcurrent` and a genuine **hard**
+ * rate-limit exhaustion (`remaining <= 0`), so it can never force a 429.
+ */
+export type RequestPriority = 'interactive' | 'high' | 'normal' | 'low';
 /** Coarse lifecycle status of the scheduler, surfaced to the UI. */
 export type SchedulerStatus = 'idle' | 'processing' | 'throttled' | 'cooldown' | 'paused';
 
