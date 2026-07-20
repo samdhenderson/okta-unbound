@@ -335,7 +335,7 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
   touching it. **Do not regenerate** (~430k tokens / 12 min).
 - Done when: each target is decomposed with tests, behavior unchanged.
 
-### 8. `[~]` Raise coverage + enable the coverage gate
+### 8. `[x]` Raise coverage + enable the coverage gate + standardize the transport
 
 - [x] **Coverage raised to 80/75 and the CI gate enabled (this session).** Added
       co-located unit tests for the lowest-coverage pure-logic modules —
@@ -362,16 +362,16 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
       the caller's promise instead of unwinding. Fixed with a `cancelGeneration` counter
       (`clearQueue` bumps it; `retryRequest` rejects on wake if it moved). Regression test
       added to `apiScheduler.cancel.test.ts`.
-- [~] **Transport migration — 7 of ~8 bypass sites done.** The recipe
-  (proven six times, oracle green each): give the hook its own `useOktaApi({ targetTabId })`
-  slice, replace `chrome.tabs.sendMessage(...)` with `makeApiRequest(endpoint, method,
+- [x] **Transport migration — COMPLETE (all 8 bypass sites migrated).** The recipe
+      (proven six times, oracle green each): give the hook its own `useOktaApi({ targetTabId })`
+      slice, replace `chrome.tabs.sendMessage(...)` with `makeApiRequest(endpoint, method,
 body, priority)` (use `'interactive'` for typed searches), drop the file from the
-  `eslint.config.js` `no-restricted-syntax` grandfather list, and flip the matching
-  oracle assertions from the direct message to the scheduled endpoint (these component
-  tests short-circuit `chrome.runtime.sendMessage` via a `route()` mock — assert on
-  `endpoint`/`priority`, not the old `{action}`). **Storybook note:** the story runner
-  aliases the `useOktaApi` FACADE to `.storybook/mocks/useOktaApi.mock.ts`, so a migrated
-  read is answered by that mock's `makeApiRequest` (now endpoint-aware), NOT the chrome fake.
+      `eslint.config.js` `no-restricted-syntax` grandfather list, and flip the matching
+      oracle assertions from the direct message to the scheduled endpoint (these component
+      tests short-circuit `chrome.runtime.sendMessage` via a `route()` mock — assert on
+      `endpoint`/`priority`, not the old `{action}`). **Storybook note:** the story runner
+      aliases the `useOktaApi` FACADE to `.storybook/mocks/useOktaApi.mock.ts`, so a migrated
+      read is answered by that mock's `makeApiRequest` (now endpoint-aware), NOT the chrome fake.
   - [x] **`useRuleLifecycle`** → `/api/v1/users/me` via `makeApiRequest` + activate/deactivate
         via the existing `ruleWrites` ops. Audit/undo/attribution/reload unchanged.
         RulesTab oracle 10/10.
@@ -391,7 +391,7 @@ body, priority)` (use `'interactive'` for typed searches), drop the file from th
   - [x] **`getUserGroups` (`useUserMemberships.ts`)** → shared
         `getUserGroupsRequest(makeApiRequest, userId)` helper (+ co-located test): the
         unbounded `rel="next"` pagination and the `{group, membershipType:'UNKNOWN',
-    addedDate:undefined}` wrapper ported verbatim from `content/userHandlers.ts`,
+addedDate:undefined}` wrapper ported verbatim from `content/userHandlers.ts`,
         running at default priority (a selection-driven read, not a typed search); the
         `{success, data, count}` shape is preserved so `useUserMemberships` changes only
         its transport line. `useUserMemberships` gained a `useOktaApi` slice. Oracles flipped
@@ -400,10 +400,21 @@ body, priority)` (use `'interactive'` for typed searches), drop the file from th
         test green; storybook `makeApiRequest` mock taught to answer the groups endpoint with
         the raw fixture groups. `useUserMemberships` stays grandfathered until `fetchGroupRules`
         (its other bypass) migrates below.
-  - [ ] **`fetchGroupRules` (`useUserMemberships.ts:139`, `useRulesData.ts:111`) — biggest,
-        last site.** Reproduce the 4-stage pipeline (paginate `/api/v1/groups/rules`;
-        parallel `/api/v1/groups/{id}` name resolution w/ 5-min cache; O(n²) conflict
-        detection; format to `{rules, stats, conflicts}` **top-level**, not under `data`).
+  - [x] **`fetchGroupRules` (both consumers)** → shared
+        `fetchGroupRulesRequest(makeApiRequest, currentGroupId?)` helper (+ co-located test):
+        the 4-stage pipeline ported verbatim — paginate `/api/v1/groups/rules?limit=200`;
+        parallel `/api/v1/groups/{id}` name resolution w/ 5-min cache
+        (`shared/cache.get/setCacheEntry`); conflict detection (reused `ruleUtils.detectConflicts`,
+        proven-equivalent to the content loop); format to `{rules, stats, conflicts}` **top-level**
+        (reused `ruleUtils.formatRuleForDisplay`, layering on `groupNames`/`allGroupNamesMap`).
+        `useUserMemberships` (passes no groupId — `analyzeMemberships` ignores
+        `affectsCurrentGroup`) and `useRulesData` (gained a `useOktaApi` slice + a
+        `currentGroupId` option threaded from `RulesTab`, which mirrors the page-URL group the
+        content script used to derive). Oracles flipped from the `fetchGroupRules` tab message
+        to the scheduled `/api/v1/groups/rules` read — the RulesTab oracle now mocks the RAW
+        rules and lets the real helper format them: RulesTab 10/10, UsersTab 21/21,
+        UserComparisonModal 38/38. Both hooks came off the eslint `no-restricted-syntax`
+        grandfather list, which now holds only the 3 sanctioned entries.
     - **Note:** `UserComparisonModal` has ZERO direct `sendMessage` (already scheduler-routed).
 - **⚠️ session-5 sequencing corrections:**
   - The scheduler migration **depends on §7's `content/index.ts` item** (DONE). The semantic

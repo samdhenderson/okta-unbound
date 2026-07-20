@@ -134,19 +134,36 @@ function rule(over: Partial<FormattedRule> = {}): FormattedRule {
 
 const stats = { total: 2, active: 1, inactive: 1, conflicts: 0 };
 
-function fetchResponse(rules: FormattedRule[]) {
+/**
+ * A RAW Okta group rule (the shape the scheduler read now returns). §8:
+ * `fetchGroupRulesRequest` runs in-panel and formats these, so the oracle mocks the
+ * raw `/api/v1/groups/rules` response and lets the real helper produce the
+ * FormattedRule the (stubbed) RuleCard receives.
+ */
+function rawRule(over: Record<string, unknown> = {}) {
   return {
-    success: true,
-    rules,
-    stats: {
-      total: rules.length,
-      active: rules.filter((r) => r.status === 'ACTIVE').length,
-      inactive: rules.filter((r) => r.status === 'INACTIVE').length,
-      conflicts: 0,
-    },
-    conflicts: [],
+    id: 'r1',
+    name: 'Engineering Rule',
+    status: 'ACTIVE',
+    conditions: { expression: { value: 'user.department=="Eng"' } },
+    actions: { assignUserToGroups: { groupIds: ['g1'] } },
+    created: '2020-01-01T00:00:00.000Z',
+    lastUpdated: '2024-01-01T00:00:00.000Z',
+    ...over,
   };
 }
+
+/** The two default raw fixtures: one ACTIVE, one INACTIVE, sharing a condition. */
+const DEFAULT_RAW_RULES = [
+  rawRule(),
+  rawRule({ id: 'r2', name: 'Sales Rule', status: 'INACTIVE' }),
+];
+
+/** §8: scheduler GETs for the rules read (`/api/v1/groups/rules?limit=200`). */
+const rulesFetchCalls = () =>
+  runtimeSendMessage.mock.calls.filter((c) =>
+    /^\/api\/v1\/groups\/rules/.test(String(c[0]?.endpoint)),
+  );
 
 function renderTab(props: Partial<React.ComponentProps<typeof RulesTab>> = {}) {
   return render(
@@ -156,21 +173,31 @@ function renderTab(props: Partial<React.ComponentProps<typeof RulesTab>> = {}) {
   );
 }
 
+/**
+ * Raw `/api/v1/groups/rules` response, reassignable per test (e.g. a failure).
+ * Reset in `beforeEach` to the two default fixtures.
+ */
+let rulesFetchResponse: () => { success: boolean; data?: unknown[]; error?: string };
+
 beforeEach(() => {
   vi.clearAllMocks();
   rulesCacheGet.mockResolvedValue(null);
   loadTabState.mockResolvedValue(null);
-  // Default: the rules fetch (still the one direct content call — useRulesData,
-  // §8-pending) returns two rules.
-  tabsSendMessage.mockImplementation(async (_tabId: number, msg: { action: string }) => {
-    if (msg.action === 'fetchGroupRules') {
-      return fetchResponse([rule(), rule({ id: 'r2', name: 'Sales Rule', status: 'INACTIVE' })]);
-    }
-    return { success: true };
+  rulesFetchResponse = () => ({ success: true, data: DEFAULT_RAW_RULES });
+
+  // §8: the rules read now routes through the scheduler. useRulesData calls
+  // fetchGroupRulesRequest, which fetches raw rules from /api/v1/groups/rules and
+  // resolves each target group's name from /api/v1/groups/{id}. The scheduler path
+  // also carries captureRuleImpact, the /users/me lookup, and activate/deactivate
+  // mutations — all resolve success/empty so they settle.
+  runtimeSendMessage.mockImplementation(async (msg: { action?: string; endpoint?: string }) => {
+    if (msg.action !== 'scheduleApiRequest') return { success: false };
+    if (/^\/api\/v1\/groups\/rules/.test(String(msg.endpoint))) return rulesFetchResponse();
+    return { success: true, data: [], headers: {} };
   });
-  // Scheduler path resolves success/empty so captureRuleImpact + the §8-migrated
-  // /users/me lookup and activate/deactivate mutations all settle.
-  runtimeSendMessage.mockResolvedValue({ success: true, data: [], headers: {} });
+
+  // RulesTab makes no direct chrome.tabs.sendMessage reads after §8; stub defensively.
+  tabsSendMessage.mockResolvedValue({ success: true });
 });
 
 describe('RulesTab characterization', () => {
@@ -184,7 +211,14 @@ describe('RulesTab characterization', () => {
     await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
 
     await waitFor(() => expect(screen.getByTestId('rule-r1')).toBeInTheDocument());
-    expect(tabsSendMessage).toHaveBeenCalledWith(1, { action: 'fetchGroupRules' });
+    // §8: the rules read now routes through the scheduler.
+    expect(rulesFetchCalls()).toHaveLength(1);
+    expect(runtimeSendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'scheduleApiRequest',
+        endpoint: '/api/v1/groups/rules?limit=200',
+      }),
+    );
     expect(screen.getByText('Engineering Rule')).toBeInTheDocument();
     expect(screen.getByText('Sales Rule')).toBeInTheDocument();
 
@@ -206,7 +240,8 @@ describe('RulesTab characterization', () => {
     await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
 
     await waitFor(() => expect(screen.getByText('Cached Rule')).toBeInTheDocument());
-    expect(tabsSendMessage).not.toHaveBeenCalledWith(1, { action: 'fetchGroupRules' });
+    // §8: a cache hit must not issue the scheduler rules read.
+    expect(rulesFetchCalls()).toHaveLength(0);
   });
 
   it('activates a rule immediately (no confirmation gate)', async () => {
@@ -289,11 +324,8 @@ describe('RulesTab characterization', () => {
   });
 
   it('surfaces a load failure in the error banner', async () => {
-    tabsSendMessage.mockImplementation(async (_t: number, msg: { action: string }) =>
-      msg.action === 'fetchGroupRules'
-        ? { success: false, error: 'Okta said no' }
-        : { success: true },
-    );
+    // §8: the rules read fails at the scheduler; the helper returns it verbatim.
+    rulesFetchResponse = () => ({ success: false, error: 'Okta said no' });
     renderTab();
     await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
     await waitFor(() => expect(screen.getByText('Okta said no')).toBeInTheDocument());

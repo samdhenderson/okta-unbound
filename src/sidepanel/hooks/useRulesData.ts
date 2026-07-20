@@ -4,12 +4,12 @@
  *
  * Extracted from `RulesTab` during its §7 decomposition. Holds the loaded rules,
  * aggregate stats, API-cost/last-fetch metadata, and loading flag, and exposes
- * `loadRules(force)` (RulesCache-first, then the content-script fetch) plus a
+ * `loadRules(force)` (RulesCache-first, then the scheduler-routed fetch) plus a
  * `hydrate` used by the tab to restore persisted state on mount.
  *
- * @remarks Keeps the raw `chrome.tabs.sendMessage('fetchGroupRules')` transport
- * verbatim (the §8 scheduler migration is out of scope); this file is
- * grandfathered in the ESLint `no-restricted-syntax` override.
+ * @remarks §8: the rule fetch now routes through the background scheduler via
+ * {@link fetchGroupRulesRequest} (`makeApiRequest`), not a raw
+ * `chrome.tabs.sendMessage`.
  */
 
 import { useCallback, useState } from 'react';
@@ -17,6 +17,8 @@ import type { FormattedRule, RuleStats } from '../../shared/types';
 import { RulesCache } from '../../shared/rulesCache';
 import { useProgress } from '../contexts/ProgressContext';
 import { createLogger } from '../../shared/utils/logger';
+import { useOktaApi } from './useOktaApi';
+import { fetchGroupRulesRequest } from './fetchGroupRulesRequest';
 
 const log = createLogger('RulesTab');
 
@@ -36,6 +38,11 @@ interface UseRulesDataOptions {
   targetTabId?: number;
   /** Surface an error message in the tab's banner. */
   onError: (message: string) => void;
+  /**
+   * Current group (the panel's detected group), used to flag rules that target it
+   * (`affectsCurrentGroup`). Mirrors the page-URL group the content script derived.
+   */
+  currentGroupId?: string;
 }
 
 /** Return shape of {@link useRulesData}. */
@@ -58,13 +65,20 @@ interface UseRulesDataReturn {
  * @param options - See {@link UseRulesDataOptions}.
  * @returns The rule data plus `loadRules`/`hydrate`.
  */
-export function useRulesData({ targetTabId, onError }: UseRulesDataOptions): UseRulesDataReturn {
+export function useRulesData({
+  targetTabId,
+  onError,
+  currentGroupId,
+}: UseRulesDataOptions): UseRulesDataReturn {
   const [rules, setRules] = useState<FormattedRule[]>([]);
   const [stats, setStats] = useState<RuleStats>(EMPTY_STATS);
   const [apiCost, setApiCost] = useState<number | null>(null);
   const [lastFetchTime, setLastFetchTime] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { startProgress, updateProgress, completeProgress } = useProgress();
+
+  // §8: own a useOktaApi slice so the rule fetch routes through the scheduler.
+  const { makeApiRequest } = useOktaApi({ targetTabId: targetTabId ?? null });
 
   const hydrate = useCallback((snapshot: RulesDataSnapshot) => {
     if (snapshot.rules) setRules(snapshot.rules);
@@ -108,9 +122,7 @@ export function useRulesData({ targetTabId, onError }: UseRulesDataOptions): Use
           }
         }
 
-        const response = await chrome.tabs.sendMessage(targetTabId, {
-          action: 'fetchGroupRules',
-        });
+        const response = await fetchGroupRulesRequest(makeApiRequest, currentGroupId);
 
         log.debug('Received response:', { success: response.success });
 
@@ -158,7 +170,15 @@ export function useRulesData({ targetTabId, onError }: UseRulesDataOptions): Use
         setIsLoading(false);
       }
     },
-    [targetTabId, onError, startProgress, updateProgress, completeProgress],
+    [
+      targetTabId,
+      onError,
+      currentGroupId,
+      makeApiRequest,
+      startProgress,
+      updateProgress,
+      completeProgress,
+    ],
   );
 
   return { rules, stats, apiCost, lastFetchTime, isLoading, loadRules, hydrate };

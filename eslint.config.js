@@ -107,21 +107,15 @@ export default [
   // Sanctioned (keeps raw access): apiScheduler.ts (the rate-limited path's own
   // dispatch to content — the endpoint the guard steers traffic toward),
   // useOktaApi/core.ts, and useOktaTabContext.ts (lightweight page-context probes,
-  // not rate-limited API traffic). Legacy, pending migration onto the scheduler
-  // with §7/§8: the god components + useUserSearch/useUserMemberships/UserOverview.
+  // not rate-limited API traffic). §8's transport migration is COMPLETE — every
+  // legacy read/write bypass (searchUsers, getUserDetails, useRuleLifecycle,
+  // useGroupLiveSearch, getUserGroups, and fetchGroupRules) now routes through the
+  // scheduler, so only the three sanctioned entries remain.
   {
     files: [
       'src/shared/scheduler/apiScheduler.ts',
       'src/sidepanel/hooks/useOktaApi/core.ts',
       'src/sidepanel/hooks/useOktaTabContext.ts',
-      'src/sidepanel/hooks/useUserMemberships.ts',
-      // (useUserSearch.ts + useUsersTabSearch.ts migrated their searchUsers read,
-      // and useDetectedUser.ts + UserOverview.tsx their getUserDetails read, onto
-      // the scheduler in §8.)
-      // RulesTab's rule fetch moved into this hook during its §7 decomposition;
-      // the bypass itself is untouched and still migrates in §8.
-      // (useRuleLifecycle.ts migrated onto the scheduler in §8 — removed here.)
-      'src/sidepanel/hooks/useRulesData.ts',
     ],
     rules: {
       'no-restricted-syntax': 'off',

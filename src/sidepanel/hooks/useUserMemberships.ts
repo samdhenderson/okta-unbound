@@ -16,6 +16,7 @@ import { analyzeMemberships } from '../../shared/utils/membershipAnalysis';
 import { createLogger } from '../../shared/utils/logger';
 import { useOktaApi } from './useOktaApi';
 import { getUserGroupsRequest } from './getUserGroupsRequest';
+import { fetchGroupRulesRequest } from './fetchGroupRulesRequest';
 
 const log = createLogger('useUserMemberships');
 
@@ -138,11 +139,9 @@ export function useUserMemberships({
               log.debug('Using cached rules from global cache');
               rules = cachedRules.rules;
             } else {
-              // Cache miss - fetch rules
+              // Cache miss - fetch rules (§8: scheduler-routed, was a fetchGroupRules message)
               log.debug('Cache miss - fetching rules');
-              const rulesResponse = await chrome.tabs.sendMessage(targetTabId, {
-                action: 'fetchGroupRules',
-              });
+              const rulesResponse = await fetchGroupRulesRequest(makeApiRequest);
 
               if (!rulesResponse.success) {
                 log.warn('Could not fetch rules for analysis:', rulesResponse.error);

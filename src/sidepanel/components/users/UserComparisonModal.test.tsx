@@ -117,7 +117,7 @@ interface Scenario {
   appsResponse?: () => Promise<unknown>;
   /** Override the scheduled `/api/v1/users/{id}/groups` response. */
   groupsResponse?: () => Promise<unknown>;
-  /** Override the `fetchGroupRules` response. */
+  /** Override the scheduled `/api/v1/groups/rules` response. */
   rulesResponse?: () => Promise<unknown>;
   /** Override the `searchUsers` response. */
   searchResponse?: () => Promise<unknown>;
@@ -184,23 +184,21 @@ beforeEach(() => {
       return { success: true, data: scenario.comparedGroups };
     }
 
+    // §8: the membership rule read now routes through the scheduler
+    // (`GET /api/v1/groups/rules`); fetchGroupRulesRequest formats the RAW rules
+    // in-panel. Empty by default (rules only affect DIRECT/RULE classification,
+    // not the group diff these tests assert on).
+    if (/^\/api\/v1\/groups\/rules/.test(endpoint)) {
+      if (scenario.rulesResponse) return scenario.rulesResponse();
+      return { success: true, data: [] };
+    }
+
     return { success: true, data: [], headers: {} };
   });
 
-  // Legacy direct path: chrome.tabs.sendMessage — still the transport for the
-  // membership rule read (fetchGroupRules), which §8 has not migrated yet.
-  mockTabsSendMessage.mockImplementation(async (_tabId: number, msg: Record<string, unknown>) => {
-    if (msg.action === 'fetchGroupRules') {
-      if (scenario.rulesResponse) return scenario.rulesResponse();
-      return {
-        success: true,
-        rules: [],
-        stats: { total: 0, active: 0, inactive: 0, conflicts: 0 },
-        conflicts: [],
-      };
-    }
-    return { success: false, error: 'unexpected' };
-  });
+  // §8: UserComparisonModal makes no direct chrome.tabs.sendMessage calls anymore
+  // (all membership reads route through the scheduler above). Stub defensively.
+  mockTabsSendMessage.mockResolvedValue({ success: false, error: 'no direct tab calls' });
 });
 
 // ----------------------------------------------------------------- harness

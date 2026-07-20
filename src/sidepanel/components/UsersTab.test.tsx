@@ -8,15 +8,15 @@
  * Do NOT "fix" a test here — if the behavior should change, change it in its own
  * commit and flip the matching assertion there.
  *
- * Harness: UsersTab's remaining direct-content read (fetchGroupRules) uses raw
- * `chrome.tabs.sendMessage` and bypasses the scheduler, so MSW does not apply. Its
- * scheduler path (searchUsers + getUserDetails + the membership groups read —
- * §8-migrated — plus the write path: suspend / unsuspend / resetPassword /
- * getUserById / searchGroups / addUserToGroup) goes through the REAL `useOktaApi`
- * → `chrome.runtime.sendMessage({ action: 'scheduleApiRequest', endpoint })`. We
- * mock both chrome messaging surfaces (exactly as `GroupsTab.test.tsx` /
- * `hooks/useOktaApi.test.ts` do) and drive the real hook so scheduler traffic and
- * the memoized-identity fix (commit 6863313) are both observable.
+ * Harness: after §8, UsersTab makes NO direct `chrome.tabs.sendMessage` reads —
+ * every read/write (searchUsers, getUserDetails, the membership groups + rules
+ * reads, and the write path: suspend / unsuspend / resetPassword / getUserById /
+ * searchGroups / addUserToGroup) goes through the REAL `useOktaApi` →
+ * `chrome.runtime.sendMessage({ action: 'scheduleApiRequest', endpoint })`. We mock
+ * the runtime surface (exactly as `GroupsTab.test.tsx` / `hooks/useOktaApi.test.ts`
+ * do) and drive the real hook so scheduler traffic and the memoized-identity fix
+ * (commit 6863313) are both observable; the `tabsSendMessage` stub only lets one
+ * assertion confirm the old searchUsers tab bypass is gone.
  *
  * Timer discipline: fake ONLY `setTimeout`/`clearTimeout` — vitest's default set
  * also stubs queueMicrotask/nextTick, which deadlocks Testing Library's async
@@ -81,12 +81,6 @@ function route(pattern: RegExp, respond: (msg: any) => any) {
   routes.push([pattern, respond]);
 }
 
-// The content-script (tabs.sendMessage) action router used by UsersTab directly.
-let tabResponders: Record<string, (msg: any) => any> = {};
-function tabRoute(action: string, respond: (msg: any) => any) {
-  tabResponders[action] = respond;
-}
-
 function tabCalls(action?: string) {
   return tabsSendMessage.mock.calls
     .map((c) => c[1])
@@ -116,6 +110,9 @@ const USER_GROUPS = /^\/api\/v1\/users\/[^/?]+\/groups/;
 function userGroupsCalls() {
   return schedulerEndpoints().filter((e) => USER_GROUPS.test(e));
 }
+
+/** §8: the scheduler GET for the group-rules read (membership analysis on a cache miss). */
+const GROUP_RULES = /^\/api\/v1\/groups\/rules/;
 
 // ---------------------------------------------------------------------------
 // fixtures
@@ -198,22 +195,22 @@ const groupSearchInput = () => screen.getByPlaceholderText('Type to search by gr
 beforeEach(() => {
   vi.clearAllMocks();
   routes = [];
-  tabResponders = {};
   userContext.current = { userInfo: null, isLoading: false, oktaOrigin: null };
 
   // sensible defaults; individual tests override.
   // §8: searchUsers is a scheduler read now (`GET /api/v1/users?q=|search=|filter=`).
   route(/^\/api\/v1\/users\?/, () => ({ success: true, data: [] }));
   route(USER_GROUPS, () => ({ success: true, data: [] }));
-  tabRoute('fetchGroupRules', () => ({ success: true, rules: [], stats: {}, conflicts: [] }));
+  // §8: the group-rules read (membership analysis on a cache miss) is a scheduler
+  // read now; raw empty rules by default (the helper formats them in-panel).
+  route(GROUP_RULES, () => ({ success: true, data: [] }));
   // §8: getUserDetails is now a scheduler read (`GET /api/v1/users/{id}`); the
   // detected-user tests that actually Load route it explicitly (no blanket default,
   // so the lifecycle tests' own `/api/v1/users/u1` route is never shadowed).
 
-  tabsSendMessage.mockImplementation(async (_tabId: number, msg: any) => {
-    const r = tabResponders[msg.action];
-    return r ? r(msg) : { success: false, error: `unhandled action ${msg.action}` };
-  });
+  // UsersTab makes no direct chrome.tabs.sendMessage calls after §8; the stub only
+  // lets `tabCalls('searchUsers')` assert the old bypass is gone (always zero).
+  tabsSendMessage.mockResolvedValue({ success: false, error: 'no direct tab calls' });
 
   rulesCacheGet.mockResolvedValue(null); // cache miss by default
   rulesCacheSet.mockResolvedValue(undefined);
@@ -500,7 +497,7 @@ describe('membership classification (in-file heuristic)', () => {
   it('CHARACTERIZED: degrades to all-DIRECT (no error) when rules cannot be fetched', async () => {
     route(USER_GROUPS, () => ({ success: true, data: [rawGroup()] }));
     rulesCacheGet.mockResolvedValue(null);
-    tabRoute('fetchGroupRules', () => ({ success: false, error: 'nope' }));
+    route(GROUP_RULES, () => ({ success: false, error: 'nope' }));
 
     render(<UsersTab targetTabId={1} />);
     fireEvent.change(userSearchInput(), { target: { value: 'ada' } });
