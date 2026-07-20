@@ -362,8 +362,8 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
       the caller's promise instead of unwinding. Fixed with a `cancelGeneration` counter
       (`clearQueue` bumps it; `retryRequest` rejects on wake if it moved). Regression test
       added to `apiScheduler.cancel.test.ts`.
-- [~] **Transport migration — 4 of ~8 bypass sites done (this session).** The recipe
-  (proven four times, oracle green each): give the hook its own `useOktaApi({ targetTabId })`
+- [~] **Transport migration — 6 of ~8 bypass sites done (this session).** The recipe
+  (proven six times, oracle green each): give the hook its own `useOktaApi({ targetTabId })`
   slice, replace `chrome.tabs.sendMessage(...)` with `makeApiRequest(endpoint, method,
 body, priority)` (use `'interactive'` for typed searches), drop the file from the
   `eslint.config.js` `no-restricted-syntax` grandfather list, and flip the matching
@@ -382,12 +382,14 @@ body, priority)` (use `'interactive'` for typed searches), drop the file from th
         mock's `makeApiRequest` to answer `/api/v1/users/{id}`) and `useDetectedUser.ts`
         (UsersTab oracle 21/21 — its harness router now prefers the last-registered route
         since getUserDetails shares `/api/v1/users/{id}` with the getUserById refresh).
-  - [ ] **Remaining 4 sites** (precise per-site mapping from the swarm agent below):
+  - [x] **`searchUsers` (both consumers)** → extracted the 1–3 request fallback (`q=` →
+        `search=` → email `filter=`, first non-empty wins, email filter only when the query
+        has `@` and nothing matched) into one shared `searchUsersRequest(makeApiRequest, query)`
+        helper (+ co-located test) running each request at `'interactive'` priority; the
+        `{success,data,count}` shape is preserved so `useUserSearch` + `useUsersTabSearch`
+        change only their transport line. UsersTab oracle 21/21, UserComparisonModal 38/38.
+  - [ ] **Remaining 2 sites** (precise per-site mapping from the swarm agent below):
     - **Compound — reproduce the loop in the side panel over `makeApiRequest`:**
-      - `searchUsers` (`useUserSearch.ts:77`, `useUsersTabSearch.ts:92`): reproduce the **1–3
-        request fallback** (`q=` → `search=` → email-`filter` only when the query has `@` and
-        the first two returned nothing) verbatim; the existing `userOperations.searchUsers`
-        does only strategy 1 and flattens, so it is NOT a drop-in.
       - `getUserGroups` (`useUserMemberships.ts:120`): add a paginating op mirroring
         `groupMembers.getAllGroupMembers` but against `/api/v1/users/{id}/groups?limit=200`
         (follow `rel="next"`), then apply the `{group, membershipType:'UNKNOWN', addedDate}`
