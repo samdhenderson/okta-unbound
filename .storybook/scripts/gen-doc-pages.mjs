@@ -19,8 +19,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(here, '../..');
 const OUT = path.resolve(here, '../generated/docs');
 
-// Skip planning/working docs that aren't reference documentation.
-const DOC_SKIP = new Set(['README.md', 'activity-bar-plan.md', 'high-impact-features-report.md']);
+// Skip index/routing docs that aren't reference documentation.
+const DOC_SKIP = new Set(['README.md']);
 
 const INTERNALS_TITLES = {
   hooks: 'Hooks',
@@ -72,7 +72,9 @@ function main() {
   }
 
   // Documentation/ADRs/* from docs/adr/*.md
-  for (const file of readdirSync(path.join(REPO, 'docs/adr')).filter((f) => f.endsWith('.md'))) {
+  for (const file of readdirSync(path.join(REPO, 'docs/adr')).filter(
+    (f) => f.endsWith('.md') && !DOC_SKIP.has(f),
+  )) {
     const slug = file.replace(/\.md$/, '');
     const title = `Documentation/ADRs/${titleCase(slug)}`;
     writeFileSync(

@@ -14,8 +14,7 @@ the same routing `CLAUDE.md` enforces, to keep context lean.
 | [development.md](./development.md)               | Dealing with logging, secrets, `any`, build, lint, CI, or versioning      |
 | [testing.md](./testing.md)                       | Writing or fixing tests                                                   |
 | [features-plan.md](./features-plan.md)           | Scoping or picking up new feature work — the ranked backlog + UX sketches |
-| [adr/](./adr/)                                   | Looking up _why_ a convention exists                                      |
-| [audit/](./audit/)                               | Reviewing the 2026-07 maintainability baseline (archived snapshot)        |
+| [adr/](./adr/README.md)                          | Looking up _why_ a convention exists                                      |
 
 **Rule of thumb:** load the matching row(s), not everything. Depth lives here;
 `CLAUDE.md` is only the router + hard rules.

@@ -5,7 +5,7 @@
  * Owns the active-tab selection (persisted to `chrome.storage.local` with legacy-tab
  * migration) and the highlighted rule id. Reads live Okta page context via
  * `useGroupContext`/`useOktaPageContext` and renders the {@link Header},
- * {@link ContextBanner}, {@link TabNavigation}, the per-tab content, and the fixed
+ * {@link ContextBar}, {@link TabNavigation}, the per-tab content, and the fixed
  * {@link ActivityBar} (the unified scheduler + progress bar), all inside the
  * SchedulerProvider.
  */

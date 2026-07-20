@@ -2,7 +2,7 @@
 
 Stack: **Vitest 4** + **@testing-library/react** + **MSW** (`src/test/mocks/handlers.ts`,
 `src/test/setup.ts`), jsdom env. Coverage via v8, thresholds lines/functions/
-statements 80%, branches 75% (enforced in CI once component tests land).
+statements 80%, branches 75% (enforced in CI).
 
 ## What to test where
 
@@ -11,8 +11,13 @@ statements 80%, branches 75% (enforced in CI once component tests land).
 - **Hooks** — test extracted logic hooks directly (see `useOktaApi.test.ts`). When you
   extract a hook from a god component, it gets a test.
 - **Components** — RTL tests for shared components and feature components with real
-  behavior (interactions, conditional states). **This is the current gap: zero
-  component tests exist.** New/refactored components must ship with tests.
+  behavior (interactions, conditional states). This is an established convention:
+  ~70 test files (~940 `it`/`test` blocks), 18 of them component tests under
+  `src/sidepanel/components/` (`shared/Input.test.tsx`, `Checkbox.test.tsx`,
+  `Modal.test.tsx`, `IconButton.test.tsx`, `SortPill.test.tsx`, plus feature tests
+  like `UserComparisonModal.test.tsx`, `GroupMergeModal.test.tsx`,
+  `ActivityBarView.test.tsx`). Query by role, mock the network with MSW, assert
+  behavior not implementation. New/refactored components ship with tests.
 
 ## Conventions
 
