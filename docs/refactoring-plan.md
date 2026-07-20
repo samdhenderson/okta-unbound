@@ -346,23 +346,38 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
       `verify` CI job's test step to `npm run test:coverage` (was bare `test:run`), so the
       80/75 thresholds in `vitest.config.ts` are now enforced on every PR (closes §1's
       pending item). Tests only — no production source changed.
+- [x] **Scheduler `interactive` tier built (this session).** New highest-priority
+      `interactive` `RequestPriority` that sorts ahead of high/normal/low and bypasses the
+      **soft** rate-limit gates (an active cooldown + the approaching-limit threshold) so a
+      typed search never stalls up to 30s — but is still held on a genuine **hard**
+      exhaustion (`X-Rate-Limit-Remaining <= 0`) and still respects `maxConcurrent`, so it
+      can never force a 429. Wired end-to-end: `types.ts`, `apiScheduler.ts` (priority-order
+      map + `processQueue` bypass), the `background/index.ts` `scheduleApiRequest` priority
+      allow-list, + `apiScheduler.interactive.test.ts` (ordering, soft-cooldown bypass,
+      hard-exhaustion hold). This is the prerequisite for migrating the typed-search bypasses.
+- [x] **`clearQueue()` promise-leak re-audit DONE (this session).** Queued requests + their
+      coalesced waiters were already rejected correctly (pinned). The one gap: a request
+      sleeping in **retry backoff** lives in `activeRequests` (not the queue), so a Cancel
+      (`clearQueue`) skipped it and it **revived + re-dispatched after cancel**, resolving
+      the caller's promise instead of unwinding. Fixed with a `cancelGeneration` counter
+      (`clearQueue` bumps it; `retryRequest` rejects on wake if it moved). Regression test
+      added to `apiScheduler.cancel.test.ts`.
 - [ ] **Remaining:** standardize on the single content-script path (drop the direct
-      side-panel→content route that bypasses the scheduler — `useOktaApi/core.ts`), plus
-      the scheduler `interactive` tier + `clearQueue` re-audit below.
+      side-panel→content route that bypasses the scheduler — the ~8 hook/component
+      `chrome.tabs.sendMessage` bypass sites), now that the `interactive` tier + clearQueue
+      audit prerequisites are in.
 - **⚠️ session-5 sequencing corrections:**
-  - The scheduler migration **depends on §7's `content/index.ts` item**. The semantic
+  - The scheduler migration **depends on §7's `content/index.ts` item** (DONE). The semantic
     content-script handlers are **compound** (unbounded `while(nextUrl)` pagination + a
     1–3 request fallback chain live inside the content script) and do **not** map 1:1
-    onto a scheduler whose unit of work is one fetch. Decompose them first.
+    onto a scheduler whose unit of work is one fetch — reproduce that logic in the side
+    panel (issuing each fetch through `makeApiRequest`) as each site migrates.
   - `UserComparisonModal` has **ZERO direct `sendMessage` calls** (the earlier
     assumption was wrong — its hooks are already decomposed and could migrate now).
-  - **Honest regression to surface, not absorb:** `processQueue` checks the cooldown
-    **before** priority, so a typed search would stall up to 30s where today it is
-    instant. Needs a new **`interactive` tier exempt from the cooldown gate**.
-  - ~~`src/shared/scheduler/` has **ZERO tests**~~ — **stale (swarm session):** the scheduler
-    now has full coverage (`apiScheduler.test.ts`, `apiScheduler.cancel.test.ts`,
-    `cancellation.test.ts`, `runBatch.test.ts`). Re-audit whether `clearQueue()` still
-    **leaks promises** (`apiScheduler.ts:541`) against those tests before migrating onto it.
+  - ~~**Honest regression:** `processQueue` checks the cooldown before priority~~ —
+    **RESOLVED:** the `interactive` tier above bypasses the soft cooldown gate.
+  - ~~`src/shared/scheduler/` has **ZERO tests**~~ / ~~re-audit `clearQueue()` leaks~~ —
+    **both DONE this session** (see the two `[x]` items above).
 - Doc: `docs/testing.md` / `docs/architecture.md`. Agent: `test-writer`.
 
 ### 9. `[ ]` Small cleanups
