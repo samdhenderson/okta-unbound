@@ -4,10 +4,13 @@
  * {@link SchedulerMetrics} into the side panel and exposes pause/resume/clear controls.
  *
  * All state lives in the background `ApiScheduler`; this context is a read-through
- * view of it. State is refreshed on mount, polled every second (for smooth cooldown
- * countdowns), and also pushed live via `schedulerStateChanged` runtime messages.
- * The control methods (`pause`/`resume`/`clearQueue`) round-trip through
- * `chrome.runtime.sendMessage` and re-read state afterwards.
+ * view of it. State is fetched once on mount and then kept current purely by the
+ * `schedulerStateChanged` push messages the background emits on every state
+ * transition — there is no polling. (Cooldown countdowns tick locally in
+ * `useActivityBar` off the absolute `cooldownEndsAt` timestamp, so no periodic
+ * re-fetch is needed for a smooth countdown.) The control methods
+ * (`pause`/`resume`/`clearQueue`) round-trip through `chrome.runtime.sendMessage`
+ * and re-read state afterwards for immediate feedback.
  */
 
 import React, {
@@ -85,20 +88,15 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, []);
 
-  // Fetch initial state
+  // Fetch initial state once on mount. Live updates arrive via the
+  // `schedulerStateChanged` push listener below — the background scheduler now
+  // notifies on every state transition, so there is no polling interval.
   useEffect(() => {
     // Fetch initial data in an async IIFE to avoid setState-in-effect warning
     (async () => {
       await refreshState();
       await refreshMetrics();
     })();
-
-    // Refresh periodically
-    const interval = setInterval(() => {
-      void refreshState();
-    }, 1000); // Update every second for smooth countdown
-
-    return () => clearInterval(interval);
   }, [refreshState, refreshMetrics]);
 
   // Listen for scheduler state changes from background

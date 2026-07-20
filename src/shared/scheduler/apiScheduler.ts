@@ -481,6 +481,13 @@ export class ApiScheduler {
     if (this.status !== status) {
       this.status = status;
       log.debug('Status changed:', status);
+      // Push every real status transition so the side panel's read-through view
+      // stays authoritative without polling. Transitions to `idle`/`paused` and
+      // the cooldown-end happen inside `processQueue`, which otherwise would not
+      // notify; this closes that gap (SchedulerContext no longer polls). Guarded
+      // by the `!==` check above, so the 50ms processing loop does not churn
+      // notifications while the status is unchanged.
+      this.notifyStateChange();
     }
   }
 
