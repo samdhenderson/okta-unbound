@@ -7,7 +7,7 @@
  */
 import React from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { FilterPill } from '../shared';
+import { FilterPill, SortPill } from '../shared';
 import type { SortField, StalenessLevel, PushFilter } from './groupFilters';
 
 interface GroupFilterPanelProps {
@@ -45,10 +45,10 @@ interface GroupFilterPanelProps {
  * grid, the push-target-app row, and the sort row. The five filter/toggle groups
  * (type, size, push status, push-target app, and the semantic-colored health pills
  * via `FilterPill`'s `inactiveClassName` escape hatch) route through the shared
- * `FilterPill` (§3). Three controls stay raw as documented exceptions: the "Clear
- * all" text-link (no shared text-link primitive), the sort buttons (need a chevron
- * `IconType` the registry does not yet have — a deferred design call), and the
- * active-filter chip's close button (a bespoke `rounded-full` chip-remove).
+ * `FilterPill`, and the sort row through the shared `SortPill` (§3). Two controls
+ * stay raw as documented exceptions: the "Clear all" text-link (no shared text-link
+ * primitive) and the active-filter chip's close button (a bespoke `rounded-full`
+ * chip-remove).
  */
 const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
   activeFilterCount,
@@ -258,37 +258,14 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
           { value: 'lastUpdated' as SortField, label: 'Last Updated' },
           { value: 'staleness' as SortField, label: 'Staleness' },
         ].map((opt) => (
-          // §3 exception: needs a directional chevron `IconType` (rotates on
-          // sortDesc) the Icon registry does not yet have — a deferred design call,
-          // and FilterPill has no trailing-icon slot. Kept raw for pixel parity.
-          <button
+          <SortPill
             key={opt.value}
-            type="button"
-            onClick={() => toggleSort(opt.value)}
-            aria-pressed={sortBy === opt.value}
-            className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${
-              sortBy === opt.value
-                ? 'bg-primary text-white'
-                : 'bg-neutral-50 text-neutral-700 border border-neutral-200 hover:border-neutral-400'
-            }`}
-          >
-            {opt.label}
-            {sortBy === opt.value && (
-              <svg
-                className={`w-3 h-3 transition-transform ${sortDesc ? 'rotate-180' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 15l7-7 7 7"
-                />
-              </svg>
-            )}
-          </button>
+            field={opt.value}
+            label={opt.label}
+            activeField={sortBy}
+            descending={sortDesc}
+            onToggle={toggleSort}
+          />
         ))}
       </div>
     </div>

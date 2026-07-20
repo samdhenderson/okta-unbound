@@ -12,6 +12,7 @@
 export { default as Button } from './Button';
 export { default as IconButton } from './IconButton';
 export { default as FilterPill } from './FilterPill';
+export { default as SortPill } from './SortPill';
 export { default as CopyButton } from './CopyButton';
 export { default as OpenInOktaLink } from './OpenInOktaLink';
 export { default as Modal } from './Modal';
