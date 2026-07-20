@@ -56,4 +56,9 @@ on push to `main`.
   browser-free (`--project unit`).
 - Irreducibly-heavy stories (e.g. `UsersTab`, the throwing `ErrorBoundary` case)
   are excluded from the runner via the `!test` tag but remain in the explorer.
-- The 80/75 coverage gate stays deferred (ADR-0005 / refactoring-plan §8).
+- The 80/75 coverage gate is enforced in CI (the `verify` job runs
+  `npm run test:coverage`; thresholds live in `vitest.config.ts`).
+- The Storybook a11y addon runs in `test: 'todo'` mode (`.storybook/preview.tsx`):
+  violations surface in the a11y panel but do not fail the run. Promoting it to
+  `'error'` (so a11y violations fail CI) is accepted future work, gated on an
+  a11y cleanup pass first.

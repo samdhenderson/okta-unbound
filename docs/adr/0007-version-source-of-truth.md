@@ -13,8 +13,8 @@ independently and mislead update logic.
 ## Decision
 
 `package.json` `version` is the single source of truth. The manifest version is
-derived at build time (via the CRXJS/manifest pipeline or `scripts/build.js`),
-and runtime code reads the version from a single injected constant (e.g. a Vite
+derived at build time (via the CRXJS/manifest pipeline), and runtime code reads
+the version from a single injected constant (e.g. a Vite
 `define` such as `__APP_VERSION__`) rather than hardcoding it. Remove the
 hardcoded `'0.3.0'` string entirely.
 

@@ -1,8 +1,9 @@
 # Features plan (living)
 
-Start here to scope or pick up **new feature** work (as opposed to the maintainability
-backlog in [refactoring-plan.md](./refactoring-plan.md)). This is a living catalog:
-add ideas, check items off, record why something was parked so it isn't re-litigated.
+Start here to scope or pick up **new feature** work (as opposed to maintainability
+work, whose 2026-07 overhaul is complete — see `CLAUDE.md` and `docs/adr/`). This is
+a living catalog: add ideas, check items off, record why something was parked so it
+isn't re-litigated.
 
 These began as six raw ideas and were pruned against what the extension can actually
 do cheaply. The single fact that reshapes everything: **the write surface is narrow

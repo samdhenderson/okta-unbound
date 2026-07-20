@@ -8,11 +8,10 @@ Feature components live under `components/{groups,users,overview}/`.
 
 1. **Never hand-roll a `<button>`, `<input>`, `<select>`, `<textarea>`, or
    `<input type="checkbox">`** in a feature component. Use `Button`/`IconButton`/
-   `FilterPill`, `Input`, `Select`, `Textarea`, `Checkbox`. If a shape is missing
-   (e.g. a filter chip / toggle), add a variant to the shared component — don't
-   inline bespoke classes. Remaining raw controls live only in the god components
-   (pending §7 decomposition) and a few documented composites (`SearchDropdown`,
-   `UserSearchBar`).
+   `FilterPill`/`SortPill`, `Input`, `Select`, `Textarea`, `Checkbox`. If a shape is
+   missing (e.g. a filter chip / toggle), add a variant to the shared component —
+   don't inline bespoke classes. The only remaining raw controls are the
+   **documented exceptions** listed below.
 2. **Import from the barrel** `components/shared` — not deep paths. The barrel must
    export every shared component (currently incomplete — see below).
 3. **No raw hex / no ad-hoc spacing** — see [design-system.md](./design-system.md).
@@ -39,11 +38,35 @@ info`) — never `error`.
 
 ## Catalog
 
-`shared/`: `Button`, `IconButton`, `FilterPill`, `CopyButton`, `OpenInOktaLink`,
-`Modal`, `Input`, `Checkbox`, `Select`, `Textarea`, `PageHeader`,
+`shared/`: `Button`, `IconButton`, `FilterPill`, `SortPill`, `CopyButton`,
+`OpenInOktaLink`, `Modal`, `Input`, `Checkbox`, `Select`, `Textarea`, `PageHeader`,
 `CollapsibleSection`, `AlertMessage`, `EmptyState`, `LoadingSpinner`,
 `ScrollableList`, `SearchDropdown`, `SelectionChips`.
 `overview/shared/`: `Icon`, `StatCard`.
+
+## Documented raw-control exceptions
+
+The button/input migration is complete; these are the raw controls that stay raw
+**by decision**, each carrying an inline `§3 exception` (or `CHARACTERIZED:`)
+comment at the call site:
+
+- **Composites** where a shared primitive is not pixel-neutral: `SearchDropdown`,
+  `UserSearchBar`, `GroupSearchBar`, and the Add-to-Group type-ahead (leading-glyph
+  search inputs with an absolutely-positioned spinner/dropdown), plus
+  `GroupFilterToggle`.
+- **Genuinely custom controls:** tab bars (`role="tab"`, e.g. `ComparisonTabBar`),
+  the dynamic-color banner, radio-cards, and the `AttributeFacet` data-viz spread
+  bars.
+- **Awaiting a new shared primitive (accepted future work):**
+  - Chromeless **text-links** ("Clear all", "View details") have no shared
+    `TextLink` primitive — adding one would discharge these across `GroupFilterPanel`,
+    `AttributeFacet`, and `ComparisonOverviewTab`.
+  - `FilterPill` legend-row toggles and the semantic-colored variants need a
+    `className` escape hatch to match without inline classes.
+  - The active-filter chip's `rounded-full` close button (`IconButton` is
+    `rounded-md`).
+  - `UserComparisonModal`'s search `Input` (`py-3`/`shadow-sm`) is not pixel-neutral
+    against the shared `Input` base — needs a design call, not a mechanical swap.
 
 **Barrel:** `shared/index.ts` now exports the full catalog above — import from the
 barrel (`../shared`), not deep paths.

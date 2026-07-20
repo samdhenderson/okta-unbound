@@ -93,9 +93,9 @@ function send(request: AnyRequest): {
  * `MessageResponse.rules` is typed `OktaGroupRule[]` (shared/types.ts:235), but the
  * content script assigns FORMATTED rules to it — it only compiles because excess-property
  * checking is bypassed for a variable assignment. Reading `condition`/`conflicts`/
- * `groupNames` off `response.rules` therefore does not type-check, which is exactly the
- * latent lie recorded in refactoring-plan §7 blockers. This cast is the test-side
- * acknowledgement of it; delete it once `ContentFormattedRule` lands for real.
+ * `groupNames` off `response.rules` therefore does not type-check — a known latent
+ * type lie. This cast is the test-side acknowledgement of it; delete it once
+ * `ContentFormattedRule` lands for real.
  */
 interface WireFormattedRule {
   id: string;

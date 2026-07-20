@@ -117,11 +117,18 @@ should be reviewed with `security-logging-reviewer`.
 | Writing / updating a spec or ADR               | `docs/README.md` + the affected doc                | `docs-maintainer`           |
 | Understanding the whole system                 | `docs/architecture.md`                             | —                           |
 
-## Continuing the maintainability work
+## Maintainability overhaul — complete
 
-Remaining refactors have a living, ordered plan: **`docs/refactoring-plan.md`**.
-After a context clear, read that + this file, pick the top unchecked item, keep it
-small, verify green, repeat.
+The 2026-07 maintainability overhaul (format/lint/coverage gates, `console`→logger,
+shared-primitive migration, `error`→`danger`, zod boundary, god-component
+decomposition, scheduler transport unification) is **done**. The point-in-time
+baseline is archived in `docs/audit/`; the _why_ behind each decision is in
+`docs/adr/`. A few accepted deferrals remain as future work, recorded topically at
+their natural home rather than a central backlog: list-path zod validation
+([adr/0006](docs/adr/0006-zod-boundary-validation.md)), the Storybook a11y
+`todo`→`error` promotion ([adr/0011](docs/adr/0011-storybook-single-docs-site.md)),
+and the remaining raw-control exceptions / a future `TextLink` primitive
+([docs/components.md](docs/components.md)).
 
 ## Where things are
 

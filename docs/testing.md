@@ -24,12 +24,17 @@ statements 80%, branches 75% (enforced in CI once component tests land).
 - For refactors, **write the test against current behavior first** (it should pass),
   then refactor and keep it green — that's the safety net (see
   [state-management.md](./state-management.md)).
+- **Always put a hard external timeout around any local `vitest run`** —
+  `perl -e 'alarm 180; exec @ARGV' npx vitest run <file>` and `pkill -9 -f vitest`
+  after. `--testTimeout` does **not** stop a render loop (an infinite loop starves
+  the timer). A hanging test file also poisons unrelated commits, since the husky
+  pre-commit resolves `vitest related --run` imports on disk. CI installs Chromium
+  for the browser project; local runs pin the sandbox binary via
+  `VITEST_BROWSER_EXECUTABLE` (the `unit` project is browser-free).
 
-## Priority backlog
+## Coverage gate
 
-1. Shared components (`Button`, `Modal` incl. new a11y: focus trap, Escape).
-2. The four god components as they're decomposed (`UsersTab`, `GroupsTab`,
-   `UserComparisonModal`, plus content-script message handlers).
-3. zod schemas — test that malformed Okta payloads are rejected cleanly.
-
-The `test-writer` agent owns this backlog and keeps coverage above threshold.
+The 80/75 thresholds (`vitest.config.ts`) are enforced in CI — the `verify` job
+runs `npm run test:coverage`. Keep new code covered so the gate stays green; the
+`test-writer` agent owns this. Malformed-Okta-payload rejection is covered by the
+zod schema tests (see [adr/0006](./adr/0006-zod-boundary-validation.md)).
