@@ -20,8 +20,7 @@ export default defineConfig({
   },
   test: {
     // Coverage stays at the top level so it can span both projects. The 80/75
-    // gate is now ENFORCED in CI: the `verify` job runs `npm run test:coverage`
-    // (§8 raised coverage above threshold); see docs/refactoring-plan.md §8.
+    // gate is ENFORCED in CI: the `verify` job runs `npm run test:coverage`.
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],

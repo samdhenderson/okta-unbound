@@ -107,10 +107,12 @@ story canvas crashes. Keep the mock's identities stable.
 
 Every new or changed `shared`/leaf feature component ships a co-located story in
 the same change — same bar as tests (`docs/testing.md`). Reviewed at PR time; an
-un-storied shared/leaf component is backlog, tracked in
-`docs/refactoring-plan.md`. God components and hook-only extraction targets
-aren't required to get a story just because they were touched — story the
-presentational pieces that come out of them.
+un-storied shared/leaf component is backlog, caught at review. God components and
+hook-only extraction targets aren't required to get a story just because they were
+touched — story the presentational pieces that come out of them. The full catalog
+is currently covered (all stories run as browser tests). The one open follow-up:
+the a11y addon runs in `test: 'todo'` mode (`.storybook/preview.tsx`) — promoting
+it to `'error'` is accepted future work, gated on an a11y cleanup pass (ADR-0011).
 
 CI gate: `build-storybook` runs as a parallel job in `.github/workflows/ci.yml`
 (ADR-0005) — a story that fails to type-check or build fails the PR.

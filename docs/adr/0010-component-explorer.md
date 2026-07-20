@@ -39,8 +39,7 @@ addon).
   way a lint/type/test regression does.
 - Every new or changed `shared`/leaf feature component ships a co-located story
   (`docs/component-explorer.md`), enforced the same way test coverage is:
-  reviewed at PR time and tracked as backlog in `docs/refactoring-plan.md` when
-  missed.
+  reviewed at PR time and caught as backlog when missed.
 
 ## Consequences
 

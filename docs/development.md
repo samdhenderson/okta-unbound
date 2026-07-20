@@ -62,11 +62,13 @@ type-check gate, not a follow-up.
 - **Husky + lint-staged** run `eslint --fix`, `prettier --write`, and
   `vitest related --run --project unit` on staged `*.{ts,tsx}` (the `unit` scope keeps
   the pre-commit browser-free).
-- **PR CI** (`.github/workflows/ci.yml`, ADR-0005) runs lint (`--max-warnings=0`) +
-  type-check + test on every PR, plus a parallel `storybook` job that builds the docs
-  site and runs the browser story tests (ADR-0010/0011) — a broken story fails the PR.
-  Green CI is required to merge. The docs site deploys to GitHub Pages on `main`
-  (`deploy-pages.yml`). Coverage gate stays deferred (§8 refactoring-plan).
+- **PR CI** (`.github/workflows/ci.yml`, ADR-0005) runs lint (0 errors required) +
+  type-check + `npm run test:coverage` (the 80/75 gate is enforced) on every PR, plus
+  a parallel `storybook` job that builds the docs site and runs the browser story
+  tests (ADR-0010/0011) — a broken story fails the PR. Green CI is required to merge.
+  The docs site deploys to GitHub Pages on `main` (`deploy-pages.yml`). The
+  `--max-warnings=0` lint mode stays deferred while ~90 warn-level legacy problems
+  remain (ADR-0004) — the gate is 0 _errors_, not 0 warnings.
 - `beta-release.yml` remains tag-triggered for releases — don't repurpose it for PRs.
 
 ## Versioning

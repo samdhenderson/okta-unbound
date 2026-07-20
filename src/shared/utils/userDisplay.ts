@@ -13,8 +13,8 @@ import type { OktaUser } from '../types';
  * NOTE: not yet consolidated with `memberAnalytics.memberFullName`. That helper
  * falls back to `name || login || ''` whereas this one falls back to
  * `name || login || email || 'User'`. A naive swap changes rendered text, so
- * consolidation needs a fallback option on `memberFullName` — tracked in
- * refactoring-plan §5, not done here.
+ * consolidation would need a fallback option on `memberFullName` — deliberately
+ * left as-is to preserve current display output.
  *
  * @param user - The Okta user.
  * @returns A non-empty display string.
