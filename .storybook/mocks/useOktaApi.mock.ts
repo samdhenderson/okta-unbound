@@ -24,6 +24,55 @@ import { fn } from 'storybook/test';
 /** A spy that resolves to `value` when awaited (the default shape for reads/writes). */
 const asyncFn = (value?: any) => fn(async () => value);
 
+/** Fixture user returned for a single-user scheduler read (mirrors the chrome fake). */
+const sampleUser = {
+  id: 'user1',
+  status: 'ACTIVE',
+  profile: {
+    login: 'ada.lovelace@example.com',
+    email: 'ada.lovelace@example.com',
+    firstName: 'Ada',
+    lastName: 'Lovelace',
+    department: 'Engineering',
+    title: 'Principal Engineer',
+  },
+};
+
+/** Fixture groups returned for a user's group-membership read (mirrors the chrome fake). */
+const sampleGroups = [
+  {
+    id: 'g-eng',
+    type: 'OKTA_GROUP',
+    profile: { name: 'Engineering', description: 'All engineers' },
+  },
+  {
+    id: 'g-admins',
+    type: 'APP_GROUP',
+    profile: { name: 'Okta Admins', description: 'Admin console' },
+  },
+];
+
+/**
+ * Endpoint-aware `makeApiRequest` spy. Returns a well-formed `RequestResult`
+ * (`{ success, data }`) so §8-migrated reads render a populated state instead of
+ * the "failed to load" branch: a single-user read (`GET /api/v1/users/{id}`)
+ * yields the fixture user, a user's groups read (`GET /api/v1/users/{id}/groups`)
+ * yields the raw fixture groups (the hook wraps + classifies them), and every other
+ * endpoint yields a benign empty success.
+ */
+const makeApiRequestFn = () =>
+  fn(async (endpoint?: string) => {
+    if (typeof endpoint === 'string') {
+      if (/^\/api\/v1\/users\/[^/?]+\/groups/.test(endpoint)) {
+        return { success: true, data: sampleGroups };
+      }
+      if (/^\/api\/v1\/users\/[^/?]+$/.test(endpoint)) {
+        return { success: true, data: sampleUser };
+      }
+    }
+    return { success: true, data: [] };
+  });
+
 /** Overridable slice of the flat `useOktaApi` return object. */
 export type UseOktaApiValue = Record<string, any>;
 
@@ -42,7 +91,7 @@ export function makeUseOktaApiValue(overrides: UseOktaApiValue = {}): UseOktaApi
     cancelOperation: fn(),
 
     // Core
-    makeApiRequest: asyncFn({}),
+    makeApiRequest: makeApiRequestFn(),
 
     // Group operations
     getAllGroupMembers: asyncFn([]),

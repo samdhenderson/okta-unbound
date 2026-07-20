@@ -19,14 +19,15 @@ Status legend: `[ ]` todo · `[~]` partially done · `[x]` done.
 
 ## Order of work (do top-to-bottom; each is independently shippable)
 
-### 1. `[~]` One-time repo-wide format, then turn on the gates
+### 1. `[x]` One-time repo-wide format, then turn on the gates
 
 - [x] Run `npm run format` as its own dedicated commit (ADR-0003).
 - [x] Re-enable the `format:check` CI step in
       [.github/workflows/ci.yml](../.github/workflows/ci.yml).
-- [ ] Add the coverage CI step (only once §5/§8 has raised coverage to 80/75).
+- [x] Added the coverage CI step (§8 raised coverage to 80/75): the `verify` job's
+      test step now runs `npm run test:coverage`, so the 80/75 gate is enforced.
 - Doc: `docs/development.md`. Agent: none (mechanical).
-- Done when: `npm run format:check` passes in CI. ✔ (coverage gate pending §8)
+- Done when: `npm run format:check` + the coverage gate pass in CI. ✔
 
 ### 2. `[x] `console.* → logger` migration
 
@@ -60,9 +61,29 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
       spinner), like `SearchDropdown`.
 - [x] **Checkboxes** → new shared `Checkbox` primitive (`GroupExportModal` 2,
       `GroupListItem` 1). Added to the barrel with tests.
-- [ ] **God-component buttons** (`GroupsTab` 10, `RulesTab` 4, `UsersTab` 3,
-      `UserComparisonModal` 2) + their raw text inputs (`GroupsTab` 2, `UsersTab` 2,
-      `RulesTab` 1, `UserComparisonModal` 1) → migrate during their §7 decomposition.
+- [~] **God-component buttons** (`GroupsTab` 10, `RulesTab` 4, `UsersTab` 3,
+  `UserComparisonModal` 2) + their raw text inputs (`GroupsTab` 2, `UsersTab` 2,
+  `RulesTab` 1, `UserComparisonModal` 1) → migrate during their §7 decomposition.
+  **`RulesTab` + `UsersTab` done in §7; `GroupsTab` done (this session); only
+  `UserComparisonModal`'s blocked follow-up remains (see below).**
+  - **`GroupsTab` DONE (this session, ui-reviewer signed off).** GroupsTab's 10
+    filter/sort buttons landed in the extracted `groups/GroupFilterPanel.tsx` during §7;
+    its five filter/toggle groups (Group Type, Size, Push Status, Push Target App, and
+    the semantic-colored Health pills via `FilterPill`'s `inactiveClassName` escape
+    hatch) now route through the shared `FilterPill`. Three controls stay raw as
+    documented exceptions, each with an inline `§3 exception` comment: the "Clear all"
+    text-link (no shared text-link primitive — same precedent as `AttributeFacet`), the
+    sort buttons (need a directional chevron `IconType` the registry lacks + `FilterPill`
+    has no trailing-icon slot — same deferred call as `UserComparisonModal` L710), and
+    the active-filter chip's `rounded-full` close button (`IconButton` is `rounded-md`,
+    not pixel-neutral). The active Health pill's invisible `border-primary` was dropped
+    (a wash — it made active health pills inconsistently ~2px larger than every other
+    active pill). ui-reviewer's two a11y wins on the kept-raw controls were folded in:
+    `aria-label` on the chip-remove button + `aria-pressed` on the sort buttons (plus
+    `type="button"` hardening on all three). GroupsTab's 2 raw text inputs are
+    `groups/GroupSearchBar.tsx`'s documented leading-glyph composite (like
+    `SearchDropdown`); `GroupFilterToggle` stays a documented raw exception. Oracle
+    (`GroupsTab.test.tsx`, 81 tests) stayed green.
   - **`UserComparisonModal` correction (session 5):** its raw-control migration is a
     **separate follow-up commit** after its §7 decompose-only pass, and 2 of its 3
     controls **cannot migrate cleanly** — so its true migratable count is **1**, not 2+1:
@@ -125,19 +146,28 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
   - **Bounded items safe to do now (session 5): DONE (swarm session).**
     - [x] Deleted the **dead `oktaUserListSchema`** (zero call sites confirmed).
     - [x] Fixed `parseOkta` leaking **zod's error message** (the mechanism was in the
-      `throw`, not `log.warn` as assumed) — it now surfaces only the issue _paths/codes_
-      (`{path, code}` per issue), never the received value; pinned by a test asserting the
-      offending value is absent from the message.
+          `throw`, not `log.warn` as assumed) — it now surfaces only the issue _paths/codes_
+          (`{path, code}` per issue), never the received value; pinned by a test asserting the
+          offending value is absent from the message.
 - [x] Burned down the message/API-layer `any`s (60→4): typing-only, precise types
       across content/useOktaApi/scheduler/tabState/rulesCache (introduced
       `MembershipRule`; reused existing rule/group/`RequestResult` types). Repo-wide
       no-explicit-any warnings 82→26. The 4 remaining in-scope are intentional
       (`ApiResponse`/`MessageResponse` `<T = any>` defaults, the org-extensible
       `profile` index signature, `RequestResult.data` raw payload).
-- [ ] Flip `@typescript-eslint/no-explicit-any` `warn`→`error` (ADR-0004/0006) —
-      **blocked on §7**: 19 `any`s remain only in the god components
-      (UsersTab/GroupsTab/RulesTab/BulkOperationsPanel), which decompose in §7; flip
-      once those clear (plus the 4 intentional ones get `eslint-disable` w/ reason).
+- [x] **Flipped `@typescript-eslint/no-explicit-any` `warn`→`error` (this session,
+      ADR-0004/0006).** §7 cleared the god-component `any`s; the last production holder
+      was `BulkOperationsPanel`'s `executeBulkOperation` prop (`operation: any` /
+      `Promise<any[]>` / `config?: any`), now typed against the shared
+      `BulkOperation`/`BulkOperationResult`. The 4 intentional survivors each got a
+      reason-annotated inline `eslint-disable` (`OktaUser.profile` index signature, the
+      `ApiResponse`/`MessageResponse` `<T = any>` defaults, `RequestResult.data`). Added
+      a test/setup-file override turning the rule `off` (mirrors the `no-console` one, so
+      mocks/fixtures may use `any`); removed the 3 now-unused inline `no-explicit-any`
+      disables that override made redundant (`content/index.test.ts`, `RulesTab.test.tsx`,
+      `UserComparisonModal.test.tsx`). `npm run lint` is 0 errors; a new production `any`
+      now fails the build. `--max-warnings=0` CI mode stays deferred (94 warn-level
+      legacy problems remain — see ADR-0004).
 - Doc: `docs/development.md` + `docs/architecture.md`. Agents: `test-writer`
   (schema tests), `security-logging-reviewer`.
 - Done when: hot-path responses validated; `any` count near zero; rule flipped.
@@ -198,7 +228,7 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
       commit; the unbounded `while(nextUrl)` pagination loops and the 1–3 request search
       fallback chain moved **verbatim**; the zod `parseOkta` boundary, same-origin + method
       guard, and host parsing preserved exactly. **Scheduler/transport route untouched (§8).**
-      No eslint grandfather move needed (`index.ts` is the message *receiver*, never called
+      No eslint grandfather move needed (`index.ts` is the message _receiver_, never called
       `chrome.tabs.sendMessage`). This unblocks §8's `content/index.ts` dependency.
 - Per file: (1) pin behavior with RTL/MSW tests; (2) extract logic into `use*` hooks
   (mirror the `useOktaApi/` module split); (3) move pure helpers to `shared/utils`;
@@ -305,26 +335,99 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
   touching it. **Do not regenerate** (~430k tokens / 12 min).
 - Done when: each target is decomposed with tests, behavior unchanged.
 
-### 8. `[ ]` Raise coverage + enable the coverage gate
+### 8. `[x]` Raise coverage + enable the coverage gate + standardize the transport
 
-- Add component tests as §7 proceeds until `npm run test:coverage` meets 80/75, then
-  add the coverage step to CI (see §1).
-- Also standardize on the single content-script path (drop the direct
-  side-panel→content route that bypasses the scheduler — `useOktaApi/core.ts`).
+- [x] **Coverage raised to 80/75 and the CI gate enabled (this session).** Added
+      co-located unit tests for the lowest-coverage pure-logic modules —
+      `shared/scheduler/rateLimitDetector`, `shared/utils/csvUtils`, `shared/rulesCache`,
+      and the `useOktaApi` factories `ruleWrites`, `utilities`, `groupDiscovery`,
+      `userOperations`, `exportOperations` (+ extended `groupBulkOps`) — taking global
+      coverage from 78.4/70.2 to **≥80 lines/funcs/stmts and ≥75 branches**. Wired the
+      `verify` CI job's test step to `npm run test:coverage` (was bare `test:run`), so the
+      80/75 thresholds in `vitest.config.ts` are now enforced on every PR (closes §1's
+      pending item). Tests only — no production source changed.
+- [x] **Scheduler `interactive` tier built (this session).** New highest-priority
+      `interactive` `RequestPriority` that sorts ahead of high/normal/low and bypasses the
+      **soft** rate-limit gates (an active cooldown + the approaching-limit threshold) so a
+      typed search never stalls up to 30s — but is still held on a genuine **hard**
+      exhaustion (`X-Rate-Limit-Remaining <= 0`) and still respects `maxConcurrent`, so it
+      can never force a 429. Wired end-to-end: `types.ts`, `apiScheduler.ts` (priority-order
+      map + `processQueue` bypass), the `background/index.ts` `scheduleApiRequest` priority
+      allow-list, + `apiScheduler.interactive.test.ts` (ordering, soft-cooldown bypass,
+      hard-exhaustion hold). This is the prerequisite for migrating the typed-search bypasses.
+- [x] **`clearQueue()` promise-leak re-audit DONE (this session).** Queued requests + their
+      coalesced waiters were already rejected correctly (pinned). The one gap: a request
+      sleeping in **retry backoff** lives in `activeRequests` (not the queue), so a Cancel
+      (`clearQueue`) skipped it and it **revived + re-dispatched after cancel**, resolving
+      the caller's promise instead of unwinding. Fixed with a `cancelGeneration` counter
+      (`clearQueue` bumps it; `retryRequest` rejects on wake if it moved). Regression test
+      added to `apiScheduler.cancel.test.ts`.
+- [x] **Transport migration — COMPLETE (all 8 bypass sites migrated).** The recipe
+      (proven six times, oracle green each): give the hook its own `useOktaApi({ targetTabId })`
+      slice, replace `chrome.tabs.sendMessage(...)` with `makeApiRequest(endpoint, method,
+body, priority)` (use `'interactive'` for typed searches), drop the file from the
+      `eslint.config.js` `no-restricted-syntax` grandfather list, and flip the matching
+      oracle assertions from the direct message to the scheduled endpoint (these component
+      tests short-circuit `chrome.runtime.sendMessage` via a `route()` mock — assert on
+      `endpoint`/`priority`, not the old `{action}`). **Storybook note:** the story runner
+      aliases the `useOktaApi` FACADE to `.storybook/mocks/useOktaApi.mock.ts`, so a migrated
+      read is answered by that mock's `makeApiRequest` (now endpoint-aware), NOT the chrome fake.
+  - [x] **`useRuleLifecycle`** → `/api/v1/users/me` via `makeApiRequest` + activate/deactivate
+        via the existing `ruleWrites` ops. Audit/undo/attribution/reload unchanged.
+        RulesTab oracle 10/10.
+  - [x] **`useGroupLiveSearch`** → single `GET /api/v1/groups?q=…&limit=20&expand=stats` at
+        `'interactive'` priority (first real user of the tier). GroupsTab oracle 81/81.
+  - [x] **`getUserDetails` (both consumers)** → `makeApiRequest('/api/v1/users/'+id)`, raw
+        `response.data`. `overview/UserOverview.tsx` (storybook suite 438/438; taught the
+        mock's `makeApiRequest` to answer `/api/v1/users/{id}`) and `useDetectedUser.ts`
+        (UsersTab oracle 21/21 — its harness router now prefers the last-registered route
+        since getUserDetails shares `/api/v1/users/{id}` with the getUserById refresh).
+  - [x] **`searchUsers` (both consumers)** → extracted the 1–3 request fallback (`q=` →
+        `search=` → email `filter=`, first non-empty wins, email filter only when the query
+        has `@` and nothing matched) into one shared `searchUsersRequest(makeApiRequest, query)`
+        helper (+ co-located test) running each request at `'interactive'` priority; the
+        `{success,data,count}` shape is preserved so `useUserSearch` + `useUsersTabSearch`
+        change only their transport line. UsersTab oracle 21/21, UserComparisonModal 38/38.
+  - [x] **`getUserGroups` (`useUserMemberships.ts`)** → shared
+        `getUserGroupsRequest(makeApiRequest, userId)` helper (+ co-located test): the
+        unbounded `rel="next"` pagination and the `{group, membershipType:'UNKNOWN',
+addedDate:undefined}` wrapper ported verbatim from `content/userHandlers.ts`,
+        running at default priority (a selection-driven read, not a typed search); the
+        `{success, data, count}` shape is preserved so `useUserMemberships` changes only
+        its transport line. `useUserMemberships` gained a `useOktaApi` slice. Oracles flipped
+        from the `getUserGroups` tab message to the scheduled `/api/v1/users/{id}/groups`
+        endpoint: UsersTab 21/21, UserComparisonModal 38/38, `useUserMemberships` cache-hit
+        test green; storybook `makeApiRequest` mock taught to answer the groups endpoint with
+        the raw fixture groups. `useUserMemberships` stays grandfathered until `fetchGroupRules`
+        (its other bypass) migrates below.
+  - [x] **`fetchGroupRules` (both consumers)** → shared
+        `fetchGroupRulesRequest(makeApiRequest, currentGroupId?)` helper (+ co-located test):
+        the 4-stage pipeline ported verbatim — paginate `/api/v1/groups/rules?limit=200`;
+        parallel `/api/v1/groups/{id}` name resolution w/ 5-min cache
+        (`shared/cache.get/setCacheEntry`); conflict detection (reused `ruleUtils.detectConflicts`,
+        proven-equivalent to the content loop); format to `{rules, stats, conflicts}` **top-level**
+        (reused `ruleUtils.formatRuleForDisplay`, layering on `groupNames`/`allGroupNamesMap`).
+        `useUserMemberships` (passes no groupId — `analyzeMemberships` ignores
+        `affectsCurrentGroup`) and `useRulesData` (gained a `useOktaApi` slice + a
+        `currentGroupId` option threaded from `RulesTab`, which mirrors the page-URL group the
+        content script used to derive). Oracles flipped from the `fetchGroupRules` tab message
+        to the scheduled `/api/v1/groups/rules` read — the RulesTab oracle now mocks the RAW
+        rules and lets the real helper format them: RulesTab 10/10, UsersTab 21/21,
+        UserComparisonModal 38/38. Both hooks came off the eslint `no-restricted-syntax`
+        grandfather list, which now holds only the 3 sanctioned entries.
+    - **Note:** `UserComparisonModal` has ZERO direct `sendMessage` (already scheduler-routed).
 - **⚠️ session-5 sequencing corrections:**
-  - The scheduler migration **depends on §7's `content/index.ts` item**. The semantic
+  - The scheduler migration **depends on §7's `content/index.ts` item** (DONE). The semantic
     content-script handlers are **compound** (unbounded `while(nextUrl)` pagination + a
     1–3 request fallback chain live inside the content script) and do **not** map 1:1
-    onto a scheduler whose unit of work is one fetch. Decompose them first.
+    onto a scheduler whose unit of work is one fetch — reproduce that logic in the side
+    panel (issuing each fetch through `makeApiRequest`) as each site migrates.
   - `UserComparisonModal` has **ZERO direct `sendMessage` calls** (the earlier
     assumption was wrong — its hooks are already decomposed and could migrate now).
-  - **Honest regression to surface, not absorb:** `processQueue` checks the cooldown
-    **before** priority, so a typed search would stall up to 30s where today it is
-    instant. Needs a new **`interactive` tier exempt from the cooldown gate**.
-  - ~~`src/shared/scheduler/` has **ZERO tests**~~ — **stale (swarm session):** the scheduler
-    now has full coverage (`apiScheduler.test.ts`, `apiScheduler.cancel.test.ts`,
-    `cancellation.test.ts`, `runBatch.test.ts`). Re-audit whether `clearQueue()` still
-    **leaks promises** (`apiScheduler.ts:541`) against those tests before migrating onto it.
+  - ~~**Honest regression:** `processQueue` checks the cooldown before priority~~ —
+    **RESOLVED:** the `interactive` tier above bypasses the soft cooldown gate.
+  - ~~`src/shared/scheduler/` has **ZERO tests**~~ / ~~re-audit `clearQueue()` leaks~~ —
+    **both DONE this session** (see the two `[x]` items above).
 - Doc: `docs/testing.md` / `docs/architecture.md`. Agent: `test-writer`.
 
 ### 9. `[ ]` Small cleanups
@@ -356,9 +459,10 @@ per `docs/component-explorer.md`'s templates.
 
 ## Known debt surfaced, not yet actioned (session 4/5)
 
-- The 269 characterization tests added ~34 `any`s (repo-wide `no-explicit-any` 26→60),
-  **all in test files**. The §6 `warn`→`error` flip needs a **test-file override** for
-  `no-explicit-any` (mirror the existing `no-console` test override).
+- ~~The 269 characterization tests added ~34 `any`s (repo-wide `no-explicit-any`
+  26→60), **all in test files**. The §6 flip needs a **test-file override** for
+  `no-explicit-any`.~~ **DONE (§6 flip session):** the test/setup override was added
+  (mirrors `no-console`, rule `off`), so test-file `any`s no longer block the flip.
 - `npm run lint` does **not** cover `scripts/`. `npx eslint .` finds a live **parsing
   error at `scripts/build.js:109`** — pre-existing; the current gate can't see it.
 - Guardrail (learned the hard way): **always put a hard external timeout around any

@@ -11,6 +11,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { GroupSummary } from '../../shared/types';
 import { liveSearchToGroupSummary } from '../components/groups/groupSummary';
+import { useOktaApi } from './useOktaApi';
 
 /** Inputs to {@link useGroupLiveSearch}. */
 interface UseGroupLiveSearchOptions {
@@ -32,9 +33,12 @@ interface UseGroupLiveSearchOptions {
  * pass an inline `onError` — an unstable handler makes the effect reschedule the
  * timer every render and the search silently never fires.
  *
- * CHARACTERIZED: this goes DIRECT to the content script (bypassing the scheduler)
- * and has no stale-response guard — the last-resolving request wins. Both are §8
- * concerns, preserved verbatim here.
+ * §8: routes through the rate-limited scheduler (`makeApiRequest` at the
+ * `interactive` priority, which jumps the soft cooldown so a typed search stays
+ * instant) instead of a direct content-script `searchGroups` message. The request
+ * is the same single `GET /api/v1/groups?q=…&limit=20&expand=stats` the content
+ * handler used to issue. CHARACTERIZED (preserved): still no stale-response guard —
+ * the last-resolving request wins.
  *
  * @returns `liveSearchQuery` + `setLiveSearchQuery` (drives the debounce),
  * `liveSearchResults`, the `isLiveSearching` flag, and `resetLiveSearch`.
@@ -48,6 +52,11 @@ export function useGroupLiveSearch({
   const [liveSearchResults, setLiveSearchResults] = useState<GroupSummary[]>([]);
   const [isLiveSearching, setIsLiveSearching] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // §8: own a useOktaApi slice for the scheduler path. `makeApiRequest` is stable
+  // per `targetTabId` (memoized in useOktaApi), so it does not widen the debounce
+  // effect's re-fire surface below.
+  const { makeApiRequest } = useOktaApi({ targetTabId });
 
   const handleLiveSearch = useCallback(
     async (query: string) => {
@@ -65,10 +74,13 @@ export function useGroupLiveSearch({
       setError(null);
 
       try {
-        const response = await chrome.tabs.sendMessage(targetTabId, {
-          action: 'searchGroups',
-          query: query.trim(),
-        });
+        const q = encodeURIComponent(query.trim());
+        const response = await makeApiRequest(
+          `/api/v1/groups?q=${q}&limit=20&expand=stats`,
+          'GET',
+          undefined,
+          'interactive',
+        );
 
         if (response.success) {
           const results = (response.data || []).map(liveSearchToGroupSummary);
@@ -84,7 +96,7 @@ export function useGroupLiveSearch({
         setIsLiveSearching(false);
       }
     },
-    [targetTabId, setError],
+    [targetTabId, setError, makeApiRequest],
   );
 
   // Debounced search effect

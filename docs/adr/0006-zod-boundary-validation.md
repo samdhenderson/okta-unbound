@@ -25,3 +25,8 @@ core paths are validated, flip `no-explicit-any` → error (ADR-0004).
   mystery crash.
 - Most of the 72 `any`s are eliminated via inferred types.
 - Small per-request parse cost, acceptable for this admin tool's volume.
+- The `no-explicit-any` → error flip has now landed (ADR-0004): the remaining
+  production `any`s are the intentional raw-payload boundaries this ADR designed
+  for (`OktaUser.profile` index signature, `ApiResponse`/`MessageResponse`
+  `<T = any>` defaults, `RequestResult.data`), each validated with zod before use
+  and carrying a reason-annotated `eslint-disable`.

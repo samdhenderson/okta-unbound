@@ -4,10 +4,10 @@ import UserOverview from './UserOverview';
 
 /**
  * Overview tab for a single Okta user: profile card, stat grid, quick actions,
- * and the user-comparison launcher. Loads user details + memberships via
- * `chrome.tabs.sendMessage` directly on mount (not through `useOktaApi`); the
- * Storybook `chrome` fake answers those `getUserDetails`/`getUserGroups` reads
- * with fixture data, so the loaded state renders.
+ * and the user-comparison launcher. Loads user details on mount through the
+ * scheduler-routed `makeApiRequest` (answered by the mocked `useOktaApi` facade)
+ * and memberships via `chrome.tabs.sendMessage` (`getUserGroups`, the chrome fake);
+ * both return fixture data, so the loaded state renders.
  */
 const meta = {
   title: 'Overview/UserOverview',

@@ -2,12 +2,12 @@
  * @module sidepanel/hooks/useUsersTabSearch
  * @description Debounced Okta user search for the Users tab's search box.
  *
- * Owns the query, debounced results and in-flight flag, sending `searchUsers` to
- * the target tab's content script (never Okta directly — the §8 read-path bypass
- * this hook grandfathers) as the query changes. Unlike the generic
- * {@link useUserSearch}, it reports failures through the tab's single merged error
- * channel and clears the selected user / memberships when a fresh search begins,
- * preserving the orchestrator's last-write-wins behavior.
+ * Owns the query, debounced results and in-flight flag, searching Okta users
+ * through the rate-limited scheduler (§8: `makeApiRequest` at `interactive`
+ * priority, via {@link searchUsersRequest}) as the query changes. Unlike the
+ * generic {@link useUserSearch}, it reports failures through the tab's single
+ * merged error channel and clears the selected user / memberships when a fresh
+ * search begins, preserving the orchestrator's last-write-wins behavior.
  *
  * Quirk preserved verbatim from the pre-decomposition inline effect: backspacing
  * to a single character early-returns WITHOUT clearing the on-screen results; only
@@ -17,6 +17,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { OktaUser } from '../../shared/types';
 import { createLogger } from '../../shared/utils/logger';
+import { useOktaApi } from './useOktaApi';
+import { searchUsersRequest } from './searchUsersRequest';
 
 const log = createLogger('useUsersTabSearch');
 
@@ -71,6 +73,10 @@ export function useUsersTabSearch({
   const [isSearching, setIsSearching] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // §8: own a useOktaApi slice for the scheduler path. `makeApiRequest` is stable
+  // per `targetTabId`, so it does not widen the debounce effect's re-fire surface.
+  const { makeApiRequest } = useOktaApi({ targetTabId: targetTabId ?? null });
+
   const handleSearch = useCallback(async () => {
     if (!targetTabId) {
       onError('No Okta tab connected');
@@ -89,10 +95,7 @@ export function useUsersTabSearch({
     try {
       log.debug('Searching for users', { queryLength: searchQuery.trim().length });
 
-      const response = await chrome.tabs.sendMessage(targetTabId, {
-        action: 'searchUsers',
-        query: searchQuery.trim(),
-      });
+      const response = await searchUsersRequest(makeApiRequest, searchQuery.trim());
 
       if (response.success) {
         setSearchResults(response.data || []);
@@ -109,7 +112,7 @@ export function useUsersTabSearch({
     } finally {
       setIsSearching(false);
     }
-  }, [targetTabId, searchQuery, onError, onSearchStart]);
+  }, [targetTabId, searchQuery, onError, onSearchStart, makeApiRequest]);
 
   // Live search with debouncing - trigger search as user types
   useEffect(() => {

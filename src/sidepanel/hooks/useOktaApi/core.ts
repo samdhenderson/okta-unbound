@@ -13,7 +13,7 @@
  */
 
 import type { MessageRequest, MessageResponse, OperationCallbacks } from './types';
-import type { RequestResult } from '@/shared/scheduler/types';
+import type { RequestResult, RequestPriority } from '@/shared/scheduler/types';
 import { runBatch, type BatchProgress, type BatchOutcome } from '@/shared/scheduler/runBatch';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -60,7 +60,7 @@ export interface CoreApi {
     endpoint: string,
     method?: string,
     body?: unknown,
-    priority?: 'high' | 'normal' | 'low',
+    priority?: RequestPriority,
   ) => Promise<RequestResult>;
   /** Resolve the signed-in admin's email/id (for audit logging); falls back to `'unknown'` on failure. */
   getCurrentUser: () => Promise<{ email: string; id: string }>;
@@ -137,7 +137,7 @@ export function createCoreApi(
     endpoint: string,
     method: string = 'GET',
     body?: unknown,
-    priority: 'high' | 'normal' | 'low' = 'normal',
+    priority: RequestPriority = 'normal',
   ): Promise<RequestResult> => {
     if (!targetTabId) {
       throw new Error('No target tab ID - not connected to Okta page');

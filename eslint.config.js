@@ -64,7 +64,11 @@ export default [
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'off', // Using TypeScript for type checking
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
-      '@typescript-eslint/no-explicit-any': 'warn',
+      // No-`any` policy (ADR-0004/0006): the message/API-layer burndown is done and
+      // the §7 god components are decomposed, so every production `any` is now either
+      // gone or an intentional, reason-annotated `eslint-disable`. Flipped warn→error.
+      // Exceptions: test/setup files (mocks) via the override block below.
+      '@typescript-eslint/no-explicit-any': 'error',
       // React Compiler rules - these are performance suggestions, not bugs
       // Setting state in effects is valid React when done intentionally
       'react-hooks/rules-of-hooks': 'error',
@@ -103,35 +107,27 @@ export default [
   // Sanctioned (keeps raw access): apiScheduler.ts (the rate-limited path's own
   // dispatch to content — the endpoint the guard steers traffic toward),
   // useOktaApi/core.ts, and useOktaTabContext.ts (lightweight page-context probes,
-  // not rate-limited API traffic). Legacy, pending migration onto the scheduler
-  // with §7/§8: the god components + useUserSearch/useUserMemberships/UserOverview.
+  // not rate-limited API traffic). §8's transport migration is COMPLETE — every
+  // legacy read/write bypass (searchUsers, getUserDetails, useRuleLifecycle,
+  // useGroupLiveSearch, getUserGroups, and fetchGroupRules) now routes through the
+  // scheduler, so only the three sanctioned entries remain.
   {
     files: [
       'src/shared/scheduler/apiScheduler.ts',
       'src/sidepanel/hooks/useOktaApi/core.ts',
       'src/sidepanel/hooks/useOktaTabContext.ts',
-      'src/sidepanel/hooks/useUserSearch.ts',
-      'src/sidepanel/hooks/useUsersTabSearch.ts',
-      'src/sidepanel/hooks/useDetectedUser.ts',
-      'src/sidepanel/hooks/useUserMemberships.ts',
-      'src/sidepanel/components/overview/UserOverview.tsx',
-      // GroupsTab's live search moved into this hook during its §7 decomposition;
-      // the bypass itself is untouched and still migrates in §8.
-      'src/sidepanel/hooks/useGroupLiveSearch.ts',
-      // RulesTab's rule fetch + activate/deactivate moved into these hooks during
-      // its §7 decomposition; the bypass itself is untouched and still migrates in §8.
-      'src/sidepanel/hooks/useRulesData.ts',
-      'src/sidepanel/hooks/useRuleLifecycle.ts',
     ],
     rules: {
       'no-restricted-syntax': 'off',
     },
   },
-  // Tests may spy on / stub console (e.g. suppressing expected warnings).
+  // Tests may spy on / stub console (e.g. suppressing expected warnings) and use
+  // `any` in mocks/fixtures where modelling the full Okta shape adds no value.
   {
     files: ['**/*.test.{ts,tsx}', 'src/test/**/*.{ts,tsx}'],
     rules: {
       'no-console': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
   // Storybook stories: CSF requires a default export (the `meta`) alongside the

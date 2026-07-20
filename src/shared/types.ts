@@ -53,6 +53,9 @@ export interface OktaUser {
     userType?: string;
     locale?: string;
     timezone?: string;
+    // Okta custom profile attributes are org-defined and arbitrarily-typed JSON;
+    // this index signature is the extension point (validated at the zod boundary).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [key: string]: any;
   };
 }
@@ -168,6 +171,9 @@ export interface FormattedRule {
 }
 
 /** Generic outcome of an Okta API call made in the content script. */
+// Generic default: callers that don't parameterize the payload get an untyped
+// `data` (raw Okta JSON, validated at the zod boundary before use).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
@@ -266,6 +272,9 @@ export interface MessageRequest {
 }
 
 /** Response envelope extending {@link ApiResponse} with rule/list extras. */
+// Generic default mirrors {@link ApiResponse}: unparameterized callers get an
+// untyped payload (raw Okta JSON, validated at the zod boundary before use).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface MessageResponse<T = any> extends ApiResponse<T> {
   count?: number;
   rules?: OktaGroupRule[];

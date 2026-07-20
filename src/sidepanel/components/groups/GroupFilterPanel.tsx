@@ -7,6 +7,7 @@
  */
 import React from 'react';
 import type { Dispatch, SetStateAction } from 'react';
+import { FilterPill } from '../shared';
 import type { SortField, StalenessLevel, PushFilter } from './groupFilters';
 
 interface GroupFilterPanelProps {
@@ -41,9 +42,13 @@ interface GroupFilterPanelProps {
 
 /**
  * The expandable filter panel: active-filter chips, the 2×2 type/size/push/health
- * grid, the push-target-app row, and the sort row. The health pills carry their own
- * semantic colors; the raw <button>s here are the §3 debt migrated during a later,
- * deliberate pass — kept raw for pixel parity in the decompose-only split.
+ * grid, the push-target-app row, and the sort row. The five filter/toggle groups
+ * (type, size, push status, push-target app, and the semantic-colored health pills
+ * via `FilterPill`'s `inactiveClassName` escape hatch) route through the shared
+ * `FilterPill` (§3). Three controls stay raw as documented exceptions: the "Clear
+ * all" text-link (no shared text-link primitive), the sort buttons (need a chevron
+ * `IconType` the registry does not yet have — a deferred design call), and the
+ * active-filter chip's close button (a bespoke `rounded-full` chip-remove).
  */
 const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
   activeFilterCount,
@@ -94,7 +99,12 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
             onRemove={() => setPushAppFilter(new Set())}
           />
         )}
-        <button onClick={clearFilters} className="text-xs text-primary-text hover:underline ml-1">
+        {/* §3 exception: chromeless text-link — no shared text-link primitive. */}
+        <button
+          type="button"
+          onClick={clearFilters}
+          className="text-xs text-primary-text hover:underline ml-1"
+        >
           Clear all
         </button>
       </div>
@@ -112,17 +122,13 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
             { value: 'APP_GROUP', label: 'App' },
             { value: 'BUILT_IN', label: 'Built-in' },
           ].map((opt) => (
-            <button
+            <FilterPill
               key={opt.value}
+              active={typeFilter === opt.value}
               onClick={() => setTypeFilter(opt.value)}
-              className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                typeFilter === opt.value
-                  ? 'bg-primary text-white'
-                  : 'bg-neutral-50 text-neutral-700 border border-neutral-200 hover:border-neutral-400'
-              }`}
             >
               {opt.label}
-            </button>
+            </FilterPill>
           ))}
         </div>
       </div>
@@ -139,17 +145,13 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
             { value: 'large', label: '200-1K' },
             { value: 'xlarge', label: '1K+' },
           ].map((opt) => (
-            <button
+            <FilterPill
               key={opt.value}
+              active={sizeFilter === opt.value}
               onClick={() => setSizeFilter(opt.value)}
-              className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                sizeFilter === opt.value
-                  ? 'bg-primary text-white'
-                  : 'bg-neutral-50 text-neutral-700 border border-neutral-200 hover:border-neutral-400'
-              }`}
             >
               {opt.label}
-            </button>
+            </FilterPill>
           ))}
         </div>
       </div>
@@ -163,17 +165,13 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
             { value: 'pushed' as PushFilter, label: 'Pushed' },
             { value: 'not_pushed' as PushFilter, label: 'Not Pushed' },
           ].map((opt) => (
-            <button
+            <FilterPill
               key={opt.value}
+              active={pushFilter === opt.value}
               onClick={() => setPushFilter(opt.value)}
-              className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                pushFilter === opt.value
-                  ? 'bg-primary text-white'
-                  : 'bg-neutral-50 text-neutral-700 border border-neutral-200 hover:border-neutral-400'
-              }`}
             >
               {opt.label}
-            </button>
+            </FilterPill>
           ))}
         </div>
       </div>
@@ -205,18 +203,18 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
               color: 'bg-danger-light text-danger-text border-danger-light',
             },
           ].map((opt) => (
-            <button
+            // The colored inactive states carry their own semantic border+fill via
+            // `inactiveClassName`; the neutral "All" option falls back to FilterPill's
+            // default. Active uses FilterPill's standard borderless primary fill (the
+            // raw markup's invisible `border-primary` on the active pill is dropped).
+            <FilterPill
               key={opt.value}
+              active={stalenessFilter === opt.value}
               onClick={() => setStalenessFilter(opt.value)}
-              className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors border ${
-                stalenessFilter === opt.value
-                  ? 'bg-primary text-white border-primary'
-                  : opt.color ||
-                    'bg-neutral-50 text-neutral-700 border-neutral-200 hover:border-neutral-400'
-              }`}
+              inactiveClassName={opt.color ? `border ${opt.color}` : undefined}
             >
               {opt.label}
-            </button>
+            </FilterPill>
           ))}
         </div>
       </div>
@@ -227,19 +225,13 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
       <div>
         <label className="block text-xs font-medium text-neutral-600 mb-1.5">Push Target App</label>
         <div className="flex flex-wrap gap-1.5">
-          <button
-            onClick={() => setPushAppFilter(new Set())}
-            className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              pushAppFilter.size === 0
-                ? 'bg-primary text-white'
-                : 'bg-neutral-50 text-neutral-700 border border-neutral-200 hover:border-neutral-400'
-            }`}
-          >
+          <FilterPill active={pushAppFilter.size === 0} onClick={() => setPushAppFilter(new Set())}>
             All
-          </button>
+          </FilterPill>
           {availablePushApps.map((app) => (
-            <button
+            <FilterPill
               key={app.id}
+              active={pushAppFilter.has(app.id)}
               onClick={() => {
                 setPushAppFilter((prev) => {
                   const next = new Set(prev);
@@ -248,14 +240,9 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
                   return next;
                 });
               }}
-              className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                pushAppFilter.has(app.id)
-                  ? 'bg-primary text-white'
-                  : 'bg-neutral-50 text-neutral-700 border border-neutral-200 hover:border-neutral-400'
-              }`}
             >
               {app.name}
-            </button>
+            </FilterPill>
           ))}
         </div>
       </div>
@@ -271,9 +258,14 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
           { value: 'lastUpdated' as SortField, label: 'Last Updated' },
           { value: 'staleness' as SortField, label: 'Staleness' },
         ].map((opt) => (
+          // §3 exception: needs a directional chevron `IconType` (rotates on
+          // sortDesc) the Icon registry does not yet have — a deferred design call,
+          // and FilterPill has no trailing-icon slot. Kept raw for pixel parity.
           <button
             key={opt.value}
+            type="button"
             onClick={() => toggleSort(opt.value)}
+            aria-pressed={sortBy === opt.value}
             className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${
               sortBy === opt.value
                 ? 'bg-primary text-white'
@@ -303,12 +295,18 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
   </div>
 );
 
-/** Small chip for showing active filters with remove button */
+/**
+ * Small chip for showing active filters with remove button. §3 exception: the
+ * `rounded-full` chip and its bespoke chip-remove close button (no matching `x`
+ * glyph in the Icon registry; IconButton is `rounded-md`, not pixel-neutral here).
+ */
 const FilterChip: React.FC<{ label: string; onRemove: () => void }> = ({ label, onRemove }) => (
   <span className="inline-flex items-center gap-1 px-2 py-1 bg-primary-light text-primary-text rounded-full text-xs font-medium border border-primary-highlight">
     {label}
     <button
+      type="button"
       onClick={onRemove}
+      aria-label={`Remove ${label}`}
       className="p-0.5 hover:bg-primary-highlight rounded-full transition-colors"
     >
       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -28,10 +28,11 @@ jobs:
       - name: Type-check
         run: npm run type-check
 
-      - name: Test
-        run: npm run test:run
-      # Coverage gate (npm run test:coverage, thresholds 80/75) is added here once
-      # component tests land (Phase 4). Enabling it now would fail on legacy debt.
+      - name: Test + coverage gate
+        # Runs the jsdom unit project with the 80/75 coverage thresholds enforced
+        # (vitest.config.ts). Replaces the old bare `test:run`; §8 raised coverage
+        # above threshold so the gate is now enforced in CI.
+        run: npm run test:coverage
 
   # Component explorer build gate (ADR-0010). Runs in parallel with `verify` (no
   # `needs:`), so it never delays the fast lint/type/test feedback. A broken or

@@ -60,6 +60,10 @@ export class ApiScheduler {
   private cooldownEndsAt: number | null = null;
   private isPaused: boolean = false;
   private processingInterval: ReturnType<typeof setInterval> | null = null;
+  // Bumped by clearQueue() (a user Cancel). A request sleeping in retry backoff
+  // captures this before it waits and, on waking, rejects instead of reviving if
+  // the value moved — so Cancel also stops mid-backoff requests, not just queued ones.
+  private cancelGeneration: number = 0;
 
   // Metrics
   private metrics: SchedulerMetrics = {
@@ -186,8 +190,8 @@ export class ApiScheduler {
    * Add request to queue with priority ordering
    */
   private addToQueue(request: QueuedRequest): void {
-    // Insert based on priority (high > normal > low)
-    const priorityOrder = { high: 0, normal: 1, low: 2 };
+    // Insert based on priority (interactive > high > normal > low)
+    const priorityOrder = { interactive: 0, high: 1, normal: 2, low: 3 };
     const requestPriorityValue = priorityOrder[request.priority];
 
     let insertIndex = this.queue.length;
@@ -236,10 +240,20 @@ export class ApiScheduler {
       return;
     }
 
+    // An `interactive` request at the head of the (priority-ordered) queue may
+    // jump the soft rate-limit gates — but only while there is genuine hard
+    // headroom left, so it can never force a 429. See {@link RequestPriority}.
+    const interactiveBypass =
+      this.queue[0]?.priority === 'interactive' && !this.rateLimitDetector.isLimitExceeded();
+
     // Check cooldown
     if (this.cooldownEndsAt && Date.now() < this.cooldownEndsAt) {
-      this.updateStatus('cooldown');
-      return;
+      if (!interactiveBypass) {
+        this.updateStatus('cooldown');
+        return;
+      }
+      // Fall through to dispatch the interactive request; the cooldown stays
+      // armed for every other tier (we do not clear `cooldownEndsAt`).
     } else if (this.cooldownEndsAt) {
       // Cooldown ended
       log.debug('Cooldown ended, resuming processing');
@@ -259,8 +273,12 @@ export class ApiScheduler {
         this.activeRequests.size,
       )
     ) {
-      this.enterCooldown();
-      return;
+      // An interactive request with hard headroom dispatches without arming a
+      // cooldown; any other tier trips the soft threshold and cools down.
+      if (!interactiveBypass) {
+        this.enterCooldown();
+        return;
+      }
     }
 
     // Get next request from queue
@@ -384,10 +402,20 @@ export class ApiScheduler {
     });
 
     // Wait before retrying
+    const generation = this.cancelGeneration;
     await new Promise((resolve) => setTimeout(resolve, backoffDelay));
+    this.activeRequests.delete(request.id);
+
+    // If the queue was cleared (user Cancel) while we slept, this request must not
+    // revive — reject it so the awaiting operation loop unwinds, mirroring how
+    // clearQueue() rejects requests that were sitting in the queue.
+    if (this.cancelGeneration !== generation) {
+      request.reject(new OperationCancelledError());
+      this.notifyStateChange();
+      return;
+    }
 
     // Re-add to queue with high priority
-    this.activeRequests.delete(request.id);
     request.priority = 'high';
     this.addToQueue(request);
   }
@@ -536,9 +564,14 @@ export class ApiScheduler {
    * loop awaiting it unwinds instead of hanging; for a coalesced GET the leader's
    * reject also fans the error out to every joined waiter and clears the coalescing
    * slot. In-flight requests already dispatched to the content script are left to
-   * settle. Cancelled requests are not retried and are not counted as failures.
+   * settle; a request sleeping in retry backoff is caught by the
+   * {@link cancelGeneration} bump and rejects on wake instead of reviving.
+   * Cancelled requests are not retried and are not counted as failures.
    */
   clearQueue(): number {
+    // Signal any request currently sleeping in retry backoff to reject on wake.
+    this.cancelGeneration++;
+
     const dropped = this.queue;
     this.queue = [];
 

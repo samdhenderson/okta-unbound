@@ -46,16 +46,8 @@ import { createLogger } from '../shared/utils/logger';
 import { extractAppIdFromUrl, extractAppNameFromPage } from './pageContext';
 import { handleMakeApiRequest } from './apiRequest';
 import { injectIndicator } from './indicator';
-import {
-  handleFetchGroupRules,
-  handleActivateRule,
-  handleDeactivateRule,
-} from './ruleHandlers';
-import {
-  handleGetGroupInfo,
-  handleExportGroupMembers,
-  handleSearchGroups,
-} from './groupHandlers';
+import { handleFetchGroupRules, handleActivateRule, handleDeactivateRule } from './ruleHandlers';
+import { handleGetGroupInfo, handleExportGroupMembers, handleSearchGroups } from './groupHandlers';
 import {
   handleGetUserInfo,
   handleSearchUsers,
