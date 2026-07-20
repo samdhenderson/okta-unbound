@@ -8,10 +8,11 @@
  * Do NOT "fix" a test here — if the behavior should change, change it in its own
  * commit and flip the matching assertion there.
  *
- * Harness: UsersTab's READ path (searchUsers / getUserDetails / getUserGroups /
- * fetchGroupRules) uses raw `chrome.tabs.sendMessage` and bypasses the scheduler,
- * so MSW does not apply. Its WRITE path (suspend / unsuspend / resetPassword /
- * getUserById / searchGroups / addUserToGroup) goes through the REAL `useOktaApi`
+ * Harness: UsersTab's remaining direct-content reads (searchUsers / getUserGroups /
+ * fetchGroupRules) use raw `chrome.tabs.sendMessage` and bypass the scheduler, so
+ * MSW does not apply. Its scheduler path (getUserDetails — §8-migrated — plus the
+ * write path: suspend / unsuspend / resetPassword / getUserById / searchGroups /
+ * addUserToGroup) goes through the REAL `useOktaApi`
  * → `chrome.runtime.sendMessage({ action: 'scheduleApiRequest', endpoint })`. We
  * mock both chrome messaging surfaces (exactly as `GroupsTab.test.tsx` /
  * `hooks/useOktaApi.test.ts` do) and drive the real hook so scheduler traffic and
@@ -94,6 +95,11 @@ function tabCalls(action?: string) {
 
 function schedulerEndpoints() {
   return runtimeSendMessage.mock.calls.map((c) => c[0].endpoint).filter(Boolean);
+}
+
+/** §8: scheduler GETs for a single user's details, e.g. `/api/v1/users/u1`. */
+function userDetailCalls() {
+  return schedulerEndpoints().filter((e) => /^\/api\/v1\/users\/[^/?]+$/.test(e));
 }
 
 // ---------------------------------------------------------------------------
@@ -184,7 +190,9 @@ beforeEach(() => {
   tabRoute('searchUsers', () => ({ success: true, data: [] }));
   tabRoute('getUserGroups', () => ({ success: true, data: [] }));
   tabRoute('fetchGroupRules', () => ({ success: true, rules: [], stats: {}, conflicts: [] }));
-  tabRoute('getUserDetails', () => ({ success: true, data: oktaUser() }));
+  // §8: getUserDetails is now a scheduler read (`GET /api/v1/users/{id}`); the
+  // detected-user tests that actually Load route it explicitly (no blanket default,
+  // so the lifecycle tests' own `/api/v1/users/u1` route is never shadowed).
 
   tabsSendMessage.mockImplementation(async (_tabId: number, msg: any) => {
     const r = tabResponders[msg.action];
@@ -196,7 +204,11 @@ beforeEach(() => {
 
   runtimeSendMessage.mockImplementation(async (msg: any) => {
     if (msg.action !== 'scheduleApiRequest') return { success: false };
-    for (const [pattern, respond] of routes) {
+    // Last-registered route wins, so a test's post-load override (e.g. the
+    // getUserById refresh) beats a default registered earlier (the getUserDetails
+    // load) on the same endpoint.
+    for (let i = routes.length - 1; i >= 0; i--) {
+      const [pattern, respond] = routes[i];
       if (pattern.test(msg.endpoint)) return respond(msg);
     }
     return { success: false, error: `unrouted endpoint: ${msg.endpoint}` };
@@ -339,10 +351,11 @@ describe('detected user: manual-load banner', () => {
 
   it('does NOT auto-fetch; shows a banner and loads only when Load is clicked', async () => {
     userContext.current = { ...detected };
+    route(/^\/api\/v1\/users\/u1$/, () => ({ success: true, data: oktaUser() }));
     render(<UsersTab targetTabId={1} />);
 
     // No fetch on detection — the banner is shown instead.
-    expect(tabCalls('getUserDetails')).toHaveLength(0);
+    expect(userDetailCalls()).toHaveLength(0);
     expect(screen.getByText(/Detected in admin/)).toBeInTheDocument();
 
     await act(async () => {
@@ -350,7 +363,8 @@ describe('detected user: manual-load banner', () => {
     });
 
     expect(await screen.findByRole('heading', { name: 'Ada Lovelace' })).toBeInTheDocument();
-    expect(tabCalls('getUserDetails')).toHaveLength(1);
+    // §8: the details read now routes through the scheduler.
+    expect(userDetailCalls()).toEqual(['/api/v1/users/u1']);
     expect(tabCalls('getUserGroups')).toHaveLength(1);
   });
 
@@ -363,7 +377,7 @@ describe('detected user: manual-load banner', () => {
       await flush();
     }
 
-    expect(tabCalls('getUserDetails')).toHaveLength(0);
+    expect(userDetailCalls()).toHaveLength(0);
     expect(screen.getByText(/Detected in admin/)).toBeInTheDocument();
   });
 
@@ -373,7 +387,7 @@ describe('detected user: manual-load banner', () => {
       isLoading: false,
       oktaOrigin: null,
     };
-    tabRoute('getUserDetails', () => ({ success: false, error: 'boom' }));
+    route(/^\/api\/v1\/users\/u1$/, () => ({ success: false, error: 'boom' }));
     render(<UsersTab targetTabId={1} />);
 
     await act(async () => {
@@ -392,7 +406,7 @@ describe('detected user: manual-load banner', () => {
     });
 
     expect(screen.queryByText(/Detected in admin/)).not.toBeInTheDocument();
-    expect(tabCalls('getUserDetails')).toHaveLength(0);
+    expect(userDetailCalls()).toHaveLength(0);
   });
 });
 
@@ -493,21 +507,27 @@ describe('lifecycle actions', () => {
       oktaOrigin: null,
     };
     tabRoute('getUserGroups', () => ({ success: true, data: [] }));
+    // §8: the banner Load fetches details through the scheduler (getUserDetails).
+    route(/^\/api\/v1\/users\/u1$/, () => ({ success: true, data: oktaUser() }));
     render(<UsersTab targetTabId={1} />);
     // Load the detected user via the banner (no auto-load).
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Load' }));
     });
     await screen.findByRole('heading', { name: 'Ada Lovelace' });
+    // Drop the load's scheduler calls so per-test assertions see only what follows.
+    runtimeSendMessage.mockClear();
   }
 
   it('suspends an ACTIVE user: exact copy, one getUserById refresh, badge flips, profile kept', async () => {
     route(/\/lifecycle\/suspend/, () => ({ success: true }));
-    route(/\/api\/v1\/users\/u1$/, () => ({
+    await renderWithActiveUser();
+    // §8: the post-suspend getUserById refresh — same endpoint as the load, so this
+    // later registration wins (last-registered-wins router).
+    route(/^\/api\/v1\/users\/u1$/, () => ({
       success: true,
       data: { id: 'u1', status: 'SUSPENDED', profile: { firstName: 'Ada', lastName: 'Lovelace' } },
     }));
-    await renderWithActiveUser();
 
     fireEvent.click(screen.getByRole('button', { name: 'Suspend User' }));
     await act(async () => {
@@ -518,7 +538,7 @@ describe('lifecycle actions', () => {
     expect(
       await screen.findByText('User suspended successfully. They can no longer sign in.'),
     ).toBeInTheDocument();
-    // exactly one GET /users/u1 (the status refresh).
+    // Exactly one GET /users/u1 after the load: the status refresh.
     expect(schedulerEndpoints().filter((e) => e === '/api/v1/users/u1')).toHaveLength(1);
     // status-only patch: badge flips but profile.department survives.
     expect(screen.getAllByText('SUSPENDED').length).toBeGreaterThan(0);
@@ -569,12 +589,15 @@ describe('add-to-group: 300ms group search (memoized searchGroups)', () => {
       oktaOrigin: null,
     };
     tabRoute('getUserGroups', () => ({ success: true, data: [] }));
+    // §8: the banner Load fetches details through the scheduler (getUserDetails).
+    route(/^\/api\/v1\/users\/u1$/, () => ({ success: true, data: oktaUser() }));
     render(<UsersTab targetTabId={1} />);
     // Load the detected user via the banner (no auto-load).
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Load' }));
     });
     await screen.findByRole('heading', { name: 'Ada Lovelace' });
+    runtimeSendMessage.mockClear();
     fireEvent.click(screen.getByRole('button', { name: 'Add to Group' }));
   }
 

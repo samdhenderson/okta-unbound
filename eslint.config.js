@@ -116,9 +116,9 @@ export default [
       'src/sidepanel/hooks/useOktaTabContext.ts',
       'src/sidepanel/hooks/useUserSearch.ts',
       'src/sidepanel/hooks/useUsersTabSearch.ts',
-      'src/sidepanel/hooks/useDetectedUser.ts',
       'src/sidepanel/hooks/useUserMemberships.ts',
-      // (UserOverview.tsx migrated its getUserDetails read onto the scheduler in §8.)
+      // (useDetectedUser.ts + UserOverview.tsx migrated their getUserDetails read
+      // onto the scheduler in §8.)
       // RulesTab's rule fetch moved into this hook during its §7 decomposition;
       // the bypass itself is untouched and still migrates in §8.
       // (useRuleLifecycle.ts migrated onto the scheduler in §8 — removed here.)

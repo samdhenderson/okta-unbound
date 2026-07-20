@@ -5,14 +5,16 @@
  * The Users tab stays pinned to the user you explicitly selected — it is never
  * hijacked by admin navigation. This hook does **not** fetch on its own; it exposes
  * a `loadDetectedUser` action that the tab's "Detected in admin — Load" banner
- * invokes on click, which fetches the user's details (via the §8-preserved raw
- * `getUserDetails` read path it grandfathers) and their memberships. Nothing hits
- * Okta until you ask for it, so navigating admin with the panel open costs nothing.
+ * invokes on click, which fetches the user's details (§8: through the rate-limited
+ * scheduler via `makeApiRequest('/api/v1/users/{id}')`) and their memberships.
+ * Nothing hits Okta until you ask for it, so navigating admin with the panel open
+ * costs nothing.
  */
 
 import { useCallback, useRef } from 'react';
 import type { OktaUser } from '../../shared/types';
 import { createLogger } from '../../shared/utils/logger';
+import { useOktaApi } from './useOktaApi';
 
 const log = createLogger('useDetectedUser');
 
@@ -64,23 +66,41 @@ export function useDetectedUser({
   onLoadingChange,
   onResetSearch,
 }: UseDetectedUserOptions): UseDetectedUserReturn {
-  // Held in a ref so `loadDetectedUser` keeps a stable identity regardless of
-  // whether callers pass inline callbacks.
+  // §8: own a useOktaApi slice for the scheduler-routed details read.
+  const { makeApiRequest } = useOktaApi({ targetTabId: targetTabId ?? null });
+
+  // Held in a ref so `loadUserById` keeps a stable `[targetTabId]` identity
+  // regardless of whether callers pass inline callbacks. `makeApiRequest` is stable
+  // per `targetTabId` but is held here too so it never widens that dependency.
   const depsRef = useRef({
     loadMemberships,
     onSelectUser,
     onError,
     onLoadingChange,
     onResetSearch,
+    makeApiRequest,
   });
-  depsRef.current = { loadMemberships, onSelectUser, onError, onLoadingChange, onResetSearch };
+  depsRef.current = {
+    loadMemberships,
+    onSelectUser,
+    onError,
+    onLoadingChange,
+    onResetSearch,
+    makeApiRequest,
+  };
 
   const loadUserById = useCallback(
     async (userId: string) => {
       if (!targetTabId || !userId) return;
 
-      const { loadMemberships, onSelectUser, onError, onLoadingChange, onResetSearch } =
-        depsRef.current;
+      const {
+        loadMemberships,
+        onSelectUser,
+        onError,
+        onLoadingChange,
+        onResetSearch,
+        makeApiRequest,
+      } = depsRef.current;
 
       log.debug('Loading user on request:', userId);
       onLoadingChange(true);
@@ -89,10 +109,7 @@ export function useDetectedUser({
 
       try {
         // First fetch user details
-        const userResponse = await chrome.tabs.sendMessage(targetTabId, {
-          action: 'getUserDetails',
-          userId,
-        });
+        const userResponse = await makeApiRequest(`/api/v1/users/${userId}`);
 
         if (!userResponse.success) {
           throw new Error(userResponse.error || 'Failed to fetch user details');
