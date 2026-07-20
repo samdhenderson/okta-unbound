@@ -72,11 +72,10 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
     the semantic-colored Health pills via `FilterPill`'s `inactiveClassName` escape
     hatch) now route through the shared `FilterPill`. Three controls stay raw as
     documented exceptions, each with an inline `§3 exception` comment: the "Clear all"
-    text-link (no shared text-link primitive — same precedent as `AttributeFacet`), the
-    sort buttons (need a directional chevron `IconType` the registry lacks + `FilterPill`
-    has no trailing-icon slot — same deferred call as `UserComparisonModal` L710), and
+    text-link (no shared text-link primitive — same precedent as `AttributeFacet`) and
     the active-filter chip's `rounded-full` close button (`IconButton` is `rounded-md`,
-    not pixel-neutral). The active Health pill's invisible `border-primary` was dropped
+    not pixel-neutral). **The sort buttons are no longer an exception — they route
+    through the new shared `SortPill` (see the SortPill bullet below).** The active Health pill's invisible `border-primary` was dropped
     (a wash — it made active health pills inconsistently ~2px larger than every other
     active pill). ui-reviewer's two a11y wins on the kept-raw controls were folded in:
     `aria-label` on the chip-remove button + `aria-pressed` on the sort buttons (plus
@@ -87,11 +86,26 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
   - **`UserComparisonModal` correction (session 5):** its raw-control migration is a
     **separate follow-up commit** after its §7 decompose-only pass, and 2 of its 3
     controls **cannot migrate cleanly** — so its true migratable count is **1**, not 2+1:
-    - `L597` is a `role="tab"` tablist item → already a documented §3 tab-bar exception.
-    - `L710` needs a **new chevron `IconType`** that does not exist yet.
+    - `L597` was a `role="tab"` tablist item → now the `ComparisonTabBar` subcomponent's
+      tab buttons, still a documented §3 tab-bar exception.
+    - `L710` was the sort caret — **gone entirely** after the §7 decompose (the current
+      `comparison/` subcomponents have no sort control). The directional-caret concern is now
+      owned by the shared `SortPill` regardless (see below), so any future re-introduction is
+      already covered.
     - `L429` → shared `Input` is **NOT pixel-neutral** (`py-3`/`border-200`/`shadow-sm`
       vs the shared base's `px-3 py-2`/`border-300`/no shadow). Needs a design call, not
-      a mechanical swap.
+      a mechanical swap. (Post-decompose, the `comparison/` subcomponents' only remaining raw
+      controls are the tab bar above and a chromeless "View details" text-link — both
+      documented exception categories.)
+- [x] **Shared `SortPill` extracted (this session).** A `FilterPill` that shows a directional
+      caret when its field is the active sort (rotates on descending). This retires the
+      "sort buttons need a chevron `IconType` + a `FilterPill` trailing-icon slot" deferral:
+      `GroupFilterPanel`'s four raw sort `<button>`s now route through `SortPill` (closing that
+      documented exception), and `overview/members/MemberFilterPanel` dedups its local
+      `SortButton` onto it. Pixel-neutral (same pill classes + caret SVG; the caret gained
+      `aria-hidden`); co-located test + story; GroupsTab oracle (81) and GroupOverview tests
+      stayed green. The caret stays a raw SVG **inside** the shared primitive (not a raw button
+      in a feature component), the same precedent as other shared primitives that embed SVGs.
 - [x] **`AttributeFacet`** (4) → §9 chart tokenization was already complete
       (`theme/chartPalette.ts`); all 4 raw `<button>`s are **documented pixel-neutral
       exceptions** (two chromeless 11px text-links with no shared text-link primitive, the
@@ -430,12 +444,21 @@ addedDate:undefined}` wrapper ported verbatim from `content/userHandlers.ts`,
     **both DONE this session** (see the two `[x]` items above).
 - Doc: `docs/testing.md` / `docs/architecture.md`. Agent: `test-writer`.
 
-### 9. `[ ]` Small cleanups
+### 9. `[x]` Small cleanups
 
 - [x] Tokenize the `AttributeFacet.tsx` dataviz ramp — already done in
       `theme/chartPalette.ts` (named `INDIGO_RAMP`/`CHART_NONE_COLOR`/`CHART_OTHER_COLOR`); no
       raw hex remains in `components/**`. (Verified during the swarm session.)
-- Reconcile the `SchedulerContext` poll+push double source of truth when next touched.
+- [x] **Reconciled the `SchedulerContext` poll+push double source of truth (this session).**
+      The 1s poll existed only to keep the cooldown countdown smooth and to paper over status
+      transitions the background scheduler never pushed — `idle`/`paused` and the cooldown-end
+      happen inside `processQueue`'s 50ms loop via `updateStatus`, which did **not** notify. Fixed
+      at the source: `apiScheduler.updateStatus` now calls `notifyStateChange` on every real
+      transition (guarded by the existing `!==` check, so the loop does not churn notifications),
+      making the `schedulerStateChanged` push the single authoritative source. `SchedulerContext`
+      dropped its `setInterval` poll — it fetches once on mount and lives off pushes; the countdown
+      already ticks locally in `useActivityBar` off the absolute `cooldownEndsAt`. Regression tests:
+      `apiScheduler.notify.test.ts` (post-drain idle transition is pushed; no churn while unchanged) + `SchedulerContext.test.tsx` (updates from a push, never re-fetches on a timer).
 
 ### 10. `[ ]` Component-explorer (Storybook) story-coverage backlog
 
