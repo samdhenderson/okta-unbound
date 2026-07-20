@@ -60,9 +60,29 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
       spinner), like `SearchDropdown`.
 - [x] **Checkboxes** → new shared `Checkbox` primitive (`GroupExportModal` 2,
       `GroupListItem` 1). Added to the barrel with tests.
-- [ ] **God-component buttons** (`GroupsTab` 10, `RulesTab` 4, `UsersTab` 3,
-      `UserComparisonModal` 2) + their raw text inputs (`GroupsTab` 2, `UsersTab` 2,
-      `RulesTab` 1, `UserComparisonModal` 1) → migrate during their §7 decomposition.
+- [~] **God-component buttons** (`GroupsTab` 10, `RulesTab` 4, `UsersTab` 3,
+  `UserComparisonModal` 2) + their raw text inputs (`GroupsTab` 2, `UsersTab` 2,
+  `RulesTab` 1, `UserComparisonModal` 1) → migrate during their §7 decomposition.
+  **`RulesTab` + `UsersTab` done in §7; `GroupsTab` done (this session); only
+  `UserComparisonModal`'s blocked follow-up remains (see below).**
+  - **`GroupsTab` DONE (this session, ui-reviewer signed off).** GroupsTab's 10
+    filter/sort buttons landed in the extracted `groups/GroupFilterPanel.tsx` during §7;
+    its five filter/toggle groups (Group Type, Size, Push Status, Push Target App, and
+    the semantic-colored Health pills via `FilterPill`'s `inactiveClassName` escape
+    hatch) now route through the shared `FilterPill`. Three controls stay raw as
+    documented exceptions, each with an inline `§3 exception` comment: the "Clear all"
+    text-link (no shared text-link primitive — same precedent as `AttributeFacet`), the
+    sort buttons (need a directional chevron `IconType` the registry lacks + `FilterPill`
+    has no trailing-icon slot — same deferred call as `UserComparisonModal` L710), and
+    the active-filter chip's `rounded-full` close button (`IconButton` is `rounded-md`,
+    not pixel-neutral). The active Health pill's invisible `border-primary` was dropped
+    (a wash — it made active health pills inconsistently ~2px larger than every other
+    active pill). ui-reviewer's two a11y wins on the kept-raw controls were folded in:
+    `aria-label` on the chip-remove button + `aria-pressed` on the sort buttons (plus
+    `type="button"` hardening on all three). GroupsTab's 2 raw text inputs are
+    `groups/GroupSearchBar.tsx`'s documented leading-glyph composite (like
+    `SearchDropdown`); `GroupFilterToggle` stays a documented raw exception. Oracle
+    (`GroupsTab.test.tsx`, 81 tests) stayed green.
   - **`UserComparisonModal` correction (session 5):** its raw-control migration is a
     **separate follow-up commit** after its §7 decompose-only pass, and 2 of its 3
     controls **cannot migrate cleanly** — so its true migratable count is **1**, not 2+1:
@@ -125,9 +145,9 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
   - **Bounded items safe to do now (session 5): DONE (swarm session).**
     - [x] Deleted the **dead `oktaUserListSchema`** (zero call sites confirmed).
     - [x] Fixed `parseOkta` leaking **zod's error message** (the mechanism was in the
-      `throw`, not `log.warn` as assumed) — it now surfaces only the issue _paths/codes_
-      (`{path, code}` per issue), never the received value; pinned by a test asserting the
-      offending value is absent from the message.
+          `throw`, not `log.warn` as assumed) — it now surfaces only the issue _paths/codes_
+          (`{path, code}` per issue), never the received value; pinned by a test asserting the
+          offending value is absent from the message.
 - [x] Burned down the message/API-layer `any`s (60→4): typing-only, precise types
       across content/useOktaApi/scheduler/tabState/rulesCache (introduced
       `MembershipRule`; reused existing rule/group/`RequestResult` types). Repo-wide
@@ -198,7 +218,7 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
       commit; the unbounded `while(nextUrl)` pagination loops and the 1–3 request search
       fallback chain moved **verbatim**; the zod `parseOkta` boundary, same-origin + method
       guard, and host parsing preserved exactly. **Scheduler/transport route untouched (§8).**
-      No eslint grandfather move needed (`index.ts` is the message *receiver*, never called
+      No eslint grandfather move needed (`index.ts` is the message _receiver_, never called
       `chrome.tabs.sendMessage`). This unblocks §8's `content/index.ts` dependency.
 - Per file: (1) pin behavior with RTL/MSW tests; (2) extract logic into `use*` hooks
   (mirror the `useOktaApi/` module split); (3) move pure helpers to `shared/utils`;

@@ -100,7 +100,11 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
           />
         )}
         {/* §3 exception: chromeless text-link — no shared text-link primitive. */}
-        <button onClick={clearFilters} className="text-xs text-primary-text hover:underline ml-1">
+        <button
+          type="button"
+          onClick={clearFilters}
+          className="text-xs text-primary-text hover:underline ml-1"
+        >
           Clear all
         </button>
       </div>
@@ -259,7 +263,9 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
           // and FilterPill has no trailing-icon slot. Kept raw for pixel parity.
           <button
             key={opt.value}
+            type="button"
             onClick={() => toggleSort(opt.value)}
+            aria-pressed={sortBy === opt.value}
             className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${
               sortBy === opt.value
                 ? 'bg-primary text-white'
@@ -298,7 +304,9 @@ const FilterChip: React.FC<{ label: string; onRemove: () => void }> = ({ label, 
   <span className="inline-flex items-center gap-1 px-2 py-1 bg-primary-light text-primary-text rounded-full text-xs font-medium border border-primary-highlight">
     {label}
     <button
+      type="button"
       onClick={onRemove}
+      aria-label={`Remove ${label}`}
       className="p-0.5 hover:bg-primary-highlight rounded-full transition-colors"
     >
       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
