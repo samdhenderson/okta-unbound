@@ -2,13 +2,16 @@
  * @module sidepanel/hooks/useUserSearch
  * @description Debounced Okta user search bound to a specific tab.
  *
- * Sends `searchUsers` to the target tab's content script (never Okta directly) as
- * the query changes, enforcing a minimum length and debounce.
+ * §8: searches route through the rate-limited scheduler (`makeApiRequest` at
+ * `interactive` priority, via {@link searchUsersRequest}) as the query changes,
+ * enforcing a minimum length and debounce.
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { OktaUser } from '../../shared/types';
 import { createLogger } from '../../shared/utils/logger';
+import { useOktaApi } from './useOktaApi';
+import { searchUsersRequest } from './searchUsersRequest';
 
 const log = createLogger('useUserSearch');
 
@@ -56,6 +59,10 @@ export function useUserSearch({
   const [error, setError] = useState<string | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // §8: own a useOktaApi slice for the scheduler path. `makeApiRequest` is stable
+  // per `targetTabId`, so it does not widen the debounce effect's re-fire surface.
+  const { makeApiRequest } = useOktaApi({ targetTabId: targetTabId ?? null });
+
   const performSearch = useCallback(
     async (query: string) => {
       if (!targetTabId) {
@@ -74,10 +81,7 @@ export function useUserSearch({
       try {
         log.debug('Searching for users', { queryLength: query.length });
 
-        const response = await chrome.tabs.sendMessage(targetTabId, {
-          action: 'searchUsers',
-          query: query.trim(),
-        });
+        const response = await searchUsersRequest(makeApiRequest, query.trim());
 
         if (response.success) {
           setSearchResults(response.data || []);
@@ -95,7 +99,7 @@ export function useUserSearch({
         setIsSearching(false);
       }
     },
-    [targetTabId],
+    [targetTabId, makeApiRequest],
   );
 
   // Debounced search effect

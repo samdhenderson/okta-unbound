@@ -114,11 +114,10 @@ export default [
       'src/shared/scheduler/apiScheduler.ts',
       'src/sidepanel/hooks/useOktaApi/core.ts',
       'src/sidepanel/hooks/useOktaTabContext.ts',
-      'src/sidepanel/hooks/useUserSearch.ts',
-      'src/sidepanel/hooks/useUsersTabSearch.ts',
       'src/sidepanel/hooks/useUserMemberships.ts',
-      // (useDetectedUser.ts + UserOverview.tsx migrated their getUserDetails read
-      // onto the scheduler in §8.)
+      // (useUserSearch.ts + useUsersTabSearch.ts migrated their searchUsers read,
+      // and useDetectedUser.ts + UserOverview.tsx their getUserDetails read, onto
+      // the scheduler in §8.)
       // RulesTab's rule fetch moved into this hook during its §7 decomposition;
       // the bypass itself is untouched and still migrates in §8.
       // (useRuleLifecycle.ts migrated onto the scheduler in §8 — removed here.)

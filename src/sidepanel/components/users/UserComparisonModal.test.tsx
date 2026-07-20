@@ -132,6 +132,14 @@ let scenario: Scenario;
 const appsEndpointUserId = (endpoint: string): string =>
   endpoint.match(/user\.id\+eq\+"([^"]+)"/)?.[1] ?? '';
 
+/** §8: strategy-1 (`q=`) scheduler user-search calls — one per committed search. */
+const userSearchCalls = () =>
+  mockRuntimeSendMessage.mock.calls.filter(
+    (c) =>
+      (c[0] as Record<string, unknown>).action === 'scheduleApiRequest' &&
+      /^\/api\/v1\/users\?q=/.test(String((c[0] as Record<string, unknown>).endpoint)),
+  );
+
 beforeEach(() => {
   vi.clearAllMocks();
 
@@ -162,10 +170,17 @@ beforeEach(() => {
       return { success: true, data: scenario.apps[userId] ?? [], headers: {} };
     }
 
+    // §8: user search now routes through the scheduler (`/api/v1/users?q=|search=`).
+    if (endpoint.startsWith('/api/v1/users?')) {
+      if (scenario.searchResponse) return scenario.searchResponse();
+      return { success: true, data: scenario.searchResults, headers: {} };
+    }
+
     return { success: true, data: [], headers: {} };
   });
 
-  // Legacy direct path: chrome.tabs.sendMessage (bypasses the scheduler; §8 owns it).
+  // Legacy direct path: chrome.tabs.sendMessage — still the transport for the
+  // membership reads (getUserGroups / fetchGroupRules), which §8 has not migrated yet.
   mockTabsSendMessage.mockImplementation(async (_tabId: number, msg: Record<string, unknown>) => {
     if (msg.action === 'getUserGroups') {
       if (scenario.groupsResponse) return scenario.groupsResponse();
@@ -179,10 +194,6 @@ beforeEach(() => {
         stats: { total: 0, active: 0, inactive: 0, conflicts: 0 },
         conflicts: [],
       };
-    }
-    if (msg.action === 'searchUsers') {
-      if (scenario.searchResponse) return scenario.searchResponse();
-      return { success: true, data: scenario.searchResults };
     }
     return { success: false, error: 'unexpected' };
   });
@@ -770,9 +781,7 @@ describe('UserComparisonModal', () => {
 
       // Under the 2-char minimum: no search is issued.
       await new Promise((r) => setTimeout(r, 700));
-      expect(
-        mockTabsSendMessage.mock.calls.filter(([, m]) => m.action === 'searchUsers'),
-      ).toHaveLength(0);
+      expect(userSearchCalls()).toHaveLength(0);
 
       await userEvent.type(searchInput(), 'xample');
       await screen.findByText('Search Results', {}, { timeout: 3000 });
@@ -792,11 +801,14 @@ describe('UserComparisonModal', () => {
       render(<Harness />);
       await userEvent.type(searchInput(), 'bob');
 
+      // §8: the search now routes through the scheduler (`q=bob`).
       await waitFor(
         () =>
-          expect(mockTabsSendMessage).toHaveBeenCalledWith(
-            TAB_ID,
-            expect.objectContaining({ action: 'searchUsers', query: 'bob' }),
+          expect(mockRuntimeSendMessage).toHaveBeenCalledWith(
+            expect.objectContaining({
+              action: 'scheduleApiRequest',
+              endpoint: '/api/v1/users?q=bob&limit=20',
+            }),
           ),
         { timeout: 3000 },
       );

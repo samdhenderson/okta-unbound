@@ -8,11 +8,11 @@
  * Do NOT "fix" a test here — if the behavior should change, change it in its own
  * commit and flip the matching assertion there.
  *
- * Harness: UsersTab's remaining direct-content reads (searchUsers / getUserGroups /
+ * Harness: UsersTab's remaining direct-content reads (getUserGroups /
  * fetchGroupRules) use raw `chrome.tabs.sendMessage` and bypass the scheduler, so
- * MSW does not apply. Its scheduler path (getUserDetails — §8-migrated — plus the
- * write path: suspend / unsuspend / resetPassword / getUserById / searchGroups /
- * addUserToGroup) goes through the REAL `useOktaApi`
+ * MSW does not apply. Its scheduler path (searchUsers + getUserDetails —
+ * §8-migrated — plus the write path: suspend / unsuspend / resetPassword /
+ * getUserById / searchGroups / addUserToGroup) goes through the REAL `useOktaApi`
  * → `chrome.runtime.sendMessage({ action: 'scheduleApiRequest', endpoint })`. We
  * mock both chrome messaging surfaces (exactly as `GroupsTab.test.tsx` /
  * `hooks/useOktaApi.test.ts` do) and drive the real hook so scheduler traffic and
@@ -102,6 +102,15 @@ function userDetailCalls() {
   return schedulerEndpoints().filter((e) => /^\/api\/v1\/users\/[^/?]+$/.test(e));
 }
 
+/**
+ * §8: strategy-1 (`q=`) scheduler calls — one per committed user-search cycle. The
+ * search issues `search=`/`filter=` fallbacks only when `q=` returns nothing, so
+ * counting `q=` calls is the debounce signal, independent of the fallback chain.
+ */
+function userSearchCalls() {
+  return schedulerEndpoints().filter((e) => /^\/api\/v1\/users\?q=/.test(e));
+}
+
 // ---------------------------------------------------------------------------
 // fixtures
 // ---------------------------------------------------------------------------
@@ -187,7 +196,8 @@ beforeEach(() => {
   userContext.current = { userInfo: null, isLoading: false, oktaOrigin: null };
 
   // sensible defaults; individual tests override.
-  tabRoute('searchUsers', () => ({ success: true, data: [] }));
+  // §8: searchUsers is a scheduler read now (`GET /api/v1/users?q=|search=|filter=`).
+  route(/^\/api\/v1\/users\?/, () => ({ success: true, data: [] }));
   tabRoute('getUserGroups', () => ({ success: true, data: [] }));
   tabRoute('fetchGroupRules', () => ({ success: true, rules: [], stats: {}, conflicts: [] }));
   // §8: getUserDetails is now a scheduler read (`GET /api/v1/users/{id}`); the
@@ -224,53 +234,51 @@ afterEach(() => {
 //    A handleSearch identity regression here fails silently (search stops).
 // ===========================================================================
 describe('user search: 600ms debounce contract', () => {
-  it('fires exactly one searchUsers message 600ms after the last keystroke', async () => {
+  it('fires exactly one scheduler user search 600ms after the last keystroke', async () => {
     useDebounceTimers();
     render(<UsersTab targetTabId={1} />);
-    tabsSendMessage.mockClear();
+    runtimeSendMessage.mockClear();
 
     typeInto(userSearchInput(), 'ada');
 
     await advance(599);
-    expect(tabCalls('searchUsers')).toHaveLength(0);
+    expect(userSearchCalls()).toHaveLength(0);
 
     await advance(1);
-    expect(tabCalls('searchUsers')).toHaveLength(1);
-    expect(tabsSendMessage).toHaveBeenCalledWith(1, { action: 'searchUsers', query: 'ada' });
+    expect(userSearchCalls()).toEqual(['/api/v1/users?q=ada&limit=20']);
   });
 
   it('restarts the 600ms window on every keystroke (only one call fires)', async () => {
     useDebounceTimers();
     render(<UsersTab targetTabId={1} />);
-    tabsSendMessage.mockClear();
+    runtimeSendMessage.mockClear();
     const input = userSearchInput();
 
     setValue(input, 'ad');
     await advance(500);
     setValue(input, 'ada');
     await advance(500);
-    expect(tabCalls('searchUsers')).toHaveLength(0);
+    expect(userSearchCalls()).toHaveLength(0);
 
     await advance(100);
-    expect(tabCalls('searchUsers')).toHaveLength(1);
-    expect(tabsSendMessage).toHaveBeenCalledWith(1, { action: 'searchUsers', query: 'ada' });
+    expect(userSearchCalls()).toEqual(['/api/v1/users?q=ada&limit=20']);
   });
 
   it('does not search for queries shorter than 2 characters', async () => {
     useDebounceTimers();
     render(<UsersTab targetTabId={1} />);
-    tabsSendMessage.mockClear();
+    runtimeSendMessage.mockClear();
 
     typeInto(userSearchInput(), 'a');
     await advance(1000);
 
-    expect(tabCalls('searchUsers')).toHaveLength(0);
+    expect(userSearchCalls()).toHaveLength(0);
   });
 
   it('still fires exactly once when unrelated re-renders happen mid-debounce', async () => {
     useDebounceTimers();
     const { rerender } = render(<UsersTab targetTabId={1} currentGroupId="x0" />);
-    tabsSendMessage.mockClear();
+    runtimeSendMessage.mockClear();
 
     typeInto(userSearchInput(), 'ada');
 
@@ -282,8 +290,7 @@ describe('user search: 600ms debounce contract', () => {
     }
     await advance(600);
 
-    expect(tabCalls('searchUsers')).toHaveLength(1);
-    expect(tabsSendMessage).toHaveBeenCalledWith(1, { action: 'searchUsers', query: 'ada' });
+    expect(userSearchCalls()).toEqual(['/api/v1/users?q=ada&limit=20']);
   });
 
   it('re-searches when targetTabId changes', async () => {
@@ -291,18 +298,21 @@ describe('user search: 600ms debounce contract', () => {
     const { rerender } = render(<UsersTab targetTabId={1} />);
     typeInto(userSearchInput(), 'ada');
     await advance(600);
-    tabsSendMessage.mockClear();
+    runtimeSendMessage.mockClear();
 
     rerender(<UsersTab targetTabId={2} />);
     await advance(600);
 
-    expect(tabCalls('searchUsers')).toHaveLength(1);
-    expect(tabsSendMessage).toHaveBeenCalledWith(2, { action: 'searchUsers', query: 'ada' });
+    expect(userSearchCalls()).toHaveLength(1);
+    // The scheduler message carries the new tab id.
+    expect(runtimeSendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: '/api/v1/users?q=ada&limit=20', tabId: 2 }),
+    );
   });
 
   it('CHARACTERIZED (quirk): backspacing to 1 char leaves stale results on screen', async () => {
     useDebounceTimers();
-    tabRoute('searchUsers', () => ({
+    route(/^\/api\/v1\/users\?q=/, () => ({
       success: true,
       data: [oktaUser({ id: 'u9', profile: { firstName: 'Grace', lastName: 'Hopper' } })],
     }));
@@ -313,11 +323,11 @@ describe('user search: 600ms debounce contract', () => {
     await advance(600);
     expect(screen.getByText('Grace Hopper')).toBeInTheDocument();
 
-    tabsSendMessage.mockClear();
+    runtimeSendMessage.mockClear();
     setValue(input, 'g'); // <2 chars: early-returns WITHOUT clearing searchResults
     await advance(1000);
 
-    expect(tabCalls('searchUsers')).toHaveLength(0);
+    expect(userSearchCalls()).toHaveLength(0);
     expect(screen.getByText('Grace Hopper')).toBeInTheDocument();
 
     setValue(input, ''); // only reaching 0 chars clears the results
@@ -325,7 +335,7 @@ describe('user search: 600ms debounce contract', () => {
     expect(screen.queryByText('Grace Hopper')).not.toBeInTheDocument();
   });
 
-  it('never routes user search through the background scheduler (the §8 bypass)', async () => {
+  it('routes user search through the background scheduler, never a direct content call (§8)', async () => {
     useDebounceTimers();
     render(<UsersTab targetTabId={1} />);
     runtimeSendMessage.mockClear();
@@ -333,8 +343,8 @@ describe('user search: 600ms debounce contract', () => {
     typeInto(userSearchInput(), 'ada');
     await advance(600);
 
-    expect(schedulerEndpoints()).not.toContain('/api/v1/users');
-    expect(runtimeSendMessage).not.toHaveBeenCalled();
+    expect(userSearchCalls()).toHaveLength(1);
+    expect(tabCalls('searchUsers')).toHaveLength(0);
   });
 });
 
@@ -415,7 +425,8 @@ describe('detected user: manual-load banner', () => {
 // ===========================================================================
 describe('membership classification (in-file heuristic)', () => {
   beforeEach(() => {
-    tabRoute('searchUsers', () => ({ success: true, data: [oktaUser()] }));
+    // §8: searchUsers strategy 1 (`q=`) returns the user so selection has a result.
+    route(/^\/api\/v1\/users\?q=/, () => ({ success: true, data: [oktaUser()] }));
   });
 
   it('classifies an APP_GROUP as RULE_BASED regardless of rules', async () => {
