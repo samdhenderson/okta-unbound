@@ -7,9 +7,10 @@
  * `runLifecycle(ruleId, kind)` while preserving the exact audit-entry shape,
  * undo metadata, current-user attribution, and post-mutation reload behavior.
  *
- * @remarks Keeps the raw `chrome.tabs.sendMessage` transport verbatim (the §8
- * scheduler migration is deliberately out of scope here); this file is
- * grandfathered in the ESLint `no-restricted-syntax` override.
+ * @remarks §8: routes through the rate-limited scheduler path — the current-user
+ * lookup via `makeApiRequest('/api/v1/users/me')` and the mutation via
+ * `activateGroupRule`/`deactivateGroupRule` (both `useOktaApi` ops that post
+ * through the background `ApiScheduler`). No direct `chrome.tabs.sendMessage`.
  */
 
 import { useCallback } from 'react';
@@ -17,6 +18,7 @@ import type { FormattedRule, AuditLogEntry } from '../../shared/types';
 import { logAction } from '../../shared/undoManager';
 import { auditStore } from '../../shared/storage/auditStore';
 import { createLogger } from '../../shared/utils/logger';
+import { useOktaApi } from './useOktaApi';
 
 const log = createLogger('RulesTab');
 
@@ -26,7 +28,6 @@ type LifecycleKind = 'activate' | 'deactivate';
 /** Per-kind copy/action wiring, keeping the two flows byte-faithful to the original. */
 const LIFECYCLE = {
   activate: {
-    action: 'activateRule' as const,
     auditAction: 'activate_rule' as const,
     undoType: 'ACTIVATE_RULE' as const,
     gerund: 'Activating',
@@ -35,7 +36,6 @@ const LIFECYCLE = {
     errorLog: 'Activation error:',
   },
   deactivate: {
-    action: 'deactivateRule' as const,
     auditAction: 'deactivate_rule' as const,
     undoType: 'DEACTIVATE_RULE' as const,
     gerund: 'Deactivating',
@@ -78,6 +78,12 @@ export function useRuleLifecycle({
   reload,
   onError,
 }: UseRuleLifecycleOptions): UseRuleLifecycleReturn {
+  // §8: own a useOktaApi slice so both the current-user lookup and the mutation
+  // route through the rate-limited scheduler instead of a direct content call.
+  const { makeApiRequest, activateGroupRule, deactivateGroupRule } = useOktaApi({
+    targetTabId: targetTabId ?? null,
+  });
+
   const runLifecycle = useCallback(
     async (ruleId: string, kind: LifecycleKind) => {
       if (!targetTabId) return;
@@ -91,11 +97,7 @@ export function useRuleLifecycle({
 
         // Get current user for audit logging
         try {
-          const userResponse = await chrome.tabs.sendMessage(targetTabId, {
-            action: 'makeApiRequest',
-            endpoint: '/api/v1/users/me',
-            method: 'GET',
-          });
+          const userResponse = await makeApiRequest('/api/v1/users/me');
           if (userResponse.success && userResponse.data) {
             currentUserEmail = userResponse.data.profile?.email || 'unknown@unknown.com';
           }
@@ -109,10 +111,9 @@ export function useRuleLifecycle({
         const groupIds = rule?.groupIds || [];
         const groupNames = rule?.groupNames || [];
 
-        const response = await chrome.tabs.sendMessage(targetTabId, {
-          action: cfg.action,
-          ruleId,
-        });
+        const response = await (kind === 'activate'
+          ? activateGroupRule(ruleId)
+          : deactivateGroupRule(ruleId));
 
         if (response.success) {
           // Log undo action
@@ -201,7 +202,7 @@ export function useRuleLifecycle({
         });
       }
     },
-    [targetTabId, rules, reload, onError],
+    [targetTabId, rules, reload, onError, makeApiRequest, activateGroupRule, deactivateGroupRule],
   );
 
   const activateRule = useCallback(

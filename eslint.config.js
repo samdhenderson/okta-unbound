@@ -122,10 +122,10 @@ export default [
       // GroupsTab's live search moved into this hook during its §7 decomposition;
       // the bypass itself is untouched and still migrates in §8.
       'src/sidepanel/hooks/useGroupLiveSearch.ts',
-      // RulesTab's rule fetch + activate/deactivate moved into these hooks during
-      // its §7 decomposition; the bypass itself is untouched and still migrates in §8.
+      // RulesTab's rule fetch moved into this hook during its §7 decomposition;
+      // the bypass itself is untouched and still migrates in §8.
+      // (useRuleLifecycle.ts migrated onto the scheduler in §8 — removed here.)
       'src/sidepanel/hooks/useRulesData.ts',
-      'src/sidepanel/hooks/useRuleLifecycle.ts',
     ],
     rules: {
       'no-restricted-syntax': 'off',

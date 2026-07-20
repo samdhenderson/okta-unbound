@@ -160,21 +160,16 @@ beforeEach(() => {
   vi.clearAllMocks();
   rulesCacheGet.mockResolvedValue(null);
   loadTabState.mockResolvedValue(null);
-  // Default: a rules fetch returns two rules; /users/me + lifecycle calls succeed.
+  // Default: the rules fetch (still the one direct content call — useRulesData,
+  // §8-pending) returns two rules.
   tabsSendMessage.mockImplementation(async (_tabId: number, msg: { action: string }) => {
-    switch (msg.action) {
-      case 'fetchGroupRules':
-        return fetchResponse([rule(), rule({ id: 'r2', name: 'Sales Rule', status: 'INACTIVE' })]);
-      case 'makeApiRequest':
-        return { success: true, data: { profile: { email: 'admin@corp.com' } } };
-      case 'activateRule':
-      case 'deactivateRule':
-        return { success: true };
-      default:
-        return { success: true };
+    if (msg.action === 'fetchGroupRules') {
+      return fetchResponse([rule(), rule({ id: 'r2', name: 'Sales Rule', status: 'INACTIVE' })]);
     }
+    return { success: true };
   });
-  // Scheduler path (captureRuleImpact) resolves empty so the modal settles.
+  // Scheduler path resolves success/empty so captureRuleImpact + the §8-migrated
+  // /users/me lookup and activate/deactivate mutations all settle.
   runtimeSendMessage.mockResolvedValue({ success: true, data: [], headers: {} });
 });
 
@@ -220,8 +215,16 @@ describe('RulesTab characterization', () => {
     await waitFor(() => expect(screen.getByTestId('rule-r2')).toBeInTheDocument());
 
     await userEvent.click(screen.getByRole('button', { name: 'activate r2' }));
+    // §8: the mutation now routes through the scheduler (POST to the lifecycle
+    // endpoint) rather than a direct `activateRule` content-script message.
     await waitFor(() =>
-      expect(tabsSendMessage).toHaveBeenCalledWith(1, { action: 'activateRule', ruleId: 'r2' }),
+      expect(runtimeSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'scheduleApiRequest',
+          endpoint: '/api/v1/groups/rules/r2/lifecycle/activate',
+          method: 'POST',
+        }),
+      ),
     );
   });
 
@@ -234,12 +237,21 @@ describe('RulesTab characterization', () => {
     await userEvent.click(screen.getByRole('button', { name: 'deactivate r1' }));
     const modal = await screen.findByTestId('impact-modal');
     expect(modal).toHaveAttribute('data-mode', 'deactivate');
-    expect(tabsSendMessage).not.toHaveBeenCalledWith(1, { action: 'deactivateRule', ruleId: 'r1' });
+    const deactivateEndpoint = '/api/v1/groups/rules/r1/lifecycle/deactivate';
+    expect(runtimeSendMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: deactivateEndpoint }),
+    );
 
-    // Confirming commits the deactivation.
+    // Confirming commits the deactivation (POST via the scheduler).
     await userEvent.click(screen.getByRole('button', { name: 'confirm-deactivate' }));
     await waitFor(() =>
-      expect(tabsSendMessage).toHaveBeenCalledWith(1, { action: 'deactivateRule', ruleId: 'r1' }),
+      expect(runtimeSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'scheduleApiRequest',
+          endpoint: deactivateEndpoint,
+          method: 'POST',
+        }),
+      ),
     );
   });
 
@@ -251,7 +263,9 @@ describe('RulesTab characterization', () => {
     await userEvent.click(screen.getByRole('button', { name: 'preview r1' }));
     const modal = await screen.findByTestId('impact-modal');
     expect(modal).toHaveAttribute('data-mode', 'preview');
-    expect(tabsSendMessage).not.toHaveBeenCalledWith(1, { action: 'deactivateRule', ruleId: 'r1' });
+    expect(runtimeSendMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: '/api/v1/groups/rules/r1/lifecycle/deactivate' }),
+    );
   });
 
   it('filters the list by search query', async () => {
