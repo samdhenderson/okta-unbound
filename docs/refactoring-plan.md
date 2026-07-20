@@ -154,10 +154,19 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
       no-explicit-any warnings 82→26. The 4 remaining in-scope are intentional
       (`ApiResponse`/`MessageResponse` `<T = any>` defaults, the org-extensible
       `profile` index signature, `RequestResult.data` raw payload).
-- [ ] Flip `@typescript-eslint/no-explicit-any` `warn`→`error` (ADR-0004/0006) —
-      **blocked on §7**: 19 `any`s remain only in the god components
-      (UsersTab/GroupsTab/RulesTab/BulkOperationsPanel), which decompose in §7; flip
-      once those clear (plus the 4 intentional ones get `eslint-disable` w/ reason).
+- [x] **Flipped `@typescript-eslint/no-explicit-any` `warn`→`error` (this session,
+      ADR-0004/0006).** §7 cleared the god-component `any`s; the last production holder
+      was `BulkOperationsPanel`'s `executeBulkOperation` prop (`operation: any` /
+      `Promise<any[]>` / `config?: any`), now typed against the shared
+      `BulkOperation`/`BulkOperationResult`. The 4 intentional survivors each got a
+      reason-annotated inline `eslint-disable` (`OktaUser.profile` index signature, the
+      `ApiResponse`/`MessageResponse` `<T = any>` defaults, `RequestResult.data`). Added
+      a test/setup-file override turning the rule `off` (mirrors the `no-console` one, so
+      mocks/fixtures may use `any`); removed the 3 now-unused inline `no-explicit-any`
+      disables that override made redundant (`content/index.test.ts`, `RulesTab.test.tsx`,
+      `UserComparisonModal.test.tsx`). `npm run lint` is 0 errors; a new production `any`
+      now fails the build. `--max-warnings=0` CI mode stays deferred (94 warn-level
+      legacy problems remain — see ADR-0004).
 - Doc: `docs/development.md` + `docs/architecture.md`. Agents: `test-writer`
   (schema tests), `security-logging-reviewer`.
 - Done when: hot-path responses validated; `any` count near zero; rule flipped.
@@ -376,9 +385,10 @@ per `docs/component-explorer.md`'s templates.
 
 ## Known debt surfaced, not yet actioned (session 4/5)
 
-- The 269 characterization tests added ~34 `any`s (repo-wide `no-explicit-any` 26→60),
-  **all in test files**. The §6 `warn`→`error` flip needs a **test-file override** for
-  `no-explicit-any` (mirror the existing `no-console` test override).
+- ~~The 269 characterization tests added ~34 `any`s (repo-wide `no-explicit-any`
+  26→60), **all in test files**. The §6 flip needs a **test-file override** for
+  `no-explicit-any`.~~ **DONE (§6 flip session):** the test/setup override was added
+  (mirrors `no-console`, rule `off`), so test-file `any`s no longer block the flip.
 - `npm run lint` does **not** cover `scripts/`. `npx eslint .` finds a live **parsing
   error at `scripts/build.js:109`** — pre-existing; the current gate can't see it.
 - Guardrail (learned the hard way): **always put a hard external timeout around any

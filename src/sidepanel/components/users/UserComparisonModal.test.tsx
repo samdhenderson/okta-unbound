@@ -34,7 +34,6 @@ globalThis.chrome = {
   storage: {
     local: { get: mockStorageGet, set: mockStorageSet, remove: mockStorageRemove },
   },
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } as any;
 
 // addUserToGroup writes an audit entry on success; not under test here.

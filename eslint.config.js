@@ -64,7 +64,11 @@ export default [
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'off', // Using TypeScript for type checking
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
-      '@typescript-eslint/no-explicit-any': 'warn',
+      // No-`any` policy (ADR-0004/0006): the message/API-layer burndown is done and
+      // the §7 god components are decomposed, so every production `any` is now either
+      // gone or an intentional, reason-annotated `eslint-disable`. Flipped warn→error.
+      // Exceptions: test/setup files (mocks) via the override block below.
+      '@typescript-eslint/no-explicit-any': 'error',
       // React Compiler rules - these are performance suggestions, not bugs
       // Setting state in effects is valid React when done intentionally
       'react-hooks/rules-of-hooks': 'error',
@@ -127,11 +131,13 @@ export default [
       'no-restricted-syntax': 'off',
     },
   },
-  // Tests may spy on / stub console (e.g. suppressing expected warnings).
+  // Tests may spy on / stub console (e.g. suppressing expected warnings) and use
+  // `any` in mocks/fixtures where modelling the full Okta shape adds no value.
   {
     files: ['**/*.test.{ts,tsx}', 'src/test/**/*.{ts,tsx}'],
     rules: {
       'no-console': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
   // Storybook stories: CSF requires a default export (the `meta`) alongside the

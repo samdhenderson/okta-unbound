@@ -71,6 +71,9 @@ export interface SchedulerState {
  */
 export interface RequestResult {
   success: boolean;
+  // Raw transport payload — the scheduler is response-shape-agnostic; the actual
+  // Okta JSON is validated at the content-script zod boundary before use.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data?: any;
   error?: string;
   headers?: Record<string, string>;
