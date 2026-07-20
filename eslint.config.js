@@ -118,7 +118,7 @@ export default [
       'src/sidepanel/hooks/useUsersTabSearch.ts',
       'src/sidepanel/hooks/useDetectedUser.ts',
       'src/sidepanel/hooks/useUserMemberships.ts',
-      'src/sidepanel/components/overview/UserOverview.tsx',
+      // (UserOverview.tsx migrated its getUserDetails read onto the scheduler in §8.)
       // RulesTab's rule fetch moved into this hook during its §7 decomposition;
       // the bypass itself is untouched and still migrates in §8.
       // (useRuleLifecycle.ts migrated onto the scheduler in §8 — removed here.)

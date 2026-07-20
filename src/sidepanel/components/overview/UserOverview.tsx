@@ -12,6 +12,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import StatCard from './shared/StatCard';
 import { UserProfileCard, UserComparisonModal } from '../users';
 import { useUserMemberships } from '../../hooks/useUserMemberships';
+import { useOktaApi } from '../../hooks/useOktaApi';
 import { useEntityQuery } from '../../cache/useEntityQuery';
 import AlertMessage from '../shared/AlertMessage';
 import Button from '../shared/Button';
@@ -44,6 +45,9 @@ const UserOverview: React.FC<UserOverviewProps> = ({
 }) => {
   const [isCompareOpen, setIsCompareOpen] = useState(false);
 
+  // §8: read the user through the rate-limited scheduler path.
+  const { makeApiRequest } = useOktaApi({ targetTabId });
+
   // User details from the shared entity cache: re-navigating back to this user
   // (or returning from another tab) serves instantly with no refetch.
   const {
@@ -53,10 +57,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
   } = useEntityQuery<OktaUser>(
     ['userDetails', userId],
     async () => {
-      const userResponse = await chrome.tabs.sendMessage(targetTabId, {
-        action: 'getUserDetails',
-        userId,
-      });
+      const userResponse = await makeApiRequest(`/api/v1/users/${userId}`);
       if (!userResponse.success || !userResponse.data) {
         throw new Error(userResponse.error || 'Failed to load user details');
       }

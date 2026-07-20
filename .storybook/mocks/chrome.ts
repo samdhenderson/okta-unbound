@@ -109,6 +109,9 @@ function respondToTabAction(message?: { action?: string }): unknown {
 const chromeFake = {
   runtime: {
     // Scheduler/provider round-trips resolve to a benign, well-formed payload.
+    // (Reads that route through the scheduler are answered by the mocked
+    // `useOktaApi` facade — see mocks/useOktaApi.mock.ts — not this fake, because
+    // Storybook aliases the facade module.)
     sendMessage: (_message?: any) => Promise.resolve({ ok: true }),
     onMessage: listenerSlot,
     getURL: (path: string) => `chrome-extension://storybook-mock/${path}`,
