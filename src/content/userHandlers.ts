@@ -12,9 +12,16 @@
  * @see `content/index` for message routing.
  */
 
-import type { MessageResponse, OktaUser, OktaGroup, UserInfo, UserStatus } from '../shared/types';
+import type { MessageResponse, OktaUser, UserInfo, UserStatus } from '../shared/types';
 import { createLogger } from '../shared/utils/logger';
-import { oktaUserSchema, parseOkta } from '../shared/schemas/okta';
+import {
+  oktaUserSchema,
+  oktaUserListItemSchema,
+  oktaGroupListItemSchema,
+  parseOkta,
+  parseOktaList,
+  type OktaGroupListItem,
+} from '../shared/schemas/okta';
 import { extractUserIdFromUrl, extractUserNameFromPage } from './pageContext';
 import { handleMakeApiRequest } from './apiRequest';
 
@@ -127,7 +134,7 @@ export async function handleSearchUsers(query: string): Promise<MessageResponse>
     let response = await handleMakeApiRequest(qSearchUrl, 'GET');
 
     if (response.success && response.data && response.data.length > 0) {
-      users = response.data;
+      users = parseOktaList(oktaUserListItemSchema, response.data, 'GET /api/v1/users?q');
       log.debug('Found users with q search', { count: users.length });
     } else {
       // Strategy 2: If 'q' doesn't work, try 'search' parameter (prefix search)
@@ -138,7 +145,7 @@ export async function handleSearchUsers(query: string): Promise<MessageResponse>
       response = await handleMakeApiRequest(searchUrl, 'GET');
 
       if (response.success && response.data) {
-        users = response.data;
+        users = parseOktaList(oktaUserListItemSchema, response.data, 'GET /api/v1/users?search');
         log.debug('Found users with search parameter', { count: users.length });
       }
     }
@@ -150,7 +157,7 @@ export async function handleSearchUsers(query: string): Promise<MessageResponse>
       response = await handleMakeApiRequest(filterUrl, 'GET');
 
       if (response.success && response.data) {
-        users = response.data;
+        users = parseOktaList(oktaUserListItemSchema, response.data, 'GET /api/v1/users?filter');
         log.debug('Found users with email filter', { count: users.length });
       }
     }
@@ -183,7 +190,7 @@ export async function handleGetUserGroups(userId: string): Promise<MessageRespon
   log.debug('Processing getUserGroups request', { userId });
 
   try {
-    let allGroups: OktaGroup[] = [];
+    let allGroups: OktaGroupListItem[] = [];
     let nextUrl: string | null = `/api/v1/users/${userId}/groups?limit=200`;
 
     // Fetch all groups with pagination
@@ -194,7 +201,9 @@ export async function handleGetUserGroups(userId: string): Promise<MessageRespon
         return response;
       }
 
-      allGroups = allGroups.concat(response.data || []);
+      allGroups = allGroups.concat(
+        parseOktaList(oktaGroupListItemSchema, response.data, 'GET /api/v1/users/{id}/groups'),
+      );
 
       // Parse next link from headers
       nextUrl = null;
@@ -322,11 +331,15 @@ export async function handleGetUserDetails(userId: string): Promise<MessageRespo
       return response;
     }
 
+    // Single-entity read: validate strictly (mirrors handleGetUserInfo). A shape
+    // mismatch throws and is caught below as a clean error, not a mystery crash.
+    const user = parseOkta(oktaUserSchema, response.data, 'GET /api/v1/users/{id}');
+
     log.debug('Retrieved user details');
 
     return {
       success: true,
-      data: response.data,
+      data: user,
     };
   } catch (error) {
     log.error('getUserDetails error', error);

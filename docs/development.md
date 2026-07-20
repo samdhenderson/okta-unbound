@@ -23,13 +23,14 @@
   `no-console` is an ESLint `error` with a narrow exception only for the logger
   module itself (ADR-0004).
 - **Never log secrets or payloads** — no XSRF tokens, no request/response bodies,
-  no user PII. (Current leaks: `useOktaApi/core.ts:30-32`, `content/index.ts:182-184`.)
+  no user PII. `apiRequest.ts` logs only whether a token is `{ present: boolean }`,
+  never its value.
 - Log levels are gated by build mode; debug logs must not ship enabled in production.
 
 ## Type safety policy
 
-- `strict` is on. **No new `any`.** `@typescript-eslint/no-explicit-any` becomes an
-  `error` after the boundary-validation burndown (ADR-0004/0006).
+- `strict` is on. **No new `any`.** `@typescript-eslint/no-explicit-any` is an
+  ESLint `error` (ADR-0004/0006).
 - Validate external data (Okta responses) at the boundary with **zod**; use inferred
   types instead of hand-written `any`-laden interfaces.
 
@@ -67,15 +68,15 @@ type-check gate, not a follow-up.
   a parallel `storybook` job that builds the docs site and runs the browser story
   tests (ADR-0010/0011) — a broken story fails the PR. Green CI is required to merge.
   The docs site deploys to GitHub Pages on `main` (`deploy-pages.yml`). The
-  `--max-warnings=0` lint mode stays deferred while ~90 warn-level legacy problems
-  remain (ADR-0004) — the gate is 0 _errors_, not 0 warnings.
+  `--max-warnings=0` lint mode stays deferred while a small number of warn-level
+  legacy lint items remain (ADR-0004) — the gate is 0 _errors_, not 0 warnings.
 - `beta-release.yml` remains tag-triggered for releases — don't repurpose it for PRs.
 
 ## Versioning
 
 `package.json` `version` is the single source of truth (ADR-0007). The manifest
-version is derived at build; runtime reads one injected constant. **Never hardcode a
-version** (remove `'0.3.0'` in `background/index.ts:210,221`).
+version is derived at build; the background reads it at runtime via
+`chrome.runtime.getManifest().version`. **Never hardcode a version.**
 
 ## Conventions
 
@@ -85,4 +86,3 @@ version** (remove `'0.3.0'` in `background/index.ts:210,221`).
   don't mix throw/return/swallow for the same layer.
 - Deduplicate shared logic (`isOktaUrl`, date formatting) into `shared/utils` — don't
   copy-paste.
-- Fill real repo/author metadata in `package.json` (currently placeholders).

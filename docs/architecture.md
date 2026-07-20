@@ -9,7 +9,7 @@ Chrome MV3 side-panel extension. React 19 + TS 5.9 + Tailwind v4, bundled by Vit
 | --------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------- |
 | Side panel (UI)             | `src/sidepanel/`          | React app: tabs, components, hooks, contexts                                                   |
 | Background (service worker) | `src/background/index.ts` | Context menus, alarms, notifications, downloads, and the global `ApiScheduler`                 |
-| Content script              | `src/content/index.ts`    | Injected on Okta pages; the only place with the authenticated session; does the actual `fetch` |
+| Content script              | `src/content/index.ts`    | Injected on Okta pages; the only place with the authenticated session; does the actual `fetch` (decomposed — see below) |
 | Shared                      | `src/shared/`             | Cross-context logic: types, cache, rule engine, scheduler, storage, utils                      |
 
 ## Message-passing pipeline
@@ -19,11 +19,19 @@ Side panel (useOktaApi)  →  Background (ApiScheduler: rate limit, retry, backo
 ```
 
 - **API calls only happen in the content script**, which holds the live Okta
-  session cookies + XSRF token (scraped from the DOM, never persisted). No tokens
-  are stored anywhere. Keep it that way.
-- **All API traffic must go through the scheduler path.** There is a second, direct
-  side-panel→content path (`useOktaApi/core.ts:31`) that **bypasses rate limiting** —
-  do not add new direct calls; migrate existing ones onto the scheduler.
+  session cookies + XSRF token (scraped from the DOM at fetch time by `getXsrfToken`
+  in `apiRequest.ts`, never persisted). No tokens are stored anywhere. Keep it that
+  way.
+- The content script is decomposed: `src/content/index.ts` is a ~255-line router
+  that dispatches messages to handler modules (`apiRequest.ts`, `groupHandlers.ts`,
+  `userHandlers.ts`, `ruleHandlers.ts`, `pageContext.ts`, `exportHelpers.ts`,
+  `indicator.ts`). The only raw Okta `fetch(` lives in `apiRequest.ts`.
+- **All raw Okta API traffic must go through the scheduler path.** `makeApiRequest`
+  (`useOktaApi/core.ts`) routes every Okta call through the background scheduler — do
+  not add side-panel→content calls that fetch Okta directly and bypass rate limiting.
+  Direct `sendMessage` to the content script is the legitimate transport for
+  non-API content-script messages (e.g. streaming a CSV export to a download); it
+  carries no raw Okta API traffic.
 - `ApiScheduler` (`shared/scheduler/apiScheduler.ts`): priority queue, concurrency
   cap (5), cooldowns, exponential backoff, rate-limit detection.
 - **Cancellation** is one signal end to end (ADR-0008):
@@ -40,10 +48,11 @@ Side panel (useOktaApi)  →  Background (ApiScheduler: rate limit, retry, backo
 
 ## The API client: `useOktaApi/`
 
-`src/sidepanel/hooks/useOktaApi/` is a factory decomposed into ~13 focused modules
+`src/sidepanel/hooks/useOktaApi/` is a factory decomposed into 14 focused modules
 (`core`, `groupMembers`, `groupBulkOps`, `groupCleanup`, `groupDiscovery`,
-`groupAnalysis`, `userOperations`, `exportOperations`, `pushGroupOps`, `utilities`,
-`types`, `index`). `core.ts` exposes `makeApiRequest` (via background) and
+`groupAnalysis`, `ruleImpact`, `ruleWrites`, `userOperations`, `exportOperations`,
+`pushGroupOps`, `utilities`, `types`, `index`). `core.ts` exposes `makeApiRequest`
+(via background) and
 `sendMessage` (direct to content). **This module layout is the reference pattern**
 for decomposing other large areas — extend it, don't reinvent it.
 
@@ -51,7 +60,7 @@ for decomposing other large areas — extend it, don't reinvent it.
 
 Pure React — hooks + two contexts (`SchedulerContext`, `ProgressContext`). No
 Redux/Zustand/React Query. See [state-management.md](./state-management.md) for the
-hook-vs-context-vs-local decision and the god-component decomposition target.
+hook-vs-context-vs-local decision and how the god components were decomposed.
 
 ## Persistence
 

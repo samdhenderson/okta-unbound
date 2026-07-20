@@ -112,6 +112,7 @@ should be reviewed with `security-logging-reviewer`.
 | Refactoring a god component / pipeline / hooks | `docs/architecture.md`, `docs/state-management.md` | `architecture-refactor`     |
 | Adding / fixing tests                          | `docs/testing.md`                                  | `test-writer`               |
 | Logging / secrets / validation / `any` removal | `docs/development.md`                              | `security-logging-reviewer` |
+| Security posture / threat model / controls     | `docs/security.md`                                 | `security-logging-reviewer` |
 | Build / lint / CI / release / versioning       | `docs/development.md`                              | —                           |
 | Documenting code / TypeDoc / API comments      | `docs/development.md`                              | `docs-maintainer`           |
 | Writing / updating a spec or ADR               | `docs/README.md` + the affected doc                | `docs-maintainer`           |
@@ -121,9 +122,8 @@ should be reviewed with `security-logging-reviewer`.
 
 The 2026-07 maintainability overhaul (format/lint/coverage gates, `console`→logger,
 shared-primitive migration, `error`→`danger`, zod boundary, god-component
-decomposition, scheduler transport unification) is **done**. The point-in-time
-baseline is archived in `docs/audit/`; the _why_ behind each decision is in
-`docs/adr/`. A few accepted deferrals remain as future work, recorded topically at
+decomposition, scheduler transport unification) is **done**. The _why_ behind each
+decision is in `docs/adr/`. A few accepted deferrals remain as future work, recorded topically at
 their natural home rather than a central backlog: list-path zod validation
 ([adr/0006](docs/adr/0006-zod-boundary-validation.md)), the Storybook a11y
 `todo`→`error` promotion ([adr/0011](docs/adr/0011-storybook-single-docs-site.md)),
@@ -132,8 +132,8 @@ and the remaining raw-control exceptions / a future `TextLink` primitive
 
 ## Where things are
 
-- Specs: `docs/` (index at `docs/README.md`). Decisions: `docs/adr/`. Baseline
-  audit + backlog: `docs/audit/`.
+- Specs: `docs/` (index at `docs/README.md`). Decisions: `docs/adr/`. Feature
+  backlog: `docs/features-plan.md`.
 - Shared UI: `src/sidepanel/components/shared/`. Icons: `overview/shared/Icon.tsx`.
 - API client: `src/sidepanel/hooks/useOktaApi/` (module-per-concern pattern).
 - Shared utils: `src/shared/utils/` (`logger`, `oktaUrl`, `dateFormat`, …).

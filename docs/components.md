@@ -12,10 +12,10 @@ Feature components live under `components/{groups,users,overview}/`.
    missing (e.g. a filter chip / toggle), add a variant to the shared component —
    don't inline bespoke classes. The only remaining raw controls are the
    **documented exceptions** listed below.
-2. **Import from the barrel** `components/shared` — not deep paths. The barrel must
-   export every shared component (currently incomplete — see below).
+2. **Import from the barrel** `components/shared` — not deep paths. The barrel
+   exports every shared component (see below).
 3. **No raw hex / no ad-hoc spacing** — see [design-system.md](./design-system.md).
-4. **Icons come from the `Icon` registry** (`overview/shared/Icon.tsx`, 25 typed
+4. **Icons come from the `Icon` registry** (`overview/shared/Icon.tsx`, 27 typed
    icons, `currentColor`). Don't inline `<svg>` in feature code.
 
 ## The variant/size convention
@@ -31,8 +31,8 @@ const sizeClasses: Record<FooSize, string> = { sm: '…', md: '…', lg: '…' }
 ```
 
 - Size scale is `sm | md | lg`. Express sizing in Tailwind classes only — do **not**
-  add parallel inline pixel `style` maps (Button currently does this at
-  `Button.tsx:58-62,96`; collapse it).
+  add parallel inline pixel `style` maps (`Button.tsx` is the model: its sizing is
+  class-based).
 - Variant/status names use the shared `StatusType` (`success | warning | danger |
 info`) — never `error`.
 

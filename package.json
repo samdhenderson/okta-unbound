@@ -36,7 +36,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/shsamhenderson/okta-unbound.git"
+    "url": "git+https://github.com/samdhenderson/okta-unbound.git"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.2.1",
@@ -86,9 +86,9 @@
     "doc": "docs"
   },
   "bugs": {
-    "url": "https://github.com/shsamhenderson/okta-unbound/issues"
+    "url": "https://github.com/samdhenderson/okta-unbound/issues"
   },
-  "homepage": "https://github.com/shsamhenderson/okta-unbound#readme",
+  "homepage": "https://github.com/samdhenderson/okta-unbound#readme",
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
     "idb": "^8.0.3",

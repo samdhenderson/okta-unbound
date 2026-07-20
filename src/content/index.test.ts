@@ -214,6 +214,7 @@ beforeEach(async () => {
 
   globalThis.chrome = {
     runtime: {
+      id: 'test-extension',
       onMessage: { addListener, removeListener: vi.fn() },
       sendMessage: vi.fn(),
       getURL: vi.fn((p: string) => `chrome-extension://mock-id/${p}`),
@@ -277,6 +278,33 @@ describe('message router', () => {
 
   it('handles all 14 known actions plus an unknown one', () => {
     expect(allActions).toHaveLength(14);
+  });
+
+  it('ignores a message whose sender.id differs from chrome.runtime.id', () => {
+    const sendResponse = vi.fn();
+    // A foreign extension / web page sender must be dropped before any branch:
+    // no sendResponse, and a synchronous `false` so the channel closes.
+    const returned = listener(
+      { action: 'getOktaOrigin' } as MessageRequest,
+      { id: 'some-other-extension' } as chrome.runtime.MessageSender,
+      sendResponse,
+    );
+
+    expect(returned).toBe(false);
+    expect(sendResponse).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('handles a same-extension message normally (sender.id matches chrome.runtime.id)', () => {
+    const sendResponse = vi.fn();
+    const returned = listener(
+      { action: 'getOktaOrigin' } as MessageRequest,
+      { id: 'test-extension' } as chrome.runtime.MessageSender,
+      sendResponse,
+    );
+
+    expect(returned).toBe(true);
+    expect(sendResponse).toHaveBeenCalledWith({ success: true, data: ORIGIN });
   });
 
   it('returns true and reports Unknown action for an unrecognized action', async () => {
@@ -1794,18 +1822,33 @@ describe('getUserContext', () => {
 // ============================================================================
 
 describe('getUserDetails', () => {
-  it('re-wraps success, DROPPING headers and status (no zod validation)', async () => {
-    const raw = { id: USER_ID, status: 'BOGUS_STATUS', profile: {} };
+  it('re-wraps a valid success, DROPPING headers and status', async () => {
+    const raw = makeUser();
     routeFetch([
       [`/api/v1/users/${USER_ID}`, () => res(raw, { headers: { 'x-rate-limit-remaining': '9' } })],
     ]);
 
     const result = await send({ action: 'getUserDetails', userId: USER_ID }).response;
 
-    // Unvalidated passthrough — a schema-violating payload sails right through.
+    // Single-entity read: the valid user is zod-validated then re-wrapped; the
+    // re-wrap drops headers and status.
     expect(result).toEqual({ success: true, data: raw });
     expect(result).not.toHaveProperty('headers');
     expect(result).not.toHaveProperty('status');
+  });
+
+  it('now rejects a schema-violating payload (ADR-0006 gap closed)', async () => {
+    // Previously this sailed through unvalidated; getUserDetails is a single-entity
+    // read and now validates with strict parseOkta like getUserInfo.
+    const raw = { id: USER_ID, status: 'BOGUS_STATUS', profile: {} };
+    routeFetch([[`/api/v1/users/${USER_ID}`, () => res(raw)]]);
+
+    const result = await send({ action: 'getUserDetails', userId: USER_ID }).response;
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/validation failed/);
+    // The offending status value is never echoed into the error (no PII leak).
+    expect(JSON.stringify(result)).not.toContain('BOGUS_STATUS');
   });
 
   it('passes a FAILED ApiResponse through verbatim (status + data preserved)', async () => {

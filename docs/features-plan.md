@@ -5,14 +5,14 @@ work, whose 2026-07 overhaul is complete — see `CLAUDE.md` and `docs/adr/`). T
 a living catalog: add ideas, check items off, record why something was parked so it
 isn't re-litigated.
 
-These began as six raw ideas and were pruned against what the extension can actually
-do cheaply. The single fact that reshapes everything: **the write surface is narrow
-and the session is single-tenant**. Today the app can `suspend`/`unsuspend` users,
-`resetPassword(sendEmail=true)`, add/remove group members, run bulk group ops, and
-`activate`/`deactivate` rules. It has **no** profile write, no user `activate`/
-`reactivate`, no rule create/update/delete, no app-push writes, and no policy ops.
-Every API call targets one browser tab's Okta session — two tenants at once is
-impossible. See [architecture.md](./architecture.md).
+The single fact that reshapes everything: **the write surface is narrow and the session
+is single-tenant**. Today the app can `suspend`/`unsuspend` users,
+`resetPassword(sendEmail=true)`, add/remove group members, run bulk group ops,
+`activate`/`deactivate` rules, and — since Feature A4 — **create / delete group rules**
+(zod-validated, via the safe create → activate → retire sequence). It still has **no**
+profile write, no user `activate`/`reactivate`, no in-place rule edit, no app-push
+writes, and no policy ops. Every API call targets one browser tab's Okta session — two
+tenants at once is impossible. See [architecture.md](./architecture.md).
 
 **Ground rules for every feature below** (the code must satisfy these):
 
@@ -43,11 +43,10 @@ Status legend: `[ ]` todo · `[~]` partially done · `[x]` done.
 | List entry (paste/search → chips)       | `Textarea`, `Input`, `SelectionChips`, `ComparisonSearchPhase`         | `components/shared/`, `users/comparison/`                    |
 | Confirm / destructive gate              | shared `Modal`                                                         | `components/shared/Modal.tsx`                                |
 | Audit + undo                            | `logAction`, `logBulkRemoveAction`, `AuditLogViewer`                   | `shared/undoManager.ts`, `components/AuditLogViewer.tsx`     |
-| Action CTAs                             | `QuickActionsPanel`                                                    | `components/overview/shared/QuickActionsPanel.tsx`           |
-| Group analysis (overlap/staleness)      | `compareGroups`, `calculateStaleness`, `getAllGroups` (`expand=stats`) | `hooks/useOktaApi/groupAnalysis.ts`, `groupDiscovery.ts`     |
-| Rule read + activate/deactivate         | `getGroupRulesForGroup`; `handleActivateRule/DeactivateRule`           | `groupDiscovery.ts`, `content/index.ts`                      |
+| Rule read + write                       | `getGroupRulesForGroup`; `ruleWrites` (create/delete/(de)activate)     | `groupDiscovery.ts`, `hooks/useOktaApi/ruleWrites.ts`        |
+| Population diff (who gains/loses)       | `classifyGroupImpact`, `summarizeRuleImpact`                           | `shared/membership/ruleImpact.ts`                            |
 
-Two new shared primitives are worth building **once** and reusing across A/C/D:
+The two primitives worth building **once** and reusing across C/D:
 
 - **`BulkTargetList`** — paste/CSV or search → resolve via `searchUsers`/`getUserById`
   → removable chips, unresolved entries flagged. Add **saved named lists** (persist in
@@ -61,9 +60,9 @@ Two new shared primitives are worth building **once** and reusing across A/C/D:
 
 | Feature                                | Effort | Impact   | Verdict                        |
 | -------------------------------------- | ------ | -------- | ------------------------------ |
-| A. Orphan/Clutter + Rule Consolidation | M      | High     | **Build (flagship)**           |
-| B. Rule Impact Preview                 | L–M    | High     | **Build**                      |
-| C. Bulk Attribute Editor               | M      | High     | **Build**                      |
+| A. Orphan/Clutter + Rule Consolidation | M      | High     | `[x]` **Shipped (flagship)**   |
+| B. Rule Impact Preview                 | L–M    | High     | `[x]` **Shipped**              |
+| C. Bulk Attribute Editor               | M      | High     | `[ ]` **Build (next)**         |
 | D. Bulk Lifecycle Console              | M      | Med–High | Fast follow                    |
 | E. Group Push deploy                   | H      | Med      | Parked                         |
 | F. OEL Sandbox (full)                  | H      | Med      | Parked (B is the cheap slice)  |
@@ -71,147 +70,39 @@ Two new shared primitives are worth building **once** and reusing across A/C/D:
 
 ---
 
-## A. `[x]` Orphan / Clutter Remediation + Rule Consolidation — flagship
+## Shipped (A + B)
 
-**All four sub-features delivered** on branch `claude/high-impact-features` (A1 read-only
-triage, A2 membership-source insight, A3 group merge, A4 rule consolidation). Per-feature
-"Delivered" notes are inline below.
+**A. Orphan / Clutter Remediation + Rule Consolidation — flagship** `[x]`
+All four sub-features landed; the _why_ is captured in the code and ADRs.
 
-Directories accumulate duplicate-name, empty, and rule-orphaned groups; admins have no
-consolidated view, and Okta's UI blocks adding target groups to an existing rule.
+- **A1 — Cleanup triage** (`groups/clutterAnalysis.ts::analyzeClutter`): a pure, tested
+  classifier over the loaded `GroupSummary[]` fuses empty / duplicate-name / stale /
+  missing-description into one 0–100 review score. Surfaced as a **Cleanup** panel inside
+  the Groups tab whose category counts are one-click selectors into the existing
+  selection → bulk/export machinery — no new mutation surface.
+- **A2 — Membership-source insight** (`GroupSourceModal` + `useGroupSource` +
+  `shared/membership/groupSource.ts`): per-group "why does this exist / who feeds it" —
+  feeding rules, app-push targets, and a gated manual-vs-rule split. Read-only.
+- **A3 — Group merge** (`GroupMergeModal` + `useGroupMerge` +
+  `shared/membership/mergePlan.ts`): membership consolidation from the selection bar —
+  copy sources into a survivor, empty the sources, block sources fed by an active rule;
+  reversible; audited.
+- **A4 — Rule consolidation** (`RuleConsolidationModal` + `useRuleConsolidation` +
+  `useOktaApi/ruleWrites.ts` + `shared/rules/consolidation.ts`): new zod-validated
+  create/delete rule writes to add a target group or merge identical-condition rules, via
+  the safe create → activate → retire sequence with `CONSOLIDATE_RULE` undo capture.
 
-**A1 — Clutter scan dashboard** _(Effort: L)_ — `[x]` delivered (read-only triage)
-Detection is mostly **local** over the already-fetched group list, so few/no extra
-calls. Reuse `getAllGroups({expand:'stats'})`, `calculateStaleness`, `compareGroups`,
-`getGroupRulesForGroup`. Detects: exact/normalized-duplicate names; empty groups (0
-members); orphans (no feeding rule **and** no app push **and** 0 manual members); stale.
-UX: a new **"Cleanup"** view (a scan like `MfaScanPanel`, or a Groups-tab sub-view) with
-category cards → each expands to a **selectable results table** (`useGroupSelection` +
-`Checkbox`) → selection bar → bulk action.
-_Enhancement:_ a single sortable **"safe to remove" confidence badge** that fuses the
-signals, so admins triage on one column instead of four.
-
-**Delivered** (branch `claude/high-impact-features`): a **Cleanup** panel _inside_ the
-Groups tab (a new selection-bar toggle beside Compare/Bulk/Collections — no new top-level
-tab, no clutter). `clutterAnalysis.analyzeClutter` is a pure, tested classifier over the
-loaded `GroupSummary[]` that fuses empty / duplicate-name / stale / missing-description
-into one 0–100 **review score** with reasons — the "single confidence" enhancement. The
-category counts are one-click **selectors** that feed the existing selection → bulk/export
-machinery, so cleanup reuses everything and adds no new mutation surface. Scoped honestly
-to what's knowable locally: it flags empty/duplicate/stale but does **not** yet claim
-rule-orphan status (needs the rules payload — a clean follow-up now that A2 fetches
-feeding rules per group).
-
-**A2 — Membership-source insight** _(Effort: L–M)_ — `[x]` delivered
-Per group, answer **"why does this exist / who feeds it?"** — feeding rules
-(`getGroupRulesForGroup`), app push mappings (`getAppPushGroupMappings`), and the
-manual-vs-rule member split. Expandable detail panel per row; this is the safety
-context an admin needs before removing anything.
-
-**Delivered:** `GroupSourceModal` opened from the group row ("Why does this group exist?").
-Feeding rules + app-push targets load cheaply; the manual-vs-rule split is a gated
-one-paginated-read analysis (`useGroupSource`) computed by the pure
-`shared/membership/groupSource.summarizeMemberSources`, which delegates per-member
-classification to the app's single-source `analyzeMemberships` heuristic. Read-only.
-
-**A3 — Merge / consolidate groups** _(Effort: M)_
-Pick a **survivor**, copy source members in (`addUserToGroup` loop via scheduler +
-`ProgressContext`), then retire the emptied source. UX: Modal wizard — choose survivor
-→ preview member delta (`compareGroups` overlap already computes it) → run → audit.
-_Enhancement:_ a **"what breaks" preview** listing every rule/app pointing at the source
-before retiring it.
-_Safeguard:_ never delete a group with a feeding rule until that rule is repointed/removed.
-
-**Delivered** (`[x]`): a merge wizard from the selection bar ("Merge", 2+ selected). Because
-the extension can't delete groups, "merge" = **membership consolidation** — copy each
-source's members into a chosen survivor, then empty the sources (the empty husks are left
-for the admin to delete in Okta, which handles dependencies safely). Fully reversible via
-the member add/remove writes. Pure `shared/membership/mergePlan.planGroupMerge` computes the
-distinct copies + per-source removals and **blocks** any source fed by an active rule
-(emptying would be futile — the "what breaks" safeguard). `useGroupMerge` runs it through the
-scheduler with `ProgressContext`, one bulk undo per affected group, and two audit entries.
-
-**A4 — Rule consolidation (the sharp one)** _(Effort: M, needs new writes)_
-Okta lets you set multiple target groups only at rule **creation**, not on edit. Work
-around it: to add a group, **duplicate** the rule (same expression) with the extra group
-in `assignUserToGroups.groupIds`; or **merge** rules with identical/similar expressions
-into one carrying the union of groupIds.
-New endpoints (follow the `suspendUser`/content-script pattern):
-`POST /api/v1/groups/rules`, `PUT /api/v1/groups/rules/{id}`, optionally
-`DELETE /api/v1/groups/rules/{id}`. Okta requires a rule be **INACTIVE to edit**, so the
-safe sequence — deactivate → mutate → reactivate — reuses the existing rule actions.
-UX: from a rule row → "Add target group" (search-select, preview diff, confirm) or
-"Merge similar rules" (list matching-expression rules → choose primary → union groupIds
-→ deactivate/delete redundant → reactivate).
-_Safeguard:_ show a **dry-run diff** (expression + resulting groupIds) before writing;
-merging _similar_ (not identical) expressions changes who gets access, so require B's
-population delta ("+12 gain, −3 lose") before committing; never delete the source rule
-until the merged rule is created and active; audit every create/update/delete.
-
-**Delivered** (`[x]`): new rule writes in `useOktaApi/ruleWrites` (create/read-raw/delete/
-(de)activate, all on the scheduler path, create/read responses **zod-validated** —
-`oktaGroupRuleSchema`, ADR-0006). `shared/rules/consolidation` is the pure core:
-`buildConsolidatedRulePayload` (copy conditions verbatim, union target groups, length-capped
-unique name) and `findMergeableRuleGroups` (cluster identical-expression rules). `useRule
-Consolidation` runs the **safe sequence — create → activate (if a source was active) → only
-then retire (delete) sources** — aborting before any delete if create/activate fails, and
-captures each retired rule's definition in a new `CONSOLIDATE_RULE` undo entry. UX:
-`RuleCard` → "Add Target Group" (search-select + `RuleConsolidationModal` dry-run diff) and a
-`RulesMergeBanner` surfacing duplicate-condition rule sets to merge. **Scope note:** the
-dry-run shows the structural diff honestly (resulting expression unchanged + resulting target
-groups); I did **not** fabricate a population delta for add-target because Okta exposes no
-expression-evaluate API (Feature F), so who a rule _matches_ isn't computable — for
-identical-expression merges the access change is genuinely nil and is labeled as such. Only
-identical (not fuzzy "similar") expressions are offered for merge.
-
-- Reuse: `groupBulkOps.ts`, `groupAnalysis.ts`, `groupDiscovery.ts`, `content/index.ts`
-  rule handlers, `ProgressContext`, `Modal`, `undoManager`.
-- Open questions: near-duplicate name + similar-expression thresholds — start with
-  exact + normalized (case/whitespace) match; add fuzzy later.
-- Done when: an admin can scan, understand _why_ a group exists, merge two groups, and
-  add a group to a live rule — each behind a dry-run/preflight, each audited, tests green.
+**B. Rule Impact Preview** `[x]` — _"who loses access if I deactivate this rule?"_
+Answered before the admin commits, read-only, no EL interpreter. Pure population-diff
+engine `shared/membership/ruleImpact.ts` (one rules listing + one member fetch per target
+group, all on the scheduler path — no per-member fan-out). Each `RuleCard` gains a
+**Preview Impact** action, and rule deactivation is now **gated** behind an impact-aware
+confirmation (`RuleImpactModal`) that leads with the loss headline. Loss is inferred from
+rule targets + exclusions and labeled as such inline.
 
 ---
 
-## B. `[x]` Rule Impact Preview — the cheap slice of the OEL sandbox
-
-Admins want to know _who a rule affects_ before flipping it, without an EL interpreter
-(Okta exposes no evaluate-expression API — a true sandbox is high effort, Feature F).
-
-Read the **result** of the rule, not a simulation of its expression: for a selected
-rule, show its target group(s), live member counts, and — crucially — who would **lose**
-access on a deactivate/edit (the scary case admins most need). No interpreter, no writes.
-
-- Reuse: `getGroupRulesForGroup` (expression + groupIds already parsed),
-  `getAllGroupMembers`, `compareGroups`-style set math, `ProgressContext`.
-- UX: on a rule in RulesTab → "Preview impact" → panel with target groups, counts, and a
-  paginated members list with a **before/after diff + loss highlighting**. This diff
-  engine is exactly what A4 consumes.
-- Done when: selecting a rule shows its captured population and the access delta of
-  toggling it, read-only, tests green.
-
-**Delivered** (branch `claude/high-impact-features`):
-
-- Pure, reusable population-diff engine at `shared/membership/ruleImpact.ts`
-  (`classifyGroupImpact` / `summarizeRuleImpact`) — I/O-free set math consistent with the
-  app's single-source membership-attribution heuristic (`membershipAnalysis`): a member is
-  attributed to a rule for a group when an ACTIVE rule targeting the group and not excluding
-  them is that rule; they **lose** access only if no _other_ active, non-excluding rule also
-  targets the group. `APP_GROUP` membership is application-managed and never attributed.
-  This is exactly the diff **A4** will consume.
-- Read-only capture op `useOktaApi/ruleImpact.ts::captureRuleImpact` — one rules listing +
-  one member fetch per target group over the scheduler path; **no per-member calls**, so the
-  "who loses access" answer needs no expensive user fan-out or uncertain internal endpoints.
-- UX woven into the existing Rules tab (no new tab): each `RuleCard` gains a read-only
-  **"Preview Impact"** action, and — closing a real safety gap — **deactivation is now gated**
-  behind an impact-aware confirmation (`RuleImpactModal`) that leads with the loss headline
-  before committing. State lives in the `useRuleImpact` hook.
-- Honest framing in the UI: loss is inferred from rule targets + exclusions and manual adds
-  can't always be distinguished — stated inline rather than over-claimed.
-
----
-
-## C. `[ ]` Bulk Attribute Editor — safeguarded profile write
+## C. `[ ]` Bulk Attribute Editor — safeguarded profile write (next build)
 
 Mass-edit one profile field (department rename, title change) across many users, without
 fighting externally-mastered (AD/HR) profiles.
@@ -229,11 +120,36 @@ fighting externally-mastered (AD/HR) profiles.
   (N updatable / M skipped-locked + reasons, capturing old values) → confirm modal
   restating counts → run through scheduler with live progress → results summary
   (updated / skipped / failed) + CSV export + audit entry.
-- _Enhancement:_ value **templating** (find-replace / derive-from-existing, e.g.
-  normalize a title) in addition to a static value, with a per-user before→after table.
+- _Enhancement:_ value **templating** (find-replace / derive-from-existing) with a
+  per-user before→after table.
 - _Safeguard:_ preflight captures prior values so undo can restore them.
 - Done when: an admin can change one field across a resolved cohort, locked profiles are
   auto-skipped with reasons, the change is previewed/confirmed/audited/undoable, green.
+
+---
+
+## Known tech debt / follow-ups
+
+Carried forward from the A/B build (surfaced while working, none blocking):
+
+- **A4 hardening (highest risk).** The rule create/delete path is the sharpest code in
+  the repo and hasn't been exercised against a live tenant. Add a `useRuleConsolidation`
+  hook test (mock the write ops) pinning the create → activate → retire sequencing and
+  the abort-before-delete guarantee; consider a post-create verification read.
+- **A3/A4 audit attribution.** Both write a placeholder `performedBy:
+  'unknown@unknown.com'` (they don't fetch `/users/me` like the rule lifecycle does).
+  Thread the current user through for accurate audit trails.
+- **`RulesCache` stores `rawRules: []`.** Anything needing exclusion lists (the impact
+  engine) must re-fetch raw rules. Populating `rawRules` once would let impact capture
+  skip its rules fetch entirely.
+- **Rules tab fetches rules outside the scheduler** (`chrome.tabs.sendMessage` directly),
+  unlike the impact capture. Migrating the main rule fetch onto the scheduler path would
+  make rate-limiting uniform.
+- **A1 orphan signal.** `GroupSummary.hasRules`/`ruleCount` are now populated from
+  `RulesCache`, so `analyzeClutter` could add a real **orphan** category/reason on top of
+  the existing counts.
+- **`useGroupsLoader` mount-rehydrate races `loadAllGroups`** (characterized in its
+  docstring) — relevant if A1/A2 start triggering loads.
 
 ---
 
@@ -241,8 +157,8 @@ fighting externally-mastered (AD/HR) profiles.
 
 - **D. Bulk Lifecycle Console** _(fast follow)_ — paste users → suspend/unsuspend/
   reactivate + trigger reset/activation emails. Extends existing lifecycle ops; the
-  "comms engine" is just Okta's built-in `sendEmail` flag, framed honestly. Only new
-  bits: `lifecycle/activate` + `reactivate`. Reuses `BulkTargetList` + preflight from C.
+  "comms engine" is just Okta's built-in `sendEmail` flag. Only new bits:
+  `lifecycle/activate` + `reactivate`. Reuses `BulkTargetList` + preflight from C.
 - **E. Group Push deploy** — the extension only **reads** push mappings
   (`getAppPushGroupMappings`); writing app group-push config is deep provisioning.
   High effort, parked.

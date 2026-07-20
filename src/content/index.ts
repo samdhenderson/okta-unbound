@@ -72,6 +72,15 @@ chrome.runtime.onMessage.addListener(
     sender: chrome.runtime.MessageSender,
     sendResponse: (response: MessageResponse) => void,
   ) => {
+    // Only trust messages from this extension's own contexts (the side panel /
+    // background). `onMessage` should never fire for other extensions or web
+    // pages, but — mirroring the background listener — reject any foreign sender
+    // explicitly so the invariant is enforced and future-proof.
+    if (sender.id !== chrome.runtime.id) {
+      log.warn('Ignoring message from foreign sender');
+      return false;
+    }
+
     log.debug('Received message', {
       action: request.action,
       from: sender.id,

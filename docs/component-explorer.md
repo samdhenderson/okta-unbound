@@ -119,8 +119,8 @@ CI gate: `build-storybook` runs as a parallel job in `.github/workflows/ci.yml`
 
 ## Stories as browser tests (`@storybook/addon-vitest`, ADR-0011)
 
-`vitest.config.ts` has two projects: `unit` (jsdom, the 752 existing tests) and
-`storybook` (headless-browser, every story becomes a render test; the 9 `play`
+`vitest.config.ts` has two projects: `unit` (jsdom, the ~940 existing tests) and
+`storybook` (headless-browser, every story becomes a render test; the 11 `play`
 functions become interaction tests). Scripts:
 
 ```

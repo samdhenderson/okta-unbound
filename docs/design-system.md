@@ -23,7 +23,7 @@ Semantic (each has base + variants where defined):
 | `success` | `#16884a` | `-text`, `-light`                                                 |
 | `warning` | `#a16c03` | `-text`, `-light`                                                 |
 | `info`    | `#546be7` | `-light`                                                          |
-| `accent`  | `#9333ea` | `-dark` — distinguishes the "user page" context (`ContextBanner`) |
+| `accent`  | `#9333ea` | `-dark` — distinguishes the "user page" context (`ContextBar`) |
 
 Neutral scale: `neutral-50, 100, 200, 300, 400, 500, 600, 700, 900`
 (note: no `800`). Use for text (`neutral-900` headings, `neutral-700` body,
@@ -72,9 +72,8 @@ gaps `gap-2`/`gap-3`, radius `rounded-md`. Avoid one-off values (`px-2.5`,
 `py-0.5`, `px-5`) — snap to the scale. Component sizing goes through the `sm|md|lg`
 size props, not ad-hoc padding.
 
-## Known violations to fix
+## Token violations
 
-See [audit §1](./audit/2026-07-audit.md): `ContextBanner.tsx`.
-(`SchedulerStatusBar.tsx` resolved — replaced by the token-based `ActivityBar`
-(ADR-0008); `AttributeFacet.tsx` resolved — palette moved to
-`theme/chartPalette.ts`.)
+No known token violations. Every color in `components/**` maps to an Odyssey token;
+the `ActivityBar` (ADR-0008) and `AttributeFacet` (palette in
+`theme/chartPalette.ts`) are token-based, and `ContextBar` carries no raw hex.

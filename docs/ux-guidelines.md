@@ -12,9 +12,9 @@ Every modal must have:
 - **Escape closes** the modal (in addition to overlay click and the X button).
 - Autofocus a sensible first control (the primary action or first field).
 
-These are currently missing (audit §3) — fix in `Modal.tsx` once so every consumer
-inherits it. Prefer a small focus-trap util over a dependency, but a vetted lib is
-acceptable if recorded in an ADR.
+The shared `Modal` provides all of these — `role="dialog"` + `aria-modal="true"`,
+the Tab focus-trap, autofocus, focus restoration on close, and Escape-to-close — so
+every consumer inherits them without re-implementing the semantics.
 
 ### Tabs (e.g. UserComparisonModal)
 
@@ -34,8 +34,7 @@ Every async view handles all three explicitly — never a blank panel:
 ## Status colors → meaning
 
 `success` (completed/healthy), `warning` (caution/attention), `danger`
-(failure/destructive), `info` (neutral note). Use tokens, never raw hex
-(`ContextBanner` currently violates this).
+(failure/destructive), `info` (neutral note). Use tokens, never raw hex.
 
 ### Activity bar
 
