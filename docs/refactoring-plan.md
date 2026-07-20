@@ -71,7 +71,12 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
     - `L429` → shared `Input` is **NOT pixel-neutral** (`py-3`/`border-200`/`shadow-sm`
       vs the shared base's `px-3 py-2`/`border-300`/no shadow). Needs a design call, not
       a mechanical swap.
-- [ ] **`AttributeFacet`** (4) → with the §9 chart tokenization.
+- [x] **`AttributeFacet`** (4) → §9 chart tokenization was already complete
+      (`theme/chartPalette.ts`); all 4 raw `<button>`s are **documented pixel-neutral
+      exceptions** (two chromeless 11px text-links with no shared text-link primitive, the
+      data-viz spread bars — an existing §3 exception, and legend-row toggles `FilterPill`
+      cannot match without a `className` escape hatch). Discharged-by-documentation, not
+      migrated — a text-link primitive / `FilterPill` `className` is a separate design call.
 - Doc: `docs/components.md`. Agent: `component-builder`; verify with `ui-reviewer`.
 - Done when: no raw `<button>` in feature components except documented exceptions;
   form controls routed through shared `Input`/`Select`/`Textarea`/`Checkbox`.
@@ -117,11 +122,12 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
     than throwing**. Also there is still **no single fetch boundary**: search exists
     twice, on two transports. Revisit list-path validation only **after §8** unifies the
     transport, and add `.passthrough()` (or explicit fields) before it touches any list.
-  - **Bounded items safe to do now (session 5):**
-    - Delete the **dead `oktaUserListSchema`** (`okta.ts:72`, zero call sites).
-    - Fix `parseOkta` interpolating **zod's error message into `log.warn`** — it echoes
-      received values, so it becomes a PII leak the moment anyone adds a `z.enum` over a
-      PII field. Log the issue _paths/codes_, never the value.
+  - **Bounded items safe to do now (session 5): DONE (swarm session).**
+    - [x] Deleted the **dead `oktaUserListSchema`** (zero call sites confirmed).
+    - [x] Fixed `parseOkta` leaking **zod's error message** (the mechanism was in the
+      `throw`, not `log.warn` as assumed) — it now surfaces only the issue _paths/codes_
+      (`{path, code}` per issue), never the received value; pinned by a test asserting the
+      offending value is absent from the message.
 - [x] Burned down the message/API-layer `any`s (60→4): typing-only, precise types
       across content/useOktaApi/scheduler/tabState/rulesCache (introduced
       `MembershipRule`; reused existing rule/group/`RequestResult` types). Repo-wide
@@ -182,6 +188,18 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
       `chrome.tabs.sendMessage` §8 bypass moved into `useRulesData`/`useRuleLifecycle`
       (their eslint grandfather entries followed them; `RulesTab.tsx` dropped from the
       list); no scheduler change.
+- [x] **`content/index.ts` DONE (swarm session, 7 commits).** 1449 → **263 lines** — a thin
+      `chrome.runtime.onMessage` router + DOM-ready indicator init, delegating to 7 extracted
+      concern modules under `src/content/` (mirroring the `useOktaApi/` split): `pageContext.ts`
+      (URL/DOM extraction), `apiRequest.ts` (same-origin fetch core: `isSameOriginPath` guard +
+      allow-listed methods + per-request XSRF), `exportHelpers.ts` (escapeCSV-guarded CSV +
+      download), `indicator.ts`, `ruleHandlers.ts`, `groupHandlers.ts`, `userHandlers.ts`.
+      Decompose-only: the `content/index.test.ts` oracle (152 tests) stayed green after every
+      commit; the unbounded `while(nextUrl)` pagination loops and the 1–3 request search
+      fallback chain moved **verbatim**; the zod `parseOkta` boundary, same-origin + method
+      guard, and host parsing preserved exactly. **Scheduler/transport route untouched (§8).**
+      No eslint grandfather move needed (`index.ts` is the message *receiver*, never called
+      `chrome.tabs.sendMessage`). This unblocks §8's `content/index.ts` dependency.
 - Per file: (1) pin behavior with RTL/MSW tests; (2) extract logic into `use*` hooks
   (mirror the `useOktaApi/` module split); (3) move pure helpers to `shared/utils`;
   (4) split UI into subcomponents (like `overview/members/`); (5) re-verify.
@@ -269,11 +287,15 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
         `chrome.tabs.sendMessage` read sites moved VERBATIM into the two search/auto-load
         hooks; the eslint grandfather list gained those two files and dropped `UsersTab.tsx`
         (now clean). UsersTab 682 → **451 lines**.
-  - [ ] **(d) Presentational split to reach ~300** — remaining bulk is JSX. Extract the
-        Add-to-Group modal (still holds a raw `<input>` + raw `<button>` dropdown — the §3
-        god-component button/input debt) and the lifecycle actions + confirm modal into
-        presentational components under `components/users/`. One component per commit, pixel
-        review, oracle green.
+  - [x] **(d) Presentational split (swarm session, 3 commits, oracle 21/21 green each).**
+        UsersTab 517 → **335 lines** via three pixel-neutral extractions under
+        `components/users/` (each with co-located stories + TypeDoc): `AddToGroupModal`,
+        `UserLifecycleActions`, `DetectedUserBanner`. The Add-to-Group type-ahead's raw
+        `<input>` + dropdown `<button>`s stayed raw with a documented `CHARACTERIZED:`
+        exception (shared `Input` is not pixel-neutral here — `mb-2` label, `outline` focus,
+        nested wrapper that breaks the absolutely-positioned spinner/dropdown — same exemption
+        as `SearchDropdown`/`UserSearchBar`). Scheduler route untouched. 335 is within the
+        ~300 region; no further extraction attempted without a pixel change.
 - Target: no component over ~300 lines.
 - Doc: `docs/state-management.md`. Agents: `test-writer` then `architecture-refactor`.
 - **Pre-computed asset:** deep per-component decomposition maps (state/effect
@@ -299,13 +321,17 @@ documented (tab bar, dynamic-color banner, radio-cards, data-viz bars).
   - **Honest regression to surface, not absorb:** `processQueue` checks the cooldown
     **before** priority, so a typed search would stall up to 30s where today it is
     instant. Needs a new **`interactive` tier exempt from the cooldown gate**.
-  - `src/shared/scheduler/` has **ZERO tests** and `clearQueue()` **leaks promises** —
-    test it (and fix the leak) **before** migrating anything onto it.
+  - ~~`src/shared/scheduler/` has **ZERO tests**~~ — **stale (swarm session):** the scheduler
+    now has full coverage (`apiScheduler.test.ts`, `apiScheduler.cancel.test.ts`,
+    `cancellation.test.ts`, `runBatch.test.ts`). Re-audit whether `clearQueue()` still
+    **leaks promises** (`apiScheduler.ts:541`) against those tests before migrating onto it.
 - Doc: `docs/testing.md` / `docs/architecture.md`. Agent: `test-writer`.
 
 ### 9. `[ ]` Small cleanups
 
-- Tokenize the `AttributeFacet.tsx` dataviz ramp (define a named `chartPalette`).
+- [x] Tokenize the `AttributeFacet.tsx` dataviz ramp — already done in
+      `theme/chartPalette.ts` (named `INDIGO_RAMP`/`CHART_NONE_COLOR`/`CHART_OTHER_COLOR`); no
+      raw hex remains in `components/**`. (Verified during the swarm session.)
 - Reconcile the `SchedulerContext` poll+push double source of truth when next touched.
 
 ### 10. `[ ]` Component-explorer (Storybook) story-coverage backlog

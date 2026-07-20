@@ -97,9 +97,6 @@ export const oktaGroupRuleSchema = z
   })
   .passthrough();
 
-/** An array of users, e.g. from a search or group-members listing. */
-export const oktaUserListSchema = z.array(oktaUserSchema);
-
 /** Inferred type of a validated {@link oktaUserSchema} response. */
 export type OktaUserResponse = z.infer<typeof oktaUserSchema>;
 /** Inferred type of a validated {@link oktaGroupSchema} response. */
@@ -117,7 +114,13 @@ export type OktaGroupRuleResponse = z.infer<typeof oktaGroupRuleSchema>;
 export function parseOkta<T>(schema: z.ZodType<T>, data: unknown, context: string): T {
   const result = schema.safeParse(data);
   if (!result.success) {
-    throw new Error(`Okta response validation failed (${context}): ${result.error.message}`);
+    // Log only issue paths + codes — never zod's default message, which echoes the
+    // received values and would leak PII (identifiers and outcomes only).
+    const issues = result.error.issues.map((issue) => ({
+      path: issue.path.join('.'),
+      code: issue.code,
+    }));
+    throw new Error(`Okta response validation failed (${context}): ${JSON.stringify(issues)}`);
   }
   return result.data;
 }
