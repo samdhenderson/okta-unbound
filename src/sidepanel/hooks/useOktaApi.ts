@@ -21,6 +21,7 @@ import { createGroupCleanupOperations } from './useOktaApi/groupCleanup';
 import { createGroupBulkOperations } from './useOktaApi/groupBulkOps';
 import { createGroupDiscoveryOperations } from './useOktaApi/groupDiscovery';
 import { createUserOperations } from './useOktaApi/userOperations';
+import { createAppOperations } from './useOktaApi/appOperations';
 import { createExportOperations } from './useOktaApi/exportOperations';
 import { createExportEngineOperations } from './useOktaApi/exportEngine';
 import { createPushGroupOperations } from './useOktaApi/pushGroupOps';
@@ -153,6 +154,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
   );
   const groupDiscoveryOps = useMemo(() => createGroupDiscoveryOperations(coreApi), [coreApi]);
   const userOps = useMemo(() => createUserOperations(coreApi), [coreApi]);
+  const appOps = useMemo(() => createAppOperations(coreApi), [coreApi]);
   const exportOps = useMemo(() => createExportOperations(coreApi), [coreApi]);
   const exportEngineOps = useMemo(() => createExportEngineOperations(coreApi), [coreApi]);
   const pushGroupOps = useMemo(() => createPushGroupOperations(coreApi), [coreApi]);
@@ -218,6 +220,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       getUserGroupMemberships: userOps.getUserGroupMemberships,
       searchUsers: userOps.searchUsers,
       getUserById: userOps.getUserById,
+      searchApps: appOps.searchApps,
       suspendUser: userOps.suspendUser,
       unsuspendUser: userOps.unsuspendUser,
       resetPassword: userOps.resetPassword,
@@ -258,6 +261,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       groupDiscoveryOps,
       groupBulkOps,
       userOps,
+      appOps,
       exportOps,
       exportEngineOps,
       pushGroupOps,

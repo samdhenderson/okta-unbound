@@ -56,6 +56,14 @@ const ExportTab: React.FC<ExportTabProps> = ({ targetTabId, oktaOrigin }) => {
           sublabel: group.type,
         }));
       },
+      searchApps: async (query: string) => {
+        const apps = await api.searchApps(query);
+        return apps.map((app) => ({
+          id: app.id,
+          label: app.label,
+          sublabel: app.status,
+        }));
+      },
     }),
     [api],
   );
