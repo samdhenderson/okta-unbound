@@ -26,6 +26,63 @@ export interface GroupFilterState {
   sortDesc: boolean;
 }
 
+/**
+ * Parse a rockstar-style `/pattern/flags` regex query.
+ *
+ * Returns a compiled {@link RegExp} when `query` is slash-wrapped and the pattern
+ * is valid, else `null` (the caller falls back to substring matching). The `g` and
+ * `y` flags are stripped because they make `.test()` stateful across the many calls
+ * one filter pass makes; `i`/`m`/`s`/`u` are preserved.
+ *
+ * @param query - The raw search text.
+ * @returns A compiled regex, or `null` if not slash-wrapped or the pattern is invalid.
+ *
+ * @example
+ * parseRegexQuery('/^sales-/i'); // => a RegExp matching names starting "sales-"
+ * parseRegexQuery('sales');      // => null (plain substring query)
+ */
+export function parseRegexQuery(query: string): RegExp | null {
+  const match = query.trim().match(/^\/(.+)\/([gimsuy]*)$/);
+  if (!match) return null;
+  try {
+    return new RegExp(match[1], match[2].replace(/[gy]/g, ''));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether a group matches the search query, across name / description / id.
+ *
+ * A slash-wrapped query (`/pattern/flags`) is matched as a regex; anything else is
+ * a case-insensitive substring match (the long-standing behavior). An empty query
+ * matches everything.
+ *
+ * @param group - The group to test.
+ * @param query - The raw search text.
+ * @returns `true` if the group matches.
+ */
+export function matchesSearchQuery(group: GroupSummary, query: string): boolean {
+  const trimmed = query.trim();
+  if (!trimmed) return true;
+
+  const regex = parseRegexQuery(trimmed);
+  if (regex) {
+    return (
+      regex.test(group.name) ||
+      (group.description ? regex.test(group.description) : false) ||
+      regex.test(group.id)
+    );
+  }
+
+  const q = trimmed.toLowerCase();
+  return (
+    group.name.toLowerCase().includes(q) ||
+    (group.description?.toLowerCase().includes(q) ?? false) ||
+    group.id.toLowerCase().includes(q)
+  );
+}
+
 /** Member-count bucket predicate. `default` (unrecognised filter) matches everything. */
 export function matchesSizeFilter(memberCount: number, sizeFilter: string): boolean {
   switch (sizeFilter) {
@@ -93,13 +150,7 @@ export function filterAndSortGroups(
   let filtered = [...groups];
 
   if (state.searchQuery.trim()) {
-    const q = state.searchQuery.toLowerCase();
-    filtered = filtered.filter(
-      (g) =>
-        g.name.toLowerCase().includes(q) ||
-        g.description?.toLowerCase().includes(q) ||
-        g.id.toLowerCase().includes(q),
-    );
+    filtered = filtered.filter((g) => matchesSearchQuery(g, state.searchQuery));
   }
 
   if (state.typeFilter) {

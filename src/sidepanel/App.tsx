@@ -17,6 +17,7 @@ import OverviewTab from './components/OverviewTab';
 import RulesTab from './components/RulesTab';
 import UsersTab from './components/UsersTab';
 import GroupsTab from './components/GroupsTab';
+import { ExportTab } from './components/export';
 import AuditLogViewer from './components/AuditLogViewer';
 import ActivityBar from './components/ActivityBar';
 import { useGroupContext } from './hooks/useGroupContext';
@@ -137,6 +138,22 @@ const App: React.FC = () => {
     }
   };
 
+  // Reconnect: reload the Okta tab so a fresh content script is injected, then
+  // re-detect. Used when the connection is genuinely down (e.g. the script was
+  // orphaned by an extension reload). Needs no extra permission — reloading a
+  // host we already have permission for is allowed. The onUpdated('complete')
+  // listeners re-probe once the page reloads; refetch nudges it along.
+  const handleReconnect = () => {
+    if (targetTabId != null) {
+      chrome.tabs.reload(targetTabId, {}, () => {
+        void chrome.runtime.lastError; // tab may be gone; ignore
+        page.refetch();
+      });
+    } else {
+      page.refetch();
+    }
+  };
+
   // Load saved tab preference on mount with legacy migration
   useEffect(() => {
     chrome.storage.local.get([SELECTED_TAB_KEY], (result) => {
@@ -210,6 +227,7 @@ const App: React.FC = () => {
           liveContextChanged={isPinned && page.resyncPending}
           onTogglePin={handleTogglePin}
           onRefresh={page.refetch}
+          onReconnect={handleReconnect}
         />
 
         <TabNavigation activeTab={activeTab} onTabChange={handleTabChange} />
@@ -258,6 +276,9 @@ const App: React.FC = () => {
             selectedGroupId={selectedGroupId}
             onGroupSelected={() => setSelectedGroupId(null)}
           />
+        )}
+        {activeTab === 'export' && (
+          <ExportTab targetTabId={targetTabId ?? undefined} oktaOrigin={oktaOrigin ?? undefined} />
         )}
         {activeTab === 'history' && (
           <div

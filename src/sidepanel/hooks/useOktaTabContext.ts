@@ -64,7 +64,13 @@ export interface OktaTabContext<T> {
   resyncPending: boolean;
 }
 
-const MAX_RETRIES = 3;
+// A freshly-loaded Okta page (or one whose content script was orphaned by an
+// extension reload) can take a moment before its `onMessage` listener is live.
+// Retry generously — on par with the background scheduler's own budget — so the
+// common "panel opened while the page was still settling" race heals silently
+// instead of surfacing as a disconnect.
+const MAX_RETRIES = 5;
+const MAX_RETRY_DELAY_MS = 4000;
 const DEBOUNCE_MS = 150;
 
 /**
@@ -174,22 +180,31 @@ export function useOktaTabContext<T>(config: OktaTabContextConfig<T>): OktaTabCo
           setConnectionStatus('connected');
           setError(null);
           setData(entity);
-        } catch (messageErr) {
-          // Content script not responding — retry with exponential backoff.
-          log.warn('Content script communication error', messageErr);
-
+        } catch {
+          // Content script not yet listening (page still loading, or the script
+          // was orphaned by an extension reload). Retry with capped exponential
+          // backoff — it usually appears within a second or two. Keep this at
+          // debug: a transient miss that the retry resolves is not noteworthy,
+          // and logging every attempt across the page-context hooks floods the
+          // console.
           if (retryCount < MAX_RETRIES) {
-            const delay = Math.pow(2, retryCount) * 500; // 500ms, 1s, 2s
-            log.debug('Retrying content script', { delayMs: delay });
+            const delay = Math.min(Math.pow(2, retryCount) * 500, MAX_RETRY_DELAY_MS);
+            log.debug('Content script not ready; retrying', {
+              attempt: retryCount + 1,
+              delayMs: delay,
+            });
             setTimeout(() => fetchContext(retryCount + 1), delay);
             return; // Leave loading state until the retry settles.
           }
 
-          // Past the retry budget: treat as connected-but-degraded.
-          log.warn('Max retries reached; showing as connected');
-          setConnectionStatus('connected');
+          // Genuinely unreachable after the full budget. Report honestly rather
+          // than masquerading as connected (which hid a broken session behind a
+          // green dot); the caller can offer a reconnect that reloads the tab.
+          // targetTabId is left set so that reconnect knows which tab to reload.
+          log.warn('Content script unreachable after retries', { attempts: retryCount + 1 });
+          setConnectionStatus('error');
           setData(commsFailedData);
-          setError('Connected to Okta, but extension communication delayed');
+          setError('Can’t reach the Okta tab — reload it to reconnect.');
         }
       } catch (err) {
         log.error('Context fetch failed', err);
@@ -197,6 +212,10 @@ export function useOktaTabContext<T>(config: OktaTabContextConfig<T>): OktaTabCo
         setConnectionStatus('error');
         setData(initialData);
         setOktaOrigin(null);
+        // No reachable Okta tab — clear the target so a reconnect affordance
+        // knows there is nothing to reload (vs. the comms-failure path above,
+        // which keeps targetTabId set for exactly that reason).
+        setTargetTabId(null);
       } finally {
         if (!isStale()) {
           setIsLoading(false);

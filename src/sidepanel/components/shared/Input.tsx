@@ -21,6 +21,8 @@ interface InputProps {
   error?: string;
   /** Optional field label rendered above the input. */
   label?: string;
+  /** Accessible name for the control when no visible `label` is rendered (e.g. an inline field). */
+  ariaLabel?: string;
   /** Helper text below the input, shown only when there is no `error`. */
   hint?: string;
   /** Stretch to fill the container width. Defaults to `true`. */
@@ -52,6 +54,7 @@ const Input: React.FC<InputProps> = ({
   disabled = false,
   error,
   label,
+  ariaLabel,
   hint,
   fullWidth = true,
   icon,
@@ -86,6 +89,7 @@ const Input: React.FC<InputProps> = ({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
+          aria-label={ariaLabel}
           placeholder={placeholder}
           disabled={disabled}
           autoFocus={autoFocus}

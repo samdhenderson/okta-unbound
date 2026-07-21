@@ -18,7 +18,7 @@ import type { OktaGroupRule, FormattedRule, RuleConflict, RuleStats } from '../.
 import type { CoreApi } from './useOktaApi/core';
 import { getCacheEntry, setCacheEntry } from '../../shared/cache';
 import { detectConflicts, formatRuleForDisplay } from '../../shared/ruleUtils';
-import { parseNextLink } from './useOktaApi/utilities';
+import { nextPageUrl } from './useOktaApi/utilities';
 import { createLogger } from '../../shared/utils/logger';
 
 const log = createLogger('fetchGroupRulesRequest');
@@ -85,13 +85,20 @@ async function resolveGroupName(
  * @param currentGroupId - When provided, flags rules that target this group
  *   (`affectsCurrentGroup`); the caller supplies the panel's current group, which
  *   mirrors the page-URL group the content script used to derive.
+ * @param options - `resolveGroupNames` (default `true`) controls step 2. Set it to
+ *   `false` for callers that only need raw rule ids/expressions (e.g. membership
+ *   analysis, which never reads a resolved name): it skips the per-referenced-group
+ *   `GET /api/v1/groups/{id}` fan-out — otherwise hundreds of requests on a cold
+ *   cache — and leaves `groupNames`/`allGroupNamesMap` falling back to ids.
  * @returns `{ success: true, rules, stats, conflicts }`; a failed rules page is
  *   returned verbatim, and a thrown error becomes `{ success: false, error }`.
  */
 export async function fetchGroupRulesRequest(
   makeApiRequest: MakeApiRequest,
   currentGroupId?: string,
+  options: { resolveGroupNames?: boolean } = {},
 ): Promise<FetchGroupRulesResult> {
+  const { resolveGroupNames = true } = options;
   try {
     // 1. Fetch all rules with pagination.
     let rules: OktaGroupRule[] = [];
@@ -102,23 +109,28 @@ export async function fetchGroupRulesRequest(
       if (!response.success) {
         return response;
       }
-      rules = rules.concat(response.data || []);
-      nextUrl = parseNextLink(response.headers?.link);
+      const page: OktaGroupRule[] = response.data || [];
+      rules = rules.concat(page);
+      nextUrl = nextPageUrl(nextUrl, response.headers?.link, page.length);
     }
 
     log.debug('Fetched rules (total across all pages)', { count: rules.length });
 
     // 2. Resolve every referenced group's name in parallel (each cached 5 min).
-    const allGroupIds = new Set<string>();
-    rules.forEach((rule) => groupIdsReferencedBy(rule).forEach((id) => allGroupIds.add(id)));
-
+    //    Skipped when the caller only needs ids/expressions — the fan-out is one
+    //    GET per referenced group and is pure waste for those callers.
     const groupNameMap = new Map<string, string>();
-    const resolved = await Promise.all(
-      Array.from(allGroupIds).map((groupId) => resolveGroupName(makeApiRequest, groupId)),
-    );
-    resolved.forEach((result) => {
-      if (result) groupNameMap.set(result.groupId, result.name);
-    });
+    if (resolveGroupNames) {
+      const allGroupIds = new Set<string>();
+      rules.forEach((rule) => groupIdsReferencedBy(rule).forEach((id) => allGroupIds.add(id)));
+
+      const resolved = await Promise.all(
+        Array.from(allGroupIds).map((groupId) => resolveGroupName(makeApiRequest, groupId)),
+      );
+      resolved.forEach((result) => {
+        if (result) groupNameMap.set(result.groupId, result.name);
+      });
+    }
 
     // 3. Detect conflicts between active rules (O(n²), active-only).
     const conflicts = detectConflicts(rules);

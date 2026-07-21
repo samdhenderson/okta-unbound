@@ -60,8 +60,10 @@ comment at the call site:
   `GroupFilterToggle`.
 - **Genuinely custom controls:** `ComparisonTabBar` (a documented one-off
   `role="tab"` bar that predates and has not been migrated to the shared `Tabs`
-  primitive), the dynamic-color banner, radio-cards, and the `AttributeFacet`
-  data-viz spread bars.
+  primitive), the dynamic-color banner, radio-cards, the `AttributeFacet`
+  data-viz spread bars, and the Export tab's `EntityPicker` selectable entity
+  cards (`role="button"` icon+title+description rows — no shared card primitive
+  fits, and `Button` is a centered CTA; kept keyboard-accessible).
 - **Awaiting a new shared primitive (accepted future work):**
   - Chromeless **text-links** ("Clear all", "View details") have no shared
     `TextLink` primitive — adding one would discharge these across `GroupFilterPanel`,

@@ -139,21 +139,23 @@ export function useUserMemberships({
               log.debug('Using cached rules from global cache');
               rules = cachedRules.rules;
             } else {
-              // Cache miss - fetch rules (§8: scheduler-routed, was a fetchGroupRules message)
-              log.debug('Cache miss - fetching rules');
-              const rulesResponse = await fetchGroupRulesRequest(makeApiRequest);
+              // Cache miss - fetch rules (§8: scheduler-routed, was a fetchGroupRules message).
+              // Membership analysis matches only on group ids, condition expressions,
+              // and user attributes — never a resolved group name — so skip the
+              // per-referenced-group name fan-out (otherwise hundreds of wasted
+              // GET /groups/{id} calls just to load one user's memberships).
+              log.debug('Cache miss - fetching rules (names not needed for analysis)');
+              const rulesResponse = await fetchGroupRulesRequest(makeApiRequest, undefined, {
+                resolveGroupNames: false,
+              });
 
               if (!rulesResponse.success) {
                 log.warn('Could not fetch rules for analysis:', rulesResponse.error);
               } else {
                 rules = rulesResponse.rules || [];
-                // Populate cache for future use
-                await RulesCache.set(
-                  rules,
-                  [],
-                  rulesResponse.stats || { total: 0, active: 0, inactive: 0, conflicts: 0 },
-                  rulesResponse.conflicts || [],
-                );
+                // Intentionally NOT populating RulesCache here: these rules carry
+                // ids-as-names (name resolution was skipped), and the Rules tab
+                // relies on the shared cache holding real group names.
               }
             }
 

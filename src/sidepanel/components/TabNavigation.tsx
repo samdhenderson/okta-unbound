@@ -7,7 +7,7 @@
 import React from 'react';
 
 /** Identifier for each top-level side-panel tab. */
-export type TabType = 'overview' | 'rules' | 'users' | 'groups' | 'history';
+export type TabType = 'overview' | 'rules' | 'users' | 'groups' | 'export' | 'history';
 
 interface TabNavigationProps {
   /** Currently selected tab, rendered with the active styling and underline. */
@@ -23,6 +23,7 @@ const TabNavigation: React.FC<TabNavigationProps> = ({ activeTab, onTabChange })
     { id: 'users', label: 'Users' },
     { id: 'groups', label: 'Groups' },
     { id: 'rules', label: 'Rules' },
+    { id: 'export', label: 'Export' },
     { id: 'history', label: 'History' },
   ];
 

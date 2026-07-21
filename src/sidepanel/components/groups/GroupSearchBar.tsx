@@ -60,7 +60,7 @@ const GroupSearchBar: React.FC<GroupSearchBarProps> = ({
     ) : (
       <input
         type="text"
-        placeholder="Search by name, description, or ID..."
+        placeholder="Search by name, description, ID — or /regex/"
         value={searchQuery}
         onChange={(e) => onSearchQueryChange(e.target.value)}
         className="w-full pl-11 pr-4 py-3 bg-white border border-neutral-200 rounded-md text-sm placeholder-neutral-400 focus:outline-none focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary transition-all duration-100"

@@ -143,6 +143,29 @@ export const oktaGroupListItemSchema = z
   })
   .passthrough();
 
+/**
+ * An app as it appears in a *list* response (`GET /api/v1/apps`).
+ *
+ * Deliberately lenient — only `id` is required; identity fields are optional and
+ * unknown fields `.passthrough()` (org/app-specific settings, `_links`, etc.).
+ * Shared by the app search op and the Apps export descriptor. Use with
+ * {@link parseOktaList}.
+ */
+export const oktaAppListItemSchema = z
+  .object({
+    id: z.string(),
+    name: z.string().optional(),
+    label: z.string().optional(),
+    status: z.string().optional(),
+    signOnMode: z.string().optional(),
+    created: z.string().nullish(),
+    lastUpdated: z.string().nullish(),
+  })
+  .passthrough();
+
+/** Inferred type of a validated {@link oktaAppListItemSchema} row. */
+export type OktaAppListItem = z.infer<typeof oktaAppListItemSchema>;
+
 /** Inferred type of a validated {@link oktaUserSchema} response. */
 export type OktaUserResponse = z.infer<typeof oktaUserSchema>;
 /** Inferred type of a validated {@link oktaGroupSchema} response. */
