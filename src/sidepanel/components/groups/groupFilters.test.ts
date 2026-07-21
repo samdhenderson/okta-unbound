@@ -6,6 +6,8 @@ import {
   compareGroupsBy,
   filterAndSortGroups,
   computeActiveFilterCount,
+  parseRegexQuery,
+  matchesSearchQuery,
   type GroupFilterState,
 } from './groupFilters';
 
@@ -28,6 +30,60 @@ const emptyState: GroupFilterState = {
   sortBy: 'name',
   sortDesc: false,
 };
+
+describe('parseRegexQuery', () => {
+  it('compiles a slash-wrapped pattern with flags', () => {
+    const rx = parseRegexQuery('/^sales-.*/i');
+    expect(rx).toBeInstanceOf(RegExp);
+    expect(rx!.test('Sales-EMEA')).toBe(true);
+  });
+
+  it('returns null for a plain (non-slash-wrapped) query', () => {
+    expect(parseRegexQuery('sales')).toBeNull();
+  });
+
+  it('returns null for an invalid pattern', () => {
+    expect(parseRegexQuery('/[unclosed/')).toBeNull();
+  });
+
+  it('strips the stateful g/y flags so repeated .test is stable', () => {
+    const rx = parseRegexQuery('/a/g');
+    expect(rx!.flags).toBe('');
+    // Would flip-flop if the `g` flag survived (lastIndex statefulness).
+    expect(rx!.test('a')).toBe(true);
+    expect(rx!.test('a')).toBe(true);
+  });
+});
+
+describe('matchesSearchQuery', () => {
+  const grp = g({ id: '00gFAKE1', name: 'Sales-EMEA', description: 'Regional sales team' });
+
+  it('empty query matches everything', () => {
+    expect(matchesSearchQuery(grp, '   ')).toBe(true);
+  });
+
+  it('substring matches name, description, and id case-insensitively', () => {
+    expect(matchesSearchQuery(grp, 'emea')).toBe(true);
+    expect(matchesSearchQuery(grp, 'regional')).toBe(true);
+    expect(matchesSearchQuery(grp, '00gfake1')).toBe(true);
+    expect(matchesSearchQuery(grp, 'engineering')).toBe(false);
+  });
+
+  it('regex query matches on the name', () => {
+    expect(matchesSearchQuery(grp, '/^sales-/i')).toBe(true);
+    expect(matchesSearchQuery(grp, '/^eng-/i')).toBe(false);
+  });
+
+  it('filterAndSortGroups applies a regex searchQuery', () => {
+    const groups = [
+      g({ id: 'a', name: 'Sales-EMEA' }),
+      g({ id: 'b', name: 'Sales-AMER' }),
+      g({ id: 'c', name: 'Engineering' }),
+    ];
+    const result = filterAndSortGroups(groups, { ...emptyState, searchQuery: '/^sales-/i' });
+    expect(result.map((x) => x.name)).toEqual(['Sales-AMER', 'Sales-EMEA']);
+  });
+});
 
 describe('matchesSizeFilter', () => {
   it('buckets by member count', () => {

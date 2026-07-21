@@ -17,6 +17,27 @@ components, zod, audit-every-mutation, TypeDoc) apply to everything below.
 
 Status legend: `[ ]` todo · `[~]` partial · `[x]` done.
 
+## Progress (updated 2026-07-20)
+
+**Phases 0–1 shipped.** The descriptor-driven Export Engine is live behind a new
+**Export** tab. Adding an export is now adding one self-contained descriptor file
+under `src/sidepanel/export/descriptors/` — they auto-register via `import.meta.glob`
+(no registry edit). The six open UX questions were resolved to their recommended
+defaults (inline column picker, named idb presets + last-used, raw filter passthrough
+with a live match count, row-capped preview, unified hub, search-to-select context).
+
+Ten entities export today: **Users, Groups (+stats), Group Rules, Group Memberships,
+Applications, App Users, App Groups, Network Zones, Devices, Identity Providers** —
+each column-pickable, cancellable, rate-limited, zod-validated, audited. **Group regex
+search** also shipped (cached-mode `/pattern/` in the Groups tab).
+
+Deliberately deferred (needs your input, not blocked):
+
+- **Administrators export** — unlike every other entity there is no clean single
+  paginated list endpoint (it's per-user role assignments or the newer IAM
+  `assignees` API, whose response envelope needs confirming against a live tenant).
+  Left out rather than ship a likely-wrong descriptor. See ADR-triggers below.
+
 ---
 
 ## Triage — rockstar feature → disposition
@@ -65,7 +86,7 @@ Console, Deleted-object browser). Both `TabType` additions in `TabNavigation`.
 
 ---
 
-## Phase 0 — foundations `[ ]` (unblocks everything)
+## Phase 0 — foundations `[x]` (shipped)
 
 Prove the export pattern end to end on the safest entities.
 
@@ -115,7 +136,7 @@ _Preview table density_
 3. **Count-only "dry run"** (fetch total, skip rows) → download — leanest for huge orgs
    where preview isn't worth the calls.
 
-## Phase 1 — reporting parity `[ ]`
+## Phase 1 — reporting parity `[~]` (all descriptors + group regex search shipped; Admins deferred)
 
 The point at which reports stop pulling you back to rockstar.
 
