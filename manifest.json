@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Okta Unbound",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Group, user & rule management for Okta admins — bulk ops, rule-impact analysis, and local audit logging.",
   "permissions": ["activeTab", "storage", "contextMenus", "notifications", "sidePanel", "alarms"],
   "host_permissions": [
