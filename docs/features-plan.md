@@ -29,22 +29,26 @@ tenants at once is impossible. See [architecture.md](./architecture.md).
   state so undo can _restore_, not just log. Components < ~300 lines; logic in hooks.
 - Document exports with TypeDoc.
 
+> **Rockstar replacement:** the drive to fully replace rockstar has its own roadmap in
+> [rockstar-parity-plan.md](./rockstar-parity-plan.md). Features **C** and **D** below are
+> absorbed there as Phase 5.
+
 Status legend: `[ ]` todo · `[~]` partially done · `[x]` done.
 
 ---
 
 ## Reuse map (build on these, don't reinvent)
 
-| Need                                    | Reuse                                                                  | Path                                                         |
-| --------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------ |
-| Bulk loop + per-item error capture      | `executeBulkOperation`, `removeDeprovisioned`                          | `hooks/useOktaApi/groupBulkOps.ts`, `groupCleanup.ts`        |
-| Progress UI (count / % / ETA / cancel)  | `ProgressContext` + `ActivityBar`                                      | `contexts/ProgressContext.tsx`, `components/ActivityBar.tsx` |
-| Multi-select state (survives filtering) | `useGroupSelection`, `Checkbox`                                        | `hooks/useGroupSelection.ts`                                 |
-| List entry (paste/search → chips)       | `Textarea`, `Input`, `SelectionChips`, `ComparisonSearchPhase`         | `components/shared/`, `users/comparison/`                    |
-| Confirm / destructive gate              | shared `Modal`                                                         | `components/shared/Modal.tsx`                                |
-| Audit + undo                            | `logAction`, `logBulkRemoveAction`, `AuditLogViewer`                   | `shared/undoManager.ts`, `components/AuditLogViewer.tsx`     |
-| Rule read + write                       | `getGroupRulesForGroup`; `ruleWrites` (create/delete/(de)activate)     | `groupDiscovery.ts`, `hooks/useOktaApi/ruleWrites.ts`        |
-| Population diff (who gains/loses)       | `classifyGroupImpact`, `summarizeRuleImpact`                           | `shared/membership/ruleImpact.ts`                            |
+| Need                                    | Reuse                                                              | Path                                                         |
+| --------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------ |
+| Bulk loop + per-item error capture      | `executeBulkOperation`, `removeDeprovisioned`                      | `hooks/useOktaApi/groupBulkOps.ts`, `groupCleanup.ts`        |
+| Progress UI (count / % / ETA / cancel)  | `ProgressContext` + `ActivityBar`                                  | `contexts/ProgressContext.tsx`, `components/ActivityBar.tsx` |
+| Multi-select state (survives filtering) | `useGroupSelection`, `Checkbox`                                    | `hooks/useGroupSelection.ts`                                 |
+| List entry (paste/search → chips)       | `Textarea`, `Input`, `SelectionChips`, `ComparisonSearchPhase`     | `components/shared/`, `users/comparison/`                    |
+| Confirm / destructive gate              | shared `Modal`                                                     | `components/shared/Modal.tsx`                                |
+| Audit + undo                            | `logAction`, `logBulkRemoveAction`, `AuditLogViewer`               | `shared/undoManager.ts`, `components/AuditLogViewer.tsx`     |
+| Rule read + write                       | `getGroupRulesForGroup`; `ruleWrites` (create/delete/(de)activate) | `groupDiscovery.ts`, `hooks/useOktaApi/ruleWrites.ts`        |
+| Population diff (who gains/loses)       | `classifyGroupImpact`, `summarizeRuleImpact`                       | `shared/membership/ruleImpact.ts`                            |
 
 The two primitives worth building **once** and reusing across C/D:
 
@@ -137,7 +141,7 @@ Carried forward from the A/B build (surfaced while working, none blocking):
   hook test (mock the write ops) pinning the create → activate → retire sequencing and
   the abort-before-delete guarantee; consider a post-create verification read.
 - **A3/A4 audit attribution.** Both write a placeholder `performedBy:
-  'unknown@unknown.com'` (they don't fetch `/users/me` like the rule lifecycle does).
+'unknown@unknown.com'` (they don't fetch `/users/me` like the rule lifecycle does).
   Thread the current user through for accurate audit trails.
 - **`RulesCache` stores `rawRules: []`.** Anything needing exclusion lists (the impact
   engine) must re-fetch raw rules. Populating `rawRules` once would let impact capture
