@@ -267,7 +267,6 @@ const UsersTab: React.FC<UsersTabProps> = ({
           <div className="space-y-6 animate-in slide-in-from-top-4 duration-500">
             <UserProfileCard
               user={selectedUser}
-              groupCount={memberships.length}
               oktaOrigin={oktaOrigin}
               afterCard={
                 <UserLifecycleActions

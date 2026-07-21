@@ -4,14 +4,16 @@
  *
  * Presentational: it reflects the active {@link MemberFilter} set into pressed
  * pill states and reports every change (status toggles, per-factor has/missing
- * modes, quick MFA counts, sort field/direction) via callbacks. MFA controls stay
- * disabled until scan results are supplied.
+ * modes, quick MFA counts, sort field/direction) via callbacks. Hosts the MFA
+ * scan trigger inline — scanning lives here, next to the factor filters it
+ * enables — and the factor controls stay hidden until scan results are supplied.
  */
 import React from 'react';
-import type { MemberMfaResult } from '../../../../shared/types';
+import type { MemberMfaResult, MfaScanStatus } from '../../../../shared/types';
 import FilterPill from '../../shared/FilterPill';
 import SortPill from '../../shared/SortPill';
 import ActiveFilterChips from './ActiveFilterChips';
+import MfaScanButton from './MfaScanButton';
 import { type BreakdownRow, type MemberFilter, type SortField } from './memberAnalytics';
 
 /** Per-factor filter intent: unset, require-present, or require-absent. */
@@ -27,6 +29,12 @@ interface MemberFilterPanelProps {
   mfaResults: Map<string, MemberMfaResult> | null;
   /** Observed factor labels across the group, for per-factor toggles. */
   factorLabels: string[];
+  /** Member count; drives the scan button's disabled/confirm behaviour. */
+  memberCount: number;
+  /** Current MFA scan lifecycle status. */
+  scanStatus: MfaScanStatus;
+  /** Start (or confirm) the MFA scan. */
+  onRunScanClick: () => void;
   /** Current sort field. */
   sortBy: SortField;
   /** Whether the current sort is descending. */
@@ -53,6 +61,9 @@ const MemberFilterPanel: React.FC<MemberFilterPanelProps> = ({
   statusRows,
   mfaResults,
   factorLabels,
+  memberCount,
+  scanStatus,
+  onRunScanClick,
   sortBy,
   sortDesc,
   onToggleStatus,
@@ -100,12 +111,23 @@ const MemberFilterPanel: React.FC<MemberFilterPanelProps> = ({
         </div>
       )}
 
-      {/* MFA factor filters */}
+      {/* MFA factor filters — the scan is triggered here, next to the filters it enables */}
       <div>
-        <label className="block text-xs font-medium text-neutral-600 mb-1.5">MFA Factors</label>
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <label className="block text-xs font-medium text-neutral-600">MFA Factors</label>
+          <MfaScanButton
+            mfaResults={mfaResults}
+            scanStatus={scanStatus}
+            memberCount={memberCount}
+            onScanClick={onRunScanClick}
+          />
+        </div>
+        {scanStatus === 'error' && (
+          <p className="text-xs text-danger-text mb-1.5">The MFA scan failed. Please try again.</p>
+        )}
         {!mfaResults ? (
           <p className="text-xs text-neutral-500">
-            Run the MFA scan above to filter by enrolled factors.
+            Scan the group to filter by enrolled factors (1 API call per member).
           </p>
         ) : (
           <div className="space-y-2">

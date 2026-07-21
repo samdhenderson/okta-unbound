@@ -55,20 +55,31 @@ export const STANDARD_PROFILE_FIELDS = new Set([
 ]);
 
 /**
+ * Whether a profile key is {@link EXCLUDED_PROFILE_FIELDS security-sensitive} and
+ * must never be surfaced in the UI. Matches both the raw and lower-cased key.
+ * Single source of truth for the exclusion so every consumer (custom-attributes
+ * and the "All attributes" view) stays in sync.
+ *
+ * @param key - The profile attribute name.
+ */
+export function isExcludedProfileField(key: string): boolean {
+  return EXCLUDED_PROFILE_FIELDS.has(key) || EXCLUDED_PROFILE_FIELDS.has(key.toLowerCase());
+}
+
+/**
  * Return the non-standard, non-excluded, non-empty profile entries to render as
  * "Custom Attributes".
  *
  * @param profile - The user's Okta profile object.
  * @returns `[key, value]` pairs for every field that is not a standard field,
- *   not a {@link EXCLUDED_PROFILE_FIELDS security-sensitive} field (matched both
- *   as-is and lower-cased), and whose value is not `null`/`undefined`/`''`.
+ *   not a {@link isExcludedProfileField security-sensitive} field, and whose
+ *   value is not `null`/`undefined`/`''`.
  */
 export function getCustomProfileFields(profile: Record<string, unknown>): Array<[string, unknown]> {
   return Object.entries(profile).filter(
     ([key, value]) =>
       !STANDARD_PROFILE_FIELDS.has(key) &&
-      !EXCLUDED_PROFILE_FIELDS.has(key) &&
-      !EXCLUDED_PROFILE_FIELDS.has(key.toLowerCase()) &&
+      !isExcludedProfileField(key) &&
       value !== null &&
       value !== undefined &&
       value !== '',
