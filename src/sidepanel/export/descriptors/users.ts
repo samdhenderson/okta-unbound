@@ -7,12 +7,11 @@
  * every other descriptor follows.
  */
 
-import { oktaUserListItemSchema, type OktaUserListItem } from '@/shared/schemas/okta';
 import type { EntityExport } from '../types';
-import { userColumns } from '../columns/userColumns';
+import { userColumns, exportUserSchema, type ExportUser } from '../columns/userColumns';
 
 /** Whole-org Users export with a raw `search` filter and per-row deep links. */
-export const usersDescriptor: EntityExport<OktaUserListItem> = {
+export const usersDescriptor: EntityExport<ExportUser> = {
   id: 'users',
   displayName: 'Users',
   icon: 'user',
@@ -20,7 +19,7 @@ export const usersDescriptor: EntityExport<OktaUserListItem> = {
   context: { kind: 'whole-org' },
   endpoint: '/api/v1/users',
   defaultQuery: { limit: 200 },
-  schema: oktaUserListItemSchema,
+  schema: exportUserSchema,
   filter: {
     kind: 'search',
     placeholder: 'status eq "ACTIVE" and profile.department eq "Sales"',

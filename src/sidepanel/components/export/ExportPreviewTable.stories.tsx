@@ -52,6 +52,7 @@ const meta = {
   args: {
     columns,
     rows,
+    fetched: rows.length,
     dropped: 0,
     capped: false,
     linkify: { entityType: 'user', idColumnId: 'id' },
@@ -67,7 +68,7 @@ export const Default: Story = {};
 
 /** Some rows failed schema validation and were skipped. */
 export const WithDropped: Story = {
-  args: { dropped: 3 },
+  args: { fetched: rows.length + 3, dropped: 3 },
 };
 
 /** The export hit the descriptor's row cap. */
@@ -75,7 +76,12 @@ export const Capped: Story = {
   args: { capped: true },
 };
 
-/** No rows matched the current filter. */
+/** No rows matched the current filter (server returned nothing). */
 export const Empty: Story = {
-  args: { rows: [] },
+  args: { rows: [], fetched: 0 },
+};
+
+/** Rows were returned but all failed validation (self-diagnosing empty state). */
+export const AllDropped: Story = {
+  args: { rows: [], fetched: 12, dropped: 12 },
 };

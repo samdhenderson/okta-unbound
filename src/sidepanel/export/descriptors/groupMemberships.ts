@@ -5,15 +5,14 @@
  * A `search-to-select` descriptor: the admin first picks a group (resolved by the
  * Export tab via `deps.searchGroups`, since its context `label` is `'Group'`), then
  * the engine lists that group's users. Members are users, so this descriptor reuses
- * the shared {@link userColumns} catalog and the {@link OktaUserListItem} schema.
+ * the shared {@link userColumns} catalog and the lenient {@link exportUserSchema}.
  */
 
-import { oktaUserListItemSchema, type OktaUserListItem } from '@/shared/schemas/okta';
 import type { EntityExport } from '../types';
-import { userColumns } from '../columns/userColumns';
+import { userColumns, exportUserSchema, type ExportUser } from '../columns/userColumns';
 
 /** Members of a chosen group, with user identity + profile columns and per-row deep links. */
-export const groupMembershipsDescriptor: EntityExport<OktaUserListItem> = {
+export const groupMembershipsDescriptor: EntityExport<ExportUser> = {
   id: 'group-memberships',
   displayName: 'Group Memberships',
   icon: 'users',
@@ -25,7 +24,7 @@ export const groupMembershipsDescriptor: EntityExport<OktaUserListItem> = {
     endpoint: (groupId) => `/api/v1/groups/${groupId}/users`,
   },
   defaultQuery: { limit: 200 },
-  schema: oktaUserListItemSchema,
+  schema: exportUserSchema,
   filter: { kind: 'none' },
   linkify: { entityType: 'user', idColumnId: 'id' },
   columnCatalog: userColumns,

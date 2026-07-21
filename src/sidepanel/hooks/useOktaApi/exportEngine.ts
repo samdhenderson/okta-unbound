@@ -34,6 +34,8 @@ const DEFAULT_MAX_ROWS = 50_000;
 export interface FetchAllResult<Row> {
   /** Validated rows (malformed rows dropped and counted in `dropped`). */
   rows: Row[];
+  /** Total raw rows the server returned across all pages (before validation). */
+  fetched: number;
   /** How many rows failed schema validation and were skipped. */
   dropped: number;
   /** Whether the `maxRows` cap was hit before pagination finished. */
@@ -86,6 +88,7 @@ export function createExportEngineOperations(coreApi: CoreApi) {
     const rows: Row[] = [];
     const cap = descriptor.maxRows ?? DEFAULT_MAX_ROWS;
     const context = `EXPORT ${descriptor.id}`;
+    let fetched = 0;
     let dropped = 0;
     let capped = false;
     let nextUrl: string | null = resolvedEndpoint;
@@ -98,6 +101,7 @@ export function createExportEngineOperations(coreApi: CoreApi) {
       }
 
       const rawLength = Array.isArray(response.data) ? response.data.length : 0;
+      fetched += rawLength;
       const page = parseOktaList(descriptor.schema, response.data, context) as Row[];
       dropped += rawLength - page.length;
       rows.push(...page);
@@ -112,7 +116,7 @@ export function createExportEngineOperations(coreApi: CoreApi) {
       nextUrl = parseNextLink(response.headers?.link);
     }
 
-    return { rows, dropped, capped };
+    return { rows, fetched, dropped, capped };
   };
 
   /**

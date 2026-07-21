@@ -6,9 +6,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { oktaUserListItemSchema } from '@/shared/schemas/okta';
 import { groupMembershipsDescriptor } from './groupMemberships';
-import { userColumns } from '../columns/userColumns';
+import { userColumns, exportUserSchema } from '../columns/userColumns';
 
 describe('groupMembershipsDescriptor', () => {
   it('has the stable registry id', () => {
@@ -29,7 +28,9 @@ describe('groupMembershipsDescriptor', () => {
     expect(groupMembershipsDescriptor.columnCatalog).toBe(userColumns);
   });
 
-  it('validates rows with the user list-item schema', () => {
-    expect(groupMembershipsDescriptor.schema).toBe(oktaUserListItemSchema);
+  it('validates rows with the lenient export user schema', () => {
+    expect(groupMembershipsDescriptor.schema).toBe(exportUserSchema);
+    // Lenient: a member missing name/profile fields must NOT be dropped.
+    expect(exportUserSchema.safeParse({ id: '00uFAKE1' }).success).toBe(true);
   });
 });

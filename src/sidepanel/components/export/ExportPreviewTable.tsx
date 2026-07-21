@@ -23,6 +23,8 @@ interface ExportPreviewTableProps {
   columns: ExportColumn<unknown>[];
   /** All fetched rows; only the first {@link PREVIEW_LIMIT} are shown. */
   rows: unknown[];
+  /** Total raw rows the server returned (before validation). */
+  fetched: number;
   /** Rows skipped for failing schema validation. */
   dropped: number;
   /** Whether the descriptor's row cap was hit. */
@@ -50,6 +52,7 @@ function projectCell(column: ExportColumn<unknown>, row: unknown): string {
 const ExportPreviewTable: React.FC<ExportPreviewTableProps> = ({
   columns,
   rows,
+  fetched,
   dropped,
   capped,
   linkify,
@@ -58,11 +61,13 @@ const ExportPreviewTable: React.FC<ExportPreviewTableProps> = ({
   const total = rows.length;
 
   if (total === 0) {
-    return (
-      <div className="rounded-md border border-neutral-200 bg-white p-4 text-sm text-neutral-600">
-        No rows matched — nothing to preview.
-      </div>
-    );
+    // Distinguish "the server returned nothing" from "every row was dropped by
+    // validation" so an empty export explains itself instead of looking broken.
+    const message =
+      fetched > 0
+        ? `The server returned ${fetched} row${fetched === 1 ? '' : 's'}, but all were skipped as unrecognized. This is likely a schema mismatch — please report it.`
+        : 'The server returned no rows for this query.';
+    return <AlertMessage message={{ type: fetched > 0 ? 'warning' : 'info', text: message }} />;
   }
 
   const shown = Math.min(PREVIEW_LIMIT, total);

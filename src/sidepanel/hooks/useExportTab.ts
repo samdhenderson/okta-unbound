@@ -35,6 +35,7 @@ export interface ExportMatchCount {
 /** Result of a paginated export read. */
 interface FetchResult<Row> {
   rows: Row[];
+  fetched: number;
   dropped: number;
   capped: boolean;
 }
@@ -137,6 +138,8 @@ export interface UseExportTab {
 
   /** Fetched preview rows (shared by Preview + Download), or `null`. */
   previewRows: unknown[] | null;
+  /** Total raw rows the server returned (before validation). */
+  fetched: number;
   /** Rows skipped for failing schema validation. */
   dropped: number;
   /** Whether the descriptor's row cap was hit. */
@@ -185,6 +188,7 @@ export function useExportTab({
   const [matchCount, setMatchCount] = useState<ExportMatchCount | null>(null);
   const [matchCountLoading, setMatchCountLoading] = useState(false);
   const [previewRows, setPreviewRows] = useState<unknown[] | null>(null);
+  const [fetched, setFetched] = useState(0);
   const [dropped, setDropped] = useState(0);
   const [capped, setCapped] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
@@ -224,6 +228,7 @@ export function useExportTab({
       setContextId(null);
       setContextLabel(null);
       setPreviewRows(null);
+      setFetched(0);
       setDropped(0);
       setCapped(false);
       setActivePresetId(null);
@@ -370,6 +375,7 @@ export function useExportTab({
       try {
         const result = await api.fetchExportRows(target, endpoint, (n) => updateProgress(n));
         setPreviewRows(result.rows);
+        setFetched(result.fetched);
         setDropped(result.dropped);
         setCapped(result.capped);
         return result.rows;
@@ -455,6 +461,7 @@ export function useExportTab({
     deletePreset,
 
     previewRows,
+    fetched,
     dropped,
     capped,
     loadPreview,

@@ -171,6 +171,7 @@ const ExportTab: React.FC<ExportTabProps> = ({ targetTabId, oktaOrigin }) => {
               <ExportPreviewTable
                 columns={tab.enabledColumns}
                 rows={tab.previewRows}
+                fetched={tab.fetched}
                 dropped={tab.dropped}
                 capped={tab.capped}
                 linkify={descriptor.linkify}

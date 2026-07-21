@@ -7,11 +7,39 @@
  * rules list endpoint exposes no useful search parameter, so no raw filter box.
  */
 
-import { oktaGroupRuleSchema, type OktaGroupRuleResponse } from '@/shared/schemas/okta';
+import { z } from 'zod';
 import type { EntityExport } from '../types';
 
+/**
+ * Lenient group-rule list-item schema for export. Only `id` is required and the
+ * status is a free string (not the strict ACTIVE/INACTIVE enum the consolidation
+ * flow uses), so no rule is ever dropped from a report.
+ */
+const exportRuleSchema = z
+  .object({
+    id: z.string(),
+    name: z.string().optional(),
+    status: z.string().optional(),
+    type: z.string().optional(),
+    conditions: z
+      .object({ expression: z.object({ value: z.string().optional() }).passthrough().optional() })
+      .passthrough()
+      .optional(),
+    actions: z
+      .object({
+        assignUserToGroups: z
+          .object({ groupIds: z.array(z.string()).optional() })
+          .passthrough()
+          .optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+type ExportRule = z.infer<typeof exportRuleSchema>;
+
 /** Whole-org Group Rules export (no filter, no per-row deep link). */
-export const rulesDescriptor: EntityExport<OktaGroupRuleResponse> = {
+export const rulesDescriptor: EntityExport<ExportRule> = {
   id: 'group-rules',
   displayName: 'Group Rules',
   icon: 'bolt',
@@ -19,7 +47,7 @@ export const rulesDescriptor: EntityExport<OktaGroupRuleResponse> = {
   context: { kind: 'whole-org' },
   endpoint: '/api/v1/groups/rules',
   defaultQuery: { limit: 200 },
-  schema: oktaGroupRuleSchema,
+  schema: exportRuleSchema,
   filter: { kind: 'none' },
   columnCatalog: [
     {
@@ -27,42 +55,42 @@ export const rulesDescriptor: EntityExport<OktaGroupRuleResponse> = {
       label: 'Rule ID',
       group: 'base',
       defaultEnabled: true,
-      accessor: (r: OktaGroupRuleResponse) => r.id,
+      accessor: (r: ExportRule) => r.id,
     },
     {
       id: 'name',
       label: 'Name',
       group: 'base',
       defaultEnabled: true,
-      accessor: (r: OktaGroupRuleResponse) => r.name,
+      accessor: (r: ExportRule) => r.name,
     },
     {
       id: 'status',
       label: 'Status',
       group: 'base',
       defaultEnabled: true,
-      accessor: (r: OktaGroupRuleResponse) => r.status,
+      accessor: (r: ExportRule) => r.status,
     },
     {
       id: 'type',
       label: 'Type',
       group: 'base',
       defaultEnabled: false,
-      accessor: (r: OktaGroupRuleResponse) => r.type,
+      accessor: (r: ExportRule) => r.type,
     },
     {
       id: 'expression',
       label: 'Condition',
       group: 'base',
       defaultEnabled: true,
-      accessor: (r: OktaGroupRuleResponse) => r.conditions?.expression?.value,
+      accessor: (r: ExportRule) => r.conditions?.expression?.value,
     },
     {
       id: 'assignedGroups',
       label: 'Assigned Groups',
       group: 'base',
       defaultEnabled: true,
-      accessor: (r: OktaGroupRuleResponse) => r.actions?.assignUserToGroups?.groupIds,
+      accessor: (r: ExportRule) => r.actions?.assignUserToGroups?.groupIds,
       format: (value: unknown): string => (Array.isArray(value) ? value.join('; ') : ''),
     },
   ],
