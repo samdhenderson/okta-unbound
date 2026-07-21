@@ -40,7 +40,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   return (
     <div className="rounded-md border border-neutral-200 bg-white overflow-hidden transition-all duration-100">
       <button
-        className="w-full flex items-center justify-between px-5 py-3.5 text-left font-semibold text-neutral-900 bg-neutral-50 hover:bg-neutral-100 transition-all duration-100 border-b border-neutral-200"
+        className="w-full flex items-center justify-between px-5 py-3.5 text-left font-semibold text-neutral-900 bg-white hover:bg-neutral-50 transition-all duration-100 border-b border-neutral-200"
         onClick={() => setIsOpen(!isOpen)}
         type="button"
       >
@@ -55,7 +55,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
           </svg>
           <span className="text-sm font-semibold">{title}</span>
           {itemCount !== undefined && (
-            <span className="px-2 py-0.5 bg-white rounded-md text-xs font-medium text-neutral-600 border border-neutral-200">
+            <span className="px-2 py-0.5 bg-neutral-50 rounded-md text-xs font-medium text-neutral-600 border border-neutral-200">
               {itemCount}
             </span>
           )}
