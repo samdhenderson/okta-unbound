@@ -3,7 +3,7 @@
  * and `deepMergeProfiles` (recursive profile merge with array strategies).
  */
 import { describe, it, expect } from 'vitest';
-import { parseNextLink, deepMergeProfiles } from './utilities';
+import { parseNextLink, deepMergeProfiles, nextPageUrl } from './utilities';
 
 describe('parseNextLink', () => {
   it('returns null when the header is missing', () => {
@@ -37,6 +37,28 @@ describe('parseNextLink', () => {
     // Matches the rel token but the `<...>` extraction fails → falls through to null.
     const header = 'https://example.okta.com/api/v1/users; rel="next"';
     expect(parseNextLink(header)).toBeNull();
+  });
+});
+
+describe('nextPageUrl', () => {
+  const cur = '/api/v1/groups/rules?limit=200';
+  const nextHeader = '<https://acme.okta.com/api/v1/groups/rules?after=CUR&limit=200>; rel="next"';
+
+  it('returns the next page when the cursor advances and the page had items', () => {
+    expect(nextPageUrl(cur, nextHeader, 200)).toBe('/api/v1/groups/rules?after=CUR&limit=200');
+  });
+
+  it('stops when the page came back empty even if a next link is present', () => {
+    expect(nextPageUrl(cur, nextHeader, 0)).toBeNull();
+  });
+
+  it('stops when the cursor does not advance (self-referential next link)', () => {
+    const selfHeader = `<https://acme.okta.com${cur}>; rel="next"`;
+    expect(nextPageUrl(cur, selfHeader, 200)).toBeNull();
+  });
+
+  it('stops when there is no next link', () => {
+    expect(nextPageUrl(cur, undefined, 200)).toBeNull();
   });
 });
 
