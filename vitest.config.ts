@@ -66,6 +66,13 @@ export default defineConfig({
         plugins: [storybookTest({ configDir: path.join(dirname, '.storybook') })],
         test: {
           name: 'storybook',
+          // The browser runner occasionally throws "Failed to fetch dynamically
+          // imported module" for a Storybook addon chunk (addon-docs / addon-vitest)
+          // — a transient Vite dep-optimizer race, not a broken story (the affected
+          // file varies run to run). Retry clears the transient test-level failures;
+          // the CI script also passes --no-file-parallelism to serialize file loads
+          // so the optimizer settles before the bulk of the suite runs.
+          retry: 2,
           // @storybook/addon-vitest (SB 10.3+) auto-applies the preview
           // annotations (provider decorators + the chrome-fake side effect from
           // preview.tsx), so no explicit setProjectAnnotations setup file is needed.

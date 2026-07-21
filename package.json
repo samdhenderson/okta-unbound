@@ -12,7 +12,7 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --project unit --coverage",
     "test:run": "vitest run --project unit",
-    "test:storybook": "vitest run --project storybook",
+    "test:storybook": "vitest run --project storybook --no-file-parallelism",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives",
     "lint:fix": "eslint src --ext ts,tsx --fix",
