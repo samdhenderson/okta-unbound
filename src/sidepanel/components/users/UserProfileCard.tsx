@@ -2,457 +2,164 @@
  * @module sidepanel/components/users/UserProfileCard
  * @description Presentational card summarizing a single Okta user's profile.
  *
- * Shared by both UsersTab and UserOverview. Shows avatar, status badge, key
- * metadata, and optional collapsible Account/Organization/Contact sections that
- * self-hide when the user has no data for them.
+ * Renders the compact {@link UserIdentity} header followed by tabbed detail
+ * sections (Account / Organization / Contact / Preferences / Custom) plus an
+ * **All** tab — a flat, searchable list of every profile attribute. Sections with
+ * no data self-hide. Used by the Users tab.
  */
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { OktaUser } from '../../../shared/types';
-import CollapsibleSection from '../shared/CollapsibleSection';
-import { IconButton, OpenInOktaLink } from '../shared';
-import { formatDateShort, getRelativeTime } from '../../../shared/utils/dateFormat';
-import { getCustomProfileFields } from '../../../shared/utils/profileFields';
+import { Tabs, Input, type TabItem } from '../shared';
+import Icon from '../overview/shared/Icon';
+import UserIdentity from './UserIdentity';
+import {
+  getAccountFields,
+  getOrgFields,
+  getContactFields,
+  getPrefsFields,
+  getCustomFields,
+  getAllFields,
+  type ProfileField,
+} from './userProfileSections';
 
 /** Props for {@link UserProfileCard}. */
 interface UserProfileCardProps {
   /** The user to render. */
   user: OktaUser;
-  /** Group count shown in the metadata footer. */
-  groupCount?: number;
-  /**
-   * When true (default), renders the collapsible Account / Organization / Contact /
-   * Preferences / Custom Attributes sections.
-   */
+  /** When true (default), renders the tabbed detail sections below the identity header. */
   showCollapsibleSections?: boolean;
   /** Okta origin used to build the "Open in Okta" admin link; the link is hidden when absent. */
   oktaOrigin?: string | null;
-  /**
-   * Whether to render the "Open in Okta" deep link. Defaults to `true`. The
-   * Overview passes `false` — you're already on that entity's page, so the link is
-   * redundant there.
-   */
+  /** Whether to render the identity header's "Open in Okta" deep link. Defaults to `true`. */
   showOktaLink?: boolean;
   /**
-   * Optional content rendered between the summary card and the collapsible sections
+   * Optional content rendered between the identity header and the detail sections
    * (e.g. UsersTab's lifecycle-action controls). Renders regardless of
    * `showCollapsibleSections`.
    */
   afterCard?: React.ReactNode;
 }
 
+/** A two-column grid of labelled profile field cells. */
+const FieldGrid: React.FC<{ fields: ProfileField[] }> = ({ fields }) => (
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+    {fields.map((field) => (
+      <div key={field.key} className="p-3 bg-white rounded-md border border-neutral-200">
+        <span className="text-xs font-medium text-neutral-600 mb-1 block">{field.label}</span>
+        <span
+          className={`block text-neutral-900 ${field.mono ? 'font-mono text-xs truncate' : 'text-sm'}`}
+        >
+          {field.value}
+        </span>
+      </div>
+    ))}
+  </div>
+);
+
 /**
- * Shared user profile card used in both UsersTab and UserOverview. Displays user
- * details with avatar, status badge, metadata footer, and optional collapsible
- * sections. Includes copy-to-clipboard for the user id.
+ * Shared user profile card used in the Users tab. Displays the compact identity
+ * header, an optional `afterCard` slot, and tabbed detail sections including a
+ * searchable "All attributes" view.
  */
 const UserProfileCard: React.FC<UserProfileCardProps> = ({
   user,
-  groupCount = 0,
   showCollapsibleSections = true,
   oktaOrigin,
   showOktaLink = true,
   afterCard,
 }) => {
-  const [idCopied, setIdCopied] = useState(false);
+  const sections = useMemo(() => {
+    const account = getAccountFields(user);
+    const org = getOrgFields(user);
+    const contact = getContactFields(user);
+    const prefs = getPrefsFields(user);
+    const custom = getCustomFields(user);
+    const all = getAllFields(user);
+    return { account, org, contact, prefs, custom, all };
+  }, [user]);
 
-  const handleCopyId = () => {
-    navigator.clipboard.writeText(user.id).then(() => {
-      setIdCopied(true);
-      setTimeout(() => setIdCopied(false), 1500);
-    });
-  };
+  // Only render tabs that have data (Account + All are always present).
+  const tabs = useMemo<TabItem[]>(() => {
+    const list: TabItem[] = [{ key: 'account', label: 'Account' }];
+    if (sections.org.length) list.push({ key: 'org', label: 'Org' });
+    if (sections.contact.length) list.push({ key: 'contact', label: 'Contact' });
+    if (sections.prefs.length) list.push({ key: 'prefs', label: 'Prefs' });
+    if (sections.custom.length)
+      list.push({ key: 'custom', label: 'Custom', count: sections.custom.length });
+    list.push({ key: 'all', label: 'All' });
+    return list;
+  }, [sections]);
 
-  /** Maps an Okta user status to its status-badge Tailwind classes (color-coded per status). */
-  const getStatusBadgeClass = (status: string): string => {
-    const baseClasses =
-      'inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold shadow-sm';
-    switch (status) {
-      case 'ACTIVE':
-        return `${baseClasses} bg-emerald-50 text-emerald-700 border border-emerald-200`;
-      case 'PROVISIONED':
-        return `${baseClasses} bg-blue-50 text-blue-700 border border-blue-200`;
-      case 'STAGED':
-        return `${baseClasses} bg-neutral-100 text-neutral-700 border border-neutral-300`;
-      case 'SUSPENDED':
-        return `${baseClasses} bg-amber-50 text-amber-700 border border-amber-200`;
-      case 'RECOVERY':
-        return `${baseClasses} bg-purple-50 text-purple-700 border border-purple-200`;
-      case 'PASSWORD_EXPIRED':
-        return `${baseClasses} bg-orange-50 text-orange-700 border border-orange-200`;
-      case 'LOCKED_OUT':
-        return `${baseClasses} bg-rose-50 text-rose-700 border border-rose-200`;
-      case 'DEPROVISIONED':
-        return `${baseClasses} bg-red-50 text-red-700 border border-red-200`;
-      default:
-        return `${baseClasses} bg-neutral-100 text-neutral-700 border border-neutral-300`;
-    }
-  };
+  const [activeKey, setActiveKey] = useState('account');
+  const [allFilter, setAllFilter] = useState('');
 
-  const hasOrgInfo =
-    user.profile.title ||
-    user.profile.department ||
-    user.profile.division ||
-    user.profile.organization ||
-    user.profile.manager ||
-    user.profile.costCenter ||
-    user.profile.employeeNumber ||
-    user.profile.userType;
+  // Guard against an active tab that disappeared when the user changed.
+  const activeExists = tabs.some((t) => t.key === activeKey);
+  const currentKey = activeExists ? activeKey : 'account';
 
-  const hasContactInfo =
-    user.profile.mobilePhone ||
-    user.profile.primaryPhone ||
-    user.profile.streetAddress ||
-    user.profile.city ||
-    user.profile.state ||
-    user.profile.zipCode ||
-    user.profile.countryCode;
+  const filteredAll = useMemo(() => {
+    const q = allFilter.trim().toLowerCase();
+    if (!q) return sections.all;
+    return sections.all.filter(
+      (f) => f.label.toLowerCase().includes(q) || f.value.toLowerCase().includes(q),
+    );
+  }, [sections.all, allFilter]);
 
   return (
     <div className="space-y-4">
-      {/* Premium User ID Card */}
-      <div className="bg-white rounded-md border border-neutral-200 overflow-hidden">
-        <div className="p-6 bg-white">
-          <div className="flex items-start gap-5">
-            {/* Avatar */}
-            <div className="shrink-0 w-16 h-16 rounded-full bg-primary flex items-center justify-center text-white text-xl font-bold shadow-sm ring-4 ring-primary-highlight">
-              {user.profile.firstName?.[0]?.toUpperCase() || '?'}
-              {user.profile.lastName?.[0]?.toUpperCase() || ''}
-            </div>
-
-            {/* User Info */}
-            <div className="flex-1 min-w-0">
-              <h2 className="text-xl font-bold text-neutral-900 mb-1">
-                {user.profile.firstName} {user.profile.lastName}
-              </h2>
-              {(user.profile.title || user.profile.department) && (
-                <div className="text-sm text-neutral-600 mb-2 flex items-center gap-2">
-                  {user.profile.title && <span>{user.profile.title}</span>}
-                  {user.profile.title && user.profile.department && (
-                    <span className="text-neutral-400">|</span>
-                  )}
-                  {user.profile.department && <span>{user.profile.department}</span>}
-                </div>
-              )}
-              <div className="text-sm text-neutral-700 mb-1">{user.profile.email}</div>
-              {user.profile.genderPronouns && (
-                <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-700 text-xs font-medium rounded-md border border-purple-200 mt-2">
-                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  {user.profile.genderPronouns}
-                </div>
-              )}
-            </div>
-
-            {/* Status Badge + Admin Console Link */}
-            <div className="shrink-0 flex flex-col items-end gap-2">
-              <span className={getStatusBadgeClass(user.status)}>{user.status}</span>
-              {showOktaLink && (
-                <OpenInOktaLink oktaOrigin={oktaOrigin} entityType="user" entityId={user.id} />
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Metadata Footer */}
-        <div className="px-6 py-4 bg-neutral-50 border-t border-neutral-200 grid grid-cols-3 gap-4 text-sm">
-          <div className="flex flex-col">
-            <span className="text-xs font-medium text-neutral-600 mb-1">Last Login</span>
-            <span className="text-neutral-900 font-medium">
-              {user.lastLogin
-                ? getRelativeTime(user.lastLogin) || formatDateShort(user.lastLogin)
-                : 'Never'}
-            </span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-xs font-medium text-neutral-600 mb-1">Created</span>
-            <span className="text-neutral-900 font-medium">
-              {user.created
-                ? getRelativeTime(user.created) || formatDateShort(user.created)
-                : 'Unknown'}
-            </span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-xs font-medium text-neutral-600 mb-1">Groups</span>
-            <span className="text-neutral-900 font-medium">{groupCount}</span>
-          </div>
-        </div>
-      </div>
+      <UserIdentity user={user} oktaOrigin={oktaOrigin} showOktaLink={showOktaLink} />
 
       {afterCard}
 
-      {/* Collapsible Detail Sections */}
       {showCollapsibleSections && (
-        <div className="space-y-4">
-          {/* Account Details */}
-          <CollapsibleSection title="Account Details" defaultOpen={false}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-              <div className="p-3 bg-white rounded-md border border-neutral-200">
-                <span className="text-xs font-medium text-neutral-600 mb-1 block">Login</span>
-                <span className="text-sm text-neutral-900 block">{user.profile.login}</span>
-              </div>
-              <div className="p-3 bg-white rounded-md border border-neutral-200">
-                <span className="text-xs font-medium text-neutral-600 mb-1 block">User ID</span>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-mono text-xs text-neutral-900 truncate">{user.id}</span>
-                  <IconButton
-                    label={idCopied ? 'Copied!' : 'Copy ID'}
-                    onClick={handleCopyId}
-                    variant="ghost"
-                    size="sm"
-                    className="shrink-0"
-                  >
-                    {idCopied ? (
-                      <svg
-                        className="w-3.5 h-3.5 text-success-text"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
+        <div className="bg-white rounded-md border border-neutral-200 overflow-hidden">
+          <div className="px-2">
+            <Tabs
+              tabs={tabs}
+              activeKey={currentKey}
+              onChange={setActiveKey}
+              ariaLabel="User profile sections"
+            />
+          </div>
+
+          <div className="p-4">
+            {currentKey === 'account' && <FieldGrid fields={sections.account} />}
+            {currentKey === 'org' && <FieldGrid fields={sections.org} />}
+            {currentKey === 'contact' && <FieldGrid fields={sections.contact} />}
+            {currentKey === 'prefs' && <FieldGrid fields={sections.prefs} />}
+            {currentKey === 'custom' && <FieldGrid fields={sections.custom} />}
+            {currentKey === 'all' && (
+              <div className="space-y-3">
+                <Input
+                  type="search"
+                  value={allFilter}
+                  onChange={setAllFilter}
+                  placeholder="Filter all attributes…"
+                  icon={<Icon type="search" size="sm" />}
+                />
+                <div className="border border-neutral-200 rounded-md overflow-hidden divide-y divide-neutral-200 max-h-80 overflow-y-auto">
+                  {filteredAll.map((field) => (
+                    <div
+                      key={field.key}
+                      className="flex items-start justify-between gap-3 px-3 py-2 text-sm"
+                    >
+                      <span className="text-neutral-500 shrink-0">{field.label}</span>
+                      <span
+                        className={`font-medium text-neutral-900 text-right break-all ${field.mono ? 'font-mono text-xs' : ''}`}
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                        />
-                      </svg>
-                    ) : (
-                      <svg
-                        className="w-3.5 h-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M8 5a2 2 0 002 2h4a2 2 0 002-2M8 5a2 2 0 012-2h4a2 2 0 012 2"
-                        />
-                      </svg>
-                    )}
-                  </IconButton>
-                </div>
-              </div>
-              {user.profile.secondEmail && (
-                <div className="p-3 bg-white rounded-md border border-neutral-200">
-                  <span className="text-xs font-medium text-neutral-600 mb-1 block">
-                    Secondary Email
-                  </span>
-                  <span className="text-sm text-neutral-900 block">{user.profile.secondEmail}</span>
-                </div>
-              )}
-              {user.activated && (
-                <div className="p-3 bg-white rounded-md border border-neutral-200">
-                  <span className="text-xs font-medium text-neutral-600 mb-1 block">Activated</span>
-                  <span className="text-sm text-neutral-900 block">
-                    {formatDateShort(user.activated)}
-                  </span>
-                </div>
-              )}
-              {user.statusChanged && (
-                <div className="p-3 bg-white rounded-md border border-neutral-200">
-                  <span className="text-xs font-medium text-neutral-600 mb-1 block">
-                    Status Changed
-                  </span>
-                  <span className="text-sm text-neutral-900 block">
-                    {formatDateShort(user.statusChanged)}
-                  </span>
-                </div>
-              )}
-              {user.passwordChanged && (
-                <div className="p-3 bg-white rounded-md border border-neutral-200">
-                  <span className="text-xs font-medium text-neutral-600 mb-1 block">
-                    Password Changed
-                  </span>
-                  <span className="text-sm text-neutral-900 block">
-                    {formatDateShort(user.passwordChanged)}
-                  </span>
-                </div>
-              )}
-              {user.lastUpdated && (
-                <div className="p-3 bg-white rounded-md border border-neutral-200">
-                  <span className="text-xs font-medium text-neutral-600 mb-1 block">
-                    Profile Updated
-                  </span>
-                  <span className="text-sm text-neutral-900 block">
-                    {formatDateShort(user.lastUpdated)}
-                  </span>
-                </div>
-              )}
-            </div>
-          </CollapsibleSection>
-
-          {/* Organization - only show if any org fields exist */}
-          {hasOrgInfo && (
-            <CollapsibleSection title="Organization" defaultOpen={false}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                {user.profile.title && (
-                  <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-medium text-neutral-600 mb-1 block">Title</span>
-                    <span className="text-sm text-neutral-900 block">{user.profile.title}</span>
-                  </div>
-                )}
-                {user.profile.department && (
-                  <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
-                      Department
-                    </span>
-                    <span className="text-sm text-neutral-900 block">
-                      {user.profile.department}
-                    </span>
-                  </div>
-                )}
-                {user.profile.division && (
-                  <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
-                      Division
-                    </span>
-                    <span className="text-sm text-neutral-900 block">{user.profile.division}</span>
-                  </div>
-                )}
-                {user.profile.organization && (
-                  <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
-                      Organization
-                    </span>
-                    <span className="text-sm text-neutral-900 block">
-                      {user.profile.organization}
-                    </span>
-                  </div>
-                )}
-                {user.profile.manager && (
-                  <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-medium text-neutral-600 mb-1 block">Manager</span>
-                    <span className="text-sm text-neutral-900 block">{user.profile.manager}</span>
-                  </div>
-                )}
-                {user.profile.costCenter && (
-                  <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
-                      Cost Center
-                    </span>
-                    <span className="text-sm text-neutral-900 block">
-                      {user.profile.costCenter}
-                    </span>
-                  </div>
-                )}
-                {user.profile.employeeNumber && (
-                  <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
-                      Employee #
-                    </span>
-                    <span className="text-sm text-neutral-900 block">
-                      {user.profile.employeeNumber}
-                    </span>
-                  </div>
-                )}
-                {user.profile.userType && (
-                  <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
-                      User Type
-                    </span>
-                    <span className="text-sm text-neutral-900 block">{user.profile.userType}</span>
-                  </div>
-                )}
-              </div>
-            </CollapsibleSection>
-          )}
-
-          {/* Contact - only show if any contact fields exist */}
-          {hasContactInfo && (
-            <CollapsibleSection title="Contact" defaultOpen={false}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                {user.profile.primaryPhone && (
-                  <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-medium text-neutral-600 mb-1 block">Phone</span>
-                    <span className="text-sm text-neutral-900 block">
-                      {user.profile.primaryPhone}
-                    </span>
-                  </div>
-                )}
-                {user.profile.mobilePhone && (
-                  <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-medium text-neutral-600 mb-1 block">Mobile</span>
-                    <span className="text-sm text-neutral-900 block">
-                      {user.profile.mobilePhone}
-                    </span>
-                  </div>
-                )}
-                {(user.profile.streetAddress ||
-                  user.profile.city ||
-                  user.profile.state ||
-                  user.profile.zipCode) && (
-                  <div className="p-3 bg-white rounded-md border border-neutral-200 md:col-span-2">
-                    <span className="text-xs font-medium text-neutral-600 mb-1 block">Address</span>
-                    <span className="text-sm text-neutral-900 block">
-                      {[
-                        user.profile.streetAddress,
-                        user.profile.city,
-                        user.profile.state,
-                        user.profile.zipCode,
-                        user.profile.countryCode,
-                      ]
-                        .filter(Boolean)
-                        .join(', ')}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </CollapsibleSection>
-          )}
-
-          {/* Preferences - only show if any exist */}
-          {(user.profile.locale || user.profile.timezone) && (
-            <CollapsibleSection title="Preferences" defaultOpen={false}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                {user.profile.locale && (
-                  <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-medium text-neutral-600 mb-1 block">Locale</span>
-                    <span className="text-sm text-neutral-900 block">{user.profile.locale}</span>
-                  </div>
-                )}
-                {user.profile.timezone && (
-                  <div className="p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-xs font-medium text-neutral-600 mb-1 block">
-                      Timezone
-                    </span>
-                    <span className="text-sm text-neutral-900 block">{user.profile.timezone}</span>
-                  </div>
-                )}
-              </div>
-            </CollapsibleSection>
-          )}
-
-          {/* Custom Attributes - show any non-standard profile fields */}
-          {(() => {
-            const customFields = getCustomProfileFields(user.profile);
-
-            if (customFields.length === 0) return null;
-
-            return (
-              <CollapsibleSection
-                title="Custom Attributes"
-                defaultOpen={false}
-                itemCount={customFields.length}
-              >
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                  {customFields.map(([key, value]) => (
-                    <div className="p-3 bg-white rounded-md border border-neutral-200" key={key}>
-                      <span className="text-xs font-medium text-neutral-600 mb-1 block">{key}</span>
-                      <span className="text-sm text-neutral-900 block">
-                        {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                        {field.value}
                       </span>
                     </div>
                   ))}
+                  {filteredAll.length === 0 && (
+                    <div className="px-3 py-4 text-sm text-neutral-500 text-center">
+                      No matching attributes
+                    </div>
+                  )}
                 </div>
-              </CollapsibleSection>
-            );
-          })()}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

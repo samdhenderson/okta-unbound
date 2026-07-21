@@ -40,6 +40,9 @@ const meta = {
     statusRows,
     mfaResults: null,
     factorLabels: [],
+    memberCount: 250,
+    scanStatus: 'idle',
+    onRunScanClick: fn(),
     sortBy: 'name',
     sortDesc: false,
     onToggleStatus: fn(),
@@ -63,6 +66,7 @@ export const WithMfaResults: Story = {
   args: {
     mfaResults,
     factorLabels: ['Okta Verify (Fastpass)', 'SMS'],
+    scanStatus: 'complete',
   },
 };
 
@@ -72,6 +76,7 @@ export const WithActiveFilters: Story = {
     filters: activeFilters,
     mfaResults,
     factorLabels: ['Okta Verify (Fastpass)', 'SMS'],
+    scanStatus: 'complete',
   },
 };
 
@@ -80,7 +85,15 @@ export const SortedByFactors: Story = {
   args: {
     mfaResults,
     factorLabels: ['Okta Verify (Fastpass)', 'SMS'],
+    scanStatus: 'complete',
     sortBy: 'factors',
     sortDesc: true,
+  },
+};
+
+/** A scan in progress: the trigger shows its loading state. */
+export const Scanning: Story = {
+  args: {
+    scanStatus: 'scanning',
   },
 };

@@ -2,7 +2,7 @@
  * @module sidepanel/hooks/useGroupSource
  * @description Loads the "why does this group exist?" insight for one group.
  *
- * Two tiers, mirroring `MfaScanPanel`'s cheap-then-gated pattern: opening a group
+ * Two tiers, mirroring the MFA scan's cheap-then-gated pattern: opening a group
  * loads its feeding rules (cheap, cache-backed); the manual-vs-rule member split
  * is an opt-in analysis that fetches the group's members (one paginated read) and
  * classifies each with the shared membership heuristic. Read-only.

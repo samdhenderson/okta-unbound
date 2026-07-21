@@ -4,13 +4,12 @@
  *
  * Owns the active-tab selection (persisted to `chrome.storage.local` with legacy-tab
  * migration) and the highlighted rule id. Reads live Okta page context via
- * `useGroupContext`/`useOktaPageContext` and renders the {@link Header},
- * {@link ContextBar}, {@link TabNavigation}, the per-tab content, and the fixed
- * {@link ActivityBar} (the unified scheduler + progress bar), all inside the
- * SchedulerProvider.
+ * `useGroupContext`/`useOktaPageContext` and renders the {@link ContextBar} masthead
+ * (app wordmark + entity identity + connection), {@link TabNavigation}, the per-tab
+ * content, and the fixed {@link ActivityBar} (the unified scheduler + progress bar),
+ * all inside the SchedulerProvider.
  */
 import React, { useState, useEffect } from 'react';
-import Header from './components/Header';
 import ContextBar from './components/ContextBar';
 import PageHeader from './components/shared/PageHeader';
 import TabNavigation, { type TabType } from './components/TabNavigation';
@@ -199,8 +198,6 @@ const App: React.FC = () => {
   return (
     <SchedulerProvider>
       <div className="flex flex-col h-screen overflow-y-auto pb-14 bg-canvas">
-        <Header status={connectionStatus} />
-
         <ContextBar
           pageType={effective.pageType}
           entityName={entityName}

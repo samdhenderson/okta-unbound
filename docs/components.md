@@ -40,8 +40,12 @@ info`) — never `error`.
 
 `shared/`: `Button`, `IconButton`, `FilterPill`, `SortPill`, `CopyButton`,
 `OpenInOktaLink`, `Modal`, `Input`, `Checkbox`, `Select`, `Textarea`, `PageHeader`,
-`CollapsibleSection`, `AlertMessage`, `EmptyState`, `LoadingSpinner`,
+`Tabs`, `CollapsibleSection`, `AlertMessage`, `EmptyState`, `LoadingSpinner`,
 `ScrollableList`, `SearchDropdown`, `SelectionChips`.
+
+`Tabs` is the accessible tab-bar primitive (`role="tablist"/"tab"`, roving
+`tabindex`, arrow-key nav) with two variants: `underline` (section nav) and
+`segmented` (compact toggle).
 `overview/shared/`: `Icon`, `StatCard`.
 
 ## Documented raw-control exceptions
@@ -54,9 +58,10 @@ comment at the call site:
   `UserSearchBar`, `GroupSearchBar`, and the Add-to-Group type-ahead (leading-glyph
   search inputs with an absolutely-positioned spinner/dropdown), plus
   `GroupFilterToggle`.
-- **Genuinely custom controls:** tab bars (`role="tab"`, e.g. `ComparisonTabBar`),
-  the dynamic-color banner, radio-cards, and the `AttributeFacet` data-viz spread
-  bars.
+- **Genuinely custom controls:** `ComparisonTabBar` (a documented one-off
+  `role="tab"` bar that predates and has not been migrated to the shared `Tabs`
+  primitive), the dynamic-color banner, radio-cards, and the `AttributeFacet`
+  data-viz spread bars.
 - **Awaiting a new shared primitive (accepted future work):**
   - Chromeless **text-links** ("Clear all", "View details") have no shared
     `TextLink` primitive — adding one would discharge these across `GroupFilterPanel`,

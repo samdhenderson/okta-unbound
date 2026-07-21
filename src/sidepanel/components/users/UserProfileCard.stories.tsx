@@ -52,7 +52,7 @@ const minimalUser: OktaUser = {
 const suspendedUser: OktaUser = mockUsers.find((u) => u.status === 'SUSPENDED') ?? baseUser;
 const deprovisionedUser: OktaUser = mockUsers.find((u) => u.status === 'DEPROVISIONED') ?? baseUser;
 
-/** Presentational summary card for a single Okta user: avatar, status, metadata, detail sections. */
+/** Presentational summary card for a single Okta user: identity header + tabbed detail sections. */
 const meta = {
   title: 'Users/UserProfileCard',
   component: UserProfileCard,
@@ -60,7 +60,6 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   args: {
     user: richUser,
-    groupCount: 4,
   },
 } satisfies Meta<typeof UserProfileCard>;
 
@@ -70,9 +69,9 @@ type Story = StoryObj<typeof meta>;
 /** Active user with full profile data across all collapsible sections. */
 export const Default: Story = {};
 
-/** A newly staged user with only the required profile fields — org/contact sections self-hide. */
+/** A newly staged user with only the required profile fields — org/contact tabs self-hide. */
 export const MinimalProfile: Story = {
-  args: { user: minimalUser, groupCount: 0 },
+  args: { user: minimalUser },
 };
 
 /** Suspended account status badge. */

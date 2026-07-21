@@ -10,7 +10,8 @@
  */
 import React, { useState, useEffect, useMemo } from 'react';
 import StatCard from './shared/StatCard';
-import { UserProfileCard, UserComparisonModal } from '../users';
+import { UserIdentity, UserComparisonModal } from '../users';
+import { formatDateShort, getRelativeTime } from '../../../shared/utils/dateFormat';
 import { useUserMemberships } from '../../hooks/useUserMemberships';
 import { useOktaApi } from '../../hooks/useOktaApi';
 import { useEntityQuery } from '../../cache/useEntityQuery';
@@ -120,15 +121,35 @@ const UserOverview: React.FC<UserOverviewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* User Profile Card - moved to the top */}
+      {/* Compact identity header (the tall ID card's essentials; name + id also live
+          in the masthead, so the id row is hidden here to avoid duplication). */}
       {userDetails && (
-        <UserProfileCard
-          user={userDetails}
-          groupCount={totalGroups}
-          showCollapsibleSections={false}
-          oktaOrigin={oktaOrigin}
-          showOktaLink={false}
-        />
+        <div className="space-y-2">
+          <UserIdentity
+            user={userDetails}
+            oktaOrigin={oktaOrigin}
+            showOktaLink={false}
+            showId={false}
+          />
+          <div className="flex flex-wrap gap-x-6 gap-y-1 px-1 text-xs text-neutral-500">
+            <span>
+              Last login{' '}
+              <span className="font-medium text-neutral-700">
+                {userDetails.lastLogin
+                  ? getRelativeTime(userDetails.lastLogin) || formatDateShort(userDetails.lastLogin)
+                  : 'Never'}
+              </span>
+            </span>
+            <span>
+              Created{' '}
+              <span className="font-medium text-neutral-700">
+                {userDetails.created
+                  ? getRelativeTime(userDetails.created) || formatDateShort(userDetails.created)
+                  : 'Unknown'}
+              </span>
+            </span>
+          </div>
+        </div>
       )}
 
       {/* Quick Stats Grid */}

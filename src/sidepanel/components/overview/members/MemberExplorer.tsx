@@ -12,12 +12,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { OktaUser, MemberMfaResult, MfaScanStatus } from '../../../../shared/types';
 import Button from '../../shared/Button';
+import Modal from '../../shared/Modal';
 import MemberSearchBar from './MemberSearchBar';
 import MemberFilterPanel from './MemberFilterPanel';
 import CopyMembersModal from './CopyMembersModal';
 import CompositionReports from './CompositionReports';
 import BreakdownDetailsModal from './BreakdownDetailsModal';
-import MfaScanPanel from './MfaScanPanel';
 import MemberList from './MemberList';
 import {
   type BreakdownRow,
@@ -25,12 +25,16 @@ import {
   type MemberFilter,
   type SortField,
   computeDimensionBreakdown,
+  computeMfaBreakdown,
   discoverAttributeBreakdowns,
   filterMembers,
   sortMembers,
   getObservedFactorLabels,
   dimensionTitle,
 } from './memberAnalytics';
+
+/** Above this member count, scanning requires explicit confirmation (1 API call per member). */
+const MFA_AUTO_THRESHOLD = 500;
 
 /** Per-factor filter intent: unset, require-present, or require-absent. */
 type FactorMode = 'off' | 'has' | 'missing';
@@ -89,6 +93,7 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
   const attributes = useMemo(() => discoverAttributeBreakdowns(members), [members]);
   const statusRows = useMemo(() => computeDimensionBreakdown(members, 'status'), [members]);
   const factorLabels = useMemo(() => getObservedFactorLabels(mfaResults), [mfaResults]);
+  const mfaRows = useMemo(() => computeMfaBreakdown(members, mfaResults), [members, mfaResults]);
 
   const filtered = useMemo(
     () => filterMembers(members, debouncedQuery, filters, mfaResults),
@@ -178,6 +183,13 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
     setVisibleCount((c) => Math.min(c + PAGE, sorted.length));
   }, [sorted.length]);
 
+  // A single scan entry point (used by the filter panel and the Composition MFA
+  // tab): large groups route through the confirmation gate, small ones scan now.
+  const handleScanClick = useCallback(() => {
+    if (members.length > MFA_AUTO_THRESHOLD) onRequestConfirm();
+    else onRunScan();
+  }, [members.length, onRequestConfirm, onRunScan]);
+
   const mfaScanned = mfaResults !== null && scanStatus === 'complete';
   const activeFilterCount = filters.length;
 
@@ -225,13 +237,16 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
         </button>
       </div>
 
-      {/* Expandable filter panel */}
+      {/* Expandable filter panel — also hosts the MFA scan trigger */}
       {showFilters && (
         <MemberFilterPanel
           filters={filters}
           statusRows={statusRows}
           mfaResults={mfaResults}
           factorLabels={factorLabels}
+          memberCount={members.length}
+          scanStatus={scanStatus}
+          onRunScanClick={handleScanClick}
           sortBy={sortBy}
           sortDesc={sortDesc}
           onToggleStatus={handleStatusToggle}
@@ -244,24 +259,18 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
         />
       )}
 
-      {/* MFA scan trigger + distribution report */}
-      <MfaScanPanel
-        members={members}
-        mfaResults={mfaResults}
-        scanStatus={scanStatus}
-        filters={filters}
-        onRunScan={onRunScan}
-        onRequestConfirm={onRequestConfirm}
-        onCancelConfirm={onCancelConfirm}
-        onToggleMfaFilter={(row) => handleMfaValueToggle(row.value, row.label)}
-      />
-
-      {/* Composition: distribution of every browseable profile attribute */}
+      {/* Composition: attribute distribution + MFA factor breakdown, sectioned together */}
       <CompositionReports
         attributes={attributes}
         filters={filters}
         onToggle={handleCompositionToggle}
         onExpand={setDetailKey}
+        mfaRows={mfaRows}
+        mfaResults={mfaResults}
+        scanStatus={scanStatus}
+        memberCount={members.length}
+        onToggleMfa={(row) => handleMfaValueToggle(row.value, row.label)}
+        onRunScanClick={handleScanClick}
       />
 
       {/* Member list */}
@@ -307,6 +316,30 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
 
       {/* Copy members (name / email / username) modal */}
       <CopyMembersModal isOpen={copyOpen} onClose={() => setCopyOpen(false)} members={sorted} />
+
+      {/* MFA scan confirmation gate for large groups (triggered from the filter panel
+          or the Composition MFA tab; kept here so it renders regardless of either). */}
+      <Modal
+        isOpen={scanStatus === 'confirming'}
+        onClose={onCancelConfirm}
+        title="Run MFA scan?"
+        footer={
+          <>
+            <Button variant="secondary" onClick={onCancelConfirm}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={onRunScan}>
+              Scan anyway
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-neutral-600">
+          This group has <strong>{members.length.toLocaleString()}</strong> members. Scanning makes
+          roughly <strong>{members.length.toLocaleString()}</strong> API calls (one per member) and
+          may take a while on large groups. Results are cached until you reload the panel.
+        </p>
+      </Modal>
     </div>
   );
 };
