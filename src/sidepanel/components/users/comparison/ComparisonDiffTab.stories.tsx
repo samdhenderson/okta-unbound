@@ -56,6 +56,34 @@ export const WithRowAction: Story = {
   },
 };
 
+/**
+ * Bidirectional groups variant: Add actions in BOTH the compared-only bucket
+ * (copy onto the context user) and the context-only bucket (copy onto the
+ * compared user). Their subtitles flip to read "Add groups to <the other user>".
+ */
+export const WithBidirectionalActions: Story = {
+  args: {
+    renderAction: (item) => (
+      <button
+        type="button"
+        onClick={fn()}
+        className="text-xs font-semibold text-primary-text hover:text-primary-dark"
+      >
+        Add {item.label} to Jane Doe
+      </button>
+    ),
+    renderContextAction: (item) => (
+      <button
+        type="button"
+        onClick={fn()}
+        className="text-xs font-semibold text-primary-text hover:text-primary-dark"
+      >
+        Add {item.label} to John Smith
+      </button>
+    ),
+  },
+};
+
 /** All three buckets empty (identical or brand-new users). */
 export const Empty: Story = {
   args: {

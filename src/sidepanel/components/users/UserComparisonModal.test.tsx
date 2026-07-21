@@ -529,6 +529,42 @@ describe('UserComparisonModal', () => {
     });
   });
 
+  describe('group add — to the compared user (bidirectional)', () => {
+    it('copies a context-only group onto the COMPARED user and re-buckets it to shared', async () => {
+      const onGroupsChanged = vi.fn();
+      render(<Harness onGroupsChanged={onGroupsChanged} />);
+      await openComparison();
+      await gotoTab('Groups');
+
+      // Precondition: the context-only group sits in the "Only Alice Context" bucket,
+      // and it now offers its own Add (in the other direction).
+      expect(bucketTitleOf('Context Only Group')).toBe('Only Alice Context');
+
+      await userEvent.click(addButtonFor('Context Only Group'));
+
+      // The PUT targets the COMPARED user (cmp-1), not the context user (ctx-1).
+      await waitFor(() =>
+        expect(mockRuntimeSendMessage).toHaveBeenCalledWith({
+          action: 'scheduleApiRequest',
+          endpoint: '/api/v1/groups/g2/users/cmp-1',
+          method: 'PUT',
+          body: undefined,
+          tabId: TAB_ID,
+          priority: 'normal',
+        }),
+      );
+
+      // Optimistically re-buckets into Shared and the Add button vanishes.
+      await waitFor(() => expect(bucketTitleOf('Context Only Group')).toBe('Shared'));
+      expect(
+        within(rowFor('Context Only Group')).queryByRole('button', { name: 'Add' }),
+      ).toBeNull();
+
+      // The parent's CONTEXT refresh is not called — this add changed the compared user.
+      expect(onGroupsChanged).not.toHaveBeenCalled();
+    });
+  });
+
   describe('group add — both failure channels', () => {
     const expectFailed = async (message: string) => {
       const alert = await screen.findByRole('alert');

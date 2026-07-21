@@ -54,7 +54,7 @@ describe('bucketGroups', () => {
     expect(onlyContext.map((g) => g.id)).toEqual(['a']);
   });
 
-  it('treats addedGroupIds as shared before contextGroups catches up', () => {
+  it('treats addedToContextIds as shared before contextGroups catches up', () => {
     const contextGroups = [membership('a')];
     const comparedGroups = [membership('b'), membership('c')];
 
@@ -62,6 +62,39 @@ describe('bucketGroups', () => {
 
     expect(shared.map((g) => g.id)).toEqual(['b']);
     expect(onlyCompared.map((g) => g.id)).toEqual(['c']);
+  });
+
+  it('treats addedToComparedIds as shared, moving a context-only group out of onlyContext', () => {
+    const contextGroups = [membership('a'), membership('b')];
+    const comparedGroups = [membership('b')];
+
+    // 'a' is context-only, but was just copied onto the compared user this session.
+    const { onlyCompared, shared, onlyContext } = bucketGroups(
+      contextGroups,
+      comparedGroups,
+      new Set(),
+      new Set(['a']),
+    );
+
+    expect(onlyCompared).toEqual([]);
+    expect(shared.map((g) => g.id)).toEqual(['b', 'a']);
+    expect(onlyContext).toEqual([]);
+  });
+
+  it('re-buckets both directions at once without double-counting', () => {
+    const contextGroups = [membership('a'), membership('shared')];
+    const comparedGroups = [membership('shared'), membership('c')];
+
+    const { onlyCompared, shared, onlyContext } = bucketGroups(
+      contextGroups,
+      comparedGroups,
+      new Set(['c']), // c copied onto context
+      new Set(['a']), // a copied onto compared
+    );
+
+    expect(onlyCompared).toEqual([]);
+    expect(onlyContext).toEqual([]);
+    expect(shared.map((g) => g.id).sort()).toEqual(['a', 'c', 'shared']);
   });
 
   it('preserves comparedGroups order within onlyCompared/shared', () => {

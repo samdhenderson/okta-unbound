@@ -46,8 +46,9 @@ interface UseUserComparisonOptions {
  * @returns The comparison view model: `comparedUser` and search state, `activeTab`
  *   control, `groupBuckets` / `appBuckets` with their diff counts and per-facet
  *   plus `overallSimilarity`, aggregated `isLoading` / `loadError`, group-copy
- *   state (`addedGroupIds`, `addingGroupId`, `addError`, `addGroup`), display
- *   names, and the `selectUser` / `changeUser` actions.
+ *   state (`addingGroupId`, `addError`) and the bidirectional `addToContext` /
+ *   `addToCompared` actions, display names, and the `selectUser` / `changeUser`
+ *   actions.
  */
 export function useUserComparison({
   isOpen,
@@ -77,15 +78,30 @@ export function useUserComparison({
     comparedUser,
   });
 
+  // Refresh the compared user's memberships after a group is copied onto them,
+  // so the row re-buckets on the next load (mirrors the context-side refresh the
+  // parent drives via onGroupsChanged).
+  const onComparedGroupsChanged = useCallback(() => {
+    if (comparedUser) void loadMemberships(comparedUser, { force: true });
+  }, [comparedUser, loadMemberships]);
+
   const {
-    addedGroupIds,
+    addedToContextIds,
+    addedToComparedIds,
     addingGroupId,
     addError,
     setAddError,
-    addGroup,
+    addToContext,
+    addToCompared,
     resetCopyState,
     resetForChangeUser,
-  } = useGroupCopy({ targetTabId, contextUser, onGroupsChanged });
+  } = useGroupCopy({
+    targetTabId,
+    contextUser,
+    comparedUser,
+    onContextGroupsChanged: onGroupsChanged,
+    onComparedGroupsChanged,
+  });
 
   // Reset everything when the modal closes. The parent keeps this component mounted
   // across close (only Modal's children unmount), so this effect is the sole thing
@@ -126,8 +142,8 @@ export function useUserComparison({
   }, [resetApps, resetForChangeUser, clearMemberships, clearSearch]);
 
   const groupBuckets = useMemo(
-    () => bucketGroups(contextGroups, comparedGroups, addedGroupIds),
-    [contextGroups, comparedGroups, addedGroupIds],
+    () => bucketGroups(contextGroups, comparedGroups, addedToContextIds, addedToComparedIds),
+    [contextGroups, comparedGroups, addedToContextIds, addedToComparedIds],
   );
 
   const appBuckets = useMemo(
@@ -171,11 +187,11 @@ export function useUserComparison({
     overallSimilarity,
     isLoading,
     loadError,
-    addedGroupIds,
     addingGroupId,
     addError,
     setAddError,
-    addGroup,
+    addToContext,
+    addToCompared,
     contextName,
     comparedName,
     selectUser,

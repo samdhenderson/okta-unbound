@@ -511,6 +511,41 @@ describe('membership classification (in-file heuristic)', () => {
 });
 
 // ===========================================================================
+// 3b. Compare entry point: the selected-user actions expose a Compare button that
+//     opens the user-comparison modal (same feature as the Overview tab).
+// ===========================================================================
+describe('compare entry point', () => {
+  async function renderWithSelectedUser() {
+    userContext.current = {
+      userInfo: { userId: 'u1', userName: 'Ada Lovelace', userStatus: 'ACTIVE' },
+      isLoading: false,
+      oktaOrigin: null,
+    };
+    route(USER_GROUPS, () => ({ success: true, data: [] }));
+    route(/^\/api\/v1\/users\/u1$/, () => ({ success: true, data: oktaUser() }));
+    render(<UsersTab targetTabId={1} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Load' }));
+    });
+    await screen.findByRole('heading', { name: 'Ada Lovelace' });
+  }
+
+  it('opens the comparison modal from the Compare action', async () => {
+    await renderWithSelectedUser();
+
+    // Closed by default — the dialog is not mounted.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Compare/ }));
+    });
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveAccessibleName('Compare with another user');
+  });
+});
+
+// ===========================================================================
 // 4. Lifecycle confirm flow (real useOktaApi → scheduler).
 // ===========================================================================
 describe('lifecycle actions', () => {
