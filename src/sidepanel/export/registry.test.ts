@@ -3,9 +3,9 @@
  * @description Unit tests for the descriptor registry assembly.
  *
  * Pins that `buildRegistry` keys descriptors by their `id`, includes the
- * reference `users` descriptor, and that `listDescriptors` returns them in
- * insertion order. The registry is the one append point new entities plug into,
- * so this guards the shape the entity hub and engine rely on.
+ * reference `users` descriptor, and that `listDescriptors` returns them sorted by
+ * `displayName`. Descriptors auto-register via `import.meta.glob`, so this guards
+ * the shape the entity hub and engine rely on.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { buildRegistry, listDescriptors } from './registry';
@@ -32,12 +32,12 @@ describe('buildRegistry', () => {
 });
 
 describe('listDescriptors', () => {
-  it('returns the descriptors in insertion order', () => {
+  it('returns the descriptors sorted by display name', () => {
     const registry = buildRegistry(deps);
     const list = listDescriptors(registry);
 
     expect(list.length).toBeGreaterThan(0);
-    expect(list[0].id).toBe('users');
-    expect(list.map((d) => d.id)).toEqual(Object.keys(registry));
+    const names = list.map((d) => d.displayName);
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
   });
 });
