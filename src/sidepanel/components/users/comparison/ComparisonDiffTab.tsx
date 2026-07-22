@@ -30,8 +30,10 @@ interface ComparisonDiffTabProps {
   emptyContextText: string;
   /** Singular noun for the items ("group" or "app"), used in subtitles. */
   noun: string;
-  /** Optional per-row action renderer (e.g. an Add button); only wired for groups. */
+  /** Optional per-row action for the only-compared bucket (Add to context user); groups only. */
   renderAction?: (item: DiffItem) => React.ReactNode;
+  /** Optional per-row action for the only-context bucket (Add to compared user); groups only. */
+  renderContextAction?: (item: DiffItem) => React.ReactNode;
 }
 
 /** Groups/Apps diff view: three tone-coded buckets (add / shared / neutral). */
@@ -46,6 +48,7 @@ const ComparisonDiffTab: React.FC<ComparisonDiffTabProps> = ({
   emptyContextText,
   noun,
   renderAction,
+  renderContextAction,
 }) => (
   <div className="space-y-3">
     <BucketCard
@@ -68,10 +71,15 @@ const ComparisonDiffTab: React.FC<ComparisonDiffTabProps> = ({
     <BucketCard
       tone="neutral"
       title={`Only ${contextName}`}
-      subtitle={`${noun.charAt(0).toUpperCase() + noun.slice(1)}s ${comparedName} doesn't have`}
+      subtitle={
+        renderContextAction
+          ? `Add ${noun}s to ${comparedName}`
+          : `${noun.charAt(0).toUpperCase() + noun.slice(1)}s ${comparedName} doesn't have`
+      }
       count={contextItems.length}
       items={contextItems}
       emptyText={emptyContextText}
+      renderAction={renderContextAction}
     />
   </div>
 );

@@ -17,6 +17,7 @@ import {
   AddToGroupModal,
   DetectedUserBanner,
   GroupMembershipsList,
+  UserComparisonModal,
   UserLifecycleActions,
   UserProfileCard,
   UserSearchBar,
@@ -64,6 +65,7 @@ const UsersTab: React.FC<UsersTabProps> = ({
   const { userInfo, oktaOrigin } = useUserContext();
   const [isLoadingMemberships, setIsLoadingMemberships] = useState(false);
   const [selectedUser, setSelectedUser] = useState<OktaUser | null>(null);
+  const [isCompareOpen, setIsCompareOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultMessage, setResultMessage] = useState<AlertMessageData | null>(null);
   // Detected-user banner is hidden per id once dismissed (the tab stays pinned to
@@ -111,6 +113,16 @@ const UsersTab: React.FC<UsersTabProps> = ({
     },
     [handleSelectUser],
   );
+
+  // Compare-modal refresh: after a group is copied onto the selected user, drop the
+  // cached analysis and reload their memberships in place. Crucially this does NOT
+  // touch `selectedUser` or the modal's open state, so adding a group never closes
+  // the comparison or resets the tab — you can keep adding.
+  const refreshSelectedUserMemberships = useCallback(() => {
+    if (!selectedUser) return;
+    invalidate(['userMemberships', selectedUser.id]);
+    void loadMemberships(selectedUser, { force: true });
+  }, [selectedUser, loadMemberships]);
 
   // Load the user detected on the page — only when the banner's Load button is
   // clicked. The raw `getUserDetails` read path (a §8-preserved scheduler bypass)
@@ -288,14 +300,26 @@ const UsersTab: React.FC<UsersTabProps> = ({
               oktaOrigin={oktaOrigin}
               onNavigateToRule={onNavigateToRule}
               actions={
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleOpenAddToGroupModal}
-                  disabled={isLoadingMemberships}
-                >
-                  Add to Group
-                </Button>
+                <>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon="users"
+                    onClick={() => setIsCompareOpen(true)}
+                    disabled={isLoadingMemberships}
+                    title="Compare group & app access with another user"
+                  >
+                    Compare
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleOpenAddToGroupModal}
+                    disabled={isLoadingMemberships}
+                  >
+                    Add to Group
+                  </Button>
+                </>
               }
             />
           </div>
@@ -310,6 +334,19 @@ const UsersTab: React.FC<UsersTabProps> = ({
           />
         )}
       </div>
+
+      {/* User comparison modal — same feature as the Overview's Compare, now
+          reachable from the Users tab. Mounted only with a live tab + selection. */}
+      {selectedUser && targetTabId != null && (
+        <UserComparisonModal
+          isOpen={isCompareOpen}
+          onClose={() => setIsCompareOpen(false)}
+          contextUser={selectedUser}
+          contextGroups={memberships}
+          targetTabId={targetTabId}
+          onGroupsChanged={refreshSelectedUserMemberships}
+        />
+      )}
 
       {/* Add to Group Modal */}
       <AddToGroupModal

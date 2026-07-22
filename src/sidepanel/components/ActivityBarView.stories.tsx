@@ -15,6 +15,7 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   args: {
     onCancel: fn(),
+    onToggleCollapse: fn(),
   },
 } satisfies Meta<typeof ActivityBarView>;
 
@@ -134,6 +135,77 @@ export const ProcessedWithFailures: Story = {
       ...idleView,
       processed: 118,
       failed: 3,
+    },
+  },
+};
+
+/**
+ * Narrow panel, condensed to essentials — status, rate and the processed tally,
+ * with a chevron to reveal the rest. This is the idle small-screen default.
+ */
+export const CollapsedIdle: Story = {
+  args: {
+    collapsible: true,
+    collapsed: true,
+    view: {
+      ...idleView,
+      rateLimit: { remaining: 480, limit: 600, low: false },
+      processed: 118,
+      failed: 3,
+    },
+  },
+};
+
+/** Narrow panel, condensed, with an operation running — progress shows in place of the tally. */
+export const CollapsedOperation: Story = {
+  args: {
+    collapsible: true,
+    collapsed: true,
+    view: {
+      ...idleView,
+      statusLabel: 'Processing',
+      statusColorVar: 'var(--color-info)',
+      busy: true,
+      operationActive: true,
+      operationName: 'Removing members',
+      current: 42,
+      total: 120,
+      percentage: 35,
+      opCompleted: 40,
+      opActive: 2,
+      opFailed: 1,
+      rateLimit: { remaining: 90, limit: 600, low: false },
+      queueLength: 6,
+      activeRequests: 2,
+      canCancel: true,
+    },
+  },
+};
+
+/** Narrow panel with the user expanded — the full stats show and wrap onto multiple lines. */
+export const NarrowExpanded: Story = {
+  args: {
+    collapsible: true,
+    collapsed: false,
+    view: {
+      ...idleView,
+      statusLabel: 'Processing',
+      statusColorVar: 'var(--color-info)',
+      busy: true,
+      operationActive: true,
+      operationName: 'Removing members',
+      current: 42,
+      total: 120,
+      percentage: 35,
+      elapsedLabel: '0:18',
+      etaLabel: '~0:34 left',
+      opCompleted: 40,
+      opActive: 2,
+      opFailed: 0,
+      rateLimit: { remaining: 90, limit: 600, low: false },
+      queueLength: 6,
+      activeRequests: 2,
+      canCancel: true,
     },
   },
 };

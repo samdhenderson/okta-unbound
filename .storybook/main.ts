@@ -73,6 +73,17 @@ const config: StorybookConfig = {
       ...(viteConfig.resolve.alias as Record<string, string>),
       '@': path.resolve(configDir, '../src'),
     };
+
+    // Pre-bundle `zod` up front. It is the one non-storybook runtime dependency a
+    // story file imports DIRECTLY (EntityPicker.stories builds fake descriptor
+    // schemas with it). Under the browser test runner it would otherwise be
+    // discovered lazily when that story loads, triggering a mid-run dep
+    // re-optimization that invalidates already-served module URLs (notably the
+    // addon-docs react-dom-shim) and fails the story with "Failed to fetch
+    // dynamically imported module". Including it here settles the optimizer before
+    // the suite runs.
+    viteConfig.optimizeDeps = viteConfig.optimizeDeps ?? {};
+    viteConfig.optimizeDeps.include = [...(viteConfig.optimizeDeps.include ?? []), 'zod'];
     return viteConfig;
   },
 };

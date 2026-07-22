@@ -171,4 +171,110 @@ describe('ActivityBarView', () => {
     expect(within(actions).getByRole('button')).toBeDisabled();
     expect(actions).toHaveTextContent(/cancel/i);
   });
+
+  it('does not offer the collapse toggle when not collapsible', () => {
+    render(<ActivityBarView view={idleView()} onCancel={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /activity stats/i })).not.toBeInTheDocument();
+  });
+
+  describe('condensed layout (narrow panel)', () => {
+    it('shows only status, rate and the processed tally — full metric slots hidden', () => {
+      render(
+        <ActivityBarView
+          view={idleView({
+            rateLimit: { remaining: 480, limit: 600, low: false },
+            processed: 118,
+            failed: 3,
+          })}
+          onCancel={vi.fn()}
+          collapsible
+          collapsed
+          onToggleCollapse={vi.fn()}
+        />,
+      );
+      // Essentials are present…
+      expect(screen.getByText('Ready')).toBeInTheDocument();
+      expect(screen.getByTestId('activity-rate-compact')).toHaveTextContent('480/600');
+      expect(screen.getByTestId('activity-processed-compact')).toHaveTextContent('118');
+      expect(screen.getByTestId('activity-processed-compact')).toHaveTextContent('3 failed');
+      // …but the boxed metric slots are not rendered in the condensed layout.
+      expect(screen.queryByTestId('activity-queue')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('activity-active')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('activity-eta')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('activity-op-breakdown')).not.toBeInTheDocument();
+    });
+
+    it('shows live progress instead of the tally while an operation runs', () => {
+      render(
+        <ActivityBarView
+          view={idleView({
+            operationActive: true,
+            operationName: 'Removing members',
+            busy: true,
+            current: 42,
+            total: 120,
+            opFailed: 1,
+          })}
+          onCancel={vi.fn()}
+          collapsible
+          collapsed
+          onToggleCollapse={vi.fn()}
+        />,
+      );
+      expect(screen.getByTestId('activity-operation-name')).toHaveTextContent('Removing members');
+      expect(screen.getByTestId('activity-progress-compact')).toHaveTextContent('42/120');
+      expect(screen.getByTestId('activity-progress-compact')).toHaveTextContent('1 failed');
+      expect(screen.queryByTestId('activity-processed-compact')).not.toBeInTheDocument();
+    });
+
+    it('keeps Cancel available in the condensed layout', () => {
+      const onCancel = vi.fn();
+      render(
+        <ActivityBarView
+          view={idleView({ queueLength: 5, canCancel: true })}
+          onCancel={onCancel}
+          collapsible
+          collapsed
+          onToggleCollapse={vi.fn()}
+        />,
+      );
+      const actions = screen.getByTestId('activity-actions');
+      fireEvent.click(within(actions).getByRole('button', { name: /cancel/i }));
+      expect(onCancel).toHaveBeenCalledTimes(1);
+    });
+
+    it('fires onToggleCollapse when the expand chevron is clicked', () => {
+      const onToggleCollapse = vi.fn();
+      render(
+        <ActivityBarView
+          view={idleView()}
+          onCancel={vi.fn()}
+          collapsible
+          collapsed
+          onToggleCollapse={onToggleCollapse}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: /show all activity stats/i }));
+      expect(onToggleCollapse).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers a re-collapse toggle and the full stats when narrow but expanded', () => {
+      render(
+        <ActivityBarView
+          view={idleView({ queueLength: 7, activeRequests: 3 })}
+          onCancel={vi.fn()}
+          collapsible
+          collapsed={false}
+          onToggleCollapse={vi.fn()}
+        />,
+      );
+      // Full slots are back…
+      expect(screen.getByTestId('activity-queue')).toHaveTextContent('7');
+      expect(screen.getByTestId('activity-active')).toHaveTextContent('3');
+      // …and the chevron now offers to hide them again.
+      expect(
+        screen.getByRole('button', { name: /hide extra activity stats/i }),
+      ).toBeInTheDocument();
+    });
+  });
 });

@@ -48,18 +48,24 @@ export interface GroupBuckets {
 
 /**
  * Split the two users' group memberships into onlyCompared / shared / onlyContext.
- * `addedGroupIds` (groups optimistically copied onto the context user this session)
- * count as shared before the parent's contextGroups refresh lands.
+ *
+ * Optimistic re-bucketing runs in BOTH directions this session, before the
+ * parent's refresh lands: `addedToContextIds` (groups just copied onto the
+ * context user, moved out of onlyCompared into shared) and `addedToComparedIds`
+ * (groups just copied onto the compared user, moved out of onlyContext into
+ * shared).
  *
  * @param contextGroups - The context user's memberships (baseline).
  * @param comparedGroups - The compared user's memberships.
- * @param addedGroupIds - Group ids optimistically added to the context user this session; treated as shared.
+ * @param addedToContextIds - Group ids optimistically added to the context user this session; treated as shared.
+ * @param addedToComparedIds - Group ids optimistically added to the compared user this session; treated as shared.
  * @returns The three-way {@link GroupBuckets} split.
  */
 export const bucketGroups = (
   contextGroups: GroupMembership[],
   comparedGroups: GroupMembership[],
-  addedGroupIds: Set<string>,
+  addedToContextIds: Set<string>,
+  addedToComparedIds: Set<string> = new Set(),
 ): GroupBuckets => {
   const contextGroupIds = new Set(contextGroups.map((m) => m.group.id));
   const comparedGroupIds = new Set(comparedGroups.map((m) => m.group.id));
@@ -67,16 +73,22 @@ export const bucketGroups = (
   const onlyCompared: OktaGroup[] = [];
   const shared: OktaGroup[] = [];
   for (const m of comparedGroups) {
-    if (contextGroupIds.has(m.group.id) || addedGroupIds.has(m.group.id)) {
+    if (contextGroupIds.has(m.group.id) || addedToContextIds.has(m.group.id)) {
       shared.push(m.group);
     } else {
       onlyCompared.push(m.group);
     }
   }
 
-  const onlyContext = contextGroups
-    .filter((m) => !comparedGroupIds.has(m.group.id))
-    .map((m) => m.group);
+  // Context-side pass: groups already on both users were counted as shared above
+  // (skip them here to avoid a double-count); a context-only group optimistically
+  // added to the compared user becomes shared, everything else stays onlyContext.
+  const onlyContext: OktaGroup[] = [];
+  for (const m of contextGroups) {
+    if (comparedGroupIds.has(m.group.id)) continue;
+    if (addedToComparedIds.has(m.group.id)) shared.push(m.group);
+    else onlyContext.push(m.group);
+  }
 
   return { onlyCompared, shared, onlyContext };
 };
