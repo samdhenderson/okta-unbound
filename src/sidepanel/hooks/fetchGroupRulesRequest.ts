@@ -7,7 +7,8 @@
  * instead of a direct `chrome.tabs.sendMessage`. The four-stage pipeline is ported
  * verbatim from `content/ruleHandlers.ts`:
  *   1. paginate `/api/v1/groups/rules?limit=200` (follow `Link` rel="next");
- *   2. resolve every referenced group's name in parallel, cached 5 min per group;
+ *   2. label referenced group ids with names from the Groups-tab cache (no API
+ *      calls; unknown ids fall back to the id in the display);
  *   3. detect attribute/target conflicts between active rules (O(n²));
  *   4. format each rule for display (names, `allGroupNamesMap`, conflicts).
  * The `{ success, rules, stats, conflicts }` **top-level** result shape (not under
@@ -16,9 +17,9 @@
 
 import type { OktaGroupRule, FormattedRule, RuleConflict, RuleStats } from '../../shared/types';
 import type { CoreApi } from './useOktaApi/core';
-import { getCacheEntry, setCacheEntry } from '../../shared/cache';
 import { detectConflicts, formatRuleForDisplay } from '../../shared/ruleUtils';
 import { nextPageUrl } from './useOktaApi/utilities';
+import { GROUPS_CACHE_KEY, parseGroupsCache } from '../components/groups/groupsCache';
 import { createLogger } from '../../shared/utils/logger';
 
 const log = createLogger('fetchGroupRulesRequest');
@@ -50,30 +51,26 @@ function groupIdsReferencedBy(rule: OktaGroupRule): string[] {
 }
 
 /**
- * Resolve a single group's display name, served from a 5-minute cache when warm and
- * otherwise fetched by id. Returns `null` when the name cannot be resolved.
+ * Build an id→name map from the Groups tab's `chrome.storage.local` cache — the
+ * same list the Groups tab renders. Reuses names already loaded there instead of
+ * issuing a `GET /api/v1/groups/{id}` per referenced group. Returns an empty map
+ * when the cache is absent, aged out, or unparseable; callers then fall back to
+ * showing the group id.
  */
-async function resolveGroupName(
-  makeApiRequest: MakeApiRequest,
-  groupId: string,
-): Promise<{ groupId: string; name: string } | null> {
+async function loadCachedGroupNames(): Promise<Map<string, string>> {
+  const nameById = new Map<string, string>();
   try {
-    const cacheKey = `group_name_${groupId}`;
-    const cachedName = await getCacheEntry<string>(cacheKey);
-    if (cachedName) {
-      return { groupId, name: cachedName };
-    }
-
-    const groupResponse = await makeApiRequest(`/api/v1/groups/${groupId}`);
-    if (groupResponse.success && groupResponse.data?.profile?.name) {
-      const groupName = groupResponse.data.profile.name;
-      await setCacheEntry(cacheKey, groupName, { ttl: 5 * 60 * 1000 });
-      return { groupId, name: groupName };
-    }
+    const stored = await chrome.storage.local.get(GROUPS_CACHE_KEY);
+    const raw = stored?.[GROUPS_CACHE_KEY];
+    if (typeof raw !== 'string') return nameById;
+    const groups = parseGroupsCache(raw, Date.now());
+    groups?.forEach((group) => {
+      if (group.id && group.name) nameById.set(group.id, group.name);
+    });
   } catch (err) {
-    log.warn('Failed to fetch group name for group', { groupId }, err);
+    log.warn('Failed to read cached group names', err);
   }
-  return null;
+  return nameById;
 }
 
 /**
@@ -87,9 +84,8 @@ async function resolveGroupName(
  *   mirrors the page-URL group the content script used to derive.
  * @param options - `resolveGroupNames` (default `true`) controls step 2. Set it to
  *   `false` for callers that only need raw rule ids/expressions (e.g. membership
- *   analysis, which never reads a resolved name): it skips the per-referenced-group
- *   `GET /api/v1/groups/{id}` fan-out — otherwise hundreds of requests on a cold
- *   cache — and leaves `groupNames`/`allGroupNamesMap` falling back to ids.
+ *   analysis, which never reads a resolved name): it skips the Groups-cache read
+ *   and leaves `groupNames`/`allGroupNamesMap` falling back to ids.
  * @returns `{ success: true, rules, stats, conflicts }`; a failed rules page is
  *   returned verbatim, and a thrown error becomes `{ success: false, error }`.
  */
@@ -116,21 +112,13 @@ export async function fetchGroupRulesRequest(
 
     log.debug('Fetched rules (total across all pages)', { count: rules.length });
 
-    // 2. Resolve every referenced group's name in parallel (each cached 5 min).
-    //    Skipped when the caller only needs ids/expressions — the fan-out is one
-    //    GET per referenced group and is pure waste for those callers.
-    const groupNameMap = new Map<string, string>();
-    if (resolveGroupNames) {
-      const allGroupIds = new Set<string>();
-      rules.forEach((rule) => groupIdsReferencedBy(rule).forEach((id) => allGroupIds.add(id)));
-
-      const resolved = await Promise.all(
-        Array.from(allGroupIds).map((groupId) => resolveGroupName(makeApiRequest, groupId)),
-      );
-      resolved.forEach((result) => {
-        if (result) groupNameMap.set(result.groupId, result.name);
-      });
-    }
+    // 2. Label referenced group ids with names from the Groups-tab cache — no API
+    //    calls. Loading rules costs only the page fetches above; the Groups tab is
+    //    the single source of id→name. Ids absent from that cache fall back to the
+    //    id in the display. Skipped when the caller only needs ids/expressions.
+    const groupNameMap = resolveGroupNames
+      ? await loadCachedGroupNames()
+      : new Map<string, string>();
 
     // 3. Detect conflicts between active rules (O(n²), active-only).
     const conflicts = detectConflicts(rules);
