@@ -461,8 +461,7 @@ describe('live search: error paths', () => {
   });
 
   // SURPRISE (pinned as-is): there is no request-id / stale-response guard, so the
-  // LAST-RESOLVING response wins — not the last-issued one.
-  it('lets an out-of-order (older) response overwrite a newer one', async () => {
+  it('discards an out-of-order (older) response so the newest result wins', async () => {
     useDebounceTimers();
     const first = deferred<any>();
     const second = deferred<any>();
@@ -491,8 +490,8 @@ describe('live search: error paths', () => {
       await Promise.resolve();
     });
 
-    // Current behavior: the stale first response wins.
-    expect(renderedGroupNames()).toEqual(['FIRST']);
+    // The stale first response is discarded; the newest result stays.
+    expect(renderedGroupNames()).toEqual(['SECOND']);
   });
 });
 
@@ -746,9 +745,7 @@ describe('mount cache rehydrate', () => {
     expect(screen.getByText('Live')).toBeInTheDocument();
   });
 
-  // SURPRISE (pinned as-is): the storage read is an un-awaited callback that races
-  // loadAllGroups. A late callback silently clobbers freshly-loaded groups.
-  it('a late storage callback overwrites freshly loaded groups (stale wins)', async () => {
+  it('a late storage callback is discarded after loadAllGroups completes', async () => {
     const uev = userEvent.setup();
     let storageCb: ((r: any) => void) | null = null;
     // Only capture the callback-style group-cache rehydrate; the loader also does a
@@ -775,7 +772,8 @@ describe('mount cache rehydrate', () => {
       });
     });
 
-    expect(renderedGroupNames()).toEqual(['STALE']);
+    // The stale callback is discarded; the fresh load result is preserved.
+    expect(renderedGroupNames()).toEqual(['FRESH']);
   });
 });
 
@@ -1529,7 +1527,7 @@ describe('handleRemoveUserFromGroups', () => {
     expect(schedulerCalls().every((m) => m.method === 'DELETE' || m.method === 'GET')).toBe(true);
   });
 
-  it('aborts the remaining groups when a DELETE rejects, and propagates', async () => {
+  it('attempts all groups even when one DELETE rejects (partial failure)', async () => {
     const attempted: string[] = [];
     route(/^\/api\/v1\/groups\/.*\/users\/u1$/, (msg) => {
       attempted.push(msg.endpoint);
@@ -1538,8 +1536,10 @@ describe('handleRemoveUserFromGroups', () => {
     });
     const remove = await openCrossSearch();
 
-    await expect(remove('u1', ['g1', 'g2', 'g3'])).rejects.toThrow('boom');
-    expect(attempted).toEqual(['/api/v1/groups/g1/users/u1', '/api/v1/groups/g2/users/u1']);
+    await act(async () => {
+      await expect(remove('u1', ['g1', 'g2', 'g3'])).resolves.toBeUndefined();
+    });
+    expect(attempted).toHaveLength(3);
   });
 
   // SURPRISE (pinned as-is): RequestResult.success is ignored, so a non-throwing

@@ -63,18 +63,8 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
         `/api/v1/groups/${groupId}/users?limit=200`,
       );
       if (usersResponse.success && usersResponse.data) {
-        const firstPageCount = usersResponse.data.length;
-
-        const linkHeader = usersResponse.headers?.['link'] || usersResponse.headers?.['Link'];
-        const hasMorePages = linkHeader && linkHeader.includes('rel="next"');
-
-        if (hasMorePages) {
-          return firstPageCount;
-        }
-
-        return firstPageCount;
+        return usersResponse.data.length;
       }
-
       return 0;
     } catch (error) {
       log.error(`Failed to get member count for group ${groupId}:`, error);

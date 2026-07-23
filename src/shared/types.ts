@@ -405,6 +405,8 @@ export interface BulkOperation {
   id: string;
   type: 'remove_user' | 'add_user' | 'cleanup_inactive' | 'export_all';
   targetGroups: string[];
+  /** Pre-resolved names keyed by group id — avoids a redundant GET per group. */
+  targetGroupNames?: Record<string, string>;
   status: 'pending' | 'running' | 'completed' | 'failed';
   progress: number;
   results: BulkOperationResult[];

@@ -244,7 +244,8 @@ export class ApiScheduler {
     // jump the soft rate-limit gates — but only while there is genuine hard
     // headroom left, so it can never force a 429. See {@link RequestPriority}.
     const interactiveBypass =
-      this.queue[0]?.priority === 'interactive' && !this.rateLimitDetector.isLimitExceeded();
+      this.queue[0]?.priority === 'interactive' &&
+      !this.rateLimitDetector.isLimitExceeded(this.activeRequests.size + 1);
 
     // Check cooldown
     if (this.cooldownEndsAt && Date.now() < this.cooldownEndsAt) {
@@ -266,11 +267,12 @@ export class ApiScheduler {
       return;
     }
 
-    // Check rate limits (account for in-flight requests)
+    // Check rate limits — count the request we are about to dispatch so the
+    // threshold reflects the state *after* dispatch, not before.
     if (
       this.rateLimitDetector.isApproachingLimit(
         this.config.minRemainingThreshold,
-        this.activeRequests.size,
+        this.activeRequests.size + 1,
       )
     ) {
       // An interactive request with hard headroom dispatches without arming a
@@ -424,7 +426,11 @@ export class ApiScheduler {
    * Check if we should enter cooldown based on rate limit info
    */
   private shouldEnterCooldown(info: RateLimitInfo): boolean {
-    const effectiveRemaining = Math.max(0, info.remaining - this.activeRequests.size);
+    // The completing request is still in activeRequests at this point but its
+    // cost is already reflected in the server's `remaining`, so subtract 1 to
+    // avoid double-counting it.
+    const otherInFlight = Math.max(0, this.activeRequests.size - 1);
+    const effectiveRemaining = Math.max(0, info.remaining - otherInFlight);
     const percentRemaining = (effectiveRemaining / info.limit) * 100;
     return percentRemaining <= this.config.minRemainingThreshold;
   }
@@ -438,9 +444,11 @@ export class ApiScheduler {
 
     // Use reset time if available and shorter, otherwise fall back to configured cooldown
     const resetWaitTime = this.rateLimitDetector.getMillisecondsUntilReset(info);
+    // Wait at least until the window resets so we don't re-enter cooldown in a
+    // tight loop when the configured duration is shorter than the remaining window.
     const cooldownDuration =
       resetWaitTime > 0
-        ? Math.min(this.config.cooldownDuration, resetWaitTime)
+        ? Math.max(this.config.cooldownDuration, resetWaitTime)
         : this.config.cooldownDuration;
 
     this.cooldownEndsAt = Date.now() + cooldownDuration;

@@ -66,9 +66,12 @@ export function createGroupBulkOperations(
       const groupId = operation.targetGroups[i];
 
       try {
-        // Get group name
-        const groupResponse = await coreApi.makeApiRequest(`/api/v1/groups/${groupId}`);
-        const groupName = groupResponse.data?.profile?.name || groupId;
+        // Use pre-resolved name if available, otherwise fetch
+        let groupName: string = operation.targetGroupNames?.[groupId] ?? '';
+        if (!groupName) {
+          const groupResponse = await coreApi.makeApiRequest(`/api/v1/groups/${groupId}`);
+          groupName = groupResponse.data?.profile?.name || groupId;
+        }
 
         onProgress?.(i + 1, totalGroups, groupName);
 
@@ -102,16 +105,19 @@ export function createGroupBulkOperations(
           }
 
           case 'remove_user': {
-            if (operation.config?.userId) {
-              const removeResult = await coreApi.makeApiRequest(
-                `/api/v1/groups/${groupId}/users/${operation.config.userId}`,
-                'DELETE',
-              );
-              result.status = removeResult.success ? 'success' : 'failed';
-              result.itemsProcessed = removeResult.success ? 1 : 0;
-              if (!removeResult.success) {
-                result.errors = [removeResult.error || 'Unknown error'];
-              }
+            if (!operation.config?.userId) {
+              result.status = 'failed';
+              result.errors = ['No userId provided'];
+              break;
+            }
+            const removeResult = await coreApi.makeApiRequest(
+              `/api/v1/groups/${groupId}/users/${operation.config.userId}`,
+              'DELETE',
+            );
+            result.status = removeResult.success ? 'success' : 'failed';
+            result.itemsProcessed = removeResult.success ? 1 : 0;
+            if (!removeResult.success) {
+              result.errors = [removeResult.error || 'Unknown error'];
             }
             break;
           }
@@ -139,7 +145,9 @@ export function createGroupBulkOperations(
         });
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      if (i < totalGroups - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
     }
 
     return results;

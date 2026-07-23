@@ -7,7 +7,7 @@
  * enrichment → cache write) and switches the tab into cached mode.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useOktaApi } from './useOktaApi';
 import type { GroupSummary } from '../../shared/types';
@@ -42,11 +42,11 @@ interface UseGroupsLoaderOptions {
  * `loadAllGroups` pipeline (fetch → map → staleness → non-fatal push enrichment →
  * cache write).
  *
- * CHARACTERIZED: the mount rehydrate races `loadAllGroups` with no cancellation —
- * a late storage callback can overwrite freshly loaded groups (stale wins). The
- * push-mapping enrichment is a NESTED non-fatal try/catch: a push failure logs a
- * warning and lets the load complete + cache; a `getAllGroups` failure banners and
- * caches nothing. Both are preserved verbatim.
+ * Uses a `loadGenRef` counter to prevent a late mount cache callback from
+ * clobbering a freshly completed `loadAllGroups` result. The push-mapping
+ * enrichment is a nested non-fatal try/catch: a push failure logs a warning and
+ * lets the load complete + cache; a `getAllGroups` failure banners and caches
+ * nothing.
  *
  * @returns The `groups` list, a `loading` flag, and the `loadAllGroups` trigger.
  */
@@ -58,10 +58,13 @@ export function useGroupsLoader({
 }: UseGroupsLoaderOptions) {
   const [groups, setGroups] = useState<GroupSummary[]>([]);
   const [loading, setLoading] = useState(false);
+  const loadGenRef = useRef(0);
 
   // Load groups from cache on mount ([setSearchMode] is a stable setter → mount-only).
   useEffect(() => {
+    const genAtStart = loadGenRef.current;
     chrome.storage.local.get([GROUPS_CACHE_KEY], (result) => {
+      if (loadGenRef.current !== genAtStart) return;
       if (result[GROUPS_CACHE_KEY]) {
         try {
           const parsedGroups = parseGroupsCache(result[GROUPS_CACHE_KEY] as string, Date.now());
@@ -77,6 +80,7 @@ export function useGroupsLoader({
   }, [setSearchMode]);
 
   const loadAllGroups = async () => {
+    loadGenRef.current++;
     setLoading(true);
     setError(null);
 

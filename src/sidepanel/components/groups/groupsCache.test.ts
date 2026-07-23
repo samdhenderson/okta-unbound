@@ -21,16 +21,14 @@ describe('reviveGroupDates', () => {
     expect(revived.created).toBeInstanceOf(Date);
   });
 
-  it('does NOT revive lastMembershipUpdated (stays a string) and preserves other fields', () => {
+  it('revives lastMembershipUpdated into a Date and preserves other fields', () => {
     const revived = reviveGroupDates({
       id: 'g1',
       name: 'Eng',
       memberCount: 9,
       lastMembershipUpdated: '2026-03-03T00:00:00Z',
     });
-    expect(
-      typeof (revived as unknown as { lastMembershipUpdated: unknown }).lastMembershipUpdated,
-    ).toBe('string');
+    expect(revived.lastMembershipUpdated).toBeInstanceOf(Date);
     expect(revived.memberCount).toBe(9);
     expect(revived.lastUpdated).toBeUndefined();
   });

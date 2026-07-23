@@ -305,18 +305,15 @@ describe('executeBulkOperation remove_user', () => {
     expect(results[0].errors).toEqual(['Unknown error']);
   });
 
-  it('does nothing but succeed when no userId is configured', async () => {
-    // Drives the `if (operation.config?.userId)` false branch: no DELETE issued.
+  it('reports failure when no userId is configured', async () => {
     const core = makeCore();
     const { executeBulkOperation } = createGroupBulkOperations(core, vi.fn(), vi.fn());
 
     const results = await executeBulkOperation(bulkOp('remove_user', ['00gFAKE1']));
 
-    expect(results[0].status).toBe('success');
+    expect(results[0].status).toBe('failed');
+    expect(results[0].errors).toContain('No userId provided');
     expect(results[0].itemsProcessed).toBe(0);
-    // Only the group-name lookup, never a DELETE.
-    const methods = (core.makeApiRequest as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[1]);
-    expect(methods).not.toContain('DELETE');
   });
 });
 

@@ -6,7 +6,7 @@
  * A collection captures the current selection so it can be re-selected later or
  * exported. Storage is local-only (no Okta API involved).
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button, IconButton, Input } from '../shared';
 import type { GroupCollection, GroupSummary } from '../../../shared/types';
 import { createLogger } from '../../../shared/utils/logger';
@@ -59,8 +59,7 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
     });
   }, []);
 
-  const saveCollections = useCallback((updated: GroupCollection[]) => {
-    setCollections(updated);
+  const persistCollections = useCallback((updated: GroupCollection[]) => {
     chrome.storage.local.set({ [COLLECTIONS_STORAGE_KEY]: JSON.stringify(updated) });
   }, []);
 
@@ -76,50 +75,68 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
       updatedAt: Date.now(),
     };
 
-    saveCollections([collection, ...collections]);
+    setCollections((prev) => {
+      const updated = [collection, ...prev];
+      persistCollections(updated);
+      return updated;
+    });
     setNewName('');
     setNewDescription('');
     setShowCreate(false);
-  }, [newName, newDescription, selectedGroupIds, collections, saveCollections]);
+  }, [newName, newDescription, selectedGroupIds, persistCollections]);
 
   const handleDelete = useCallback(
     (id: string) => {
-      saveCollections(collections.filter((c) => c.id !== id));
+      setCollections((prev) => {
+        const updated = prev.filter((c) => c.id !== id);
+        persistCollections(updated);
+        return updated;
+      });
     },
-    [collections, saveCollections],
+    [persistCollections],
   );
 
   const handleRename = useCallback(
     (id: string) => {
       if (!editName.trim()) return;
-      saveCollections(
-        collections.map((c) =>
+      setCollections((prev) => {
+        const updated = prev.map((c) =>
           c.id === id ? { ...c, name: editName.trim(), updatedAt: Date.now() } : c,
-        ),
-      );
+        );
+        persistCollections(updated);
+        return updated;
+      });
       setEditingId(null);
       setEditName('');
     },
-    [editName, collections, saveCollections],
+    [editName, persistCollections],
   );
 
   const handleUpdateGroupIds = useCallback(
     (id: string) => {
       if (selectedGroupIds.size === 0) return;
-      saveCollections(
-        collections.map((c) =>
+      setCollections((prev) => {
+        const updated = prev.map((c) =>
           c.id === id ? { ...c, groupIds: Array.from(selectedGroupIds), updatedAt: Date.now() } : c,
-        ),
-      );
+        );
+        persistCollections(updated);
+        return updated;
+      });
     },
-    [selectedGroupIds, collections, saveCollections],
+    [selectedGroupIds, persistCollections],
   );
+
+  const groupNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const g of groups) map.set(g.id, g.name);
+    return map;
+  }, [groups]);
 
   const getGroupName = useCallback(
     (groupId: string) => {
-      return groups.find((g) => g.id === groupId)?.name || groupId.slice(0, 12) + '...';
+      return groupNameMap.get(groupId) || groupId.slice(0, 12) + '...';
     },
-    [groups],
+    [groupNameMap],
   );
 
   return (

@@ -52,10 +52,15 @@ const CrossGroupSearch: React.FC<CrossGroupSearchProps> = ({
       { user: OktaUser; groups: Array<{ groupId: string; groupName: string }> }
     >();
     for (const r of results) {
-      if (!byUser.has(r.user.id)) {
-        byUser.set(r.user.id, { user: r.user, groups: [] });
+      const existing = byUser.get(r.user.id);
+      if (existing) {
+        existing.groups.push({ groupId: r.groupId, groupName: r.groupName });
+      } else {
+        byUser.set(r.user.id, {
+          user: r.user,
+          groups: [{ groupId: r.groupId, groupName: r.groupName }],
+        });
       }
-      byUser.get(r.user.id)!.groups.push({ groupId: r.groupId, groupName: r.groupName });
     }
     return Array.from(byUser.values());
   }, [results]);
@@ -78,8 +83,12 @@ const CrossGroupSearch: React.FC<CrossGroupSearchProps> = ({
     const byUser = new Map<string, string[]>();
     for (const key of selectedRemovals) {
       const [userId, groupId] = key.split('_');
-      if (!byUser.has(userId)) byUser.set(userId, []);
-      byUser.get(userId)!.push(groupId);
+      const existing = byUser.get(userId);
+      if (existing) {
+        existing.push(groupId);
+      } else {
+        byUser.set(userId, [groupId]);
+      }
     }
 
     try {

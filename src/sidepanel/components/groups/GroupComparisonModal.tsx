@@ -4,9 +4,9 @@
  *
  * Runs the comparison automatically on open, then renders summary stats, a per-group
  * unique/shared/overlap breakdown, and (for 3+ groups) a pairwise-overlap matrix
- * computed from the member cache. Results are exportable to CSV.
+ * precomputed via `useMemo`. Results are exportable to CSV.
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Modal from '../shared/Modal';
 import Button from '../shared/Button';
 import { generateCSV, downloadCSV, getDateForFilename } from '../../../shared/utils/csvUtils';
@@ -59,8 +59,10 @@ const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const cancelledRef = useRef(false);
 
   const runComparison = useCallback(async () => {
+    cancelledRef.current = false;
     setLoading(true);
     setError(null);
     setResult(null);
@@ -70,12 +72,16 @@ const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
         (_current, _total, message) => setProgress(message || ''),
         memberCache,
       );
-      setResult(comparison);
+      if (!cancelledRef.current) setResult(comparison);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Comparison failed');
+      if (!cancelledRef.current) {
+        setError(err instanceof Error ? err.message : 'Comparison failed');
+      }
     } finally {
-      setLoading(false);
-      setProgress('');
+      if (!cancelledRef.current) {
+        setLoading(false);
+        setProgress('');
+      }
     }
   }, [groups, compareGroups, memberCache]);
 
@@ -84,10 +90,43 @@ const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
       runComparison();
     }
     return () => {
+      cancelledRef.current = true;
       setResult(null);
       setError(null);
     };
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Precompute member-ID sets and pairwise overlap matrix so the render body
+  // does not redo O(g^2 * m) set work on every paint.
+  const memberIdSets = useMemo(() => {
+    if (!result) return new Map<string, Set<string>>();
+    const sets = new Map<string, Set<string>>();
+    for (const g of result.groups) {
+      const members = memberCache.get(g.id);
+      sets.set(g.id, members ? new Set(members.map((u) => u.id)) : new Set());
+    }
+    return sets;
+  }, [result, memberCache]);
+
+  const overlapMatrix = useMemo(() => {
+    if (!result || result.groups.length <= 2) return null;
+    const matrix = new Map<string, number>();
+    for (const row of result.groups) {
+      const rowSet = memberIdSets.get(row.id);
+      for (const col of result.groups) {
+        if (row.id === col.id) continue;
+        const colSet = memberIdSets.get(col.id);
+        let overlap = 0;
+        if (rowSet && colSet) {
+          for (const id of rowSet) {
+            if (colSet.has(id)) overlap++;
+          }
+        }
+        matrix.set(`${row.id}:${col.id}`, overlap);
+      }
+    }
+    return matrix;
+  }, [result, memberIdSets]);
 
   const handleExportResults = useCallback(() => {
     if (!result) return;
@@ -201,7 +240,7 @@ const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
           </div>
 
           {/* Overlap Matrix */}
-          {result.groups.length > 2 && (
+          {overlapMatrix && result.groups.length > 2 && (
             <div className="space-y-2">
               <div className="text-xs font-semibold text-neutral-700 uppercase tracking-wide">
                 Pairwise Overlap
@@ -234,20 +273,12 @@ const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
                               </td>
                             );
                           }
-                          // Compute pairwise overlap from cache
-                          const rowMembers = memberCache.get(rowGroup.id);
-                          const colMembers = memberCache.get(colGroup.id);
-                          let overlap = 0;
-                          if (rowMembers && colMembers) {
-                            const colSet = new Set(colMembers.map((u) => u.id));
-                            overlap = rowMembers.filter((u) => colSet.has(u.id)).length;
-                          }
                           return (
                             <td
                               key={colGroup.id}
                               className="p-2 text-center font-medium text-neutral-900"
                             >
-                              {overlap}
+                              {overlapMatrix.get(`${rowGroup.id}:${colGroup.id}`) ?? 0}
                             </td>
                           );
                         })}

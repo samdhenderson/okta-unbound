@@ -34,6 +34,31 @@ const StalenessIndicator: React.FC<{ staleness: StalenessInfo }> = ({ staleness 
   );
 };
 
+const TYPE_BADGE_CONFIGS = {
+  OKTA_GROUP: {
+    label: 'OKTA',
+    bg: 'bg-primary-light',
+    text: 'text-primary-text',
+    border: 'border-primary-highlight',
+  },
+  APP_GROUP: {
+    label: 'APP',
+    bg: 'bg-warning-light',
+    text: 'text-warning-text',
+    border: 'border-warning-light',
+  },
+  BUILT_IN: {
+    label: 'BUILT-IN',
+    bg: 'bg-neutral-50',
+    text: 'text-neutral-700',
+    border: 'border-neutral-200',
+  },
+} as const;
+
+function getTypeBadge(type: string) {
+  return TYPE_BADGE_CONFIGS[type as keyof typeof TYPE_BADGE_CONFIGS] || TYPE_BADGE_CONFIGS.BUILT_IN;
+}
+
 interface GroupListItemProps {
   /** The group to render. */
   group: GroupSummary;
@@ -59,30 +84,6 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
     React.useEffect(() => {
       if (isHighlighted) setExpanded(true);
     }, [isHighlighted]);
-
-    const getTypeBadge = (type: string) => {
-      const configs = {
-        OKTA_GROUP: {
-          label: 'OKTA',
-          bg: 'bg-primary-light',
-          text: 'text-primary-text',
-          border: 'border-primary-highlight',
-        },
-        APP_GROUP: {
-          label: 'APP',
-          bg: 'bg-warning-light',
-          text: 'text-warning-text',
-          border: 'border-warning-light',
-        },
-        BUILT_IN: {
-          label: 'BUILT-IN',
-          bg: 'bg-neutral-50',
-          text: 'text-neutral-700',
-          border: 'border-neutral-200',
-        },
-      };
-      return configs[type as keyof typeof configs] || configs.BUILT_IN;
-    };
 
     const handleOpenInOkta = useCallback(
       (e: React.MouseEvent) => {
@@ -166,9 +167,9 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
                     {group.pushMappings &&
                       group.pushMappings.length > 0 &&
                       (() => {
-                        const uniqueApps = [
-                          ...new Set(group.pushMappings!.map((m) => m.appName || m.appId)),
-                        ];
+                        const mappings = group.pushMappings;
+                        if (!mappings) return null;
+                        const uniqueApps = [...new Set(mappings.map((m) => m.appName || m.appId))];
                         const MAX_DISPLAY = 2;
                         const displayApps = uniqueApps.slice(0, MAX_DISPLAY);
                         const remaining = uniqueApps.length - MAX_DISPLAY;

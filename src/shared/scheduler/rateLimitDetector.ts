@@ -118,12 +118,16 @@ export class RateLimitDetector {
   }
 
   /**
-   * Check if rate limit has been exceeded
+   * Check if rate limit has been exceeded, accounting for in-flight requests.
+   *
+   * @param inFlightCount - Requests dispatched but whose response headers
+   * haven't been processed yet. Subtracted from `remaining` so the check
+   * reflects the true effective headroom.
    */
-  isLimitExceeded(): boolean {
+  isLimitExceeded(inFlightCount: number = 0): boolean {
     const info = this.getMostRestrictive();
     if (!info) return false;
-    return info.remaining <= 0;
+    return info.remaining - inFlightCount <= 0;
   }
 
   /**

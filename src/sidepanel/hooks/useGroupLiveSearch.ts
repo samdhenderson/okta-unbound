@@ -37,8 +37,8 @@ interface UseGroupLiveSearchOptions {
  * `interactive` priority, which jumps the soft cooldown so a typed search stays
  * instant) instead of a direct content-script `searchGroups` message. The request
  * is the same single `GET /api/v1/groups?q=…&limit=20&expand=stats` the content
- * handler used to issue. CHARACTERIZED (preserved): still no stale-response guard —
- * the last-resolving request wins.
+ * handler used to issue. Uses a monotonic request counter to discard stale
+ * responses when a newer search has been dispatched.
  *
  * @returns `liveSearchQuery` + `setLiveSearchQuery` (drives the debounce),
  * `liveSearchResults`, the `isLiveSearching` flag, and `resetLiveSearch`.
@@ -52,6 +52,7 @@ export function useGroupLiveSearch({
   const [liveSearchResults, setLiveSearchResults] = useState<GroupSummary[]>([]);
   const [isLiveSearching, setIsLiveSearching] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const requestIdRef = useRef(0);
 
   // §8: own a useOktaApi slice for the scheduler path. `makeApiRequest` is stable
   // per `targetTabId` (memoized in useOktaApi), so it does not widen the debounce
@@ -70,6 +71,7 @@ export function useGroupLiveSearch({
         return;
       }
 
+      const thisRequest = ++requestIdRef.current;
       setIsLiveSearching(true);
       setError(null);
 
@@ -82,6 +84,8 @@ export function useGroupLiveSearch({
           'interactive',
         );
 
+        if (thisRequest !== requestIdRef.current) return;
+
         if (response.success) {
           const results = (response.data || []).map(liveSearchToGroupSummary);
           setLiveSearchResults(results);
@@ -90,10 +94,13 @@ export function useGroupLiveSearch({
           setLiveSearchResults([]);
         }
       } catch (err) {
-        setError((err as Error).message || 'Failed to communicate with Okta tab');
+        if (thisRequest !== requestIdRef.current) return;
+        setError(err instanceof Error ? err.message : 'Failed to communicate with Okta tab');
         setLiveSearchResults([]);
       } finally {
-        setIsLiveSearching(false);
+        if (thisRequest === requestIdRef.current) {
+          setIsLiveSearching(false);
+        }
       }
     },
     [targetTabId, setError, makeApiRequest],

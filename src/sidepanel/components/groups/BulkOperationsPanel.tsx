@@ -81,11 +81,15 @@ const BulkOperationsPanel: React.FC<BulkOperationsPanelProps> = ({
       setResults(null);
 
       try {
+        const nameMap: Record<string, string> = {};
+        for (const g of selectedGroups) nameMap[g.id] = g.name;
+
         const opResults = await executeBulkOperation(
           {
             id: `bulk_${Date.now()}`,
             type,
             targetGroups: selectedGroups.map((g) => g.id),
+            targetGroupNames: nameMap,
             status: 'pending',
             progress: 0,
             results: [],

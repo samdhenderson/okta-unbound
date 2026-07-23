@@ -21,7 +21,8 @@ type OktaApi = ReturnType<typeof useOktaApi>;
  *
  * @param api - The Okta API surface from {@link useOktaApi} (captured in a render-time ref; see below).
  * @param groups - Current group summaries, used to derive the `groupId → name` lookup.
- * @returns `groupMembersCache`, a `groupNames` map, `fetchMembers`, and `removeUserFromGroups`.
+ * @returns `groupMembersCache`, a `groupNames` map, `fetchMembers`,
+ * `removeUserFromGroups`, and `clearCache`.
  *
  * `apiRef` is assigned during render (NOT in an effect): `useOktaApi` returns a
  * fresh object with fresh method identities every render, so a ref updated in an
@@ -40,21 +41,57 @@ export function useGroupMembersCache(api: OktaApi, groups: GroupSummary[]) {
   apiRef.current = api;
 
   const fetchMembers = useCallback(async (groupId: string) => {
-    const members = await apiRef.current.getAllGroupMembers(groupId);
-    // Populate cache
-    setGroupMembersCache((prev) => {
-      const next = new Map(prev);
-      next.set(groupId, members);
-      return next;
-    });
-    return members;
+    try {
+      const members = await apiRef.current.getAllGroupMembers(groupId);
+      setGroupMembersCache((prev) => {
+        const next = new Map(prev);
+        next.set(groupId, members);
+        return next;
+      });
+      return members;
+    } catch (err) {
+      log.error(`Failed to fetch members for group ${groupId}:`, err);
+      return [];
+    }
   }, []);
 
   const removeUserFromGroups = useCallback(async (userId: string, groupIds: string[]) => {
-    for (const groupId of groupIds) {
-      await apiRef.current.makeApiRequest(`/api/v1/groups/${groupId}/users/${userId}`, 'DELETE');
-      log.debug(`Removed user ${userId} from group ${groupId}`);
+    const results = await Promise.allSettled(
+      groupIds.map(async (groupId) => {
+        await apiRef.current.makeApiRequest(`/api/v1/groups/${groupId}/users/${userId}`, 'DELETE');
+        log.debug(`Removed user ${userId} from group ${groupId}`);
+        return groupId;
+      }),
+    );
+
+    const succeededGroupIds = results
+      .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+      .map((r) => r.value);
+
+    const failedCount = results.filter((r) => r.status === 'rejected').length;
+    if (failedCount > 0) {
+      log.error(`Failed to remove user ${userId} from ${failedCount} group(s)`);
     }
+
+    if (succeededGroupIds.length > 0) {
+      setGroupMembersCache((prev) => {
+        const next = new Map(prev);
+        for (const groupId of succeededGroupIds) {
+          const members = next.get(groupId);
+          if (members) {
+            next.set(
+              groupId,
+              members.filter((m) => m.id !== userId),
+            );
+          }
+        }
+        return next;
+      });
+    }
+  }, []);
+
+  const clearCache = useCallback(() => {
+    setGroupMembersCache(new Map());
   }, []);
 
   const groupNames = useMemo(() => {
@@ -65,5 +102,5 @@ export function useGroupMembersCache(api: OktaApi, groups: GroupSummary[]) {
     return names;
   }, [groups]);
 
-  return { groupMembersCache, groupNames, fetchMembers, removeUserFromGroups };
+  return { groupMembersCache, groupNames, fetchMembers, removeUserFromGroups, clearCache };
 }

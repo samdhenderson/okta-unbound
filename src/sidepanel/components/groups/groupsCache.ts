@@ -22,19 +22,21 @@ interface SerializedGroupsCache {
  * A GroupSummary after JSON round-tripping: its `Date` fields come back as ISO
  * strings. Kept as an index type so unknown fields survive untouched.
  */
-type SerializedGroup = { lastUpdated?: string; created?: string; [key: string]: unknown };
+type SerializedGroup = {
+  lastUpdated?: string;
+  lastMembershipUpdated?: string;
+  created?: string;
+  [key: string]: unknown;
+};
 
 /**
  * Revive a cached group's ISO date strings back into `Date`s.
- *
- * Only `lastUpdated` and `created` are revived — `lastMembershipUpdated` and any
- * nested dates stay strings after a cache load. That asymmetry is existing
- * behavior; preserve it.
  */
 export function reviveGroupDates(g: SerializedGroup): GroupSummary {
   return {
     ...g,
     lastUpdated: g.lastUpdated ? new Date(g.lastUpdated) : undefined,
+    lastMembershipUpdated: g.lastMembershipUpdated ? new Date(g.lastMembershipUpdated) : undefined,
     created: g.created ? new Date(g.created) : undefined,
   } as GroupSummary;
 }

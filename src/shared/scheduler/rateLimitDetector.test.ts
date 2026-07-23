@@ -187,6 +187,14 @@ describe('RateLimitDetector', () => {
       d.parseHeaders(headers('100', '-2', String(NOW_SECONDS + 60)), '/a');
       expect(d.isLimitExceeded()).toBe(true);
     });
+
+    it('accounts for in-flight requests that consume remaining headroom', () => {
+      const d = new RateLimitDetector();
+      d.parseHeaders(headers('100', '3', String(NOW_SECONDS + 60)), '/a');
+      expect(d.isLimitExceeded(0)).toBe(false);
+      expect(d.isLimitExceeded(3)).toBe(true);
+      expect(d.isLimitExceeded(5)).toBe(true);
+    });
   });
 
   describe('getSecondsUntilReset / getMillisecondsUntilReset', () => {
