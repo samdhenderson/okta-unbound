@@ -41,7 +41,48 @@ const meta = {
   title: 'Groups/GroupsListPanel',
   component: GroupsListPanel,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'The scrollable groups list plus its mode-specific empty states.\n\n' +
+          'Renders a `GroupListItem` per filtered group, forwarding selection, deep-link, ' +
+          'and analyze-source handlers. Shows a spinner during the initial load, and ' +
+          'distinct empty states for cached mode with excluding filters versus a live ' +
+          'search that returned no matches — the live "no results" copy is suppressed ' +
+          'while a search is still in flight.',
+      },
+    },
+  },
+  argTypes: {
+    loading: { description: 'Whether the initial group load is in progress.' },
+    searchMode: { description: '`live` queries Okta directly; `cached` filters the loaded list.' },
+    liveSearchQuery: {
+      description: 'Current live-search query (drives the live empty-state copy).',
+    },
+    isLiveSearching: {
+      description: 'Whether a live search is in flight (suppresses the "no results" state).',
+    },
+    hasGroups: {
+      description: 'Whether any groups are loaded — gates the cached-mode empty state.',
+    },
+    activeFilterCount: {
+      description: 'Active-filter count — gates the "Clear Filters" empty-state action.',
+    },
+    filteredGroups: { description: 'Groups to render after filtering/sorting.' },
+    selectedGroupIds: { description: 'Ids of the currently selected groups.' },
+    onToggleSelect: { description: 'Toggles selection for a group id.' },
+    oktaOrigin: { description: 'Okta origin passed to each row for deep-linking.' },
+    onLoadAllGroups: {
+      description: 'Switches to cached mode by loading all groups (live empty-state action).',
+    },
+    onClearFilters: { description: 'Clears all filters (cached empty-state action).' },
+    onAnalyzeSource: { description: 'Opens the read-only membership-source insight for a group.' },
+    highlightedGroupId: {
+      description: 'Group id to highlight (deep-link target from the Rules tab).',
+    },
+  },
   args: {
     loading: false,
     searchMode: 'cached',

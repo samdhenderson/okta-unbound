@@ -74,7 +74,34 @@ const meta = {
   title: 'Groups/GroupListItem',
   component: GroupListItem,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'A single expandable row in the groups list.\n\n' +
+          'Renders the group name, type/rule/push/staleness badges, and a selection ' +
+          'checkbox; expanding the row reveals member metadata, push mappings, and ' +
+          'staleness factors. Highlights when selected, adds an "Open in Okta" deep link ' +
+          'when `oktaOrigin` is set, and auto-expands with a ring when deep-linked as a ' +
+          'highlight target.',
+      },
+    },
+  },
+  argTypes: {
+    group: { description: 'The group to render.' },
+    selected: { description: 'Whether this row is selected.' },
+    onToggleSelect: { description: "Toggles selection for this group's id." },
+    oktaOrigin: {
+      description: 'Okta origin, enabling the "Open in Okta" deep link when present.',
+    },
+    onAnalyzeSource: {
+      description: 'Opens the read-only membership-source insight for this group.',
+    },
+    isHighlighted: {
+      description: 'When true, the row auto-expands and shows a highlight ring (deep-link target).',
+    },
+  },
   args: {
     group: baseGroup,
     selected: false,

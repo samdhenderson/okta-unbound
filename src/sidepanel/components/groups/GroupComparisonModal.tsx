@@ -210,9 +210,18 @@ const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
                 <table className="w-full text-xs border-collapse">
                   <thead>
                     <tr>
-                      <th className="p-2 text-left text-neutral-600 font-medium"></th>
+                      {/* Blank corner cell: rows and columns are both groups. An
+                          empty <th> has no accessible name (axe empty-table-header),
+                          so label it for assistive tech while staying visually blank. */}
+                      <th scope="col" className="p-2 text-left text-neutral-600 font-medium">
+                        <span className="sr-only">Group</span>
+                      </th>
                       {result.groups.map((g, i) => (
-                        <th key={g.id} className={`p-2 text-center font-medium ${COLORS[i]}`}>
+                        <th
+                          key={g.id}
+                          scope="col"
+                          className={`p-2 text-center font-medium ${COLORS[i]}`}
+                        >
                           {g.name.length > 15 ? g.name.slice(0, 15) + '...' : g.name}
                         </th>
                       ))}

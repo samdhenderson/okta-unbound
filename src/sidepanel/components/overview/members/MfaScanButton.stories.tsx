@@ -12,7 +12,30 @@ const meta = {
   title: 'Overview/Members/MfaScanButton',
   component: MfaScanButton,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'Shared trigger button for the group MFA factor scan.\n\n' +
+          'Renders the scan/rescan button with the right label, loading, and disabled ' +
+          'state for the current scan status: `Run MFA scan` before a scan, a loading ' +
+          '`Scanning…` while one runs, `Rescan` once results exist, and disabled for an ' +
+          'empty group. Used by both the filter panel and the Composition MFA tab so the ' +
+          'two entry points stay consistent; the large-group confirmation gate is owned ' +
+          'by the caller via `onScanClick`.',
+      },
+    },
+  },
+  argTypes: {
+    mfaResults: { description: 'Per-member MFA scan results, or null before a scan has run.' },
+    scanStatus: { description: 'Current MFA scan lifecycle status.' },
+    memberCount: { description: 'Member count; scanning is disabled for an empty group.' },
+    onScanClick: {
+      description: 'Start (or confirm) the scan — the caller decides whether to gate large groups.',
+    },
+    size: { description: 'Button size; defaults to `sm`.' },
+  },
   args: {
     mfaResults: null,
     scanStatus: 'idle',
@@ -38,6 +61,6 @@ export const Scanned: Story = {
 };
 
 /** Empty group — the button is disabled. */
-export const EmptyGroup: Story = {
+export const Disabled: Story = {
   args: { memberCount: 0 },
 };

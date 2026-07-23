@@ -8,7 +8,37 @@ const meta = {
   title: 'Shared/Input',
   component: Input,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'Controlled single-line text field with optional label, hint, leading icon, and error state.\n\n' +
+          '`onChange` receives the string value (not the event). When `error` is set the field turns red and the error message replaces the hint. Supports labeled, hinted, error, disabled, and icon-adorned states. For multi-line use `Textarea`; for choices use `Select`.',
+      },
+    },
+  },
+  argTypes: {
+    value: { description: 'Controlled value.' },
+    onChange: { description: 'Called with the new string value on each change.' },
+    placeholder: { description: 'Placeholder text shown when empty.' },
+    type: { description: 'Native input type. Defaults to `text`.' },
+    disabled: { description: 'Disables the field.' },
+    error: { description: 'Error message; when set, applies danger styling and hides `hint`.' },
+    label: { description: 'Optional field label rendered above the input.' },
+    ariaLabel: {
+      description:
+        'Accessible name for the control when no visible `label` is rendered (e.g. an inline field).',
+    },
+    hint: { description: 'Helper text below the input, shown only when there is no `error`.' },
+    fullWidth: { description: 'Stretch to fill the container width. Defaults to `true`.' },
+    icon: { description: 'Optional leading icon rendered inside the field.' },
+    className: { description: 'Extra classes merged onto the outer container.' },
+    autoFocus: { description: 'Focus the input on mount.' },
+    onKeyDown: {
+      description: 'Key handler on the input (e.g. Enter to submit, Escape to cancel).',
+    },
+  },
   args: {
     value: '',
     onChange: fn(),
@@ -38,7 +68,7 @@ export const WithHint: Story = {
 };
 
 /** With error message (replaces hint). */
-export const WithError: Story = {
+export const ErrorState: Story = {
   args: {
     label: 'Email address',
     value: 'invalid',

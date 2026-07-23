@@ -57,9 +57,11 @@ const EntityPicker: React.FC<EntityPickerProps> = ({ descriptors, onSelect }) =>
             <Icon type={descriptor.icon} size="md" />
           </div>
           <div className="flex-1 min-w-0">
-            <h4 className="font-semibold text-neutral-900 group-hover:text-primary-text transition-colors duration-100">
+            {/* h2: one level below the Export tab's PageHeader <h1>, matching the
+                configure-phase section heading — avoids an h1→h4 heading-order skip. */}
+            <h2 className="font-semibold text-neutral-900 group-hover:text-primary-text transition-colors duration-100">
               {descriptor.displayName}
-            </h4>
+            </h2>
             <p className="mt-0.5 text-sm text-neutral-600">{descriptor.description}</p>
           </div>
         </div>

@@ -253,7 +253,7 @@ const RuleImpactModal: React.FC<RuleImpactModalProps> = ({
               <StatCard
                 title="Lose access"
                 value={totalLosing}
-                color={totalLosing > 0 ? 'error' : 'success'}
+                color={totalLosing > 0 ? 'danger' : 'success'}
                 icon={totalLosing > 0 ? 'alert' : 'check'}
                 subtitle={`across ${summary.targetGroups.length} target group${
                   summary.targetGroups.length === 1 ? '' : 's'

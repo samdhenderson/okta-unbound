@@ -32,7 +32,28 @@ const meta = {
   title: 'Overview/Members/AttributeFacet',
   component: AttributeFacet,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          "Compact card visualizing one profile attribute's value distribution as " +
+          'clickable filters.\n\n' +
+          'Shows a segmented "spread bar" plus a short legend of the leading values; every ' +
+          'segment/legend entry toggles a member-list filter, and "View all" opens the full ' +
+          'distribution. Named values use an indigo ramp while "(none)"/"Other" use ' +
+          'neutrals; a low fill rate surfaces a "% set" suffix next to the value count.',
+      },
+    },
+  },
+  argTypes: {
+    summary: { description: 'The attribute and its precomputed value distribution.' },
+    activeValues: {
+      description: 'Canonical values currently active as filters for this attribute.',
+    },
+    onToggleValue: { description: 'Toggle a value as a member-list filter.' },
+    onExpand: { description: 'Open the full value distribution for this attribute.' },
+  },
   args: {
     summary: departmentSummary,
     activeValues: new Set<string>(),

@@ -7,7 +7,23 @@ const meta = {
   title: 'Overview/Members/MemberSearchBar',
   component: MemberSearchBar,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'Search input for the member list, with a leading search icon and a clear button.\n\n' +
+          'A thin controlled wrapper over the shared `Input`; the parent ' +
+          '(`MemberExplorer`) owns the value and debounces it before filtering. A clear ' +
+          'button appears only when the query is non-empty.',
+      },
+    },
+  },
+  argTypes: {
+    value: { description: 'Current query text (controlled).' },
+    onChange: { description: 'Called with the new query on each change / clear.' },
+    placeholder: { description: 'Optional placeholder override.' },
+  },
   args: {
     value: '',
     onChange: fn(),

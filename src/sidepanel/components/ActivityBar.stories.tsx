@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import ActivityBar from './ActivityBar';
+import { inSidePanelFrame } from '../../../.storybook/decorators';
 
 /**
  * Container that wires `useActivityBar` (scheduler + progress context state) to
@@ -10,6 +11,9 @@ const meta = {
   title: 'Sidepanel/ActivityBar',
   component: ActivityBar,
   tags: ['autodocs'],
+  // The bar is `position: fixed` to the panel bottom; frame it so it renders in
+  // view here and in autodocs instead of escaping to the bottom of a blank page.
+  decorators: [inSidePanelFrame],
   parameters: {
     layout: 'fullscreen',
     docs: {

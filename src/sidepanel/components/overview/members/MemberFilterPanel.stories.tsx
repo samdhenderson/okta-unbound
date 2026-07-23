@@ -34,7 +34,42 @@ const meta = {
   title: 'Overview/Members/MemberFilterPanel',
   component: MemberFilterPanel,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Expandable panel of status, MFA-factor, and sort controls for the member list.\n\n' +
+          'Presentational: it reflects the active filter set into pressed pill states and ' +
+          'reports every change (status toggles, per-factor has/missing modes, quick MFA ' +
+          'counts, sort field/direction) via callbacks. Hosts the MFA scan trigger inline — ' +
+          'scanning lives next to the factor filters it enables — and the factor controls ' +
+          'stay hidden until scan results are supplied.',
+      },
+    },
+  },
+  argTypes: {
+    filters: { description: 'Active facet filters, reflected into pressed pill states.' },
+    statusRows: { description: 'Status distribution (value + count) used to build status pills.' },
+    mfaResults: { description: 'Per-member MFA scan results, or null before a scan has run.' },
+    factorLabels: {
+      description: 'Observed factor labels across the group, for per-factor toggles.',
+    },
+    memberCount: {
+      description: "Member count; drives the scan button's disabled/confirm behaviour.",
+    },
+    scanStatus: { description: 'Current MFA scan lifecycle status.' },
+    onRunScanClick: { description: 'Start (or confirm) the MFA scan.' },
+    sortBy: { description: 'Current sort field.' },
+    sortDesc: { description: 'Whether the current sort is descending.' },
+    onToggleStatus: { description: 'Toggle a status value as a filter.' },
+    onClearStatus: { description: 'Clear all status filters.' },
+    onToggleMfaValue: { description: "Toggle a count-based MFA value (e.g. 'none', 'multiple')." },
+    onSetFactorMode: { description: 'Set a per-factor has/missing/off mode.' },
+    onToggleSort: { description: 'Toggle the sort field (or flip direction if already selected).' },
+    onRemoveFilter: { description: 'Remove a single active filter.' },
+    onClearAll: { description: 'Clear every active filter.' },
+  },
   args: {
     filters: [],
     statusRows,

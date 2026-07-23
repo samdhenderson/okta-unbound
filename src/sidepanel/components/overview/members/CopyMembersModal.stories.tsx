@@ -8,7 +8,24 @@ const meta = {
   title: 'Overview/Members/CopyMembersModal',
   component: CopyMembersModal,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Modal for copying the current member list as a chosen identifier, one per line.\n\n' +
+          'The user picks a format (full name, email, username, or `name <email>`); the ' +
+          'modal renders a live preview — truncated with an "…and N more" summary for long ' +
+          'lists — and copies the full list via the shared `CopyButton`. Blank identifiers ' +
+          'are dropped so the count reflects only copyable lines. Renders nothing while closed.',
+      },
+    },
+  },
+  argTypes: {
+    isOpen: { description: 'Whether the modal is open.' },
+    onClose: { description: 'Close the modal.' },
+    members: { description: 'The members to copy (already filtered/sorted by the caller).' },
+  },
   args: {
     isOpen: true,
     onClose: fn(),

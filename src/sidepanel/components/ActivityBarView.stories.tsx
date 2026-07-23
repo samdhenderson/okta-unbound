@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import ActivityBarView from './ActivityBarView';
 import type { ActivityView } from '../hooks/useActivityBar';
+import { inSidePanelFrame } from '../../../.storybook/decorators';
 
 /**
  * Pure presentation of the unified activity bar — a fixed bottom bar with a
@@ -12,7 +13,35 @@ const meta = {
   title: 'Sidepanel/ActivityBarView',
   component: ActivityBarView,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  // `position: fixed` bottom bar — frame it so every state renders in view here
+  // and in autodocs rather than pinned to the bottom of a blank page.
+  decorators: [inSidePanelFrame],
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Pure presentation of the unified activity bar — a fixed bottom bar with a deliberately stable layout.\n\n' +
+          'The status region, the four metric slots (queue / active / rate-limit / eta) and the action area stay mounted, so values coming and going swap text in place instead of reflowing the row. On a narrow panel the bar can collapse to a condensed line — status + rate + a processed/progress tally — behind a chevron toggle. All state arrives as an already-merged `ActivityView`; timers and context wiring live in `useActivityBar`.',
+      },
+    },
+  },
+  argTypes: {
+    view: {
+      description:
+        'Merged, display-ready activity state (status, metric slots, progress, cancel flags).',
+    },
+    onCancel: { description: 'Invoked when the user confirms cancellation of the current work.' },
+    collapsible: {
+      description:
+        'Whether the panel is narrow enough to offer collapsing; when `true` the chevron toggle is shown.',
+    },
+    collapsed: {
+      description:
+        'Whether the bar is currently condensed to its essentials. Only meaningful when `collapsible`.',
+    },
+    onToggleCollapse: { description: 'Toggles between the condensed and full layouts.' },
+  },
   args: {
     onCancel: fn(),
     onToggleCollapse: fn(),

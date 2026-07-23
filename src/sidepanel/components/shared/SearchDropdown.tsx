@@ -100,6 +100,7 @@ function SearchDropdown<T>({
               onClick={onClear}
               className="ml-2 p-1 text-neutral-400 hover:text-neutral-600 transition-colors rounded-full hover:bg-neutral-200"
               title="Clear selection"
+              aria-label="Clear selection"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -162,6 +163,8 @@ function SearchDropdown<T>({
             type="button"
             className="absolute inset-y-0 right-0 pr-3 flex items-center text-neutral-400 hover:text-neutral-600 transition-colors"
             onClick={onClear}
+            title="Clear search"
+            aria-label="Clear search"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path

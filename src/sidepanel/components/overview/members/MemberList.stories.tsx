@@ -23,7 +23,33 @@ const meta = {
   title: 'Overview/Members/MemberList',
   component: MemberList,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Windowed, auto-paging scrollable list of member rows.\n\n' +
+          'Mounts only the first `visibleCount` rows and grows via a "Load more" footer ' +
+          'plus an IntersectionObserver sentinel, capping DOM size for very large groups ' +
+          '(up to ~64k members). Each row optionally renders MFA factor tags once a scan ' +
+          'completes and deep-links to the Admin Console when an org origin is known; an ' +
+          'empty list shows the "no members match" message.\n\n' +
+          '**Related internals:** [Types](?path=/docs/internals-types--docs)',
+      },
+    },
+  },
+  argTypes: {
+    members: { description: 'Members to display, already filtered and sorted by the caller.' },
+    mfaResults: { description: 'Per-member MFA scan results, or null before a scan has run.' },
+    mfaScanned: {
+      description: 'True once a scan completed, so rows render "No MFA" for 0-factor users.',
+    },
+    visibleCount: { description: 'How many rows are currently mounted.' },
+    onLoadMore: { description: 'Reveal the next page of rows.' },
+    oktaOrigin: {
+      description: 'Okta org origin for per-member Admin Console links (null when unknown).',
+    },
+  },
   args: {
     members: mockUsers.slice(0, 20),
     mfaResults: null,

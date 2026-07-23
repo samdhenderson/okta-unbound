@@ -28,7 +28,31 @@ const meta = {
   title: 'Overview/Members/MemberRow',
   component: MemberRow,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'Single member card: name, email, login, a status badge, and MFA factor tags.\n\n' +
+          'Memoized for large lists. The status badge maps the user status to a semantic ' +
+          'token set (success / warning / danger, neutral fallback). Factor tags — or a ' +
+          '"No MFA" badge for 0-factor users — render only once a scan has completed. When ' +
+          "an org origin is provided the whole row becomes a deep link to the member's " +
+          'Okta Admin Console profile.',
+      },
+    },
+  },
+  argTypes: {
+    user: { description: 'The member to render.' },
+    mfa: { description: "This member's MFA scan result, if available." },
+    mfaScanned: {
+      description: 'True once an MFA scan has completed, so "No MFA" can show for 0-factor users.',
+    },
+    oktaOrigin: {
+      description:
+        'Okta org origin; when set, the row links to the member’s Admin Console profile.',
+    },
+  },
   args: {
     user: activeUser,
     mfaScanned: false,

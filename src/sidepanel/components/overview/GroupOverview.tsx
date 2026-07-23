@@ -184,7 +184,7 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
         <StatCard
           title="Deprovisioned"
           value={deprovisionedCount}
-          color={deprovisionedCount > 0 ? 'error' : 'success'}
+          color={deprovisionedCount > 0 ? 'danger' : 'success'}
           icon="trash"
         />
       </div>

@@ -49,11 +49,39 @@ const meta = {
   title: 'Users/GroupMembershipsList',
   component: GroupMembershipsList,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          "Card listing a user's group memberships, distinguishing direct vs rule-based membership.\n\n" +
+          'Direct/rule-based classification is heuristic — the Okta API does not expose which rule (if any) added a user. Rule-based rows surface the matched rule name plus its condition expression and an optional deep link to the Rules tab. Renders a spinner while loading and an empty state when the user belongs to no groups; the header exposes an `actions` slot for caller-supplied controls (e.g. UsersTab\'s "Add to Group" button).',
+      },
+    },
+  },
   args: {
     memberships: [directMembership, ruleMembership],
     isLoading: false,
     onNavigateToRule: fn(),
+  },
+  argTypes: {
+    memberships: {
+      description: "The user's group memberships, each already classified as direct or rule-based.",
+    },
+    isLoading: { description: 'When true, shows a spinner instead of the list.' },
+    currentGroupId: {
+      description: 'Group id to visually highlight as the "current" group, if any.',
+    },
+    oktaOrigin: {
+      description:
+        'Okta origin used to build admin-console deep links; links are hidden when absent.',
+    },
+    onNavigateToRule: {
+      description: 'Invoked with a rule id to navigate to that rule in the Rules tab.',
+    },
+    actions: {
+      description: 'Caller-supplied header controls, rendered on the right of the title row.',
+    },
   },
 } satisfies Meta<typeof GroupMembershipsList>;
 

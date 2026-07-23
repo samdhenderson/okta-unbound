@@ -108,11 +108,11 @@ const UserOverview: React.FC<UserOverviewProps> = ({
   const ruleBasedGroups = groups.filter((g) => g.membershipType === 'RULE_BASED').length;
   const totalGroups = groups.length;
 
-  const statusColors: Record<string, 'success' | 'warning' | 'error' | 'neutral'> = {
+  const statusColors: Record<string, 'success' | 'warning' | 'danger' | 'neutral'> = {
     ACTIVE: 'success',
     SUSPENDED: 'warning',
-    DEPROVISIONED: 'error',
-    LOCKED_OUT: 'error',
+    DEPROVISIONED: 'danger',
+    LOCKED_OUT: 'danger',
     PROVISIONED: 'neutral',
     STAGED: 'neutral',
     RECOVERY: 'warning',

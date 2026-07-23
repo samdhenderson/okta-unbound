@@ -10,7 +10,29 @@ const meta = {
   title: 'Export/ExportFilterBox',
   component: ExportFilterBox,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'Raw filter input for the Export tab with a debounced live match-count.\n\n' +
+          "Wraps the shared `Input` with the descriptor's inline help text and a live " +
+          '"N matching" readout driven by the tab hook\'s first-page probe. The readout has ' +
+          'three states: `Checking…` while a probe is in flight, `No matches` (warning tone) ' +
+          'for a zero-result query, and `N+ matching` when rows are found. Presentational ' +
+          'only — the filter text and match-count are owned by the hook.',
+      },
+    },
+  },
+  argTypes: {
+    value: { description: 'Controlled raw filter expression.' },
+    onChange: { description: 'Called with the new filter text on each change.' },
+    help: { description: 'Inline help text shown under the field (from the descriptor).' },
+    placeholder: { description: 'Example expression shown as the input placeholder.' },
+    matchCount: { description: 'Debounced first-page match-count, or `null` while unknown.' },
+    matchCountLoading: { description: 'Whether a match-count probe is in flight.' },
+    disabled: { description: 'Disable the input (e.g. no context entity chosen yet).' },
+  },
   args: {
     value: '',
     onChange: fn(),
@@ -29,7 +51,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
 
 /** A match-count probe is in flight. */
-export const Checking: Story = {
+export const Loading: Story = {
   args: { value: 'status eq "ACTIVE"', matchCountLoading: true },
 };
 

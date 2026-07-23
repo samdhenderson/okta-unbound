@@ -7,7 +7,25 @@ const meta = {
   title: 'Groups/GroupFilterToggle',
   component: GroupFilterToggle,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'The "Filters" toggle button shown beside the search bar in cached mode.\n\n' +
+          'Opens and closes the filter panel and carries a count badge of the currently ' +
+          'active filters. Takes on active styling both when the panel is expanded and ' +
+          'when any filters are applied.',
+      },
+    },
+  },
+  argTypes: {
+    showFilters: {
+      description: 'Whether the filter panel is currently expanded (drives the active styling).',
+    },
+    activeFilterCount: { description: 'Active-filter count shown in the badge (hidden at 0).' },
+    onToggle: { description: 'Toggles the filter panel open/closed.' },
+  },
   args: {
     showFilters: false,
     activeFilterCount: 0,

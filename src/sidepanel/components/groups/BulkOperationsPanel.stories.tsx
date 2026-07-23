@@ -38,7 +38,32 @@ const meta = {
   title: 'Groups/BulkOperationsPanel',
   component: BulkOperationsPanel,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Inline panel for running bulk operations over the selected groups.\n\n' +
+          'Presents the operation picker (clean / export / remove), runs the chosen ' +
+          'operation with per-group progress, and renders a per-group success/failure ' +
+          'summary. A rejected operation surfaces an error instead of the summary.\n\n' +
+          '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs), ' +
+          '[Scheduler & messaging](?path=/docs/internals-scheduler-messaging--docs), ' +
+          '[Types](?path=/docs/internals-types--docs)',
+      },
+    },
+  },
+  argTypes: {
+    selectedGroups: { description: 'Groups the operation runs against (the current selection).' },
+    executeBulkOperation: {
+      description:
+        'Runs a bulk operation, reporting per-group progress and resolving with results.',
+    },
+    onClose: { description: 'Dismisses the panel.' },
+    onExportSelection: {
+      description: 'Opens the export flow (used by the "Export All Members" operation).',
+    },
+  },
   args: {
     selectedGroups,
     executeBulkOperation: fn(async () => successResults),

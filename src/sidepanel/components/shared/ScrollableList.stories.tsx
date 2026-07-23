@@ -8,7 +8,26 @@ const meta = {
   title: 'Shared/ScrollableList',
   component: ScrollableList,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Independently scrollable list container with built-in loading and empty states.\n\n' +
+          'Renders a `LoadingSpinner` while `loading`, the `emptyState` node when it has no children, otherwise a scroll region (its own scrollbar) that by default flex-grows to fill available space so surrounding chrome stays visible.',
+      },
+    },
+  },
+  argTypes: {
+    children: { description: 'The list items to render.' },
+    className: { description: 'Additional CSS classes for the container.' },
+    emptyState: { description: 'Content to show when there are no children.' },
+    loading: { description: 'Shows a loading spinner when true.' },
+    loadingMessage: { description: 'Custom message for the loading state.' },
+    maxHeight: { description: 'Optional explicit max-height (e.g. "400px", "50vh").' },
+    fillAvailable: { description: 'If true (default), uses flex-grow to fill remaining space.' },
+    testId: { description: 'Test id applied to the container.' },
+  },
   args: {
     children: null,
   },

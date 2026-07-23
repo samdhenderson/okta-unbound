@@ -1,6 +1,6 @@
 import { Meta } from '@storybook/addon-docs/blocks';
 
-<Meta title="Overview" />
+<Meta title="Getting Started" />
 
 # Okta Unbound — component explorer & docs
 
@@ -10,7 +10,9 @@ reference, and the project's written specs.
 ## Sections
 
 - **Components** — every shared primitive and feature component, with live
-  variants, controls, and autodocs generated from their TSDoc. Hook-coupled
+  variants, controls, and autodocs generated from their TSDoc. These surface as
+  feature-named sidebar roots (`Shared`, `Groups`, `Users`, `Overview`, `Rules`,
+  `Export`, `Sidepanel`) rather than one literal "Components" folder. Hook-coupled
   containers render against a mocked `useOktaApi` + a fake `chrome`.
 - **Internals** — the auto-generated API reference for the non-component code
   (hooks, scheduler & messaging, cache, shared utilities, types, background,

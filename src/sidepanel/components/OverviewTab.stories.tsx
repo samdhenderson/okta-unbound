@@ -9,7 +9,7 @@ import OverviewTab from './OverviewTab';
  * group/user overviews are covered by their own stories.
  */
 const meta = {
-  title: 'Components/OverviewTab',
+  title: 'Overview/OverviewTab',
   component: OverviewTab,
   tags: ['autodocs'],
   parameters: {

@@ -10,7 +10,35 @@ const meta = {
   title: 'Groups/GroupSelectionBar',
   component: GroupSelectionBar,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'The "N of M selected" bar and action buttons above the groups list.\n\n' +
+          'Button visibility is gated by the selection size: Select All / Deselect All / ' +
+          'Export List are always available; Compare appears for 2–5 selected groups and ' +
+          'Merge / Bulk Actions / Export Selection for 2+. The active inline panel gets a ' +
+          'highlighted trigger, and a badge surfaces the number of cached cross-group ' +
+          'search results.',
+      },
+    },
+  },
+  argTypes: {
+    selectedCount: { description: 'Number of currently selected groups.' },
+    filteredCount: { description: 'Number of groups after filtering (the "of M" denominator).' },
+    activePanel: { description: 'Which inline panel is open, used to highlight its trigger.' },
+    crossSearchBadge: {
+      description: 'Cached-members count — shown as the Cross-Search badge when > 0.',
+    },
+    onSelectAll: { description: 'Selects every filtered group.' },
+    onDeselectAll: { description: 'Clears the selection.' },
+    onCompare: { description: 'Opens the comparison modal (shown only for 2–5 selections).' },
+    onMerge: { description: 'Opens the merge wizard (shown for 2+ selections).' },
+    onTogglePanel: { description: 'Toggles the given inline panel open/closed.' },
+    onExportSelection: { description: 'Exports the selected groups.' },
+    onExportGroupsList: { description: 'Exports the current (filtered) groups list.' },
+  },
   args: {
     selectedCount: 0,
     filteredCount: 42,

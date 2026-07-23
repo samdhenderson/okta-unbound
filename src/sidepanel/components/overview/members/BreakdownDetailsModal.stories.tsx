@@ -18,7 +18,29 @@ const meta = {
   title: 'Overview/Members/BreakdownDetailsModal',
   component: BreakdownDetailsModal,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Modal showing the full value distribution for one composition dimension.\n\n' +
+          'Displays every value — including those collapsed into the summary\'s "Other" ' +
+          'row — as a scrollable {@link BreakdownReport}, with a "Copy all" of the real ' +
+          'value labels (disabled when there are none). Each row toggles a member-list ' +
+          'filter; an active value is highlighted. Renders nothing while closed.',
+      },
+    },
+  },
+  argTypes: {
+    isOpen: { description: 'Whether the modal is open.' },
+    onClose: { description: 'Close the modal.' },
+    title: { description: "Modal heading (usually the dimension's display title)." },
+    rows: { description: 'The complete (un-aggregated) value distribution for the dimension.' },
+    activeValues: {
+      description: 'Canonical values currently active as filters, for row highlighting.',
+    },
+    onRowClick: { description: 'Toggle a value as a member-list filter.' },
+  },
   args: {
     isOpen: true,
     onClose: fn(),

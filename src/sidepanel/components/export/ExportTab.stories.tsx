@@ -23,6 +23,13 @@ const meta = {
       },
     },
   },
+  argTypes: {
+    targetTabId: {
+      description:
+        'Chrome tab id of the connected Okta tab; export/preview are disabled when absent.',
+    },
+    oktaOrigin: { description: 'Okta org origin used to build per-row deep links in the preview.' },
+  },
   args: {
     targetTabId: 42,
     oktaOrigin: 'https://example.okta.com',

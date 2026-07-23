@@ -68,6 +68,17 @@ const meta = {
       },
     },
   },
+  argTypes: {
+    group: { description: 'The group being explained, or null when closed.' },
+    feedingRules: { description: 'Rules that assign users to the group.' },
+    rulesStatus: { description: 'Status of the feeding-rules load.' },
+    breakdown: { description: 'Manual-vs-rule breakdown once analyzed.' },
+    memberStatus: { description: 'Status of the gated member analysis.' },
+    error: { description: 'Error message for whichever step failed.' },
+    onClose: { description: 'Close the modal.' },
+    onAnalyzeMembers: { description: 'Run the gated member-source analysis.' },
+    onNavigateToRule: { description: 'Jump to a feeding rule in the Rules tab.' },
+  },
   args: {
     group: baseGroup,
     feedingRules,

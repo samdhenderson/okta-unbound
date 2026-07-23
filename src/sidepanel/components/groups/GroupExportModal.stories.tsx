@@ -54,7 +54,38 @@ const meta = {
   title: 'Groups/GroupExportModal',
   component: GroupExportModal,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Modal for exporting a set of groups (and optionally their members) to CSV.\n\n' +
+          'Exports either an ad-hoc selection or a saved collection (the latter names the ' +
+          'title/filename). Enabling "Include member list" fetches each group’s members ' +
+          'and, past ~20 groups, warns the run may take a while. Export is blocked when no ' +
+          'Okta tab is connected (`targetTabId` null), and the modal renders nothing when ' +
+          'closed.\n\n' +
+          '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs), ' +
+          '[Scheduler & messaging](?path=/docs/internals-scheduler-messaging--docs), ' +
+          '[Shared utilities](?path=/docs/internals-shared-utilities--docs)',
+      },
+    },
+  },
+  argTypes: {
+    isOpen: { description: 'Whether the modal is visible.' },
+    onClose: { description: 'Closes the modal.' },
+    groups: { description: 'Groups included in the export.' },
+    targetTabId: { description: 'Connected Okta tab id; export is blocked when null.' },
+    exportType: {
+      description:
+        'Whether the source is an ad-hoc selection or a saved collection (affects filename).',
+    },
+    collectionName: {
+      description:
+        'Collection name, used for the title/filename when `exportType` is `collection`.',
+    },
+    onFetchMembers: { description: "Fetches a group's members for the optional member-list CSV." },
+  },
   args: {
     isOpen: true,
     onClose: fn(),
@@ -80,7 +111,7 @@ export const Collection: Story = {
 };
 
 /** No Okta tab connected — export is blocked; the disabled state is illustrative here. */
-export const NoTargetTab: Story = {
+export const Disabled: Story = {
   args: { targetTabId: null },
 };
 

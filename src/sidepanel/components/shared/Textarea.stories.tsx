@@ -9,7 +9,28 @@ const meta = {
   title: 'Shared/Textarea',
   component: Textarea,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'Controlled multi-line text field with label, hint, and error state; vertically resizable.\n\n' +
+          'The multi-line sibling of `Input`. `onChange` receives the string value (not the event); when `error` is set the field turns red and the message replaces the hint. Supports labeled, hinted, error, disabled, and custom-row states. Prefer this over a raw `<textarea>`.',
+      },
+    },
+  },
+  argTypes: {
+    value: { description: 'Controlled value.' },
+    onChange: { description: 'Called with the new string value on each change.' },
+    placeholder: { description: 'Placeholder text shown when empty.' },
+    disabled: { description: 'Disables the field.' },
+    error: { description: 'Error message; when set, applies danger styling and hides `hint`.' },
+    label: { description: 'Optional label rendered above the field.' },
+    hint: { description: 'Helper text below the field, shown only when there is no `error`.' },
+    rows: { description: 'Visible row count. Defaults to `4`.' },
+    fullWidth: { description: 'Stretch to fill the container width. Defaults to `true`.' },
+    className: { description: 'Extra classes merged onto the outer container.' },
+  },
   args: {
     value: '',
     onChange: fn(),
@@ -33,7 +54,7 @@ export const WithLabel: Story = {
 };
 
 /** With error state. */
-export const WithError: Story = {
+export const ErrorState: Story = {
   args: {
     value: 'Some invalid input',
     label: 'Notes',

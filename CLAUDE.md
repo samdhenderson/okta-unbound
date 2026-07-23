@@ -130,10 +130,10 @@ shared-primitive migration, `error`→`danger`, zod boundary, god-component
 decomposition, scheduler transport unification) is **done**. The _why_ behind each
 decision is in `docs/adr/`. A few accepted deferrals remain as future work, recorded topically at
 their natural home rather than a central backlog: list-path zod validation
-([adr/0006](docs/adr/0006-zod-boundary-validation.md)), the Storybook a11y
-`todo`→`error` promotion ([adr/0011](docs/adr/0011-storybook-single-docs-site.md)),
-and the remaining raw-control exceptions / a future `TextLink` primitive
-([docs/components.md](docs/components.md)).
+([adr/0006](docs/adr/0006-zod-boundary-validation.md)) and the remaining
+raw-control exceptions / a future `TextLink` primitive
+([docs/components.md](docs/components.md)). The Storybook a11y `todo`→`error`
+promotion is **done** ([adr/0014](docs/adr/0014-storybook-hardening.md)).
 
 ## Where things are
 

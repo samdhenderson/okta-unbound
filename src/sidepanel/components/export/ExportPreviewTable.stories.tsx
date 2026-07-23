@@ -48,7 +48,29 @@ const meta = {
   title: 'Export/ExportPreviewTable',
   component: ExportPreviewTable,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Read-only preview of the first rows an export will produce.\n\n' +
+          'Renders the enabled columns using the exact projection the engine uses, with a ' +
+          'summary banner, an optional dropped-rows note, and an info alert when the row cap ' +
+          'was hit. When the descriptor declares a `linkify` column, that cell deep-links into ' +
+          'the Okta Admin Console. Empty results self-diagnose: it distinguishes "the server ' +
+          'returned nothing" from "every row was dropped by schema validation".',
+      },
+    },
+  },
+  argTypes: {
+    columns: { description: 'Enabled columns, in catalog order (headers + projection order).' },
+    rows: { description: 'All fetched rows; only the first 100 are shown.' },
+    fetched: { description: 'Total raw rows the server returned (before validation).' },
+    dropped: { description: 'Rows skipped for failing schema validation.' },
+    capped: { description: "Whether the descriptor's row cap was hit." },
+    linkify: { description: 'Optional deep-link configuration for one column.' },
+    oktaOrigin: { description: 'Okta org origin used to build the deep links.' },
+  },
   args: {
     columns,
     rows,

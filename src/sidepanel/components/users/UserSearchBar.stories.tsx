@@ -7,13 +7,32 @@ const meta = {
   title: 'Users/UserSearchBar',
   component: UserSearchBar,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'Controlled search input for user search, with an inline spinner and a clear button.\n\n' +
+          'Fully controlled by the parent: it renders the current query, shows an inline loading indicator while a search is in flight, and exposes a clear (×) button that both clears the query and refocuses the input. Placeholder text is customizable.',
+      },
+    },
+  },
   args: {
     searchQuery: '',
     onSearchChange: fn(),
     onClear: fn(),
     isSearching: false,
     showClearButton: false,
+  },
+  argTypes: {
+    searchQuery: { description: 'Current search text (controlled).' },
+    onSearchChange: { description: 'Called with the new query on every keystroke.' },
+    onClear: { description: 'Clears the query; also refocuses the input.' },
+    isSearching: { description: 'When true, shows the inline loading spinner.' },
+    showClearButton: { description: 'When true, shows the clear (×) button.' },
+    placeholder: {
+      description: 'Placeholder text; defaults to a generic email/name/login hint.',
+    },
   },
   decorators: [
     (Story) => (

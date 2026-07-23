@@ -21,7 +21,16 @@ const meta = {
   title: 'Users/Comparison/ComparisonDiffTab',
   component: ComparisonDiffTab,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Three tone-coded diff buckets (only-compared / shared / only-context) for groups or apps.\n\n' +
+          'Reused for both the Groups and Apps detail tabs via the `noun` and empty-text props. Optional `renderAction` / `renderContextAction` render-props add per-row "Add" controls to the compared-only and context-only buckets (groups only), enabling one-way or bidirectional copy. Each bucket scrolls within a fixed-height list and shows its empty-state text when the bucket is empty.',
+      },
+    },
+  },
   args: {
     contextName: 'Jane Doe',
     comparedName: 'John Smith',
@@ -32,6 +41,25 @@ const meta = {
     emptySharedText: 'No shared groups.',
     emptyContextText: 'No groups unique to Jane Doe.',
     noun: 'group',
+  },
+  argTypes: {
+    contextName: { description: 'Display name of the context user (baseline).' },
+    comparedName: { description: 'Display name of the compared user.' },
+    comparedItems: { description: 'Items unique to the compared user (the "add" bucket).' },
+    sharedItems: { description: 'Items both users share.' },
+    contextItems: { description: 'Items unique to the context user.' },
+    emptyComparedText: { description: 'Empty-state text for the only-compared bucket.' },
+    emptySharedText: { description: 'Empty-state text for the shared bucket.' },
+    emptyContextText: { description: 'Empty-state text for the only-context bucket.' },
+    noun: { description: 'Singular noun for the items ("group" or "app"), used in subtitles.' },
+    renderAction: {
+      description:
+        'Optional per-row action for the only-compared bucket (Add to context user); groups only.',
+    },
+    renderContextAction: {
+      description:
+        'Optional per-row action for the only-context bucket (Add to compared user); groups only.',
+    },
   },
 } satisfies Meta<typeof ComparisonDiffTab>;
 

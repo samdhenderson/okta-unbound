@@ -6,7 +6,22 @@ const meta = {
   title: 'Shared/LoadingSpinner',
   component: LoadingSpinner,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'Spinning loading indicator with `role="status"`; optional caption and centering.\n\n' +
+          'With neither `message` nor `centered`, renders a bare inline spinner; otherwise it is wrapped in a centered column with the message beneath. Three sizes: `sm` (16px), `md` (32px), `lg` (48px).',
+      },
+    },
+  },
+  argTypes: {
+    size: { description: 'Spinner size. Defaults to `md`.' },
+    message: { description: 'Optional caption rendered below the spinner.' },
+    centered: { description: 'Center the spinner (and message) within a padded flex block.' },
+    className: { description: 'Extra classes merged onto the spinner element.' },
+  },
 } satisfies Meta<typeof LoadingSpinner>;
 
 export default meta;
