@@ -164,3 +164,8 @@ record the decision _after_ (ADR-0001).
 Prefer reusing what exists over adding new code. After edits: `type-check`, `lint`,
 and `prettier --write` touched files; add/keep tests green. Land refactors
 tests-first and one component per change.
+
+**One concern per PR.** Keep each PR to a single, coherent change — don't bundle an
+unrelated fix in with a feature (e.g. an export engine shipped alongside side-panel
+reliability fixes). A focused PR is easier to review, revert, and — since history is
+squash-merged (ADR-0012) — to read later. Split unrelated work into separate PRs.
