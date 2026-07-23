@@ -39,6 +39,11 @@ Details: `docs/architecture.md`.
 
 ## Hard rules (non-negotiable)
 
+- **Never modify or delete an existing test to make it pass.** If a test seems
+  wrong, flag it in the PR description and stop — don't edit it unilaterally.
+  Editing a test's setup/mocks/fixtures is fine when the underlying behavior
+  legitimately changed; editing its assertions or deleting a case to silence a
+  failure is not. (ADR-0012, `docs/testing.md`)
 - **No raw hex.** Use Odyssey tokens; add a token before inlining a color.
   (`docs/design-system.md`)
 - **Never hand-roll a `<button>/<input>/<select>/<textarea>`** — use the shared

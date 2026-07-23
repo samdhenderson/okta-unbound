@@ -29,6 +29,11 @@ statements 80%, branches 75% (enforced in CI).
 - For refactors, **write the test against current behavior first** (it should pass),
   then refactor and keep it green — that's the safety net (see
   [state-management.md](./state-management.md)).
+- **Never modify or delete an existing test to make it pass** ([adr/0012](./adr/0012-no-test-tampering.md)).
+  A red test is a signal to investigate. Fix the code, or — if the behavior
+  legitimately changed — update only the test's setup/mocks/fixtures. Rewriting an
+  assertion or deleting/skipping a case to silence a failure is banned; if the
+  assertion itself looks wrong, flag it in the PR and stop.
 - **Always put a hard external timeout around any local `vitest run`** —
   `perl -e 'alarm 180; exec @ARGV' npx vitest run <file>` and `pkill -9 -f vitest`
   after. `--testTimeout` does **not** stop a render loop (an infinite loop starves
