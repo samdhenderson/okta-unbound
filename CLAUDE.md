@@ -139,6 +139,8 @@ and the remaining raw-control exceptions / a future `TextLink` primitive
 
 - Specs: `docs/` (index at `docs/README.md`). Decisions: `docs/adr/`. Feature
   backlog: `docs/features-plan.md`.
+- `AGENTS.md` (repo root): a thin cross-tool pointer back to this file — project
+  description + commands only. Keep in sync via `docs/development.md`.
 - Shared UI: `src/sidepanel/components/shared/`. Icons: `overview/shared/Icon.tsx`.
 - API client: `src/sidepanel/hooks/useOktaApi/` (module-per-concern pattern).
 - Shared utils: `src/shared/utils/` (`logger`, `oktaUrl`, `dateFormat`, …).
