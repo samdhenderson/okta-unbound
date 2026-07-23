@@ -20,6 +20,11 @@ You write and maintain tests, and own coverage.
 - Co-locate `Foo.test.ts(x)` next to `Foo`.
 - For refactors, write the test against **current** behavior first (it must pass),
   so it becomes the safety net.
+- **Never resolve a failing test by weakening it.** Do not edit an existing test's
+  assertions or delete a test case to make a suite green. Adjusting setup, mocks, or
+  fixtures is fine _when the behavior under test legitimately changed_ — but if the
+  assertion itself looks wrong, flag it in the PR description and stop; don't rewrite
+  it unilaterally. (CLAUDE.md hard rules, ADR-0012)
 
 ## Priority backlog
 

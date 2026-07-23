@@ -39,6 +39,11 @@ Details: `docs/architecture.md`.
 
 ## Hard rules (non-negotiable)
 
+- **Never modify or delete an existing test to make it pass.** If a test seems
+  wrong, flag it in the PR description and stop — don't edit it unilaterally.
+  Editing a test's setup/mocks/fixtures is fine when the underlying behavior
+  legitimately changed; editing its assertions or deleting a case to silence a
+  failure is not. (ADR-0012, `docs/testing.md`)
 - **No raw hex.** Use Odyssey tokens; add a token before inlining a color.
   (`docs/design-system.md`)
 - **Never hand-roll a `<button>/<input>/<select>/<textarea>`** — use the shared
@@ -134,12 +139,33 @@ and the remaining raw-control exceptions / a future `TextLink` primitive
 
 - Specs: `docs/` (index at `docs/README.md`). Decisions: `docs/adr/`. Feature
   backlog: `docs/features-plan.md`.
+- `AGENTS.md` (repo root): a thin cross-tool pointer back to this file — project
+  description + commands only. Keep in sync via `docs/development.md`.
 - Shared UI: `src/sidepanel/components/shared/`. Icons: `overview/shared/Icon.tsx`.
 - API client: `src/sidepanel/hooks/useOktaApi/` (module-per-concern pattern).
 - Shared utils: `src/shared/utils/` (`logger`, `oktaUrl`, `dateFormat`, …).
+
+## Plan-and-approval gate for bigger changes
+
+Before writing implementation code for a **bigger change**, produce a short plan and
+stop for explicit go-ahead. A change is "bigger" if it touches **more than ~2 files**,
+or if it is scoped from `docs/features-plan.md` or `docs/rockstar-parity-plan.md`. The
+plan states: the **affected files**, the **approach**, **which existing tests it
+should be checked against**, and **any new tests needed**. Wait for approval before
+implementing. (ADR-0013)
+
+Use **Claude Code's plan mode** as the mechanism where relevant — it presents the
+plan and blocks edits until you approve it. **Small, single-file fixes are exempt** —
+don't gate a typo or a one-liner. This gate is the plan _before_ the work; ADRs still
+record the decision _after_ (ADR-0001).
 
 ## Working agreement
 
 Prefer reusing what exists over adding new code. After edits: `type-check`, `lint`,
 and `prettier --write` touched files; add/keep tests green. Land refactors
 tests-first and one component per change.
+
+**One concern per PR.** Keep each PR to a single, coherent change — don't bundle an
+unrelated fix in with a feature (e.g. an export engine shipped alongside side-panel
+reliability fixes). A focused PR is easier to review, revert, and — since history is
+squash-merged (ADR-0012) — to read later. Split unrelated work into separate PRs.

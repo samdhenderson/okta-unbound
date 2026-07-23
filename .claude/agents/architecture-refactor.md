@@ -31,7 +31,11 @@ utils in `src/shared/utils/`).
 
 ## Guardrails
 
-Preserve public props and observable behavior. Migrate any direct
+Preserve public props and observable behavior. A refactor that turns a pinning
+test red has changed behavior — fix the code, don't edit the test's assertions or
+delete the case to make it pass. If the test itself is wrong, flag it in the PR
+description and stop (CLAUDE.md hard rules, ADR-0012). Updating test setup/mocks is
+only acceptable when the observable behavior legitimately changed. Migrate any direct
 side-panel→content calls onto the scheduler path. No new `any`; validate external
 data with zod (`docs/development.md`). Every module, hook, and exported helper you
 create or move carries a TypeDoc `@module`/`@description` header + doc comments on

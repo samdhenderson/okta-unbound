@@ -86,3 +86,13 @@ version is derived at build; the background reads it at runtime via
   don't mix throw/return/swallow for the same layer.
 - Deduplicate shared logic (`isOktaUrl`, date formatting) into `shared/utils` — don't
   copy-paste.
+
+## `AGENTS.md` (cross-tool portability)
+
+The repo root carries an **`AGENTS.md`** — the emerging cross-tool convention other
+coding agents look for. It is a **thin pointer**, not a second source of truth: it
+holds only the one-paragraph project description, the commands block, and a line
+directing readers to CLAUDE.md + `docs/` for the routing table, hard rules, and
+subagent definitions. Keep it in sync when the project description or the commands
+change (it mirrors CLAUDE.md's "Project" and "Commands" sections); never let it grow
+into a parallel copy of the guidance — that belongs in CLAUDE.md and here.
