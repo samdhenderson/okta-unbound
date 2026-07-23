@@ -19,6 +19,7 @@ convention; the specs in [`../`](../README.md) describe the _what_.
 | [0010](./0010-component-explorer.md)            | Adopt Storybook as the component explorer                       | Accepted | Partly superseded by 0011.                                                 |
 | [0011](./0011-storybook-single-docs-site.md)    | Storybook is the single documentation site; browser story tests | Accepted | Supersedes parts of 0010.                                                  |
 | [0012](./0012-no-test-tampering.md)             | Never modify or delete a test to make it pass                   | Accepted | Squash-merge hides test-first ordering; enforce at authoring time.         |
+| [0013](./0013-plan-and-approval-gate.md)        | Lightweight plan-and-approval gate before bigger changes        | Accepted | Plan before work for >~2-file / plan-scoped changes; complements ADRs.     |
 
 ## Adding an ADR
 

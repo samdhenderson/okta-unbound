@@ -145,6 +145,20 @@ and the remaining raw-control exceptions / a future `TextLink` primitive
 - API client: `src/sidepanel/hooks/useOktaApi/` (module-per-concern pattern).
 - Shared utils: `src/shared/utils/` (`logger`, `oktaUrl`, `dateFormat`, …).
 
+## Plan-and-approval gate for bigger changes
+
+Before writing implementation code for a **bigger change**, produce a short plan and
+stop for explicit go-ahead. A change is "bigger" if it touches **more than ~2 files**,
+or if it is scoped from `docs/features-plan.md` or `docs/rockstar-parity-plan.md`. The
+plan states: the **affected files**, the **approach**, **which existing tests it
+should be checked against**, and **any new tests needed**. Wait for approval before
+implementing. (ADR-0013)
+
+Use **Claude Code's plan mode** as the mechanism where relevant — it presents the
+plan and blocks edits until you approve it. **Small, single-file fixes are exempt** —
+don't gate a typo or a one-liner. This gate is the plan _before_ the work; ADRs still
+record the decision _after_ (ADR-0001).
+
 ## Working agreement
 
 Prefer reusing what exists over adding new code. After edits: `type-check`, `lint`,
