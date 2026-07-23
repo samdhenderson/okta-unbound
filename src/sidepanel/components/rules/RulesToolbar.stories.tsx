@@ -7,7 +7,28 @@ const meta = {
   title: 'Rules/RulesToolbar',
   component: RulesToolbar,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Search, filter, and sort controls for the Rules tab.\n\n' +
+          'A free-text search field over rule name/condition/attributes sits above a row of filter chips (All / Active Only / Conflicts / Current Group) and a sort selector. The Conflicts chip is disabled until conflicts exist and shows their count; the Current Group chip appears only when a group is detected on the page. Chips route through the shared `FilterPill`; the search field is a documented raw-`<input>` composite (leading glyph) matching the group/user search bars.',
+      },
+    },
+  },
+  argTypes: {
+    searchQuery: { description: 'Current search text.' },
+    onSearchChange: { description: 'Called with the new query as the user types.' },
+    activeFilter: { description: 'Active filter chip.' },
+    onFilterChange: { description: 'Called with the newly selected filter chip.' },
+    conflictsCount: { description: 'Conflict count shown on (and gating) the Conflicts chip.' },
+    showCurrentGroup: {
+      description: 'Whether to show the "Current Group" chip (a group is detected).',
+    },
+    sortMode: { description: 'Active list sort mode.' },
+    onSortChange: { description: 'Change the list sort mode.' },
+  },
   args: {
     searchQuery: '',
     onSearchChange: fn(),

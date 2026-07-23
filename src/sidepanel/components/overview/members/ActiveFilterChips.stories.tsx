@@ -13,7 +13,23 @@ const meta = {
   title: 'Overview/Members/ActiveFilterChips',
   component: ActiveFilterChips,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          "Removable chips summarizing the member explorer's active facet filters.\n\n" +
+          'Renders one chip per active filter — each with an accessible remove button — ' +
+          'plus a "Clear all" action, wrapping across lines as filters accumulate. Renders ' +
+          'nothing when no filters are active.',
+      },
+    },
+  },
+  argTypes: {
+    filters: { description: 'Currently active facet filters.' },
+    onRemove: { description: 'Remove a single filter.' },
+    onClearAll: { description: 'Remove every active filter.' },
+  },
   args: {
     filters: sampleFilters,
     onRemove: fn(),

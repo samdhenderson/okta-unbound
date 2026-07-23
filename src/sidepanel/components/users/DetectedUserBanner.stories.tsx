@@ -7,12 +7,27 @@ const meta = {
   title: 'Users/DetectedUserBanner',
   component: DetectedUserBanner,
   tags: ['autodocs'],
-  parameters: { layout: 'padded' },
+  parameters: {
+    layout: 'padded',
+    docs: {
+      description: {
+        component:
+          'Presentational "detected in admin" banner for the Users tab.\n\n' +
+          'Shown when the Okta admin page has a user open that differs from the one explicitly selected in the tab. Renders the detected user with a status-colored badge (success / warning / danger, omitted when no status is known). Loading is MANUAL only — the Load button — so admin navigation never hijacks the tab; all visibility/dismiss logic lives in the parent and this component only forwards Load / Dismiss intent.',
+      },
+    },
+  },
   args: {
     userInfo: { userId: 'u1', userName: 'Ada Lovelace', userStatus: 'ACTIVE' },
     isLoading: false,
     onLoad: fn(),
     onDismiss: fn(),
+  },
+  argTypes: {
+    userInfo: { description: 'The user detected on the current Okta admin page.' },
+    isLoading: { description: 'Disables the Load button while a load/analysis is in flight.' },
+    onLoad: { description: 'Load the detected user + their memberships into the tab.' },
+    onDismiss: { description: 'Dismiss the banner without loading.' },
   },
 } satisfies Meta<typeof DetectedUserBanner>;
 

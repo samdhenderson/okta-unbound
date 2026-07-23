@@ -86,7 +86,38 @@ const meta = {
   title: 'Overview/Members/CompositionReports',
   component: CompositionReports,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Collapsible "Composition" panel — what a group is made of.\n\n' +
+          'One section with a segmented toggle between **Attributes** (an ' +
+          '{@link AttributeFacet} per discovered profile attribute) and **MFA factors** ' +
+          "(the scan's factor distribution). Above a threshold of attributes it adds a " +
+          '"Find attribute…" filter input. Value clicks bubble up as member-list facet ' +
+          'toggles; "View all" requests the full-distribution modal. The MFA tab prompts ' +
+          'to run the scan before results exist and shows the factor distribution after.\n\n' +
+          '**Related internals:** [Types](?path=/docs/internals-types--docs)',
+      },
+    },
+  },
+  argTypes: {
+    attributes: { description: 'Discovered profile attributes with their value distributions.' },
+    filters: { description: 'Active member-list filters, used to highlight selected values.' },
+    onToggle: { description: 'Toggle a value within an attribute as a member-list filter.' },
+    onExpand: { description: 'Open the full-distribution details view for an attribute.' },
+    mfaRows: { description: 'Pre-computed MFA factor distribution rows (empty before a scan).' },
+    mfaResults: { description: 'Per-member MFA scan results, or null before a scan has run.' },
+    scanStatus: { description: 'Current MFA scan lifecycle status.' },
+    memberCount: {
+      description: "Member count; drives the scan button's disabled/confirm behaviour.",
+    },
+    onToggleMfa: { description: 'Toggle an MFA breakdown row as a member-list filter.' },
+    onRunScanClick: {
+      description: "Start (or confirm) the MFA scan from the MFA tab's empty state.",
+    },
+  },
   args: {
     attributes: discoveredAttributes,
     filters: [],

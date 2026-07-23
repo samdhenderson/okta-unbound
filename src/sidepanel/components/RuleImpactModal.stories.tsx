@@ -66,7 +66,7 @@ const mockEmptySummary: RuleImpactSummary = {
  * mode — the confirmation gate for deactivating it.
  */
 const meta = {
-  title: 'Components/RuleImpactModal',
+  title: 'Rules/RuleImpactModal',
   component: RuleImpactModal,
   tags: ['autodocs'],
   parameters: {
@@ -78,6 +78,22 @@ const meta = {
           "Shows a rule's target groups with live member counts and, crucially, how many members would lose access if the rule were deactivated (the members held by this rule alone). Doubles as the confirmation gate for a deactivation: in `deactivate` mode it leads with the loss headline and its footer commits the change. Computation is read-only — see `shared/membership/ruleImpact`.\n\n" +
           '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs), [Shared utilities](?path=/docs/internals-shared-utilities--docs)',
       },
+    },
+  },
+  argTypes: {
+    isOpen: { description: 'Whether the modal is shown.' },
+    ruleName: { description: 'The rule name being analyzed (for the header/copy).' },
+    mode: { description: 'Preview vs deactivation-confirmation intent.' },
+    status: { description: 'Async status of the capture.' },
+    summary: { description: 'The captured summary once available.' },
+    error: { description: "Error message when `status === 'error'`." },
+    progress: { description: 'Load progress while capturing.' },
+    onClose: { description: 'Close/cancel the modal.' },
+    onConfirmDeactivate: {
+      description: 'Commit the deactivation (only used in `deactivate` mode).',
+    },
+    onNavigateToGroup: {
+      description: "Jump to a target group in the Groups tab (reverse of A2's rule deep-link).",
     },
   },
   args: {

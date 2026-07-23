@@ -7,7 +7,27 @@ const meta = {
   title: 'Shared/AlertMessage',
   component: AlertMessage,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'Inline alert/notification banner with a status icon and optional dismiss (×) button and inline action.\n\n' +
+          'Colour and icon are driven by the canonical `StatusType` vocabulary (`success | warning | danger | info` — ADR-0002). Renders with `role="alert"`. A `danger` message forces its action button into destructive styling regardless of the action’s own `variant`.',
+      },
+    },
+  },
+  argTypes: {
+    message: {
+      description:
+        'The alert text plus its `StatusType` severity, which selects the icon and colours.',
+    },
+    onDismiss: {
+      description: 'When provided, renders a dismiss (×) button that invokes this callback.',
+    },
+    action: { description: 'Optional inline call-to-action button (e.g. “Retry”, “Undo”).' },
+    className: { description: 'Extra classes merged onto the outer container.' },
+  },
   args: {
     message: {
       text: 'This is an informational message.',

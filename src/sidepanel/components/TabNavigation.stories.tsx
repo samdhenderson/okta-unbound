@@ -7,7 +7,22 @@ const meta = {
   title: 'Sidepanel/TabNavigation',
   component: TabNavigation,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          "Sticky top tab bar for switching between the side panel's main views.\n\n" +
+          'Renders the Overview / Users / Groups / Rules / Export / History tabs and highlights the active one with an underline. Selection is reported via `onTabChange`; which tab is active is owned by the caller.',
+      },
+    },
+  },
+  argTypes: {
+    activeTab: {
+      description: 'Currently selected tab, rendered with the active styling and underline.',
+    },
+    onTabChange: { description: 'Called with the chosen tab id when a tab is clicked.' },
+  },
   args: {
     activeTab: 'overview',
     onTabChange: fn(),

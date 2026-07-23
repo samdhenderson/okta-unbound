@@ -15,7 +15,27 @@ const meta = {
   title: 'Shared/SelectionChips',
   component: SelectionChips,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'Renders a set of selected items as removable chips — the display half of a multi-select.\n\n' +
+          'Generic over the item type `T`; `getKey`/`getLabel` project each item. Shows `emptyMessage` when empty, and a “Clear all” link only when more than one item is selected.',
+      },
+    },
+  },
+  argTypes: {
+    items: { description: 'Selected items to render as chips.' },
+    getKey: { description: 'Stable React key for an item.' },
+    getLabel: { description: 'Visible chip label for an item.' },
+    onRemove: { description: 'Called to remove a single item (its × button).' },
+    onClearAll: {
+      description: 'Optional “Clear all” handler; the link shows only when >1 item is selected.',
+    },
+    emptyMessage: { description: 'Placeholder text shown when there are no items.' },
+    className: { description: 'Extra classes merged onto the outer container.' },
+  },
   args: {
     items: [],
     getKey: (item: unknown) => asUser(item).id,

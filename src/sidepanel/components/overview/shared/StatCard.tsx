@@ -15,7 +15,7 @@ interface StatCardProps {
   /** The metric; numbers are rendered with thousands separators. */
   value: number | string;
   /** Semantic color, selecting the icon and border token set; defaults to `neutral`. */
-  color?: 'primary' | 'success' | 'warning' | 'error' | 'neutral';
+  color?: 'primary' | 'success' | 'warning' | 'danger' | 'neutral';
   /** Optional icon shown at the top-right. */
   icon?: IconType;
   /** Optional caption below the value. */
@@ -46,7 +46,7 @@ const colorConfigs = {
     border: 'border-neutral-200',
     textColor: 'text-neutral-900',
   },
-  error: {
+  danger: {
     iconBg: 'bg-danger-light',
     iconColor: 'text-danger-text',
     cardBg: 'bg-white',

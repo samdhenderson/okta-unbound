@@ -41,9 +41,33 @@ const preview: Preview = {
       },
     },
     a11y: {
-      // 'todo' — surface violations in the a11y panel without failing;
-      // promote to 'error' once stories are clean.
-      test: 'todo',
+      // Enforced: a story with an axe violation fails the browser test suite
+      // (promoted from the former report-only 'todo' after the a11y cleanup pass,
+      // closing the ADR-0011 follow-up).
+      test: 'error',
+    },
+    // Side-panel width presets. The extension lives in a Chrome side panel the
+    // user drags freely; `useIsNarrow(640)` condenses the ActivityBar below 640px.
+    // These let a reviewer preview the compact vs. full layouts in the explorer
+    // (toolbar → Viewport). No default is set, so stories still fill the canvas.
+    viewport: {
+      options: {
+        sidepanelCompact: {
+          name: 'Side panel — compact (< 640)',
+          styles: { width: '360px', height: '900px' },
+          type: 'other',
+        },
+        sidepanelDefault: {
+          name: 'Side panel — default',
+          styles: { width: '480px', height: '900px' },
+          type: 'other',
+        },
+        sidepanelWide: {
+          name: 'Side panel — wide (≥ 640)',
+          styles: { width: '720px', height: '900px' },
+          type: 'other',
+        },
+      },
     },
     // The extension renders in a narrow side panel; default stories to fullscreen
     // (primitive stories override to 'centered').

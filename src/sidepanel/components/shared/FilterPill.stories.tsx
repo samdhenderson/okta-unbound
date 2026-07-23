@@ -7,7 +7,28 @@ const meta = {
   title: 'Shared/FilterPill',
   component: FilterPill,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'Small two-state toggle pill for filter panels — solid primary when active, neutral outline when inactive.\n\n' +
+          'Reflects its state as `aria-pressed` and supports a disabled (dimmed, non-interactive) state. For icon-only buttons use `IconButton`; for text CTAs use `Button`.',
+      },
+    },
+  },
+  argTypes: {
+    active: {
+      description: 'Toggle state; when true the pill is filled and `aria-pressed` is set.',
+    },
+    onClick: { description: 'Called when the pill is toggled.' },
+    children: { description: 'Pill label content.' },
+    title: { description: 'Native tooltip text for the pill.' },
+    disabled: { description: 'When true the pill is dimmed and non-interactive.' },
+    inactiveClassName: {
+      description: 'Optional custom classes for the inactive state (e.g. semantic colors).',
+    },
+  },
   args: {
     children: 'Filter label',
     onClick: fn(),

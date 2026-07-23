@@ -17,7 +17,31 @@ const meta = {
   title: 'Overview/Members/BreakdownReport',
   component: BreakdownReport,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'Dependency-free list of horizontal proportion bars for a value distribution.\n\n' +
+          'Each row is a clickable filter toggle that highlights when its value is an ' +
+          'active member-list filter; the aggregated "Other" row is clickable only when an ' +
+          '`onShowOther` handler is supplied, revealing a "View →" affordance. Bars are ' +
+          'plain divs sized by percentage using existing color tokens. With no rows it ' +
+          'falls back to an empty-state message (`emptyMessage`, default "No data").',
+      },
+    },
+  },
+  argTypes: {
+    rows: { description: 'Pre-computed, sorted rows (top-N + optional "Other").' },
+    activeValues: {
+      description: 'Canonical values currently selected as filters (for highlight).',
+    },
+    onRowClick: { description: 'Called when a clickable value row is toggled.' },
+    onShowOther: {
+      description: 'Called when the aggregated "Other" row is clicked, to reveal its values.',
+    },
+    emptyMessage: { description: 'Optional empty-state message when there are no rows.' },
+  },
   args: {
     rows: sampleRows,
     activeValues: new Set<string>(),

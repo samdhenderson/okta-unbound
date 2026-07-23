@@ -39,7 +39,26 @@ const meta = {
   title: 'Export/ColumnPicker',
   component: ColumnPicker,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'Inline collapsible column selector for the Export tab.\n\n' +
+          "Groups the descriptor's catalog into `Identity` (base), `Profile`, and " +
+          '`Custom` buckets — empty buckets are skipped — and renders each column as a ' +
+          '`FilterPill` toggle chip. The section header badge counts the enabled columns. ' +
+          'Fully controlled: the enabled set and toggling are owned by the Export tab hook.',
+      },
+    },
+  },
+  argTypes: {
+    catalog: {
+      description: "The descriptor's full column catalog (grouped and rendered as chips).",
+    },
+    enabled: { description: 'Ids of the currently enabled columns.' },
+    onToggle: { description: 'Toggle a single column on/off by id.' },
+  },
   args: {
     catalog,
     enabled: new Set(['id', 'status', 'email', 'firstName']),

@@ -16,7 +16,41 @@ const meta = {
   title: 'Shared/SearchDropdown',
   component: SearchDropdown,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'Generic search input with a live results dropdown and a selected-item summary state.\n\n' +
+          'Fully controlled and presentational — the caller owns query state, async searching, and the results array (typically via a search hook). Generic over the result type `T`; `renderResult` / `renderSelected` project each item to UI. Covers idle, searching (spinner), results-open, selected-summary, and disabled states.',
+      },
+    },
+  },
+  argTypes: {
+    placeholder: { description: 'Placeholder text for the search input.' },
+    query: { description: 'Controlled query text.' },
+    onQueryChange: { description: 'Called with the new query on each keystroke.' },
+    isSearching: { description: 'When true, shows a spinner in the field (search in flight).' },
+    results: { description: 'Result items to render in the dropdown.' },
+    showDropdown: {
+      description: 'Whether the results dropdown is visible (also requires non-empty `results`).',
+    },
+    onSelect: { description: 'Called when a result is clicked.' },
+    renderResult: { description: 'Renders a single result row.' },
+    selectedItem: {
+      description:
+        'Currently selected item; when set (with `renderSelected`) the picker shows its summary state instead of the input.',
+    },
+    renderSelected: {
+      description: 'Renders the selected item’s summary; required to show the selected state.',
+    },
+    onClear: {
+      description: 'Clears the query or selection; renders the clear affordance when provided.',
+    },
+    disabled: { description: 'Disables the input.' },
+    label: { description: 'Optional field label.' },
+    hint: { description: 'Optional helper text below the field.' },
+  },
   args: {
     placeholder: 'Search users...',
     query: '',

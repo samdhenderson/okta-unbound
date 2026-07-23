@@ -20,7 +20,19 @@ const meta = {
   title: 'Sidepanel/ErrorBoundary',
   component: ErrorBoundary,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Top-level React error boundary for the side panel.\n\n' +
+          'Passes children through normally, and when a descendant throws during render it catches the error, logs it via the shared logger, and shows a recoverable fallback with expandable error details plus "Try Again" (reset the boundary) and "Reload Extension" actions.',
+      },
+    },
+  },
+  argTypes: {
+    children: { description: 'Subtree to render and guard against uncaught errors.' },
+  },
   args: {
     children: <Healthy />,
   },

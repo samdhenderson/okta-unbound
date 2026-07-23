@@ -56,6 +56,8 @@ const Select: React.FC<SelectProps> = ({
   fullWidth = true,
   className = '',
 }) => {
+  // Associate the visible label with the control so it is an accessible name.
+  const selectId = React.useId();
   const selectClasses = `
     px-3 py-2 text-sm
     border rounded-md
@@ -71,8 +73,13 @@ const Select: React.FC<SelectProps> = ({
 
   return (
     <div className={`${fullWidth ? 'w-full' : ''} ${className}`}>
-      {label && <label className="block text-sm font-medium text-neutral-700 mb-2">{label}</label>}
+      {label && (
+        <label htmlFor={selectId} className="block text-sm font-medium text-neutral-700 mb-2">
+          {label}
+        </label>
+      )}
       <select
+        id={selectId}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}

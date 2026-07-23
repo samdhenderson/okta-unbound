@@ -54,6 +54,15 @@ const meta = {
       },
     },
   },
+  argTypes: {
+    selectedGroupIds: {
+      description:
+        'Currently selected group ids — the payload saved into a new/updated collection.',
+    },
+    groups: { description: 'All loaded groups, used to resolve ids to display names.' },
+    onLoadCollection: { description: 'Applies a saved collection by selecting its group ids.' },
+    onClose: { description: 'Dismisses the panel.' },
+  },
   args: {
     groups: sampleGroups,
     selectedGroupIds: new Set([mockGroup.id, 'group456']),

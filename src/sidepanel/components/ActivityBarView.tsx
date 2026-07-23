@@ -133,6 +133,7 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({
   const progressTrack = (
     <div
       role="progressbar"
+      aria-label="Operation progress"
       aria-valuenow={Math.round(view.percentage)}
       aria-valuemin={0}
       aria-valuemax={100}

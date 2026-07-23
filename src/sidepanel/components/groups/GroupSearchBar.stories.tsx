@@ -7,7 +7,30 @@ const meta = {
   title: 'Groups/GroupSearchBar',
   component: GroupSearchBar,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'The groups search input row.\n\n' +
+          'Binds to a different query depending on the search mode: `live` queries Okta ' +
+          'directly (showing a trailing spinner while a request is in flight), while ' +
+          '`cached` filters the already-loaded list client-side.',
+      },
+    },
+  },
+  argTypes: {
+    searchMode: {
+      description: '`live` queries Okta directly; `cached` filters the loaded list.',
+    },
+    liveSearchQuery: { description: 'Query bound in live mode.' },
+    onLiveSearchQueryChange: { description: 'Fired as the live-mode query changes.' },
+    searchQuery: { description: 'Query bound in cached mode.' },
+    onSearchQueryChange: { description: 'Fired as the cached-mode query changes.' },
+    isLiveSearching: {
+      description: 'Whether a live search is in flight (shows the trailing spinner).',
+    },
+  },
   args: {
     searchMode: 'cached',
     liveSearchQuery: '',

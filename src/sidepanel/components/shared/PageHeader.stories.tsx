@@ -9,7 +9,24 @@ const meta = {
   title: 'Shared/PageHeader',
   component: PageHeader,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Top-of-view header bar rendered at the top of a tab/view — title with optional subtitle, status badge, and trailing actions.\n\n' +
+          'The optional badge uses PageHeader’s own local palette (`primary | success | warning | error | neutral`), which still keys on `error`; this is distinct from the canonical `StatusType` vocabulary (which uses `danger`, ADR-0002). Actions are right-aligned.',
+      },
+    },
+  },
+  argTypes: {
+    title: { description: 'Page/section heading.' },
+    subtitle: { description: 'Optional secondary line under the title.' },
+    actions: { description: 'Optional trailing action node(s), right-aligned (e.g. a `Button`).' },
+    badge: {
+      description: 'Optional coloured badge next to the title. Variant defaults to `neutral`.',
+    },
+  },
   args: {
     title: 'Groups',
   },

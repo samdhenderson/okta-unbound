@@ -44,7 +44,23 @@ const meta = {
   title: 'Export/EntityPicker',
   component: EntityPicker,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          "The Export tab's entity hub — a scrollable list of exportable entities.\n\n" +
+          'Purely descriptor-driven: renders one selectable card (icon + name + description) ' +
+          'per registered entity descriptor, inside a `ScrollableList`. Selecting a card hands ' +
+          'its id back to the tab, which enters the `configure` phase. With no descriptors it ' +
+          'renders the shared `EmptyState`.',
+      },
+    },
+  },
+  argTypes: {
+    descriptors: { description: 'Ordered descriptors to offer, one selectable row each.' },
+    onSelect: { description: 'Invoked with the chosen descriptor id when a row is clicked.' },
+  },
   args: {
     descriptors,
     onSelect: fn(),

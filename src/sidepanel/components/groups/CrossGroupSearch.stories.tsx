@@ -43,7 +43,33 @@ const meta = {
   title: 'Groups/CrossGroupSearch',
   component: CrossGroupSearch,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Search-and-bulk-remove panel operating over cached group memberships.\n\n' +
+          'Typing 2+ characters surfaces every (group, user) match across the cached ' +
+          'membership corpus, so an admin can find a user everywhere they appear and ' +
+          'remove them from several groups at once. When nothing is cached it shows a ' +
+          '"load members first" hint.\n\n' +
+          '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs), ' +
+          '[Scheduler & messaging](?path=/docs/internals-scheduler-messaging--docs), ' +
+          '[Types](?path=/docs/internals-types--docs)',
+      },
+    },
+  },
+  argTypes: {
+    groupMembersCache: { description: 'Cached members keyed by group id — the corpus searched.' },
+    groupNames: { description: 'Group id → display name, used to label matches.' },
+    searchUserAcrossGroups: {
+      description: 'Returns every (group, user) match for the query against the cache.',
+    },
+    onRemoveUserFromGroups: {
+      description: 'Removes a user from the given groups (called per user during bulk remove).',
+    },
+    onClose: { description: 'Dismisses the panel.' },
+  },
   args: {
     groupMembersCache,
     groupNames,
@@ -68,7 +94,7 @@ export const SingleGroupCached: Story = {
 };
 
 /** Nothing cached yet — shows the "load members first" hint. */
-export const EmptyCache: Story = {
+export const Empty: Story = {
   args: {
     groupMembersCache: new Map<string, OktaUser[]>(),
     groupNames: new Map<string, string>(),

@@ -62,7 +62,7 @@ export const NoOktaOrigin: Story = {
 };
 
 /** An empty group — zero members, all stat cards at zero. */
-export const EmptyGroup: Story = {
+export const Empty: Story = {
   args: { groupId: 'group-empty', groupName: 'Empty Group' },
   beforeEach: () => {
     useOktaApi.mockReturnValue(makeUseOktaApiValue({ getAllGroupMembers: fn(async () => []) }));
@@ -83,7 +83,7 @@ export const Loading: Story = {
 };
 
 /** Member load failed — inline danger alert with a retry action. */
-export const WithError: Story = {
+export const ErrorState: Story = {
   args: { groupId: 'group-error' },
   beforeEach: () => {
     useOktaApi.mockReturnValue(

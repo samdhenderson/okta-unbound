@@ -60,7 +60,23 @@ const meta = {
   title: 'Rules/RulesMergeBanner',
   component: RulesMergeBanner,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Collapsible banner surfacing rule sets that can be safely merged (Feature A4).\n\n' +
+          'Rules that share a match expression but target different groups are redundant and can be folded into one rule carrying the union of their target groups, with no change to who is matched. The banner starts collapsed so it stays out of the way; each cluster expands to reveal its shared condition and member rules, each with a "View" link that scrolls to the rule\'s card. Merging opens a non-destructive preview wizard — nothing is written until the admin confirms. Renders nothing when there are no mergeable clusters.',
+      },
+    },
+  },
+  argTypes: {
+    clusters: { description: 'Clusters of identical-expression rules (2+ each).' },
+    onMerge: {
+      description: 'Start merging a cluster (opens the non-destructive preview wizard).',
+    },
+    onFocusRule: { description: 'Scroll to and highlight a rule by id (its "View" link).' },
+  },
   args: {
     clusters,
     onMerge: fn(),

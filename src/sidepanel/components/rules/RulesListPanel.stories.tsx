@@ -48,7 +48,35 @@ const meta = {
   title: 'Rules/RulesListPanel',
   component: RulesListPanel,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          "The Rules tab's list region, switching between four states.\n\n" +
+          'Shows a spinner while loading; a "Load Rules" call-to-action empty state when nothing is loaded yet; a "no match" empty state when a search/filter excludes every rule; otherwise the filtered `RuleCard` list. Each card is wrapped in a `data-rule-id` anchor so a deep-linked rule can be scrolled to and highlighted.',
+      },
+    },
+  },
+  argTypes: {
+    isLoading: { description: 'Whether a load is in flight.' },
+    hasRules: {
+      description:
+        'Whether any rules are loaded at all (drives the "load" vs "no match" empty state).',
+    },
+    filteredRules: { description: 'Rules after search + filter.' },
+    onLoad: { description: 'Load rules (used by the empty-state action).' },
+    onActivate: { description: 'Activate an inactive rule.' },
+    onDeactivate: {
+      description: 'Request deactivation (gated behind the impact confirm upstream).',
+    },
+    onPreviewImpact: { description: 'Open the read-only impact preview for a rule.' },
+    onAddTargetGroup: {
+      description: 'Start the "add target group" consolidation for a rule (A4).',
+    },
+    oktaOrigin: { description: 'Okta origin for each card\'s "View in Okta" link.' },
+    selectedRuleId: { description: 'Rule id to highlight/scroll to (deep-link target).' },
+  },
   args: {
     isLoading: false,
     hasRules: true,

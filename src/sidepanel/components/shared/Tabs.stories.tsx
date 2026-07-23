@@ -20,7 +20,26 @@ const meta = {
   title: 'Shared/Tabs',
   component: Tabs,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'Accessible tab bar with `underline` and `segmented` variants.\n\n' +
+          'Renders the tab strip only — callers own the panels and toggle them on the active key. Implements the ARIA tablist pattern (`role="tablist"`/`role="tab"`, `aria-selected`, roving `tabindex`) with Left/Right/Home/End keyboard navigation and automatic activation. Tabs may carry an optional count badge.',
+      },
+    },
+  },
+  argTypes: {
+    tabs: { description: 'Tabs to render, in display order.' },
+    activeKey: { description: 'Key of the currently selected tab.' },
+    onChange: { description: 'Invoked with the newly selected tab key.' },
+    variant: {
+      description: '`underline` (default) for section navigation; `segmented` for compact toggles.',
+    },
+    ariaLabel: { description: 'Accessible label for the tablist (e.g. “User profile sections”).' },
+    className: { description: 'Extra classes merged onto the tablist container.' },
+  },
   args: {
     tabs: SECTION_TABS,
     activeKey: 'account',

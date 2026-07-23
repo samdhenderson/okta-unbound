@@ -15,7 +15,16 @@ const meta = {
   title: 'Users/UserLifecycleActions',
   component: UserLifecycleActions,
   tags: ['autodocs'],
-  parameters: { layout: 'padded' },
+  parameters: {
+    layout: 'padded',
+    docs: {
+      description: {
+        component:
+          "The Users tab's lifecycle-actions panel plus its confirmation modal, gated by user status.\n\n" +
+          'Offers only the actions valid for the current status — Suspend + Reset Password for ACTIVE, Unsuspend for SUSPENDED, and a notice (no actions) for DEPROVISIONED. Trigger buttons disable while an action is in flight; arming an action opens a confirmation modal that the parent commits. Presentational — the parent owns the pending-action state and the API call.',
+      },
+    },
+  },
   args: {
     user: user(),
     isLifecycleLoading: false,
@@ -23,6 +32,18 @@ const meta = {
     onRequestAction: fn(),
     onCancel: fn(),
     onConfirm: fn(),
+  },
+  argTypes: {
+    user: { description: 'The selected user the actions apply to.' },
+    isLifecycleLoading: {
+      description: 'True while a confirmed action is in flight (disables the trigger buttons).',
+    },
+    pendingLifecycleAction: {
+      description: 'The action awaiting confirmation, or null. Drives the confirm modal.',
+    },
+    onRequestAction: { description: 'Arm the confirm modal for an action.' },
+    onCancel: { description: 'Dismiss the confirm modal without running the action.' },
+    onConfirm: { description: 'Run the armed action (the confirm button).' },
   },
 } satisfies Meta<typeof UserLifecycleActions>;
 

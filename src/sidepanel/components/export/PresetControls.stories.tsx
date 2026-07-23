@@ -32,7 +32,28 @@ const meta = {
   title: 'Export/PresetControls',
   component: PresetControls,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'Saved-preset controls for the Export tab.\n\n' +
+          'Apply a saved column selection via the shared `Select`, save the current selection ' +
+          'under a name (shared `Input` + `Button`), and delete the active preset. The apply ' +
+          'dropdown is disabled when no presets exist; the delete affordance only appears once ' +
+          'a preset is applied; saving is gated on `canSave` and a non-empty name. Persistence ' +
+          'is owned by the tab hook — this component is presentational plus a local name field.',
+      },
+    },
+  },
+  argTypes: {
+    presets: { description: 'Saved presets for the active entity, newest first.' },
+    activePresetId: { description: 'Id of the currently applied preset, or `null`.' },
+    onApply: { description: 'Apply a saved preset by id.' },
+    onSave: { description: 'Save the current selection under a name.' },
+    onDelete: { description: 'Delete a saved preset by id.' },
+    canSave: { description: 'Whether saving is allowed (e.g. at least one column enabled).' },
+  },
   args: {
     presets,
     activePresetId: null,
@@ -55,7 +76,7 @@ export const PresetApplied: Story = {
 };
 
 /** No presets saved yet — the apply dropdown is disabled. */
-export const NoPresets: Story = {
+export const Empty: Story = {
   args: { presets: [] },
 };
 

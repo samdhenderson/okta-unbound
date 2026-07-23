@@ -7,7 +7,23 @@ const meta = {
   title: 'Shared/EmptyState',
   component: EmptyState,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Centered “no content” placeholder — icon badge, title, description, and optional action buttons.\n\n' +
+          'Use for empty lists, no-search-results, first-run, error, and permission states. Each action renders as a shared `Button` (defaulting to `primary`), and actions are shown only when the list is non-empty.',
+      },
+    },
+  },
+  argTypes: {
+    icon: { description: 'Icon glyph shown in the circular badge.' },
+    title: { description: 'Bold headline.' },
+    description: { description: 'Supporting explanatory copy.' },
+    actions: { description: 'Optional action buttons (rendered only when non-empty).' },
+    className: { description: 'Extra classes merged onto the outer container.' },
+  },
   args: {
     icon: 'search',
     title: 'No results found',
@@ -51,7 +67,7 @@ export const WithMultipleActions: Story = {
 };
 
 /** Empty list variant. */
-export const EmptyList: Story = {
+export const Empty: Story = {
   args: {
     icon: 'users',
     title: 'No users yet',

@@ -6,7 +6,22 @@ const meta = {
   title: 'Shared/CollapsibleSection',
   component: CollapsibleSection,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'Bordered card whose clickable header toggles its body open or closed.\n\n' +
+          'Manages its own open/closed state internally (uncontrolled), seeded by `defaultOpen`. A chevron rotates on toggle and an optional count badge shows next to the title (rendered even when the count is zero).',
+      },
+    },
+  },
+  argTypes: {
+    title: { description: 'Header label.' },
+    defaultOpen: { description: 'Whether the section starts expanded. Defaults to `true`.' },
+    children: { description: 'Body content, rendered only while expanded.' },
+    itemCount: { description: 'Optional count rendered as a small badge next to the title.' },
+  },
   args: {
     title: 'Advanced Filters',
     defaultOpen: true,

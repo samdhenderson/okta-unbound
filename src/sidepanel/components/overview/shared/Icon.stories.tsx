@@ -8,7 +8,25 @@ const meta = {
   title: 'Overview/Shared/Icon',
   component: Icon,
   tags: ['autodocs'],
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component:
+          'Inline SVG icon registry shared across the Overview tab components.\n\n' +
+          'A single stateless component that maps an icon name to a Tailwind-sized, ' +
+          '`currentColor`-stroked SVG, so stat cards, quick actions, and facets can ' +
+          'reference glyphs by name without an external icon library. Size is one of ' +
+          '`sm` (16px), `md` (20px), `lg` (24px), `xl` (32px); pass a color token through ' +
+          '`className`. See `AllIcons` for the full catalog.',
+      },
+    },
+  },
+  argTypes: {
+    type: { description: 'Which glyph to render (see the `AllIcons` catalog).' },
+    className: { description: 'Extra classes merged after the size class (e.g. a color token).' },
+    size: { description: 'Preset square dimensions: sm=16px, md=20px, lg=24px, xl=32px.' },
+  },
   args: {
     type: 'check',
   },

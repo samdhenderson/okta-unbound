@@ -43,6 +43,24 @@ const meta = {
     targetTabId: 1,
     onGroupsChanged: fn(),
   },
+  argTypes: {
+    isOpen: { description: 'Whether the modal is open.' },
+    onClose: { description: 'Closes the modal.' },
+    contextUser: {
+      description: 'The "context" user being compared from (the user currently in focus).',
+    },
+    contextGroups: {
+      description:
+        "The context user's group memberships, used as the left-hand comparison baseline.",
+    },
+    targetTabId: {
+      description: 'Tab id of the Okta admin tab; API calls are scheduled against it.',
+    },
+    onGroupsChanged: {
+      description:
+        'Called after a group is successfully copied onto the context user so the parent can refresh.',
+    },
+  },
 } satisfies Meta<typeof UserComparisonModal>;
 
 export default meta;

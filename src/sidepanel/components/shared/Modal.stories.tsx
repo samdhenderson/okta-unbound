@@ -8,7 +8,26 @@ const meta = {
   title: 'Shared/Modal',
   component: Modal,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Accessible modal dialog — the canonical overlay for all pop-up UI.\n\n' +
+          'Provides `role="dialog"` + `aria-modal`, a Tab focus-trap, autofocus into the panel, focus restoration on close, and Escape / overlay-click to dismiss. Four width presets (`sm | md | lg | xl`) and an optional footer bar for action buttons. Renders nothing when `isOpen` is false. Always use this rather than a bespoke overlay.',
+      },
+    },
+  },
+  argTypes: {
+    isOpen: { description: 'When false the modal renders nothing (unmounted).' },
+    onClose: { description: 'Invoked on Escape, overlay click, or the header close button.' },
+    title: { description: 'Dialog title; wired to `aria-labelledby`.' },
+    children: { description: 'Body content.' },
+    footer: {
+      description: 'Optional footer node (typically action buttons), shown in a styled footer bar.',
+    },
+    size: { description: 'Max-width preset for the panel. Defaults to `md`.' },
+  },
   args: {
     isOpen: true,
     onClose: fn(),

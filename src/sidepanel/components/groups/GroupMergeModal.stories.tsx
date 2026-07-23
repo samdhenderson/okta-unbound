@@ -93,6 +93,17 @@ const meta = {
       },
     },
   },
+  argTypes: {
+    isOpen: { description: 'Whether the modal is visible.' },
+    selectedGroups: { description: 'The 2+ groups selected for merge.' },
+    phase: { description: 'Wizard step: idle → preview → running → done/error.' },
+    plan: { description: 'The previewed merge plan (member delta and per-source blockers).' },
+    results: { description: 'Per-operation counts once the merge has run.' },
+    error: { description: 'Error message when the merge fails.' },
+    onPreview: { description: 'Load the preview for the chosen survivor + the remaining sources.' },
+    onExecute: { description: 'Execute the previewed plan.' },
+    onClose: { description: 'Close + reset.' },
+  },
   args: {
     isOpen: true,
     selectedGroups,

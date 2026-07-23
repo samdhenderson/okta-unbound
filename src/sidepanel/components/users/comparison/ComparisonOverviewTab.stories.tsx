@@ -35,7 +35,16 @@ const meta = {
   title: 'Users/Comparison/ComparisonOverviewTab',
   component: ComparisonOverviewTab,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Summary tab of the comparison modal: two proportion cards (groups + apps) with jump-to-detail links.\n\n' +
+          'Each card visualizes the shared vs unique split for one dimension and shows its whole-percent overlap; the links jump to the corresponding Groups or Apps detail tab. Prop-driven from pre-bucketed data, so it renders full-overlap, no-overlap, and fully-empty states purely from its inputs.',
+      },
+    },
+  },
   args: {
     contextName: 'Jane Doe',
     comparedName: 'John Smith',
@@ -45,6 +54,20 @@ const meta = {
     appSimilarity: 67,
     onJumpToGroups: fn(),
     onJumpToApps: fn(),
+  },
+  argTypes: {
+    contextName: { description: 'Display name for the context user.' },
+    comparedName: { description: 'Display name for the compared user.' },
+    groupBuckets: {
+      description: 'Bucketed group memberships (only-compared / shared / only-context).',
+    },
+    appBuckets: {
+      description: 'Bucketed app assignments (only-compared / shared / only-context).',
+    },
+    groupSimilarity: { description: 'Group overlap as a whole percent (0–100).' },
+    appSimilarity: { description: 'App overlap as a whole percent (0–100).' },
+    onJumpToGroups: { description: 'Jumps to the Groups detail tab.' },
+    onJumpToApps: { description: 'Jumps to the Apps detail tab.' },
   },
 } satisfies Meta<typeof ComparisonOverviewTab>;
 

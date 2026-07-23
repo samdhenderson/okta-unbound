@@ -70,7 +70,38 @@ const meta = {
   title: 'Groups/GroupComparisonModal',
   component: GroupComparisonModal,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    // heading-order disabled: the shared Modal renders its title as an <h3> with no
+    // <h1>/<h2> ancestor here (the app-shell heading is absent), so axe flags the
+    // isolated heading. The modal's own internal heading structure is consistent.
+    a11y: { config: { rules: [{ id: 'heading-order', enabled: false }] } },
+    docs: {
+      description: {
+        component:
+          'Modal comparing membership overlap across 2–5 selected groups.\n\n' +
+          'Opening triggers the comparison: it fetches members (reusing the passed cache ' +
+          'where possible) and renders the shared intersection, each group’s unique ' +
+          'members, and — for 3+ groups — a pairwise overlap matrix. Surfaces loading and ' +
+          'error states while the comparison is in flight, and renders nothing when ' +
+          'closed.\n\n' +
+          '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs), ' +
+          '[Scheduler & messaging](?path=/docs/internals-scheduler-messaging--docs), ' +
+          '[Types](?path=/docs/internals-types--docs)',
+      },
+    },
+  },
+  argTypes: {
+    isOpen: { description: 'Whether the modal is visible; opening triggers the comparison.' },
+    onClose: { description: 'Closes the modal.' },
+    groups: { description: 'Groups to compare (expects 2–5).' },
+    compareGroups: {
+      description: 'Fetches members and computes the comparison result, reporting progress.',
+    },
+    memberCache: {
+      description: 'Cached members keyed by group id; also used to build the pairwise matrix.',
+    },
+  },
   args: {
     isOpen: true,
     onClose: fn(),
@@ -103,7 +134,7 @@ export const Loading: Story = {
 };
 
 /** The comparison call rejects. */
-export const WithError: Story = {
+export const ErrorState: Story = {
   args: {
     compareGroups: fn(async () => {
       throw new Error('Comparison failed: rate limited');

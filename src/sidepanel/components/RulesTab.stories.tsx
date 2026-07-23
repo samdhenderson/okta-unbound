@@ -7,11 +7,14 @@ import RulesTab from './RulesTab';
  * on demand via the "Load Rules" button — nothing is fetched automatically).
  */
 const meta = {
-  title: 'Components/RulesTab',
+  title: 'Rules/RulesTab',
   component: RulesTab,
   tags: ['autodocs'],
   parameters: {
     layout: 'fullscreen',
+    // heading-order disabled: this story renders the tab as a page fragment out of
+    // its heading context (no surrounding app shell), so axe flags the isolated headings.
+    a11y: { config: { rules: [{ id: 'heading-order', enabled: false }] } },
     docs: {
       description: {
         component:
@@ -21,6 +24,26 @@ const meta = {
           '[Rules engine](?path=/docs/internals-rules-engine--docs), ' +
           '[Scheduler & messaging](?path=/docs/internals-scheduler-messaging--docs)',
       },
+    },
+  },
+  argTypes: {
+    targetTabId: {
+      description: 'Chrome tab id of the connected Okta tab; required to fetch or mutate rules.',
+    },
+    currentGroupId: {
+      description: 'Id of the currently detected group; enables the "Current Group" filter.',
+    },
+    oktaOrigin: {
+      description: 'Okta org origin passed to each RuleCard for its "View in Okta" link.',
+    },
+    selectedRuleId: {
+      description: 'Rule id to scroll to and highlight when navigated here from another tab.',
+    },
+    onRuleSelected: {
+      description: 'Called once the highlighted rule has been shown, so the parent can clear it.',
+    },
+    onNavigateToGroup: {
+      description: "Deep-link to a group in the Groups tab (from a rule's target groups).",
     },
   },
   args: {

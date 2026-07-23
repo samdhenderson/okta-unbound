@@ -6,7 +6,19 @@ const meta = {
   title: 'Rules/RulesStatsGrid',
   component: RulesStatsGrid,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          "The Rules tab's four summary tiles: total, active, inactive, and conflicts.\n\n" +
+          'Built from the shared `StatCard` so it reads consistently with the Overview tab. Counts are locale-formatted with a thousands separator. The conflicts tile is the only stateful one — it switches from neutral to warning styling when the conflict count is above zero.',
+      },
+    },
+  },
+  argTypes: {
+    stats: { description: 'Aggregate rule counts (total / active / inactive / conflicts).' },
+  },
   args: {
     stats: { total: 42, active: 30, inactive: 12, conflicts: 0 },
   },

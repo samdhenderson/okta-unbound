@@ -26,10 +26,41 @@ const baseRule: FormattedRule = {
  * and "View in Okta" actions in its expanded detail view.
  */
 const meta = {
-  title: 'Sidepanel/RuleCard',
+  title: 'Rules/RuleCard',
   component: RuleCard,
   tags: ['autodocs'],
-  parameters: { layout: 'fullscreen' },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Expandable card summarising a single Okta group rule.\n\n' +
+          'The collapsed view shows the rule name, a status dot, current-group/conflict badges, and the condition. Expanding reveals the condition expression (with inline group-name badges), referenced user attributes, target groups, conflict details, metadata, and the activate/deactivate plus "View in Okta" actions. A deep-linked rule auto-expands with a highlight ring. Memoised for list rendering.',
+      },
+    },
+  },
+  argTypes: {
+    rule: { description: 'The formatted rule to display.' },
+    onActivate: {
+      description: 'Called with the rule id when the user activates an inactive rule.',
+    },
+    onDeactivate: {
+      description: 'Called with the rule id when the user deactivates an active rule.',
+    },
+    onPreviewImpact: {
+      description: 'Called with the rule when the user opens its read-only impact preview.',
+    },
+    onAddTargetGroup: {
+      description: 'Called with the rule to start the "add target group" consolidation (A4).',
+    },
+    oktaOrigin: {
+      description: 'Okta org origin used to build the "View in Okta" rules-page link.',
+    },
+    isHighlighted: {
+      description:
+        'When true, the card auto-expands and shows a highlight ring (deep-link target).',
+    },
+  },
   args: {
     rule: baseRule,
     onActivate: fn(),
