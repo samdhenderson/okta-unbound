@@ -323,6 +323,28 @@ describe('RulesTab characterization', () => {
     expect(screen.queryByTestId('rule-r2')).not.toBeInTheDocument();
   });
 
+  it('pre-applies the current-group filter when scoped from "View Rules"', async () => {
+    // r1 feeds the current group (g1); r2 feeds a different group.
+    rulesFetchResponse = () => ({
+      success: true,
+      data: [
+        rawRule({ id: 'r1', actions: { assignUserToGroups: { groupIds: ['g1'] } } }),
+        rawRule({
+          id: 'r2',
+          name: 'Other Group Rule',
+          actions: { assignUserToGroups: { groupIds: ['g2'] } },
+        }),
+      ],
+    });
+
+    renderTab({ currentGroupId: 'g1', scopeToGroupId: 'g1', onScopeConsumed: () => {} });
+    await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
+
+    // Arrived scoped to the current group: the rule that doesn't feed g1 is hidden.
+    await waitFor(() => expect(screen.getByTestId('rule-r1')).toBeInTheDocument());
+    expect(screen.queryByTestId('rule-r2')).not.toBeInTheDocument();
+  });
+
   it('surfaces a load failure in the error banner', async () => {
     // §8: the rules read fails at the scheduler; the helper returns it verbatim.
     rulesFetchResponse = () => ({ success: false, error: 'Okta said no' });

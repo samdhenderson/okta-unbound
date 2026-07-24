@@ -48,6 +48,8 @@ interface OverviewTabProps {
   onExportGroup: (groupId: string, groupName: string) => void;
   /** Open the Export tab pre-scoped to an app-scoped descriptor for the given app. */
   onExportApp: (descriptorId: string, appId: string, appName: string) => void;
+  /** Open the Rules tab scoped to the given group (from the group Overview's "View Rules"). */
+  onViewGroupRules: (groupId: string) => void;
 }
 
 /**
@@ -70,6 +72,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
   onViewAllGroups,
   onExportGroup,
   onExportApp,
+  onViewGroupRules,
 }) => {
   if (isLoading) {
     return (
@@ -109,7 +112,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
             groupId={groupInfo.groupId}
             groupName={groupInfo.groupName}
             targetTabId={targetTabId}
-            onTabChange={(tab, selectedRuleId) => onTabChange(tab, selectedRuleId)}
+            onViewRules={() => onViewGroupRules(groupInfo.groupId)}
             onExportMembers={onExportGroup}
             oktaOrigin={oktaOrigin}
           />

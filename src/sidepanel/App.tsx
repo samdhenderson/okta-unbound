@@ -48,6 +48,9 @@ const App: React.FC = () => {
   // A one-shot request to open the Export tab pre-scoped (e.g. from the group
   // Overview's "Export Members"); cleared by the tab once consumed.
   const [exportRequest, setExportRequest] = useState<ExportRequest | null>(null);
+  // A one-shot request to scope the Rules tab to a group on arrival (from the
+  // group Overview's "View Rules"); cleared by the tab once consumed.
+  const [scopeRulesToGroupId, setScopeRulesToGroupId] = useState<string | null>(null);
   // The pinned snapshot (null = following the live tab). Persisted across reopen.
   const [pinned, setPinned] = useState<PinnedContext | null>(null);
   const isPinned = pinned !== null;
@@ -225,6 +228,13 @@ const App: React.FC = () => {
   const handleExportApp = (descriptorId: string, appId: string, appName: string) =>
     handleNavigateToExport({ descriptorId, contextId: appId, contextLabel: appName });
 
+  // "View Rules" from a group Overview: open the Rules tab scoped to that group.
+  const handleViewGroupRules = (groupId: string) => {
+    setScopeRulesToGroupId(groupId);
+    setActiveTab('rules');
+    chrome.storage.local.set({ [SELECTED_TAB_KEY]: 'rules' });
+  };
+
   return (
     <SchedulerProvider>
       <div className="flex flex-col h-screen overflow-y-auto pb-14 bg-canvas">
@@ -263,6 +273,7 @@ const App: React.FC = () => {
             }}
             onExportGroup={handleExportGroup}
             onExportApp={handleExportApp}
+            onViewGroupRules={handleViewGroupRules}
           />
         )}
         {activeTab === 'rules' && (
@@ -273,6 +284,8 @@ const App: React.FC = () => {
             selectedRuleId={selectedRuleId}
             onRuleSelected={() => setSelectedRuleId(null)}
             onNavigateToGroup={handleNavigateToGroup}
+            scopeToGroupId={scopeRulesToGroupId}
+            onScopeConsumed={() => setScopeRulesToGroupId(null)}
           />
         )}
         {activeTab === 'users' && (

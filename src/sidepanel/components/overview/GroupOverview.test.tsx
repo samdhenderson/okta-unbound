@@ -50,7 +50,7 @@ const baseProps = {
   groupId: 'g1',
   groupName: 'Group One',
   targetTabId: 1,
-  onTabChange: () => {},
+  onViewRules: () => {},
   onExportMembers: () => {},
 };
 
