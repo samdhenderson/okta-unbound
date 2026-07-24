@@ -23,25 +23,12 @@ import ActivityBar from './components/ActivityBar';
 import { useGroupContext } from './hooks/useGroupContext';
 import { useOktaPageContext } from './hooks/useOktaPageContext';
 import { SchedulerProvider } from './contexts/SchedulerContext';
-import type { GroupInfo, UserInfo } from '../shared/types';
+import { deriveTabContext, type PinnedContext } from './pinContext';
 
 /** Storage key under which the last-active tab is persisted in `chrome.storage.local`. */
 const SELECTED_TAB_KEY = 'okta_unbound_selected_tab';
 /** Storage key under which the pinned context snapshot is persisted. */
 const PINNED_CONTEXT_KEY = 'okta_unbound_pinned_context';
-
-/**
- * A frozen snapshot of the Overview context. When present the panel holds this
- * entity (ignoring live tab navigation) so the user can cross-reference another
- * Okta page without losing their place; unpinning resumes live detection.
- */
-interface PinnedContext {
-  pageType: 'group' | 'user';
-  groupInfo: GroupInfo | null;
-  userInfo: UserInfo | null;
-  targetTabId: number;
-  oktaOrigin: string | null;
-}
 
 /**
  * Root application shell for the Okta Unbound side panel.
@@ -101,6 +88,11 @@ const App: React.FC = () => {
         error: page.error,
         isLoading: page.isLoading,
       };
+
+  // The context the feature tabs operate on. When pinned it follows the frozen
+  // snapshot (so "View Rules"/exports target the pinned entity, not whatever the
+  // live tab drifted to); otherwise it follows the live always-on tab context.
+  const tabContext = deriveTabContext(pinned, { targetTabId, groupInfo, oktaOrigin });
 
   const entityName =
     effective.pageType === 'group'
@@ -251,9 +243,9 @@ const App: React.FC = () => {
         )}
         {activeTab === 'rules' && (
           <RulesTab
-            targetTabId={targetTabId ?? undefined}
-            currentGroupId={groupInfo?.groupId}
-            oktaOrigin={oktaOrigin ?? undefined}
+            targetTabId={tabContext.targetTabId ?? undefined}
+            currentGroupId={tabContext.currentGroupId}
+            oktaOrigin={tabContext.oktaOrigin ?? undefined}
             selectedRuleId={selectedRuleId}
             onRuleSelected={() => setSelectedRuleId(null)}
             onNavigateToGroup={handleNavigateToGroup}
@@ -261,8 +253,8 @@ const App: React.FC = () => {
         )}
         {activeTab === 'users' && (
           <UsersTab
-            targetTabId={targetTabId ?? undefined}
-            currentGroupId={groupInfo?.groupId}
+            targetTabId={tabContext.targetTabId ?? undefined}
+            currentGroupId={tabContext.currentGroupId}
             onNavigateToRule={handleNavigateToRule}
             selectedUserId={selectedUserId}
             onUserSelected={() => setSelectedUserId(null)}
@@ -270,15 +262,18 @@ const App: React.FC = () => {
         )}
         {activeTab === 'groups' && (
           <GroupsTab
-            targetTabId={targetTabId ?? null}
-            oktaOrigin={oktaOrigin ?? undefined}
+            targetTabId={tabContext.targetTabId ?? null}
+            oktaOrigin={tabContext.oktaOrigin ?? undefined}
             onNavigateToRule={handleNavigateToRule}
             selectedGroupId={selectedGroupId}
             onGroupSelected={() => setSelectedGroupId(null)}
           />
         )}
         {activeTab === 'export' && (
-          <ExportTab targetTabId={targetTabId ?? undefined} oktaOrigin={oktaOrigin ?? undefined} />
+          <ExportTab
+            targetTabId={tabContext.targetTabId ?? undefined}
+            oktaOrigin={tabContext.oktaOrigin ?? undefined}
+          />
         )}
         {activeTab === 'history' && (
           <div
