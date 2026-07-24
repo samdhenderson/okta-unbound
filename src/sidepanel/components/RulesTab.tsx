@@ -9,7 +9,7 @@
  * (`RulesMetaRow`, `RulesStatsGrid`, `RulesToolbar`, `RulesListPanel`) plus the
  * `RuleImpactModal`. Deactivation is gated behind that modal (Feature B).
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import RuleImpactModal from './RuleImpactModal';
 import PageHeader from './shared/PageHeader';
 import Button from './shared/Button';
@@ -71,6 +71,9 @@ const RulesTab: React.FC<RulesTabProps> = ({
   // combined with the cross-tab deep-link so both drive one highlight path.
   const [focusRuleId, setFocusRuleId] = useState<string | null>(null);
   const activeRuleId = selectedRuleId ?? focusRuleId;
+  // Set once the mount-time persisted-state restore has been attempted, so the
+  // deep-link auto-load below doesn't race a fetch ahead of the hydrate.
+  const [restoreAttempted, setRestoreAttempted] = useState(false);
 
   // Single error channel; '' clears it. Stable so the hooks below keep their
   // memoized identities (useOktaApi in particular memoizes on this callback).
@@ -144,6 +147,8 @@ const RulesTab: React.FC<RulesTabProps> = ({
         }
       } catch (err) {
         log.error('Failed to load persisted state:', err);
+      } finally {
+        setRestoreAttempted(true);
       }
     };
 
@@ -152,24 +157,26 @@ const RulesTab: React.FC<RulesTabProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Scroll to and highlight the active rule (cross-tab deep-link or a local focus)
-  // once it is in the DOM.
+  // A cross-tab deep-link can arrive before rules have ever been loaded this
+  // session (rules load manually, not on mount). Kick a cache-first load once so
+  // the target can actually render — mirroring the Users tab's load-on-demand.
+  const deepLinkLoadRef = useRef<string | null>(null);
   useEffect(() => {
-    if (activeRuleId && rules.length > 0) {
-      log.debug('Navigating to rule:', activeRuleId);
-      const ruleElement = document.querySelector(`[data-rule-id="${activeRuleId}"]`);
-      if (ruleElement) {
-        ruleElement.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-        const t = setTimeout(() => {
-          onRuleSelected?.();
-          setFocusRuleId(null);
-        }, 2000);
-        return () => clearTimeout(t);
-      } else {
-        log.warn('Rule not found in DOM:', activeRuleId);
-      }
+    if (!activeRuleId) {
+      deepLinkLoadRef.current = null;
+      return;
     }
-  }, [activeRuleId, rules, onRuleSelected]);
+    if (
+      restoreAttempted &&
+      rules.length === 0 &&
+      !data.isLoading &&
+      targetTabId != null &&
+      deepLinkLoadRef.current !== activeRuleId
+    ) {
+      deepLinkLoadRef.current = activeRuleId;
+      void loadRules(false);
+    }
+  }, [activeRuleId, restoreAttempted, rules.length, data.isLoading, targetTabId, loadRules]);
 
   // Persist rules + UI state whenever they change.
   useEffect(() => {
@@ -233,6 +240,33 @@ const RulesTab: React.FC<RulesTabProps> = ({
     }
     return sortRules(result, sortMode);
   }, [rules, searchQuery, activeFilter, sortMode]);
+
+  // Scroll to and highlight the active rule (cross-tab deep-link or a local focus)
+  // once it is in the DOM. If it is loaded but hidden by the current search/filter,
+  // relax them first so a persisted filter can't swallow the deep-link.
+  useEffect(() => {
+    if (!activeRuleId || rules.length === 0) return;
+    if (!rules.some((r) => r.id === activeRuleId)) return; // not loaded yet; loader effect handles it
+    if (!filteredRules.some((r) => r.id === activeRuleId)) {
+      // Target exists but is filtered out — clear the view so it renders, then
+      // this effect re-runs and scrolls to it.
+      setSearchQuery('');
+      setActiveFilter('all');
+      return;
+    }
+    log.debug('Navigating to rule:', activeRuleId);
+    const ruleElement = document.querySelector(`[data-rule-id="${activeRuleId}"]`);
+    if (ruleElement) {
+      ruleElement.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      const t = setTimeout(() => {
+        onRuleSelected?.();
+        setFocusRuleId(null);
+      }, 2000);
+      return () => clearTimeout(t);
+    } else {
+      log.warn('Rule not found in DOM:', activeRuleId);
+    }
+  }, [activeRuleId, rules, filteredRules, onRuleSelected]);
 
   return (
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
