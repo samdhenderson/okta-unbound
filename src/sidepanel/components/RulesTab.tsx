@@ -49,6 +49,14 @@ interface RulesTabProps {
   onRuleSelected?: () => void;
   /** Deep-link to a group in the Groups tab (from a rule's target groups, B → A2). */
   onNavigateToGroup?: (groupId: string) => void;
+  /**
+   * One-shot request to scope the list to the current group on arrival (e.g. from
+   * the group Overview's "View Rules"). The value is the group id being scoped to;
+   * cleared via {@link RulesTabProps.onScopeConsumed} once applied.
+   */
+  scopeToGroupId?: string | null;
+  /** Invoked once {@link RulesTabProps.scopeToGroupId} has been applied. */
+  onScopeConsumed?: () => void;
 }
 
 /**
@@ -62,18 +70,21 @@ const RulesTab: React.FC<RulesTabProps> = ({
   selectedRuleId,
   onRuleSelected,
   onNavigateToGroup,
+  scopeToGroupId,
+  onScopeConsumed,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<RulesFilterType>('all');
   const [sortMode, setSortMode] = useState<RuleSortMode>('default');
+  // Set once the mount-time persisted-state restore has run, so the deep-link
+  // auto-load doesn't race a fetch ahead of the hydrate, and a scope request
+  // applies *after* (and thus wins over) any restored filter.
+  const [restoreAttempted, setRestoreAttempted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Local "scroll to this rule" focus (e.g. from the merge banner's View link),
   // combined with the cross-tab deep-link so both drive one highlight path.
   const [focusRuleId, setFocusRuleId] = useState<string | null>(null);
   const activeRuleId = selectedRuleId ?? focusRuleId;
-  // Set once the mount-time persisted-state restore has been attempted, so the
-  // deep-link auto-load below doesn't race a fetch ahead of the hydrate.
-  const [restoreAttempted, setRestoreAttempted] = useState(false);
 
   // Single error channel; '' clears it. Stable so the hooks below keep their
   // memoized identities (useOktaApi in particular memoizes on this callback).
@@ -156,6 +167,21 @@ const RulesTab: React.FC<RulesTabProps> = ({
     TabStateManager.markTabVisited('rules');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Fulfil a one-shot "View Rules for this group" request: pre-apply the
+  // current-group filter so the list arrives scoped to the detected group. Runs
+  // after the persisted-state restore so it wins over any restored filter.
+  const scopeHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!scopeToGroupId) {
+      scopeHandledRef.current = null;
+      return;
+    }
+    if (!restoreAttempted || scopeHandledRef.current === scopeToGroupId) return;
+    scopeHandledRef.current = scopeToGroupId;
+    if (currentGroupId) setActiveFilter('current-group');
+    onScopeConsumed?.();
+  }, [scopeToGroupId, restoreAttempted, currentGroupId, onScopeConsumed]);
 
   // A cross-tab deep-link can arrive before rules have ever been loaded this
   // session (rules load manually, not on mount). Kick a cache-first load once so

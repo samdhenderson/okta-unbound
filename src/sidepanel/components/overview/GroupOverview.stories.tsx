@@ -33,7 +33,7 @@ const meta = {
     groupId: 'group-default',
     groupName: 'Engineering Team',
     targetTabId: 1,
-    onTabChange: fn(),
+    onViewRules: fn(),
     onExportMembers: fn(),
     oktaOrigin: 'https://example.okta.com',
   },

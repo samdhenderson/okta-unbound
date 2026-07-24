@@ -30,8 +30,8 @@ interface GroupOverviewProps {
   groupName: string;
   /** Browser tab hosting the Okta session; every API call is routed to it. */
   targetTabId: number;
-  /** Switch the side panel to another primary tab (optionally focusing a rule). */
-  onTabChange: (tab: 'rules' | 'users' | 'groups', selectedRuleId?: string) => void;
+  /** Open the Rules tab scoped to this group (its feeding rules). */
+  onViewRules: () => void;
   /** Open the Export tab pre-scoped to this group's members. */
   onExportMembers: (groupId: string, groupName: string) => void;
   /** Okta org origin, used to build Admin Console deep links (null when unknown). */
@@ -46,7 +46,7 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
   groupId,
   groupName,
   targetTabId,
-  onTabChange,
+  onViewRules,
   onExportMembers,
   oktaOrigin,
 }) => {
@@ -224,7 +224,7 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
           variant="secondary"
           size="sm"
           icon="list"
-          onClick={() => onTabChange('rules')}
+          onClick={onViewRules}
           title="View group rules affecting this group"
         >
           View Rules
