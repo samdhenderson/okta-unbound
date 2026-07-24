@@ -155,3 +155,34 @@ export const WithoutAnalyzeSource: Story = {
 export const LongText: Story = {
   args: { group: longNameGroup, isHighlighted: true },
 };
+
+/**
+ * Rule badge with both relationships — hover the "⚡ N rules" badge to see the
+ * "Assigned by X · Used in Y" split (a rule target vs. referenced in a condition).
+ */
+export const UsedInAndAssignedByRules: Story = {
+  args: {
+    group: {
+      ...baseGroup,
+      id: '00grel0001',
+      name: 'Contractors',
+      hasRules: true,
+      ruleCount: 2,
+      usedInRuleCount: 3,
+    },
+  },
+};
+
+/** A group only *referenced* in a rule condition — not fed by any rule. */
+export const UsedInRulesOnly: Story = {
+  args: {
+    group: {
+      ...appGroup,
+      id: '00grel0002',
+      name: 'Eligibility Cohort',
+      hasRules: false,
+      ruleCount: 0,
+      usedInRuleCount: 1,
+    },
+  },
+};

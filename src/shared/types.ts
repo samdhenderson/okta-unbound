@@ -390,8 +390,16 @@ export interface GroupSummary {
   memberCount: number;
   lastUpdated?: Date;
   lastMembershipUpdated?: Date;
+  /** Whether at least one rule assigns users to this group (a feeding/target rule). */
   hasRules: boolean;
+  /** Number of rules that assign users to this group (its feeding/target set). */
   ruleCount: number;
+  /**
+   * Number of rules that reference this group in their condition expression
+   * (e.g. `isMemberOfAnyGroup("<id>")`) — the group is used to *decide* the rule,
+   * not assigned by it. Undefined until the rules payload is known.
+   */
+  usedInRuleCount?: number;
   selected?: boolean;
   sourceAppId?: string;
   sourceAppName?: string;
