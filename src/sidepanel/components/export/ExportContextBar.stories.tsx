@@ -73,6 +73,16 @@ export const WithResults: Story = {
   },
 };
 
+/**
+ * Pre-seeded selection — how the picker opens when deep-linked from the group
+ * Overview's "Export Members" (already scoped, no search needed).
+ */
+export const PreSelected: Story = {
+  args: {
+    initialSelected: { id: '00gFAKE001', label: 'Engineering', sublabel: 'OKTA_GROUP' },
+  },
+};
+
 /** App-scoped context — the same picker reused for a different parent entity. */
 export const AppContext: Story = {
   args: {

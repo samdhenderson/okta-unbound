@@ -26,6 +26,12 @@ interface UseSearchWithDropdownOptions<T> {
   filterFn?: (results: T[]) => T[];
   /** When true, searching is suppressed entirely. */
   disabled?: boolean;
+  /**
+   * Seed the initially-selected item (e.g. a deep-linked pre-scoped context).
+   * Only the initial value is read; later changes don't re-seed. Search stays
+   * paused until it is cleared, exactly as if the user had picked it.
+   */
+  initialSelected?: T | null;
 }
 
 /** Return shape of {@link useSearchWithDropdown}. */
@@ -83,12 +89,13 @@ export function useSearchWithDropdown<T>({
   onSelect,
   filterFn,
   disabled = false,
+  initialSelected = null,
 }: UseSearchWithDropdownOptions<T>): UseSearchWithDropdownReturn<T> {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<T[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<T | null>(null);
+  const [selectedItem, setSelectedItem] = useState<T | null>(initialSelected);
 
   // Track if component is mounted to prevent state updates after unmount
   const isMounted = useRef(true);

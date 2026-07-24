@@ -22,6 +22,8 @@ interface ExportContextBarProps {
   search: (query: string) => Promise<EntityContextOption[]>;
   /** Called with the chosen entity, or `null` when the selection is cleared. */
   onSelect: (option: EntityContextOption | null) => void;
+  /** Pre-selected entity to show on mount (e.g. a deep-linked pre-scoped context). */
+  initialSelected?: EntityContextOption | null;
 }
 
 /**
@@ -33,10 +35,12 @@ const ExportContextBar: React.FC<ExportContextBarProps> = ({
   placeholder,
   search,
   onSelect,
+  initialSelected = null,
 }) => {
   const dropdown = useSearchWithDropdown<EntityContextOption>({
     searchFn: search,
     onSelect,
+    initialSelected,
   });
 
   return (

@@ -9,7 +9,7 @@
  * preview table. Every Okta read routes through the rate-limited scheduler path; no
  * entity-specific code lives here, so new descriptors need zero tab changes.
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PageHeader, AlertMessage, Button } from '../shared';
 import { useOktaApi } from '../../hooks/useOktaApi';
 import { useExportTab } from '../../hooks/useExportTab';
@@ -22,18 +22,40 @@ import ColumnPicker from './ColumnPicker';
 import PresetControls from './PresetControls';
 import ExportPreviewTable from './ExportPreviewTable';
 
+/**
+ * A one-shot request to open the Export tab pre-scoped to a specific descriptor
+ * and context entity (e.g. from the group Overview's "Export Members").
+ */
+export interface ExportRequest {
+  /** Descriptor id to select (e.g. `'group-memberships'`). */
+  descriptorId: string;
+  /** The context entity's Okta id (e.g. the group id). */
+  contextId: string;
+  /** The context entity's display label (folded into the export filename). */
+  contextLabel: string;
+}
+
 /** Props for {@link ExportTab}. */
 interface ExportTabProps {
   /** Chrome tab id of the connected Okta tab; export/preview are disabled when absent. */
   targetTabId?: number;
   /** Okta org origin used to build per-row deep links in the preview. */
   oktaOrigin?: string;
+  /** One-shot request to open pre-scoped to a descriptor + context; cleared once consumed. */
+  exportRequest?: ExportRequest | null;
+  /** Invoked once {@link ExportTabProps.exportRequest} has been applied. */
+  onExportRequestConsumed?: () => void;
 }
 
 /**
  * Renders the Export tab and orchestrates the descriptor-driven export flow.
  */
-const ExportTab: React.FC<ExportTabProps> = ({ targetTabId, oktaOrigin }) => {
+const ExportTab: React.FC<ExportTabProps> = ({
+  targetTabId,
+  oktaOrigin,
+  exportRequest,
+  onExportRequestConsumed,
+}) => {
   const [error, setError] = useState<string | null>(null);
 
   // Must be stable: useOktaApi memoizes its operations on this callback's identity.
@@ -79,7 +101,23 @@ const ExportTab: React.FC<ExportTabProps> = ({ targetTabId, oktaOrigin }) => {
     onError: setError,
   });
 
-  const { descriptor } = tab;
+  const { descriptor, selectEntity, setContext } = tab;
+
+  // Fulfil a one-shot deep-link (e.g. Overview's "Export Members"): select the
+  // requested descriptor and seed its context so the tab opens pre-scoped.
+  const handledExportRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!exportRequest) {
+      handledExportRef.current = null;
+      return;
+    }
+    const key = `${exportRequest.descriptorId}:${exportRequest.contextId}`;
+    if (handledExportRef.current === key) return;
+    handledExportRef.current = key;
+    selectEntity(exportRequest.descriptorId);
+    setContext({ id: exportRequest.contextId, label: exportRequest.contextLabel });
+    onExportRequestConsumed?.();
+  }, [exportRequest, selectEntity, setContext, onExportRequestConsumed]);
 
   return (
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
@@ -117,6 +155,11 @@ const ExportTab: React.FC<ExportTabProps> = ({ targetTabId, oktaOrigin }) => {
                 placeholder={descriptor.context.placeholder}
                 search={tab.contextSearch}
                 onSelect={tab.setContext}
+                initialSelected={
+                  tab.contextId
+                    ? { id: tab.contextId, label: tab.contextLabel ?? tab.contextId }
+                    : null
+                }
               />
             )}
 

@@ -41,6 +41,8 @@ interface OverviewTabProps {
   onRetry: () => void;
   /** Open the current user in the Users tab with all groups loaded. */
   onViewAllGroups: () => void;
+  /** Open the Export tab pre-scoped to a group's members. */
+  onExportGroup: (groupId: string, groupName: string) => void;
 }
 
 /**
@@ -60,6 +62,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
   oktaOrigin,
   onRetry,
   onViewAllGroups,
+  onExportGroup,
 }) => {
   if (isLoading) {
     return (
@@ -100,6 +103,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
             groupName={groupInfo.groupName}
             targetTabId={targetTabId}
             onTabChange={(tab, selectedRuleId) => onTabChange(tab, selectedRuleId)}
+            onExportMembers={onExportGroup}
             oktaOrigin={oktaOrigin}
           />
         )}
