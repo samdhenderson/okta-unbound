@@ -9,7 +9,7 @@
  * guidance {@link EmptyState} otherwise.
  */
 import React from 'react';
-import type { GroupInfo, UserInfo } from '../../shared/types';
+import type { GroupInfo, UserInfo, AppInfo } from '../../shared/types';
 import type { PageType } from '../hooks/useOktaPageContext';
 import type { ConnectionStatus } from '../hooks/useOktaTabContext';
 import AlertMessage from './shared/AlertMessage';
@@ -17,6 +17,7 @@ import EmptyState from './shared/EmptyState';
 import LoadingSpinner from './shared/LoadingSpinner';
 import GroupOverview from './overview/GroupOverview';
 import UserOverview from './overview/UserOverview';
+import AppOverview from './overview/AppOverview';
 
 interface OverviewTabProps {
   /** Navigates to another tab, optionally deep-linking to a specific rule id. */
@@ -27,6 +28,8 @@ interface OverviewTabProps {
   groupInfo: GroupInfo | null;
   /** User identity when `pageType === 'user'`. */
   userInfo: UserInfo | null;
+  /** App identity when `pageType === 'app'`. */
+  appInfo: AppInfo | null;
   /** Connection state to the Okta tab. */
   connectionStatus: ConnectionStatus;
   /** Tab hosting the Okta session; every API call is routed to it. */
@@ -43,6 +46,8 @@ interface OverviewTabProps {
   onViewAllGroups: () => void;
   /** Open the Export tab pre-scoped to a group's members. */
   onExportGroup: (groupId: string, groupName: string) => void;
+  /** Open the Export tab pre-scoped to an app-scoped descriptor for the given app. */
+  onExportApp: (descriptorId: string, appId: string, appName: string) => void;
 }
 
 /**
@@ -55,6 +60,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
   pageType,
   groupInfo,
   userInfo,
+  appInfo,
   connectionStatus,
   targetTabId,
   error,
@@ -63,6 +69,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
   onRetry,
   onViewAllGroups,
   onExportGroup,
+  onExportApp,
 }) => {
   if (isLoading) {
     return (
@@ -118,7 +125,13 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
           />
         )}
 
-        {(pageType === 'unknown' || pageType === 'admin' || pageType === 'app') && (
+        {pageType === 'app' && appInfo && targetTabId && (
+          <AppOverview appId={appInfo.appId} appName={appInfo.appName} onExport={onExportApp} />
+        )}
+
+        {(pageType === 'unknown' ||
+          pageType === 'admin' ||
+          (pageType === 'app' && (!appInfo || !targetTabId))) && (
           <EmptyState
             icon="search"
             title="Waiting for Context"

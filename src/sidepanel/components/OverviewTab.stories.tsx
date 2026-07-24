@@ -27,6 +27,7 @@ const meta = {
     pageType: 'admin',
     groupInfo: null,
     userInfo: null,
+    appInfo: null,
     connectionStatus: 'connected',
     targetTabId: 1,
     error: null,
@@ -35,6 +36,7 @@ const meta = {
     onRetry: fn(),
     onViewAllGroups: fn(),
     onExportGroup: fn(),
+    onExportApp: fn(),
   },
 } satisfies Meta<typeof OverviewTab>;
 
@@ -54,5 +56,13 @@ export const Disconnected: Story = {
   args: {
     connectionStatus: 'error',
     error: 'Please open an Okta admin page in this window',
+  },
+};
+
+/** On a detected app page — the minimal app branch with its export deep-links. */
+export const AppPage: Story = {
+  args: {
+    pageType: 'app',
+    appInfo: { appId: '0oaFAKE001', appName: 'Salesforce' },
   },
 };
