@@ -63,6 +63,7 @@ export function toGroupSummary(group: RawOktaGroup): GroupSummary {
     created: group.created ? new Date(group.created) : undefined,
     hasRules: false,
     ruleCount: 0,
+    usedInRuleCount: 0,
     selected: false,
     sourceAppId,
     sourceAppName,
@@ -87,6 +88,7 @@ export function liveSearchToGroupSummary(group: RawOktaGroup): GroupSummary {
     created: group.created ? new Date(group.created) : undefined,
     hasRules: false,
     ruleCount: 0,
+    usedInRuleCount: 0,
     selected: false,
   };
 }
