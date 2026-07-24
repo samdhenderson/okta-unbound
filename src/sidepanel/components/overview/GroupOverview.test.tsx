@@ -9,7 +9,8 @@
  * must still re-fire when `groupId` changes.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 // A single stable api object — same identities every render, exactly like the
 // memoized useOktaApi. The whole point is that GroupOverview does not re-load when
@@ -50,6 +51,7 @@ const baseProps = {
   groupName: 'Group One',
   targetTabId: 1,
   onTabChange: () => {},
+  onExportMembers: () => {},
 };
 
 beforeEach(() => {
@@ -85,5 +87,19 @@ describe('GroupOverview member-load effect', () => {
     await waitFor(() => expect(api.getAllGroupMembers).toHaveBeenCalledWith('g2'));
 
     expect(api.getAllGroupMembers).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('GroupOverview member export', () => {
+  it('deep-links "Export Members" to the Export tab instead of a bespoke modal', async () => {
+    const onExportMembers = vi.fn();
+    render(<GroupOverview {...baseProps} onExportMembers={onExportMembers} />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Export Members' }));
+
+    expect(onExportMembers).toHaveBeenCalledWith('g1', 'Group One');
+    // The retired bespoke CSV/JSON modal must not exist anymore.
+    expect(screen.queryByText('Export Group Members')).not.toBeInTheDocument();
+    expect(api.exportMembers).not.toHaveBeenCalled();
   });
 });

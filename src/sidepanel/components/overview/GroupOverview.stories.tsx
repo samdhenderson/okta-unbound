@@ -34,6 +34,7 @@ const meta = {
     groupName: 'Engineering Team',
     targetTabId: 1,
     onTabChange: fn(),
+    onExportMembers: fn(),
     oktaOrigin: 'https://example.okta.com',
   },
 } satisfies Meta<typeof GroupOverview>;

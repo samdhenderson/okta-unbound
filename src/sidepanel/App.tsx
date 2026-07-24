@@ -17,7 +17,7 @@ import OverviewTab from './components/OverviewTab';
 import RulesTab from './components/RulesTab';
 import UsersTab from './components/UsersTab';
 import GroupsTab from './components/GroupsTab';
-import { ExportTab } from './components/export';
+import { ExportTab, type ExportRequest } from './components/export';
 import AuditLogViewer from './components/AuditLogViewer';
 import ActivityBar from './components/ActivityBar';
 import { useGroupContext } from './hooks/useGroupContext';
@@ -45,6 +45,9 @@ const App: React.FC = () => {
   // A one-shot request to open a specific user in the Users tab (e.g. from the
   // Overview's "View all groups"); cleared by the tab once consumed.
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  // A one-shot request to open the Export tab pre-scoped (e.g. from the group
+  // Overview's "Export Members"); cleared by the tab once consumed.
+  const [exportRequest, setExportRequest] = useState<ExportRequest | null>(null);
   // The pinned snapshot (null = following the live tab). Persisted across reopen.
   const [pinned, setPinned] = useState<PinnedContext | null>(null);
   const isPinned = pinned !== null;
@@ -204,6 +207,18 @@ const App: React.FC = () => {
     chrome.storage.local.set({ [SELECTED_TAB_KEY]: 'users' });
   };
 
+  // Deep-link the group Overview's "Export Members" into the Export tab, opened
+  // pre-scoped to that group's memberships export.
+  const handleExportGroup = (groupId: string, groupName: string) => {
+    setExportRequest({
+      descriptorId: 'group-memberships',
+      contextId: groupId,
+      contextLabel: groupName,
+    });
+    setActiveTab('export');
+    chrome.storage.local.set({ [SELECTED_TAB_KEY]: 'export' });
+  };
+
   return (
     <SchedulerProvider>
       <div className="flex flex-col h-screen overflow-y-auto pb-14 bg-canvas">
@@ -239,6 +254,7 @@ const App: React.FC = () => {
             onViewAllGroups={() => {
               if (effective.userInfo) handleNavigateToUser(effective.userInfo.userId);
             }}
+            onExportGroup={handleExportGroup}
           />
         )}
         {activeTab === 'rules' && (
@@ -273,6 +289,8 @@ const App: React.FC = () => {
           <ExportTab
             targetTabId={tabContext.targetTabId ?? undefined}
             oktaOrigin={tabContext.oktaOrigin ?? undefined}
+            exportRequest={exportRequest}
+            onExportRequestConsumed={() => setExportRequest(null)}
           />
         )}
         {activeTab === 'history' && (
