@@ -331,6 +331,36 @@ describe('RulesTab characterization', () => {
     await waitFor(() => expect(screen.getByText('Okta said no')).toBeInTheDocument());
   });
 
+  it('auto-loads rules when deep-linked to a rule with nothing loaded yet', async () => {
+    // Arrive with a cross-tab deep-link (selectedRuleId) but no rules loaded and
+    // no persisted state — the tab must fetch on its own, then highlight the target.
+    renderTab({ selectedRuleId: 'r2' });
+
+    await waitFor(() => expect(screen.getByTestId('rule-r2')).toBeInTheDocument());
+    // The deep-link triggered exactly one cache-first rules read (no manual click).
+    expect(rulesFetchCalls()).toHaveLength(1);
+    expect(screen.getByTestId('rule-r2')).toHaveAttribute('data-highlighted', 'true');
+  });
+
+  it('clears a persisted filter that would hide the deep-linked rule', async () => {
+    // Persisted state restores an "active only" filter; the deep-link targets the
+    // INACTIVE rule, which that filter would hide. The tab must relax the filter.
+    loadTabState.mockResolvedValue({
+      cachedRules: [rule(), rule({ id: 'r2', name: 'Sales Rule', status: 'INACTIVE' })],
+      cachedStats: stats,
+      lastFetchTime: new Date('2024-01-01').toISOString(),
+      activeFilter: 'active',
+    });
+
+    renderTab({ selectedRuleId: 'r2' });
+
+    // r2 becomes visible and highlighted despite the restored "active" filter...
+    await waitFor(() => expect(screen.getByTestId('rule-r2')).toBeInTheDocument());
+    expect(screen.getByTestId('rule-r2')).toHaveAttribute('data-highlighted', 'true');
+    // ...and no network fetch was needed — the rules came from persisted state.
+    expect(rulesFetchCalls()).toHaveLength(0);
+  });
+
   it('the merge banner "View" link highlights the rule card in the list', async () => {
     // The two default fixtures share a condition, so they cluster in the banner.
     renderTab();

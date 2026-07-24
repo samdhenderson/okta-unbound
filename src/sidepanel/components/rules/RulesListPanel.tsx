@@ -50,7 +50,11 @@ const RulesListPanel: React.FC<RulesListPanelProps> = ({
 }) => (
   <div className="min-h-[400px]">
     {isLoading ? (
-      <LoadingSpinner size="lg" message="Loading rules..." centered />
+      <LoadingSpinner
+        size="lg"
+        message={selectedRuleId ? 'Loading requested rule…' : 'Loading rules...'}
+        centered
+      />
     ) : !hasRules ? (
       <EmptyState
         icon="list"

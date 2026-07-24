@@ -1737,4 +1737,30 @@ describe('deep-link from the Rules tab', () => {
     await waitFor(() => expect(screen.getByText('Group ID')).toBeInTheDocument());
     expect(screen.getAllByText('Group ID')).toHaveLength(1);
   });
+
+  it('loads the group list on demand when the target is not cached, then highlights it', async () => {
+    // Live mode, nothing loaded. A deep-link for g1 must trigger a cached load
+    // itself rather than sit inert waiting for a manual "Load All Groups".
+    route(/^\/api\/v1\/groups\?limit=200&expand=stats$/, () => ({
+      success: true,
+      headers: {},
+      data: [
+        rawGroup({ id: 'g1', profile: { name: 'Engineering' } }),
+        rawGroup({ id: 'g2', profile: { name: 'Sales' } }),
+      ],
+    }));
+
+    render(<GroupsTab targetTabId={1} selectedGroupId="g1" onGroupSelected={() => {}} />);
+
+    // The list loaded itself (no manual click) and the target appears...
+    await waitFor(() => expect(renderedGroupNames()).toContain('Engineering'));
+    expect(
+      schedulerCalls().filter((m) =>
+        /^\/api\/v1\/groups\?limit=200&expand=stats$/.test(m.endpoint),
+      ),
+    ).toHaveLength(1);
+    // ...auto-expanded because it is the highlighted deep-link target.
+    await waitFor(() => expect(screen.getByText('Group ID')).toBeInTheDocument());
+    expect(screen.getAllByText('Group ID')).toHaveLength(1);
+  });
 });

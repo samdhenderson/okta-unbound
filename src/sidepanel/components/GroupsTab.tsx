@@ -110,18 +110,31 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   const { filteredGroups, activeFilterCount } = filters;
   const { selectedGroupIds, selectedGroups } = selection;
 
-  // Deep-link from the Rules tab: when a group id arrives and that group is in the
-  // loaded list, switch to cached mode, clear filters/search so it isn't hidden,
-  // then scroll to and highlight its row. Best-effort (mirrors the Rules deep-link):
-  // if the group isn't loaded, we wait for a later load rather than acting.
+  // Deep-link from the Rules tab: when a group id arrives, switch to cached mode,
+  // clear filters/search so it isn't hidden, then scroll to and highlight its row.
+  // If the group isn't in the loaded list yet, trigger a cached load on demand
+  // (mirrors the Rules tab) rather than sitting inert until a manual load.
   const navHandledRef = useRef<string | null>(null);
+  const navLoadRef = useRef<string | null>(null);
   useEffect(() => {
     if (!selectedGroupId) {
       navHandledRef.current = null;
+      navLoadRef.current = null;
       return;
     }
     if (navHandledRef.current === selectedGroupId) return;
-    if (!groups.some((g) => g.id === selectedGroupId)) return; // wait for groups to load
+    if (!groups.some((g) => g.id === selectedGroupId)) {
+      // Target isn't in the loaded list (fresh session, live-search mode, or a
+      // never-loaded list). Kick a cached load once so it can appear, then wait
+      // for `groups`/`loading` to update and re-run this effect — mirroring the
+      // Rules tab's load-on-demand deep-link.
+      if (!loading && navLoadRef.current !== selectedGroupId) {
+        navLoadRef.current = selectedGroupId;
+        setSearchMode('cached');
+        void loadAllGroups();
+      }
+      return;
+    }
     navHandledRef.current = selectedGroupId;
 
     setSearchMode('cached');
@@ -138,10 +151,11 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
       clearTimeout(scrollT);
       clearTimeout(clearT);
     };
-    // Setters (setSearchMode/filters/onGroupSelected) are stable enough; re-running
-    // only on id/groups changes avoids the unstable-filters-identity churn.
+    // Setters (setSearchMode/filters/onGroupSelected) and loadAllGroups are stable
+    // enough; re-running only on id/groups/loading changes avoids the
+    // unstable-filters-identity churn while still reacting when a load completes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedGroupId, groups]);
+  }, [selectedGroupId, groups, loading]);
 
   const handleExportSelection = useCallback(() => {
     if (selectedGroupIds.size === 0) {
