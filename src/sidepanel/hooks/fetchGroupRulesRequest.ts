@@ -4,8 +4,9 @@
  *
  * §8: reproduces the content script's former `fetchGroupRules` handler in the side
  * panel, issuing every fetch through the rate-limited scheduler (`makeApiRequest`)
- * instead of a direct `chrome.tabs.sendMessage`. The four-stage pipeline is ported
- * verbatim from `content/ruleHandlers.ts`:
+ * instead of a direct `chrome.tabs.sendMessage`. The four-stage pipeline was ported
+ * verbatim from the content script's `ruleHandlers.ts` (since deleted — this module
+ * is the sole implementation):
  *   1. paginate `/api/v1/groups/rules?limit=200` (follow `Link` rel="next");
  *   2. label referenced group ids with names from the Groups-tab cache (no API
  *      calls; unknown ids fall back to the id in the display);
