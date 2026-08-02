@@ -15,9 +15,7 @@ import { IconButton } from './shared';
 import Icon from './overview/shared/Icon';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import type { ConnectionStatus } from '../hooks/useOktaTabContext';
-
-/** Kind of Okta page detected for the active tab. */
-type PageType = 'group' | 'user' | 'app' | 'admin' | 'unknown';
+import type { PageType } from '../hooks/useOktaPageContext';
 
 /** Props for {@link ContextBar}. */
 interface ContextBarProps {
