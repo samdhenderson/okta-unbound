@@ -42,6 +42,7 @@ import type { SchedulerState } from '../shared/scheduler/types';
 import type { SchedulerStateChangedMessage } from '../shared/types';
 import { createLogger } from '../shared/utils/logger';
 import { isOktaUrl as isOktaUrlShared } from '../shared/utils/oktaUrl';
+import { createThrottledRelay } from './throttledRelay';
 
 const log = createLogger('Background');
 
@@ -66,15 +67,27 @@ log.info('Global API scheduler initialized');
 // Broadcast scheduler state changes to all sidepanel instances. Metrics ride
 // along so the side panel's failed/coalesced counters stay live instead of
 // freezing at their mount-time fetch.
+//
+// The relay is throttled: the event-driven scheduler can settle many requests
+// within milliseconds, and rebroadcasting each change would flood the runtime
+// messaging channel. Status transitions (idle→processing, →cooldown, →paused…)
+// flush immediately; volume-only changes (queue length, metrics counters)
+// coalesce into one trailing send per window.
+const relaySchedulerState = createThrottledRelay<SchedulerStateChangedMessage>(
+  (message) => {
+    // Broadcast to all extension contexts
+    chrome.runtime.sendMessage(message).catch(() => {
+      // Ignore errors if no listeners (sidepanel not open)
+    });
+  },
+  { isUrgent: (previous, next) => previous.state.status !== next.state.status },
+);
+
 globalScheduler.onStateChange((state: SchedulerState) => {
-  const message: SchedulerStateChangedMessage = {
+  relaySchedulerState({
     action: 'schedulerStateChanged',
     state,
     metrics: globalScheduler.getMetrics(),
-  };
-  // Broadcast to all extension contexts
-  chrome.runtime.sendMessage(message).catch(() => {
-    // Ignore errors if no listeners (sidepanel not open)
   });
 });
 
