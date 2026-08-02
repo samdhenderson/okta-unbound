@@ -16,8 +16,6 @@ const log = createLogger('pushGroupOps');
  *
  * @param coreApi - Shared transport surface (see {@link CoreApi}).
  * @returns `{ getAppPushGroupMappings, applyPushGroupMappings }`.
- * @remarks Note: this factory is not currently re-exported from the barrel; it is
- * wired up where push-group enrichment is needed.
  */
 export function createPushGroupOperations(coreApi: CoreApi) {
   /**
