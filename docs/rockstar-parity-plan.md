@@ -191,9 +191,11 @@ _Surfacing entity context (apps / idp / device / zone)_
 
 ## ADRs this forces (our hard rules require them — write before the phase)
 
-- **API Console path allow-list widening** (Phase 4): today the content script only
-  fetches allow-listed methods/paths. An arbitrary console widens that — ADR must fix
-  same-origin enforcement, a method allow-list, and confirm-on-write.
+- **API Console write-surface widening** (Phase 4): today the content script enforces
+  a same-origin path guard plus an HTTP-method allow-list (there is no path-level
+  allow-list — any same-origin path may be fetched). An arbitrary console widens the
+  humanly-driven write surface — ADR must fix same-origin enforcement, a method
+  allow-list, and confirm-on-write.
 - **New write endpoints** (Phase 5): profile update, set-password, admin role
   grant/revoke, factor verify — each expands the write surface; each must audit + capture
   prior state so undo can _restore_.
