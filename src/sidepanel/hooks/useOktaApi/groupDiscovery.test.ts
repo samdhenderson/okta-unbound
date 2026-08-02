@@ -19,6 +19,7 @@ vi.mock('../../../shared/rulesCache', () => ({
   RulesCache: {
     getRulesForGroup: vi.fn(),
     isFresh: vi.fn(),
+    set: vi.fn(),
   },
 }));
 
@@ -26,6 +27,7 @@ vi.mock('../../../shared/rulesCache', () => ({
 // static methods, so wrap each method to expose the mock control surface.
 const getRulesForGroupMock = vi.mocked(RulesCache.getRulesForGroup);
 const isFreshMock = vi.mocked(RulesCache.isFresh);
+const setMock = vi.mocked(RulesCache.set);
 
 /** Build a fake CoreApi whose transport is fully mocked. */
 function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
@@ -228,6 +230,90 @@ describe('getGroupRulesForGroup', () => {
     });
 
     expect(await createGroupDiscoveryOperations(core).getGroupRulesForGroup('g1')).toEqual([]);
+  });
+});
+
+describe('getGroupRulesForGroup pagination + cache write-back', () => {
+  const RULES_NEXT_LINK =
+    '<https://fake.okta.example.com/api/v1/groups/rules?after=CURSOR2&limit=200>; rel="next"';
+
+  it('accumulates rules across multiple pages on a cache miss', async () => {
+    const makeApiRequest = vi
+      .fn()
+      // Page 1: one matching + one non-matching rule, with a next link.
+      .mockResolvedValueOnce({
+        success: true,
+        data: [
+          { id: 'r1', status: 'ACTIVE', actions: { assignUserToGroups: { groupIds: ['g1'] } } },
+          { id: 'r2', status: 'ACTIVE', actions: { assignUserToGroups: { groupIds: ['g2'] } } },
+        ],
+        headers: { link: RULES_NEXT_LINK },
+      })
+      // Page 2: another matching rule, NO next link -> loop terminates.
+      .mockResolvedValueOnce({
+        success: true,
+        data: [
+          { id: 'r3', status: 'INACTIVE', actions: { assignUserToGroups: { groupIds: ['g1'] } } },
+        ],
+        headers: {},
+      });
+    const core = makeCore({ makeApiRequest });
+
+    const rules = await createGroupDiscoveryOperations(core).getGroupRulesForGroup('g1');
+
+    // Matching rules from BOTH pages are returned (no >200-rule truncation).
+    expect(rules.map((r) => (r as { id: string }).id)).toEqual(['r1', 'r3']);
+    expect(makeApiRequest).toHaveBeenNthCalledWith(1, '/api/v1/groups/rules?limit=200');
+    expect(makeApiRequest).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/groups/rules?after=CURSOR2&limit=200',
+    );
+  });
+
+  it('writes the full fetched list back to RulesCache with aggregate stats', async () => {
+    const core = makeCore({
+      makeApiRequest: vi.fn().mockResolvedValue({
+        success: true,
+        data: [
+          { id: 'r1', status: 'ACTIVE', actions: { assignUserToGroups: { groupIds: ['g1'] } } },
+          { id: 'r2', status: 'INACTIVE', actions: { assignUserToGroups: { groupIds: ['g2'] } } },
+        ],
+      }),
+    });
+
+    await createGroupDiscoveryOperations(core).getGroupRulesForGroup('g1');
+
+    expect(setMock).toHaveBeenCalledTimes(1);
+    const [formattedRules, rawRules, stats, conflicts] = setMock.mock.calls[0];
+    // ALL rules are cached (not just this group's) so any group can be served next.
+    expect(formattedRules.map((r) => r.id)).toEqual(['r1', 'r2']);
+    expect(rawRules.map((r) => r.id)).toEqual(['r1', 'r2']);
+    expect(stats).toEqual({ total: 2, active: 1, inactive: 1, conflicts: 0 });
+    expect(conflicts).toEqual([]);
+  });
+
+  it('serves a second call from the populated cache without a second fetch', async () => {
+    // Wire the mock cache: once set() stores rules, getRulesForGroup serves them.
+    setMock.mockImplementation(async (rules) => {
+      isFreshMock.mockResolvedValue(true);
+      getRulesForGroupMock.mockImplementation(async (gid) =>
+        rules.filter((r) => r.groupIds.includes(gid)),
+      );
+    });
+    const makeApiRequest = vi.fn().mockResolvedValue({
+      success: true,
+      data: [{ id: 'r1', status: 'ACTIVE', actions: { assignUserToGroups: { groupIds: ['g1'] } } }],
+    });
+    const ops = createGroupDiscoveryOperations(makeCore({ makeApiRequest }));
+
+    const first = await ops.getGroupRulesForGroup('g1');
+    expect(first.map((r) => (r as { id: string }).id)).toEqual(['r1']);
+    expect(makeApiRequest).toHaveBeenCalledTimes(1);
+
+    const second = await ops.getGroupRulesForGroup('g1');
+    expect(second.map((r) => (r as { id: string }).id)).toEqual(['r1']);
+    // No additional fetch: the second call was served from the cache write-back.
+    expect(makeApiRequest).toHaveBeenCalledTimes(1);
   });
 });
 
