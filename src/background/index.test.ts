@@ -190,6 +190,23 @@ describe('rejects tab-originated privileged actions', () => {
 // Legitimate side-panel calls still work
 // ============================================================================
 
+describe('tab state cleanup alarm', () => {
+  it('creates the hourly tabStateCleanup alarm at startup', () => {
+    expect(chrome.alarms.create).toHaveBeenCalledWith('tabStateCleanup', {
+      periodInMinutes: 60,
+    });
+  });
+
+  it('runs TabStateManager.cleanupExpiredStates when the tabStateCleanup alarm fires', async () => {
+    const onAlarm = (chrome.alarms.onAlarm.addListener as unknown as Mock).mock
+      .calls[0][0] as (alarm: { name: string }) => Promise<void>;
+
+    await onAlarm({ name: 'tabStateCleanup' });
+
+    expect(tabStateMethods.cleanupExpiredStates).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('accepts side-panel (no sender.tab) calls', () => {
   it('pauseScheduler from the side panel pauses the scheduler', () => {
     const { returned, sendResponse } = send({ action: 'pauseScheduler' }, SIDE_PANEL);

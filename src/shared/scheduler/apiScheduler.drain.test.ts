@@ -97,3 +97,36 @@ describe('ApiScheduler event-driven drain', () => {
     expect(scheduler.getState().queueLength).toBe(2);
   });
 });
+
+describe('ApiScheduler idle interval stop', () => {
+  it('stops the fallback interval once the queue fully drains, and restarts on schedule', async () => {
+    sendMessage.mockResolvedValue({ success: true, data: 'ok' });
+    scheduler = new ApiScheduler();
+
+    await scheduler.scheduleRequest('/api/v1/users/u1', 'GET', undefined, 1);
+
+    // Fully idle (queue empty, nothing in flight, no cooldown): the interval
+    // and the per-request timeout are both cleared, so no timers remain.
+    expect(scheduler.getState().status).toBe('idle');
+    expect(vi.getTimerCount()).toBe(0);
+
+    // Scheduling again restarts processing: the request dispatches and settles.
+    const second = await scheduler.scheduleRequest('/api/v1/users/u2', 'GET', undefined, 1);
+    expect(second.data).toBe('ok');
+    expect(apiCallCount()).toBe(2);
+  });
+
+  it('still drains queued work after pause/resume', async () => {
+    sendMessage.mockResolvedValue({ success: true, data: 'ok' });
+    scheduler = new ApiScheduler();
+
+    scheduler.pause();
+    const parked = scheduler.scheduleRequest('/api/v1/users/u1', 'GET', undefined, 1);
+    await Promise.resolve();
+    expect(apiCallCount()).toBe(0); // parked while paused
+
+    scheduler.resume();
+    await expect(parked).resolves.toMatchObject({ success: true, data: 'ok' });
+    expect(apiCallCount()).toBe(1);
+  });
+});

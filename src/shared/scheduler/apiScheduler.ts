@@ -173,6 +173,9 @@ export class ApiScheduler {
       this.metrics.totalRequests++;
       this.notifyStateChange();
 
+      // Restart the fallback interval if the idle scheduler stopped it.
+      this.startProcessing();
+
       // Kick the drain event-driven so a request scheduled while the scheduler
       // is idle dispatches immediately instead of waiting for the 50ms fallback
       // tick. Deferred one microtask so a synchronous burst of schedules is
@@ -235,14 +238,23 @@ export class ApiScheduler {
   }
 
   /**
-   * Stop the processing loop
+   * Stop the fallback interval. Called when the scheduler goes fully idle so an
+   * MV3 service worker is not kept alive by an empty 50ms loop;
+   * {@link scheduleRequest} restarts it.
    */
-  stop(): void {
+  private stopProcessing(): void {
     if (this.processingInterval) {
       clearInterval(this.processingInterval);
       this.processingInterval = null;
+      log.debug('Stopped processing loop');
     }
-    log.debug('Stopped processing loop');
+  }
+
+  /**
+   * Stop the processing loop
+   */
+  stop(): void {
+    this.stopProcessing();
   }
 
   /**
@@ -330,9 +342,15 @@ export class ApiScheduler {
     if (this.queue.length > 0 || this.activeRequests.size > 0) {
       this.updateStatus('processing');
     } else if (this.cooldownEndsAt && Date.now() < this.cooldownEndsAt) {
+      // Keep the interval ticking through an armed cooldown so its expiry (a
+      // time-based wake-up with nothing to settle) is still noticed and pushed.
       this.updateStatus('cooldown');
     } else {
       this.updateStatus('idle');
+      // Fully idle: nothing queued, nothing in flight, no cooldown pending —
+      // stop the fallback interval so the service worker can suspend.
+      // scheduleRequest restarts it.
+      this.stopProcessing();
     }
   }
 
@@ -518,6 +536,10 @@ export class ApiScheduler {
   resume(): void {
     this.isPaused = false;
     log.debug('Resumed');
+    // Drain immediately (and restart the fallback interval in case the
+    // scheduler went fully idle while paused) instead of waiting for a tick.
+    this.startProcessing();
+    this.processQueue();
   }
 
   /**
