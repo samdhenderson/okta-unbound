@@ -243,20 +243,10 @@ export interface GroupMembership {
  * per-action optional arguments.
  */
 export interface MessageRequest {
-  action:
-    | 'getGroupInfo'
-    | 'getUserInfo'
-    | 'getAppInfo'
-    | 'makeApiRequest'
-    | 'exportGroupMembers'
-    | 'getOktaOrigin';
+  action: 'getGroupInfo' | 'getUserInfo' | 'getAppInfo' | 'makeApiRequest' | 'getOktaOrigin';
   endpoint?: string;
   method?: string;
   body?: unknown;
-  groupId?: string;
-  groupName?: string;
-  format?: 'csv' | 'json';
-  statusFilter?: UserStatus | '';
 }
 
 /** Response envelope extending {@link ApiResponse} with rule/list extras. */

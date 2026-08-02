@@ -18,12 +18,10 @@
  * - Make authenticated API requests using the page's session
  * - Handle XSRF token extraction and inclusion
  * - Parse pagination headers from API responses
- * - Export data to CSV/JSON formats
  * - Display visual indicators when active
  *
  * **Supported Operations:**
  * - Page context (current group / user / app info, Okta origin)
- * - Group member export (CSV/JSON download from page context)
  * - Generic API requests (GET, POST, PUT, DELETE) relayed by the background scheduler
  *
  * **Security:**
@@ -44,7 +42,7 @@ import { createLogger } from '../shared/utils/logger';
 import { extractAppIdFromUrl, extractAppNameFromPage } from './pageContext';
 import { handleMakeApiRequest } from './apiRequest';
 import { injectIndicator } from './indicator';
-import { handleGetGroupInfo, handleExportGroupMembers } from './groupHandlers';
+import { handleGetGroupInfo } from './groupHandlers';
 import { handleGetUserInfo } from './userHandlers';
 
 const log = createLogger('Content');
@@ -96,14 +94,6 @@ chrome.runtime.onMessage.addListener(
           return true;
         }
         handleMakeApiRequest(request.endpoint, request.method, request.body).then(sendResponse);
-        return true;
-
-      case 'exportGroupMembers':
-        if (!request.groupId || !request.format) {
-          sendResponse({ success: false, error: 'Missing groupId or format' });
-          return true;
-        }
-        handleExportGroupMembers(request).then(sendResponse);
         return true;
 
       case 'getOktaOrigin':

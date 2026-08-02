@@ -22,7 +22,6 @@ import { createGroupBulkOperations } from './useOktaApi/groupBulkOps';
 import { createGroupDiscoveryOperations } from './useOktaApi/groupDiscovery';
 import { createUserOperations } from './useOktaApi/userOperations';
 import { createAppOperations } from './useOktaApi/appOperations';
-import { createExportOperations } from './useOktaApi/exportOperations';
 import { createExportEngineOperations } from './useOktaApi/exportEngine';
 import { createPushGroupOperations } from './useOktaApi/pushGroupOps';
 import { createGroupAnalysisOperations } from './useOktaApi/groupAnalysis';
@@ -35,7 +34,7 @@ import { createRuleWriteOperations } from './useOktaApi/ruleWrites';
  * Each returned function ultimately posts a message to the background
  * `ApiScheduler`, which rate-limits and forwards it to the content script that
  * performs the actual authenticated `fetch` — the side panel never calls Okta
- * directly. Long-running operations (`removeDeprovisioned`, `exportMembers`) are
+ * directly. Long-running operations (`removeDeprovisioned`) are
  * wrapped so they toggle `isLoading` and can be aborted via `cancelOperation`.
  *
  * @remarks
@@ -155,7 +154,6 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
   const groupDiscoveryOps = useMemo(() => createGroupDiscoveryOperations(coreApi), [coreApi]);
   const userOps = useMemo(() => createUserOperations(coreApi), [coreApi]);
   const appOps = useMemo(() => createAppOperations(coreApi), [coreApi]);
-  const exportOps = useMemo(() => createExportOperations(coreApi), [coreApi]);
   const exportEngineOps = useMemo(() => createExportEngineOperations(coreApi), [coreApi]);
   const pushGroupOps = useMemo(() => createPushGroupOperations(coreApi), [coreApi]);
   const groupAnalysisOps = useMemo(
@@ -184,11 +182,6 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
     () => wrapOperation(groupCleanupOps.removeDeprovisioned),
     [wrapOperation, groupCleanupOps],
   );
-  const exportMembers = useMemo(
-    () => wrapOperation(exportOps.exportMembers),
-    [wrapOperation, exportOps],
-  );
-
   return useMemo(
     () => ({
       // State
@@ -226,9 +219,6 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       unsuspendUser: userOps.unsuspendUser,
       resetPassword: userOps.resetPassword,
 
-      // Export operations
-      exportMembers,
-
       // Descriptor-driven Export Engine (Export tab)
       fetchExportRows: exportEngineOps.fetchAllRows,
       countExportRows: exportEngineOps.countRows,
@@ -263,14 +253,12 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       groupBulkOps,
       userOps,
       appOps,
-      exportOps,
       exportEngineOps,
       pushGroupOps,
       groupAnalysisOps,
       ruleImpactOps,
       ruleWriteOps,
       removeDeprovisioned,
-      exportMembers,
     ],
   );
 }

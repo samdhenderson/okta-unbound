@@ -2,8 +2,7 @@
  * @module content/groupHandlers
  * @description Group-oriented message handlers for the content script.
  *
- * Covers resolving the current group's info (URL/DOM/API fallback chain), fetching
- * all members with unbounded pagination, and exporting members to CSV/JSON. Every
+ * Covers resolving the current group's info (URL/DOM/API fallback chain). Every
  * network call routes through the same-origin fetch primitive; Okta responses are
  * zod-validated at the boundary.
  *
@@ -11,18 +10,11 @@
  * @see `content/index` for message routing.
  */
 
-import type { MessageRequest, MessageResponse, OktaUser, GroupInfo } from '../shared/types';
+import type { MessageResponse, GroupInfo } from '../shared/types';
 import { createLogger } from '../shared/utils/logger';
-import {
-  oktaGroupSchema,
-  oktaUserListItemSchema,
-  parseOkta,
-  parseOktaList,
-} from '../shared/schemas/okta';
+import { oktaGroupSchema, parseOkta } from '../shared/schemas/okta';
 import { extractGroupIdFromUrl, extractGroupNameFromPage } from './pageContext';
 import { handleMakeApiRequest } from './apiRequest';
-import { nextPageUrl } from '../shared/utils/oktaPagination';
-import { convertToCSV, downloadFile } from './exportHelpers';
 
 const log = createLogger('Content');
 
@@ -89,89 +81,4 @@ export async function handleGetGroupInfo(): Promise<MessageResponse<GroupInfo>> 
       error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
-}
-
-/**
- * Export a group's members (optionally filtered by status) as a CSV or JSON
- * download.
- *
- * @param request - The message; requires `groupId` and `format`, with optional
- *   `groupName` and `statusFilter`.
- * @returns A response with the exported `count`, or an error.
- */
-export async function handleExportGroupMembers(request: MessageRequest): Promise<MessageResponse> {
-  log.debug('Processing exportGroupMembers request');
-
-  try {
-    const { groupId, groupName, format, statusFilter } = request;
-
-    // Fetch all group members
-    const members = await fetchAllGroupMembers(groupId!);
-
-    // Filter by status if specified
-    let filteredMembers = members;
-    if (statusFilter) {
-      filteredMembers = members.filter((u: OktaUser) => u.status === statusFilter);
-    }
-
-    // Format and download
-    const filename = `${groupName}_members_${new Date().toISOString().split('T')[0]}.${format}`;
-    let content: string;
-
-    if (format === 'csv') {
-      content = convertToCSV(filteredMembers);
-    } else {
-      content = JSON.stringify(filteredMembers, null, 2);
-    }
-
-    downloadFile(filename, content, format === 'csv' ? 'text/csv' : 'application/json');
-
-    return {
-      success: true,
-      count: filteredMembers.length,
-    };
-  } catch (error) {
-    log.error('exportGroupMembers error', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Export failed',
-    };
-  }
-}
-
-/**
- * Fetch every member of a group across all pages.
- *
- * Follows Okta's `rel="next"` pagination links until exhausted; a failed page
- * throws (unlike the other content-script loops), aborting the whole fetch.
- *
- * @param groupId - The group whose members to fetch.
- * @returns The accumulated list of members.
- */
-export async function fetchAllGroupMembers(groupId: string): Promise<OktaUser[]> {
-  let allMembers: OktaUser[] = [];
-  let nextUrl: string | null = `/api/v1/groups/${groupId}/users?limit=200`;
-
-  while (nextUrl) {
-    const response = await handleMakeApiRequest(nextUrl, 'GET');
-
-    if (!response.success) {
-      throw new Error(response.error || 'Failed to fetch group members');
-    }
-
-    allMembers = allMembers.concat(
-      parseOktaList(oktaUserListItemSchema, response.data, 'GET /api/v1/groups/{id}/users'),
-    );
-
-    // Shared guarded pagination: stops on a missing/malformed next link, an empty
-    // page, or a non-advancing cursor (keyed off the RAW page length so an
-    // all-malformed page still advances).
-    nextUrl = nextPageUrl(
-      nextUrl,
-      response.headers?.link,
-      Array.isArray(response.data) ? response.data.length : 0,
-    );
-  }
-
-  return allMembers;
 }
