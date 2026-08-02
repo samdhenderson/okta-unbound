@@ -5,12 +5,12 @@ Chrome MV3 side-panel extension. React 19 + TS 5.9 + Tailwind v4, bundled by Vit
 
 ## The four contexts
 
-| Context                     | Entry                     | Responsibility                                                                                 |
-| --------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------- |
-| Side panel (UI)             | `src/sidepanel/`          | React app: tabs, components, hooks, contexts                                                   |
-| Background (service worker) | `src/background/index.ts` | Context menus, alarms, notifications, downloads, and the global `ApiScheduler`                 |
+| Context                     | Entry                     | Responsibility                                                                                                          |
+| --------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Side panel (UI)             | `src/sidepanel/`          | React app: tabs, components, hooks, contexts                                                                            |
+| Background (service worker) | `src/background/index.ts` | Context menus, alarms, notifications, downloads, and the global `ApiScheduler`                                          |
 | Content script              | `src/content/index.ts`    | Injected on Okta pages; the only place with the authenticated session; does the actual `fetch` (decomposed — see below) |
-| Shared                      | `src/shared/`             | Cross-context logic: types, cache, rule engine, scheduler, storage, utils                      |
+| Shared                      | `src/shared/`             | Cross-context logic: types, cache, rule engine, scheduler, storage, utils                                               |
 
 ## Message-passing pipeline
 
@@ -22,10 +22,10 @@ Side panel (useOktaApi)  →  Background (ApiScheduler: rate limit, retry, backo
   session cookies + XSRF token (scraped from the DOM at fetch time by `getXsrfToken`
   in `apiRequest.ts`, never persisted). No tokens are stored anywhere. Keep it that
   way.
-- The content script is decomposed: `src/content/index.ts` is a ~255-line router
+- The content script is decomposed: `src/content/index.ts` is a small router
   that dispatches messages to handler modules (`apiRequest.ts`, `groupHandlers.ts`,
-  `userHandlers.ts`, `ruleHandlers.ts`, `pageContext.ts`, `exportHelpers.ts`,
-  `indicator.ts`). The only raw Okta `fetch(` lives in `apiRequest.ts`.
+  `userHandlers.ts`, `pageContext.ts`, `exportHelpers.ts`, `indicator.ts`). The
+  only raw Okta `fetch(` lives in `apiRequest.ts`.
 - **All raw Okta API traffic must go through the scheduler path.** `makeApiRequest`
   (`useOktaApi/core.ts`) routes every Okta call through the background scheduler — do
   not add side-panel→content calls that fetch Okta directly and bypass rate limiting.

@@ -3,9 +3,9 @@
  * @description Group-oriented message handlers for the content script.
  *
  * Covers resolving the current group's info (URL/DOM/API fallback chain), fetching
- * all members with unbounded pagination, exporting members to CSV/JSON, and the
- * autocomplete-style group search. Every network call routes through the
- * same-origin fetch primitive; Okta responses are zod-validated at the boundary.
+ * all members with unbounded pagination, and exporting members to CSV/JSON. Every
+ * network call routes through the same-origin fetch primitive; Okta responses are
+ * zod-validated at the boundary.
  *
  * @see `content/apiRequest` for the transport primitive.
  * @see `content/index` for message routing.
@@ -15,7 +15,6 @@ import type { MessageRequest, MessageResponse, OktaUser, GroupInfo } from '../sh
 import { createLogger } from '../shared/utils/logger';
 import {
   oktaGroupSchema,
-  oktaGroupListItemSchema,
   oktaUserListItemSchema,
   parseOkta,
   parseOktaList,
@@ -175,49 +174,4 @@ export async function fetchAllGroupMembers(groupId: string): Promise<OktaUser[]>
   }
 
   return allMembers;
-}
-
-/**
- * Search groups by name using Okta's flexible `q` parameter (autocomplete style).
- *
- * @param query - The (untrimmed) search text.
- * @returns A response with the matched groups and their `count`.
- */
-export async function handleSearchGroups(query: string): Promise<MessageResponse> {
-  log.debug('Processing searchGroups request', { queryLength: query.length });
-
-  try {
-    const trimmedQuery = query.trim();
-
-    // Use 'q' parameter for flexible name-based search (autocomplete scenario)
-    // This matches the pattern used by searchUsers and is simple/fast
-    const qParam = encodeURIComponent(trimmedQuery);
-    const searchUrl = `/api/v1/groups?q=${qParam}&limit=20&expand=stats`;
-
-    log.debug('Searching groups with q parameter');
-    const response = await handleMakeApiRequest(searchUrl, 'GET');
-
-    if (response.success && response.data) {
-      const groups = parseOktaList(oktaGroupListItemSchema, response.data, 'GET /api/v1/groups?q');
-      log.debug('Found groups', { count: groups.length });
-
-      return {
-        success: true,
-        data: groups,
-        count: groups.length,
-      };
-    }
-
-    return {
-      success: true,
-      data: [],
-      count: 0,
-    };
-  } catch (error) {
-    log.error('searchGroups error', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to search groups',
-    };
-  }
 }

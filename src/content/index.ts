@@ -18,15 +18,13 @@
  * - Make authenticated API requests using the page's session
  * - Handle XSRF token extraction and inclusion
  * - Parse pagination headers from API responses
- * - Cache frequently accessed data (group names, etc.)
  * - Export data to CSV/JSON formats
  * - Display visual indicators when active
  *
  * **Supported Operations:**
- * - Group management (fetch members, get info, export)
- * - User management (search, get details, get groups)
- * - Rules management (fetch, activate, deactivate)
- * - Generic API requests (GET, POST, PUT, DELETE)
+ * - Page context (current group / user / app info, Okta origin)
+ * - Group member export (CSV/JSON download from page context)
+ * - Generic API requests (GET, POST, PUT, DELETE) relayed by the background scheduler
  *
  * **Security:**
  * - All API calls use the page's existing authentication
@@ -46,15 +44,8 @@ import { createLogger } from '../shared/utils/logger';
 import { extractAppIdFromUrl, extractAppNameFromPage } from './pageContext';
 import { handleMakeApiRequest } from './apiRequest';
 import { injectIndicator } from './indicator';
-import { handleFetchGroupRules, handleActivateRule, handleDeactivateRule } from './ruleHandlers';
-import { handleGetGroupInfo, handleExportGroupMembers, handleSearchGroups } from './groupHandlers';
-import {
-  handleGetUserInfo,
-  handleSearchUsers,
-  handleGetUserGroups,
-  handleGetUserContext,
-  handleGetUserDetails,
-} from './userHandlers';
+import { handleGetGroupInfo, handleExportGroupMembers } from './groupHandlers';
+import { handleGetUserInfo } from './userHandlers';
 
 const log = createLogger('Content');
 
@@ -113,66 +104,6 @@ chrome.runtime.onMessage.addListener(
           return true;
         }
         handleExportGroupMembers(request).then(sendResponse);
-        return true;
-
-      case 'fetchGroupRules':
-        handleFetchGroupRules(request.groupId).then(sendResponse);
-        return true;
-
-      case 'activateRule':
-        if (!request.ruleId) {
-          sendResponse({ success: false, error: 'Missing ruleId' });
-          return true;
-        }
-        handleActivateRule(request.ruleId).then(sendResponse);
-        return true;
-
-      case 'deactivateRule':
-        if (!request.ruleId) {
-          sendResponse({ success: false, error: 'Missing ruleId' });
-          return true;
-        }
-        handleDeactivateRule(request.ruleId).then(sendResponse);
-        return true;
-
-      case 'searchUsers':
-        if (!request.query) {
-          sendResponse({ success: false, error: 'Missing query' });
-          return true;
-        }
-        handleSearchUsers(request.query).then(sendResponse);
-        return true;
-
-      case 'searchGroups':
-        if (!request.query) {
-          sendResponse({ success: false, error: 'Missing query' });
-          return true;
-        }
-        handleSearchGroups(request.query).then(sendResponse);
-        return true;
-
-      case 'getUserGroups':
-        if (!request.userId) {
-          sendResponse({ success: false, error: 'Missing userId' });
-          return true;
-        }
-        handleGetUserGroups(request.userId).then(sendResponse);
-        return true;
-
-      case 'getUserDetails':
-        if (!request.userId) {
-          sendResponse({ success: false, error: 'Missing userId' });
-          return true;
-        }
-        handleGetUserDetails(request.userId).then(sendResponse);
-        return true;
-
-      case 'getUserContext':
-        if (!request.userId) {
-          sendResponse({ success: false, error: 'Missing userId' });
-          return true;
-        }
-        handleGetUserContext(request.userId).then(sendResponse);
         return true;
 
       case 'getOktaOrigin':

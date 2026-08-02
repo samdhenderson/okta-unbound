@@ -249,17 +249,7 @@ export interface MessageRequest {
     | 'getAppInfo'
     | 'makeApiRequest'
     | 'exportGroupMembers'
-    | 'fetchGroupRules'
-    | 'searchUsers'
-    | 'searchGroups'
-    | 'getUserGroups'
-    | 'getUserDetails'
-    | 'getUserContext'
-    | 'getOktaOrigin'
-    | 'activateRule'
-    | 'deactivateRule'
-    | 'getAllGroups'
-    | 'exportMultiGroupMembers';
+    | 'getOktaOrigin';
   endpoint?: string;
   method?: string;
   body?: unknown;
@@ -267,10 +257,6 @@ export interface MessageRequest {
   groupName?: string;
   format?: 'csv' | 'json';
   statusFilter?: UserStatus | '';
-  query?: string;
-  userId?: string;
-  ruleId?: string;
-  groupIds?: string[];
 }
 
 /** Response envelope extending {@link ApiResponse} with rule/list extras. */
