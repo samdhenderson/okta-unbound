@@ -5,30 +5,22 @@
  * A `search-to-select` descriptor: the admin first picks an app (resolved by the
  * Export tab via `deps.searchApps`, since its context `label` matches `/app/i`),
  * then the engine lists that app's assigned groups. Rows are app-group assignments,
- * so this descriptor carries a self-contained lenient schema and a small base
- * column catalog rather than reusing a shared one.
+ * validated with the shared lenient `oktaAppGroupSchema`, with a small base column
+ * catalog of its own.
  */
 
-import { z } from 'zod';
 import { formatDateForCSV } from '@/shared/utils/csvUtils';
+import { oktaAppGroupSchema, type OktaAppGroup } from '@/shared/schemas/okta';
 import type { EntityExport } from '../types';
 
 /**
- * Lenient local schema for an app-group assignment row. Kept permissive
- * (`passthrough`, optional/nullish fields) because app-group payloads vary by
- * app type; only the group `id` is relied on for deep-linking.
+ * The shared lenient app-group assignment schema (ADR-0006 boundary validation).
+ * Re-exported here so existing consumers and `appGroups.test.ts` stay put.
  */
-export const appGroupSchema = z
-  .object({
-    id: z.string(),
-    priority: z.number().optional(),
-    lastUpdated: z.string().nullish(),
-    profile: z.record(z.unknown()).optional(),
-  })
-  .passthrough();
+export const appGroupSchema = oktaAppGroupSchema;
 
 /** A validated app-group assignment row (the app's assigned group). */
-export type AppGroup = z.infer<typeof appGroupSchema>;
+export type AppGroup = OktaAppGroup;
 
 /** Groups assigned to a chosen app, with per-row deep links back to each group. */
 export const appGroupsDescriptor: EntityExport<AppGroup> = {

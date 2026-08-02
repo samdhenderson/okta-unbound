@@ -4,6 +4,8 @@ import {
   oktaGroupSchema,
   oktaUserListItemSchema,
   oktaGroupListItemSchema,
+  oktaAppUserSchema,
+  oktaAppGroupSchema,
   parseOkta,
   parseOktaList,
 } from './okta';
@@ -77,6 +79,55 @@ describe('oktaGroupSchema', () => {
     expect(() => parseOkta(oktaGroupSchema, { id: 1 }, 'GET /groups/{id}')).toThrow(
       /GET \/groups\/\{id\}/,
     );
+  });
+});
+
+describe('oktaAppUserSchema', () => {
+  it('accepts a minimal row (only id required) and preserves unknown fields', () => {
+    const parsed = oktaAppUserSchema.parse({ id: '00uFAKE1', orgSpecific: 'kept' });
+    expect(parsed.id).toBe('00uFAKE1');
+    expect((parsed as Record<string, unknown>).orgSpecific).toBe('kept');
+  });
+
+  it('accepts an assignment carrying embedded credentials and surfaces userName', () => {
+    const parsed = oktaAppUserSchema.parse({
+      id: '00uFAKE1',
+      status: 'ACTIVE',
+      scope: 'USER',
+      syncState: 'SYNCED',
+      created: null,
+      credentials: { userName: 'user@example.com', extra: true },
+    });
+    expect(parsed.credentials?.userName).toBe('user@example.com');
+    expect(parsed.scope).toBe('USER');
+  });
+
+  it('rejects a row without an id', () => {
+    expect(oktaAppUserSchema.safeParse({ status: 'ACTIVE' }).success).toBe(false);
+  });
+});
+
+describe('oktaAppGroupSchema', () => {
+  it('accepts a minimal row (only id required)', () => {
+    const parsed = oktaAppGroupSchema.parse({ id: '00gFAKE1', priority: 1 });
+    expect(parsed.id).toBe('00gFAKE1');
+    expect(parsed.priority).toBe(1);
+  });
+
+  it('accepts a generic profile and nullish lastUpdated, preserving unknown fields', () => {
+    const parsed = oktaAppGroupSchema.parse({
+      id: '00gFAKE1',
+      lastUpdated: null,
+      profile: { anything: 'goes' },
+      _links: { group: { href: 'https://example.okta.com/api/v1/groups/00gFAKE1' } },
+    });
+    expect(parsed.lastUpdated).toBeNull();
+    expect(parsed.profile).toEqual({ anything: 'goes' });
+    expect((parsed as Record<string, unknown>)._links).toBeDefined();
+  });
+
+  it('rejects a row without an id', () => {
+    expect(oktaAppGroupSchema.safeParse({ priority: 0 }).success).toBe(false);
   });
 });
 

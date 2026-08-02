@@ -198,6 +198,55 @@ export const oktaAppGroupAssignmentSchema = z
 /** Inferred type of a validated {@link oktaAppGroupAssignmentSchema} row. */
 export type OktaAppGroupAssignment = z.infer<typeof oktaAppGroupAssignmentSchema>;
 
+/**
+ * A user's assignment to an application, as returned by
+ * `GET /api/v1/apps/{appId}/users`.
+ *
+ * Deliberately lenient, following the {@link oktaAppListItemSchema} precedent:
+ * only `id` is required; the assignment lifecycle fields (`status`, `scope`,
+ * `syncState`, dates) and the embedded `credentials.userName` are optional, and
+ * unknown fields `.passthrough()` so org-specific credential/profile extras
+ * survive validation. Shared with the App Users export descriptor. Use with
+ * {@link parseOktaList}.
+ */
+export const oktaAppUserSchema = z
+  .object({
+    id: z.string(),
+    status: z.string().optional(),
+    scope: z.string().optional(),
+    syncState: z.string().optional(),
+    created: z.string().nullish(),
+    lastUpdated: z.string().nullish(),
+    credentials: z.object({ userName: z.string().optional() }).passthrough().optional(),
+  })
+  .passthrough();
+
+/** Inferred type of a validated {@link oktaAppUserSchema} row. */
+export type OktaAppUser = z.infer<typeof oktaAppUserSchema>;
+
+/**
+ * An app-group assignment row as consumed by the App Groups export descriptor
+ * (`GET /api/v1/apps/{appId}/groups`).
+ *
+ * Sibling of {@link oktaAppGroupAssignmentSchema} over the same endpoint: that
+ * schema types the push-mapping fields (profile name variants, `_links.group`
+ * href) the enrichment path reads, while this one types the export columns
+ * (`priority`, `lastUpdated`) and keeps `profile` fully generic. Only `id` is
+ * required and unknown fields `.passthrough()`, per the
+ * {@link oktaAppListItemSchema} precedent. Use with {@link parseOktaList}.
+ */
+export const oktaAppGroupSchema = z
+  .object({
+    id: z.string(),
+    priority: z.number().optional(),
+    lastUpdated: z.string().nullish(),
+    profile: z.record(z.unknown()).optional(),
+  })
+  .passthrough();
+
+/** Inferred type of a validated {@link oktaAppGroupSchema} row. */
+export type OktaAppGroup = z.infer<typeof oktaAppGroupSchema>;
+
 /** Inferred type of a validated {@link oktaUserSchema} response. */
 export type OktaUserResponse = z.infer<typeof oktaUserSchema>;
 /** Inferred type of a validated {@link oktaGroupSchema} response. */
