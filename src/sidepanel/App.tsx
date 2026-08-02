@@ -12,7 +12,8 @@
 import React, { useState, useEffect } from 'react';
 import ContextBar from './components/ContextBar';
 import PageHeader from './components/shared/PageHeader';
-import TabNavigation, { type TabType } from './components/TabNavigation';
+import TabNavigation from './components/TabNavigation';
+import { migrateLegacyTabId, type TabType } from './tabs';
 import OverviewTab from './components/OverviewTab';
 import RulesTab from './components/RulesTab';
 import UsersTab from './components/UsersTab';
@@ -157,23 +158,7 @@ const App: React.FC = () => {
     chrome.storage.local.get([SELECTED_TAB_KEY], (result) => {
       if (result[SELECTED_TAB_KEY]) {
         const savedTab = result[SELECTED_TAB_KEY] as string;
-        let migratedTab: TabType;
-
-        switch (savedTab) {
-          case 'dashboard':
-          case 'operations':
-            migratedTab = 'overview';
-            break;
-          case 'undo':
-            migratedTab = 'history';
-            break;
-          case 'security':
-          case 'apps':
-            migratedTab = 'overview';
-            break;
-          default:
-            migratedTab = savedTab as TabType;
-        }
+        const migratedTab = migrateLegacyTabId(savedTab);
 
         setActiveTab(migratedTab);
         if (migratedTab !== savedTab) {

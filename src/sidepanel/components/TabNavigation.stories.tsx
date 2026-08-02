@@ -13,7 +13,7 @@ const meta = {
       description: {
         component:
           "Sticky top tab bar for switching between the side panel's main views.\n\n" +
-          'Renders the Overview / Users / Groups / Rules / Export / History tabs and highlights the active one with an underline. Selection is reported via `onTabChange`; which tab is active is owned by the caller.',
+          'Renders the tabs from the central `sidepanel/tabs` registry via the shared accessible `Tabs` strip (underline variant) and highlights the active one. Selection is reported via `onTabChange`; which tab is active is owned by the caller.',
       },
     },
   },
