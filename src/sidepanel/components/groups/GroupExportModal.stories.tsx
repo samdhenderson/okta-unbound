@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { fn, userEvent, within } from 'storybook/test';
 import GroupExportModal from './GroupExportModal';
 import type { GroupSummary } from '../../../shared/types';
 import { mockUsers } from '../../../test/mocks/handlers';
@@ -110,9 +110,14 @@ export const Collection: Story = {
   },
 };
 
-/** No Okta tab connected — export is blocked; the disabled state is illustrative here. */
+/** No Okta tab connected — attempting an export surfaces the inline error notice. */
 export const Disabled: Story = {
   args: { targetTabId: null },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: /Export \(3\)/ }));
+    await canvas.findByText('No Okta tab connected');
+  },
 };
 
 /** A large export (more than 20 groups) shows the "may take a while" warning once

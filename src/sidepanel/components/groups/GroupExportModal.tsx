@@ -4,15 +4,18 @@
  * to CSV, with column selection and an optional member-list export.
  *
  * The groups CSV honours the enabled columns; enabling "Include member list" fetches
- * each group's members and writes a second CSV. Uses the shared csvUtils helpers.
+ * each group's members (through the shared entity-cache-backed fetch path) and writes
+ * a second CSV. Both documents are assembled with the shared `generateCSV`, and
+ * failures surface as an inline {@link AlertMessage} notice instead of `alert()`.
  */
 import React, { useState, useCallback } from 'react';
 import Modal from '../shared/Modal';
 import Button from '../shared/Button';
+import AlertMessage from '../shared/AlertMessage';
 import { Checkbox } from '../shared';
 import type { GroupSummary, OktaUser } from '../../../shared/types';
 import {
-  escapeCSV,
+  generateCSV,
   downloadCSV,
   formatDateForCSV,
   sanitizeFilename,
@@ -102,6 +105,15 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
   const [includeMemberList, setIncludeMemberList] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  // Drop any stale error notice when the modal is (re)opened — render-phase
+  // derived state, so no extra effect pass.
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) setExportError(null);
+  }
 
   const toggleColumn = useCallback((columnId: string) => {
     setColumns((prev) =>
@@ -110,14 +122,16 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
   }, []);
 
   const handleExport = useCallback(async () => {
+    setExportError(null);
+
     if (!targetTabId) {
-      alert('No Okta tab connected');
+      setExportError('No Okta tab connected');
       return;
     }
 
     const enabledColumns = columns.filter((col) => col.enabled);
     if (enabledColumns.length === 0) {
-      alert('Please select at least one column to export');
+      setExportError('Please select at least one column to export');
       return;
     }
 
@@ -125,16 +139,12 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
     setExportProgress('Generating groups CSV...');
 
     try {
-      // Generate groups CSV
+      // Generate groups CSV via the shared assembler (escapeCSV on every cell).
       const headers = enabledColumns.map((col) => col.label);
       const rows = groups.map((group) =>
-        enabledColumns.map((col) => escapeCSV(getColumnValue(group, col.id))),
+        enabledColumns.map((col) => getColumnValue(group, col.id)),
       );
-
-      const groupsCSV =
-        headers.map((h) => escapeCSV(h)).join(',') +
-        '\n' +
-        rows.map((row) => row.join(',')).join('\n');
+      const groupsCSV = generateCSV(headers, rows);
 
       // Generate filename
       const date = getDateForFilename();
@@ -150,7 +160,7 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
 
       // If member list is requested, fetch and export members
       if (includeMemberList) {
-        setExportProgress('Fetching group members...');
+        setExportProgress(`Fetching members for ${groups.length} groups...`);
 
         const memberHeaders = [
           'Group ID',
@@ -161,45 +171,50 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
           'Last Name',
           'Status',
         ];
-        const memberRows: string[][] = [];
 
-        for (let i = 0; i < groups.length; i++) {
-          const group = groups[i];
-          setExportProgress(`Fetching members for group ${i + 1} of ${groups.length}...`);
-
-          try {
-            const members = await onFetchMembers(group.id);
-            members.forEach((member) => {
-              memberRows.push([
-                escapeCSV(group.id),
-                escapeCSV(group.name),
-                escapeCSV(member.id),
-                escapeCSV(member.profile.email),
-                escapeCSV(member.profile.firstName),
-                escapeCSV(member.profile.lastName),
-                escapeCSV(member.status),
+        // Fetch every group through the shared entity-cache-backed path at once:
+        // cached groups resolve without a network call, and uncached ones are
+        // queued (and rate-limited) by the background scheduler, so there is no
+        // need to serialize here. The progress line counts completions; row
+        // order stays grouped by `groups` order regardless of completion order.
+        let completed = 0;
+        const perGroupRows = await Promise.all(
+          groups.map(async (group): Promise<string[][]> => {
+            let groupRows: string[][];
+            try {
+              const members = await onFetchMembers(group.id);
+              groupRows = members.map((member) => [
+                group.id,
+                group.name,
+                member.id,
+                member.profile.email,
+                member.profile.firstName,
+                member.profile.lastName,
+                member.status,
               ]);
-            });
-          } catch (err) {
-            log.error(`Failed to fetch members for group ${group.id}:`, err);
-            // Add error row
-            memberRows.push([
-              escapeCSV(group.id),
-              escapeCSV(group.name),
-              'ERROR',
-              `Failed to fetch: ${err instanceof Error ? err.message : 'Unknown error'}`,
-              '',
-              '',
-              '',
-            ]);
-          }
-        }
+            } catch (err) {
+              log.error(`Failed to fetch members for group ${group.id}:`, err);
+              // Add error row
+              groupRows = [
+                [
+                  group.id,
+                  group.name,
+                  'ERROR',
+                  `Failed to fetch: ${err instanceof Error ? err.message : 'Unknown error'}`,
+                  '',
+                  '',
+                  '',
+                ],
+              ];
+            }
+            completed++;
+            setExportProgress(`Fetched members for ${completed} of ${groups.length} groups...`);
+            return groupRows;
+          }),
+        );
 
         setExportProgress('Generating members CSV...');
-        const membersCSV =
-          memberHeaders.map((h) => escapeCSV(h)).join(',') +
-          '\n' +
-          memberRows.map((row) => row.join(',')).join('\n');
+        const membersCSV = generateCSV(memberHeaders, perGroupRows.flat());
 
         downloadCSV(membersCSV, `${baseFilename}-members-${date}.csv`);
       }
@@ -208,7 +223,7 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
       onClose();
     } catch (err) {
       log.error('Export failed:', err);
-      alert(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setExportError(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setIsExporting(false);
       setExportProgress(null);
@@ -248,6 +263,14 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
       }
     >
       <div className="space-y-6">
+        {/* Inline error notice (replaces the old alert() calls) */}
+        {exportError && (
+          <AlertMessage
+            message={{ text: exportError, type: 'danger' }}
+            onDismiss={() => setExportError(null)}
+          />
+        )}
+
         {/* Column Selection */}
         <div>
           <h4 className="text-sm font-medium text-neutral-700 mb-3">Select columns to include:</h4>
