@@ -12,8 +12,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createRuleImpactOperations } from './ruleImpact';
 import type { CoreApi } from './core';
 import type { OktaGroupRule, OktaUser } from '../../../shared/types';
+import { OperationCancelledError } from '../../../shared/scheduler/cancellation';
 
-/** Build a fake CoreApi whose transport is fully mocked. */
+/** Build a fake CoreApi whose runOperation actually drives the per-item task. */
 function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
   return {
     targetTabId: 1,
@@ -22,10 +23,45 @@ function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
     getCurrentUser: vi.fn().mockResolvedValue({ email: 'admin@example.com', id: 'admin' }),
     checkCancelled: vi.fn(),
     resetCancellation: vi.fn(),
-    runOperation: vi.fn(),
+    runOperation: vi.fn(
+      async (
+        _name: string,
+        items: unknown[],
+        task: (item: unknown, index: number) => Promise<unknown>,
+      ) => {
+        const results: Array<{
+          item: unknown;
+          index: number;
+          status: string;
+          value?: unknown;
+          error?: unknown;
+        }> = [];
+        let completed = 0;
+        let failed = 0;
+        for (let i = 0; i < items.length; i++) {
+          try {
+            const value = await task(items[i], i);
+            results.push({ item: items[i], index: i, status: 'fulfilled', value });
+            completed++;
+          } catch (error) {
+            results.push({ item: items[i], index: i, status: 'rejected', error });
+            failed++;
+          }
+        }
+        return {
+          results,
+          total: items.length,
+          completed,
+          failed,
+          skipped: 0,
+          stoppedByError: false,
+          cancelled: false,
+        };
+      },
+    ),
     callbacks: {},
     ...overrides,
-  } as CoreApi;
+  } as unknown as CoreApi;
 }
 
 /** A member of the analyzed target group. */
@@ -186,6 +222,29 @@ describe('fetchRawRules RulesCache consultation', () => {
       String(c[0]).startsWith('/api/v1/groups/rules'),
     );
     expect(rulesListings).toHaveLength(1);
+  });
+
+  // The target-group loads now run through coreApi.runOperation (ADR-0009); a
+  // cancel reported by the runner surfaces as an OperationCancelledError so the
+  // caller's error path (not a bogus empty summary) handles it.
+  it('raises OperationCancelledError when the target-group load is cancelled', async () => {
+    seedRulesCache([cachedRawRule]); // rules come from cache; no rules fetch
+    const cancelledOutcome = {
+      results: [],
+      total: 1,
+      completed: 0,
+      failed: 0,
+      skipped: 1,
+      stoppedByError: false,
+      cancelled: true,
+    };
+    const runOperation = vi
+      .fn()
+      .mockResolvedValue(cancelledOutcome) as unknown as CoreApi['runOperation'];
+    const core = makeCore({ makeApiRequest: routeMetaOnly(), runOperation });
+    const { captureRuleImpact } = createRuleImpactOperations(core, vi.fn());
+
+    await expect(captureRuleImpact(analyzedInput)).rejects.toBeInstanceOf(OperationCancelledError);
   });
 
   it('still paginates on a missing entry or a legacy entry without raw rules', async () => {

@@ -111,21 +111,28 @@ export function createUserOperations(coreApi: CoreApi) {
    * Fetch full details for many users, keyed by id.
    *
    * @param userIds - Users to load.
-   * @param onProgress - Called after each batch with `(processed, total)`.
+   * @param onProgress - Called with `(processed, total)` every third settled user
+   * and at completion — the cadence of the old batch-of-3 implementation.
    * @returns Map of userId → {@link OktaUser}; ids that fail to load are omitted.
-   * @remarks Requests in batches of 3 (matching scheduler `maxConcurrent`) at
-   * `low` priority so it never starves interactive requests.
+   * @remarks Runs through {@link CoreApi.runOperation} (ADR-0009): each `GET` is
+   * a `low`-priority scheduler request so it never starves interactive work, with
+   * a live activity view and cancellation (a cancel returns the partial map).
+   * A per-user fetch failure is logged and its id omitted, never thrown.
    */
   const batchGetUserDetails = async (
     userIds: string[],
     onProgress?: (current: number, total: number) => void,
   ): Promise<Map<string, OktaUser>> => {
     const userDetailsMap = new Map<string, OktaUser>();
-    const batchSize = 3; // Match scheduler maxConcurrent
+    const total = userIds.length;
+    // Report cadence preserved from the old lockstep batches of 3.
+    const reportInterval = 3;
+    let processed = 0;
 
-    for (let i = 0; i < userIds.length; i += batchSize) {
-      const batch = userIds.slice(i, i + batchSize);
-      const batchPromises = batch.map(async (userId) => {
+    await coreApi.runOperation(
+      'Load user details',
+      userIds,
+      async (userId) => {
         try {
           const response = await coreApi.makeApiRequest(
             `/api/v1/users/${userId}`,
@@ -134,24 +141,19 @@ export function createUserOperations(coreApi: CoreApi) {
             'low',
           );
           if (response.success && response.data) {
-            return { userId, data: response.data };
+            userDetailsMap.set(userId, response.data);
           }
-          return { userId, data: null };
         } catch (error) {
           log.error(`Failed to fetch user ${userId}:`, error);
-          return { userId, data: null };
+        } finally {
+          processed += 1;
+          if (processed % reportInterval === 0 || processed === total) {
+            onProgress?.(processed, total);
+          }
         }
-      });
-
-      const results = await Promise.all(batchPromises);
-      results.forEach(({ userId, data }) => {
-        if (data) {
-          userDetailsMap.set(userId, data);
-        }
-      });
-
-      onProgress?.(Math.min(i + batchSize, userIds.length), userIds.length);
-    }
+      },
+      { message: (p) => `Loading user details (${p.completed}/${p.total})` },
+    );
 
     return userDetailsMap;
   };
@@ -162,9 +164,9 @@ export function createUserOperations(coreApi: CoreApi) {
    * @param userIds - Users to scan.
    * @param onProgress - Called after each batch with `(processed, total)`.
    * @returns Map of userId → {@link MemberMfaResult} (summarized via {@link summarizeFactors}).
-   * @remarks Costs one API call per user (`GET /api/v1/users/{id}/factors`). Uses the
-   * same batching as `batchGetUserDetails` (batch size 3, `low` priority) to
-   * avoid starving interactive requests.
+   * @remarks Costs one API call per user (`GET /api/v1/users/{id}/factors`). Runs
+   * through the shared operation runner at `low` priority (like
+   * `batchGetUserDetails`) to avoid starving interactive requests.
    */
   const scanGroupMfa = async (
     userIds: string[],

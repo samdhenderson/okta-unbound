@@ -40,8 +40,10 @@ export function createGroupBulkOperations(
    * @param onProgress - Called per group with `(index, total, currentGroupName)`.
    * @returns One `BulkGroupResult` per target group, in input order.
    * @remarks
-   * Groups are processed sequentially with a 50 ms pause between them to ease
-   * scheduler pressure. Supported `type`s: `cleanup_inactive` (remove
+   * Groups are processed sequentially; within a group, `cleanup_inactive`
+   * removals run through {@link CoreApi.runOperation} (ADR-0009), so they are
+   * scheduler-rate-limited, activity-bar visible, and cancellable — no artificial
+   * pause is needed between groups. Supported `type`s: `cleanup_inactive` (remove
    * `DEPROVISIONED`/`SUSPENDED`/`LOCKED_OUT` members), `export_all` (attach the
    * member list to the result), and `remove_user` (drop one user by
    * `config.userId`); unknown types yield a `failed` result. A thrown error for
@@ -88,8 +90,32 @@ export function createGroupBulkOperations(
 
             result.itemsProcessed = inactiveUsers.length;
 
-            for (const user of inactiveUsers) {
-              await removeUserFromGroup(groupId, groupName, user);
+            // ADR-0009: removals run through the shared operation runner —
+            // scheduler-rate-limited, activity-bar visible, one Cancel. The
+            // first rejection halts the group's remaining removals and is
+            // re-raised so the group is recorded as failed (matching the old
+            // serial loop's abort semantics).
+            const outcome = await coreApi.runOperation(
+              'Remove inactive members',
+              inactiveUsers,
+              async (user) => {
+                await removeUserFromGroup(groupId, groupName, user);
+              },
+              {
+                stopOnError: () => true,
+                message: (p) => `Removing inactive members (${p.completed}/${p.total})`,
+              },
+            );
+            if (outcome.cancelled) {
+              // A cancel mid-removal aborts the whole bulk operation, exactly
+              // like the old loop's propagated OperationCancelledError.
+              throw new OperationCancelledError();
+            }
+            const rejected = outcome.results.find((r) => r.status === 'rejected');
+            if (rejected) {
+              throw rejected.error instanceof Error
+                ? rejected.error
+                : new Error('Failed to remove inactive members');
             }
             break;
           }
@@ -138,8 +164,7 @@ export function createGroupBulkOperations(
           errors: [error instanceof Error ? error.message : 'Unknown error'],
         });
       }
-
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      // No pause between groups: the background scheduler enforces rate limits.
     }
 
     return results;

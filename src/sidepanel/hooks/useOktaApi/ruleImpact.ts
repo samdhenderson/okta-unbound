@@ -12,6 +12,7 @@
 import type { CoreApi } from './core';
 import type { OktaUser, OktaGroupRule, GroupType } from '../../../shared/types';
 import { RulesCache } from '../../../shared/rulesCache';
+import { OperationCancelledError } from '../../../shared/scheduler/cancellation';
 import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
 import { oktaGroupRuleSchema, type OktaGroupRuleResponse } from '@/shared/schemas/okta';
 import { createLogger } from '../../../shared/utils/logger';
@@ -126,8 +127,12 @@ export function createRuleImpactOperations(
    * @param rule - The rule to analyze (id, name, target group ids/names).
    * @param opts - Optional progress callback.
    * @returns A {@link RuleImpactSummary} with per-group and org-level counts.
-   * @remarks Cost is one rules listing plus, per target group, one group-meta
-   * read and one paginated member fetch — no per-member calls.
+   * @remarks Cost is one rules listing (often served from the RulesCache) plus,
+   * per target group, one group-meta read and one paginated member fetch — no
+   * per-member calls. Target groups load through {@link CoreApi.runOperation}
+   * (ADR-0009): cancellable and activity-bar visible. The first failing group
+   * aborts the capture with its error re-raised (matching the old serial loop);
+   * a cancel raises {@link OperationCancelledError}.
    */
   const captureRuleImpact = async (
     rule: RuleImpactInput,
@@ -136,18 +141,44 @@ export function createRuleImpactOperations(
     const rawRules = await fetchRawRules();
     const impactRules = rawRules.map(toImpactRule);
 
-    const targets: TargetGroupMembers[] = [];
     const total = rule.groupIds.length;
+    const groupInputs = rule.groupIds.map((groupId, i) => ({
+      groupId,
+      fallbackName: rule.groupNames?.[i] || groupId,
+    }));
+    let started = 0;
 
-    for (let i = 0; i < total; i++) {
-      const groupId = rule.groupIds[i];
-      const fallbackName = rule.groupNames?.[i] || groupId;
-      opts?.onProgress?.(i + 1, total, `Loading members for ${fallbackName}…`);
+    const outcome = await coreApi.runOperation(
+      'Rule impact preview',
+      groupInputs,
+      async ({ groupId, fallbackName }): Promise<TargetGroupMembers> => {
+        started += 1;
+        opts?.onProgress?.(Math.min(started, total), total, `Loading members for ${fallbackName}…`);
 
-      const meta = await fetchGroupMeta(groupId, fallbackName);
-      const members = await getAllGroupMembers(groupId);
+        const meta = await fetchGroupMeta(groupId, fallbackName);
+        const members = await getAllGroupMembers(groupId);
+        return { groupId, groupName: meta.name, groupType: meta.type, members };
+      },
+      {
+        stopOnError: () => true,
+        message: (p) => `Loading rule targets (${p.completed}/${p.total})`,
+      },
+    );
 
-      targets.push({ groupId, groupName: meta.name, groupType: meta.type, members });
+    if (outcome.cancelled) {
+      throw new OperationCancelledError();
+    }
+    const rejected = outcome.results.find((r) => r.status === 'rejected');
+    if (rejected) {
+      throw rejected.error instanceof Error
+        ? rejected.error
+        : new Error('Failed to load rule target group');
+    }
+
+    // Results preserve input order, so the summary's per-group view is stable.
+    const targets: TargetGroupMembers[] = [];
+    for (const r of outcome.results) {
+      if (r.status === 'fulfilled' && r.value) targets.push(r.value);
     }
 
     return summarizeRuleImpact(rule.id, rule.name, targets, impactRules);
