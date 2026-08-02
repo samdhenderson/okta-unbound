@@ -7,17 +7,20 @@
  * (`toLocaleDateString(undefined, …)`), so rendered output varies by user locale.
  */
 
+/** Accepted date inputs: a `Date`, an epoch-ms number, an ISO/parseable string, or nullish. */
+export type DateInput = Date | number | string | null | undefined;
+
 /**
  * Human-friendly absolute date with time, e.g. "Mar 5, 2026, 02:30 PM".
  *
- * @param dateString - An ISO/parseable date string, or nullish.
+ * @param date - A `Date`, epoch-ms number, ISO/parseable date string, or nullish.
  * @returns The localized date-time string; `'Never'` for nullish input, or the
- *   raw input string if `Date` construction throws.
+ *   stringified raw input if `Date` construction throws.
  */
-export function formatDate(dateString: string | null | undefined): string {
-  if (!dateString) return 'Never';
+export function formatDate(date: DateInput): string {
+  if (!date) return 'Never';
   try {
-    return new Date(dateString).toLocaleDateString(undefined, {
+    return new Date(date).toLocaleDateString(undefined, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -25,7 +28,7 @@ export function formatDate(dateString: string | null | undefined): string {
       minute: '2-digit',
     });
   } catch {
-    return dateString;
+    return String(date);
   }
 }
 
@@ -33,20 +36,20 @@ export function formatDate(dateString: string | null | undefined): string {
  * Date-only variant, e.g. "Mar 5, 2026" (no time). Used where a compact date is
  * preferred over the full timestamp.
  *
- * @param dateString - An ISO/parseable date string, or nullish.
- * @returns The localized date string; `'Never'`/the raw input on the same
- *   conditions as {@link formatDate}.
+ * @param date - A `Date`, epoch-ms number, ISO/parseable date string, or nullish.
+ * @returns The localized date string; `'Never'`/the stringified raw input on the
+ *   same conditions as {@link formatDate}.
  */
-export function formatDateShort(dateString: string | null | undefined): string {
-  if (!dateString) return 'Never';
+export function formatDateShort(date: DateInput): string {
+  if (!date) return 'Never';
   try {
-    return new Date(dateString).toLocaleDateString(undefined, {
+    return new Date(date).toLocaleDateString(undefined, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
     });
   } catch {
-    return dateString;
+    return String(date);
   }
 }
 
