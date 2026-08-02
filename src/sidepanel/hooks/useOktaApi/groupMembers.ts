@@ -5,6 +5,7 @@
 
 import type { CoreApi } from './core';
 import type { OktaUser } from './types';
+import type { BatchOutcome } from '@/shared/scheduler/runBatch';
 import { logAction } from '../../../shared/undoManager';
 import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
 import { oktaUserListItemSchema, type OktaUserListItem } from '@/shared/schemas/okta';
@@ -13,7 +14,7 @@ import { oktaUserListItemSchema, type OktaUserListItem } from '@/shared/schemas/
  * Build add/remove/list operations for individual group memberships.
  *
  * @param coreApi - Shared transport surface (see {@link CoreApi}).
- * @returns `{ removeUserFromGroup, getAllGroupMembers, addUserToGroup }`.
+ * @returns `{ removeUserFromGroup, removeUserFromGroups, getAllGroupMembers, addUserToGroup }`.
  */
 export function createGroupMemberOperations(coreApi: CoreApi) {
   /**
@@ -53,6 +54,48 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
     }
 
     return result;
+  };
+
+  /**
+   * Remove one user from several groups as a single tracked, cancellable
+   * operation ({@link CoreApi.runOperation} → activity bar + Cancel; ADR-0009).
+   *
+   * @param userId - The user to remove.
+   * @param groupIds - Groups to remove the user from, processed in order.
+   * @param onProgress - Optional `(completed, total)` callback fired after each
+   * successful removal.
+   * @returns The full {@link BatchOutcome} (never throws for control flow —
+   * inspect `results` / `cancelled`); callers that need the legacy
+   * throw-on-first-rejection contract re-raise from `results`.
+   * @remarks
+   * Deliberately preserved legacy semantics (pinned by GroupsTab
+   * characterization tests — do not "fix" here):
+   * - DELETEs run sequentially (`concurrency: 1`) in the given group order.
+   * - The first *rejected* request halts the remaining groups (`stopOnError`).
+   * - A `success: false` response (no throw) still counts as processed and the
+   *   run carries on.
+   * No per-group undo entry is logged, matching the previous implementation.
+   */
+  const removeUserFromGroups = async (
+    userId: string,
+    groupIds: string[],
+    onProgress?: (completed: number, total: number) => void,
+  ): Promise<BatchOutcome<string, void>> => {
+    let completedCount = 0;
+    return coreApi.runOperation(
+      'Remove user from groups',
+      groupIds,
+      async (groupId) => {
+        await coreApi.makeApiRequest(`/api/v1/groups/${groupId}/users/${userId}`, 'DELETE');
+        completedCount += 1;
+        onProgress?.(completedCount, groupIds.length);
+      },
+      {
+        concurrency: 1,
+        stopOnError: () => true,
+        message: (p) => `Removing user from groups (${p.completed}/${p.total})`,
+      },
+    );
   };
 
   /**
@@ -128,6 +171,7 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
 
   return {
     removeUserFromGroup,
+    removeUserFromGroups,
     getAllGroupMembers,
     addUserToGroup,
   };

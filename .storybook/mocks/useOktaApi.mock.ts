@@ -96,6 +96,16 @@ export function makeUseOktaApiValue(overrides: UseOktaApiValue = {}): UseOktaApi
     // Group operations
     getAllGroupMembers: asyncFn([]),
     removeUserFromGroup: asyncFn(),
+    // Benign empty BatchOutcome — consumers iterate `results`.
+    removeUserFromGroups: asyncFn({
+      results: [],
+      total: 0,
+      completed: 0,
+      failed: 0,
+      skipped: 0,
+      stoppedByError: false,
+      cancelled: false,
+    }),
     addUserToGroup: asyncFn(),
     removeDeprovisioned: asyncFn(),
     getAllGroups: asyncFn([]),

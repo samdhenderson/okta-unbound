@@ -202,6 +202,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       // Group operations
       getAllGroupMembers: groupMemberOps.getAllGroupMembers,
       removeUserFromGroup: groupMemberOps.removeUserFromGroup,
+      removeUserFromGroups: groupMemberOps.removeUserFromGroups,
       addUserToGroup: groupMemberOps.addUserToGroup,
       removeDeprovisioned,
       getAllGroups: groupDiscoveryOps.getAllGroups,
