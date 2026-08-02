@@ -19,6 +19,7 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   ReactNode,
 } from 'react';
 import type { SchedulerState, SchedulerMetrics } from '../../shared/scheduler/types';
@@ -147,21 +148,23 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, [refreshState]);
 
-  return (
-    <SchedulerContext.Provider
-      value={{
-        state,
-        metrics,
-        pause,
-        resume,
-        clearQueue,
-        refreshState,
-        refreshMetrics,
-      }}
-    >
-      {children}
-    </SchedulerContext.Provider>
+  // Memoize the provider value so consumers only re-render when the scheduler
+  // snapshot actually changes — every callback above is useCallback-stable, so
+  // a parent re-render no longer mints a fresh context object.
+  const contextValue = useMemo(
+    () => ({
+      state,
+      metrics,
+      pause,
+      resume,
+      clearQueue,
+      refreshState,
+      refreshMetrics,
+    }),
+    [state, metrics, pause, resume, clearQueue, refreshState, refreshMetrics],
   );
+
+  return <SchedulerContext.Provider value={contextValue}>{children}</SchedulerContext.Provider>;
 };
 
 /**
