@@ -5,10 +5,18 @@
 
 import type { CoreApi } from './core';
 import type { PushGroupMapping, GroupSummary } from '../../../shared/types';
-import { parseNextLink } from './utilities';
+import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
 import { createLogger } from '../../../shared/utils/logger';
 
 const log = createLogger('pushGroupOps');
+
+/** The subset of an `/api/v1/apps/{id}/groups` assignment row the mapper reads. */
+interface AppGroupAssignment {
+  id?: string;
+  priority?: number;
+  profile?: { name?: string; groupName?: string } | null;
+  _links?: { group?: { href?: string } };
+}
 
 /**
  * Build push-group mapping operations.
@@ -35,28 +43,30 @@ export function createPushGroupOperations(coreApi: CoreApi) {
     appName?: string,
   ): Promise<PushGroupMapping[]> => {
     const mappings: PushGroupMapping[] = [];
-    let nextUrl: string | null = `/api/v1/apps/${appId}/groups?limit=200`;
 
     try {
-      while (nextUrl) {
-        const response = await coreApi.makeApiRequest(nextUrl, 'GET', undefined, 'low');
-        if (!response.success || !response.data) break;
-
-        for (const assignment of response.data) {
-          mappings.push({
-            mappingId:
-              assignment.id ||
-              `${appId}_${assignment._links?.group?.href?.split('/').pop() || 'unknown'}`,
-            sourceUserGroupId: assignment._links?.group?.href?.split('/').pop() || '',
-            targetGroupName: assignment.profile?.name || assignment.profile?.groupName || '',
-            status: assignment.priority !== undefined ? 'ACTIVE' : 'INACTIVE',
-            appId,
-            appName,
-          });
-        }
-
-        nextUrl = parseNextLink(response.headers?.link);
-      }
+      // Accumulate via onPage so a mid-walk failure still returns the pages
+      // collected so far (fetchAllPages throws on a failed page).
+      await fetchAllPages<AppGroupAssignment>(
+        (url) => coreApi.makeApiRequest(url, 'GET', undefined, 'low'),
+        `/api/v1/apps/${appId}/groups?limit=${OKTA_PAGE_SIZE}`,
+        {
+          onPage: (assignments) => {
+            for (const assignment of assignments) {
+              mappings.push({
+                mappingId:
+                  assignment.id ||
+                  `${appId}_${assignment._links?.group?.href?.split('/').pop() || 'unknown'}`,
+                sourceUserGroupId: assignment._links?.group?.href?.split('/').pop() || '',
+                targetGroupName: assignment.profile?.name || assignment.profile?.groupName || '',
+                status: assignment.priority !== undefined ? 'ACTIVE' : 'INACTIVE',
+                appId,
+                appName,
+              });
+            }
+          },
+        },
+      );
     } catch (error) {
       log.error(`Failed to fetch push mappings for app ${appId}:`, error);
     }

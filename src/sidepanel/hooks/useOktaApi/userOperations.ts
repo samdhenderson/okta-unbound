@@ -6,7 +6,7 @@
 import type { CoreApi } from './core';
 import type { OktaFactor, MemberMfaResult, OktaUser } from '../../../shared/types';
 import { summarizeFactors } from '../../../shared/utils/mfaUtils';
-import { parseNextLink } from './utilities';
+import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
 import { createLogger } from '../../../shared/utils/logger';
 
 const log = createLogger('useOktaApi');
@@ -47,9 +47,9 @@ export function createUserOperations(coreApi: CoreApi) {
    */
   const getUserAppAssignments = async (userId: string): Promise<number> => {
     try {
-      // Fetch first page with limit=200 to get app assignments count
+      // Fetch first page with the standard page size to get app assignments count
       const response = await coreApi.makeApiRequest(
-        `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=200`,
+        `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=${OKTA_PAGE_SIZE}`,
       );
       if (response.success && response.data) {
         const firstPageCount = response.data.length;
@@ -81,21 +81,21 @@ export function createUserOperations(coreApi: CoreApi) {
    */
   const getUserApps = async (userId: string): Promise<Array<{ id: string; label: string }>> => {
     const apps: Array<{ id: string; label: string }> = [];
-    let nextUrl: string | null = `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=200`;
 
     try {
-      while (nextUrl) {
-        const response = await coreApi.makeApiRequest(nextUrl);
-        if (!response.success || !response.data) {
-          break;
-        }
-
-        for (const app of response.data) {
-          apps.push({ id: app.id, label: app.label || app.name || app.id });
-        }
-
-        nextUrl = parseNextLink(response.headers?.link);
-      }
+      // Accumulate via onPage so a mid-walk failure still returns the pages
+      // collected so far (fetchAllPages throws on a failed page).
+      await fetchAllPages<{ id: string; label?: string; name?: string }>(
+        (url) => coreApi.makeApiRequest(url),
+        `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=${OKTA_PAGE_SIZE}`,
+        {
+          onPage: (page) => {
+            for (const app of page) {
+              apps.push({ id: app.id, label: app.label || app.name || app.id });
+            }
+          },
+        },
+      );
     } catch (error) {
       log.error(`Failed to list apps for user ${userId}:`, error);
     }

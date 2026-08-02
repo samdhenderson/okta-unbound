@@ -11,7 +11,7 @@
 
 import type { CoreApi } from './core';
 import type { OktaUser, OktaGroupRule, GroupType } from '../../../shared/types';
-import { parseNextLink } from './utilities';
+import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
 import { createLogger } from '../../../shared/utils/logger';
 import {
   toImpactRule,
@@ -64,21 +64,12 @@ export function createRuleImpactOperations(
    * Fetch every group rule (raw, so exclusion lists survive), following `Link`
    * pagination at low priority so it never starves interactive requests.
    */
-  const fetchRawRules = async (): Promise<OktaGroupRule[]> => {
-    const all: OktaGroupRule[] = [];
-    let nextUrl: string | null = '/api/v1/groups/rules?limit=200';
-
-    while (nextUrl) {
-      const response = await coreApi.makeApiRequest(nextUrl, 'GET', undefined, 'low');
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to fetch group rules');
-      }
-      all.push(...((response.data as OktaGroupRule[]) || []));
-      nextUrl = parseNextLink(response.headers?.link);
-    }
-
-    return all;
-  };
+  const fetchRawRules = async (): Promise<OktaGroupRule[]> =>
+    fetchAllPages<OktaGroupRule>(
+      (url) => coreApi.makeApiRequest(url, 'GET', undefined, 'low'),
+      `/api/v1/groups/rules?limit=${OKTA_PAGE_SIZE}`,
+      { errorMessage: 'Failed to fetch group rules' },
+    );
 
   /** Resolve a target group's display name and type (for APP_GROUP handling). */
   const fetchGroupMeta = async (

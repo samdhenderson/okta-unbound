@@ -6,7 +6,7 @@
 import type { CoreApi } from './core';
 import type { OktaUser } from './types';
 import { logAction } from '../../../shared/undoManager';
-import { parseNextLink } from './utilities';
+import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
 
 /**
  * Build add/remove/list operations for individual group memberships.
@@ -62,30 +62,25 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
    * @remarks Emits per-page `onResult` progress. Throws on the first failed page.
    */
   const getAllGroupMembers = async (groupId: string): Promise<OktaUser[]> => {
-    const allMembers: OktaUser[] = [];
-    let nextUrl: string | null = `/api/v1/groups/${groupId}/users?limit=200`;
     let pageCount = 0;
 
-    while (nextUrl) {
-      pageCount++;
-      coreApi.callbacks.onResult?.(`Fetching page ${pageCount}...`, 'info');
-
-      const response = await coreApi.makeApiRequest(nextUrl);
-
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to fetch group members');
-      }
-
-      const pageMembers = response.data || [];
-      allMembers.push(...pageMembers);
-
-      coreApi.callbacks.onResult?.(
-        `Page ${pageCount}: Loaded ${pageMembers.length} members (Total: ${allMembers.length})`,
-        'info',
-      );
-
-      nextUrl = parseNextLink(response.headers?.link);
-    }
+    const allMembers = await fetchAllPages<OktaUser>(
+      (url) => coreApi.makeApiRequest(url),
+      `/api/v1/groups/${groupId}/users?limit=${OKTA_PAGE_SIZE}`,
+      {
+        errorMessage: 'Failed to fetch group members',
+        onBeforePage: (pageNumber) => {
+          pageCount = pageNumber;
+          coreApi.callbacks.onResult?.(`Fetching page ${pageNumber}...`, 'info');
+        },
+        onPage: (pageMembers, totalSoFar) => {
+          coreApi.callbacks.onResult?.(
+            `Page ${pageCount}: Loaded ${pageMembers.length} members (Total: ${totalSoFar})`,
+            'info',
+          );
+        },
+      },
+    );
 
     coreApi.callbacks.onResult?.(`Loaded ${allMembers.length} total members`, 'success');
     return allMembers;

@@ -7,7 +7,7 @@ import type { CoreApi } from './core';
 import type { OktaGroup, OktaGroupRule, FormattedRule } from '../../../shared/types';
 import { RulesCache } from '../../../shared/rulesCache';
 import { detectConflicts, formatRuleForDisplay } from '../../../shared/ruleUtils';
-import { parseNextLink, nextPageUrl } from './utilities';
+import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
 import { createLogger } from '../../../shared/utils/logger';
 
 const log = createLogger('useOktaApi');
@@ -28,27 +28,15 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
    */
   const getAllGroups = async (
     onProgress?: (loaded: number, total: number) => void,
-  ): Promise<OktaGroup[]> => {
-    const allGroups: OktaGroup[] = [];
-    let nextUrl: string | null = '/api/v1/groups?limit=200&expand=stats';
-
-    while (nextUrl) {
-      const response = await coreApi.makeApiRequest(nextUrl);
-
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to fetch groups');
-      }
-
-      const pageGroups = response.data || [];
-      allGroups.push(...pageGroups);
-
-      onProgress?.(allGroups.length, allGroups.length);
-
-      nextUrl = parseNextLink(response.headers?.link);
-    }
-
-    return allGroups;
-  };
+  ): Promise<OktaGroup[]> =>
+    fetchAllPages<OktaGroup>(
+      (url) => coreApi.makeApiRequest(url),
+      `/api/v1/groups?limit=${OKTA_PAGE_SIZE}&expand=stats`,
+      {
+        errorMessage: 'Failed to fetch groups',
+        onPage: (_pageGroups, totalSoFar) => onProgress?.(totalSoFar, totalSoFar),
+      },
+    );
 
   /**
    * Approximate a group's member count from the first page of members.
@@ -61,7 +49,7 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
   const getGroupMemberCount = async (groupId: string): Promise<number> => {
     try {
       const usersResponse = await coreApi.makeApiRequest(
-        `/api/v1/groups/${groupId}/users?limit=200`,
+        `/api/v1/groups/${groupId}/users?limit=${OKTA_PAGE_SIZE}`,
       );
       if (usersResponse.success && usersResponse.data) {
         return usersResponse.data.length;
@@ -98,17 +86,10 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
       // Cache miss - fetch ALL group rules, following pagination so orgs with
       // more than one page (>200 rules) are not silently truncated.
       log.debug(`Cache miss - fetching all rules for group ${groupId}`);
-      let allRules: OktaGroupRule[] = [];
-      let nextUrl: string | null = '/api/v1/groups/rules?limit=200';
-      while (nextUrl) {
-        const response = await coreApi.makeApiRequest(nextUrl);
-        if (!response.success) {
-          return [];
-        }
-        const page: OktaGroupRule[] = response.data || [];
-        allRules = allRules.concat(page);
-        nextUrl = nextPageUrl(nextUrl, response.headers?.link, page.length);
-      }
+      const allRules = await fetchAllPages<OktaGroupRule>(
+        (url) => coreApi.makeApiRequest(url),
+        `/api/v1/groups/rules?limit=${OKTA_PAGE_SIZE}`,
+      );
 
       // Write back to the global cache so the next call (any group) hits it.
       // No currentGroupId is passed to the formatter: the cache is org-wide, so
