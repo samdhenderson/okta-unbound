@@ -399,3 +399,20 @@ describe('lifecycle actions', () => {
     expect(result).toEqual({ success: true, error: undefined });
   });
 });
+
+describe('getUserApps boundary validation', () => {
+  it('drops malformed app rows (missing id) leniently instead of failing', async () => {
+    const core = makeCore({
+      makeApiRequest: vi.fn().mockResolvedValue({
+        success: true,
+        // The second row lacks the required `id` — the lenient list parser
+        // (ADR-0006) drops it rather than failing the whole fetch.
+        data: [{ id: '0oaFAKE1', label: 'App One' }, { label: 'No Id App' }],
+        headers: {},
+      }),
+    });
+    const { getUserApps } = createUserOperations(core);
+
+    expect(await getUserApps('00uFAKE1')).toEqual([{ id: '0oaFAKE1', label: 'App One' }]);
+  });
+});

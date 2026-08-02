@@ -6,17 +6,10 @@
 import type { CoreApi } from './core';
 import type { PushGroupMapping, GroupSummary } from '../../../shared/types';
 import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
+import { oktaAppGroupAssignmentSchema, type OktaAppGroupAssignment } from '@/shared/schemas/okta';
 import { createLogger } from '../../../shared/utils/logger';
 
 const log = createLogger('pushGroupOps');
-
-/** The subset of an `/api/v1/apps/{id}/groups` assignment row the mapper reads. */
-interface AppGroupAssignment {
-  id?: string;
-  priority?: number;
-  profile?: { name?: string; groupName?: string } | null;
-  _links?: { group?: { href?: string } };
-}
 
 /**
  * Build push-group mapping operations.
@@ -47,10 +40,13 @@ export function createPushGroupOperations(coreApi: CoreApi) {
     try {
       // Accumulate via onPage so a mid-walk failure still returns the pages
       // collected so far (fetchAllPages throws on a failed page).
-      await fetchAllPages<AppGroupAssignment>(
+      await fetchAllPages<OktaAppGroupAssignment>(
         (url) => coreApi.makeApiRequest(url, 'GET', undefined, 'low'),
         `/api/v1/apps/${appId}/groups?limit=${OKTA_PAGE_SIZE}`,
         {
+          // Validated at the response boundary (ADR-0006): malformed rows are
+          // dropped leniently by parseOktaList, never thrown on.
+          schema: oktaAppGroupAssignmentSchema,
           onPage: (assignments) => {
             for (const assignment of assignments) {
               mappings.push({

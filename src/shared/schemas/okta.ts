@@ -166,6 +166,38 @@ export const oktaAppListItemSchema = z
 /** Inferred type of a validated {@link oktaAppListItemSchema} row. */
 export type OktaAppListItem = z.infer<typeof oktaAppListItemSchema>;
 
+/**
+ * A group assignment as it appears in `GET /api/v1/apps/{appId}/groups`.
+ *
+ * Deliberately lenient, following the {@link oktaAppListItemSchema} precedent:
+ * only `id` (the assigned group's id) is required. The push-mapping fields the
+ * UI reads — `priority`, the `profile` name variants, and the `_links.group`
+ * href — are optional, and unknown fields `.passthrough()`. Use with
+ * {@link parseOktaList}.
+ */
+export const oktaAppGroupAssignmentSchema = z
+  .object({
+    id: z.string(),
+    priority: z.number().optional(),
+    profile: z
+      .object({
+        name: z.string().optional(),
+        groupName: z.string().optional(),
+      })
+      .passthrough()
+      .nullish(),
+    _links: z
+      .object({
+        group: z.object({ href: z.string().optional() }).passthrough().optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
+/** Inferred type of a validated {@link oktaAppGroupAssignmentSchema} row. */
+export type OktaAppGroupAssignment = z.infer<typeof oktaAppGroupAssignmentSchema>;
+
 /** Inferred type of a validated {@link oktaUserSchema} response. */
 export type OktaUserResponse = z.infer<typeof oktaUserSchema>;
 /** Inferred type of a validated {@link oktaGroupSchema} response. */

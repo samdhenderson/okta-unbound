@@ -12,6 +12,7 @@
 import type { CoreApi } from './core';
 import type { OktaUser, OktaGroupRule, GroupType } from '../../../shared/types';
 import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
+import { oktaGroupRuleSchema, type OktaGroupRuleResponse } from '@/shared/schemas/okta';
 import { createLogger } from '../../../shared/utils/logger';
 import {
   toImpactRule,
@@ -64,12 +65,23 @@ export function createRuleImpactOperations(
    * Fetch every group rule (raw, so exclusion lists survive), following `Link`
    * pagination at low priority so it never starves interactive requests.
    */
-  const fetchRawRules = async (): Promise<OktaGroupRule[]> =>
-    fetchAllPages<OktaGroupRule>(
+  const fetchRawRules = async (): Promise<OktaGroupRule[]> => {
+    const rules = await fetchAllPages<OktaGroupRuleResponse>(
       (url) => coreApi.makeApiRequest(url, 'GET', undefined, 'low'),
       `/api/v1/groups/rules?limit=${OKTA_PAGE_SIZE}`,
-      { errorMessage: 'Failed to fetch group rules' },
+      {
+        // Validated at the response boundary (ADR-0006): malformed rows are
+        // dropped leniently by parseOktaList, never thrown on.
+        schema: oktaGroupRuleSchema,
+        errorMessage: 'Failed to fetch group rules',
+      },
     );
+    // The lenient schema `.passthrough()`es fields it does not declare
+    // (`created`, `lastUpdated`, `type`, …), so validated rows still carry the
+    // domain type's required audit fields at runtime — hence the widen through
+    // `unknown` to the domain `OktaGroupRule` the impact engine consumes.
+    return rules as unknown as OktaGroupRule[];
+  };
 
   /** Resolve a target group's display name and type (for APP_GROUP handling). */
   const fetchGroupMeta = async (

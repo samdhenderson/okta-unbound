@@ -10,6 +10,7 @@ import type { BulkUserInfo } from '../../../shared/undoTypes';
 import { logBulkRemoveAction } from '../../../shared/undoManager';
 import { auditStore } from '../../../shared/storage/auditStore';
 import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
+import { oktaUserListItemSchema, type OktaUserListItem } from '@/shared/schemas/okta';
 import { OperationCancelledError } from '../../../shared/scheduler/cancellation';
 import { createLogger } from '../../../shared/utils/logger';
 
@@ -33,10 +34,13 @@ async function fetchAllMembers(
 ): Promise<OktaUser[]> {
   let pageCount = 0;
 
-  return fetchAllPages<OktaUser>(
+  const members: OktaUser[] = await fetchAllPages<OktaUserListItem>(
     (url) => coreApi.makeApiRequest(url),
     `/api/v1/groups/${groupId}/users?limit=${OKTA_PAGE_SIZE}`,
     {
+      // Validated at the response boundary (ADR-0006): malformed rows are
+      // dropped leniently by parseOktaList, never thrown on.
+      schema: oktaUserListItemSchema,
       errorMessage: 'Failed to fetch group members',
       onBeforePage: (pageNumber) => {
         pageCount = pageNumber;
@@ -48,6 +52,8 @@ async function fetchAllMembers(
       },
     },
   );
+
+  return members;
 }
 
 /**

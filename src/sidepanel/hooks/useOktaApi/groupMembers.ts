@@ -7,6 +7,7 @@ import type { CoreApi } from './core';
 import type { OktaUser } from './types';
 import { logAction } from '../../../shared/undoManager';
 import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
+import { oktaUserListItemSchema, type OktaUserListItem } from '@/shared/schemas/okta';
 
 /**
  * Build add/remove/list operations for individual group memberships.
@@ -64,10 +65,13 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
   const getAllGroupMembers = async (groupId: string): Promise<OktaUser[]> => {
     let pageCount = 0;
 
-    const allMembers = await fetchAllPages<OktaUser>(
+    const allMembers: OktaUser[] = await fetchAllPages<OktaUserListItem>(
       (url) => coreApi.makeApiRequest(url),
       `/api/v1/groups/${groupId}/users?limit=${OKTA_PAGE_SIZE}`,
       {
+        // Validated at the response boundary (ADR-0006): malformed rows are
+        // dropped leniently by parseOktaList, never thrown on.
+        schema: oktaUserListItemSchema,
         errorMessage: 'Failed to fetch group members',
         onBeforePage: (pageNumber) => {
           pageCount = pageNumber;

@@ -7,6 +7,7 @@ import type { CoreApi } from './core';
 import type { OktaFactor, MemberMfaResult, OktaUser } from '../../../shared/types';
 import { summarizeFactors } from '../../../shared/utils/mfaUtils';
 import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
+import { oktaAppListItemSchema, type OktaAppListItem } from '@/shared/schemas/okta';
 import { createLogger } from '../../../shared/utils/logger';
 
 const log = createLogger('useOktaApi');
@@ -85,10 +86,13 @@ export function createUserOperations(coreApi: CoreApi) {
     try {
       // Accumulate via onPage so a mid-walk failure still returns the pages
       // collected so far (fetchAllPages throws on a failed page).
-      await fetchAllPages<{ id: string; label?: string; name?: string }>(
+      await fetchAllPages<OktaAppListItem>(
         (url) => coreApi.makeApiRequest(url),
         `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=${OKTA_PAGE_SIZE}`,
         {
+          // Validated at the response boundary (ADR-0006): malformed rows are
+          // dropped leniently by parseOktaList, never thrown on.
+          schema: oktaAppListItemSchema,
           onPage: (page) => {
             for (const app of page) {
               apps.push({ id: app.id, label: app.label || app.name || app.id });
