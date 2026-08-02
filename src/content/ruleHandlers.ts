@@ -16,6 +16,7 @@ import { getCacheEntry, setCacheEntry } from '../shared/cache';
 import { createLogger } from '../shared/utils/logger';
 import { extractGroupIdFromUrl } from './pageContext';
 import { handleMakeApiRequest } from './apiRequest';
+import { nextPageUrl } from '../shared/utils/oktaPagination';
 
 const log = createLogger('Content');
 
@@ -44,21 +45,15 @@ export async function handleFetchGroupRules(groupId?: string): Promise<MessageRe
 
       allRules = allRules.concat(response.data || []);
 
-      // Parse next link from headers
-      nextUrl = null;
-      if (response.headers?.link) {
-        const links = response.headers.link.split(',');
-        for (const link of links) {
-          if (link.includes('rel="next"')) {
-            const match = link.match(/<([^>]+)>/);
-            if (match) {
-              const fullUrl = new URL(match[1]);
-              nextUrl = fullUrl.pathname + fullUrl.search;
-              log.debug('Fetching next page of rules', { path: fullUrl.pathname });
-              break;
-            }
-          }
-        }
+      // Shared guarded pagination: stops on a missing/malformed next link, an empty
+      // page, or a non-advancing cursor.
+      nextUrl = nextPageUrl(
+        nextUrl,
+        response.headers?.link,
+        Array.isArray(response.data) ? response.data.length : 0,
+      );
+      if (nextUrl) {
+        log.debug('Fetching next page of rules', { path: nextUrl.split('?')[0] });
       }
     }
 

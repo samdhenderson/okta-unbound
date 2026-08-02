@@ -22,6 +22,7 @@ import {
 } from '../shared/schemas/okta';
 import { extractGroupIdFromUrl, extractGroupNameFromPage } from './pageContext';
 import { handleMakeApiRequest } from './apiRequest';
+import { nextPageUrl } from '../shared/utils/oktaPagination';
 import { convertToCSV, downloadFile } from './exportHelpers';
 
 const log = createLogger('Content');
@@ -163,21 +164,14 @@ export async function fetchAllGroupMembers(groupId: string): Promise<OktaUser[]>
       parseOktaList(oktaUserListItemSchema, response.data, 'GET /api/v1/groups/{id}/users'),
     );
 
-    // Parse next link from headers
-    nextUrl = null;
-    if (response.headers?.link) {
-      const links = response.headers.link.split(',');
-      for (const link of links) {
-        if (link.includes('rel="next"')) {
-          const match = link.match(/<([^>]+)>/);
-          if (match) {
-            const fullUrl = new URL(match[1]);
-            nextUrl = fullUrl.pathname + fullUrl.search;
-            break;
-          }
-        }
-      }
-    }
+    // Shared guarded pagination: stops on a missing/malformed next link, an empty
+    // page, or a non-advancing cursor (keyed off the RAW page length so an
+    // all-malformed page still advances).
+    nextUrl = nextPageUrl(
+      nextUrl,
+      response.headers?.link,
+      Array.isArray(response.data) ? response.data.length : 0,
+    );
   }
 
   return allMembers;
