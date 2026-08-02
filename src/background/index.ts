@@ -39,6 +39,7 @@ import { auditStore } from '../shared/storage/auditStore';
 import { ApiScheduler } from '../shared/scheduler/apiScheduler';
 import { TabStateManager } from '../shared/tabState/tabStateManager';
 import type { SchedulerState } from '../shared/scheduler/types';
+import type { SchedulerStateChangedMessage } from '../shared/types';
 import { createLogger } from '../shared/utils/logger';
 import { isOktaUrl as isOktaUrlShared } from '../shared/utils/oktaUrl';
 
@@ -62,17 +63,19 @@ const globalScheduler = new ApiScheduler({
 
 log.info('Global API scheduler initialized');
 
-// Broadcast scheduler state changes to all sidepanel instances
+// Broadcast scheduler state changes to all sidepanel instances. Metrics ride
+// along so the side panel's failed/coalesced counters stay live instead of
+// freezing at their mount-time fetch.
 globalScheduler.onStateChange((state: SchedulerState) => {
+  const message: SchedulerStateChangedMessage = {
+    action: 'schedulerStateChanged',
+    state,
+    metrics: globalScheduler.getMetrics(),
+  };
   // Broadcast to all extension contexts
-  chrome.runtime
-    .sendMessage({
-      action: 'schedulerStateChanged',
-      state,
-    })
-    .catch(() => {
-      // Ignore errors if no listeners (sidepanel not open)
-    });
+  chrome.runtime.sendMessage(message).catch(() => {
+    // Ignore errors if no listeners (sidepanel not open)
+  });
 });
 
 // Cleanup expired tab states periodically (every hour)

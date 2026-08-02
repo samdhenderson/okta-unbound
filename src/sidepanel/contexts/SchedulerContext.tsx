@@ -22,6 +22,7 @@ import React, {
   ReactNode,
 } from 'react';
 import type { SchedulerState, SchedulerMetrics } from '../../shared/scheduler/types';
+import type { SchedulerStateChangedMessage } from '../../shared/types';
 import { createLogger } from '../../shared/utils/logger';
 
 const log = createLogger('SchedulerContext');
@@ -99,11 +100,16 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
     })();
   }, [refreshState, refreshMetrics]);
 
-  // Listen for scheduler state changes from background
+  // Listen for scheduler state changes from background. The broadcast carries a
+  // metrics snapshot alongside the state (see SchedulerStateChangedMessage), so
+  // failed/coalesced counters stay live instead of freezing at mount time.
   useEffect(() => {
-    const listener = (message: { action?: string; state?: SchedulerState }) => {
+    const listener = (message: Partial<SchedulerStateChangedMessage> & { action?: string }) => {
       if (message.action === 'schedulerStateChanged') {
         setState(message.state ?? null);
+        if (message.metrics) {
+          setMetrics(message.metrics);
+        }
       }
     };
 

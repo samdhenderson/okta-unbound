@@ -13,6 +13,8 @@
  * org-extensible attributes; new code should prefer the zod-inferred types.
  */
 
+import type { SchedulerState, SchedulerMetrics } from './scheduler/types';
+
 /** An Okta user as returned by the Users API, with a partly-typed profile. */
 export interface OktaUser {
   id: string;
@@ -281,6 +283,20 @@ export interface MessageResponse<T = any> extends ApiResponse<T> {
   formattedRules?: FormattedRule[];
   stats?: RuleStats;
   conflicts?: RuleConflict[];
+}
+
+/**
+ * Push message broadcast by the background service worker to all extension
+ * pages on every scheduler state transition. Carries the metrics snapshot
+ * alongside the state so side-panel listeners (e.g. the ActivityBar) stay live
+ * without polling `getSchedulerMetrics`.
+ */
+export interface SchedulerStateChangedMessage {
+  action: 'schedulerStateChanged';
+  /** The scheduler state after the transition. */
+  state: SchedulerState;
+  /** Throughput/rate-limit metrics snapshot taken at broadcast time. */
+  metrics: SchedulerMetrics;
 }
 
 /** Aggregate counts across a set of rules. */
