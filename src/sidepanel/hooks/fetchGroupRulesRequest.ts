@@ -31,6 +31,12 @@ type MakeApiRequest = CoreApi['makeApiRequest'];
 export interface FetchGroupRulesResult {
   success: boolean;
   rules?: FormattedRule[];
+  /**
+   * The same rules exactly as returned by Okta (the one paginated fetch produces
+   * both shapes) — cached in `RulesCache` so raw-rule consumers (e.g. rule-impact
+   * analysis) never re-paginate data already in memory.
+   */
+  rawRules?: OktaGroupRule[];
   stats?: RuleStats;
   conflicts?: RuleConflict[];
   error?: string;
@@ -147,7 +153,7 @@ export async function fetchGroupRulesRequest(
     };
 
     log.debug('Rule stats', stats);
-    return { success: true, rules: formattedRules, stats, conflicts };
+    return { success: true, rules: formattedRules, rawRules: rules, stats, conflicts };
   } catch (error) {
     log.error('fetchGroupRules error', error);
     return {

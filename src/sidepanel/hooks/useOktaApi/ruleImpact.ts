@@ -11,6 +11,7 @@
 
 import type { CoreApi } from './core';
 import type { OktaUser, OktaGroupRule, GroupType } from '../../../shared/types';
+import { RulesCache } from '../../../shared/rulesCache';
 import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
 import { oktaGroupRuleSchema, type OktaGroupRuleResponse } from '@/shared/schemas/okta';
 import { createLogger } from '../../../shared/utils/logger';
@@ -64,8 +65,20 @@ export function createRuleImpactOperations(
   /**
    * Fetch every group rule (raw, so exclusion lists survive), following `Link`
    * pagination at low priority so it never starves interactive requests.
+   *
+   * @remarks Served from the fresh {@link RulesCache} when it carries raw rules
+   * (a Rules-tab load or a group-rules lookup populated it from the same Okta
+   * listing), so opening the impact preview does not re-paginate
+   * `/api/v1/groups/rules`. A stale/missing entry — or a legacy entry written
+   * before raw rules were cached (`rawRules: []`) — falls through to the fetch.
    */
   const fetchRawRules = async (): Promise<OktaGroupRule[]> => {
+    const cached = await RulesCache.get();
+    if (cached && cached.rawRules.length > 0) {
+      log.debug('Serving raw rules from RulesCache', { count: cached.rawRules.length });
+      return cached.rawRules;
+    }
+
     const rules = await fetchAllPages<OktaGroupRuleResponse>(
       (url) => coreApi.makeApiRequest(url, 'GET', undefined, 'low'),
       `/api/v1/groups/rules?limit=${OKTA_PAGE_SIZE}`,

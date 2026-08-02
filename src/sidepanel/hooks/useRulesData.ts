@@ -134,10 +134,13 @@ export function useRulesData({
           setStats(response.stats || EMPTY_STATS);
           setLastFetchTime(new Date().toISOString());
 
-          // OPTIMIZED: Populate global cache for other components to use
+          // OPTIMIZED: Populate global cache for other components to use. The
+          // raw rules come from the same single fetch as the formatted ones, so
+          // raw-rule consumers (rule-impact analysis) are served from this cache
+          // instead of re-paginating /api/v1/groups/rules.
           await RulesCache.set(
             response.rules || [],
-            [], // rawRules not available from formatted response
+            response.rawRules || [],
             response.stats || EMPTY_STATS,
             response.conflicts || [],
           );
