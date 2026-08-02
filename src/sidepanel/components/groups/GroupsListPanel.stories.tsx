@@ -147,3 +147,22 @@ export const LiveSearching: Story = {
     hasGroups: false,
   },
 };
+
+/**
+ * A large filtered list (120 groups): only the first 50 rows are mounted, with a
+ * "Showing X of Y" footer plus a Load more button / scroll sentinel to reveal the
+ * rest incrementally.
+ */
+export const LargeListWindowed: Story = {
+  args: {
+    filteredGroups: Array.from({ length: 120 }, (_, i) => ({
+      id: `00gFAKE${String(i).padStart(4, '0')}`,
+      name: `Team ${i + 1}`,
+      description: 'Generated sample group',
+      type: 'OKTA_GROUP' as const,
+      memberCount: (i * 7) % 400,
+      hasRules: i % 5 === 0,
+      ruleCount: i % 5 === 0 ? 1 : 0,
+    })),
+  },
+};
