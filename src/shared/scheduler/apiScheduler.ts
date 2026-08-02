@@ -113,7 +113,7 @@ export class ApiScheduler {
     tabId: number,
     priority: RequestPriority = 'normal',
   ): Promise<RequestResult> {
-    const dedupKey = this.getGetDedupKey(method, endpoint);
+    const dedupKey = this.getGetDedupKey(method, endpoint, tabId);
 
     // Coalesce an identical in-flight/queued GET: attach to the leader's result
     // instead of issuing a second fetch. Reads are idempotent, so this is safe.
@@ -180,10 +180,12 @@ export class ApiScheduler {
   /**
    * Coalescing key for an idempotent GET, or `null` for methods that must not be
    * de-duplicated (mutations). Includes the full endpoint so differing query
-   * strings stay distinct.
+   * strings stay distinct, and the tabId so identical paths issued against
+   * different Okta tabs (different orgs, different sessions) never share one
+   * response.
    */
-  private getGetDedupKey(method: string, endpoint: string): string | null {
-    return method.toUpperCase() === 'GET' ? `GET ${endpoint}` : null;
+  private getGetDedupKey(method: string, endpoint: string, tabId: number): string | null {
+    return method.toUpperCase() === 'GET' ? `GET ${tabId} ${endpoint}` : null;
   }
 
   /**
