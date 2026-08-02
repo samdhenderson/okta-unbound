@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { auditStore } from './auditStore';
 import type { AuditLogEntry, AuditSettings } from '../types';
 
@@ -261,6 +261,165 @@ describe('AuditStore', () => {
       await auditStore.clearAllLogs();
 
       expect(mockDB.clear).toHaveBeenCalledWith('operations');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Timestamp-index paths (jsdom has no IndexedDB, so IDBKeyRange is stubbed
+  // with tagged marker objects we can assert against).
+  // -------------------------------------------------------------------------
+  describe('timestamp index paths', () => {
+    const fakeIDBKeyRange = {
+      bound: vi.fn((lower: Date, upper: Date) => ({ kind: 'bound', lower, upper })),
+      lowerBound: vi.fn((lower: Date) => ({ kind: 'lowerBound', lower })),
+      upperBound: vi.fn((upper: Date, open?: boolean) => ({ kind: 'upperBound', upper, open })),
+    };
+
+    const indexEntry = (id: string, timestamp: Date): AuditLogEntry => ({
+      id,
+      timestamp,
+      action: 'remove_users',
+      groupId: 'group1',
+      groupName: 'Group 1',
+      performedBy: 'admin@example.com',
+      affectedUsers: [],
+      result: 'success',
+      details: { usersSucceeded: 1, usersFailed: 0, apiRequestCount: 1, durationMs: 500 },
+    });
+
+    beforeEach(() => {
+      vi.stubGlobal('IDBKeyRange', fakeIDBKeyRange);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('date-scoped getHistory reads only the bounded timestamp range, never getAll', async () => {
+      const startDate = new Date('2025-01-01');
+      const endDate = new Date('2025-02-01');
+      const inRangeOld = indexEntry('old', new Date('2025-01-10'));
+      const inRangeNew = indexEntry('new', new Date('2025-01-20'));
+      mockDB.getAllFromIndex.mockResolvedValueOnce([inRangeOld, inRangeNew]);
+
+      const result = await auditStore.getHistory({ startDate, endDate });
+
+      expect(mockDB.getAllFromIndex).toHaveBeenCalledWith('operations', 'timestamp', {
+        kind: 'bound',
+        lower: startDate,
+        upper: endDate,
+      });
+      expect(mockDB.getAll).not.toHaveBeenCalled();
+      // Result shape/ordering promise holds: newest first.
+      expect(result.map((e) => e.id)).toEqual(['new', 'old']);
+    });
+
+    it('startDate-only uses a lower bound; endDate-only uses an upper bound', async () => {
+      const startDate = new Date('2025-03-01');
+      mockDB.getAllFromIndex.mockResolvedValueOnce([]);
+      await auditStore.getHistory({ startDate });
+      expect(mockDB.getAllFromIndex).toHaveBeenLastCalledWith('operations', 'timestamp', {
+        kind: 'lowerBound',
+        lower: startDate,
+      });
+
+      const endDate = new Date('2025-04-01');
+      mockDB.getAllFromIndex.mockResolvedValueOnce([]);
+      await auditStore.getHistory({ endDate });
+      expect(mockDB.getAllFromIndex).toHaveBeenLastCalledWith('operations', 'timestamp', {
+        kind: 'upperBound',
+        upper: endDate,
+        open: undefined,
+      });
+      expect(mockDB.getAll).not.toHaveBeenCalled();
+    });
+
+    it('an equality filter plus dates keeps the equality index and date-filters in JS', async () => {
+      const startDate = new Date('2025-01-01');
+      const kept = indexEntry('kept', new Date('2025-01-10'));
+      const tooOld = indexEntry('too-old', new Date('2024-12-01'));
+      mockDB.getAllFromIndex.mockResolvedValueOnce([kept, tooOld]);
+
+      const result = await auditStore.getHistory({ groupId: 'group1', startDate });
+
+      expect(mockDB.getAllFromIndex).toHaveBeenCalledWith('operations', 'groupId', 'group1');
+      expect(result.map((e) => e.id)).toEqual(['kept']);
+    });
+
+    it('clearOldLogs walks a cursor over the expired range, deleting as it goes', async () => {
+      const second = {
+        delete: vi.fn().mockResolvedValue(undefined),
+        continue: vi.fn().mockResolvedValue(null),
+      };
+      const first = {
+        delete: vi.fn().mockResolvedValue(undefined),
+        continue: vi.fn().mockResolvedValue(second),
+      };
+      const openCursor = vi.fn().mockResolvedValue(first);
+      const transaction = {
+        store: { index: vi.fn(() => ({ openCursor })) },
+        done: Promise.resolve(),
+      };
+      mockDB.transaction.mockReturnValueOnce(transaction);
+
+      await auditStore.clearOldLogs(30);
+
+      expect(mockDB.transaction).toHaveBeenCalledWith('operations', 'readwrite');
+      expect(transaction.store.index).toHaveBeenCalledWith('timestamp');
+      // Strictly-older-than cutoff: an OPEN upper bound.
+      expect(openCursor).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'upperBound', open: true }),
+      );
+      expect(first.delete).toHaveBeenCalledTimes(1);
+      expect(second.delete).toHaveBeenCalledTimes(1);
+      // The full-table read is gone.
+      expect(mockDB.getAll).not.toHaveBeenCalled();
+      expect(mockDB.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('settings cache', () => {
+    it('logOperation skips the per-write settings read once updateSettings primed the cache', async () => {
+      mockDB.put.mockResolvedValueOnce(undefined);
+      await auditStore.updateSettings({ enabled: true, retentionDays: 90 });
+      vi.clearAllMocks();
+
+      mockDB.add.mockResolvedValueOnce(undefined);
+      const entry: AuditLogEntry = {
+        id: 'cached-settings-entry',
+        timestamp: new Date(),
+        action: 'remove_users',
+        groupId: 'test-group',
+        groupName: 'Test Group',
+        performedBy: 'admin@example.com',
+        affectedUsers: ['user1'],
+        result: 'success',
+        details: { usersSucceeded: 1, usersFailed: 0, apiRequestCount: 1, durationMs: 100 },
+      };
+      await auditStore.logOperation(entry);
+
+      expect(mockDB.get).not.toHaveBeenCalled();
+      expect(mockDB.add).toHaveBeenCalled();
+    });
+
+    it('updateSettings replaces the cached snapshot (a disable takes effect immediately)', async () => {
+      mockDB.put.mockResolvedValueOnce(undefined);
+      await auditStore.updateSettings({ enabled: false, retentionDays: 90 });
+
+      await auditStore.logOperation({
+        id: 'disabled-entry',
+        timestamp: new Date(),
+        action: 'remove_users',
+        groupId: 'test-group',
+        groupName: 'Test Group',
+        performedBy: 'admin@example.com',
+        affectedUsers: [],
+        result: 'success',
+        details: { usersSucceeded: 0, usersFailed: 0, apiRequestCount: 0, durationMs: 100 },
+      });
+
+      expect(mockDB.get).not.toHaveBeenCalled();
+      expect(mockDB.add).not.toHaveBeenCalled();
     });
   });
 });

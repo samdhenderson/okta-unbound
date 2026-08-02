@@ -46,6 +46,25 @@ const SETTINGS_STORE = 'settings';
 class AuditStore {
   private dbPromise: Promise<IDBPDatabase<AuditDB>> | null = null;
 
+  /**
+   * In-memory settings snapshot, primed (and replaced) by {@link updateSettings}
+   * — the only writer in this context — so per-write settings reads in
+   * {@link logOperation} skip the DB round-trip once settings have been saved.
+   * Never populated from plain reads: reads must observe out-of-band DB state.
+   */
+  private settingsCache: AuditSettings | null = null;
+
+  /**
+   * Builds an inclusive timestamp key range for the given bounds, or null when
+   * neither bound is set (matching the JS filter's `< start` / `> end` exclusions).
+   */
+  private static timestampRange(startDate?: Date, endDate?: Date): IDBKeyRange | null {
+    if (startDate && endDate) return IDBKeyRange.bound(startDate, endDate);
+    if (startDate) return IDBKeyRange.lowerBound(startDate);
+    if (endDate) return IDBKeyRange.upperBound(endDate);
+    return null;
+  }
+
   private async getDB(): Promise<IDBPDatabase<AuditDB>> {
     if (!this.dbPromise) {
       this.dbPromise = openDB<AuditDB>(DB_NAME, DB_VERSION, {
@@ -117,7 +136,12 @@ class AuditStore {
       } else if (filters.result) {
         results = await db.getAllFromIndex(STORE_NAME, 'result', filters.result);
       } else {
-        results = await db.getAll(STORE_NAME);
+        // No equality filter: date-scoped reads go through the timestamp index
+        // so only the range is materialized, instead of getAll + JS filtering.
+        const range = AuditStore.timestampRange(filters.startDate, filters.endDate);
+        results = range
+          ? await db.getAllFromIndex(STORE_NAME, 'timestamp', range)
+          : await db.getAll(STORE_NAME);
       }
 
       // Apply additional filters
@@ -197,18 +221,22 @@ class AuditStore {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
-      // Get all entries older than cutoff
-      const allEntries = await db.getAll(STORE_NAME);
-      const oldEntries = allEntries.filter((entry) => new Date(entry.timestamp) < cutoffDate);
-
-      // Delete old entries
+      // Walk only the expired range via the timestamp index (open upper bound =
+      // strictly-older-than cutoff, matching the previous `< cutoffDate` filter),
+      // deleting at the cursor — no full-table read, no per-entry key lookups.
       const tx = db.transaction(STORE_NAME, 'readwrite');
-      for (const entry of oldEntries) {
-        await tx.store.delete(entry.id);
+      let deleted = 0;
+      let cursor = await tx.store
+        .index('timestamp')
+        .openCursor(IDBKeyRange.upperBound(cutoffDate, true));
+      while (cursor) {
+        await cursor.delete();
+        deleted++;
+        cursor = await cursor.continue();
       }
       await tx.done;
 
-      log.debug(`Cleared ${oldEntries.length} old log entries`);
+      log.debug(`Cleared ${deleted} old log entries`);
     } catch (error) {
       log.error('Failed to clear old logs:', error);
     }
@@ -279,9 +307,14 @@ class AuditStore {
   }
 
   /**
-   * Get current audit settings
+   * Get current audit settings. Served from the in-memory snapshot when
+   * {@link updateSettings} has written one this session (so per-write reads in
+   * {@link logOperation} skip the DB); otherwise read from the DB.
    */
   async getSettings(): Promise<AuditSettings> {
+    if (this.settingsCache) {
+      return this.settingsCache;
+    }
     try {
       const db = await this.getDB();
       const settings = await db.get(SETTINGS_STORE, 'default');
@@ -295,13 +328,16 @@ class AuditStore {
   }
 
   /**
-   * Update audit settings
+   * Update audit settings. On success the in-memory snapshot is replaced with
+   * the new value (this store is the settings' only writer), which both
+   * invalidates any previous snapshot and lets subsequent reads skip the DB.
    */
   async updateSettings(settings: AuditSettings): Promise<void> {
     try {
       const db = await this.getDB();
       const storedSettings = { ...settings, id: 'default' as const };
       await db.put(SETTINGS_STORE, storedSettings);
+      this.settingsCache = { ...settings };
       log.debug('Updated settings:', settings);
     } catch (error) {
       log.error('Failed to update settings:', error);

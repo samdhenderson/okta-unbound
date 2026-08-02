@@ -47,6 +47,7 @@ export default [
         HTMLElement: 'readonly',
         HTMLDivElement: 'readonly',
         IntersectionObserver: 'readonly',
+        IDBKeyRange: 'readonly',
       },
     },
     plugins: {
