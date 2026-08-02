@@ -7,10 +7,11 @@
  * to the content script's `searchGroups` action.
  */
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { GroupSummary } from '../../shared/types';
 import { liveSearchToGroupSummary } from '../components/groups/groupSummary';
+import { useDebouncedValue } from './useDebouncedValue';
 import { useOktaApi } from './useOktaApi';
 
 /** Inputs to {@link useGroupLiveSearch}. */
@@ -28,10 +29,10 @@ interface UseGroupLiveSearchOptions {
  * flag, and the 300ms debounce.
  *
  * `handleLiveSearch` is memoized on `[targetTabId, setError]` (both stable — the
- * error setter is the shell's raw useState setter), so the debounce effect keyed on
+ * error setter is the shell's raw useState setter), so the search effect keyed on
  * its identity only re-fires when `targetTabId` changes. Do NOT widen these deps or
- * pass an inline `onError` — an unstable handler makes the effect reschedule the
- * timer every render and the search silently never fires.
+ * pass an inline `onError` — an unstable handler makes the effect re-fire the
+ * search on every render.
  *
  * §8: routes through the rate-limited scheduler (`makeApiRequest` at the
  * `interactive` priority, which jumps the soft cooldown so a typed search stays
@@ -51,7 +52,7 @@ export function useGroupLiveSearch({
   const [liveSearchQuery, setLiveSearchQuery] = useState('');
   const [liveSearchResults, setLiveSearchResults] = useState<GroupSummary[]>([]);
   const [isLiveSearching, setIsLiveSearching] = useState(false);
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const debouncedQuery = useDebouncedValue(liveSearchQuery, 300);
 
   // §8: own a useOktaApi slice for the scheduler path. `makeApiRequest` is stable
   // per `targetTabId` (memoized in useOktaApi), so it does not widen the debounce
@@ -99,18 +100,14 @@ export function useGroupLiveSearch({
     [targetTabId, setError, makeApiRequest],
   );
 
-  // Debounced search effect
+  // Debounced search effect: fires once the query has been stable for 300ms, and
+  // re-fires with the settled query when the handler identity changes (i.e. a new
+  // `targetTabId`) or the mode flips back to live.
   useEffect(() => {
     if (searchMode === 'live') {
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = setTimeout(() => {
-        handleLiveSearch(liveSearchQuery);
-      }, 300);
-      return () => {
-        if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-      };
+      handleLiveSearch(debouncedQuery);
     }
-  }, [liveSearchQuery, searchMode, handleLiveSearch]);
+  }, [debouncedQuery, searchMode, handleLiveSearch]);
 
   const resetLiveSearch = useCallback(() => {
     setLiveSearchQuery('');

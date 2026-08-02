@@ -9,8 +9,9 @@
  * The caller owns the selected user and the result banner.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { OktaUser } from '../../shared/types';
+import { useDebouncedValue } from './useDebouncedValue';
 import { useOktaApi } from './useOktaApi';
 
 /** Shape returned by `searchGroups` in `groupDiscovery.ts` for the Add-to-Group flow. */
@@ -73,28 +74,31 @@ export function useAddToGroup({
   const [selectedGroup, setSelectedGroup] = useState<GroupSearchResult | null>(null);
   const [isAddingToGroup, setIsAddingToGroup] = useState(false);
   const [showGroupDropdown, setShowGroupDropdown] = useState(false);
-  const groupDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const debouncedGroupQuery = useDebouncedValue(groupSearchQuery, 300);
 
   const { searchGroups, addUserToGroup } = useOktaApi({
     targetTabId: targetTabId ?? null,
   });
 
-  // Debounced group search for the Add to Group modal
+  // Below the minimum length the dropdown clears immediately (no debounce), so
+  // clearing/selecting doesn't leave stale results on screen for 300ms.
   useEffect(() => {
-    if (groupDebounceTimerRef.current) {
-      clearTimeout(groupDebounceTimerRef.current);
-    }
-
     if (groupSearchQuery.trim().length < 2) {
       setGroupSearchResults([]);
       setShowGroupDropdown(false);
-      return;
     }
+  }, [groupSearchQuery]);
 
-    groupDebounceTimerRef.current = setTimeout(async () => {
+  // Debounced group search for the Add to Group modal. CHARACTERIZED (preserved):
+  // no stale-response guard — the last-resolving search wins.
+  useEffect(() => {
+    const query = debouncedGroupQuery.trim();
+    if (query.length < 2) return;
+
+    void (async () => {
       setIsSearchingGroups(true);
       try {
-        const results = await searchGroups(groupSearchQuery.trim());
+        const results = await searchGroups(query);
         setGroupSearchResults(results);
         setShowGroupDropdown(results.length > 0);
       } catch {
@@ -103,14 +107,8 @@ export function useAddToGroup({
       } finally {
         setIsSearchingGroups(false);
       }
-    }, 300);
-
-    return () => {
-      if (groupDebounceTimerRef.current) {
-        clearTimeout(groupDebounceTimerRef.current);
-      }
-    };
-  }, [groupSearchQuery, searchGroups]);
+    })();
+  }, [debouncedGroupQuery, searchGroups]);
 
   const openModal = useCallback(() => {
     setGroupSearchQuery('');
