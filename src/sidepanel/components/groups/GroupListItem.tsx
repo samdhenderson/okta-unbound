@@ -8,6 +8,7 @@
  */
 import React, { useState, useCallback, memo } from 'react';
 import { Button, IconButton, Checkbox } from '../shared';
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import type { GroupSummary, StalenessInfo } from '../../../shared/types';
 
 /**
@@ -82,7 +83,7 @@ interface GroupListItemProps {
 const GroupListItem: React.FC<GroupListItemProps> = memo(
   ({ group, selected, onToggleSelect, oktaOrigin, onAnalyzeSource, isHighlighted = false }) => {
     const [expanded, setExpanded] = useState(false);
-    const [idCopied, setIdCopied] = useState(false);
+    const { copied: idCopied, copy: copyId } = useCopyToClipboard();
 
     // Auto-expand when highlighted (deep-linked from the Rules tab).
     React.useEffect(() => {
@@ -134,12 +135,9 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
     const handleCopyId = useCallback(
       (e: React.MouseEvent) => {
         e.stopPropagation();
-        navigator.clipboard.writeText(group.id).then(() => {
-          setIdCopied(true);
-          setTimeout(() => setIdCopied(false), 1500);
-        });
+        copyId(group.id);
       },
-      [group.id],
+      [copyId, group.id],
     );
 
     const typeBadge = getTypeBadge(group.type);

@@ -7,9 +7,10 @@
  * "Open in Okta" link. Shared by {@link UserProfileCard} (Users tab) and
  * {@link UserOverview} so both render user identity consistently.
  */
-import React, { useState } from 'react';
+import React from 'react';
 import type { OktaUser } from '../../../shared/types';
 import { IconButton, OpenInOktaLink } from '../shared';
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import Icon from '../overview/shared/Icon';
 
 /** Props for {@link UserIdentity}. */
@@ -62,18 +63,10 @@ const UserIdentity: React.FC<UserIdentityProps> = ({
   showOktaLink = true,
   showId = true,
 }) => {
-  const [idCopied, setIdCopied] = useState(false);
+  const { copied: idCopied, copy: copyId } = useCopyToClipboard();
 
   const handleCopyId = () => {
-    navigator.clipboard.writeText(user.id).then(
-      () => {
-        setIdCopied(true);
-        setTimeout(() => setIdCopied(false), 1500);
-      },
-      () => {
-        /* clipboard blocked — fail quietly */
-      },
-    );
+    copyId(user.id);
   };
 
   const initials =

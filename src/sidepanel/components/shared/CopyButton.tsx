@@ -6,8 +6,9 @@
  * click, and clipboard failures (blocked permissions / insecure context) fail
  * silently rather than throwing.
  */
-import React, { useState } from 'react';
+import React from 'react';
 import Button, { type ButtonVariant, type ButtonSize } from './Button';
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 
 interface CopyButtonProps {
   /** Text to copy, computed lazily on click so large lists aren't built until needed. */
@@ -44,19 +45,10 @@ const CopyButton: React.FC<CopyButtonProps> = ({
   size = 'sm',
   className,
 }) => {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard();
 
   const handleCopy = () => {
-    const text = getText();
-    navigator.clipboard.writeText(text).then(
-      () => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      },
-      () => {
-        // Clipboard can be blocked (permissions / insecure context); fail quietly.
-      },
-    );
+    copy(getText());
   };
 
   return (
