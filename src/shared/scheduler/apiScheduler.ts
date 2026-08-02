@@ -60,6 +60,12 @@ export class ApiScheduler {
   private cooldownEndsAt: number | null = null;
   private isPaused: boolean = false;
   private processingInterval: ReturnType<typeof setInterval> | null = null;
+  // Re-entrancy guard for processQueue: notifyStateChange runs listeners
+  // synchronously mid-drain, and a listener may call back into the scheduler.
+  // A blocked call marks `reprocessRequested` so the running drain loops again
+  // instead of double-dispatching (or silently dropping the wake-up).
+  private isProcessing: boolean = false;
+  private reprocessRequested: boolean = false;
   // Bumped by clearQueue() (a user Cancel). A request sleeping in retry backoff
   // captures this before it waits and, on waking, rejects instead of reviving if
   // the value moved — so Cancel also stops mid-backoff requests, not just queued ones.
@@ -167,6 +173,12 @@ export class ApiScheduler {
       this.metrics.totalRequests++;
       this.notifyStateChange();
 
+      // Kick the drain event-driven so a request scheduled while the scheduler
+      // is idle dispatches immediately instead of waiting for the 50ms fallback
+      // tick. Deferred one microtask so a synchronous burst of schedules is
+      // fully enqueued (and priority-ordered) before the first dispatch.
+      void Promise.resolve().then(() => this.processQueue());
+
       log.debug('Scheduled request:', {
         id: request.id,
         endpoint: endpoint.split('?')[0],
@@ -213,7 +225,8 @@ export class ApiScheduler {
   private startProcessing(): void {
     if (this.processingInterval) return;
 
-    // Process queue every 50ms for snappier throughput
+    // Fallback tick: dispatch is event-driven (on schedule and on settle), but
+    // the 50ms loop still catches time-based wake-ups such as a cooldown ending.
     this.processingInterval = setInterval(() => {
       this.processQueue();
     }, 50);
@@ -233,66 +246,94 @@ export class ApiScheduler {
   }
 
   /**
-   * Process queued requests
+   * Process queued requests: drain the queue event-driven, filling every free
+   * `maxConcurrent` slot in one pass. Invoked on schedule and on settle (with
+   * the 50ms interval as a fallback); the re-entrancy guard makes concurrent
+   * invocations loop the running drain once more instead of double-dispatching.
    */
-  private async processQueue(): Promise<void> {
+  private processQueue(): void {
+    if (this.isProcessing) {
+      this.reprocessRequested = true;
+      return;
+    }
+    this.isProcessing = true;
+    try {
+      do {
+        this.reprocessRequested = false;
+        this.drainQueue();
+      } while (this.reprocessRequested);
+    } finally {
+      this.isProcessing = false;
+    }
+  }
+
+  /**
+   * One drain pass: dispatch queued requests until the concurrency cap, an
+   * armed rate-limit gate, or an empty queue stops it. Every gate is
+   * re-evaluated per dispatch so a multi-dispatch drain can never overshoot
+   * what the single-dispatch tick would have allowed.
+   */
+  private drainQueue(): void {
     // Skip if paused
     if (this.isPaused) {
       this.updateStatus('paused');
       return;
     }
 
-    // An `interactive` request at the head of the (priority-ordered) queue may
-    // jump the soft rate-limit gates — but only while there is genuine hard
-    // headroom left, so it can never force a 429. See {@link RequestPriority}.
-    const interactiveBypass =
-      this.queue[0]?.priority === 'interactive' && !this.rateLimitDetector.isLimitExceeded();
-
-    // Check cooldown
-    if (this.cooldownEndsAt && Date.now() < this.cooldownEndsAt) {
-      if (!interactiveBypass) {
-        this.updateStatus('cooldown');
-        return;
-      }
-      // Fall through to dispatch the interactive request; the cooldown stays
-      // armed for every other tier (we do not clear `cooldownEndsAt`).
-    } else if (this.cooldownEndsAt) {
-      // Cooldown ended
+    // Clear an expired cooldown before draining
+    if (this.cooldownEndsAt && Date.now() >= this.cooldownEndsAt) {
       log.debug('Cooldown ended, resuming processing');
       this.cooldownEndsAt = null;
     }
 
-    // Check if we can process more requests
-    if (this.activeRequests.size >= this.config.maxConcurrent) {
-      this.updateStatus('processing');
-      return;
-    }
+    while (this.activeRequests.size < this.config.maxConcurrent && this.queue.length > 0) {
+      // An `interactive` request at the head of the (priority-ordered) queue may
+      // jump the soft rate-limit gates — but only while there is genuine hard
+      // headroom left, so it can never force a 429. See {@link RequestPriority}.
+      // Re-evaluated every iteration: the head changes as requests dispatch.
+      const interactiveBypass =
+        this.queue[0]?.priority === 'interactive' && !this.rateLimitDetector.isLimitExceeded();
 
-    // Check rate limits (account for in-flight requests)
-    if (
-      this.rateLimitDetector.isApproachingLimit(
-        this.config.minRemainingThreshold,
-        this.activeRequests.size,
-      )
-    ) {
-      // An interactive request with hard headroom dispatches without arming a
-      // cooldown; any other tier trips the soft threshold and cools down.
-      if (!interactiveBypass) {
+      // Check cooldown (may have been armed mid-drain by a settling request).
+      // An interactive head falls through to dispatch; the cooldown stays armed
+      // for every other tier (we do not clear `cooldownEndsAt`).
+      if (this.cooldownEndsAt && Date.now() < this.cooldownEndsAt && !interactiveBypass) {
+        this.updateStatus('cooldown');
+        return;
+      }
+
+      // Check rate limits (account for in-flight requests). An interactive
+      // request with hard headroom dispatches without arming a cooldown; any
+      // other tier trips the soft threshold and cools down.
+      if (
+        this.rateLimitDetector.isApproachingLimit(
+          this.config.minRemainingThreshold,
+          this.activeRequests.size,
+        ) &&
+        !interactiveBypass
+      ) {
         this.enterCooldown();
         return;
       }
+
+      const request = this.queue.shift();
+      if (!request) return;
+
+      // Execute request (synchronously registers itself in activeRequests, so
+      // the loop condition above stays accurate for the next iteration).
+      this.updateStatus('processing');
+      this.executeRequest(request);
     }
 
-    // Get next request from queue
-    const request = this.queue.shift();
-    if (!request) {
+    // Post-drain status: busy while anything is queued or in flight, cooldown
+    // while the gate is armed with an empty queue, idle otherwise.
+    if (this.queue.length > 0 || this.activeRequests.size > 0) {
+      this.updateStatus('processing');
+    } else if (this.cooldownEndsAt && Date.now() < this.cooldownEndsAt) {
+      this.updateStatus('cooldown');
+    } else {
       this.updateStatus('idle');
-      return;
     }
-
-    // Execute request
-    this.updateStatus('processing');
-    this.executeRequest(request);
   }
 
   /**
@@ -356,6 +397,9 @@ export class ApiScheduler {
       }
     } finally {
       this.notifyStateChange();
+      // A settled request frees a concurrency slot (or, on retry, re-queued
+      // itself) — drain immediately instead of waiting for the fallback tick.
+      this.processQueue();
     }
   }
 
