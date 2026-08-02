@@ -8,6 +8,7 @@
  */
 import React from 'react';
 import type { OktaUser, MemberMfaResult } from '../../../../shared/types';
+import { userStatusVariant, type UserStatusVariant } from '../../shared';
 
 /** Props for {@link MemberRow}. */
 interface MemberRowProps {
@@ -21,19 +22,18 @@ interface MemberRowProps {
   oktaOrigin?: string | null;
 }
 
-/** Maps a user status to its badge color classes; unknown statuses fall back to neutral. */
-const statusBadge: Record<string, string> = {
-  ACTIVE: 'bg-success-light text-success-text',
-  DEPROVISIONED: 'bg-danger-light text-danger-text',
-  LOCKED_OUT: 'bg-danger-light text-danger-text',
-  SUSPENDED: 'bg-warning-light text-warning-text',
-  PASSWORD_EXPIRED: 'bg-warning-light text-warning-text',
-  RECOVERY: 'bg-warning-light text-warning-text',
+/** Per-variant badge color classes (token palette, keyed by the shared variant map). */
+const VARIANT_CLASSES: Record<UserStatusVariant, string> = {
+  success: 'bg-success-light text-success-text',
+  info: 'bg-primary-light text-primary-text',
+  warning: 'bg-warning-light text-warning-text',
+  danger: 'bg-danger-light text-danger-text',
+  neutral: 'bg-neutral-100 text-neutral-700',
 };
 
 /** Renders one member card, optionally wrapped as an Admin Console deep link. */
 const MemberRow: React.FC<MemberRowProps> = ({ user, mfa, mfaScanned, oktaOrigin }) => {
-  const badgeClass = statusBadge[user.status] || 'bg-neutral-100 text-neutral-700';
+  const badgeClass = VARIANT_CLASSES[userStatusVariant(user.status)];
   const fullName =
     `${user.profile.firstName || ''} ${user.profile.lastName || ''}`.trim() || user.profile.login;
 
