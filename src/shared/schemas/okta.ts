@@ -247,6 +247,62 @@ export const oktaAppGroupSchema = z
 /** Inferred type of a validated {@link oktaAppGroupSchema} row. */
 export type OktaAppGroup = z.infer<typeof oktaAppGroupSchema>;
 
+/**
+ * A policy as it appears in a *list* response (`GET /api/v1/policies?type=…`),
+ * covering every policy type (`ACCESS_POLICY`, `OKTA_SIGN_ON`, `MFA_ENROLL`,
+ * `PASSWORD`, …).
+ *
+ * Deliberately lenient, following the {@link oktaAppListItemSchema} precedent:
+ * only `id` is required and unknown fields `.passthrough()`. Policy payloads
+ * differ per type and Okta adds fields over time, so stripping unknown keys here
+ * would silently drop data the UI (or a later feature) reads — the exact class of
+ * corruption ADR-0006 warns about. `_links` is declared as `z.unknown()` because
+ * its shape varies by policy type; consumers must narrow it defensively rather
+ * than trust a typed shape. Use with {@link parseOktaList}.
+ */
+export const oktaPolicyListItemSchema = z
+  .object({
+    id: z.string(),
+    name: z.string().optional(),
+    status: z.string().optional(),
+    type: z.string().optional(),
+    priority: z.number().nullish(),
+    description: z.string().nullish(),
+    system: z.boolean().optional(),
+    created: z.string().nullish(),
+    lastUpdated: z.string().nullish(),
+    _links: z.unknown().optional(),
+  })
+  .passthrough();
+
+/**
+ * A policy rule as returned by `GET /api/v1/policies/{policyId}/rules`.
+ *
+ * Same lenient contract as {@link oktaPolicyListItemSchema}: only `id` is
+ * required and unknown fields `.passthrough()`. `conditions` and `actions` are
+ * `z.unknown()` on purpose — their deep shapes vary by policy type (an access
+ * policy rule's `actions.appSignOn` looks nothing like a password policy rule's),
+ * and the UI renders only the validated scalar fields; anything reading into
+ * those trees must narrow them defensively. Use with {@link parseOktaList}.
+ */
+export const oktaPolicyRuleSchema = z
+  .object({
+    id: z.string(),
+    name: z.string().optional(),
+    status: z.string().optional(),
+    priority: z.number().nullish(),
+    system: z.boolean().optional(),
+    conditions: z.unknown().optional(),
+    actions: z.unknown().optional(),
+  })
+  .passthrough();
+
+/** Inferred type of a validated {@link oktaPolicyListItemSchema} row. */
+export type OktaPolicyListItem = z.infer<typeof oktaPolicyListItemSchema>;
+
+/** Inferred type of a validated {@link oktaPolicyRuleSchema} row. */
+export type OktaPolicyRule = z.infer<typeof oktaPolicyRuleSchema>;
+
 /** Inferred type of a validated {@link oktaUserSchema} response. */
 export type OktaUserResponse = z.infer<typeof oktaUserSchema>;
 /** Inferred type of a validated {@link oktaGroupSchema} response. */

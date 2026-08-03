@@ -129,6 +129,16 @@ export function makeUseOktaApiValue(overrides: UseOktaApiValue = {}): UseOktaApi
     unsuspendUser: asyncFn(),
     resetPassword: asyncFn(),
 
+    // App inventory operations (read-only: Apps tab + app Overview enrichment)
+    getAllApps: asyncFn([]),
+    getAppById: asyncFn(null),
+    getAppAssignmentCounts: asyncFn(null),
+
+    // Auth policy operations (read-only: Auth Policies tab)
+    listPolicies: asyncFn([]),
+    getPolicyRules: asyncFn([]),
+    getAppAccessPolicyId: asyncFn(null),
+
     // Export operations
     exportMembers: asyncFn(),
 

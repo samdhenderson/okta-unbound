@@ -3,7 +3,7 @@
  * @description Facade hook that exposes the whole Okta API surface to the side panel.
  *
  * Composes the per-concern operation modules under `useOktaApi/` (core, group
- * members/cleanup/bulk/discovery/analysis, users, exports, push groups) into a
+ * members/cleanup/bulk/discovery/analysis, users, apps, policies, exports, push groups) into a
  * single memoized object. No request is issued here directly: every call routes
  * through the extension's rate-limited path — side panel → background
  * `ApiScheduler` → content script `fetch` against the live Okta session. This hook
@@ -22,6 +22,7 @@ import { createGroupBulkOperations } from './useOktaApi/groupBulkOps';
 import { createGroupDiscoveryOperations } from './useOktaApi/groupDiscovery';
 import { createUserOperations } from './useOktaApi/userOperations';
 import { createAppOperations } from './useOktaApi/appOperations';
+import { createPolicyOperations } from './useOktaApi/policyOperations';
 import { createExportEngineOperations } from './useOktaApi/exportEngine';
 import { createPushGroupOperations } from './useOktaApi/pushGroupOps';
 import { createGroupAnalysisOperations } from './useOktaApi/groupAnalysis';
@@ -154,6 +155,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
   const groupDiscoveryOps = useMemo(() => createGroupDiscoveryOperations(coreApi), [coreApi]);
   const userOps = useMemo(() => createUserOperations(coreApi), [coreApi]);
   const appOps = useMemo(() => createAppOperations(coreApi), [coreApi]);
+  const policyOps = useMemo(() => createPolicyOperations(coreApi), [coreApi]);
   const exportEngineOps = useMemo(() => createExportEngineOperations(coreApi), [coreApi]);
   const pushGroupOps = useMemo(() => createPushGroupOperations(coreApi), [coreApi]);
   const groupAnalysisOps = useMemo(
@@ -219,6 +221,16 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       unsuspendUser: userOps.unsuspendUser,
       resetPassword: userOps.resetPassword,
 
+      // App operations (read-only: Applications tab)
+      getAllApps: appOps.getAllApps,
+      getAppById: appOps.getAppById,
+      getAppAssignmentCounts: appOps.getAppAssignmentCounts,
+
+      // Auth policy operations (read-only: Auth Policies tab)
+      listPolicies: policyOps.listPolicies,
+      getPolicyRules: policyOps.getPolicyRules,
+      getAppAccessPolicyId: policyOps.getAppAccessPolicyId,
+
       // Descriptor-driven Export Engine (Export tab)
       fetchExportRows: exportEngineOps.fetchAllRows,
       countExportRows: exportEngineOps.countRows,
@@ -253,6 +265,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       groupBulkOps,
       userOps,
       appOps,
+      policyOps,
       exportEngineOps,
       pushGroupOps,
       groupAnalysisOps,

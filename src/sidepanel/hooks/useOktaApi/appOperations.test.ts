@@ -1,10 +1,12 @@
 /**
  * @module hooks/useOktaApi/appOperations.test
- * @description Unit tests for the app search operation.
+ * @description Unit tests for the app read operations.
  *
  * Drives `searchApps` through a fully-mocked `CoreApi`, asserting the request
  * shape, the `label || name || id` fallback, the short-query and error
  * short-circuits, and that malformed rows are dropped by boundary validation.
+ * Also covers the Applications-tab reads: `getAllApps` (pagination + lenient
+ * validation), `getAppById`, and `getAppAssignmentCounts`.
  * Fixtures use fake placeholders (`0oaFAKE…`) per CLAUDE.md.
  */
 import { describe, it, expect, vi } from 'vitest';
@@ -86,5 +88,174 @@ describe('searchApps', () => {
     });
     const { searchApps } = createAppOperations(core);
     expect(await searchApps('anything')).toEqual([]);
+  });
+});
+
+describe('getAllApps', () => {
+  it('walks every page via the Link header and returns all validated apps', async () => {
+    const makeApiRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        success: true,
+        data: [{ id: '0oaFAKE1', label: 'Salesforce', status: 'ACTIVE' }],
+        headers: { link: '<https://example.okta.com/api/v1/apps?after=1&limit=200>; rel="next"' },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: [{ id: '0oaFAKE2', label: 'Zoom' }],
+        headers: {},
+      });
+    const core = makeCore({ makeApiRequest });
+    const { getAllApps } = createAppOperations(core);
+
+    const apps = await getAllApps();
+
+    expect(makeApiRequest.mock.calls[0][0]).toBe('/api/v1/apps?limit=200');
+    expect(makeApiRequest.mock.calls[1][0]).toBe('/api/v1/apps?after=1&limit=200');
+    expect(apps.map((a) => a.id)).toEqual(['0oaFAKE1', '0oaFAKE2']);
+  });
+
+  it('drops a malformed row (missing id) but keeps the rest of the page', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const core = makeCore({
+      makeApiRequest: vi.fn().mockResolvedValue({
+        success: true,
+        data: [{ label: 'no id' }, { id: '0oaFAKE9', label: 'Good', orgExtra: 'kept' }],
+        headers: {},
+      }),
+    });
+    const { getAllApps } = createAppOperations(core);
+
+    const apps = await getAllApps();
+
+    expect(apps).toHaveLength(1);
+    expect(apps[0].id).toBe('0oaFAKE9');
+    // passthrough keeps org-specific extras rather than stripping them.
+    expect((apps[0] as Record<string, unknown>).orgExtra).toBe('kept');
+    vi.restoreAllMocks();
+  });
+
+  it('throws on a failed page (mirrors getAllGroups — a truncated inventory must not look complete)', async () => {
+    const core = makeCore({
+      makeApiRequest: vi.fn().mockResolvedValue({ success: false, error: 'boom' }),
+    });
+    const { getAllApps } = createAppOperations(core);
+
+    await expect(getAllApps()).rejects.toThrow('boom');
+  });
+});
+
+describe('getAppById', () => {
+  it('fetches one app and returns the validated entity', async () => {
+    const core = makeCore({
+      makeApiRequest: vi.fn().mockResolvedValue({
+        success: true,
+        data: { id: '0oaFAKE1', label: 'Salesforce', signOnMode: 'SAML_2_0', created: null },
+      }),
+    });
+    const { getAppById } = createAppOperations(core);
+
+    const app = await getAppById('0oaFAKE1');
+
+    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/apps/0oaFAKE1');
+    expect(app?.label).toBe('Salesforce');
+    expect(app?.signOnMode).toBe('SAML_2_0');
+  });
+
+  it('returns null when the request fails', async () => {
+    const core = makeCore({
+      makeApiRequest: vi.fn().mockResolvedValue({ success: false, error: 'not found' }),
+    });
+    const { getAppById } = createAppOperations(core);
+
+    expect(await getAppById('0oaFAKE1')).toBeNull();
+  });
+
+  it('returns null when the response fails validation', async () => {
+    const core = makeCore({
+      makeApiRequest: vi.fn().mockResolvedValue({ success: true, data: { label: 'no id' } }),
+    });
+    const { getAppById } = createAppOperations(core);
+
+    expect(await getAppById('0oaFAKE1')).toBeNull();
+  });
+
+  it('returns null (never throws) when the transport rejects', async () => {
+    const core = makeCore({ makeApiRequest: vi.fn().mockRejectedValue(new Error('network')) });
+    const { getAppById } = createAppOperations(core);
+
+    expect(await getAppById('0oaFAKE1')).toBeNull();
+  });
+});
+
+describe('getAppAssignmentCounts', () => {
+  it('counts users and groups across all pages at low priority', async () => {
+    const makeApiRequest = vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/v1/apps/0oaFAKE1/users?limit=200') {
+        return Promise.resolve({
+          success: true,
+          data: [{ id: '00uFAKE1' }, { id: '00uFAKE2' }],
+          headers: {
+            link: '<https://example.okta.com/api/v1/apps/0oaFAKE1/users?after=2>; rel="next"',
+          },
+        });
+      }
+      if (url === '/api/v1/apps/0oaFAKE1/users?after=2') {
+        return Promise.resolve({ success: true, data: [{ id: '00uFAKE3' }], headers: {} });
+      }
+      if (url === '/api/v1/apps/0oaFAKE1/groups?limit=200') {
+        return Promise.resolve({ success: true, data: [{ id: '00gFAKE1' }], headers: {} });
+      }
+      return Promise.resolve({ success: true, data: [], headers: {} });
+    });
+    const core = makeCore({ makeApiRequest });
+    const { getAppAssignmentCounts } = createAppOperations(core);
+
+    expect(await getAppAssignmentCounts('0oaFAKE1')).toEqual({ users: 3, groups: 1 });
+    // Bulk walks yield to interactive work.
+    for (const call of makeApiRequest.mock.calls) {
+      expect(call[3]).toBe('low');
+    }
+  });
+
+  it('counts validated rows only (malformed assignments are dropped)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const core = makeCore({
+      makeApiRequest: vi.fn().mockImplementation((url: string) =>
+        Promise.resolve({
+          success: true,
+          data: url.includes('/users')
+            ? [{ id: '00uFAKE1' }, { status: 'ACTIVE' }]
+            : [{ id: '00gFAKE1' }],
+          headers: {},
+        }),
+      ),
+    });
+    const { getAppAssignmentCounts } = createAppOperations(core);
+
+    expect(await getAppAssignmentCounts('0oaFAKE1')).toEqual({ users: 1, groups: 1 });
+    vi.restoreAllMocks();
+  });
+
+  it('returns null when either walk fails', async () => {
+    const core = makeCore({
+      makeApiRequest: vi
+        .fn()
+        .mockImplementation((url: string) =>
+          url.includes('/groups')
+            ? Promise.resolve({ success: false, error: 'boom' })
+            : Promise.resolve({ success: true, data: [{ id: '00uFAKE1' }], headers: {} }),
+        ),
+    });
+    const { getAppAssignmentCounts } = createAppOperations(core);
+
+    expect(await getAppAssignmentCounts('0oaFAKE1')).toBeNull();
+  });
+
+  it('returns null (never throws) when the transport rejects', async () => {
+    const core = makeCore({ makeApiRequest: vi.fn().mockRejectedValue(new Error('network')) });
+    const { getAppAssignmentCounts } = createAppOperations(core);
+
+    expect(await getAppAssignmentCounts('0oaFAKE1')).toBeNull();
   });
 });

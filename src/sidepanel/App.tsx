@@ -9,7 +9,7 @@
  * content, and the fixed {@link ActivityBar} (the unified scheduler + progress bar),
  * all inside the SchedulerProvider.
  */
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import ContextBar from './components/ContextBar';
 import PageHeader from './components/shared/PageHeader';
 import TabNavigation from './components/TabNavigation';
@@ -27,12 +27,14 @@ import ActivityBar from './components/ActivityBar';
 const RulesTab = lazy(() => import('./components/RulesTab'));
 const UsersTab = lazy(() => import('./components/UsersTab'));
 const GroupsTab = lazy(() => import('./components/GroupsTab'));
+const AppsTab = lazy(() => import('./components/AppsTab'));
+const AuthPoliciesTab = lazy(() => import('./components/AuthPoliciesTab'));
 const ExportTab = lazy(() => import('./components/export').then((m) => ({ default: m.ExportTab })));
 const AuditLogViewer = lazy(() => import('./components/AuditLogViewer'));
 import { useGroupContext } from './hooks/useGroupContext';
 import { useOktaPageContext } from './hooks/useOktaPageContext';
 import { SchedulerProvider } from './contexts/SchedulerContext';
-import { deriveTabContext, type PinnedContext } from './pinContext';
+import { deriveTabContext, revalidatePinnedContext, type PinnedContext } from './pinContext';
 
 /** Storage key under which the last-active tab is persisted in `chrome.storage.local`. */
 const SELECTED_TAB_KEY = 'okta_unbound_selected_tab';
@@ -65,18 +67,37 @@ const App: React.FC = () => {
   const isPinned = pinned !== null;
 
   // Always-on tab targeting + connection health (used by every tab and the header).
-  const { groupInfo, connectionStatus, targetTabId, error, isLoading, oktaOrigin } =
-    useGroupContext();
+  const {
+    groupInfo,
+    connectionStatus,
+    targetTabId,
+    error,
+    isLoading,
+    oktaOrigin,
+    refetch: refetchGroupContext,
+  } = useGroupContext();
   // Single live page detector feeding the ContextBar + Overview. It re-probes only
   // while Overview is active AND not pinned; otherwise it holds the last-known
   // context (and records that a resync is owed, surfaced as `resyncPending`).
   const page = useOktaPageContext(activeTab === 'overview' && !isPinned);
 
-  // Restore a persisted pin on mount.
+  // Restore a persisted pin on mount. The snapshot's `targetTabId` is a per-session
+  // Chrome id, so it is revalidated before use: it may be re-targeted at a live Okta
+  // tab, or the pin dropped entirely when the browser has no Okta tab open.
   useEffect(() => {
     chrome.storage.local.get([PINNED_CONTEXT_KEY], (result) => {
       const saved = result[PINNED_CONTEXT_KEY] as PinnedContext | undefined;
-      if (saved) setPinned(saved);
+      if (!saved) return;
+      void revalidatePinnedContext(saved).then((revalidated) => {
+        if (!revalidated) {
+          chrome.storage.local.remove(PINNED_CONTEXT_KEY);
+          return;
+        }
+        setPinned(revalidated);
+        if (revalidated.targetTabId !== saved.targetTabId) {
+          chrome.storage.local.set({ [PINNED_CONTEXT_KEY]: revalidated });
+        }
+      });
     });
   }, []);
 
@@ -89,8 +110,12 @@ const App: React.FC = () => {
         userInfo: pinned.userInfo,
         targetTabId: pinned.targetTabId as number | null,
         oktaOrigin: pinned.oktaOrigin,
-        connectionStatus: 'connected' as const,
-        error: null as string | null,
+        // Identity stays frozen, but connection health must not: a pinned panel
+        // reporting a permanent green "connected" hid genuinely dead sessions.
+        // These come from the always-on `useGroupContext`, which keeps probing
+        // while pinned.
+        connectionStatus,
+        error,
         isLoading: false,
       }
     : {
@@ -116,7 +141,9 @@ const App: React.FC = () => {
         ? (effective.userInfo?.userName ?? undefined)
         : effective.pageType === 'app'
           ? (page.appInfo?.appName ?? undefined)
-          : undefined;
+          : effective.pageType === 'policy'
+            ? (page.policyInfo?.policyName ?? undefined)
+            : undefined;
   const entityId =
     effective.pageType === 'group'
       ? (effective.groupInfo?.groupId ?? undefined)
@@ -124,7 +151,9 @@ const App: React.FC = () => {
         ? (effective.userInfo?.userId ?? undefined)
         : effective.pageType === 'app'
           ? (page.appInfo?.appId ?? undefined)
-          : undefined;
+          : effective.pageType === 'policy'
+            ? (page.policyInfo?.policyId ?? undefined)
+            : undefined;
 
   const handleTogglePin = () => {
     if (pinned) {
@@ -145,6 +174,19 @@ const App: React.FC = () => {
     }
   };
 
+  // Re-probe *both* context engines. The panel runs two independent
+  // `useOktaTabContext` instances — the always-on `useGroupContext` (which drives
+  // the ContextBar's connection dot and the feature tabs' target tab) and the
+  // Overview-scoped `useOktaPageContext`. Every recovery affordance used to nudge
+  // only the latter, so a latched `error` on the always-on engine had no manual
+  // exit and the bar stayed "Disconnected" forever. Both promises are fired and
+  // voided: the hooks own their own error handling and never reject.
+  const refetchPageContext = page.refetch;
+  const handleRefreshAll = useCallback(() => {
+    void refetchGroupContext();
+    void refetchPageContext();
+  }, [refetchGroupContext, refetchPageContext]);
+
   // Reconnect: reload the Okta tab so a fresh content script is injected, then
   // re-detect. Used when the connection is genuinely down (e.g. the script was
   // orphaned by an extension reload). Needs no extra permission — reloading a
@@ -154,10 +196,10 @@ const App: React.FC = () => {
     if (targetTabId != null) {
       chrome.tabs.reload(targetTabId, {}, () => {
         void chrome.runtime.lastError; // tab may be gone; ignore
-        page.refetch();
+        handleRefreshAll();
       });
     } else {
-      page.refetch();
+      handleRefreshAll();
     }
   };
 
@@ -242,7 +284,7 @@ const App: React.FC = () => {
           canPin={isLivePinnable}
           liveContextChanged={isPinned && page.resyncPending}
           onTogglePin={handleTogglePin}
-          onRefresh={page.refetch}
+          onRefresh={handleRefreshAll}
           onReconnect={handleReconnect}
         />
 
@@ -259,12 +301,13 @@ const App: React.FC = () => {
               groupInfo={effective.groupInfo}
               userInfo={effective.userInfo}
               appInfo={page.appInfo ?? null}
+              policyInfo={page.policyInfo ?? null}
               connectionStatus={effective.connectionStatus}
               targetTabId={effective.targetTabId}
               error={effective.error}
               isLoading={effective.isLoading}
               oktaOrigin={effective.oktaOrigin}
-              onRetry={page.refetch}
+              onRetry={handleRefreshAll}
               onViewAllGroups={() => {
                 if (effective.userInfo) handleNavigateToUser(effective.userInfo.userId);
               }}
@@ -301,6 +344,18 @@ const App: React.FC = () => {
               onNavigateToRule={handleNavigateToRule}
               selectedGroupId={selectedGroupId}
               onGroupSelected={() => setSelectedGroupId(null)}
+            />
+          )}
+          {activeTab === 'apps' && (
+            <AppsTab
+              targetTabId={tabContext.targetTabId ?? null}
+              oktaOrigin={tabContext.oktaOrigin ?? undefined}
+            />
+          )}
+          {activeTab === 'policies' && (
+            <AuthPoliciesTab
+              targetTabId={tabContext.targetTabId ?? undefined}
+              oktaOrigin={tabContext.oktaOrigin ?? undefined}
             />
           )}
           {activeTab === 'export' && (

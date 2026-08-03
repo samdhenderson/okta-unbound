@@ -6,6 +6,8 @@ import {
   oktaGroupListItemSchema,
   oktaAppUserSchema,
   oktaAppGroupSchema,
+  oktaPolicyListItemSchema,
+  oktaPolicyRuleSchema,
   parseOkta,
   parseOktaList,
 } from './okta';
@@ -128,6 +130,98 @@ describe('oktaAppGroupSchema', () => {
 
   it('rejects a row without an id', () => {
     expect(oktaAppGroupSchema.safeParse({ priority: 0 }).success).toBe(false);
+  });
+});
+
+describe('oktaPolicyListItemSchema', () => {
+  it('accepts a minimal row (only id required)', () => {
+    const parsed = oktaPolicyListItemSchema.parse({ id: 'rstFAKEpolicy00000001' });
+    expect(parsed.id).toBe('rstFAKEpolicy00000001');
+    expect(parsed.name).toBeUndefined();
+    expect(parsed.priority).toBeUndefined();
+  });
+
+  it('accepts the full known shape, including nullish dates and description', () => {
+    const parsed = oktaPolicyListItemSchema.parse({
+      id: 'rstFAKEpolicy00000001',
+      name: 'Any two factors',
+      status: 'ACTIVE',
+      type: 'ACCESS_POLICY',
+      priority: 1,
+      description: null,
+      system: false,
+      created: '2026-01-01T00:00:00.000Z',
+      lastUpdated: null,
+    });
+    expect(parsed.type).toBe('ACCESS_POLICY');
+    expect(parsed.description).toBeNull();
+    expect(parsed.system).toBe(false);
+  });
+
+  it('preserves _links and unknown fields via passthrough (never strips them)', () => {
+    const parsed = oktaPolicyListItemSchema.parse({
+      id: 'rstFAKEpolicy00000001',
+      _links: { rules: { href: 'https://example.okta.com/api/v1/policies/x/rules' } },
+      conditions: { people: { groups: { include: [] } } },
+      someFutureOktaField: 'kept',
+    });
+    expect(parsed._links).toEqual({
+      rules: { href: 'https://example.okta.com/api/v1/policies/x/rules' },
+    });
+    expect((parsed as Record<string, unknown>).conditions).toEqual({
+      people: { groups: { include: [] } },
+    });
+    expect((parsed as Record<string, unknown>).someFutureOktaField).toBe('kept');
+  });
+
+  it('rejects a row without an id', () => {
+    expect(oktaPolicyListItemSchema.safeParse({ name: 'no id' }).success).toBe(false);
+  });
+
+  it('drops id-less rows through parseOktaList but keeps the valid ones', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const policies = parseOktaList(
+      oktaPolicyListItemSchema,
+      [{ name: 'no id' }, 'not-an-object', { id: 'rstFAKEpolicy00000002' }],
+      'GET /api/v1/policies',
+    );
+    expect(policies).toHaveLength(1);
+    expect(policies[0].id).toBe('rstFAKEpolicy00000002');
+    vi.restoreAllMocks();
+  });
+});
+
+describe('oktaPolicyRuleSchema', () => {
+  it('accepts a minimal rule (only id required)', () => {
+    const parsed = oktaPolicyRuleSchema.parse({ id: 'rulFAKErule000000001' });
+    expect(parsed.id).toBe('rulFAKErule000000001');
+    expect(parsed.conditions).toBeUndefined();
+    expect(parsed.actions).toBeUndefined();
+  });
+
+  it('keeps conditions/actions verbatim regardless of their (per-type) deep shape', () => {
+    const parsed = oktaPolicyRuleSchema.parse({
+      id: 'rulFAKErule000000001',
+      name: 'Catch-all',
+      status: 'ACTIVE',
+      priority: 1,
+      system: true,
+      conditions: { network: { connection: 'ANYWHERE' }, elCondition: { condition: 'true' } },
+      actions: { appSignOn: { access: 'ALLOW', verificationMethod: { factorMode: '2FA' } } },
+      unknownFutureField: 'kept',
+    });
+    expect(parsed.conditions).toEqual({
+      network: { connection: 'ANYWHERE' },
+      elCondition: { condition: 'true' },
+    });
+    expect(parsed.actions).toEqual({
+      appSignOn: { access: 'ALLOW', verificationMethod: { factorMode: '2FA' } },
+    });
+    expect((parsed as Record<string, unknown>).unknownFutureField).toBe('kept');
+  });
+
+  it('rejects a rule without an id', () => {
+    expect(oktaPolicyRuleSchema.safeParse({ name: 'no id' }).success).toBe(false);
   });
 });
 

@@ -224,3 +224,144 @@ describe('useOktaTabContext detection hygiene', () => {
     await waitFor(() => expect(sendCount()).toBeGreaterThan(before));
   });
 });
+
+describe('useOktaTabContext reload recovery', () => {
+  /** The tab URL `mockOktaTab` uses by default — the "same entity" for these tests. */
+  const groupUrl = 'https://acme.okta.com/admin/groups';
+
+  const groupResponder = (action: string): SendResponse =>
+    action === 'getGroupInfo'
+      ? { success: true, data: { groupId: '00g1', groupName: 'Engineering' } }
+      : origin(action);
+
+  type OnUpdated = (
+    id: number,
+    change: { url?: string; status?: string },
+    tab: chrome.tabs.Tab,
+  ) => void;
+
+  /**
+   * Wire chrome.* for one Okta tab whose content script never answers, mirroring a
+   * page that is still loading or whose script was orphaned by an extension reload.
+   * Returns the `sendMessage` mock so a test can later let it succeed ("tab reloaded").
+   */
+  function mockUnreachableTab() {
+    (chrome as unknown as { windows: unknown }).windows = {
+      getCurrent: vi.fn().mockResolvedValue({ id: 1 }),
+    };
+    chrome.tabs.query = vi.fn().mockResolvedValue([{ id: 42, url: groupUrl, active: true }]);
+    chrome.tabs.get = vi.fn();
+    const sendMessage = vi
+      .fn()
+      .mockRejectedValue(
+        new Error('Could not establish connection. Receiving end does not exist.'),
+      );
+    chrome.tabs.sendMessage = sendMessage as unknown as typeof chrome.tabs.sendMessage;
+    return sendMessage;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setVisibility('visible');
+  });
+
+  afterEach(() => {
+    setVisibility('visible');
+    vi.useRealTimers();
+  });
+
+  it('recovers from error when the Okta tab is reloaded at the same URL', async () => {
+    vi.useFakeTimers();
+    const sendMessage = mockUnreachableTab();
+
+    const { result } = renderHook(() => useGroupContext());
+
+    // Burn the whole retry budget so the hook lands in the terminal error state.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20000);
+    });
+    expect(result.current.connectionStatus).toBe('error');
+
+    // The user hits F5: a fresh content script is now listening.
+    sendMessage.mockImplementation((_tabId: number, msg: { action: string }) =>
+      Promise.resolve(groupResponder(msg.action)),
+    );
+
+    // Chrome reports a document load as `status: 'complete'` with NO changeInfo.url.
+    const onUpdated = lastListener<OnUpdated>(chrome.tabs.onUpdated.addListener);
+    await act(async () => {
+      onUpdated(42, { status: 'complete' }, { url: groupUrl } as chrome.tabs.Tab);
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    expect(result.current.connectionStatus).toBe('connected');
+    expect(result.current.groupInfo).toEqual({ groupId: '00g1', groupName: 'Engineering' });
+    expect(result.current.error).toBeNull();
+  });
+
+  it('re-probes on a same-URL document reload while already connected', async () => {
+    mockOktaTab(groupResponder);
+    const { result } = renderHook(() => useGroupContext());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.connectionStatus).toBe('connected');
+
+    const before = sendCount();
+    const onUpdated = lastListener<OnUpdated>(chrome.tabs.onUpdated.addListener);
+
+    onUpdated(42, { status: 'complete' }, { url: groupUrl } as chrome.tabs.Tab);
+
+    await waitFor(() => expect(sendCount()).toBeGreaterThan(before));
+  });
+
+  it('does not latch the entity URL after a failed attempt', async () => {
+    vi.useFakeTimers();
+    mockUnreachableTab();
+
+    const { result } = renderHook(() => useGroupContext());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20000);
+    });
+    expect(result.current.connectionStatus).toBe('error');
+
+    const before = sendCount();
+    const onUpdated = lastListener<OnUpdated>(chrome.tabs.onUpdated.addListener);
+
+    // A plain (non-forced) event for the *same* entity URL still refetches, because
+    // the failed attempt left no suppression latch behind.
+    await act(async () => {
+      onUpdated(42, { url: groupUrl }, { url: groupUrl } as chrome.tabs.Tab);
+      await vi.advanceTimersByTimeAsync(300);
+    });
+
+    expect(sendCount()).toBeGreaterThan(before);
+  });
+
+  it('clears a pending backoff retry on unmount', async () => {
+    vi.useFakeTimers();
+    mockUnreachableTab();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const { unmount } = renderHook(() => useGroupContext());
+
+    // Let the first attempt fail and schedule a backoff retry (first delay: 500ms).
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    const afterFirstAttempt = sendCount();
+    expect(afterFirstAttempt).toBeGreaterThan(0);
+
+    unmount();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20000);
+    });
+
+    expect(sendCount()).toBe(afterFirstAttempt);
+    expect(
+      consoleError.mock.calls.filter(([first]) =>
+        /not wrapped in act|unmounted component/i.test(String(first)),
+      ),
+    ).toEqual([]);
+    consoleError.mockRestore();
+  });
+});

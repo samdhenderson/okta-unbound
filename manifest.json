@@ -3,7 +3,15 @@
   "name": "Okta Unbound",
   "version": "0.5.0",
   "description": "Group, user & rule management for Okta admins — bulk ops, rule-impact analysis, and local audit logging.",
-  "permissions": ["activeTab", "storage", "contextMenus", "notifications", "sidePanel", "alarms"],
+  "permissions": [
+    "activeTab",
+    "storage",
+    "contextMenus",
+    "notifications",
+    "sidePanel",
+    "alarms",
+    "scripting"
+  ],
   "host_permissions": [
     "https://*.okta.com/*",
     "https://*.oktapreview.com/*",

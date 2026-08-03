@@ -19,6 +19,7 @@ export { createGroupBulkOperations } from './groupBulkOps';
 export { createGroupDiscoveryOperations } from './groupDiscovery';
 export { createUserOperations } from './userOperations';
 export { createAppOperations } from './appOperations';
+export { createPolicyOperations, OKTA_POLICY_TYPES, type OktaPolicyType } from './policyOperations';
 export { createExportEngineOperations } from './exportEngine';
 export { createPushGroupOperations } from './pushGroupOps';
 export { createGroupAnalysisOperations } from './groupAnalysis';

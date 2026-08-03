@@ -205,6 +205,22 @@ export interface AppInfo {
   appLabel?: string;
 }
 
+/**
+ * Minimal authentication/access-policy identity extracted from the current Okta page.
+ *
+ * Detection is read-only and identity-only: the id comes from the URL and the name
+ * from the page heading (optionally corrected by a single validated
+ * `GET /api/v1/policies/{id}` read). Policy *settings* are never scraped out of the
+ * page markup.
+ */
+export interface PolicyInfo {
+  policyId: string;
+  /** Display name; `null` when neither the DOM nor the API supplied one. */
+  policyName: string | null;
+  /** Lifecycle status (e.g. `ACTIVE`), present only when API enrichment succeeded. */
+  policyStatus?: string;
+}
+
 /** A user plus every group they belong to, for membership tracing. */
 export interface UserMembershipTrace {
   userId: string;
@@ -243,7 +259,13 @@ export interface GroupMembership {
  * per-action optional arguments.
  */
 export interface MessageRequest {
-  action: 'getGroupInfo' | 'getUserInfo' | 'getAppInfo' | 'makeApiRequest' | 'getOktaOrigin';
+  action:
+    | 'getGroupInfo'
+    | 'getUserInfo'
+    | 'getAppInfo'
+    | 'getPolicyInfo'
+    | 'makeApiRequest'
+    | 'getOktaOrigin';
   endpoint?: string;
   method?: string;
   body?: unknown;

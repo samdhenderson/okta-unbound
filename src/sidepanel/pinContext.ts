@@ -10,6 +10,7 @@
  * launched while pinned would silently target whatever the live tab drifted to.
  */
 import type { GroupInfo, UserInfo } from '../shared/types';
+import { isOktaUrl } from '../shared/utils/oktaUrl';
 import type { PageType } from './hooks/useOktaPageContext';
 
 /**
@@ -28,6 +29,13 @@ export interface PinnedContext {
   pageType: PinnablePageType;
   groupInfo: GroupInfo | null;
   userInfo: UserInfo | null;
+  /**
+   * Chrome tab id the pinned entity's API calls are routed through. Chrome tab ids
+   * are per-session, so a persisted pin's id goes stale as soon as the tab (or the
+   * browser) is closed. It is therefore **revalidated on restore** by
+   * {@link revalidatePinnedContext}, which may rewrite it to a live Okta tab or
+   * drop the pin entirely when no Okta tab is open.
+   */
   targetTabId: number;
   oktaOrigin: string | null;
 }
@@ -74,4 +82,45 @@ export function deriveTabContext(pinned: PinnedContext | null, live: LiveTabCont
     currentGroupId: live.groupInfo?.groupId,
     oktaOrigin: live.oktaOrigin,
   };
+}
+
+/**
+ * Revalidate a persisted pin snapshot against the browser's live tabs.
+ *
+ * A pin is persisted to `chrome.storage.local` so it survives the side panel being
+ * closed — but its `targetTabId` is a per-session Chrome id. After a browser restart
+ * (or once the pinned tab is closed) that id points at nothing, and restoring the
+ * snapshot blindly leaves the panel pinned to a dead tab where every API call fails.
+ *
+ * The snapshot's *identity* (entity, page type, origin) is still worth keeping, so
+ * this only re-targets the transport: if the saved tab is gone — or has navigated
+ * off Okta — it re-resolves to a live Okta tab in the current window using the same
+ * selection rule as `useOktaTabContext` (prefer the active tab, else the first).
+ *
+ * Every "is this Okta?" decision goes through `shared/utils/oktaUrl`.
+ *
+ * @param saved - The pin snapshot loaded from storage.
+ * @returns `saved` unchanged when its tab is still a live Okta tab; a copy with
+ *   `targetTabId` rewritten to a live Okta tab when one exists; or `null` when no
+ *   Okta tab is open in the current window, meaning the caller should drop the pin.
+ */
+export async function revalidatePinnedContext(saved: PinnedContext): Promise<PinnedContext | null> {
+  try {
+    const tab = await chrome.tabs.get(saved.targetTabId);
+    if (isOktaUrl(tab.url)) return saved;
+  } catch {
+    // The tab no longer exists — fall through and re-resolve against live tabs.
+  }
+
+  try {
+    const currentWindow = await chrome.windows.getCurrent();
+    const tabsInWindow = await chrome.tabs.query({ windowId: currentWindow.id });
+    const oktaTabs = tabsInWindow.filter((tab) => isOktaUrl(tab.url));
+    // Prefer the active Okta tab, otherwise the first one (matches useOktaTabContext).
+    const liveTab = oktaTabs.find((t) => t.active) ?? oktaTabs[0];
+    if (!liveTab || liveTab.id == null) return null;
+    return { ...saved, targetTabId: liveTab.id };
+  } catch {
+    return null;
+  }
 }

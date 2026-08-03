@@ -6,6 +6,12 @@
  * caller-supplied `loadEntity`, and refetches (debounced) as the user navigates or
  * switches tabs. Retries transient content-script failures with exponential backoff
  * and guards against stale responses clobbering newer ones.
+ *
+ * Two rules keep a failed probe from becoming a permanent "Disconnected":
+ * the same-entity suppression latch is only armed **after a successful probe**
+ * (a failure clears it, so the very next event for the same URL still refetches),
+ * and a document (re)load — `status: 'complete'` with no `changeInfo.url` — forces
+ * a re-probe past the latch, because a reload means a brand-new content script.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -100,6 +106,10 @@ function normalizeEntityUrl(url?: string): string | null {
  * (`useGroupContext`, `useUserContext`, `useOktaPageContext`) are thin wrappers
  * that supply `loadEntity` and rename `data`.
  *
+ * Same-entity navigation is suppressed only against the last **successful** probe,
+ * and a document (re)load always forces a fresh probe — so an `error` state is
+ * always recoverable by reloading the Okta tab.
+ *
  * @typeParam T - The entity-detection shape produced by `loadEntity` and exposed
  *   as `data`.
  * @param config - Logger scope, initial / comms-failed fallbacks, and the
@@ -124,14 +134,25 @@ export function useOktaTabContext<T>(config: OktaTabContextConfig<T>): OktaTabCo
 
   // Track in-flight requests so a stale fetch can't clobber a newer one.
   const fetchIdRef = useRef(0);
-  // Entity URL (fragment-stripped) of the last fetch, to skip hash-only navigation.
+  // Entity URL (fragment-stripped) of the last *successful* fetch, to skip hash-only
+  // navigation. Latched on success only and cleared on terminal failure: a failed
+  // attempt must never suppress a later event for the same URL, or a disconnect
+  // becomes unrecoverable (a plain tab reload could never heal it).
   const lastEntityUrlRef = useRef<string | null>(null);
   // Set when a navigation was observed while suppressed (hidden/disabled) and a
   // catch-up fetch is owed once the hook is enabled + visible again.
   const pendingResyncRef = useRef(false);
+  // Pending backoff retry, so a manual refetch (or unmount) cancels it instead of
+  // racing it.
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchContext = useCallback(
     async (retryCount = 0) => {
+      // Cancel any scheduled retry: whoever called us owns the attempt chain now.
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
       const currentFetchId = ++fetchIdRef.current;
       const isStale = () => currentFetchId !== fetchIdRef.current;
       // A fresh fetch applies the latest context, clearing any owed resync hint.
@@ -159,8 +180,6 @@ export function useOktaTabContext<T>(config: OktaTabContextConfig<T>): OktaTabCo
         }
 
         setTargetTabId(tab.id!);
-        // Remember the entity we're fetching so hash-only navigation is skipped.
-        lastEntityUrlRef.current = normalizeEntityUrl(tab.url);
 
         const sendToTab = <R>(action: string): Promise<MessageResponse<R>> =>
           chrome.tabs.sendMessage(tab.id!, { action });
@@ -177,6 +196,10 @@ export function useOktaTabContext<T>(config: OktaTabContextConfig<T>): OktaTabCo
 
           if (isStale()) return;
 
+          // Arm the same-entity latch only now that the probe actually landed, so
+          // hash-only navigation is skipped without ever suppressing recovery from
+          // a failed attempt.
+          lastEntityUrlRef.current = normalizeEntityUrl(tab.url);
           setConnectionStatus('connected');
           setError(null);
           setData(entity);
@@ -193,7 +216,7 @@ export function useOktaTabContext<T>(config: OktaTabContextConfig<T>): OktaTabCo
               attempt: retryCount + 1,
               delayMs: delay,
             });
-            setTimeout(() => fetchContext(retryCount + 1), delay);
+            retryTimerRef.current = setTimeout(() => fetchContext(retryCount + 1), delay);
             return; // Leave loading state until the retry settles.
           }
 
@@ -202,12 +225,17 @@ export function useOktaTabContext<T>(config: OktaTabContextConfig<T>): OktaTabCo
           // green dot); the caller can offer a reconnect that reloads the tab.
           // targetTabId is left set so that reconnect knows which tab to reload.
           log.warn('Content script unreachable after retries', { attempts: retryCount + 1 });
+          // Terminal failure: drop the latch so the next event for this same URL
+          // (typically the user reloading the tab) is allowed through.
+          lastEntityUrlRef.current = null;
           setConnectionStatus('error');
           setData(commsFailedData);
           setError('Can’t reach the Okta tab — reload it to reconnect.');
         }
       } catch (err) {
         log.error('Context fetch failed', err);
+        // Terminal failure — see above; never leave a latch behind on a failure.
+        lastEntityUrlRef.current = null;
         setError(err instanceof Error ? err.message : 'Unknown error');
         setConnectionStatus('error');
         setData(initialData);
@@ -250,8 +278,11 @@ export function useOktaTabContext<T>(config: OktaTabContextConfig<T>): OktaTabCo
 
     // Fetch only for a genuine entity change while active + visible; otherwise
     // record that a resync is owed for when the panel next becomes so.
-    const requestFetch = (nextUrl?: string) => {
-      if (nextUrl && normalizeEntityUrl(nextUrl) === lastEntityUrlRef.current) {
+    // `force` bypasses the same-entity latch (document reload — a new content
+    // script exists, so re-probing is correct even from a healthy connection);
+    // the enabled/hidden deferral still applies either way.
+    const requestFetch = (nextUrl?: string, force = false) => {
+      if (!force && nextUrl && normalizeEntityUrl(nextUrl) === lastEntityUrlRef.current) {
         return; // hash-only / same-page navigation — nothing to refetch
       }
       if (!enabledRef.current || document.hidden) {
@@ -271,7 +302,13 @@ export function useOktaTabContext<T>(config: OktaTabContextConfig<T>): OktaTabCo
       tab: chrome.tabs.Tab,
     ) => {
       if ((changeInfo.url || changeInfo.status === 'complete') && isOktaUrl(tab.url)) {
-        requestFetch(changeInfo.url ?? tab.url);
+        // A `complete` with no URL change is a document (re)load — e.g. F5 — which
+        // installs a fresh content script. Force past the same-entity latch so a
+        // reload always re-probes (this is the exit path out of `error`). A
+        // hash-only navigation arrives as `{ url }` with no status and stays
+        // suppressed.
+        const isDocumentLoad = changeInfo.status === 'complete' && !changeInfo.url;
+        requestFetch(changeInfo.url ?? tab.url, isDocumentLoad);
       }
     };
 
@@ -299,6 +336,11 @@ export function useOktaTabContext<T>(config: OktaTabContextConfig<T>): OktaTabCo
 
     return () => {
       if (debounceTimer) clearTimeout(debounceTimer);
+      // Drop any in-flight backoff retry so it can't fire after unmount.
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
       chrome.tabs.onUpdated.removeListener(handleTabUpdate);
       chrome.tabs.onActivated.removeListener(handleTabActivated);
       document.removeEventListener('visibilitychange', handleVisibilityChange);

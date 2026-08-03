@@ -21,6 +21,7 @@
     "prepare": "husky",
     "docs": "typedoc && node .storybook/scripts/bundle-internals.mjs",
     "docs:clean": "rm -rf .storybook/generated",
+    "shoot": "node .storybook/scripts/shoot-stories.mjs",
     "storybook": "node .storybook/scripts/gen-doc-pages.mjs && storybook dev -p 6006",
     "build-storybook": "npm run docs && node .storybook/scripts/gen-doc-pages.mjs && storybook build"
   },

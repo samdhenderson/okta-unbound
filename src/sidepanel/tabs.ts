@@ -10,14 +10,17 @@
  */
 
 /** Identifier for each top-level side-panel tab. */
-export type TabType = 'overview' | 'rules' | 'users' | 'groups' | 'export' | 'history';
+export type TabType =
+  'overview' | 'rules' | 'users' | 'groups' | 'apps' | 'policies' | 'export' | 'history';
 
 /** The top-level tabs in display order, with their visible labels. */
 export const TAB_DEFS: ReadonlyArray<{ id: TabType; label: string }> = [
   { id: 'overview', label: 'Overview' },
   { id: 'users', label: 'Users' },
   { id: 'groups', label: 'Groups' },
+  { id: 'apps', label: 'Apps' },
   { id: 'rules', label: 'Rules' },
+  { id: 'policies', label: 'Auth Policies' },
   { id: 'export', label: 'Export' },
   { id: 'history', label: 'History' },
 ];
@@ -25,15 +28,15 @@ export const TAB_DEFS: ReadonlyArray<{ id: TabType; label: string }> = [
 /**
  * Retired tab ids from earlier versions mapped to their current equivalents.
  *
- * NOTE: the retired `'apps'` id currently falls back to `'overview'`; when the
- * Applications tab lands, remove that entry so saved `'apps'` selections resolve
- * to the real tab instead of being migrated away.
+ * NOTE: `'apps'` is no longer listed here. It used to be a retired id migrated to
+ * `'overview'`; now that the Applications tab exists it is a real {@link TabType},
+ * so a saved `'apps'` selection passes through {@link migrateLegacyTabId}
+ * unchanged and restores the Applications tab.
  */
 const LEGACY_TAB_MAP: Readonly<Record<string, TabType>> = {
   dashboard: 'overview',
   operations: 'overview',
   security: 'overview',
-  apps: 'overview',
   undo: 'history',
 };
 

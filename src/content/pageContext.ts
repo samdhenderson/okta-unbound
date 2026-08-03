@@ -3,8 +3,9 @@
  * @description Pure page-context extraction helpers for the Okta content script.
  *
  * These functions read the current page's URL and DOM to recover the Okta entity
- * (group / user / app) the user is looking at. They perform no network I/O and hold
- * no state — they are the "where am I?" layer that the message handlers build on.
+ * (group / user / app / authentication policy) the user is looking at. They perform
+ * no network I/O and hold no state — they are the "where am I?" layer that the
+ * message handlers build on.
  *
  * @see `content/index` for the message routing that consumes these helpers.
  */
@@ -295,6 +296,144 @@ export function extractAppNameFromPage(): string | null {
         const text = element.textContent?.trim();
         // Skip generic text
         if (text && !['Application', 'App', 'Settings', 'Configuration'].includes(text)) {
+          return text;
+        }
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Shape an Okta id must match to be accepted as an authentication/access policy id.
+ *
+ * Okta issues policy ids with a `rst` or `00p` prefix followed by an alphanumeric
+ * body (18+ chars total). Unlike {@link extractAppIdFromUrl}'s deliberately loose
+ * "starts with 0oa **or** is long enough" rule, policy detection requires the
+ * prefix: the admin policy routes below sit under generic `/admin/...` paths whose
+ * segments are frequently sub-views (`new`, `edit`, `rules`), and a loose match
+ * would classify those as policy pages.
+ *
+ * @remarks Deliberately mirrors `POLICY_ID_PATTERN` in
+ * `hooks/useOktaApi/policyOperations` — the same shape guard, applied at the other
+ * end of the pipeline.
+ */
+const POLICY_ID_PATTERN = /^(?:rst|00p)[A-Za-z0-9]{15,}$/;
+
+/**
+ * Extract an Okta authentication/access policy ID from a page URL.
+ *
+ * Tries a prioritized list of admin policy routes (the OIE `/admin/authn/policies`
+ * and `/admin/access/policies` surfaces, plus the older generic `/admin/policy/…`
+ * forms), the API path, and query-parameter forms. Rejects obvious non-ID segments
+ * and requires the candidate to match {@link POLICY_ID_PATTERN}.
+ *
+ * @param url - The page URL to parse.
+ * @returns The policy ID, or `null` if none matched.
+ */
+export function extractPolicyIdFromUrl(url: string): string | null {
+  log.debug('extractPolicyIdFromUrl: parsing URL', { path: url.split('?')[0] });
+
+  const patterns: Array<{ regex: RegExp; name: string }> = [
+    // Okta Identity Engine authentication-policy routes
+    { regex: /\/admin\/authn\/policies\/([a-zA-Z0-9]+)/, name: '/admin/authn/policies/{id}' },
+    { regex: /\/admin\/access\/policies\/([a-zA-Z0-9]+)/, name: '/admin/access/policies/{id}' },
+
+    // Defensive: older / alternate generic policy routes, where the id may sit
+    // behind an intermediate sub-view segment (e.g. /admin/policy/edit/{id}).
+    { regex: /\/admin\/policy\/[a-zA-Z0-9-]+\/([a-zA-Z0-9]+)/, name: '/admin/policy/{view}/{id}' },
+    { regex: /\/admin\/policy\/([a-zA-Z0-9]+)/, name: '/admin/policy/{id}' },
+
+    // API patterns
+    { regex: /\/api\/v1\/policies\/([a-zA-Z0-9]+)/, name: '/api/v1/policies/{id}' },
+
+    // Query parameter patterns
+    { regex: /[?&]policyId=([a-zA-Z0-9]+)/, name: '?policyId={id}' },
+  ];
+
+  for (const { regex, name } of patterns) {
+    const match = url.match(regex);
+    if (match && match[1]) {
+      const potentialId = match[1];
+      // Skip obvious non-IDs (same guard-list posture as the user/app extractors).
+      const nonIdKeywords = [
+        'settings',
+        'new',
+        'create',
+        'edit',
+        'view',
+        'delete',
+        'list',
+        'search',
+        'rules',
+        'policies',
+        'default',
+      ];
+      if (nonIdKeywords.includes(potentialId.toLowerCase())) {
+        continue;
+      }
+      if (POLICY_ID_PATTERN.test(potentialId)) {
+        log.debug('extractPolicyIdFromUrl: matched pattern', { pattern: name, id: potentialId });
+        return potentialId;
+      }
+    }
+  }
+
+  log.warn('extractPolicyIdFromUrl: no pattern matched', { path: url.split('?')[0] });
+  return null;
+}
+
+/**
+ * Scrape the policy's display name from the current page DOM, trying a prioritized
+ * list of selectors and skipping generic labels like "Policy" or "Authentication".
+ *
+ * @remarks This reads *identity only* (the page heading), exactly like
+ * {@link extractAppNameFromPage}. Policy settings/rule detail are read from the API,
+ * never scraped out of the settings page markup.
+ *
+ * @returns The trimmed policy name, or `null` if no usable selector matched.
+ */
+export function extractPolicyNameFromPage(): string | null {
+  const selectors = [
+    // Policy detail headers
+    '[data-se="policy-name"]',
+    '[data-se="policy-title"]',
+    '[data-testid="policy-name"]',
+
+    '.policy-header h1',
+    '.policy-detail-header h1',
+    '[class*="PolicyHeader"] h1',
+
+    // Generic headers in policy context
+    'h1.okta-form-title',
+    '.content-container h1',
+    'main h1',
+
+    // Page title
+    '.page-title',
+    '[class*="PageTitle"]',
+  ];
+
+  const genericLabels = [
+    'Policy',
+    'Policies',
+    'Authentication',
+    'Authentication Policy',
+    'Authentication Policies',
+    'Access Policy',
+    'Settings',
+    'Security',
+  ];
+
+  for (const selector of selectors) {
+    try {
+      const element = document.querySelector(selector);
+      if (element) {
+        const text = element.textContent?.trim();
+        if (text && !genericLabels.includes(text)) {
           return text;
         }
       }
