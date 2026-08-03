@@ -45,6 +45,20 @@ import { injectIndicator } from './indicator';
 import { handleGetGroupInfo } from './groupHandlers';
 import { handleGetUserInfo } from './userHandlers';
 
+declare global {
+  interface Window {
+    /**
+     * Liveness probe left by the content script that claimed this page. The
+     * closure reads `chrome.runtime.id` from the *claimant's* extension
+     * context, so only a still-live script of the same extension can return
+     * the current id — an orphaned script's context is invalidated and
+     * throws or returns a non-matching value. Used to skip duplicate
+     * initialization. See {@link isDuplicateInjection}.
+     */
+    __oktaUnboundClaim?: () => string | undefined;
+  }
+}
+
 const log = createLogger('Content');
 
 log.debug('Content script loaded', {
@@ -52,61 +66,99 @@ log.debug('Content script loaded', {
 });
 
 // ============================================================================
+// Double-injection guard
+// ============================================================================
+
+// `onInstalled` re-injects this script into already-open Okta tabs (see
+// background/reinjectContentScripts.ts). A tab that Chrome had *already* given a
+// fresh script would then run two copies, and both would answer every message —
+// duplicate API calls and a racing `sendResponse`. The claim is a window-scoped
+// *liveness probe*, not a static flag: a static id (or id+version) marker would
+// survive from a pre-update orphaned script — `chrome.runtime.id` is stable
+// across updates, and the version doesn't change on a same-version dev reload —
+// and would wrongly make the re-injected script bail, leaving the tab with no
+// live listener at all. Calling the closure evaluates `chrome.runtime.id` in
+// the *claimant's* extension context: a live same-extension claimant returns
+// the current id (genuine duplicate — skip); an orphaned claimant's context is
+// invalidated and throws or returns undefined (stale claim — proceed).
+const isDuplicateInjection = (() => {
+  try {
+    return window.__oktaUnboundClaim?.() === chrome.runtime.id;
+  } catch {
+    // The previous claimant's extension context is invalidated — stale claim.
+    return false;
+  }
+})();
+
+if (isDuplicateInjection) {
+  log.debug('Content script already active on this page; skipping initialization');
+} else {
+  window.__oktaUnboundClaim = () => chrome.runtime.id;
+}
+
+// ============================================================================
 // Message Listener
 // ============================================================================
 
-chrome.runtime.onMessage.addListener(
-  (
-    request: MessageRequest,
-    sender: chrome.runtime.MessageSender,
-    sendResponse: (response: MessageResponse) => void,
-  ) => {
-    // Only trust messages from this extension's own contexts (the side panel /
-    // background). `onMessage` should never fire for other extensions or web
-    // pages, but — mirroring the background listener — reject any foreign sender
-    // explicitly so the invariant is enforced and future-proof.
-    if (sender.id !== chrome.runtime.id) {
-      log.warn('Ignoring message from foreign sender');
-      return false;
-    }
+/**
+ * Route one runtime message. Returns `true` whenever a response will be sent (a
+ * literal `true`, never a promise — MV3 closes the channel on a promise), and
+ * `false` for a rejected sender.
+ */
+function handleMessage(
+  request: MessageRequest,
+  sender: chrome.runtime.MessageSender,
+  sendResponse: (response: MessageResponse) => void,
+): boolean {
+  // Only trust messages from this extension's own contexts (the side panel /
+  // background). `onMessage` should never fire for other extensions or web
+  // pages, but — mirroring the background listener — reject any foreign sender
+  // explicitly so the invariant is enforced and future-proof.
+  if (sender.id !== chrome.runtime.id) {
+    log.warn('Ignoring message from foreign sender');
+    return false;
+  }
 
-    log.debug('Received message', {
-      action: request.action,
-      from: sender.id,
-    });
+  log.debug('Received message', {
+    action: request.action,
+    from: sender.id,
+  });
 
-    switch (request.action) {
-      case 'getGroupInfo':
-        handleGetGroupInfo().then(sendResponse);
+  switch (request.action) {
+    case 'getGroupInfo':
+      handleGetGroupInfo().then(sendResponse);
+      return true;
+
+    case 'getUserInfo':
+      handleGetUserInfo().then(sendResponse);
+      return true;
+
+    case 'getAppInfo':
+      handleGetAppInfo().then(sendResponse);
+      return true;
+
+    case 'makeApiRequest':
+      if (!request.endpoint) {
+        sendResponse({ success: false, error: 'Missing endpoint' });
         return true;
+      }
+      handleMakeApiRequest(request.endpoint, request.method, request.body).then(sendResponse);
+      return true;
 
-      case 'getUserInfo':
-        handleGetUserInfo().then(sendResponse);
-        return true;
+    case 'getOktaOrigin':
+      sendResponse({ success: true, data: window.location.origin });
+      return true;
 
-      case 'getAppInfo':
-        handleGetAppInfo().then(sendResponse);
-        return true;
+    default:
+      log.warn('Unknown action', { action: request.action });
+      sendResponse({ success: false, error: 'Unknown action' });
+      return true;
+  }
+}
 
-      case 'makeApiRequest':
-        if (!request.endpoint) {
-          sendResponse({ success: false, error: 'Missing endpoint' });
-          return true;
-        }
-        handleMakeApiRequest(request.endpoint, request.method, request.body).then(sendResponse);
-        return true;
-
-      case 'getOktaOrigin':
-        sendResponse({ success: true, data: window.location.origin });
-        return true;
-
-      default:
-        log.warn('Unknown action', { action: request.action });
-        sendResponse({ success: false, error: 'Unknown action' });
-        return true;
-    }
-  },
-);
+if (!isDuplicateInjection) {
+  chrome.runtime.onMessage.addListener(handleMessage);
+}
 
 async function handleGetAppInfo(): Promise<MessageResponse<import('../shared/types').AppInfo>> {
   log.debug('Processing getAppInfo request');
@@ -173,13 +225,16 @@ async function handleGetAppInfo(): Promise<MessageResponse<import('../shared/typ
 // Initialization
 // ============================================================================
 
-// Initialize
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    log.debug('DOMContentLoaded fired');
+// Initialize (skipped entirely for a duplicate injection — the page already has a
+// live script and its indicator).
+if (!isDuplicateInjection) {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      log.debug('DOMContentLoaded fired');
+      injectIndicator();
+    });
+  } else {
+    log.debug('DOM already loaded, injecting indicator');
     injectIndicator();
-  });
-} else {
-  log.debug('DOM already loaded, injecting indicator');
-  injectIndicator();
+  }
 }

@@ -10,6 +10,13 @@
  * - The content script registers its `chrome.runtime.onMessage` listener and mounts
  *   the indicator at IMPORT time, so every test re-imports it via `loadContentScript()`
  *   after `vi.resetModules()` and captures the listener from the addListener mock.
+ * - The script claims the page with a window-scoped liveness probe
+ *   (`__oktaUnboundClaim`, the double-injection guard) that deliberately OUTLIVES a
+ *   module reset, so a second `import('./index')` would bail out instead of
+ *   re-registering. `beforeEach` installs a no-op accessor for that property so every
+ *   import in this suite behaves like a fresh page load; the guard's real behavior is
+ *   covered by the dedicated `double-injection guard` test, which removes the stub
+ *   first.
  * - Network is stubbed at `globalThis.fetch` rather than via MSW (a deviation from
  *   docs/testing.md). Reason: MSW has no `setupServer` anywhere in this repo today,
  *   and several load-bearing behaviors here are properties of the `RequestInit`
@@ -51,6 +58,22 @@ const storageRemove = vi.fn(async (keys: string[]) => {
 });
 
 const addListener = vi.fn();
+
+/** Window-scoped "this page is already claimed" liveness probe set by the content script. */
+const CLAIM_FLAG = '__oktaUnboundClaim';
+
+/**
+ * Neutralize the double-injection guard: reads always look unclaimed and writes are
+ * dropped, so each `import('./index')` in this suite starts from a fresh page. The
+ * property is `configurable`, so the guard test can `delete` it to get the real one back.
+ */
+function stubDoubleInjectionGuard(): void {
+  Object.defineProperty(window, CLAIM_FLAG, {
+    configurable: true,
+    get: () => undefined,
+    set: () => {},
+  });
+}
 
 let listener: Listener;
 
@@ -164,6 +187,7 @@ beforeEach(async () => {
   document.body.innerHTML = '';
   document.head.innerHTML = '';
   setPageUrl('/');
+  stubDoubleInjectionGuard();
 
   globalThis.chrome = {
     runtime: {
@@ -945,5 +969,74 @@ describe('bootstrap', () => {
     expect(indicator.style.position).toBe('fixed');
     expect(indicator.style.zIndex).toBe('999999');
     expect(indicator.style.cssText).toContain('rgb(26, 26, 26)');
+  });
+});
+
+// ============================================================================
+// 17. Double-injection guard (background re-injection after install/update)
+// ============================================================================
+
+describe('double-injection guard', () => {
+  /** Drop the suite-wide no-op stub so the real window claim is in play. */
+  beforeEach(() => {
+    delete (window as unknown as Record<string, unknown>)[CLAIM_FLAG];
+  });
+
+  it('registers and initializes on the first injection into a page', async () => {
+    document.body.innerHTML = '';
+    addListener.mockClear();
+    vi.resetModules();
+    await import('./index');
+
+    expect(addListener).toHaveBeenCalledTimes(1);
+    expect(document.getElementById('okta-extension-indicator')).not.toBeNull();
+    expect(window.__oktaUnboundClaim?.()).toBe('test-extension');
+  });
+
+  it('skips listener registration and initialization when a live script of this extension already claimed the page', async () => {
+    // First injection claims the page; its claim closure stays live because the
+    // mocked chrome context is never invalidated.
+    vi.resetModules();
+    await import('./index');
+    document.body.innerHTML = '';
+
+    // Background re-injection into a tab whose script is still alive.
+    addListener.mockClear();
+    vi.resetModules();
+    await import('./index');
+
+    expect(addListener).not.toHaveBeenCalled();
+    expect(document.getElementById('okta-extension-indicator')).toBeNull();
+  });
+
+  it('still initializes when the previous claimant is orphaned (invalidated context throws)', async () => {
+    // A pre-update orphaned script wrote the SAME extension id, but calling into
+    // its invalidated context throws — Chrome's real invariant: the id is stable
+    // across updates, the context is not.
+    window.__oktaUnboundClaim = () => {
+      throw new Error('Extension context invalidated.');
+    };
+    document.body.innerHTML = '';
+
+    addListener.mockClear();
+    vi.resetModules();
+    await import('./index');
+
+    expect(addListener).toHaveBeenCalledTimes(1);
+    expect(document.getElementById('okta-extension-indicator')).not.toBeNull();
+    expect(window.__oktaUnboundClaim?.()).toBe('test-extension');
+  });
+
+  it('still initializes when the previous claimant is orphaned (invalidated context returns undefined)', async () => {
+    window.__oktaUnboundClaim = () => undefined;
+    document.body.innerHTML = '';
+
+    addListener.mockClear();
+    vi.resetModules();
+    await import('./index');
+
+    expect(addListener).toHaveBeenCalledTimes(1);
+    expect(document.getElementById('okta-extension-indicator')).not.toBeNull();
+    expect(window.__oktaUnboundClaim?.()).toBe('test-extension');
   });
 });

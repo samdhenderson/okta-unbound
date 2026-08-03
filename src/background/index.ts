@@ -43,6 +43,7 @@ import type { SchedulerStateChangedMessage } from '../shared/types';
 import { createLogger } from '../shared/utils/logger';
 import { isOktaUrl } from '../shared/utils/oktaUrl';
 import { createThrottledRelay } from './throttledRelay';
+import { reinjectContentScripts } from './reinjectContentScripts';
 
 const log = createLogger('Background');
 
@@ -338,6 +339,17 @@ chrome.runtime.onInstalled.addListener((details) => {
 
     // Ensure alarm is set up after update
     setupAuditRetentionAlarm();
+  }
+
+  // An install or update orphans the content script in every already-open Okta
+  // tab (invalidated runtime) without injecting the new one, so the side panel
+  // reads "Disconnected" until the user reloads each tab. Re-inject instead.
+  // `chrome_update` / `shared_module_update` don't replace our scripts, so they
+  // are deliberately skipped. Fire-and-forget: nothing else here depends on it.
+  if (details.reason === 'install' || details.reason === 'update') {
+    reinjectContentScripts().catch((error) => {
+      log.error('Content script re-injection failed', error);
+    });
   }
 
   // Create context menu
