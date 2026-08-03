@@ -15,7 +15,7 @@ Feature components live under `components/{groups,users,overview}/`.
 2. **Import from the barrel** `components/shared` — not deep paths. The barrel
    exports every shared component (see below).
 3. **No raw hex / no ad-hoc spacing** — see [design-system.md](./design-system.md).
-4. **Icons come from the `Icon` registry** (`overview/shared/Icon.tsx`, 27 typed
+4. **Icons come from the `Icon` registry** (`overview/shared/Icon.tsx`, 29 typed
    icons, `currentColor`). Don't inline `<svg>` in feature code.
 
 ## The variant/size convention
@@ -40,12 +40,19 @@ info`) — never `error`.
 
 `shared/`: `Button`, `IconButton`, `FilterPill`, `SortPill`, `CopyButton`,
 `OpenInOktaLink`, `Modal`, `Input`, `Checkbox`, `Select`, `Textarea`, `PageHeader`,
-`Tabs`, `CollapsibleSection`, `AlertMessage`, `EmptyState`, `LoadingSpinner`,
-`ScrollableList`, `SearchDropdown`, `SelectionChips`.
+`Breadcrumbs`, `Tabs`, `CollapsibleSection`, `AlertMessage`, `EmptyState`,
+`LoadingSpinner`, `ScrollableList`, `SearchDropdown`, `SelectionChips`.
 
 `Tabs` is the accessible tab-bar primitive (`role="tablist"/"tab"`, roving
 `tabindex`, arrow-key nav) with two variants: `underline` (section nav) and
 `segmented` (compact toggle).
+
+`Breadcrumbs` is the trail primitive for **in-tab push/pop sub-navigation**
+(`nav > ol`, ancestor crumbs are buttons, the last carries `aria-current="page"`).
+It shapes to the `trail` returned by `hooks/useViewStack.ts`, and drops into
+`PageHeader`'s additive `breadcrumbs` slot alongside its `onBack` / `leading`
+slot — a tab keeps **one** `PageHeader` mounted and swaps its contents as views
+are pushed and popped, rather than each view rendering its own header.
 `overview/shared/`: `Icon`, `StatCard`.
 
 ## Documented raw-control exceptions
