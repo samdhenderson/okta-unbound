@@ -246,11 +246,29 @@ export interface MembershipRule {
   userAttributes?: string[];
 }
 
+/**
+ * How confident the membership classification is.
+ *
+ * - `exact` — decided from facts: an application-managed group, no rule targets
+ *   the group, the user is excluded from every targeting rule, or every
+ *   targeting rule's condition was fully evaluated client-side.
+ * - `inferred` — at least one targeting rule's condition could not be evaluated
+ *   client-side, so the classification falls back to a heuristic and may be
+ *   wrong (a manual add into a rule-fed group can still read as `RULE_BASED`).
+ */
+export type MembershipAttribution = 'exact' | 'inferred';
+
 /** A single group membership, annotated with how it was granted. */
 export interface GroupMembership {
   group: OktaGroup;
   membershipType: 'DIRECT' | 'RULE_BASED' | 'UNKNOWN';
   rule?: MembershipRule;
+  /**
+   * Confidence in `membershipType`/`rule`. Optional: producers that do not
+   * classify (e.g. the raw `UNKNOWN` membership envelope) leave it unset.
+   * `shared/utils/membershipAnalysis.analyzeMemberships` always sets it.
+   */
+  attribution?: MembershipAttribution;
 }
 
 /**

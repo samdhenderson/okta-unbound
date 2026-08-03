@@ -76,7 +76,10 @@ const meta = {
       description: 'Switches to cached mode by loading all groups (live empty-state action).',
     },
     onClearFilters: { description: 'Clears all filters (cached empty-state action).' },
-    onAnalyzeSource: { description: 'Opens the read-only membership-source insight for a group.' },
+    onOpenDetail: {
+      description:
+        "Drills into a group's read-only detail view (pushes onto the tab's view stack).",
+    },
     highlightedGroupId: {
       description: 'Group id to highlight (deep-link target from the Rules tab).',
     },
@@ -94,7 +97,7 @@ const meta = {
     oktaOrigin: 'https://example.okta.com',
     onLoadAllGroups: fn(),
     onClearFilters: fn(),
-    onAnalyzeSource: fn(),
+    onOpenDetail: fn(),
   },
 } satisfies Meta<typeof GroupsListPanel>;
 

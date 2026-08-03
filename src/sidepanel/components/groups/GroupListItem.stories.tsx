@@ -84,8 +84,9 @@ const meta = {
     oktaOrigin: {
       description: 'Okta origin, enabling the "Open in Okta" deep link when present.',
     },
-    onAnalyzeSource: {
-      description: 'Opens the read-only membership-source insight for this group.',
+    onOpenDetail: {
+      description:
+        "Drills into this group's read-only detail view (pushes onto the tab's view stack).",
     },
     isHighlighted: {
       description: 'When true, the row auto-expands and shows a highlight ring (deep-link target).',
@@ -95,7 +96,7 @@ const meta = {
     group: baseGroup,
     selected: false,
     onToggleSelect: fn(),
-    onAnalyzeSource: fn(),
+    onOpenDetail: fn(),
   },
 } satisfies Meta<typeof GroupListItem>;
 
@@ -130,9 +131,9 @@ export const Highlighted: Story = {
   args: { group: baseGroup, isHighlighted: true },
 };
 
-/** No "Why does this group exist?" analysis available. */
-export const WithoutAnalyzeSource: Story = {
-  args: { onAnalyzeSource: undefined },
+/** No detail view to drill into — the "View group details" action is omitted. */
+export const WithoutOpenDetail: Story = {
+  args: { onOpenDetail: undefined },
 };
 
 /** Long group name and description, exercising truncation/wrapping. */

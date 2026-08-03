@@ -51,15 +51,19 @@ interface GroupListItemProps {
   onToggleSelect: (groupId: string) => void;
   /** Okta origin, enabling the "Open in Okta" deep link when present. */
   oktaOrigin?: string;
-  /** Opens the read-only membership-source insight for this group (A2). */
-  onAnalyzeSource?: (group: GroupSummary) => void;
+  /**
+   * Drills into this group's read-only detail view. Rendered as an explicitly
+   * named action so it does not collide with the expand/collapse chevron: the two
+   * open affordances answer different questions and carry distinct accessible names.
+   */
+  onOpenDetail?: (group: GroupSummary) => void;
   /** When true, the row auto-expands and shows a highlight ring (deep-link target). */
   isHighlighted?: boolean;
 }
 
 /** Memoised expandable row for one group in the groups list. */
 const GroupListItem: React.FC<GroupListItemProps> = memo(
-  ({ group, selected, onToggleSelect, oktaOrigin, onAnalyzeSource, isHighlighted = false }) => {
+  ({ group, selected, onToggleSelect, oktaOrigin, onOpenDetail, isHighlighted = false }) => {
     const [expanded, setExpanded] = useState(false);
     const { copied: idCopied, copy: copyId } = useCopyToClipboard();
 
@@ -271,14 +275,15 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
         {/* Expanded Details */}
         {expanded && (
           <div className="px-4 pb-4 pt-2 border-t border-neutral-100 space-y-3">
-            {onAnalyzeSource && (
+            {onOpenDetail && (
               <Button
                 variant="secondary"
                 size="sm"
                 icon="chart"
-                onClick={() => onAnalyzeSource(group)}
+                onClick={() => onOpenDetail(group)}
+                title={`Open the detail view for ${group.name}`}
               >
-                Why does this group exist?
+                View group details
               </Button>
             )}
 
