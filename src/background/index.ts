@@ -39,8 +39,10 @@ import { auditStore } from '../shared/storage/auditStore';
 import { ApiScheduler } from '../shared/scheduler/apiScheduler';
 import { TabStateManager } from '../shared/tabState/tabStateManager';
 import type { SchedulerState } from '../shared/scheduler/types';
+import type { SchedulerStateChangedMessage } from '../shared/types';
 import { createLogger } from '../shared/utils/logger';
-import { isOktaUrl as isOktaUrlShared } from '../shared/utils/oktaUrl';
+import { isOktaUrl } from '../shared/utils/oktaUrl';
+import { createThrottledRelay } from './throttledRelay';
 
 const log = createLogger('Background');
 
@@ -62,28 +64,36 @@ const globalScheduler = new ApiScheduler({
 
 log.info('Global API scheduler initialized');
 
-// Broadcast scheduler state changes to all sidepanel instances
-globalScheduler.onStateChange((state: SchedulerState) => {
-  // Broadcast to all extension contexts
-  chrome.runtime
-    .sendMessage({
-      action: 'schedulerStateChanged',
-      state,
-    })
-    .catch(() => {
+// Broadcast scheduler state changes to all sidepanel instances. Metrics ride
+// along so the side panel's failed/coalesced counters stay live instead of
+// freezing at their mount-time fetch.
+//
+// The relay is throttled: the event-driven scheduler can settle many requests
+// within milliseconds, and rebroadcasting each change would flood the runtime
+// messaging channel. Status transitions (idle→processing, →cooldown, →paused…)
+// flush immediately; volume-only changes (queue length, metrics counters)
+// coalesce into one trailing send per window.
+const relaySchedulerState = createThrottledRelay<SchedulerStateChangedMessage>(
+  (message) => {
+    // Broadcast to all extension contexts
+    chrome.runtime.sendMessage(message).catch(() => {
       // Ignore errors if no listeners (sidepanel not open)
     });
+  },
+  { isUrgent: (previous, next) => previous.state.status !== next.state.status },
+);
+
+globalScheduler.onStateChange((state: SchedulerState) => {
+  relaySchedulerState({
+    action: 'schedulerStateChanged',
+    state,
+    metrics: globalScheduler.getMetrics(),
+  });
 });
 
-// Cleanup expired tab states periodically (every hour)
-setInterval(
-  () => {
-    TabStateManager.cleanupExpiredStates().catch((err) => {
-      log.error('Failed to cleanup expired tab states', err);
-    });
-  },
-  60 * 60 * 1000,
-);
+// Expired tab states are cleaned up hourly via the `tabStateCleanup` alarm
+// (see the alarms section below) — chrome.alarms survives service-worker
+// suspension, unlike a setInterval that would keep the worker alive.
 
 // ============================================================================
 // Message Handlers for Scheduler and Tab State
@@ -394,6 +404,15 @@ function getNextMidnight(): number {
   return tomorrow.getTime();
 }
 
+/**
+ * Create the hourly alarm that prunes expired persisted tab states. An alarm
+ * (rather than `setInterval`) lets the MV3 service worker suspend between runs.
+ */
+function setupTabStateCleanupAlarm(): void {
+  chrome.alarms.create('tabStateCleanup', { periodInMinutes: 60 });
+  log.debug('Tab state cleanup alarm created');
+}
+
 // Listen for alarms
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'auditRetentionCleanup') {
@@ -412,16 +431,19 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       log.error('Audit retention cleanup failed', error);
     }
   }
+
+  if (alarm.name === 'tabStateCleanup') {
+    log.debug('Running tab state cleanup');
+
+    try {
+      await TabStateManager.cleanupExpiredStates();
+      log.debug('Tab state cleanup completed');
+    } catch (error) {
+      log.error('Failed to cleanup expired tab states', error);
+    }
+  }
 });
 
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-// Re-exported from the shared single-source helper (see shared/utils/oktaUrl).
-function isOktaUrl(url: string): boolean {
-  return isOktaUrlShared(url);
-}
-
-// Initialize alarm on service worker start
+// Initialize alarms on service worker start
 setupAuditRetentionAlarm();
+setupTabStateCleanupAlarm();

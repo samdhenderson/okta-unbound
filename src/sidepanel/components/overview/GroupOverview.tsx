@@ -107,11 +107,17 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
     }
   }, [groupId]);
 
-  // Compute status counts from members
-  const statusCounts = members.reduce<Record<string, number>>((acc, user) => {
-    acc[user.status] = (acc[user.status] || 0) + 1;
-    return acc;
-  }, {});
+  // Compute status counts from members. Memoized because this component
+  // re-renders on every ProgressContext tick during scans, and the reduce is
+  // O(members) — only recompute when the member list itself changes.
+  const statusCounts = useMemo(
+    () =>
+      members.reduce<Record<string, number>>((acc, user) => {
+        acc[user.status] = (acc[user.status] || 0) + 1;
+        return acc;
+      }, {}),
+    [members],
+  );
 
   const deprovisionedCount = statusCounts['DEPROVISIONED'] || 0;
   const suspendedCount = statusCounts['SUSPENDED'] || 0;

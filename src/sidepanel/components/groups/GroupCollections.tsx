@@ -10,6 +10,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button, IconButton, Input } from '../shared';
 import type { GroupCollection, GroupSummary } from '../../../shared/types';
 import { createLogger } from '../../../shared/utils/logger';
+import { formatDateShort } from '../../../shared/utils/dateFormat';
 
 const log = createLogger('GroupCollections');
 
@@ -338,8 +339,7 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
                   )}
                 </div>
                 <div className="text-xs text-neutral-400 mt-1.5">
-                  {col.groupIds.length} groups &middot; Updated{' '}
-                  {new Date(col.updatedAt).toLocaleDateString()}
+                  {col.groupIds.length} groups &middot; Updated {formatDateShort(col.updatedAt)}
                 </div>
               </>
             )}

@@ -8,7 +8,10 @@
  */
 import React, { useState, useCallback, memo } from 'react';
 import { Button, IconButton, Checkbox } from '../shared';
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import type { GroupSummary, StalenessInfo } from '../../../shared/types';
+import { oktaAdminEntityUrl } from '../../../shared/utils/oktaUrl';
+import { formatDate, formatDateShort } from '../../../shared/utils/dateFormat';
 
 /**
  * Map a staleness score (0–100) to its badge colors and label.
@@ -82,7 +85,7 @@ interface GroupListItemProps {
 const GroupListItem: React.FC<GroupListItemProps> = memo(
   ({ group, selected, onToggleSelect, oktaOrigin, onAnalyzeSource, isHighlighted = false }) => {
     const [expanded, setExpanded] = useState(false);
-    const [idCopied, setIdCopied] = useState(false);
+    const { copied: idCopied, copy: copyId } = useCopyToClipboard();
 
     // Auto-expand when highlighted (deep-linked from the Rules tab).
     React.useEffect(() => {
@@ -116,9 +119,8 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
     const handleOpenInOkta = useCallback(
       (e: React.MouseEvent) => {
         e.stopPropagation();
-        if (oktaOrigin) {
-          window.open(`${oktaOrigin}/admin/group/${group.id}`, '_blank', 'noopener,noreferrer');
-        }
+        const url = oktaAdminEntityUrl(oktaOrigin, 'group', group.id);
+        if (url) window.open(url, '_blank', 'noopener,noreferrer');
       },
       [oktaOrigin, group.id],
     );
@@ -134,12 +136,9 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
     const handleCopyId = useCallback(
       (e: React.MouseEvent) => {
         e.stopPropagation();
-        navigator.clipboard.writeText(group.id).then(() => {
-          setIdCopied(true);
-          setTimeout(() => setIdCopied(false), 1500);
-        });
+        copyId(group.id);
       },
-      [group.id],
+      [copyId, group.id],
     );
 
     const typeBadge = getTypeBadge(group.type);
@@ -308,7 +307,7 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
                         d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                       />
                     </svg>
-                    <span>{new Date(group.lastMembershipUpdated).toLocaleDateString()}</span>
+                    <span>{formatDateShort(group.lastMembershipUpdated)}</span>
                   </div>
                 )}
               </div>
@@ -385,18 +384,14 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
               {group.lastUpdated && (
                 <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
                   <div className="text-xs font-medium text-neutral-600 mb-0.5">Last Updated</div>
-                  <div className="text-xs text-neutral-900">
-                    {new Date(group.lastUpdated).toLocaleString()}
-                  </div>
+                  <div className="text-xs text-neutral-900">{formatDate(group.lastUpdated)}</div>
                 </div>
               )}
 
               {group.created && (
                 <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
                   <div className="text-xs font-medium text-neutral-600 mb-0.5">Created</div>
-                  <div className="text-xs text-neutral-900">
-                    {new Date(group.created).toLocaleString()}
-                  </div>
+                  <div className="text-xs text-neutral-900">{formatDate(group.created)}</div>
                 </div>
               )}
 
@@ -406,7 +401,7 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
                     Last Membership Change
                   </div>
                   <div className="text-xs text-neutral-900">
-                    {new Date(group.lastMembershipUpdated).toLocaleString()}
+                    {formatDate(group.lastMembershipUpdated)}
                   </div>
                 </div>
               )}

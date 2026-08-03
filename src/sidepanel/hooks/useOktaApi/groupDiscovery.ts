@@ -6,7 +6,8 @@
 import type { CoreApi } from './core';
 import type { OktaGroup, OktaGroupRule, FormattedRule } from '../../../shared/types';
 import { RulesCache } from '../../../shared/rulesCache';
-import { parseNextLink } from './utilities';
+import { detectConflicts, formatRuleForDisplay } from '../../../shared/ruleUtils';
+import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
 import { createLogger } from '../../../shared/utils/logger';
 
 const log = createLogger('useOktaApi');
@@ -27,27 +28,15 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
    */
   const getAllGroups = async (
     onProgress?: (loaded: number, total: number) => void,
-  ): Promise<OktaGroup[]> => {
-    const allGroups: OktaGroup[] = [];
-    let nextUrl: string | null = '/api/v1/groups?limit=200&expand=stats';
-
-    while (nextUrl) {
-      const response = await coreApi.makeApiRequest(nextUrl);
-
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to fetch groups');
-      }
-
-      const pageGroups = response.data || [];
-      allGroups.push(...pageGroups);
-
-      onProgress?.(allGroups.length, allGroups.length);
-
-      nextUrl = parseNextLink(response.headers?.link);
-    }
-
-    return allGroups;
-  };
+  ): Promise<OktaGroup[]> =>
+    fetchAllPages<OktaGroup>(
+      (url) => coreApi.makeApiRequest(url),
+      `/api/v1/groups?limit=${OKTA_PAGE_SIZE}&expand=stats`,
+      {
+        errorMessage: 'Failed to fetch groups',
+        onPage: (_pageGroups, totalSoFar) => onProgress?.(totalSoFar, totalSoFar),
+      },
+    );
 
   /**
    * Approximate a group's member count from the first page of members.
@@ -60,19 +49,10 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
   const getGroupMemberCount = async (groupId: string): Promise<number> => {
     try {
       const usersResponse = await coreApi.makeApiRequest(
-        `/api/v1/groups/${groupId}/users?limit=200`,
+        `/api/v1/groups/${groupId}/users?limit=${OKTA_PAGE_SIZE}`,
       );
       if (usersResponse.success && usersResponse.data) {
-        const firstPageCount = usersResponse.data.length;
-
-        const linkHeader = usersResponse.headers?.['link'] || usersResponse.headers?.['Link'];
-        const hasMorePages = linkHeader && linkHeader.includes('rel="next"');
-
-        if (hasMorePages) {
-          return firstPageCount;
-        }
-
-        return firstPageCount;
+        return usersResponse.data.length;
       }
 
       return 0;
@@ -88,7 +68,9 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
    * @param groupId - Group whose inbound assignment rules to find.
    * @returns Matching rules, or `[]` on failure/none.
    * @remarks Serves from {@link RulesCache} when populated or fresh; otherwise
-   * fetches all rules once (200 limit) and filters those targeting `groupId`.
+   * fetches the full rules list (following `Link` pagination, 200 per page),
+   * writes it back to the cache so subsequent lookups — for any group — are
+   * served without refetching, and returns the rules targeting `groupId`.
    */
   const getGroupRulesForGroup = async (
     groupId: string,
@@ -101,14 +83,32 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
         return cachedRules;
       }
 
-      // Cache miss - fetch all group rules
+      // Cache miss - fetch ALL group rules, following pagination so orgs with
+      // more than one page (>200 rules) are not silently truncated.
       log.debug(`Cache miss - fetching all rules for group ${groupId}`);
-      const response = await coreApi.makeApiRequest('/api/v1/groups/rules?limit=200');
-      if (!response.success) {
-        return [];
-      }
+      const allRules = await fetchAllPages<OktaGroupRule>(
+        (url) => coreApi.makeApiRequest(url),
+        `/api/v1/groups/rules?limit=${OKTA_PAGE_SIZE}`,
+      );
 
-      const allRules: OktaGroupRule[] = response.data || [];
+      // Write back to the global cache so the next call (any group) hits it.
+      // No currentGroupId is passed to the formatter: the cache is org-wide, so
+      // baking one group's `affectsCurrentGroup` flag into it would be wrong.
+      const conflicts = detectConflicts(allRules);
+      const formattedRules = allRules.map((rule) =>
+        formatRuleForDisplay(rule, undefined, conflicts),
+      );
+      await RulesCache.set(
+        formattedRules,
+        allRules,
+        {
+          total: allRules.length,
+          active: allRules.filter((r) => r.status === 'ACTIVE').length,
+          inactive: allRules.filter((r) => r.status === 'INACTIVE').length,
+          conflicts: conflicts.length,
+        },
+        conflicts,
+      );
 
       // Filter rules that target this group
       const groupRules = allRules.filter((rule) => {

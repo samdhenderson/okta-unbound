@@ -82,6 +82,26 @@ describe('ApiScheduler GET coalescing', () => {
     expect(apiCallCount()).toBe(1);
   });
 
+  it('does not coalesce identical GET endpoints issued for different tabs', async () => {
+    sendMessage.mockResolvedValue({ success: true, data: 'ok' });
+    scheduler = new ApiScheduler();
+
+    // Same path, two different Okta tabs (e.g. two orgs): each tab's session
+    // must get its own fetch — sharing one response would leak across orgs.
+    await Promise.all([
+      scheduler.scheduleRequest('/api/v1/users/me', 'GET', undefined, 1),
+      scheduler.scheduleRequest('/api/v1/users/me', 'GET', undefined, 2),
+    ]);
+
+    expect(apiCallCount()).toBe(2);
+    expect(scheduler.getMetrics().coalescedRequests).toBe(0);
+    // Each fetch was dispatched to its own tab.
+    const tabIds = sendMessage.mock.calls
+      .filter((c) => c[1]?.action === 'makeApiRequest')
+      .map((c) => c[0]);
+    expect(tabIds.sort()).toEqual([1, 2]);
+  });
+
   it('does not coalesce a GET issued after the first already settled', async () => {
     sendMessage.mockResolvedValue({ success: true, data: 'ok' });
     scheduler = new ApiScheduler();

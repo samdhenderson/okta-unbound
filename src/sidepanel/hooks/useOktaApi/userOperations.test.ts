@@ -194,6 +194,39 @@ describe('batchGetUserDetails', () => {
     const map = await batchGetUserDetails(['00uFAKE1']);
     expect(map.size).toBe(1);
   });
+
+  // The batch now runs through coreApi.runOperation (ADR-0009), which makes it
+  // cancellable: a cancel mid-run resolves with the users loaded so far rather
+  // than throwing or losing them.
+  it('returns the partially-loaded map when the run is cancelled midway', async () => {
+    const runOperation = vi.fn(
+      async (_name: string, items: unknown[], task: (item: unknown, index: number) => unknown) => {
+        // Only the first item runs before the cancel trips.
+        await task(items[0], 0);
+        return {
+          results: [],
+          total: items.length,
+          completed: 1,
+          failed: 0,
+          skipped: items.length - 1,
+          stoppedByError: false,
+          cancelled: true,
+        };
+      },
+    ) as unknown as CoreApi['runOperation'];
+    const core = makeCore({
+      makeApiRequest: vi.fn(async (endpoint: string) => ({
+        success: true,
+        data: { id: endpoint.split('/').pop(), profile: {} },
+      })),
+      runOperation,
+    });
+    const { batchGetUserDetails } = createUserOperations(core);
+
+    const map = await batchGetUserDetails(['00uFAKE1', '00uFAKE2', '00uFAKE3']);
+
+    expect([...map.keys()]).toEqual(['00uFAKE1']);
+  });
 });
 
 describe('scanGroupMfa', () => {
@@ -397,5 +430,22 @@ describe('lifecycle actions', () => {
       'POST',
     );
     expect(result).toEqual({ success: true, error: undefined });
+  });
+});
+
+describe('getUserApps boundary validation', () => {
+  it('drops malformed app rows (missing id) leniently instead of failing', async () => {
+    const core = makeCore({
+      makeApiRequest: vi.fn().mockResolvedValue({
+        success: true,
+        // The second row lacks the required `id` — the lenient list parser
+        // (ADR-0006) drops it rather than failing the whole fetch.
+        data: [{ id: '0oaFAKE1', label: 'App One' }, { label: 'No Id App' }],
+        headers: {},
+      }),
+    });
+    const { getUserApps } = createUserOperations(core);
+
+    expect(await getUserApps('00uFAKE1')).toEqual([{ id: '0oaFAKE1', label: 'App One' }]);
   });
 });

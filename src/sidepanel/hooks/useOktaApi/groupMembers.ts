@@ -5,14 +5,16 @@
 
 import type { CoreApi } from './core';
 import type { OktaUser } from './types';
+import type { BatchOutcome } from '@/shared/scheduler/runBatch';
 import { logAction } from '../../../shared/undoManager';
-import { parseNextLink } from './utilities';
+import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
+import { oktaUserListItemSchema, type OktaUserListItem } from '@/shared/schemas/okta';
 
 /**
  * Build add/remove/list operations for individual group memberships.
  *
  * @param coreApi - Shared transport surface (see {@link CoreApi}).
- * @returns `{ removeUserFromGroup, getAllGroupMembers, addUserToGroup }`.
+ * @returns `{ removeUserFromGroup, removeUserFromGroups, getAllGroupMembers, addUserToGroup }`.
  */
 export function createGroupMemberOperations(coreApi: CoreApi) {
   /**
@@ -55,6 +57,48 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
   };
 
   /**
+   * Remove one user from several groups as a single tracked, cancellable
+   * operation ({@link CoreApi.runOperation} → activity bar + Cancel; ADR-0009).
+   *
+   * @param userId - The user to remove.
+   * @param groupIds - Groups to remove the user from, processed in order.
+   * @param onProgress - Optional `(completed, total)` callback fired after each
+   * successful removal.
+   * @returns The full {@link BatchOutcome} (never throws for control flow —
+   * inspect `results` / `cancelled`); callers that need the legacy
+   * throw-on-first-rejection contract re-raise from `results`.
+   * @remarks
+   * Deliberately preserved legacy semantics (pinned by GroupsTab
+   * characterization tests — do not "fix" here):
+   * - DELETEs run sequentially (`concurrency: 1`) in the given group order.
+   * - The first *rejected* request halts the remaining groups (`stopOnError`).
+   * - A `success: false` response (no throw) still counts as processed and the
+   *   run carries on.
+   * No per-group undo entry is logged, matching the previous implementation.
+   */
+  const removeUserFromGroups = async (
+    userId: string,
+    groupIds: string[],
+    onProgress?: (completed: number, total: number) => void,
+  ): Promise<BatchOutcome<string, void>> => {
+    let completedCount = 0;
+    return coreApi.runOperation(
+      'Remove user from groups',
+      groupIds,
+      async (groupId) => {
+        await coreApi.makeApiRequest(`/api/v1/groups/${groupId}/users/${userId}`, 'DELETE');
+        completedCount += 1;
+        onProgress?.(completedCount, groupIds.length);
+      },
+      {
+        concurrency: 1,
+        stopOnError: () => true,
+        message: (p) => `Removing user from groups (${p.completed}/${p.total})`,
+      },
+    );
+  };
+
+  /**
    * Fetch every member of a group, following `Link` pagination (200 per page).
    *
    * @param groupId - Group whose members to load.
@@ -62,30 +106,28 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
    * @remarks Emits per-page `onResult` progress. Throws on the first failed page.
    */
   const getAllGroupMembers = async (groupId: string): Promise<OktaUser[]> => {
-    const allMembers: OktaUser[] = [];
-    let nextUrl: string | null = `/api/v1/groups/${groupId}/users?limit=200`;
     let pageCount = 0;
 
-    while (nextUrl) {
-      pageCount++;
-      coreApi.callbacks.onResult?.(`Fetching page ${pageCount}...`, 'info');
-
-      const response = await coreApi.makeApiRequest(nextUrl);
-
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to fetch group members');
-      }
-
-      const pageMembers = response.data || [];
-      allMembers.push(...pageMembers);
-
-      coreApi.callbacks.onResult?.(
-        `Page ${pageCount}: Loaded ${pageMembers.length} members (Total: ${allMembers.length})`,
-        'info',
-      );
-
-      nextUrl = parseNextLink(response.headers?.link);
-    }
+    const allMembers: OktaUser[] = await fetchAllPages<OktaUserListItem>(
+      (url) => coreApi.makeApiRequest(url),
+      `/api/v1/groups/${groupId}/users?limit=${OKTA_PAGE_SIZE}`,
+      {
+        // Validated at the response boundary (ADR-0006): malformed rows are
+        // dropped leniently by parseOktaList, never thrown on.
+        schema: oktaUserListItemSchema,
+        errorMessage: 'Failed to fetch group members',
+        onBeforePage: (pageNumber) => {
+          pageCount = pageNumber;
+          coreApi.callbacks.onResult?.(`Fetching page ${pageNumber}...`, 'info');
+        },
+        onPage: (pageMembers, totalSoFar) => {
+          coreApi.callbacks.onResult?.(
+            `Page ${pageCount}: Loaded ${pageMembers.length} members (Total: ${totalSoFar})`,
+            'info',
+          );
+        },
+      },
+    );
 
     coreApi.callbacks.onResult?.(`Loaded ${allMembers.length} total members`, 'success');
     return allMembers;
@@ -129,6 +171,7 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
 
   return {
     removeUserFromGroup,
+    removeUserFromGroups,
     getAllGroupMembers,
     addUserToGroup,
   };

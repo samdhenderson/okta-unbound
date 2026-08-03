@@ -101,7 +101,7 @@ const Tabs: React.FC<TabsProps> = ({
 
   const listClasses = isSegmented
     ? `flex items-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 p-1 ${className}`
-    : `flex items-center gap-1 border-b border-neutral-200 overflow-x-auto ${className}`;
+    : `flex items-center gap-1 border-b border-neutral-200 overflow-x-auto overflow-y-hidden ${className}`;
 
   return (
     <div role="tablist" aria-label={ariaLabel} className={listClasses}>
@@ -114,7 +114,7 @@ const Tabs: React.FC<TabsProps> = ({
                 ? 'bg-white text-neutral-900 shadow-sm'
                 : 'text-neutral-600 hover:text-neutral-900'
             }`
-          : `relative flex items-center gap-1.5 whitespace-nowrap px-3 py-2.5 text-xs font-semibold border-b-2 -mb-px transition-colors duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+          : `relative flex items-center gap-1.5 whitespace-nowrap px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
               active
                 ? 'text-primary border-primary'
                 : 'text-neutral-600 border-transparent hover:text-neutral-900'

@@ -2,6 +2,7 @@ import '@testing-library/jest-dom';
 import { afterEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import { resetEntityCache } from '../sidepanel/cache/entityCache';
+import { resetCurrentUserCache } from '../sidepanel/hooks/useOktaApi/currentUserCache';
 
 // Cleanup after each test
 afterEach(() => {
@@ -9,6 +10,10 @@ afterEach(() => {
   // The entity cache is a module-level singleton; reset it so cached data from
   // one test never suppresses a fetch (or a loading state) asserted by the next.
   resetEntityCache();
+  // Same reasoning for the per-tab current-user TTL cache: a cached admin
+  // identity from one test must never suppress a /users/me fetch (and shift a
+  // mockResolvedValueOnce sequence) in the next.
+  resetCurrentUserCache();
 });
 
 // Mock Chrome APIs

@@ -4,6 +4,7 @@
  */
 import React from 'react';
 import type { OktaUser } from '../../../shared/types';
+import { userStatusVariant } from '../shared';
 
 /** Props for {@link UserSearchResults}. */
 interface UserSearchResultsProps {
@@ -13,20 +14,8 @@ interface UserSearchResultsProps {
   onSelectUser: (user: OktaUser) => void;
 }
 
-/** Maps an Okta user status to its badge Tailwind class. */
-const getStatusBadgeClass = (status: string) => {
-  switch (status) {
-    case 'ACTIVE':
-      return 'badge badge-success';
-    case 'DEPROVISIONED':
-      return 'badge badge-error';
-    case 'SUSPENDED':
-    case 'LOCKED_OUT':
-      return 'badge badge-warning';
-    default:
-      return 'badge badge-info';
-  }
-};
+/** Maps an Okta user status to its badge class via the shared variant map (ADR-0002). */
+const getStatusBadgeClass = (status: string) => `badge badge-${userStatusVariant(status)}`;
 
 /**
  * Displays a list of user search results as clickable cards; renders nothing when

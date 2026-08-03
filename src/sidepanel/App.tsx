@@ -9,17 +9,26 @@
  * content, and the fixed {@link ActivityBar} (the unified scheduler + progress bar),
  * all inside the SchedulerProvider.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import ContextBar from './components/ContextBar';
 import PageHeader from './components/shared/PageHeader';
-import TabNavigation, { type TabType } from './components/TabNavigation';
+import TabNavigation from './components/TabNavigation';
+import { migrateLegacyTabId, type TabType } from './tabs';
 import OverviewTab from './components/OverviewTab';
-import RulesTab from './components/RulesTab';
-import UsersTab from './components/UsersTab';
-import GroupsTab from './components/GroupsTab';
-import { ExportTab, type ExportRequest } from './components/export';
-import AuditLogViewer from './components/AuditLogViewer';
+import type { ExportRequest } from './components/export';
+import LoadingSpinner from './components/shared/LoadingSpinner';
 import ActivityBar from './components/ActivityBar';
+
+// Code-split the non-default tabs so the initial side-panel load only ships the
+// Overview (the default tab). Each import lands in its own chunk, fetched on
+// first activation of that tab; the shared Suspense below shows the standard
+// spinner during the (one-time) fetch. ExportTab is a named export from its
+// barrel, so it is re-shaped into a default export for React.lazy.
+const RulesTab = lazy(() => import('./components/RulesTab'));
+const UsersTab = lazy(() => import('./components/UsersTab'));
+const GroupsTab = lazy(() => import('./components/GroupsTab'));
+const ExportTab = lazy(() => import('./components/export').then((m) => ({ default: m.ExportTab })));
+const AuditLogViewer = lazy(() => import('./components/AuditLogViewer'));
 import { useGroupContext } from './hooks/useGroupContext';
 import { useOktaPageContext } from './hooks/useOktaPageContext';
 import { SchedulerProvider } from './contexts/SchedulerContext';
@@ -157,23 +166,7 @@ const App: React.FC = () => {
     chrome.storage.local.get([SELECTED_TAB_KEY], (result) => {
       if (result[SELECTED_TAB_KEY]) {
         const savedTab = result[SELECTED_TAB_KEY] as string;
-        let migratedTab: TabType;
-
-        switch (savedTab) {
-          case 'dashboard':
-          case 'operations':
-            migratedTab = 'overview';
-            break;
-          case 'undo':
-            migratedTab = 'history';
-            break;
-          case 'security':
-          case 'apps':
-            migratedTab = 'overview';
-            break;
-          default:
-            migratedTab = savedTab as TabType;
-        }
+        const migratedTab = migrateLegacyTabId(savedTab);
 
         setActiveTab(migratedTab);
         if (migratedTab !== savedTab) {
@@ -255,76 +248,81 @@ const App: React.FC = () => {
 
         <TabNavigation activeTab={activeTab} onTabChange={handleTabChange} />
 
-        {activeTab === 'overview' && (
-          <OverviewTab
-            onTabChange={handleTabChange}
-            pageType={effective.pageType}
-            groupInfo={effective.groupInfo}
-            userInfo={effective.userInfo}
-            appInfo={page.appInfo ?? null}
-            connectionStatus={effective.connectionStatus}
-            targetTabId={effective.targetTabId}
-            error={effective.error}
-            isLoading={effective.isLoading}
-            oktaOrigin={effective.oktaOrigin}
-            onRetry={page.refetch}
-            onViewAllGroups={() => {
-              if (effective.userInfo) handleNavigateToUser(effective.userInfo.userId);
-            }}
-            onExportGroup={handleExportGroup}
-            onExportApp={handleExportApp}
-            onViewGroupRules={handleViewGroupRules}
-          />
-        )}
-        {activeTab === 'rules' && (
-          <RulesTab
-            targetTabId={tabContext.targetTabId ?? undefined}
-            currentGroupId={tabContext.currentGroupId}
-            oktaOrigin={tabContext.oktaOrigin ?? undefined}
-            selectedRuleId={selectedRuleId}
-            onRuleSelected={() => setSelectedRuleId(null)}
-            onNavigateToGroup={handleNavigateToGroup}
-            scopeToGroupId={scopeRulesToGroupId}
-            onScopeConsumed={() => setScopeRulesToGroupId(null)}
-          />
-        )}
-        {activeTab === 'users' && (
-          <UsersTab
-            targetTabId={tabContext.targetTabId ?? undefined}
-            currentGroupId={tabContext.currentGroupId}
-            onNavigateToRule={handleNavigateToRule}
-            selectedUserId={selectedUserId}
-            onUserSelected={() => setSelectedUserId(null)}
-          />
-        )}
-        {activeTab === 'groups' && (
-          <GroupsTab
-            targetTabId={tabContext.targetTabId ?? null}
-            oktaOrigin={tabContext.oktaOrigin ?? undefined}
-            onNavigateToRule={handleNavigateToRule}
-            selectedGroupId={selectedGroupId}
-            onGroupSelected={() => setSelectedGroupId(null)}
-          />
-        )}
-        {activeTab === 'export' && (
-          <ExportTab
-            targetTabId={tabContext.targetTabId ?? undefined}
-            oktaOrigin={tabContext.oktaOrigin ?? undefined}
-            exportRequest={exportRequest}
-            onExportRequestConsumed={() => setExportRequest(null)}
-          />
-        )}
-        {activeTab === 'history' && (
-          <div
-            className="tab-content active"
-            style={{ fontFamily: 'var(--font-primary)', padding: 0 }}
-          >
-            <PageHeader title="Audit Log" subtitle="View history of actions performed" />
-            <div className="max-w-7xl mx-auto px-6 py-6">
-              <AuditLogViewer />
+        {/* One Suspense boundary for every lazy tab: the fallback is the shared
+            centered spinner, shown only during a tab chunk's first fetch.
+            Overview is static (the default tab) and never suspends. */}
+        <Suspense fallback={<LoadingSpinner size="lg" message="Loading tab..." centered />}>
+          {activeTab === 'overview' && (
+            <OverviewTab
+              onTabChange={handleTabChange}
+              pageType={effective.pageType}
+              groupInfo={effective.groupInfo}
+              userInfo={effective.userInfo}
+              appInfo={page.appInfo ?? null}
+              connectionStatus={effective.connectionStatus}
+              targetTabId={effective.targetTabId}
+              error={effective.error}
+              isLoading={effective.isLoading}
+              oktaOrigin={effective.oktaOrigin}
+              onRetry={page.refetch}
+              onViewAllGroups={() => {
+                if (effective.userInfo) handleNavigateToUser(effective.userInfo.userId);
+              }}
+              onExportGroup={handleExportGroup}
+              onExportApp={handleExportApp}
+              onViewGroupRules={handleViewGroupRules}
+            />
+          )}
+          {activeTab === 'rules' && (
+            <RulesTab
+              targetTabId={tabContext.targetTabId ?? undefined}
+              currentGroupId={tabContext.currentGroupId}
+              oktaOrigin={tabContext.oktaOrigin ?? undefined}
+              selectedRuleId={selectedRuleId}
+              onRuleSelected={() => setSelectedRuleId(null)}
+              onNavigateToGroup={handleNavigateToGroup}
+              scopeToGroupId={scopeRulesToGroupId}
+              onScopeConsumed={() => setScopeRulesToGroupId(null)}
+            />
+          )}
+          {activeTab === 'users' && (
+            <UsersTab
+              targetTabId={tabContext.targetTabId ?? undefined}
+              currentGroupId={tabContext.currentGroupId}
+              onNavigateToRule={handleNavigateToRule}
+              selectedUserId={selectedUserId}
+              onUserSelected={() => setSelectedUserId(null)}
+            />
+          )}
+          {activeTab === 'groups' && (
+            <GroupsTab
+              targetTabId={tabContext.targetTabId ?? null}
+              oktaOrigin={tabContext.oktaOrigin ?? undefined}
+              onNavigateToRule={handleNavigateToRule}
+              selectedGroupId={selectedGroupId}
+              onGroupSelected={() => setSelectedGroupId(null)}
+            />
+          )}
+          {activeTab === 'export' && (
+            <ExportTab
+              targetTabId={tabContext.targetTabId ?? undefined}
+              oktaOrigin={tabContext.oktaOrigin ?? undefined}
+              exportRequest={exportRequest}
+              onExportRequestConsumed={() => setExportRequest(null)}
+            />
+          )}
+          {activeTab === 'history' && (
+            <div
+              className="tab-content active"
+              style={{ fontFamily: 'var(--font-primary)', padding: 0 }}
+            >
+              <PageHeader title="Audit Log" subtitle="View history of actions performed" />
+              <div className="max-w-7xl mx-auto px-6 py-6">
+                <AuditLogViewer />
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </Suspense>
 
         <ActivityBar />
       </div>

@@ -4,8 +4,9 @@
  *
  * §8: reproduces the content script's former `fetchGroupRules` handler in the side
  * panel, issuing every fetch through the rate-limited scheduler (`makeApiRequest`)
- * instead of a direct `chrome.tabs.sendMessage`. The four-stage pipeline is ported
- * verbatim from `content/ruleHandlers.ts`:
+ * instead of a direct `chrome.tabs.sendMessage`. The four-stage pipeline was ported
+ * verbatim from the content script's `ruleHandlers.ts` (since deleted — this module
+ * is the sole implementation):
  *   1. paginate `/api/v1/groups/rules?limit=200` (follow `Link` rel="next");
  *   2. label referenced group ids with names from the Groups-tab cache (no API
  *      calls; unknown ids fall back to the id in the display);
@@ -31,6 +32,12 @@ type MakeApiRequest = CoreApi['makeApiRequest'];
 export interface FetchGroupRulesResult {
   success: boolean;
   rules?: FormattedRule[];
+  /**
+   * The same rules exactly as returned by Okta (the one paginated fetch produces
+   * both shapes) — cached in `RulesCache` so raw-rule consumers (e.g. rule-impact
+   * analysis) never re-paginate data already in memory.
+   */
+  rawRules?: OktaGroupRule[];
   stats?: RuleStats;
   conflicts?: RuleConflict[];
   error?: string;
@@ -147,7 +154,7 @@ export async function fetchGroupRulesRequest(
     };
 
     log.debug('Rule stats', stats);
-    return { success: true, rules: formattedRules, stats, conflicts };
+    return { success: true, rules: formattedRules, rawRules: rules, stats, conflicts };
   } catch (error) {
     log.error('fetchGroupRules error', error);
     return {

@@ -16,7 +16,7 @@ import type { OktaUser } from './types';
 import { OperationCancelledError } from '../../../shared/scheduler/cancellation';
 import type { BulkOperation } from '../../../shared/types';
 
-/** Build a fake CoreApi whose transport is fully mocked. */
+/** Build a fake CoreApi whose runOperation actually drives the per-item task. */
 function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
   return {
     targetTabId: 1,
@@ -27,10 +27,52 @@ function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
     getCurrentUser: vi.fn().mockResolvedValue({ email: 'admin', id: 'admin' }),
     checkCancelled: vi.fn(),
     resetCancellation: vi.fn(),
-    runOperation: vi.fn(),
+    runOperation: vi.fn(
+      async (
+        _name: string,
+        items: unknown[],
+        task: (item: unknown, index: number) => Promise<unknown>,
+        options?: { stopOnError?: (error: unknown, item: unknown, index: number) => boolean },
+      ) => {
+        const results: Array<{
+          item: unknown;
+          index: number;
+          status: string;
+          value?: unknown;
+          error?: unknown;
+        }> = [];
+        let completed = 0;
+        let failed = 0;
+        let halted = false;
+        for (let i = 0; i < items.length; i++) {
+          if (halted) {
+            results.push({ item: items[i], index: i, status: 'skipped' });
+            continue;
+          }
+          try {
+            const value = await task(items[i], i);
+            results.push({ item: items[i], index: i, status: 'fulfilled', value });
+            completed++;
+          } catch (error) {
+            results.push({ item: items[i], index: i, status: 'rejected', error });
+            failed++;
+            if (options?.stopOnError?.(error, items[i], i)) halted = true;
+          }
+        }
+        return {
+          results,
+          total: items.length,
+          completed,
+          failed,
+          skipped: items.length - completed - failed,
+          stoppedByError: halted,
+          cancelled: false,
+        };
+      },
+    ),
     callbacks: {},
     ...overrides,
-  } as CoreApi;
+  } as unknown as CoreApi;
 }
 
 /** A `remove_user` operation across the given groups. */
@@ -219,6 +261,59 @@ describe('executeBulkOperation cleanup_inactive', () => {
 
     expect(results[0].itemsProcessed).toBe(0);
     expect(removeUserFromGroup).not.toHaveBeenCalled();
+  });
+
+  // The removals now run through coreApi.runOperation (ADR-0009); a cancel
+  // reported by the runner must abort the WHOLE bulk operation, matching the
+  // old serial loop's propagated OperationCancelledError.
+  it('aborts the whole bulk operation when the removal batch is cancelled', async () => {
+    const members = [user('00uFAKEB', 'DEPROVISIONED')];
+    const getAllGroupMembers = vi.fn().mockResolvedValue(members);
+    const cancelledOutcome = {
+      results: [{ item: members[0], index: 0, status: 'skipped' as const }],
+      total: 1,
+      completed: 0,
+      failed: 0,
+      skipped: 1,
+      stoppedByError: false,
+      cancelled: true,
+    };
+    const runOperation = vi
+      .fn()
+      .mockResolvedValue(cancelledOutcome) as unknown as CoreApi['runOperation'];
+    const core = makeCore({ runOperation });
+    const { executeBulkOperation } = createGroupBulkOperations(core, vi.fn(), getAllGroupMembers);
+
+    await expect(
+      executeBulkOperation(bulkOp('cleanup_inactive', ['00gFAKE1', '00gFAKE2'])),
+    ).rejects.toBeInstanceOf(OperationCancelledError);
+
+    // The second group's members were never even fetched.
+    expect(getAllGroupMembers).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks the group failed when a removal rejects, and continues to the next group', async () => {
+    const members = [user('00uFAKEB', 'DEPROVISIONED')];
+    const getAllGroupMembers = vi.fn().mockResolvedValue(members);
+    const removeUserFromGroup = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValue({ success: true });
+    const core = makeCore();
+    const { executeBulkOperation } = createGroupBulkOperations(
+      core,
+      removeUserFromGroup,
+      getAllGroupMembers,
+    );
+
+    const results = await executeBulkOperation(
+      bulkOp('cleanup_inactive', ['00gFAKE1', '00gFAKE2']),
+    );
+
+    expect(results).toHaveLength(2);
+    expect(results[0].status).toBe('failed');
+    expect(results[0].errors).toEqual(['boom']);
+    expect(results[1].status).toBe('success');
   });
 });
 

@@ -201,4 +201,32 @@ describe('downloadCSV', () => {
     revokeUrl.mockRestore();
     clickSpy.mockRestore();
   });
+
+  it('honors an explicit MIME type override', () => {
+    const RealBlob = globalThis.Blob;
+    const blobs: Array<string | undefined> = [];
+    globalThis.Blob = class extends RealBlob {
+      constructor(
+        parts: ConstructorParameters<typeof globalThis.Blob>[0],
+        options?: ConstructorParameters<typeof globalThis.Blob>[1],
+      ) {
+        super(parts, options);
+        blobs.push(options?.type);
+      }
+    } as typeof globalThis.Blob;
+    const createUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fake-url');
+    const revokeUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const clickSpy = vi
+      .spyOn(globalThis.HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => {});
+
+    downloadCSV('a,b', 'export.csv', 'text/csv');
+    downloadCSV('a,b', 'export.csv');
+    expect(blobs).toEqual(['text/csv', 'text/csv;charset=utf-8;']);
+
+    globalThis.Blob = RealBlob;
+    createUrl.mockRestore();
+    revokeUrl.mockRestore();
+    clickSpy.mockRestore();
+  });
 });

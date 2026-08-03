@@ -9,7 +9,8 @@ import type { RequestResult } from '../../../shared/scheduler/types';
 import type { BulkUserInfo } from '../../../shared/undoTypes';
 import { logBulkRemoveAction } from '../../../shared/undoManager';
 import { auditStore } from '../../../shared/storage/auditStore';
-import { parseNextLink } from './utilities';
+import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
+import { oktaUserListItemSchema, type OktaUserListItem } from '@/shared/schemas/okta';
 import { OperationCancelledError } from '../../../shared/scheduler/cancellation';
 import { createLogger } from '../../../shared/utils/logger';
 
@@ -31,27 +32,28 @@ async function fetchAllMembers(
   groupId: string,
   onApiCall: () => number,
 ): Promise<OktaUser[]> {
-  const allMembers: OktaUser[] = [];
-  let nextUrl: string | null = `/api/v1/groups/${groupId}/users?limit=200`;
   let pageCount = 0;
 
-  while (nextUrl) {
-    pageCount++;
-    coreApi.callbacks.onResult?.(`Fetching page ${pageCount}...`, 'info');
+  const members: OktaUser[] = await fetchAllPages<OktaUserListItem>(
+    (url) => coreApi.makeApiRequest(url),
+    `/api/v1/groups/${groupId}/users?limit=${OKTA_PAGE_SIZE}`,
+    {
+      // Validated at the response boundary (ADR-0006): malformed rows are
+      // dropped leniently by parseOktaList, never thrown on.
+      schema: oktaUserListItemSchema,
+      errorMessage: 'Failed to fetch group members',
+      onBeforePage: (pageNumber) => {
+        pageCount = pageNumber;
+        coreApi.callbacks.onResult?.(`Fetching page ${pageNumber}...`, 'info');
+      },
+      onPage: () => {
+        const apiCalls = onApiCall();
+        coreApi.callbacks.onProgress?.(0, 100, `Fetching members (page ${pageCount})...`, apiCalls);
+      },
+    },
+  );
 
-    const response = await coreApi.makeApiRequest(nextUrl);
-    const apiCalls = onApiCall();
-    coreApi.callbacks.onProgress?.(0, 100, `Fetching members (page ${pageCount})...`, apiCalls);
-
-    if (!response.success) {
-      throw new Error(response.error || 'Failed to fetch group members');
-    }
-
-    allMembers.push(...(response.data || []));
-    nextUrl = parseNextLink(response.headers?.link);
-  }
-
-  return allMembers;
+  return members;
 }
 
 /**

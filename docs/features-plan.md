@@ -172,4 +172,6 @@ Carried forward from the A/B build (surfaced while working, none blocking):
 - **G. Policy Migrator** — **rejected.** The single-tab session model cannot address two
   tenants at once, and policy ops are entirely absent. Would require a different
   transport plus persisted cross-tenant credentials, violating the never-persist-tokens
-  principle ([architecture.md](./architecture.md)).
+  principle ([architecture.md](./architecture.md)). This rejection covers _cross-tenant
+  migration_ only; a future single-tenant, read-only Authentication Policies section
+  (viewing policies/rules in the current org) is out of its scope.

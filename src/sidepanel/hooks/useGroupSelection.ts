@@ -3,11 +3,12 @@
  * @description Tracks which groups are selected in the Groups tab (checkbox state).
  *
  * Selection is stored as a set of ids and resolved against the full group list, so
- * picks survive filtering and live/cached mode switches.
+ * picks survive filtering and live/cached mode switches. Thin typed wrapper over
+ * the generic {@link useEntitySelection}.
  */
 
-import { useState, useMemo, useCallback } from 'react';
 import type { GroupSummary } from '../../shared/types';
+import { useEntitySelection } from './useEntitySelection';
 
 /**
  * Owns group selection. `selectedGroups` derives from the full `groups` list (NOT
@@ -19,30 +20,14 @@ import type { GroupSummary } from '../../shared/types';
  * `toggleSelect` / `replaceSelection` / `deselectAll` mutators.
  */
 export function useGroupSelection(groups: GroupSummary[]) {
-  const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
+  const { selectedIds, selectedEntities, toggleSelect, replaceSelection, deselectAll } =
+    useEntitySelection(groups);
 
-  const toggleSelect = useCallback((groupId: string) => {
-    setSelectedGroupIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(groupId)) next.delete(groupId);
-      else next.add(groupId);
-      return next;
-    });
-  }, []);
-
-  /** Replace the whole selection (Select All against the filtered ids, or load a collection). */
-  const replaceSelection = useCallback((ids: string[]) => {
-    setSelectedGroupIds(new Set(ids));
-  }, []);
-
-  const deselectAll = useCallback(() => {
-    setSelectedGroupIds(new Set());
-  }, []);
-
-  const selectedGroups = useMemo(
-    () => groups.filter((g) => selectedGroupIds.has(g.id)),
-    [groups, selectedGroupIds],
-  );
-
-  return { selectedGroupIds, selectedGroups, toggleSelect, replaceSelection, deselectAll };
+  return {
+    selectedGroupIds: selectedIds,
+    selectedGroups: selectedEntities,
+    toggleSelect,
+    replaceSelection,
+    deselectAll,
+  };
 }

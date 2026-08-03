@@ -7,9 +7,10 @@
  * "Open in Okta" link. Shared by {@link UserProfileCard} (Users tab) and
  * {@link UserOverview} so both render user identity consistently.
  */
-import React, { useState } from 'react';
+import React from 'react';
 import type { OktaUser } from '../../../shared/types';
-import { IconButton, OpenInOktaLink } from '../shared';
+import { IconButton, OpenInOktaLink, userStatusVariant, type UserStatusVariant } from '../shared';
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import Icon from '../overview/shared/Icon';
 
 /** Props for {@link UserIdentity}. */
@@ -27,29 +28,19 @@ interface UserIdentityProps {
   showId?: boolean;
 }
 
-/** Maps an Okta user status to its status-badge Tailwind classes (color-coded per status). */
+/** Per-variant badge palette (this component's rich palette, keyed by shared variant). */
+const VARIANT_CLASSES: Record<UserStatusVariant, string> = {
+  success: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  info: 'bg-blue-50 text-blue-700 border border-blue-200',
+  warning: 'bg-amber-50 text-amber-700 border border-amber-200',
+  danger: 'bg-red-50 text-red-700 border border-red-200',
+  neutral: 'bg-neutral-100 text-neutral-700 border border-neutral-300',
+};
+
+/** Maps an Okta user status to its status-badge Tailwind classes via the shared variant map. */
 const getStatusBadgeClass = (status: string): string => {
   const base = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold';
-  switch (status) {
-    case 'ACTIVE':
-      return `${base} bg-emerald-50 text-emerald-700 border border-emerald-200`;
-    case 'PROVISIONED':
-      return `${base} bg-blue-50 text-blue-700 border border-blue-200`;
-    case 'STAGED':
-      return `${base} bg-neutral-100 text-neutral-700 border border-neutral-300`;
-    case 'SUSPENDED':
-      return `${base} bg-amber-50 text-amber-700 border border-amber-200`;
-    case 'RECOVERY':
-      return `${base} bg-purple-50 text-purple-700 border border-purple-200`;
-    case 'PASSWORD_EXPIRED':
-      return `${base} bg-orange-50 text-orange-700 border border-orange-200`;
-    case 'LOCKED_OUT':
-      return `${base} bg-rose-50 text-rose-700 border border-rose-200`;
-    case 'DEPROVISIONED':
-      return `${base} bg-red-50 text-red-700 border border-red-200`;
-    default:
-      return `${base} bg-neutral-100 text-neutral-700 border border-neutral-300`;
-  }
+  return `${base} ${VARIANT_CLASSES[userStatusVariant(status)]}`;
 };
 
 /**
@@ -62,18 +53,10 @@ const UserIdentity: React.FC<UserIdentityProps> = ({
   showOktaLink = true,
   showId = true,
 }) => {
-  const [idCopied, setIdCopied] = useState(false);
+  const { copied: idCopied, copy: copyId } = useCopyToClipboard();
 
   const handleCopyId = () => {
-    navigator.clipboard.writeText(user.id).then(
-      () => {
-        setIdCopied(true);
-        setTimeout(() => setIdCopied(false), 1500);
-      },
-      () => {
-        /* clipboard blocked — fail quietly */
-      },
-    );
+    copyId(user.id);
   };
 
   const initials =

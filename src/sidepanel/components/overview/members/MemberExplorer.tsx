@@ -9,8 +9,9 @@
  * composition reports, member list, and the details/copy modals. MFA scan results
  * are owned by the parent overview and passed in.
  */
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import type { OktaUser, MemberMfaResult, MfaScanStatus } from '../../../../shared/types';
+import { useDebouncedValue } from '../../../hooks/useDebouncedValue';
 import Button from '../../shared/Button';
 import Modal from '../../shared/Modal';
 import MemberSearchBar from './MemberSearchBar';
@@ -74,7 +75,6 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
   oktaOrigin,
 }) => {
   const [query, setQuery] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [filters, setFilters] = useState<MemberFilter[]>([]);
   const [visibleCount, setVisibleCount] = useState(PAGE);
   const [showFilters, setShowFilters] = useState(false);
@@ -84,10 +84,7 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
   const [copyOpen, setCopyOpen] = useState(false);
 
   // Debounce the search query so filtering runs at most a few times per second.
-  useEffect(() => {
-    const id = setTimeout(() => setDebouncedQuery(query), 200);
-    return () => clearTimeout(id);
-  }, [query]);
+  const debouncedQuery = useDebouncedValue(query, 200);
 
   // Distributions are computed over the full member set (stable while faceting).
   const attributes = useMemo(() => discoverAttributeBreakdowns(members), [members]);

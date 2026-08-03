@@ -34,5 +34,6 @@ export { default as SelectionChips } from './SelectionChips';
 export type { ButtonVariant, ButtonSize } from './Button';
 export type { IconButtonVariant, IconButtonSize } from './IconButton';
 export type { AlertMessageData, AlertAction } from './AlertMessage';
-export type { StatusType } from './status';
+export type { StatusType, UserStatusVariant } from './status';
+export { userStatusVariant } from './status';
 export type { TabItem, TabsVariant } from './Tabs';

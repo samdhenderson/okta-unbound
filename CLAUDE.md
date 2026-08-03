@@ -85,8 +85,9 @@ should be reviewed with `security-logging-reviewer`.
   before rendering or branching. Rule expressions, profile attributes, and
   group names are end-user-controllable — sanitize accordingly.
 - **Message passing stays validated.** The background listener rejects foreign
-  senders and tab-originated `scheduleApiRequest`; the content script only
-  fetches same-origin paths with an allow-listed HTTP method. Every new message
+  senders and tab-originated `scheduleApiRequest`; the content script enforces a
+  same-origin single-`/` path guard plus an HTTP-method allow-list (there is
+  deliberately **no path-level allow-list**). Every new message
   action must validate sender + message structure the same way. Never add
   `externally_connectable` or an `onMessageExternal` listener without an ADR.
 - **Host checks parse hostnames.** Use `shared/utils/oktaUrl.ts` for every "is

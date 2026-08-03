@@ -14,7 +14,7 @@
 import type { CoreApi } from './core';
 import type { AuditLogEntry } from './types';
 import type { EntityExport, CellValue } from '@/sidepanel/export/types';
-import { parseNextLink } from './utilities';
+import { parseNextLink, nextPageUrl } from '@/shared/utils/oktaPagination';
 import { parseOktaList } from '@/shared/schemas/okta';
 import {
   generateCSV,
@@ -113,7 +113,9 @@ export function createExportEngineOperations(coreApi: CoreApi) {
         rows.length = cap;
         break;
       }
-      nextUrl = parseNextLink(response.headers?.link);
+      // Guarded: stops on an empty page or a non-advancing rel="next" cursor,
+      // keyed off the RAW page length so an all-malformed page still advances.
+      nextUrl = nextPageUrl(nextUrl, response.headers?.link, rawLength);
     }
 
     return { rows, fetched, dropped, capped };

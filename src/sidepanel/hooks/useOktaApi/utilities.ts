@@ -1,58 +1,13 @@
 /**
  * @module hooks/useOktaApi/utilities
- * @description Shared utility functions for API operations
+ * @description Shared utility functions for API operations.
+ *
+ * The pagination primitives (`parseNextLink`, `nextPageUrl`) moved to the
+ * canonical `shared/utils/oktaPagination` module; they are re-exported here so
+ * existing imports (and the barrel) keep working unchanged.
  */
 
-/**
- * Extract the `rel="next"` pagination target from an Okta `Link` response header.
- *
- * @param linkHeader - Raw `Link` header value (may contain multiple comma-separated links).
- * @returns The next page as an origin-relative `pathname + search` string, or `null`
- * when there is no next page. Returning a relative path lets the caller re-issue it
- * through `CoreApi.makeApiRequest` without leaking the absolute Okta origin.
- */
-export function parseNextLink(linkHeader?: string): string | null {
-  if (!linkHeader) return null;
-
-  const links = linkHeader.split(',');
-  for (const link of links) {
-    if (link.includes('rel="next"')) {
-      const match = link.match(/<([^>]+)>/);
-      if (match) {
-        const fullUrl = new URL(match[1]);
-        return fullUrl.pathname + fullUrl.search;
-      }
-    }
-  }
-  return null;
-}
-
-/**
- * Decide the next page URL for a `Link`-header pagination loop, guarding against
- * Okta returning a `rel="next"` link that would never terminate.
- *
- * Standard cursor pagination stops when the last page omits the `next` link, but
- * some list endpoints have been observed to hand back a `next` link on an empty
- * or self-referential final page — a `while (nextUrl)` loop that trusts the link
- * alone then pages forever, flooding the scheduler. This stops when there is no
- * next link, when the returned page was empty (no further data), or when the
- * cursor did not advance (`next === current`).
- *
- * @param currentUrl - The URL that produced this page.
- * @param linkHeader - The page response's raw `Link` header.
- * @param pageSize - Number of items the page returned.
- * @returns The next page URL, or `null` to stop paginating.
- */
-export function nextPageUrl(
-  currentUrl: string,
-  linkHeader: string | undefined,
-  pageSize: number,
-): string | null {
-  if (pageSize === 0) return null;
-  const next = parseNextLink(linkHeader);
-  if (!next || next === currentUrl) return null;
-  return next;
-}
+export { parseNextLink, nextPageUrl } from '@/shared/utils/oktaPagination';
 
 /**
  * Recursively merge one app profile over another.

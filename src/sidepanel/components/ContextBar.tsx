@@ -10,13 +10,12 @@
  * your place; when the live tab moves elsewhere while pinned, a subtle hint offers to
  * switch. The heavy per-entity identity (avatar, status) lives in the content below.
  */
-import React, { useState } from 'react';
+import React from 'react';
 import { IconButton } from './shared';
 import Icon from './overview/shared/Icon';
+import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import type { ConnectionStatus } from '../hooks/useOktaTabContext';
-
-/** Kind of Okta page detected for the active tab. */
-type PageType = 'group' | 'user' | 'app' | 'admin' | 'unknown';
+import type { PageType } from '../hooks/useOktaPageContext';
 
 /** Props for {@link ContextBar}. */
 interface ContextBarProps {
@@ -96,19 +95,11 @@ const ContextBar: React.FC<ContextBarProps> = ({
   onRefresh,
   onReconnect,
 }) => {
-  const [idCopied, setIdCopied] = useState(false);
+  const { copied: idCopied, copy: copyId } = useCopyToClipboard();
 
   const handleCopyId = () => {
     if (!entityId) return;
-    navigator.clipboard.writeText(entityId).then(
-      () => {
-        setIdCopied(true);
-        setTimeout(() => setIdCopied(false), 1500);
-      },
-      () => {
-        /* clipboard blocked — fail quietly */
-      },
-    );
+    copyId(entityId);
   };
 
   const displayName = error

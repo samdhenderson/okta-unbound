@@ -6,33 +6,19 @@
  * the Export tab via `deps.searchApps`, since its context `label` matches `/app/i`),
  * then the engine lists that app's assigned users. App-user assignments are their own
  * shape (assignment status/scope/syncState plus embedded app credentials), so this
- * descriptor defines a local lenient schema and column catalog rather than reusing the
- * shared user catalog.
+ * descriptor uses the shared lenient `oktaAppUserSchema` and its own column catalog
+ * rather than reusing the shared user catalog.
  */
 
-import { z } from 'zod';
 import { formatDateForCSV } from '@/shared/utils/csvUtils';
+import { oktaAppUserSchema, type OktaAppUser } from '@/shared/schemas/okta';
 import type { EntityExport, ExportColumn } from '../types';
 
-/**
- * Lenient app-user assignment schema. Kept local (not in `shared/schemas/okta.ts`)
- * and `.passthrough()` so org-specific credential/profile fields survive validation
- * while the columns we surface stay strongly typed.
- */
-const appUserSchema = z
-  .object({
-    id: z.string(),
-    status: z.string().optional(),
-    scope: z.string().optional(),
-    syncState: z.string().optional(),
-    created: z.string().nullish(),
-    lastUpdated: z.string().nullish(),
-    credentials: z.object({ userName: z.string().optional() }).passthrough().optional(),
-  })
-  .passthrough();
+/** The shared lenient app-user assignment schema (ADR-0006 boundary validation). */
+const appUserSchema = oktaAppUserSchema;
 
 /** A single user's assignment to an application, as returned by the app-users list endpoint. */
-type AppUser = z.infer<typeof appUserSchema>;
+type AppUser = OktaAppUser;
 
 /** The base columns available when exporting an app's assigned users. */
 const appUserColumns: ExportColumn<AppUser>[] = [

@@ -10,6 +10,14 @@
  * launched while pinned would silently target whatever the live tab drifted to.
  */
 import type { GroupInfo, UserInfo } from '../shared/types';
+import type { PageType } from './hooks/useOktaPageContext';
+
+/**
+ * The subset of {@link PageType} values that can be pinned. Widening pinning to a
+ * new entity kind (e.g. `'app'`) is a one-line change here; the `Extract` keeps
+ * this union provably in sync with the canonical `PageType`.
+ */
+export type PinnablePageType = Extract<PageType, 'group' | 'user'>;
 
 /**
  * A frozen snapshot of the Overview context. When present the panel holds this
@@ -17,7 +25,7 @@ import type { GroupInfo, UserInfo } from '../shared/types';
  * Okta page without losing their place; unpinning resumes live detection.
  */
 export interface PinnedContext {
-  pageType: 'group' | 'user';
+  pageType: PinnablePageType;
   groupInfo: GroupInfo | null;
   userInfo: UserInfo | null;
   targetTabId: number;

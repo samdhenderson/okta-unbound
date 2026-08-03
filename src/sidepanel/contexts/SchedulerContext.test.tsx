@@ -86,4 +86,50 @@ describe('SchedulerContext', () => {
     await new Promise((r) => setTimeout(r, 1100));
     expect(stateCalls()).toBe(1);
   });
+
+  it('updates metrics from a schedulerStateChanged push message', async () => {
+    /** Reads the live metrics out of the context into the DOM for assertions. */
+    const MetricsProbe = () => {
+      const { metrics } = useScheduler();
+      return (
+        <div data-testid="metrics-probe">
+          {metrics && typeof metrics.failedRequests === 'number'
+            ? `failed:${metrics.failedRequests} coalesced:${metrics.coalescedRequests}`
+            : 'none'}
+        </div>
+      );
+    };
+    render(
+      <SchedulerProvider>
+        <MetricsProbe />
+      </SchedulerProvider>,
+    );
+    await waitFor(() =>
+      expect(
+        sendMessage.mock.calls.filter((c) => c[0]?.action === 'getSchedulerMetrics').length,
+      ).toBe(1),
+    );
+
+    // A pushed transition carrying metrics updates them without a re-fetch.
+    pushMessage({
+      action: 'schedulerStateChanged',
+      state: { ...baseState, status: 'processing', queueLength: 1 },
+      metrics: {
+        totalRequests: 10,
+        successfulRequests: 7,
+        failedRequests: 3,
+        retriedRequests: 1,
+        cacheHits: 0,
+        coalescedRequests: 2,
+        averageWaitTime: 5,
+        averageExecutionTime: 20,
+        cooldownEvents: 0,
+        throttleEvents: 0,
+      },
+    });
+    expect(screen.getByTestId('metrics-probe')).toHaveTextContent('failed:3 coalesced:2');
+    expect(
+      sendMessage.mock.calls.filter((c) => c[0]?.action === 'getSchedulerMetrics').length,
+    ).toBe(1);
+  });
 });

@@ -87,9 +87,14 @@ export function generateCSV(
  *
  * @param content - The CSV text to download.
  * @param filename - The suggested download filename (include the `.csv` extension).
+ * @param mimeType - Blob MIME type; defaults to `text/csv;charset=utf-8;`.
  */
-export function downloadCSV(content: string, filename: string): void {
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+export function downloadCSV(
+  content: string,
+  filename: string,
+  mimeType = 'text/csv;charset=utf-8;',
+): void {
+  const blob = new Blob([content], { type: mimeType });
   const link = document.createElement('a');
   const url = URL.createObjectURL(blob);
 

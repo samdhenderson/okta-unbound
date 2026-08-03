@@ -19,9 +19,11 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   ReactNode,
 } from 'react';
 import type { SchedulerState, SchedulerMetrics } from '../../shared/scheduler/types';
+import type { SchedulerStateChangedMessage } from '../../shared/types';
 import { createLogger } from '../../shared/utils/logger';
 
 const log = createLogger('SchedulerContext');
@@ -99,11 +101,16 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
     })();
   }, [refreshState, refreshMetrics]);
 
-  // Listen for scheduler state changes from background
+  // Listen for scheduler state changes from background. The broadcast carries a
+  // metrics snapshot alongside the state (see SchedulerStateChangedMessage), so
+  // failed/coalesced counters stay live instead of freezing at mount time.
   useEffect(() => {
-    const listener = (message: { action?: string; state?: SchedulerState }) => {
+    const listener = (message: Partial<SchedulerStateChangedMessage> & { action?: string }) => {
       if (message.action === 'schedulerStateChanged') {
         setState(message.state ?? null);
+        if (message.metrics) {
+          setMetrics(message.metrics);
+        }
       }
     };
 
@@ -141,21 +148,23 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, [refreshState]);
 
-  return (
-    <SchedulerContext.Provider
-      value={{
-        state,
-        metrics,
-        pause,
-        resume,
-        clearQueue,
-        refreshState,
-        refreshMetrics,
-      }}
-    >
-      {children}
-    </SchedulerContext.Provider>
+  // Memoize the provider value so consumers only re-render when the scheduler
+  // snapshot actually changes — every callback above is useCallback-stable, so
+  // a parent re-render no longer mints a fresh context object.
+  const contextValue = useMemo(
+    () => ({
+      state,
+      metrics,
+      pause,
+      resume,
+      clearQueue,
+      refreshState,
+      refreshMetrics,
+    }),
+    [state, metrics, pause, resume, clearQueue, refreshState, refreshMetrics],
   );
+
+  return <SchedulerContext.Provider value={contextValue}>{children}</SchedulerContext.Provider>;
 };
 
 /**
