@@ -80,6 +80,14 @@ export interface UseExportTabOptions {
   hasConnectedTab: boolean;
   /** Report a user-facing error (or `null` to clear). Owned by the tab shell. */
   onError: (message: string | null) => void;
+  /**
+   * Whether the Export tab is the visible one. The tab stays mounted while hidden
+   * (so a half-built export survives a trip to another tab), and the live
+   * match-count probe re-fires whenever `api` changes identity — i.e. on a new
+   * `targetTabId`. Gating it keeps a hidden tab from probing Okta. Defaults to
+   * `true`.
+   */
+  enabled?: boolean;
 }
 
 /** The `pick` (entity hub) or `configure` (build the export) phase. */
@@ -176,6 +184,7 @@ export function useExportTab({
   oktaOrigin: _oktaOrigin,
   hasConnectedTab,
   onError,
+  enabled = true,
 }: UseExportTabOptions): UseExportTab {
   const { startProgress, updateProgress, completeProgress } = useProgress();
 
@@ -305,6 +314,9 @@ export function useExportTab({
   // id and only probes once an endpoint can actually be built.
   const matchReqRef = useRef(0);
   useEffect(() => {
+    // Never probe from a hidden tab: the count is a live hint for a filter box
+    // nobody can see, and the effect re-fires on a `targetTabId` change.
+    if (!enabled) return;
     if (!descriptor || descriptor.filter.kind === 'none') {
       setMatchCount(null);
       return;
@@ -333,7 +345,7 @@ export function useExportTab({
       }
     }, 400);
     return () => clearTimeout(timer);
-  }, [descriptor, contextId, filterText, api]);
+  }, [enabled, descriptor, contextId, filterText, api]);
 
   const applyPreset = useCallback(
     (id: string) => {

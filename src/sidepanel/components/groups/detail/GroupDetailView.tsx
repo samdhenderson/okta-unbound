@@ -46,6 +46,12 @@ interface GroupDetailViewProps {
    * a pointless second click. Never set by a plain drill-in.
    */
   autoAnalyze?: boolean;
+  /**
+   * Whether the Groups tab is the visible top-level tab. The view stays mounted
+   * while another tab is selected, so its two read-only loads are deferred rather
+   * than issued from a hidden tab. Defaults to `true`.
+   */
+  isActive?: boolean;
 }
 
 /**
@@ -58,15 +64,26 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   oktaOrigin,
   onNavigateToRule,
   autoAnalyze = false,
+  isActive = true,
 }) => {
   const source = useGroupSource(targetTabId ?? undefined);
-  const references = useGroupRuleReferences(group.id, targetTabId ?? undefined);
+  const references = useGroupRuleReferences(group.id, targetTabId ?? undefined, isActive);
 
   // `open` is memoized on the (stable) API operation, so this runs once per group.
+  // While the Groups tab is hidden the open is *owed* rather than run: it reaches
+  // Okta, and re-running it on every return to the tab would also discard a member
+  // analysis the admin already paid for. The two effects are split so only a real
+  // input change (`open`/`group`) arms it — re-showing the tab alone does not.
   const { open, analyzeMembers } = source;
+  const openOwedRef = useRef(true);
   useEffect(() => {
-    open(group);
+    openOwedRef.current = true;
   }, [open, group]);
+  useEffect(() => {
+    if (!isActive || !openOwedRef.current) return;
+    openOwedRef.current = false;
+    open(group);
+  }, [isActive, open, group]);
 
   // Wait for `open` to land before auto-analyzing (`analyzeMembers` no-ops until
   // the hook holds the group), and latch on the id so it fires exactly once.

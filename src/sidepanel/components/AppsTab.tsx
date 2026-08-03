@@ -27,6 +27,12 @@ export interface AppsTabProps {
   targetTabId: number | null;
   /** Okta org origin used to build deep links to app admin pages. */
   oktaOrigin?: string;
+  /**
+   * Whether this is the selected top-level tab. The tab stays mounted while
+   * hidden, so the one-per-connected-tab inventory auto-load is deferred until it
+   * is shown rather than firing in the background. Defaults to `true`.
+   */
+  isActive?: boolean;
 }
 
 /**
@@ -34,7 +40,7 @@ export interface AppsTabProps {
  * filters, sorts, and lists it. Load failures surface as a dismissible `danger`
  * banner rather than an empty list presented as truth.
  */
-const AppsTab: React.FC<AppsTabProps> = ({ targetTabId, oktaOrigin }) => {
+const AppsTab: React.FC<AppsTabProps> = ({ targetTabId, oktaOrigin, isActive = true }) => {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<AppStatusFilter>('');
@@ -61,6 +67,7 @@ const AppsTab: React.FC<AppsTabProps> = ({ targetTabId, oktaOrigin }) => {
     api,
     onError: handleError,
     targetTabId,
+    enabled: isActive,
   });
 
   const filteredApps = useMemo(

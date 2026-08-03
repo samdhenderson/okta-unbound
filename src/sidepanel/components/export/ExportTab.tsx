@@ -45,6 +45,12 @@ interface ExportTabProps {
   exportRequest?: ExportRequest | null;
   /** Invoked once {@link ExportTabProps.exportRequest} has been applied. */
   onExportRequestConsumed?: () => void;
+  /**
+   * Whether this is the selected top-level tab. The tab stays mounted while
+   * hidden (a half-configured export survives leaving it), so the live
+   * match-count probe is suspended until it is shown again. Defaults to `true`.
+   */
+  isActive?: boolean;
 }
 
 /**
@@ -55,6 +61,7 @@ const ExportTab: React.FC<ExportTabProps> = ({
   oktaOrigin,
   exportRequest,
   onExportRequestConsumed,
+  isActive = true,
 }) => {
   const [error, setError] = useState<string | null>(null);
 
@@ -99,6 +106,7 @@ const ExportTab: React.FC<ExportTabProps> = ({
     oktaOrigin,
     hasConnectedTab: targetTabId != null,
     onError: setError,
+    enabled: isActive,
   });
 
   const { descriptor, selectEntity, setContext } = tab;

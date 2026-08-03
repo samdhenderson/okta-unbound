@@ -20,6 +20,15 @@
  * {@link sidepanel/hooks/useScrollPreservation.useScrollPreservation}. One
  * `PageHeader` stays mounted throughout and swaps its contents, per ADR-0008's
  * stable-region precedent.
+ *
+ * ## Leaving the tab
+ *
+ * {@link App} applies the same treatment one level up: the tab is hidden, not
+ * unmounted, when another top-level tab is selected, so the pushed detail view and
+ * everything behind it survive a trip to the Rules tab and back. In exchange the
+ * tab must stay inert while hidden — `isActive` gates the live-search debounce (the
+ * one hook here that can issue an Okta request without a click) and extends the
+ * list's scroll preservation to cover the tab-level hide as well as the push/pop one.
  */
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import PageHeader from './shared/PageHeader';
@@ -63,6 +72,12 @@ interface GroupsTabProps {
   selectedGroupId?: string | null;
   /** Called once the highlighted group has been shown, so the parent can clear it. */
   onGroupSelected?: () => void;
+  /**
+   * Whether this is the selected top-level tab. The tab stays mounted while
+   * hidden, so background work that could reach Okta (the live-search debounce)
+   * is gated on it. Defaults to `true` for standalone use.
+   */
+  isActive?: boolean;
 }
 
 /** Breadcrumb label for a group pushed onto the view stack. */
@@ -96,6 +111,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   onNavigateToRule,
   selectedGroupId,
   onGroupSelected,
+  isActive = true,
 }) => {
   // Shell-owned state: error has three producers (loader, live search, useOktaApi
   // onResult) so it stays here; searchMode is read by three hooks so it stays above
@@ -120,7 +136,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
 
   const api = useOktaApi({ targetTabId, onResult: handleResult });
 
-  const liveSearch = useGroupLiveSearch({ targetTabId, searchMode, setError });
+  const liveSearch = useGroupLiveSearch({ targetTabId, searchMode, setError, enabled: isActive });
   const loader = useGroupsLoader({
     api,
     setError,
@@ -149,7 +165,9 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
     getKey: groupCrumbKey,
     viewRef: detailViewRef,
   });
-  const captureListScroll = useScrollPreservation(listScrollRef, nav.isRoot);
+  // Visible only when this tab is selected *and* no detail view is pushed — both
+  // hide the list with `display: none`, and both destroy its scroll box.
+  const captureListScroll = useScrollPreservation(listScrollRef, isActive && nav.isRoot);
 
   const handleCloseMerge = useCallback(() => {
     setShowMergeModal(false);
@@ -446,6 +464,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
               oktaOrigin={oktaOrigin}
               onNavigateToRule={onNavigateToRule}
               autoAnalyze={autoAnalyzeGroupId === detailGroup.id}
+              isActive={isActive}
             />
           </div>
         )}

@@ -355,6 +355,28 @@ describe('live search: debounce contract', () => {
     expect(searchCalls()[0]).toMatchObject({ tabId: 2, priority: 'interactive' });
   });
 
+  it('does not re-fire on a targetTabId change while the tab is hidden, and catches up on return', async () => {
+    // App keeps every visited tab mounted, so this effect stays alive after the
+    // user has moved on. Re-issuing the last typed query from a tab nobody can
+    // see is Okta traffic with no reader.
+    useDebounceTimers();
+    routeSearch(() => ({ success: true, data: [] }));
+
+    const { rerender } = render(<GroupsTab targetTabId={1} isActive />);
+    typeInto(liveInput(), 'eng');
+    await advance(300);
+    runtimeSendMessage.mockClear();
+
+    rerender(<GroupsTab targetTabId={2} isActive={false} />);
+    await advance(300);
+    expect(searchCalls()).toHaveLength(0);
+
+    rerender(<GroupsTab targetTabId={2} isActive />);
+    await advance(300);
+    expect(searchCalls()).toHaveLength(1);
+    expect(searchCalls()[0]).toMatchObject({ tabId: 2, priority: 'interactive' });
+  });
+
   it('routes live search through the background scheduler, never a direct content call (§8)', async () => {
     useDebounceTimers();
     routeSearch(() => ({ success: true, data: [rawGroup()] }));

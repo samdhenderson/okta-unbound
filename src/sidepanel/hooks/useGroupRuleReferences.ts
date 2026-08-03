@@ -56,11 +56,17 @@ export interface UseGroupRuleReferencesReturn {
  *
  * @param groupId - Group to look up.
  * @param targetTabId - Connected Okta tab id (the load no-ops when absent).
+ * @param enabled - Whether the hosting tab is the visible one. The Group Detail
+ *   view stays mounted while another top-level tab is selected, and a new
+ *   `targetTabId` re-arms the load — so while this is `false` the load is
+ *   **deferred, not dropped**, and runs once the view is on screen again.
+ *   Defaults to `true`.
  * @returns The referencing rules plus the load status/error.
  */
 export function useGroupRuleReferences(
   groupId: string,
   targetTabId?: number,
+  enabled = true,
 ): UseGroupRuleReferencesReturn {
   const api = useOktaApi({ targetTabId: targetTabId ?? null });
   const { ensureGroupRulesLoaded } = api;
@@ -84,7 +90,17 @@ export function useGroupRuleReferences(
     setError(null);
   }
 
+  // A load becomes owed whenever the group or the API target changes, and is paid
+  // the next time the view is actually visible. Split in two so re-showing the tab
+  // does not by itself re-request: the flag is only raised by a real input change.
+  const owedRef = useRef(true);
   useEffect(() => {
+    owedRef.current = true;
+  }, [groupId, ensureGroupRulesLoaded]);
+
+  useEffect(() => {
+    if (!enabled || !owedRef.current) return;
+    owedRef.current = false;
     const runId = ++runIdRef.current;
 
     ensureGroupRulesLoaded()
@@ -113,7 +129,7 @@ export function useGroupRuleReferences(
         setError(err instanceof Error ? err.message : 'Failed to load referencing rules');
         setStatus('error');
       });
-  }, [groupId, ensureGroupRulesLoaded]);
+  }, [enabled, groupId, ensureGroupRulesLoaded]);
 
   return { rules, status, error };
 }

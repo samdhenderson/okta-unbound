@@ -65,6 +65,52 @@ describe('useScrollPreservation', () => {
     expect(node.scrollTop).toBe(120);
   });
 
+  it('restores a scrolled offset that capture() was never called for', () => {
+    // The tab-level hide: App hides the whole tab, so the consumer has no push
+    // handler to call capture() from. The passive scroll mirror covers it.
+    const ref = createRef<HTMLElement>();
+    (ref as { current: HTMLElement | null }).current = scrollBox(0);
+
+    const { rerender } = renderHook(({ visible }) => useScrollPreservation(ref, visible), {
+      initialProps: { visible: true },
+    });
+
+    ref.current!.scrollTop = 640;
+    act(() => {
+      ref.current!.dispatchEvent(new Event('scroll'));
+    });
+
+    ref.current!.scrollTop = 0; // what `display: none` does to the scroll box
+    rerender({ visible: false });
+    rerender({ visible: true });
+
+    expect(ref.current!.scrollTop).toBe(640);
+  });
+
+  it('stops mirroring scroll once hidden, so a reset to zero is not banked', () => {
+    const ref = createRef<HTMLElement>();
+    (ref as { current: HTMLElement | null }).current = scrollBox(0);
+
+    const { rerender } = renderHook(({ visible }) => useScrollPreservation(ref, visible), {
+      initialProps: { visible: true },
+    });
+
+    ref.current!.scrollTop = 200;
+    act(() => {
+      ref.current!.dispatchEvent(new Event('scroll'));
+    });
+
+    rerender({ visible: false });
+    // A late scroll event for the destroyed box must not overwrite the offset.
+    ref.current!.scrollTop = 0;
+    act(() => {
+      ref.current!.dispatchEvent(new Event('scroll'));
+    });
+    rerender({ visible: true });
+
+    expect(ref.current!.scrollTop).toBe(200);
+  });
+
   it('restores again on a second hide/show cycle with a fresh capture', () => {
     const ref = createRef<HTMLElement>();
     (ref as { current: HTMLElement | null }).current = scrollBox(50);
