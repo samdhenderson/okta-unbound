@@ -17,6 +17,7 @@ import { RulesCache } from '../../../shared/rulesCache';
 // cache-miss branches of getGroupRulesForGroup deterministically.
 vi.mock('../../../shared/rulesCache', () => ({
   RulesCache: {
+    get: vi.fn(),
     getRulesForGroup: vi.fn(),
     isFresh: vi.fn(),
     set: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock('../../../shared/rulesCache', () => ({
 
 // Per-method mocks (typed): vi.mocked on the class itself does not deep-type the
 // static methods, so wrap each method to expose the mock control surface.
+const getMock = vi.mocked(RulesCache.get);
 const getRulesForGroupMock = vi.mocked(RulesCache.getRulesForGroup);
 const isFreshMock = vi.mocked(RulesCache.isFresh);
 const setMock = vi.mocked(RulesCache.set);
@@ -50,6 +52,7 @@ const NEXT_LINK =
 
 beforeEach(() => {
   vi.clearAllMocks();
+  getMock.mockResolvedValue(null);
   getRulesForGroupMock.mockResolvedValue([]);
   isFreshMock.mockResolvedValue(false);
 });
@@ -314,6 +317,73 @@ describe('getGroupRulesForGroup pagination + cache write-back', () => {
     expect(second.map((r) => (r as { id: string }).id)).toEqual(['r1']);
     // No additional fetch: the second call was served from the cache write-back.
     expect(makeApiRequest).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ensureGroupRulesLoaded', () => {
+  const RULES_NEXT_LINK =
+    '<https://fake.okta.example.com/api/v1/groups/rules?after=CURSOR2&limit=200>; rel="next"';
+
+  it('serves a warm cache without issuing any request', async () => {
+    getMock.mockResolvedValue({
+      rules: [{ id: 'r1' }],
+      rawRules: [],
+      stats: { total: 1, active: 1, inactive: 0, conflicts: 0 },
+      conflicts: [],
+      timestamp: Date.now(),
+      ttl: 1000,
+    } as unknown as Awaited<ReturnType<typeof RulesCache.get>>);
+    const makeApiRequest = vi.fn();
+    const core = makeCore({ makeApiRequest });
+
+    const rules = await createGroupDiscoveryOperations(core).ensureGroupRulesLoaded();
+
+    expect(rules?.map((r) => r.id)).toEqual(['r1']);
+    expect(makeApiRequest).not.toHaveBeenCalled();
+    expect(setMock).not.toHaveBeenCalled();
+  });
+
+  it('on a cold cache fetches the org-wide listing ONCE and caches it', async () => {
+    const makeApiRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        success: true,
+        data: [
+          { id: 'r1', status: 'ACTIVE', actions: { assignUserToGroups: { groupIds: ['g1'] } } },
+        ],
+        headers: { link: RULES_NEXT_LINK },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: [
+          { id: 'r2', status: 'INACTIVE', actions: { assignUserToGroups: { groupIds: ['g2'] } } },
+        ],
+        headers: {},
+      });
+    const core = makeCore({ makeApiRequest });
+
+    const rules = await createGroupDiscoveryOperations(core).ensureGroupRulesLoaded();
+
+    expect(rules?.map((r) => r.id)).toEqual(['r1', 'r2']);
+    // One org-wide listing (paged), never one request per group.
+    expect(makeApiRequest).toHaveBeenNthCalledWith(1, '/api/v1/groups/rules?limit=200');
+    expect(makeApiRequest).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/groups/rules?after=CURSOR2&limit=200',
+    );
+    expect(makeApiRequest).toHaveBeenCalledTimes(2);
+    expect(setMock).toHaveBeenCalledTimes(1);
+    const [, , stats] = setMock.mock.calls[0];
+    expect(stats).toEqual({ total: 2, active: 1, inactive: 1, conflicts: 0 });
+  });
+
+  it('returns null (never throws) when the listing fails, so the group load can continue', async () => {
+    const core = makeCore({
+      makeApiRequest: vi.fn().mockResolvedValue({ success: false, error: 'boom' }),
+    });
+
+    await expect(createGroupDiscoveryOperations(core).ensureGroupRulesLoaded()).resolves.toBeNull();
+    expect(setMock).not.toHaveBeenCalled();
   });
 });
 

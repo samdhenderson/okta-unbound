@@ -50,7 +50,7 @@ describe('GroupSourceModal', () => {
               mappingId: 'm1',
               sourceUserGroupId: 'g1',
               targetGroupName: 'X',
-              status: 'ACTIVE',
+              priority: 0,
               appId: 'a1',
               appName: 'Salesforce',
             },

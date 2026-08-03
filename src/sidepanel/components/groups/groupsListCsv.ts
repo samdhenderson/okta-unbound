@@ -2,7 +2,7 @@
  * @module sidepanel/components/groups/groupsListCsv
  * @description Pure builder for the Groups tab "export groups list" CSV.
  *
- * Produces the ID/Name/Description/Type/Member Count/Staleness Score/Push Status
+ * Produces the ID/Name/Description/Type/Member Count/Push Status
  * table. Every cell goes through the shared {@link escapeCSV} guard, so
  * end-user-controllable values (group names, descriptions) get RFC 4180 quote
  * doubling plus the spreadsheet-formula-injection prefix. Cells are then
@@ -13,15 +13,7 @@ import type { GroupSummary } from '../../../shared/types';
 import { escapeCSV } from '../../../shared/utils/csvUtils';
 
 /** Column headers of the groups-list export, in emission order. */
-const HEADERS = [
-  'ID',
-  'Name',
-  'Description',
-  'Type',
-  'Member Count',
-  'Staleness Score',
-  'Push Status',
-];
+const HEADERS = ['ID', 'Name', 'Description', 'Type', 'Member Count', 'Push Status'];
 
 /**
  * Escape one cell through the shared guard, then force the quote wrap.
@@ -53,7 +45,6 @@ export function buildGroupsListCsv(groups: GroupSummary[]): string {
     g.description || '',
     g.type || '',
     g.memberCount ?? 0,
-    g.staleness?.score ?? '',
     g.pushMappings?.length ? `Pushed (${g.pushMappings.length})` : 'Not Pushed',
   ]);
   return [HEADERS, ...rows].map((row) => row.map(quoteCell).join(',')).join('\n');

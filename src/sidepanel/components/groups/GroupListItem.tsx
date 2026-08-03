@@ -2,40 +2,16 @@
  * @module sidepanel/components/groups/GroupListItem
  * @description A single expandable row in the groups list.
  *
- * Collapsed, it shows the name, type/source/push/staleness badges, and metadata;
- * expanded, it reveals description, ids, dates, push mappings, and staleness factors.
+ * Collapsed, it shows the name, type/source/push badges, and metadata;
+ * expanded, it reveals description, ids, dates, and push mappings.
  * Memoised with a custom comparator so unaffected rows skip re-render in long lists.
  */
 import React, { useState, useCallback, memo } from 'react';
 import { Button, IconButton, Checkbox } from '../shared';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
-import type { GroupSummary, StalenessInfo } from '../../../shared/types';
+import type { GroupSummary } from '../../../shared/types';
 import { oktaAdminEntityUrl } from '../../../shared/utils/oktaUrl';
-import { formatDate, formatDateShort } from '../../../shared/utils/dateFormat';
-
-/**
- * Map a staleness score (0–100) to its badge colors and label.
- * @returns Tailwind bg/text token classes plus the human-readable bucket label.
- */
-function getStalenessColor(score: number): { bg: string; text: string; label: string } {
-  if (score <= 25) return { bg: 'bg-success-light', text: 'text-success-text', label: 'Healthy' };
-  if (score <= 50) return { bg: 'bg-warning-light', text: 'text-warning-text', label: 'Monitor' };
-  if (score <= 75) return { bg: 'bg-warning-light', text: 'text-danger-text', label: 'Stale' };
-  return { bg: 'bg-danger-light', text: 'text-danger-text', label: 'Very Stale' };
-}
-
-/** Colored pill showing a group's staleness label and score, with factors in the tooltip. */
-const StalenessIndicator: React.FC<{ staleness: StalenessInfo }> = ({ staleness }) => {
-  const color = getStalenessColor(staleness.score);
-  return (
-    <span
-      className={`px-2 py-0.5 rounded-md text-xs font-medium ${color.bg} ${color.text}`}
-      title={`Staleness: ${staleness.score}/100 - ${staleness.factors.join(', ')}`}
-    >
-      {color.label} ({staleness.score})
-    </span>
-  );
-};
+import { formatDate } from '../../../shared/utils/dateFormat';
 
 /**
  * Lightning badge summarizing how a group relates to group rules. The count is
@@ -213,10 +189,6 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
                           </span>
                         );
                       })()}
-
-                    {group.staleness && group.staleness.score > 0 && (
-                      <StalenessIndicator staleness={group.staleness} />
-                    )}
                   </div>
                 </div>
 
@@ -291,25 +263,6 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
                 </div>
 
                 <RuleRelationBadge group={group} />
-
-                {group.lastMembershipUpdated && (
-                  <div className="inline-flex items-center gap-1" title="Last membership change">
-                    <svg
-                      className="w-3.5 h-3.5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                    <span>{formatDateShort(group.lastMembershipUpdated)}</span>
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -394,17 +347,6 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
                   <div className="text-xs text-neutral-900">{formatDate(group.created)}</div>
                 </div>
               )}
-
-              {group.lastMembershipUpdated && (
-                <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
-                  <div className="text-xs font-medium text-neutral-600 mb-0.5">
-                    Last Membership Change
-                  </div>
-                  <div className="text-xs text-neutral-900">
-                    {formatDate(group.lastMembershipUpdated)}
-                  </div>
-                </div>
-              )}
             </div>
 
             {group.type === 'APP_GROUP' && group.sourceAppName && (
@@ -434,31 +376,21 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
                         </div>
                       )}
                     </div>
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                        m.status === 'ACTIVE'
-                          ? 'bg-success text-white'
-                          : 'bg-neutral-200 text-neutral-600'
-                      }`}
-                    >
-                      {m.status}
-                    </span>
+                    {/*
+                      No status pill: the app-group assignment endpoint returns no
+                      activation status, so there is nothing honest to show here.
+                      `priority` is a real returned field and is labelled as such.
+                    */}
+                    {m.priority !== undefined && (
+                      <span
+                        className="px-1.5 py-0.5 rounded text-xs font-medium bg-neutral-200 text-neutral-600"
+                        title="Okta assignment priority — not an activation status"
+                      >
+                        Priority {m.priority}
+                      </span>
+                    )}
                   </div>
                 ))}
-              </div>
-            )}
-
-            {group.staleness && group.staleness.score > 0 && group.staleness.factors.length > 0 && (
-              <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
-                <div className="text-xs font-medium text-neutral-600 mb-1">Staleness Factors</div>
-                <ul className="text-xs text-neutral-700 space-y-0.5">
-                  {group.staleness.factors.map((f, i) => (
-                    <li key={i} className="flex items-center gap-1.5">
-                      <span className="w-1 h-1 rounded-full bg-neutral-400 shrink-0" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
               </div>
             )}
           </div>
@@ -475,7 +407,6 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
       prevProps.group.hasRules === nextProps.group.hasRules &&
       prevProps.group.ruleCount === nextProps.group.ruleCount &&
       prevProps.group.pushMappings === nextProps.group.pushMappings &&
-      prevProps.group.staleness?.score === nextProps.group.staleness?.score &&
       prevProps.selected === nextProps.selected &&
       prevProps.oktaOrigin === nextProps.oktaOrigin &&
       prevProps.isHighlighted === nextProps.isHighlighted

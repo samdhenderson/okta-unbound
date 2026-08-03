@@ -88,12 +88,14 @@ describe('getAppPushGroupMappings boundary validation', () => {
       undefined,
       'low',
     );
+    // No `status`: the endpoint returns none, so none is synthesized. Okta's
+    // real `priority` is carried through verbatim instead.
     expect(mappings).toEqual([
       {
         mappingId: '00gFAKE1',
         sourceUserGroupId: '00gFAKE1',
         targetGroupName: 'Pushed Group',
-        status: 'ACTIVE',
+        priority: 0,
         appId: '0oaFAKE1',
         appName: 'Fake App',
       },

@@ -110,6 +110,7 @@ export function makeUseOktaApiValue(overrides: UseOktaApiValue = {}): UseOktaApi
     removeDeprovisioned: asyncFn(),
     getAllGroups: asyncFn([]),
     getGroupMemberCount: asyncFn(0),
+    ensureGroupRulesLoaded: asyncFn(null),
     getGroupRulesForGroup: asyncFn([]),
     executeBulkOperation: asyncFn(),
     searchGroups: asyncFn([]),
@@ -154,7 +155,6 @@ export function makeUseOktaApiValue(overrides: UseOktaApiValue = {}): UseOktaApi
     // Group analysis operations
     compareGroups: asyncFn(null),
     searchUserAcrossGroups: asyncFn([]),
-    calculateStaleness: asyncFn(null),
 
     // Rule impact preview (read-only)
     captureRuleImpact: asyncFn(null),

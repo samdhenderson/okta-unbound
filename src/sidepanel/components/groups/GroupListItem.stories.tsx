@@ -13,7 +13,6 @@ const baseGroup: GroupSummary = {
   ruleCount: 2,
   created: new Date('2023-01-15'),
   lastUpdated: new Date('2026-06-01'),
-  lastMembershipUpdated: new Date('2026-06-10'),
 };
 
 const appGroup: GroupSummary = {
@@ -36,7 +35,7 @@ const pushedGroup: GroupSummary = {
       mappingId: 'map1',
       sourceUserGroupId: '00g8p9u0s1',
       targetGroupName: 'AD - Push Group',
-      status: 'ACTIVE',
+      priority: 0,
       appId: 'app1',
       appName: 'Salesforce',
     },
@@ -44,21 +43,11 @@ const pushedGroup: GroupSummary = {
       mappingId: 'map2',
       sourceUserGroupId: '00g8p9u0s1',
       targetGroupName: 'Workday - Push Group',
-      status: 'INACTIVE',
+      priority: 1,
       appId: 'app2',
       appName: 'Workday',
     },
   ],
-};
-
-const staleGroup: GroupSummary = {
-  ...baseGroup,
-  id: '00g9s0t1a2',
-  name: 'Legacy Contractors',
-  staleness: {
-    score: 82,
-    factors: ['No membership changes in 400 days', 'No active rules', 'Owner deprovisioned'],
-  },
 };
 
 const longNameGroup: GroupSummary = {
@@ -80,9 +69,9 @@ const meta = {
       description: {
         component:
           'A single expandable row in the groups list.\n\n' +
-          'Renders the group name, type/rule/push/staleness badges, and a selection ' +
-          'checkbox; expanding the row reveals member metadata, push mappings, and ' +
-          'staleness factors. Highlights when selected, adds an "Open in Okta" deep link ' +
+          'Renders the group name, type/rule/push badges, and a selection ' +
+          'checkbox; expanding the row reveals member metadata and push mappings. ' +
+          'Highlights when selected, adds an "Open in Okta" deep link ' +
           'when `oktaOrigin` is set, and auto-expands with a ring when deep-linked as a ' +
           'highlight target.',
       },
@@ -126,14 +115,9 @@ export const AppGroup: Story = {
   args: { group: appGroup },
 };
 
-/** A group with active push mappings — expand the row to see the mappings list. */
+/** A group with push mappings — expand the row to see the mappings list. */
 export const WithPushMappings: Story = {
   args: { group: pushedGroup },
-};
-
-/** A very stale group — expand the row to see the staleness factors. */
-export const Stale: Story = {
-  args: { group: staleGroup },
 };
 
 /** `oktaOrigin` present — adds the "Open in Okta" deep-link button. */
@@ -143,7 +127,7 @@ export const WithOktaLink: Story = {
 
 /** Auto-expands and shows a highlight ring (deep-linked from the Rules tab). */
 export const Highlighted: Story = {
-  args: { group: staleGroup, isHighlighted: true },
+  args: { group: baseGroup, isHighlighted: true },
 };
 
 /** No "Why does this group exist?" analysis available. */

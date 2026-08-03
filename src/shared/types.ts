@@ -361,20 +361,25 @@ export interface AuditSettings {
   retentionDays: number;
 }
 
-/** A push-group mapping linking a source Okta group to an app's target group. */
+/**
+ * A push-group mapping linking a source Okta group to an app's target group.
+ *
+ * Deliberately carries **no status**. `GET /api/v1/apps/{appId}/groups` returns
+ * no status for an app-group assignment, so any ACTIVE/INACTIVE label here would
+ * be an inference dressed up as an Okta fact. `priority` is the real field the
+ * assignment does return.
+ */
 export interface PushGroupMapping {
   mappingId: string;
   sourceUserGroupId: string;
   targetGroupName: string;
-  status: 'ACTIVE' | 'INACTIVE' | 'UNLINKED';
+  /**
+   * The assignment's priority as returned by Okta, when present. This is a real
+   * API field — it is NOT an activation state and must not be rendered as one.
+   */
+  priority?: number;
   appId: string;
   appName?: string;
-}
-
-/** Heuristic staleness score for a group and the factors that contributed. */
-export interface StalenessInfo {
-  score: number; // 0-100 (100 = most stale)
-  factors: string[];
 }
 
 /** Result of comparing membership across multiple groups. */
@@ -395,7 +400,7 @@ export interface GroupCollection {
   updatedAt: number;
 }
 
-/** Enriched group row for the group-browse UI (counts, rules, staleness, source app). */
+/** Enriched group row for the group-browse UI (counts, rules, source app). */
 export interface GroupSummary {
   id: string;
   name: string;
@@ -403,7 +408,6 @@ export interface GroupSummary {
   type: GroupType;
   memberCount: number;
   lastUpdated?: Date;
-  lastMembershipUpdated?: Date;
   /** Whether at least one rule assigns users to this group (a feeding/target rule). */
   hasRules: boolean;
   /** Number of rules that assign users to this group (its feeding/target set). */
@@ -419,7 +423,6 @@ export interface GroupSummary {
   sourceAppName?: string;
   created?: Date;
   pushMappings?: PushGroupMapping[];
-  staleness?: StalenessInfo;
 }
 
 /** A queued/running multi-group bulk operation and its per-group results. */

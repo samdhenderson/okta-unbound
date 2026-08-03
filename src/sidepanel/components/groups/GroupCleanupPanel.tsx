@@ -105,7 +105,7 @@ const GroupCleanupPanel: React.FC<GroupCleanupPanelProps> = ({
               value={report.categories.stale.length}
               color="warning"
               icon="pause"
-              subtitle="no recent activity"
+              subtitle="not updated in 1+ year"
               onClick={
                 report.categories.stale.length > 0
                   ? () => onSelectGroups(report.categories.stale)
@@ -178,7 +178,7 @@ const GroupCleanupPanel: React.FC<GroupCleanupPanelProps> = ({
             Select a category to load those groups into the selection bar, then{' '}
             <strong>Compare</strong>, <strong>Merge</strong>, or <strong>Export</strong> them — or
             hit <strong>Why?</strong> to see what feeds a group first. Detection is local (member
-            counts, names, staleness); nothing here deletes a group.
+            counts, names, last-updated dates); nothing here deletes a group.
           </p>
         </>
       )}

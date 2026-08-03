@@ -4,7 +4,12 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { analyzeClutter, normalizeGroupName, CLUTTER_WEIGHTS } from './clutterAnalysis';
+import {
+  analyzeClutter,
+  normalizeGroupName,
+  CLUTTER_WEIGHTS,
+  STALE_AGE_DAYS,
+} from './clutterAnalysis';
 import type { GroupSummary } from '../../../shared/types';
 
 function group(overrides: Partial<GroupSummary> & { id: string; name: string }): GroupSummary {
@@ -17,6 +22,12 @@ function group(overrides: Partial<GroupSummary> & { id: string; name: string }):
     ...overrides,
   };
 }
+
+/** A fixed "now" so the age predicate is deterministic. */
+const NOW = new Date('2026-07-01T00:00:00.000Z').getTime();
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+/** A `lastUpdated` exactly `days` before {@link NOW}. */
+const daysAgo = (days: number) => new Date(NOW - days * MS_PER_DAY);
 
 describe('normalizeGroupName', () => {
   it('lower-cases, trims, and collapses whitespace', () => {
@@ -44,12 +55,22 @@ describe('analyzeClutter', () => {
     expect(report.duplicateNameClusters[0].groupIds.sort()).toEqual(['g1', 'g2']);
   });
 
-  it('flags stale groups at/above the threshold only', () => {
-    const report = analyzeClutter([
-      group({ id: 'g1', name: 'Stale', staleness: { score: 70, factors: [] } }),
-      group({ id: 'g2', name: 'Fresh', staleness: { score: 30, factors: [] } }),
-    ]);
+  it('flags groups at/above the age threshold only', () => {
+    const report = analyzeClutter(
+      [
+        group({ id: 'g1', name: 'Stale', lastUpdated: daysAgo(STALE_AGE_DAYS) }),
+        group({ id: 'g2', name: 'Fresh', lastUpdated: daysAgo(STALE_AGE_DAYS - 1) }),
+      ],
+      NOW,
+    );
     expect(report.categories.stale).toEqual(['g1']);
+    expect(report.entries[0].reasons).toContain('Not updated in over a year');
+  });
+
+  it('does not flag a group with no lastUpdated date (missing data is not age)', () => {
+    const report = analyzeClutter([group({ id: 'g1', name: 'NoDate' })], NOW);
+    expect(report.categories.stale).toEqual([]);
+    expect(report.entries).toHaveLength(0);
   });
 
   it('does not flag a group solely for a missing description (hygiene, not clutter)', () => {
@@ -67,19 +88,22 @@ describe('analyzeClutter', () => {
   });
 
   it('fuses signals into reviewScore and sorts flagged groups descending', () => {
-    const report = analyzeClutter([
-      // Empty only -> 40
-      group({ id: 'g1', name: 'A', memberCount: 0 }),
-      // Empty + duplicate + stale + no desc -> capped 100
-      group({
-        id: 'g2',
-        name: 'Dup',
-        memberCount: 0,
-        description: undefined,
-        staleness: { score: 90, factors: [] },
-      }),
-      group({ id: 'g3', name: 'dup', memberCount: 3 }),
-    ]);
+    const report = analyzeClutter(
+      [
+        // Empty only -> 40
+        group({ id: 'g1', name: 'A', memberCount: 0 }),
+        // Empty + duplicate + stale + no desc -> capped 100
+        group({
+          id: 'g2',
+          name: 'Dup',
+          memberCount: 0,
+          description: undefined,
+          lastUpdated: daysAgo(STALE_AGE_DAYS + 35),
+        }),
+        group({ id: 'g3', name: 'dup', memberCount: 3 }),
+      ],
+      NOW,
+    );
     // g2 has the most signals -> first.
     expect(report.entries[0].group.id).toBe('g2');
     expect(report.entries[0].reviewScore).toBe(100);
