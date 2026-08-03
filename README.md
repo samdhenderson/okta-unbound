@@ -61,7 +61,10 @@ User search and membership analysis:
 - Search by email, name, or login
 - Comprehensive user profile display
 - Group membership with type detection (`RULE_BASED`, `DIRECT`, `APP_GROUP`)
-- Rule attribution analysis
+- Rule attribution: each membership is tested against the conditions of the rules that
+  feed the group, so a hand-added user in a rule-fed group is no longer reported as
+  rule-managed. Conditions the extension cannot evaluate locally (notably
+  `isMemberOfGroup*`) are labelled indeterminate rather than guessed
 
 ### Groups tab
 
@@ -69,11 +72,17 @@ Hybrid search and bulk operations:
 
 - **Live mode**: real-time API search with instant results
 - **Cached mode**: load all groups once, then filter by type, size, push status
+- A compact row per group answering _where do these members come from_ — rules that feed
+  the group and rules that merely reference it are counted separately, never merged
+- Drill into a group detail view: identity, member-source breakdown, both rule
+  relationships, app-push mappings, and metadata — with the list's filters, selection and
+  scroll position intact when you come back
 - Multi-select with bulk operations (remove inactive users, export)
 - Group collections for frequently used sets
 - Compare 2–5 groups with Venn-diagram visualization
 - Cross-group user search
-- Cleanup triage: a fused "review score" surfaces empty, duplicate-named, and stale groups
+- Cleanup triage: a fused "review score" surfaces empty, duplicate-named, and stale
+  groups (stale = no update in over a year, from Okta's own `lastUpdated`)
 - Group merge: consolidate membership into a survivor group, fully audited and reversible
 
 ### Rules tab

@@ -27,9 +27,10 @@ type SerializedGroup = { lastUpdated?: string; created?: string; [key: string]: 
 /**
  * Revive a cached group's ISO date strings back into `Date`s.
  *
- * Only `lastUpdated` and `created` are revived — `lastMembershipUpdated` and any
- * nested dates stay strings after a cache load. That asymmetry is existing
- * behavior; preserve it.
+ * Only `lastUpdated` and `created` are revived. Every other key is spread through
+ * verbatim, so any other date-shaped field — a nested date, or a key left behind by
+ * an older cache payload — comes back as a string. That asymmetry is existing
+ * behavior and is pinned by a test; preserve it.
  */
 export function reviveGroupDates(g: SerializedGroup): GroupSummary {
   return {

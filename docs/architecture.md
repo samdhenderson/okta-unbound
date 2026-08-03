@@ -62,6 +62,26 @@ Pure React — hooks + two contexts (`SchedulerContext`, `ProgressContext`). No
 Redux/Zustand/React Query. See [state-management.md](./state-management.md) for the
 hook-vs-context-vs-local decision and how the god components were decomposed.
 
+## The side-panel shell: tab lifetime and sub-navigation
+
+There is no router. `App.tsx` owns the active tab, and navigation happens at two
+levels:
+
+- **Between tabs — a tab mounts on first activation and is then hidden, never
+  unmounted** (ADR-0018). `renderTabPanel` toggles `.tab-content` /
+  `.tab-content.active` (`display: none` / `block`) plus the `hidden` attribute, and
+  each panel has its own `Suspense` boundary so a newly activated `React.lazy` chunk
+  cannot blank the tabs beside it. **Consequence, and it is a hard one:** every tab
+  is passed `isActive` and must gate on it anything that reaches Okta, polls,
+  re-probes page context, or listens on `window`/`document`. A hidden tab that
+  fetches is spending the shared scheduler budget invisibly.
+- **Within a tab — `useViewStack`** (ADR-0016) gives a tab shell a typed push/pop
+  stack with a breadcrumb `trail`, rendered through one always-mounted `PageHeader`
+  (`onBack` / `breadcrumbs` slots) and the shared `Breadcrumbs`. The pushed view is a
+  **sibling** of the hidden-but-mounted list, not a replacement, so list state
+  survives the round trip; `useScrollPreservation` carries the scroll offset that
+  `display: none` destroys. First consumer: `GroupsTab` → `GroupDetailView`.
+
 ## Persistence
 
 - `chrome.storage.local` / `sync` — tab state, preferences.

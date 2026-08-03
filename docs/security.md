@@ -143,15 +143,34 @@ Enforced at the single fetch choke point,
   membership responses validate through `parseOktaList()`, which drops-and-logs malformed
   items rather than failing the whole response (degrade-not-crash). See
   [ADR-0006](./adr/0006-zod-boundary-validation.md).
-- **No dynamic code execution.** Rule expressions are evaluated by a hand-written
-  lexer + recursive-descent parser
-  ([`shared/ruleEvaluator.ts`](../src/shared/ruleEvaluator.ts)): input outside the grammar
-  throws, function-call tokens resolve to `false` rather than executing, and
-  `canEvaluateClientSide` gates unsupported expressions. Grep confirms **zero**
+- **No dynamic code execution.** Rule expressions are end-user-authored, hence untrusted.
+  Syntax is handled by [`jsep`](https://github.com/EricSmekens/jsep) — pinned exactly at
+  `1.4.0`, MIT, no transitive dependencies — which builds an **AST only**: it evaluates
+  nothing and generates no code. Semantics are first-party:
+  [`shared/ruleEvaluator.ts`](../src/shared/ruleEvaluator.ts) walks that AST against an
+  explicit **allow-list** of operators, fixed-arity Okta EL functions
+  (`SUPPORTED_FUNCTIONS`), and single-level `user.<attribute>` reads; anything else —
+  unknown function, unmodelled node, computed access, wrong argument count — is reported
+  _unevaluable_, never approximated. `canEvaluateClientSide()` applies that same
+  allow-list as an **AST walk**, not a substring scan, so nothing can pass the gate and
+  then fail inside the evaluator. Parsing is capped at 4096 characters to bound the work
+  an adversarial tenant value can force, and expression text is **never logged**
+  (literals can carry tenant PII) — only a reason code. Grep confirms **zero**
   `eval`/`new Function`/string-`setTimeout`/`innerHTML`/`document.write`/
   `dangerouslySetInnerHTML` in production code. The manifest pins an explicit CSP
   (`script-src 'self'; object-src 'self'`) matching the hardened MV3 default, so
-  dynamic execution and remote scripts are blocked at runtime.
+  dynamic execution and remote scripts are blocked at runtime. Rationale, and why
+  `jse-eval`/`expression-eval` were rejected (they evaluate arbitrary JS semantics):
+  [ADR-0017](./adr/0017-jsep-expression-evaluation.md).
+- **"Cannot evaluate" is never reported as "does not match."**
+  `tryEvaluateRuleExpression()` returns `match | no-match | unevaluable`, using
+  three-valued logic so an unresolved operand poisons only the sub-expressions that
+  depend on it. This is a correctness property with security weight: these answers drive
+  membership attribution, so conflating "could not parse" with "did not match" would
+  present a confidently wrong access answer. Group-membership functions
+  (`isMemberOfGroup*`) and `app.*` context are always `unevaluable` — they need data this
+  module is not given — and callers render that as indeterminate rather than resolving it
+  either way.
 - **Okta-origin validation.** [`shared/utils/oktaUrl.ts`](../src/shared/utils/oktaUrl.ts)
   `isOktaUrl()` **parses the hostname** (`new URL`), requires `https:`, and matches against
   a hardcoded domain list by exact or dot-suffix equality — never substring matching.

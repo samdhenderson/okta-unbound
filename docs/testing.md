@@ -40,7 +40,16 @@ statements 80%, branches 75% (enforced in CI).
   the timer). A hanging test file also poisons unrelated commits, since the husky
   pre-commit resolves `vitest related --run` imports on disk. CI installs Chromium
   for the browser project; local runs pin the sandbox binary via
-  `VITEST_BROWSER_EXECUTABLE` (the `unit` project is browser-free).
+  `VITEST_BROWSER_EXECUTABLE` (the `unit` project is browser-free). In the dev
+  container that is:
+
+  ```
+  VITEST_BROWSER_EXECUTABLE=/opt/pw-browsers/chromium-1194/chrome-linux/chrome npm run test:storybook
+  ```
+
+  The pinned Playwright expects a newer Chromium build than the image ships, so
+  without the override it tries to download one and fails. Point it at the installed
+  binary — never skip the browser project to get a green run.
 
 ## Coverage gate
 

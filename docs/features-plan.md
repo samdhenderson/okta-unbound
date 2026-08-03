@@ -85,9 +85,11 @@ All four sub-features landed; the _why_ is captured in the code and ADRs.
   missing-description into one 0–100 review score. Surfaced as a **Cleanup** panel inside
   the Groups tab whose category counts are one-click selectors into the existing
   selection → bulk/export machinery — no new mutation surface.
-- **A2 — Membership-source insight** (`GroupSourceModal` + `useGroupSource` +
+- **A2 — Membership-source insight** (`useGroupSource` +
   `shared/membership/groupSource.ts`): per-group "why does this exist / who feeds it" —
-  feeding rules, app-push targets, and a gated manual-vs-rule split. Read-only.
+  feeding rules, app-push targets, and a gated manual-vs-rule split. Read-only. Its
+  original `GroupSourceModal` shell has since been retired: the content now lives in the
+  Group Detail view pushed from the groups list (ADR-0016).
 - **A3 — Group merge** (`GroupMergeModal` + `useGroupMerge` +
   `shared/membership/mergePlan.ts`): membership consolidation from the selection bar —
   copy sources into a survivor, empty the sources, block sources fed by an active rule;

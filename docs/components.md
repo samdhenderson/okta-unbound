@@ -113,3 +113,26 @@ barrel (`../shared`), not deep paths.
 - Composition over configuration: large feature UIs (e.g. a comparison modal) are
   built by composing primitives, and should be split into subcomponents rather than
   growing past ~300 lines (see [state-management.md](./state-management.md)).
+
+## List rows derive; they never fetch
+
+A row in a long list renders a few hundred times, so **a row must not own I/O.** Its
+entire rendered model is derived by a pure, I/O-free module from (a) the entity it was
+given and (b) data already banked in a session cache. `GroupListItem` is the pattern:
+`groupSourceSummary.ts` computes the badge, identity line, facts and meter state, and
+cannot fetch, which is the _structural_ guarantee — not a convention — that scrolling
+a list cannot trigger work.
+
+That guarantee is load-bearing for the member-source meter specifically: computing one
+breakdown costs `ceil(N/200)` paginated member requests **per group**, against a
+scheduler capped at 5 concurrent with a cooldown at 10% of remaining budget. So the
+row renders a meter only from a breakdown already in the cache
+(`useCachedMemberSource`, which has no API access at all); otherwise it says so and
+offers an explicit action that hands the job to a view which can show its cost.
+
+Two rules follow for any row-level fact:
+
+- **Unknown is not zero.** A count that has not been loaded yet renders as absent, not
+  as `0` (e.g. `usedInRuleCount` before the rules payload is known).
+- **Keep the memo comparator in step.** Rows are `memo`ised with a custom comparator;
+  every newly rendered field must be added to it, or long lists render stale.
