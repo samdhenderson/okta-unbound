@@ -89,6 +89,19 @@ export const PinnedLiveChanged: Story = {
   args: { isPinned: true, liveContextChanged: true, liveEntityName: 'Finance Team' },
 };
 
+/**
+ * Pinned, but the connection to the Okta tab is down. The pin keeps the frozen
+ * entity identity while the bar reports connection health truthfully — a red dot,
+ * `Not connected`, and the reload-tab affordance — instead of a permanent green dot.
+ */
+export const PinnedDisconnected: Story = {
+  args: {
+    isPinned: true,
+    connectionStatus: 'error',
+    error: 'Can’t reach the Okta tab — reload it to reconnect.',
+  },
+};
+
 /** Nothing pinnable yet (admin/unknown page) — pin disabled. */
 export const NotPinnable: Story = {
   args: {
