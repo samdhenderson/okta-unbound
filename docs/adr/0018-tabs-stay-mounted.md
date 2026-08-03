@@ -63,16 +63,16 @@ answer for "what does this do while hidden?". `App.tsx:108`'s
 `useOktaPageContext(activeTab === 'overview' && !isPinned)` is the original instance
 of the pattern. As audited at the time of this decision:
 
-| Tab      | What is gated while hidden                                                       |
-| -------- | -------------------------------------------------------------------------------- |
-| Overview | Live page-context re-probe (gated in `App`, predates this ADR)                   |
-| Rules    | The `window` scroll persister; `markTabVisited` fires per arrival, not per mount |
-| Users    | Live user-page detection, the user-search debounce, Add-to-Group type-ahead      |
-| Groups   | The live-search debounce; the detail view's two read-only loads                  |
-| Apps     | The one-per-connected-tab inventory auto-load                                    |
-| Policies | The one-per-connected-tab policy auto-load                                       |
-| Export   | The live match-count probe                                                       |
-| History  | Nothing to gate — `AuditLogViewer` reads IndexedDB, issues no Okta traffic       |
+| Tab      | What is gated while hidden                                                  |
+| -------- | --------------------------------------------------------------------------- |
+| Overview | Live page-context re-probe (gated in `App`, predates this ADR)              |
+| Rules    | `markTabVisited` fires per arrival, not per mount                           |
+| Users    | Live user-page detection, the user-search debounce, Add-to-Group type-ahead |
+| Groups   | The live-search debounce; the detail view's two read-only loads             |
+| Apps     | The one-per-connected-tab inventory auto-load                               |
+| Policies | The one-per-connected-tab policy auto-load                                  |
+| Export   | The live match-count probe                                                  |
+| History  | Nothing to gate — `AuditLogViewer` reads IndexedDB, issues no Okta traffic  |
 
 ### Two patterns for gating, and when to use which
 
@@ -94,6 +94,31 @@ returns at the top. `useScrollPreservation` mirrors `scrollTop` on a passive
 listener while the container is visible, which covers hides the tab did not
 initiate — a top-level tab switch has no `capture()` call site inside the tab.
 
+**Amended (2026-08): most tabs do not own a scroll box at all.** Only Groups and
+Users have one (`ScrollableList`). Every other tab scrolls the `h-screen
+overflow-y-auto` root div in `App` — _one element shared by all of them_. That has
+two consequences the original decision missed:
+
+- A tab's offset is not destroyed when it is hidden; it is **overwritten** by
+  whichever tab is shown next. Returning to a tab landed you wherever the tab you
+  visited in between left the shared element.
+- The Rules tab's persister aimed at `window`, which never scrolls when a child is
+  the scroller: `window.scrollY` is permanently `0`, `window.scrollTo` is a no-op,
+  and element `scroll` events do not bubble to `window`. All three call sites were
+  dead — the offset it wrote to `chrome.storage` was always `0`.
+
+So `App` now holds a ref on that root div and hands it to
+`TabPanel` (`components/TabPanel.tsx`), which wraps every panel and runs its own
+`useScrollPreservation(scrollRef, isActive)` against it. Each panel banks and
+restores _its own_ offset; a panel also zeroes the container once on mount, because
+it mounts already-visible (so the hook sees no `false → true` transition) and would
+otherwise inherit its predecessor's position. Scroll preservation is now a property
+of the panel wrapper, not something an individual tab implements — **a new tab gets
+it for free and should not add scroll handling of its own.**
+
+It is in-memory only: reopening the side panel starts at the top, consistent with
+the rest of this ADR's "not persisted" stance.
+
 ## Consequences
 
 - The reported round trip works: drilling into a group, navigating to a rule, and
@@ -103,10 +128,10 @@ initiate — a top-level tab switch has no `capture()` call site inside the tab.
 - Up to eight tab subtrees are live at once. That is a deliberate memory-for-state
   trade in a single side panel, bounded by the number of tabs and by lazy mounting
   (a tab never visited costs nothing).
-- Shared-global listeners are now genuinely shared. The Rules tab's `window` scroll
-  persister would otherwise have recorded _another_ tab's scrolling as its own
-  restore point; it is gated. Treat any new `window`/`document` listener the same
-  way.
+- Shared-global listeners are now genuinely shared, and so is the **scroll
+  container**. A listener on it records another tab's scrolling as your own unless
+  it is gated on `isActive` — which is exactly what `TabPanel` does for scroll.
+  Treat any new `window`/`document` listener the same way.
 - Effects that used to mean "on entering the tab" now mean "on mounting it, once".
   `TabStateManager.markTabVisited('rules')` moved from mount to every `isActive`
   arrival for exactly this reason. Check any effect whose intent was "on arrival".
@@ -114,7 +139,8 @@ initiate — a top-level tab switch has no `capture()` call site inside the tab.
   panel starts fresh. That was judged acceptable and is a separate decision if
   wanted.
 - Tests: `src/sidepanel/App.tabpersistence.test.tsx` pins mount-once, hide-not-unmount,
-  the Groups → Rules → Groups round trip, and that a hidden Applications tab does not
-  re-load its inventory when the connected Okta tab changes.
+  the Groups → Rules → Groups round trip, that each tab's scroll offset survives a
+  round trip while a first visit still opens at the top, and that a hidden
+  Applications tab does not re-load its inventory when the connected Okta tab changes.
 - **Review rule:** a PR that adds a tab, or adds a mount effect to an existing tab,
   should state in its description how that code behaves while the tab is hidden.

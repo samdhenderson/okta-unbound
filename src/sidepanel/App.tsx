@@ -24,20 +24,20 @@
  * traffic. `useOktaPageContext(activeTab === 'overview' && !isPinned)` below is the
  * original instance of that pattern.
  */
-import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, useRef, lazy } from 'react';
 import ContextBar from './components/ContextBar';
 import PageHeader from './components/shared/PageHeader';
 import TabNavigation from './components/TabNavigation';
+import TabPanel from './components/TabPanel';
 import { migrateLegacyTabId, type TabType } from './tabs';
 import OverviewTab from './components/OverviewTab';
 import type { ExportRequest } from './components/export';
-import LoadingSpinner from './components/shared/LoadingSpinner';
 import ActivityBar from './components/ActivityBar';
 
 // Code-split the non-default tabs so the initial side-panel load only ships the
 // Overview (the default tab). Each import lands in its own chunk, fetched on
-// first activation of that tab; that tab's own Suspense boundary (see
-// `renderTabPanel`) shows the standard spinner during the one-time fetch, without
+// first activation of that tab; that tab's own Suspense boundary (inside
+// `TabPanel`) shows the standard spinner during the one-time fetch, without
 // disturbing the tabs already mounted beside it. ExportTab is a named export from
 // its barrel, so it is re-shaped into a default export for React.lazy.
 const RulesTab = lazy(() => import('./components/RulesTab'));
@@ -91,6 +91,10 @@ const App: React.FC = () => {
   useEffect(() => {
     setMountedTabs((prev) => (prev.has(activeTab) ? prev : new Set(prev).add(activeTab)));
   }, [activeTab]);
+
+  // The one element that actually scrolls (see the JSX below). Handed to every
+  // `TabPanel` so each can bank and restore its own offset on it.
+  const scrollRootRef = useRef<HTMLDivElement>(null);
 
   // Always-on tab targeting + connection health (used by every tab and the header).
   const {
@@ -298,14 +302,8 @@ const App: React.FC = () => {
 
   /**
    * Render one tab panel: nothing until the tab has been activated once, then a
-   * permanently mounted subtree whose visibility is toggled by `.tab-content` /
-   * `.tab-content.active` (`display: none` / `block`). The `hidden` attribute is
-   * set alongside the class so the panel is out of the accessibility tree and the
-   * tab order even where that stylesheet is not loaded.
-   *
-   * Each panel owns its **own** Suspense boundary: a shared one would swap the
-   * fallback in for every mounted tab while a newly activated lazy chunk loads,
-   * which is exactly the unmount-and-lose-state problem this change removes.
+   * permanently mounted {@link TabPanel} — visibility, its own Suspense boundary,
+   * and its own slice of the shared root scroller's offset all live in there.
    *
    * @param tab - The tab this panel hosts.
    * @param content - Builds the tab's element, given whether it is currently active.
@@ -314,17 +312,22 @@ const App: React.FC = () => {
     if (!mountedTabs.has(tab)) return null;
     const isActive = tab === activeTab;
     return (
-      <div className={isActive ? 'tab-content active' : 'tab-content'} hidden={!isActive}>
-        <Suspense fallback={<LoadingSpinner size="lg" message="Loading tab..." centered />}>
-          {content(isActive)}
-        </Suspense>
-      </div>
+      <TabPanel isActive={isActive} scrollRef={scrollRootRef}>
+        {content(isActive)}
+      </TabPanel>
     );
   };
 
   return (
     <SchedulerProvider>
-      <div className="flex flex-col h-screen overflow-y-auto pb-14 bg-canvas">
+      {/* `h-screen` + `overflow-y-auto` make *this* div the scroller, not the
+          document — every root-scrolling tab shares it, which is why each
+          `TabPanel` needs the ref to preserve its own offset across a tab switch. */}
+      <div
+        ref={scrollRootRef}
+        data-testid="app-scroll-root"
+        className="flex flex-col h-screen overflow-y-auto pb-14 bg-canvas"
+      >
         <ContextBar
           pageType={effective.pageType}
           entityName={entityName}

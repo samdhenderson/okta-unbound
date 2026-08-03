@@ -125,6 +125,28 @@ async function drillInto(uev: ReturnType<typeof userEvent.setup>, name: string) 
   await uev.click(within(row).getByRole('button', { name: 'View group details' }));
 }
 
+/**
+ * The one element that actually scrolls, with a writable `scrollTop`.
+ *
+ * jsdom does no layout, so nothing ever overflows and `scrollTop` is permanently a
+ * read-only `0` — redefining it as a data property is the only way to observe the
+ * offsets the code under test reads and writes. Same trick as
+ * `GroupsTab.navigation.test.tsx`.
+ */
+function scrollRoot(): HTMLElement {
+  const node = screen.getByTestId('app-scroll-root');
+  if (!Object.getOwnPropertyDescriptor(node, 'scrollTop')) {
+    Object.defineProperty(node, 'scrollTop', { value: 0, writable: true, configurable: true });
+  }
+  return node;
+}
+
+/** Scroll the shared container and let the passive mirror observe it. */
+function scrollTo(node: HTMLElement, top: number) {
+  node.scrollTop = top;
+  node.dispatchEvent(new Event('scroll'));
+}
+
 describe('App tab lifetime', () => {
   it('mounts a tab only once it has been activated', async () => {
     const uev = userEvent.setup();
@@ -211,6 +233,44 @@ describe('App tab lifetime', () => {
         ([keys]) => Array.isArray(keys) && keys.includes(GROUPS_CACHE_KEY),
       ),
     ).toHaveLength(cacheReads);
+  });
+
+  it("restores each tab's own scroll offset on return, not the offset it was left at", async () => {
+    const uev = userEvent.setup();
+    renderApp();
+
+    await openTab(uev, 'Groups');
+    await screen.findByLabelText('Select Engineering');
+
+    // Every root-scrolling tab shares this one element, which is precisely why the
+    // offset has to be banked per tab rather than read back off the container.
+    const root = scrollRoot();
+    scrollTo(root, 240);
+
+    await openTab(uev, 'Rules');
+    await screen.findByRole('heading', { name: 'Group Rules' });
+    scrollTo(root, 90);
+
+    await openTab(uev, 'Groups');
+    expect(root.scrollTop).toBe(240);
+
+    await openTab(uev, 'Rules');
+    expect(root.scrollTop).toBe(90);
+  });
+
+  it('opens a newly activated tab at the top rather than the previous tab’s offset', async () => {
+    const uev = userEvent.setup();
+    renderApp();
+
+    await openTab(uev, 'Groups');
+    await screen.findByLabelText('Select Engineering');
+    const root = scrollRoot();
+    scrollTo(root, 320);
+
+    // Apps has never been activated, so it has no offset of its own to restore —
+    // and it must not inherit the Groups tab's position on the shared container.
+    await openTab(uev, 'Apps');
+    expect(root.scrollTop).toBe(0);
   });
 
   it('does not let a hidden Applications tab re-load the inventory when the Okta tab changes', async () => {
