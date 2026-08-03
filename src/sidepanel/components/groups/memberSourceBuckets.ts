@@ -1,9 +1,12 @@
 /**
- * @module sidepanel/components/groups/detail/memberSourceBuckets
+ * @module sidepanel/components/groups/memberSourceBuckets
  * @description Folds a {@link MemberSourceBreakdown} into ordered display buckets for the meter.
  *
  * Pure and I/O-free so the meter stays a dumb renderer: this module owns the
- * bucket order, the labels, the token classes and the percentage maths.
+ * bucket order, the labels, the token classes and the percentage maths. It sits
+ * one level above `detail/` because both the full-size meter in the Group Detail
+ * view and the compact meter in the group list row project their breakdown
+ * through it — one bucket definition, two renderers.
  *
  * ## Why `ruleBased` is not rendered as-is
  *
@@ -20,7 +23,7 @@
  * `total` and shrinking every segment's share of the track.
  */
 
-import type { MemberSourceBreakdown } from '../../../../shared/membership/groupSource';
+import type { MemberSourceBreakdown } from '../../../shared/membership/groupSource';
 
 /** Identity of one display bucket in the member-source meter. */
 export type MemberSourceBucketKey = 'ruleBased' | 'direct' | 'unattributed';

@@ -3,8 +3,9 @@
  * @description Icon-only button primitive (close, remove, clear, expand) — requires an accessible `label`.
  *
  * Three low-emphasis variants and two sizes. Can act as a toggle via `active`
- * (reflected as `aria-pressed`). For text CTAs use `Button`; for filter
- * chips use `FilterPill`.
+ * (reflected as `aria-pressed`) or as a disclosure trigger via `expanded` +
+ * `controls` (`aria-expanded` + `aria-controls`). For text CTAs use `Button`; for
+ * filter chips use `FilterPill`.
  */
 import React from 'react';
 
@@ -27,6 +28,14 @@ interface IconButtonProps {
   title?: string;
   /** For toggle buttons — reflected as `aria-pressed`. */
   active?: boolean;
+  /**
+   * For disclosure triggers — reflected as `aria-expanded`. Pair with
+   * {@link IconButtonProps.controls} so assistive tech can reach the region the
+   * button opens.
+   */
+  expanded?: boolean;
+  /** `id` of the region this button shows/hides — reflected as `aria-controls`. */
+  controls?: string;
   className?: string;
 }
 
@@ -52,6 +61,13 @@ const sizeClasses: Record<IconButtonSize, string> = {
  *   <Icon type="trash" />
  * </IconButton>
  * ```
+ *
+ * @example As a disclosure trigger
+ * ```tsx
+ * <IconButton label={open ? 'Collapse' : 'Expand'} expanded={open} controls={panelId}>
+ *   <Icon type="chevron-right" />
+ * </IconButton>
+ * ```
  */
 const IconButton: React.FC<IconButtonProps> = ({
   label,
@@ -63,6 +79,8 @@ const IconButton: React.FC<IconButtonProps> = ({
   type = 'button',
   title,
   active,
+  expanded,
+  controls,
   className = '',
 }) => (
   <button
@@ -71,6 +89,8 @@ const IconButton: React.FC<IconButtonProps> = ({
     disabled={disabled}
     aria-label={label}
     aria-pressed={active}
+    aria-expanded={expanded}
+    aria-controls={controls}
     title={title ?? label}
     className={`inline-flex items-center justify-center rounded-md transition-colors duration-100 focus:outline-2 focus:outline-offset-2 focus:outline-primary disabled:opacity-50 disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
   >

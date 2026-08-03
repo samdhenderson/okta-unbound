@@ -10,7 +10,7 @@
  * messaging surface is mocked exactly as `GroupsTab.test.tsx` does.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render as rtlRender, screen, within } from '@testing-library/react';
+import { render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement, ReactNode } from 'react';
 import GroupsTab from './GroupsTab';
@@ -247,5 +247,34 @@ describe('GroupsTab sub-navigation', () => {
     // Okta returns no activation status for an app-group assignment — priority only.
     expect(detail.getByText('Priority 2')).toBeInTheDocument();
     expect(detail.queryByText('ACTIVE')).not.toBeInTheDocument();
+  });
+
+  it("runs the analysis straight away when the push came from a row's analyze action", async () => {
+    const uev = userEvent.setup();
+    renderCached([cachedGroup()]);
+
+    // The row never analyzes in place — it hands the job to the detail view, which
+    // is the surface that can show the cost, the progress and a failure.
+    const row = screen
+      .getByLabelText('Select Engineering')
+      .closest('[data-group-id]') as HTMLElement;
+    await uev.click(within(row).getByRole('button', { name: 'Analyze member source' }));
+
+    const detail = within(screen.getByTestId('group-detail-view'));
+    // Already past the gate: the idle "Analyze" button is gone, unasked.
+    await waitFor(() =>
+      expect(detail.queryByRole('button', { name: 'Analyze' })).not.toBeInTheDocument(),
+    );
+    expect(detail.getByText('No members to attribute.')).toBeInTheDocument();
+  });
+
+  it('does not analyze on a plain drill-in', async () => {
+    const uev = userEvent.setup();
+    renderCached([cachedGroup()]);
+
+    await drillInto(uev, 'Engineering');
+
+    const detail = within(screen.getByTestId('group-detail-view'));
+    expect(detail.getByRole('button', { name: 'Analyze' })).toBeInTheDocument();
   });
 });

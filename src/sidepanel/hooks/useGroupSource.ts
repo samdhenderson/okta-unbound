@@ -6,6 +6,11 @@
  * loads its feeding rules (cheap, cache-backed); the manual-vs-rule member split
  * is an opt-in analysis that fetches the group's members (one paginated read) and
  * classifies each with the shared membership heuristic. Read-only.
+ *
+ * This is the **only** place a member-source breakdown is computed. Each result
+ * is banked in {@link module:sidepanel/cache/memberSourceCache} so cheap,
+ * fetch-less consumers — every row's compact meter in the groups list — can show
+ * the split without paying for it again.
  */
 
 import { useCallback, useRef, useState } from 'react';
@@ -15,6 +20,7 @@ import {
   summarizeMemberSources,
   type MemberSourceBreakdown,
 } from '../../shared/membership/groupSource';
+import { writeMemberSource } from '../cache/memberSourceCache';
 import { createLogger } from '../../shared/utils/logger';
 
 const log = createLogger('useGroupSource');
@@ -114,6 +120,9 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
           rules as MembershipRule[],
         );
         setBreakdown(summary);
+        // Bank it for the session: the groups list renders this split in each
+        // row's compact meter, and must never pay for it itself.
+        writeMemberSource(group.id, summary);
         setMemberStatus('done');
       })
       .catch((err) => {

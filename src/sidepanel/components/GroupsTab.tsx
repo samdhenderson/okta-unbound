@@ -140,6 +140,9 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   // its sibling, so nothing the list accumulated is lost on the way back.
   const detailViewRef = useRef<HTMLDivElement>(null);
   const listScrollRef = useRef<HTMLDivElement>(null);
+  // Set when a push was requested *in order to* analyze member source, so the
+  // pushed detail view runs that analysis instead of waiting for a second click.
+  const [autoAnalyzeGroupId, setAutoAnalyzeGroupId] = useState<string | null>(null);
   const nav = useViewStack<GroupSummary>({
     rootLabel: 'Groups',
     getLabel: groupCrumbLabel,
@@ -169,6 +172,19 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
     (group: GroupSummary) => {
       // `display: none` destroys the scroll box, so bank scrollTop before the push.
       captureListScroll();
+      setAutoAnalyzeGroupId(null);
+      pushView(group);
+    },
+    [captureListScroll, pushView],
+  );
+
+  // A row's "Analyze member source" action: the analysis costs one paginated
+  // member read, so it runs in the detail view — the one surface that can show
+  // its cost, progress and failure — and banks its result for the row's meter.
+  const handleAnalyzeSource = useCallback(
+    (group: GroupSummary) => {
+      captureListScroll();
+      setAutoAnalyzeGroupId(group.id);
       pushView(group);
     },
     [captureListScroll, pushView],
@@ -415,6 +431,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
             onLoadAllGroups={loadAllGroups}
             onClearFilters={filters.clearFilters}
             onOpenDetail={handleOpenDetail}
+            onAnalyzeSource={handleAnalyzeSource}
             highlightedGroupId={selectedGroupId ?? undefined}
             scrollRef={listScrollRef}
           />
@@ -428,6 +445,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
               targetTabId={targetTabId}
               oktaOrigin={oktaOrigin}
               onNavigateToRule={onNavigateToRule}
+              autoAnalyze={autoAnalyzeGroupId === detailGroup.id}
             />
           </div>
         )}

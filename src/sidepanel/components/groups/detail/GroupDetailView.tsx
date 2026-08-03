@@ -19,7 +19,7 @@
  * rules that merely reference it) and hands their state to pure sections. It never
  * mutates anything.
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import GroupIdentitySection from './GroupIdentitySection';
 import GroupMembershipSourceSection from './GroupMembershipSourceSection';
 import GroupRulesSection from './GroupRulesSection';
@@ -39,6 +39,13 @@ interface GroupDetailViewProps {
   oktaOrigin?: string;
   /** Deep-links a rule in the Rules tab (from either rule list, or a contribution). */
   onNavigateToRule?: (ruleId: string) => void;
+  /**
+   * Runs the gated member-source analysis as soon as the view opens, once per
+   * group. Set when the push came from a list row's "Analyze member source"
+   * action — the user already asked for the analysis, so re-asking here would be
+   * a pointless second click. Never set by a plain drill-in.
+   */
+  autoAnalyze?: boolean;
 }
 
 /**
@@ -50,15 +57,27 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   targetTabId,
   oktaOrigin,
   onNavigateToRule,
+  autoAnalyze = false,
 }) => {
   const source = useGroupSource(targetTabId ?? undefined);
   const references = useGroupRuleReferences(group.id, targetTabId ?? undefined);
 
   // `open` is memoized on the (stable) API operation, so this runs once per group.
-  const { open } = source;
+  const { open, analyzeMembers } = source;
   useEffect(() => {
     open(group);
   }, [open, group]);
+
+  // Wait for `open` to land before auto-analyzing (`analyzeMembers` no-ops until
+  // the hook holds the group), and latch on the id so it fires exactly once.
+  const autoAnalyzedRef = useRef<string | null>(null);
+  const openedGroupId = source.group?.id;
+  useEffect(() => {
+    if (!autoAnalyze || openedGroupId !== group.id) return;
+    if (autoAnalyzedRef.current === group.id) return;
+    autoAnalyzedRef.current = group.id;
+    analyzeMembers();
+  }, [autoAnalyze, openedGroupId, group.id, analyzeMembers]);
 
   return (
     <div className="space-y-3" data-testid="group-detail-view">

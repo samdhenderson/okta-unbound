@@ -11,6 +11,7 @@
 // Shared UI components following Overview tab design standards
 export { default as Button } from './Button';
 export { default as IconButton } from './IconButton';
+export { default as StretchedButton } from './StretchedButton';
 export { default as FilterPill } from './FilterPill';
 export { default as SortPill } from './SortPill';
 export { default as CopyButton } from './CopyButton';

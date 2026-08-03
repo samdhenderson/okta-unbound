@@ -38,10 +38,24 @@ info`) — never `error`.
 
 ## Catalog
 
-`shared/`: `Button`, `IconButton`, `FilterPill`, `SortPill`, `CopyButton`,
-`OpenInOktaLink`, `Modal`, `Input`, `Checkbox`, `Select`, `Textarea`, `PageHeader`,
-`Breadcrumbs`, `Tabs`, `CollapsibleSection`, `AlertMessage`, `EmptyState`,
-`LoadingSpinner`, `ScrollableList`, `SearchDropdown`, `SelectionChips`.
+`shared/`: `Button`, `IconButton`, `StretchedButton`, `FilterPill`, `SortPill`,
+`CopyButton`, `OpenInOktaLink`, `Modal`, `Input`, `Checkbox`, `Select`, `Textarea`,
+`PageHeader`, `Breadcrumbs`, `Tabs`, `CollapsibleSection`, `AlertMessage`,
+`EmptyState`, `LoadingSpinner`, `ScrollableList`, `SearchDropdown`,
+`SelectionChips`.
+
+`IconButton` is also the **disclosure** primitive: pass `expanded` + `controls`
+and it emits `aria-expanded` / `aria-controls` (as `active` does `aria-pressed`).
+Any chevron that opens a region uses it — never a bare `<button>`.
+
+`StretchedButton` makes a **whole card or row activatable**: an empty,
+absolutely-positioned button that covers its `relative` ancestor and sits behind
+the card's own controls (`relative z-10`). It replaces both bad alternatives —
+`role="button"` on a `<div>`, and wrapping the card's content in a `<button>`
+(invalid content model, and axe `nested-interactive` as soon as the card has a
+checkbox). Because every card in a list shares one `label`, pass `describedBy`
+pointing at that card's title. First consumer: `GroupListItem`'s row-body
+drill-in.
 
 `Tabs` is the accessible tab-bar primitive (`role="tablist"/"tab"`, roving
 `tabindex`, arrow-key nav) with two variants: `underline` (section nav) and

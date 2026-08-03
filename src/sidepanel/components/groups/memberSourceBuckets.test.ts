@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { toMemberSourceBuckets } from './memberSourceBuckets';
-import type { MemberSourceBreakdown } from '../../../../shared/membership/groupSource';
+import type { MemberSourceBreakdown } from '../../../shared/membership/groupSource';
 
 const breakdown = (over: Partial<MemberSourceBreakdown> = {}): MemberSourceBreakdown => ({
   total: 0,

@@ -1,111 +1,109 @@
 /**
  * @module sidepanel/components/groups/GroupListItem
- * @description A single expandable row in the groups list.
+ * @description One compact, scannable row in the groups list.
  *
- * Collapsed, it shows the name, type/source/push badges, and metadata;
- * expanded, it reveals description, ids, dates, and push mappings.
- * Memoised with a custom comparator so unaffected rows skip re-render in long lists.
+ * Rebuilt around a single question — *where do this group's members come from?* —
+ * so the row encodes state instead of listing badges. Its anatomy:
+ *
+ * ```
+ * [✓] Engineering                      OKTA        [⚡] [↗] [›]
+ *     All engineering staff
+ *     ▓▓▓▓▓░░  128 members  Rule-managed 96 · Manual 32  Fed by 2 rules
+ * ```
+ *
+ * - **Identity line** — the Okta description, falling back to the group id when
+ *   it is blank (they frequently are), so the line never renders empty.
+ * - **State encoding** — the member-source meter, which is also where the member
+ *   count now lives; there is no separate metrics strip.
+ * - **Two open affordances, two accessible names.** The chevron (`Expand` /
+ *   `Collapse`) discloses an inline preview; the row body (`View group details`)
+ *   drills into the Group Detail view. Both are real buttons, and the chevron
+ *   carries `aria-expanded`/`aria-controls` — neither of which the old row had.
+ * - **Progressive controls.** The selection checkbox and the action icons are
+ *   revealed on hover, on `:focus-within` (so keyboard users see them), and
+ *   permanently on touch devices, which have no hover. A *selected* checkbox
+ *   stays visible unconditionally, or selection would vanish while scrolling.
+ *
+ * The meter renders only from a breakdown that has **already** been computed and
+ * banked in {@link module:sidepanel/cache/memberSourceCache} — the row reads it
+ * through {@link module:sidepanel/hooks/useCachedMemberSource}, which has no API
+ * access at all. Computing one costs `ceil(N/200)` member requests, so a list of
+ * rows must never do it on its own; the row instead offers an explicit "analyze"
+ * action that hands the job to the detail view.
+ *
+ * Memoised with a custom comparator so unaffected rows skip re-render in long
+ * lists — every field rendered below is compared there.
  */
-import React, { useState, useCallback, memo } from 'react';
-import { Button, IconButton, Checkbox } from '../shared';
-import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
+import React, { useState, useCallback, useMemo, memo } from 'react';
+import { Checkbox, IconButton, StretchedButton } from '../shared';
+import Icon from '../overview/shared/Icon';
+import GroupListItemSignal from './GroupListItemSignal';
+import GroupListItemDetails from './GroupListItemDetails';
+import { summarizeGroupRow } from './groupSourceSummary';
+import { useCachedMemberSource } from '../../hooks/useCachedMemberSource';
 import type { GroupSummary } from '../../../shared/types';
 import { oktaAdminEntityUrl } from '../../../shared/utils/oktaUrl';
-import { formatDate } from '../../../shared/utils/dateFormat';
 
 /**
- * Lightning badge summarizing how a group relates to group rules. The count is
- * the total of both relationships; the tooltip breaks it down so an admin can
- * tell whether the group is *assigned to* by rules (a rule target) or merely
- * *used in* a rule's condition — which the bare "N rules" label conflated.
+ * Controls that fade in on hover or keyboard focus and stay put on touch.
+ *
+ * Tailwind wraps `hover:` variants in `@media (hover: hover)`, so a touch device
+ * would otherwise never reveal them — hence the explicit `hover: none` branch.
  */
-const RuleRelationBadge: React.FC<{ group: GroupSummary }> = ({ group }) => {
-  const assigned = group.ruleCount;
-  const used = group.usedInRuleCount ?? 0;
-  const total = assigned + used;
-  if (total === 0) return null;
-  const plural = (n: number) => (n === 1 ? '' : 's');
-  const title = `Assigned by ${assigned} rule${plural(assigned)} · Used in ${used} rule${plural(used)}`;
-  return (
-    <div className="inline-flex items-center gap-1 text-primary-text" title={title}>
-      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M13 10V3L4 14h7v7l9-11h-7z"
-        />
-      </svg>
-      <span className="font-medium">{total}</span>
-      <span>rule{plural(total)}</span>
-    </div>
-  );
-};
+const REVEAL_ON_HOVER =
+  'opacity-0 transition-opacity duration-100 ' +
+  'group-hover/row:opacity-100 group-focus-within/row:opacity-100 ' +
+  'focus-within:opacity-100 [@media(hover:none)]:opacity-100';
 
+/** Props for {@link GroupListItem}. */
 interface GroupListItemProps {
   /** The group to render. */
   group: GroupSummary;
-  /** Whether this row is selected. */
+  /** Whether this row is selected — a selected row shows its checkbox unconditionally. */
   selected: boolean;
   /** Toggles selection for this group's id. */
   onToggleSelect: (groupId: string) => void;
   /** Okta origin, enabling the "Open in Okta" deep link when present. */
   oktaOrigin?: string;
   /**
-   * Drills into this group's read-only detail view. Rendered as an explicitly
-   * named action so it does not collide with the expand/collapse chevron: the two
-   * open affordances answer different questions and carry distinct accessible names.
+   * Drills into this group's read-only detail view. When omitted the row body is
+   * inert (no overlay button) — the chevron still expands the inline preview.
    */
   onOpenDetail?: (group: GroupSummary) => void;
+  /**
+   * Requests the (paid) member-source analysis for this group. Offered only while
+   * no breakdown is cached; the handler is expected to run the analysis somewhere
+   * that can show its cost and progress, and bank the result for the row to read.
+   */
+  onAnalyzeSource?: (group: GroupSummary) => void;
   /** When true, the row auto-expands and shows a highlight ring (deep-link target). */
   isHighlighted?: boolean;
 }
 
-/** Memoised expandable row for one group in the groups list. */
+/** Memoised compact row for one group in the groups list. */
 const GroupListItem: React.FC<GroupListItemProps> = memo(
-  ({ group, selected, onToggleSelect, oktaOrigin, onOpenDetail, isHighlighted = false }) => {
+  ({
+    group,
+    selected,
+    onToggleSelect,
+    oktaOrigin,
+    onOpenDetail,
+    onAnalyzeSource,
+    isHighlighted = false,
+  }) => {
     const [expanded, setExpanded] = useState(false);
-    const { copied: idCopied, copy: copyId } = useCopyToClipboard();
+    const breakdown = useCachedMemberSource(group.id);
+    const model = useMemo(() => summarizeGroupRow(group, breakdown), [group, breakdown]);
+
+    const detailsId = `group-row-details-${group.id}`;
+    const nameId = `group-row-name-${group.id}`;
 
     // Auto-expand when highlighted (deep-linked from the Rules tab).
     React.useEffect(() => {
       if (isHighlighted) setExpanded(true);
     }, [isHighlighted]);
 
-    const getTypeBadge = (type: string) => {
-      const configs = {
-        OKTA_GROUP: {
-          label: 'OKTA',
-          bg: 'bg-primary-light',
-          text: 'text-primary-text',
-          border: 'border-primary-highlight',
-        },
-        APP_GROUP: {
-          label: 'APP',
-          bg: 'bg-warning-light',
-          text: 'text-warning-text',
-          border: 'border-warning-light',
-        },
-        BUILT_IN: {
-          label: 'BUILT-IN',
-          bg: 'bg-neutral-50',
-          text: 'text-neutral-700',
-          border: 'border-neutral-200',
-        },
-      };
-      return configs[type as keyof typeof configs] || configs.BUILT_IN;
-    };
-
-    const handleOpenInOkta = useCallback(
-      (e: React.MouseEvent) => {
-        e.stopPropagation();
-        const url = oktaAdminEntityUrl(oktaOrigin, 'group', group.id);
-        if (url) window.open(url, '_blank', 'noopener,noreferrer');
-      },
-      [oktaOrigin, group.id],
-    );
-
-    const handleToggle = useCallback(() => {
+    const handleToggleSelect = useCallback(() => {
       onToggleSelect(group.id);
     }, [onToggleSelect, group.id]);
 
@@ -113,310 +111,160 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
       setExpanded((prev) => !prev);
     }, []);
 
-    const handleCopyId = useCallback(
-      (e: React.MouseEvent) => {
-        e.stopPropagation();
-        copyId(group.id);
-      },
-      [copyId, group.id],
-    );
+    const handleOpenDetail = useCallback(() => {
+      onOpenDetail?.(group);
+    }, [onOpenDetail, group]);
 
-    const typeBadge = getTypeBadge(group.type);
+    const handleAnalyzeSource = useCallback(() => {
+      onAnalyzeSource?.(group);
+    }, [onAnalyzeSource, group]);
+
+    const handleOpenInOkta = useCallback(() => {
+      const url = oktaAdminEntityUrl(oktaOrigin, 'group', group.id);
+      if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    }, [oktaOrigin, group.id]);
+
+    const canAnalyze = Boolean(onAnalyzeSource) && model.source.kind === 'unknown';
 
     return (
       <div
         data-group-id={group.id}
-        className={`
-        group/item relative overflow-hidden rounded-md border transition-all duration-100
-        ${
+        className={`group/row rounded-md border transition-colors duration-100 ${
           selected
-            ? 'border-primary bg-primary-light ring-1 ring-primary/20'
+            ? 'border-primary bg-primary-light'
             : 'border-neutral-200 bg-white hover:border-neutral-500'
-        }
-        ${isHighlighted ? 'ring-2 ring-primary ring-offset-2' : ''}
-      `}
+        } ${isHighlighted ? 'ring-2 ring-primary ring-offset-2' : ''}`}
       >
-        {/* Header */}
-        <div className="p-4">
-          <div className="flex items-start gap-3">
-            {/* Checkbox */}
-            <div className="flex items-center pt-0.5" onClick={(e) => e.stopPropagation()}>
-              <Checkbox
-                checked={selected}
-                onChange={handleToggle}
-                aria-label={`Select ${group.name}`}
-              />
-            </div>
+        {/*
+          `relative` scopes the row-body overlay button to the header, so the
+          expanded preview below stays freely clickable. Controls inside the
+          header sit above the overlay via `relative z-10`.
+        */}
+        <div className="relative flex items-start gap-2 px-3 py-2">
+          {onOpenDetail && (
+            <StretchedButton
+              label="View group details"
+              describedBy={nameId}
+              title={`Open the detail view for ${group.name}`}
+              onClick={handleOpenDetail}
+            />
+          )}
 
-            {/* Content */}
-            <div className="flex-1 min-w-0 cursor-pointer" onClick={toggleExpanded}>
-              {/* Title Row */}
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold text-neutral-900 truncate group-hover/item:text-primary-text transition-colors duration-100">
-                    {group.name}
-                  </h3>
+          <div
+            className={`relative z-10 flex items-center pt-0.5 ${selected ? '' : REVEAL_ON_HOVER}`}
+          >
+            <Checkbox
+              checked={selected}
+              onChange={handleToggleSelect}
+              aria-label={`Select ${group.name}`}
+            />
+          </div>
 
-                  {/* Badges */}
-                  <div className="flex flex-wrap gap-1.5 mt-1.5">
-                    <span
-                      className={`px-2 py-0.5 rounded-md text-xs font-medium border ${typeBadge.bg} ${typeBadge.text} ${typeBadge.border}`}
-                    >
-                      {typeBadge.label}
-                    </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h3
+                id={nameId}
+                className="min-w-0 truncate text-sm font-semibold text-neutral-900 group-hover/row:text-primary-text"
+              >
+                {group.name}
+              </h3>
 
-                    {group.type === 'APP_GROUP' && group.sourceAppName && (
-                      <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-primary-light text-primary-text border border-primary-highlight">
-                        {group.sourceAppName}
-                      </span>
-                    )}
+              <span
+                className={`shrink-0 rounded-md border px-2 py-0.5 text-xs font-medium ${model.typeBadge.className}`}
+              >
+                {model.typeBadge.label}
+              </span>
 
-                    {group.pushMappings &&
-                      group.pushMappings.length > 0 &&
-                      (() => {
-                        const uniqueApps = [
-                          ...new Set(group.pushMappings!.map((m) => m.appName || m.appId)),
-                        ];
-                        const MAX_DISPLAY = 2;
-                        const displayApps = uniqueApps.slice(0, MAX_DISPLAY);
-                        const remaining = uniqueApps.length - MAX_DISPLAY;
-                        const label =
-                          remaining > 0
-                            ? `PUSH: ${displayApps.join(', ')} +${remaining}`
-                            : `PUSH: ${displayApps.join(', ')}`;
-                        return (
-                          <span
-                            className="px-2 py-0.5 rounded-md text-xs font-medium bg-success-light text-success-text border border-success-light"
-                            title={`Pushed to: ${uniqueApps.join(', ')}`}
-                          >
-                            {label}
-                          </span>
-                        );
-                      })()}
-                  </div>
-                </div>
+              {model.sourceApp && (
+                <span
+                  className="shrink-0 truncate rounded-md border border-primary-highlight bg-primary-light px-2 py-0.5 text-xs font-medium text-primary-text"
+                  title={`Mastered by ${model.sourceApp}`}
+                >
+                  {model.sourceApp}
+                </span>
+              )}
 
-                {/* Action Buttons */}
-                <div className="flex items-center gap-1 shrink-0">
-                  {oktaOrigin && (
+              <div className="relative z-10 ml-auto flex shrink-0 items-center gap-0.5">
+                {canAnalyze && (
+                  <span className={REVEAL_ON_HOVER}>
                     <IconButton
-                      label="Open in Okta"
-                      onClick={handleOpenInOkta}
-                      variant="ghost"
-                      size="md"
+                      label="Analyze member source"
+                      title={`Analyze where ${group.name}'s ${model.memberCount.toLocaleString()} ${model.memberNoun} came from — reads them all once`}
+                      onClick={handleAnalyzeSource}
+                      size="sm"
                     >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                        />
-                      </svg>
+                      <Icon type="chart" size="sm" />
                     </IconButton>
-                  )}
-                  <IconButton
-                    label={expanded ? 'Collapse' : 'Expand'}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleExpanded();
-                    }}
-                    variant="ghost"
-                    size="md"
-                  >
-                    <svg
-                      className={`w-4 h-4 transition-transform duration-100 ${expanded ? 'rotate-90' : ''}`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                  </IconButton>
-                </div>
-              </div>
+                  </span>
+                )}
 
-              {/* Metadata Row */}
-              <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-500">
-                <div className="inline-flex items-center gap-1">
-                  <svg
-                    className="w-3.5 h-3.5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                    />
-                  </svg>
-                  <span className="font-medium text-neutral-700">{group.memberCount}</span>
-                  <span>member{group.memberCount !== 1 ? 's' : ''}</span>
-                </div>
+                {oktaOrigin && (
+                  <span className={REVEAL_ON_HOVER}>
+                    <IconButton label="Open in Okta" onClick={handleOpenInOkta} size="sm">
+                      <Icon type="external-link" size="sm" />
+                    </IconButton>
+                  </span>
+                )}
 
-                <RuleRelationBadge group={group} />
+                <IconButton
+                  label={expanded ? 'Collapse' : 'Expand'}
+                  onClick={toggleExpanded}
+                  expanded={expanded}
+                  controls={detailsId}
+                  size="sm"
+                >
+                  <Icon
+                    type="chevron-right"
+                    size="sm"
+                    className={`transition-transform duration-100 ${expanded ? 'rotate-90' : ''}`}
+                  />
+                </IconButton>
               </div>
             </div>
+
+            <p
+              className={`mt-0.5 truncate text-xs ${
+                model.identity.kind === 'id' ? 'font-mono text-neutral-400' : 'text-neutral-600'
+              }`}
+              title={model.identity.title}
+            >
+              {model.identity.text}
+            </p>
+
+            <GroupListItemSignal model={model} />
           </div>
         </div>
 
-        {/* Expanded Details */}
-        {expanded && (
-          <div className="px-4 pb-4 pt-2 border-t border-neutral-100 space-y-3">
-            {onOpenDetail && (
-              <Button
-                variant="secondary"
-                size="sm"
-                icon="chart"
-                onClick={() => onOpenDetail(group)}
-                title={`Open the detail view for ${group.name}`}
-              >
-                View group details
-              </Button>
-            )}
-
-            {group.description && (
-              <div>
-                <div className="text-xs font-medium text-neutral-600 mb-1">Description</div>
-                <p className="text-sm text-neutral-700">{group.description}</p>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-              <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
-                <div className="text-xs font-medium text-neutral-600 mb-0.5">Group ID</div>
-                <div className="flex items-center gap-1.5">
-                  <code className="text-xs font-mono text-neutral-900 truncate">{group.id}</code>
-                  <IconButton
-                    label={idCopied ? 'Copied!' : 'Copy ID'}
-                    onClick={handleCopyId}
-                    variant="ghost"
-                    size="sm"
-                    className="shrink-0"
-                  >
-                    {idCopied ? (
-                      <svg
-                        className="w-3.5 h-3.5 text-success-text"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                        />
-                      </svg>
-                    ) : (
-                      <svg
-                        className="w-3.5 h-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M8 5a2 2 0 002 2h4a2 2 0 002-2M8 5a2 2 0 012-2h4a2 2 0 012 2"
-                        />
-                      </svg>
-                    )}
-                  </IconButton>
-                </div>
-              </div>
-
-              {group.lastUpdated && (
-                <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
-                  <div className="text-xs font-medium text-neutral-600 mb-0.5">Last Updated</div>
-                  <div className="text-xs text-neutral-900">{formatDate(group.lastUpdated)}</div>
-                </div>
-              )}
-
-              {group.created && (
-                <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
-                  <div className="text-xs font-medium text-neutral-600 mb-0.5">Created</div>
-                  <div className="text-xs text-neutral-900">{formatDate(group.created)}</div>
-                </div>
-              )}
-            </div>
-
-            {group.type === 'APP_GROUP' && group.sourceAppName && (
-              <div className="p-2 bg-primary-light rounded-md border border-primary-highlight">
-                <div className="text-xs font-medium text-primary-text mb-0.5">
-                  Source Application
-                </div>
-                <div className="text-sm font-medium text-primary-dark">{group.sourceAppName}</div>
-              </div>
-            )}
-
-            {group.pushMappings && group.pushMappings.length > 0 && (
-              <div className="space-y-1">
-                <div className="text-xs font-medium text-neutral-600">Push Group Mappings</div>
-                {group.pushMappings.map((m) => (
-                  <div
-                    key={m.mappingId}
-                    className="p-2 bg-success-light rounded-md border border-success-light flex items-center justify-between"
-                  >
-                    <div>
-                      <div className="text-xs font-medium text-success-text">
-                        {m.appName || m.appId}
-                      </div>
-                      {m.targetGroupName && (
-                        <div className="text-xs text-neutral-600 mt-0.5">
-                          Target: {m.targetGroupName}
-                        </div>
-                      )}
-                    </div>
-                    {/*
-                      No status pill: the app-group assignment endpoint returns no
-                      activation status, so there is nothing honest to show here.
-                      `priority` is a real returned field and is labelled as such.
-                    */}
-                    {m.priority !== undefined && (
-                      <span
-                        className="px-1.5 py-0.5 rounded text-xs font-medium bg-neutral-200 text-neutral-600"
-                        title="Okta assignment priority — not an activation status"
-                      >
-                        Priority {m.priority}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        {/*
+          Always mounted (empty while collapsed) so the chevron's `aria-controls`
+          always resolves to a real element.
+        */}
+        <div id={detailsId} hidden={!expanded}>
+          {expanded && <GroupListItemDetails group={group} breakdown={breakdown} />}
+        </div>
       </div>
     );
   },
-  (prevProps, nextProps) => {
-    return (
-      prevProps.group.id === nextProps.group.id &&
-      prevProps.group.name === nextProps.group.name &&
-      prevProps.group.memberCount === nextProps.group.memberCount &&
-      prevProps.group.type === nextProps.group.type &&
-      prevProps.group.hasRules === nextProps.group.hasRules &&
-      prevProps.group.ruleCount === nextProps.group.ruleCount &&
-      prevProps.group.pushMappings === nextProps.group.pushMappings &&
-      prevProps.selected === nextProps.selected &&
-      prevProps.oktaOrigin === nextProps.oktaOrigin &&
-      prevProps.isHighlighted === nextProps.isHighlighted
-    );
-  },
+  (prev, next) =>
+    // Every field the row renders, plus the callbacks whose presence/identity
+    // decides which controls render. Miss one and long lists show stale rows.
+    prev.group.id === next.group.id &&
+    prev.group.name === next.group.name &&
+    prev.group.description === next.group.description &&
+    prev.group.type === next.group.type &&
+    prev.group.memberCount === next.group.memberCount &&
+    prev.group.ruleCount === next.group.ruleCount &&
+    prev.group.usedInRuleCount === next.group.usedInRuleCount &&
+    prev.group.sourceAppName === next.group.sourceAppName &&
+    prev.group.created === next.group.created &&
+    prev.group.lastUpdated === next.group.lastUpdated &&
+    prev.group.pushMappings === next.group.pushMappings &&
+    prev.selected === next.selected &&
+    prev.oktaOrigin === next.oktaOrigin &&
+    prev.isHighlighted === next.isHighlighted &&
+    prev.onToggleSelect === next.onToggleSelect &&
+    prev.onOpenDetail === next.onOpenDetail &&
+    prev.onAnalyzeSource === next.onAnalyzeSource,
 );
 
 GroupListItem.displayName = 'GroupListItem';

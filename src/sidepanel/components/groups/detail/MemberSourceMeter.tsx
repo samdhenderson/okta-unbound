@@ -6,13 +6,13 @@
  * printed in the legend beneath it, so a screen reader gets the full answer as
  * text rather than an unlabelled graphic. Bucket order, labels, colours and
  * percentages come from the pure
- * {@link sidepanel/components/groups/detail/memberSourceBuckets} module — including
+ * {@link sidepanel/components/groups/memberSourceBuckets} module — including
  * the third "Indeterminate" bucket, which stays at `0` until the classifier
  * reports it.
  */
 import React from 'react';
 import type { MemberSourceBreakdown } from '../../../../shared/membership/groupSource';
-import { toMemberSourceBuckets } from './memberSourceBuckets';
+import { toMemberSourceBuckets } from '../memberSourceBuckets';
 
 /** Props for {@link MemberSourceMeter}. */
 interface MemberSourceMeterProps {

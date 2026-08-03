@@ -1,0 +1,83 @@
+/**
+ * @module sidepanel/components/shared/StretchedButton
+ * @description Invisible full-bleed button that makes an enclosing card or row activatable.
+ *
+ * The "stretched link" pattern, as a real `<button>`. It solves the problem of
+ * "clicking the row opens it" without either of the usual bad answers:
+ *
+ * - **Not** `role="button"` on a `<div>` — that has to re-implement Enter/Space,
+ *   focus and disabled semantics by hand.
+ * - **Not** wrapping the card's content in a `<button>` — headings, meters and
+ *   nested controls are not valid button content, and nesting a control inside a
+ *   button is an axe `nested-interactive` violation.
+ *
+ * Instead it renders an empty, absolutely-positioned button that covers its
+ * positioned ancestor, sitting *behind* the card's own controls. Content stays
+ * plain content, and the button carries its own accessible name.
+ *
+ * ## Contract
+ *
+ * - The intended click target must be a positioned ancestor (`relative`); the
+ *   button stretches to it, so scope that ancestor to the clickable region.
+ * - Sibling controls (checkboxes, icon buttons, links) must be `relative z-10`
+ *   or they sit under the overlay and become unclickable.
+ * - `label` is the accessible name and is the same for every card in a list, so
+ *   pass `describedBy` pointing at the element that names *this* card — screen
+ *   readers then announce "Open details, Engineering".
+ *
+ * @example
+ * ```tsx
+ * <div className="relative rounded-md border p-3">
+ *   <StretchedButton label="View group details" describedBy={nameId} onClick={open} />
+ *   <h3 id={nameId}>{group.name}</h3>
+ *   <div className="relative z-10">
+ *     <IconButton label="Expand" onClick={toggle}>…</IconButton>
+ *   </div>
+ * </div>
+ * ```
+ */
+import React from 'react';
+
+/** Props for {@link StretchedButton}. */
+interface StretchedButtonProps {
+  /** Accessible name — required, since the button has no visible content. */
+  label: string;
+  /** Activation handler. */
+  onClick: () => void;
+  /**
+   * `id` of the element that names the specific card (usually its title), read
+   * after the label so identically-named overlays stay distinguishable.
+   */
+  describedBy?: string;
+  /** Tooltip text; defaults to `label`. */
+  title?: string;
+  disabled?: boolean;
+  /** Extra classes merged after the base positioning classes. */
+  className?: string;
+}
+
+/**
+ * An invisible button that covers its positioned ancestor, making the whole card
+ * or row activatable while leaving its content — and its own controls —
+ * untouched. See the module header for the layout contract.
+ */
+const StretchedButton: React.FC<StretchedButtonProps> = ({
+  label,
+  onClick,
+  describedBy,
+  title,
+  disabled = false,
+  className = '',
+}) => (
+  <button
+    type="button"
+    aria-label={label}
+    aria-describedby={describedBy}
+    title={title ?? label}
+    onClick={onClick}
+    disabled={disabled}
+    className={`absolute inset-0 z-0 h-full w-full rounded-md focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed ${className}`}
+  />
+);
+
+export default StretchedButton;

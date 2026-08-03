@@ -43,6 +43,12 @@ interface GroupsListPanelProps {
   onClearFilters: () => void;
   /** Drills into a group's read-only detail view (pushes onto the tab's view stack). */
   onOpenDetail?: (group: GroupSummary) => void;
+  /**
+   * Runs the (paid) member-source analysis for a group, offered per row while no
+   * breakdown is cached. Rows never analyze on their own — see
+   * {@link sidepanel/components/groups/GroupListItem}.
+   */
+  onAnalyzeSource?: (group: GroupSummary) => void;
   /** Group id to highlight (deep-link target from the Rules tab). */
   highlightedGroupId?: string;
   /**
@@ -81,6 +87,7 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
   onLoadAllGroups,
   onClearFilters,
   onOpenDetail,
+  onAnalyzeSource,
   highlightedGroupId,
   scrollRef,
 }) => {
@@ -168,6 +175,7 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
             onToggleSelect={onToggleSelect}
             oktaOrigin={oktaOrigin}
             onOpenDetail={onOpenDetail}
+            onAnalyzeSource={onAnalyzeSource}
             isHighlighted={highlightedGroupId === group.id}
           />
         ))}
