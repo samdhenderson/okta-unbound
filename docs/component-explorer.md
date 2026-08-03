@@ -232,6 +232,49 @@ the `!test` tag — `tags: ['autodocs', '!test']` — and stays in the explorer.
 a11y is enforced (`preview.tsx` `a11y.test: 'error'`): a story with an axe
 violation fails the suite.
 
+## Screenshots on demand (`npm run shoot`)
+
+`.storybook/scripts/shoot-stories.mjs` renders stories headlessly and writes PNGs
+to `shots/` (gitignored). It exists so a **reviewer or coding agent can see the UI**
+without booting the extension — a design-system or UX review reads pixels instead
+of inferring them from Tailwind classes.
+
+```
+npm run shoot -- Shared/Button           # all 10 variants → ONE contact sheet
+npm run shoot -- shared-button--loading  # a single story, by id
+npm run shoot -- Rules --list            # matching ids only, no browser launch
+npm run shoot -- Modal --split           # one PNG per story instead of a sheet
+```
+
+Filters are case-insensitive substrings of `Title/StoryName` (an exact story id
+also matches); at least one is required. Flags: `--max=12` (cap, reported when it
+truncates), `--width=480` / `--height=900` (canvas, defaults to the
+`sidepanelDefault` preset), `--cell=320` (on-sheet cell width), `--out=shots`.
+
+Three properties matter, and each is a deliberate choice:
+
+- **Context economy.** Multiple matches compose into one labelled sheet, and every
+  capture is cropped to its rendered content. Ten Button variants cost ~630 image
+  tokens as a sheet versus ~5.7k as ten full-panel PNGs — blank pixels bill the
+  same as drawn ones.
+- **Play functions run.** The canvas executes them, so the Template-B mocked
+  states (`Loading`, `Empty`, `ErrorState`) capture in their real state rather
+  than falling back to the default mock.
+- **System Chrome.** It launches with `channel: 'chrome'`, so Playwright's managed
+  browser download isn't needed (the same constraint behind
+  `VITEST_BROWSER_EXECUTABLE` in `vitest.config.ts`).
+
+It reuses a dev server on `:6006` when one is up, otherwise starts a throwaway one
+on a free port and stops it on exit — so a single command works from nothing, and
+keeping `npm run storybook` running just skips the boot (a few seconds with Vite's
+cache warm, up to a minute cold).
+
+Two known limits: a story whose content is entirely `position: fixed` (a modal
+overlay) can't be measured for cropping and falls back to the full canvas, which
+is the right framing anyway; and the `sidepanelCompact`/`Wide` viewport presets
+are explorer-only toolbar state, so reach for `--width=360` to preview the narrow
+collapse.
+
 ## One docs site: Components + Internals + Documentation (ADR-0011)
 
 The static build is the whole documentation site, three sidebar sections:

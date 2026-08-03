@@ -64,3 +64,4 @@ manifest.v2.json
 *storybook.log
 storybook-static
 .storybook/generated
+shots/
