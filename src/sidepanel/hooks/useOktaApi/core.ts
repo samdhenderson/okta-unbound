@@ -21,6 +21,36 @@ import { getCachedCurrentUser, cacheCurrentUser } from './currentUserCache';
 const log = createLogger('useOktaApi');
 
 /**
+ * Substrings Chrome uses when a `runtime.sendMessage` loses the port because the
+ * MV3 service worker was suspending / still waking up. Matched case-insensitively.
+ */
+const TRANSIENT_PORT_ERROR_PATTERNS = [
+  'message port closed before a response',
+  'receiving end does not exist',
+];
+
+/** Retries allowed after a transient port failure (GET only). */
+const TRANSIENT_PORT_MAX_RETRIES = 2;
+
+/** Backoff before retry attempt N (0-indexed): ~250ms, then ~500ms. */
+const TRANSIENT_PORT_RETRY_DELAYS_MS = [250, 500];
+
+/**
+ * Is `message` one of the transient MV3 service-worker wakeup failures that a
+ * plain re-send can recover from?
+ *
+ * @param message - The rejection message from `chrome.runtime.sendMessage`.
+ * @returns `true` for a dropped/not-yet-live message port, `false` otherwise.
+ * @remarks Deliberately does NOT match `Extension context invalidated` — that
+ * means the extension was reloaded underneath the panel, which no retry can fix;
+ * it must surface to the caller so the UI can tell the user to reopen the panel.
+ */
+export function isTransientPortError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return TRANSIENT_PORT_ERROR_PATTERNS.some((pattern) => normalized.includes(pattern));
+}
+
+/**
  * Global progress lifecycle hooks the operation runner drives. Supplied by
  * `useOktaApi` from `ProgressContext` (or no-ops outside a provider).
  */
@@ -133,6 +163,15 @@ export function createCoreApi(
    * @remarks Routes via `chrome.runtime` `scheduleApiRequest` so the scheduler
    * enforces rate limits and honors `priority`. Only the path (query stripped)
    * is logged, never the body.
+   *
+   * The MV3 service worker suspends when idle, so a send that races its
+   * suspension/wakeup rejects with a dropped message port. Those rejections are
+   * retried up to {@link TRANSIENT_PORT_MAX_RETRIES} times (see
+   * {@link isTransientPortError}) — but **only for GET**. A port error is
+   * ambiguous about whether the scheduled request already executed, so a
+   * non-GET (write) is never re-enqueued: a double-execute is worse than a
+   * surfaced failure. Any other rejection, and the final retry's, propagates
+   * unchanged so caller error UX is untouched.
    */
   const makeApiRequest = async (
     endpoint: string,
@@ -150,15 +189,38 @@ export function createCoreApi(
       priority,
     });
 
-    // Route through the background scheduler for rate limit control
-    const response = await chrome.runtime.sendMessage({
-      action: 'scheduleApiRequest',
-      endpoint,
-      method,
-      body,
-      tabId: targetTabId,
-      priority,
-    });
+    // Reads are safely repeatable; writes are not (see the doc comment above).
+    const retryable = method.toUpperCase() === 'GET';
+    let response: RequestResult;
+    let attempt = 0;
+
+    for (;;) {
+      try {
+        // Route through the background scheduler for rate limit control
+        response = await chrome.runtime.sendMessage({
+          action: 'scheduleApiRequest',
+          endpoint,
+          method,
+          body,
+          tabId: targetTabId,
+          priority,
+        });
+        break;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!retryable || attempt >= TRANSIENT_PORT_MAX_RETRIES || !isTransientPortError(message)) {
+          throw error;
+        }
+        // Identifiers and outcomes only — never the body or the error payload.
+        log.debug('Retrying scheduled API request after transient port error', {
+          endpoint: endpoint.split('?')[0],
+          attempt: attempt + 1,
+        });
+        const delay = TRANSIENT_PORT_RETRY_DELAYS_MS[attempt];
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        attempt += 1;
+      }
+    }
 
     log.debug('Received scheduled response', {
       endpoint: endpoint.split('?')[0],

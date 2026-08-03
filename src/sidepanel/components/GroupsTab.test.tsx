@@ -442,6 +442,11 @@ describe('live search: error paths', () => {
     render(<GroupsTab targetTabId={1} />);
     typeInto(liveInput(), 'eng');
     await advance(300);
+    // The transport now retries transient port errors on GET with 250ms/500ms
+    // backoff before surfacing the rejection; flush each delay separately so
+    // the timer scheduled after each attempt's microtask gets to fire.
+    await advance(250);
+    await advance(500);
 
     expect(screen.getByText('Receiving end does not exist')).toBeInTheDocument();
     expect(renderedGroupNames()).toEqual([]);
