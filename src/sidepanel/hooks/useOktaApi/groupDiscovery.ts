@@ -16,7 +16,8 @@ const log = createLogger('useOktaApi');
  * Build read-only group discovery/search operations.
  *
  * @param coreApi - Shared transport surface (see {@link CoreApi}).
- * @returns Group listing, member-count, rules, search, and by-id lookups.
+ * @returns Group listing, member-count, org-wide + per-group rules, search, and
+ * by-id lookups.
  */
 export function createGroupDiscoveryOperations(coreApi: CoreApi) {
   /**
@@ -63,14 +64,82 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
   };
 
   /**
+   * Fetch the org-wide group-rules listing **once** and write it to
+   * {@link RulesCache}.
+   *
+   * @returns The rules in both shapes — `rules` formatted for display and
+   * `rawRules` exactly as Okta returned them.
+   * @remarks One paginated listing request for the whole org (`Link`-followed,
+   * 200 per page), never one request per group. Routed through
+   * {@link CoreApi.makeApiRequest}, i.e. the background `ApiScheduler`, like all
+   * other Okta traffic. No `currentGroupId` is passed to the formatter: the
+   * cache is org-wide, so baking one group's `affectsCurrentGroup` flag into it
+   * would be wrong. Throws if a page fails — callers decide whether that is
+   * fatal.
+   */
+  const fetchAndCacheAllGroupRules = async (): Promise<{
+    rules: FormattedRule[];
+    rawRules: OktaGroupRule[];
+  }> => {
+    const rawRules = await fetchAllPages<OktaGroupRule>(
+      (url) => coreApi.makeApiRequest(url),
+      `/api/v1/groups/rules?limit=${OKTA_PAGE_SIZE}`,
+    );
+
+    const conflicts = detectConflicts(rawRules);
+    const rules = rawRules.map((rule) => formatRuleForDisplay(rule, undefined, conflicts));
+    await RulesCache.set(
+      rules,
+      rawRules,
+      {
+        total: rawRules.length,
+        active: rawRules.filter((r) => r.status === 'ACTIVE').length,
+        inactive: rawRules.filter((r) => r.status === 'INACTIVE').length,
+        conflicts: conflicts.length,
+      },
+      conflicts,
+    );
+
+    return { rules, rawRules };
+  };
+
+  /**
+   * Ensure the org-wide rules payload is cached, fetching it once if it is not.
+   *
+   * Exists for the Groups-tab cold start: without it, a first load with an empty
+   * or expired {@link RulesCache} leaves every row's `hasRules`/`ruleCount`
+   * reading `0` — indistinguishable from "no rule feeds this group".
+   *
+   * @returns The cached-or-freshly-fetched display rules, or `null` when the
+   * listing could not be loaded (logged, never thrown) so callers can carry on
+   * without rule attribution rather than failing the whole load.
+   * @remarks Costs at most one paginated rules listing for the entire org — never
+   * one request per group. A warm cache costs nothing.
+   */
+  const ensureGroupRulesLoaded = async (): Promise<FormattedRule[] | null> => {
+    try {
+      const cached = await RulesCache.get();
+      if (cached) return cached.rules;
+
+      log.debug('Rules cache cold - fetching the org-wide rules listing once');
+      const { rules } = await fetchAndCacheAllGroupRules();
+      return rules;
+    } catch (error) {
+      log.error('Failed to load the org-wide group rules:', error);
+      return null;
+    }
+  };
+
+  /**
    * Resolve the group rules that assign users to a given group.
    *
    * @param groupId - Group whose inbound assignment rules to find.
    * @returns Matching rules, or `[]` on failure/none.
    * @remarks Serves from {@link RulesCache} when populated or fresh; otherwise
-   * fetches the full rules list (following `Link` pagination, 200 per page),
-   * writes it back to the cache so subsequent lookups — for any group — are
-   * served without refetching, and returns the rules targeting `groupId`.
+   * fetches the full rules list via {@link fetchAndCacheAllGroupRules} (following
+   * `Link` pagination, 200 per page), writing it back to the cache so subsequent
+   * lookups — for any group — are served without refetching, and returns the
+   * rules targeting `groupId`.
    */
   const getGroupRulesForGroup = async (
     groupId: string,
@@ -86,32 +155,10 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
       // Cache miss - fetch ALL group rules, following pagination so orgs with
       // more than one page (>200 rules) are not silently truncated.
       log.debug(`Cache miss - fetching all rules for group ${groupId}`);
-      const allRules = await fetchAllPages<OktaGroupRule>(
-        (url) => coreApi.makeApiRequest(url),
-        `/api/v1/groups/rules?limit=${OKTA_PAGE_SIZE}`,
-      );
-
-      // Write back to the global cache so the next call (any group) hits it.
-      // No currentGroupId is passed to the formatter: the cache is org-wide, so
-      // baking one group's `affectsCurrentGroup` flag into it would be wrong.
-      const conflicts = detectConflicts(allRules);
-      const formattedRules = allRules.map((rule) =>
-        formatRuleForDisplay(rule, undefined, conflicts),
-      );
-      await RulesCache.set(
-        formattedRules,
-        allRules,
-        {
-          total: allRules.length,
-          active: allRules.filter((r) => r.status === 'ACTIVE').length,
-          inactive: allRules.filter((r) => r.status === 'INACTIVE').length,
-          conflicts: conflicts.length,
-        },
-        conflicts,
-      );
+      const { rawRules } = await fetchAndCacheAllGroupRules();
 
       // Filter rules that target this group
-      const groupRules = allRules.filter((rule) => {
+      const groupRules = rawRules.filter((rule) => {
         const targetGroupIds = rule.actions?.assignUserToGroups?.groupIds || [];
         return targetGroupIds.includes(groupId);
       });
@@ -187,6 +234,7 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
   return {
     getAllGroups,
     getGroupMemberCount,
+    ensureGroupRulesLoaded,
     getGroupRulesForGroup,
     searchGroups,
     getGroupById,

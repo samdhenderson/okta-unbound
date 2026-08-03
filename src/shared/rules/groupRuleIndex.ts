@@ -5,7 +5,7 @@
  * A group relates to a rule in one of two ways:
  * - **Assigned by** the rule — the group is in the rule's `assignUserToGroups`
  *   target set, i.e. the rule *feeds* the group. This drives `hasRules`/
- *   `ruleCount` (and, downstream, the "no feeding rule" staleness signal).
+ *   `ruleCount` (and, downstream, the "no feeding rule" orphan signal).
  * - **Used in** the rule — the group id appears in the rule's condition
  *   expression (e.g. `isMemberOfAnyGroup("<id>")`), i.e. the group is consulted
  *   to *decide* the rule rather than populated by it. This drives
@@ -13,7 +13,7 @@
  *
  * These are deliberately separate: a group referenced in a condition is NOT fed
  * by that rule, so folding the two together would wrongly suppress the orphan
- * staleness signal. This module turns a loaded rule list into per-group tallies
+ * signal. This module turns a loaded rule list into per-group tallies
  * for both axes, filling in fields the group mapper leaves at their defaults.
  * Keeping it pure lets the Groups loader attribute rules from the shared
  * {@link RulesCache} without an extra API call.
@@ -153,7 +153,7 @@ export function countReferencedGroups(rules: readonly RuleAttribution[]): Map<st
  * Fill in each group's rule-attribution fields from a loaded rule list.
  *
  * `hasRules`/`ruleCount` reflect only the **assigned-by** (feeding) rules, so the
- * downstream "no feeding rule" staleness signal stays accurate; `usedInRuleCount`
+ * downstream "no feeding rule" orphan signal stays accurate; `usedInRuleCount`
  * separately reflects the **used-in** (referenced-in-condition) rules. Returns a
  * new array of new group objects (never mutates the inputs). A group with no
  * relation gets `0`s — only an *accurate* "no rule feeds this" once the caller

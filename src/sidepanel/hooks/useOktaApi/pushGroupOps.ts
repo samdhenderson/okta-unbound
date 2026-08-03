@@ -26,7 +26,8 @@ export function createPushGroupOperations(coreApi: CoreApi) {
    * @returns One {@link PushGroupMapping} per assigned group across all pages; `[]` on error.
    * @remarks Pages `/api/v1/apps/{id}/groups` (200 per page) at `low` priority so it
    * yields to interactive work. Group id is recovered from each assignment's
-   * `_links.group.href`; `status` is inferred `ACTIVE` when a `priority` is present.
+   * `_links.group.href`. The endpoint returns no activation status, so none is
+   * synthesized — only Okta's real `priority` is carried through.
    * Errors are swallowed (logged only) and truncate the result.
    */
   const getAppPushGroupMappings = async (
@@ -53,7 +54,7 @@ export function createPushGroupOperations(coreApi: CoreApi) {
                   `${appId}_${assignment._links?.group?.href?.split('/').pop() || 'unknown'}`,
                 sourceUserGroupId: assignment._links?.group?.href?.split('/').pop() || '',
                 targetGroupName: assignment.profile?.name || assignment.profile?.groupName || '',
-                status: assignment.priority !== undefined ? 'ACTIVE' : 'INACTIVE',
+                priority: assignment.priority,
                 appId,
                 appName,
               });

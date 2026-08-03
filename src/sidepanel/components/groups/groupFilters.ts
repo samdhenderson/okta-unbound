@@ -13,9 +13,7 @@ import { parseRegexQuery } from '../../../shared/utils/regexQuery';
 export { parseRegexQuery } from '../../../shared/utils/regexQuery';
 
 /** Field the groups list can be sorted by. */
-export type SortField = 'name' | 'memberCount' | 'lastUpdated' | 'staleness';
-/** Health/staleness bucket filter (`''` = all). */
-export type StalenessLevel = '' | 'healthy' | 'monitor' | 'stale' | 'very_stale';
+export type SortField = 'name' | 'memberCount' | 'lastUpdated';
 /** Push-status filter (`''` = all). */
 export type PushFilter = '' | 'pushed' | 'not_pushed';
 
@@ -26,7 +24,6 @@ export interface GroupFilterState {
   sizeFilter: string;
   pushFilter: PushFilter;
   pushAppFilter: Set<string>;
-  stalenessFilter: StalenessLevel;
   sortBy: SortField;
   sortDesc: boolean;
 }
@@ -81,22 +78,6 @@ export function matchesSizeFilter(memberCount: number, sizeFilter: string): bool
   }
 }
 
-/** Staleness-score bucket predicate (<=25 / 25-50 / 50-75 / >75). */
-export function matchesStalenessFilter(score: number, level: StalenessLevel): boolean {
-  switch (level) {
-    case 'healthy':
-      return score <= 25;
-    case 'monitor':
-      return score > 25 && score <= 50;
-    case 'stale':
-      return score > 50 && score <= 75;
-    case 'very_stale':
-      return score > 75;
-    default:
-      return true;
-  }
-}
-
 /**
  * Undirected comparator for the sort field. Callers apply the sort direction.
  * `lastUpdated` sorts a missing date LAST in ascending order (returns 1/-1 for the
@@ -112,8 +93,6 @@ export function compareGroupsBy(a: GroupSummary, b: GroupSummary, sortBy: SortFi
       if (!a.lastUpdated) return 1;
       if (!b.lastUpdated) return -1;
       return a.lastUpdated.getTime() - b.lastUpdated.getTime();
-    case 'staleness':
-      return (a.staleness?.score || 0) - (b.staleness?.score || 0);
     default:
       return 0;
   }
@@ -121,7 +100,7 @@ export function compareGroupsBy(a: GroupSummary, b: GroupSummary, sortBy: SortFi
 
 /**
  * The cached-mode filter + sort pipeline: copies the input (never mutates it),
- * applies the six axes conjunctively, then sorts in place on the copy.
+ * applies the five axes conjunctively, then sorts in place on the copy.
  */
 export function filterAndSortGroups(
   groups: GroupSummary[],
@@ -155,12 +134,6 @@ export function filterAndSortGroups(
     });
   }
 
-  if (state.stalenessFilter) {
-    filtered = filtered.filter((g) =>
-      matchesStalenessFilter(g.staleness?.score || 0, state.stalenessFilter),
-    );
-  }
-
   filtered.sort((a, b) => {
     const cmp = compareGroupsBy(a, b, state.sortBy);
     return state.sortDesc ? -cmp : cmp;
@@ -170,19 +143,16 @@ export function filterAndSortGroups(
 }
 
 /**
- * Badge count for the Filters toggle: the 4 scalar filters (counted via
+ * Badge count for the Filters toggle: the 3 scalar filters (counted via
  * `.filter(Boolean)`) plus 1 if any push-target app is selected. `searchQuery` is
  * deliberately NOT counted — do not "harmonize" this with `handleClearFilters`,
  * which DOES clear the search query.
  */
 export function computeActiveFilterCount(
-  state: Pick<
-    GroupFilterState,
-    'typeFilter' | 'sizeFilter' | 'pushFilter' | 'stalenessFilter' | 'pushAppFilter'
-  >,
+  state: Pick<GroupFilterState, 'typeFilter' | 'sizeFilter' | 'pushFilter' | 'pushAppFilter'>,
 ): number {
   return (
-    [state.typeFilter, state.sizeFilter, state.pushFilter, state.stalenessFilter].filter(Boolean)
-      .length + (state.pushAppFilter.size > 0 ? 1 : 0)
+    [state.typeFilter, state.sizeFilter, state.pushFilter].filter(Boolean).length +
+    (state.pushAppFilter.size > 0 ? 1 : 0)
   );
 }

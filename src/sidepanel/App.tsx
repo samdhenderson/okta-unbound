@@ -8,6 +8,21 @@
  * (app wordmark + entity identity + connection), {@link TabNavigation}, the per-tab
  * content, and the fixed {@link ActivityBar} (the unified scheduler + progress bar),
  * all inside the SchedulerProvider.
+ *
+ * ## Tab lifetime
+ *
+ * A tab **mounts on its first activation and stays mounted from then on**; the
+ * inactive ones are hidden with the shared `.tab-content` rule rather than
+ * unmounted. Unmounting used to destroy everything component-local — the Groups
+ * tab's pushed detail view, its filters, selection, loaded window, scroll offset
+ * and per-row expansion — so leaving a tab and coming back lost the user's place.
+ * `React.lazy` is unaffected: a never-visited tab still costs no chunk.
+ *
+ * Eight live tabs mean eight sets of live effects, so **every tab is told whether
+ * it is active** and gates its own background work on it (auto-loads, page-context
+ * re-probes, debounced search, window listeners). No hidden tab may issue Okta API
+ * traffic. `useOktaPageContext(activeTab === 'overview' && !isPinned)` below is the
+ * original instance of that pattern.
  */
 import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import ContextBar from './components/ContextBar';
@@ -21,9 +36,10 @@ import ActivityBar from './components/ActivityBar';
 
 // Code-split the non-default tabs so the initial side-panel load only ships the
 // Overview (the default tab). Each import lands in its own chunk, fetched on
-// first activation of that tab; the shared Suspense below shows the standard
-// spinner during the (one-time) fetch. ExportTab is a named export from its
-// barrel, so it is re-shaped into a default export for React.lazy.
+// first activation of that tab; that tab's own Suspense boundary (see
+// `renderTabPanel`) shows the standard spinner during the one-time fetch, without
+// disturbing the tabs already mounted beside it. ExportTab is a named export from
+// its barrel, so it is re-shaped into a default export for React.lazy.
 const RulesTab = lazy(() => import('./components/RulesTab'));
 const UsersTab = lazy(() => import('./components/UsersTab'));
 const GroupsTab = lazy(() => import('./components/GroupsTab'));
@@ -65,6 +81,16 @@ const App: React.FC = () => {
   // The pinned snapshot (null = following the live tab). Persisted across reopen.
   const [pinned, setPinned] = useState<PinnedContext | null>(null);
   const isPinned = pinned !== null;
+  // Tabs that have been activated at least once, and are therefore mounted. Kept
+  // as state (not a ref) so first activation triggers the render that mounts the
+  // tab; every path that sets `activeTab` funnels through the effect below, so
+  // deep links and the persisted-tab restore mount their target too.
+  const [mountedTabs, setMountedTabs] = useState<ReadonlySet<TabType>>(
+    () => new Set<TabType>(['overview']),
+  );
+  useEffect(() => {
+    setMountedTabs((prev) => (prev.has(activeTab) ? prev : new Set(prev).add(activeTab)));
+  }, [activeTab]);
 
   // Always-on tab targeting + connection health (used by every tab and the header).
   const {
@@ -270,6 +296,32 @@ const App: React.FC = () => {
     chrome.storage.local.set({ [SELECTED_TAB_KEY]: 'rules' });
   };
 
+  /**
+   * Render one tab panel: nothing until the tab has been activated once, then a
+   * permanently mounted subtree whose visibility is toggled by `.tab-content` /
+   * `.tab-content.active` (`display: none` / `block`). The `hidden` attribute is
+   * set alongside the class so the panel is out of the accessibility tree and the
+   * tab order even where that stylesheet is not loaded.
+   *
+   * Each panel owns its **own** Suspense boundary: a shared one would swap the
+   * fallback in for every mounted tab while a newly activated lazy chunk loads,
+   * which is exactly the unmount-and-lose-state problem this change removes.
+   *
+   * @param tab - The tab this panel hosts.
+   * @param content - Builds the tab's element, given whether it is currently active.
+   */
+  const renderTabPanel = (tab: TabType, content: (isActive: boolean) => React.ReactNode) => {
+    if (!mountedTabs.has(tab)) return null;
+    const isActive = tab === activeTab;
+    return (
+      <div className={isActive ? 'tab-content active' : 'tab-content'} hidden={!isActive}>
+        <Suspense fallback={<LoadingSpinner size="lg" message="Loading tab..." centered />}>
+          {content(isActive)}
+        </Suspense>
+      </div>
+    );
+  };
+
   return (
     <SchedulerProvider>
       <div className="flex flex-col h-screen overflow-y-auto pb-14 bg-canvas">
@@ -290,94 +342,97 @@ const App: React.FC = () => {
 
         <TabNavigation activeTab={activeTab} onTabChange={handleTabChange} />
 
-        {/* One Suspense boundary for every lazy tab: the fallback is the shared
-            centered spinner, shown only during a tab chunk's first fetch.
-            Overview is static (the default tab) and never suspends. */}
-        <Suspense fallback={<LoadingSpinner size="lg" message="Loading tab..." centered />}>
-          {activeTab === 'overview' && (
-            <OverviewTab
-              onTabChange={handleTabChange}
-              pageType={effective.pageType}
-              groupInfo={effective.groupInfo}
-              userInfo={effective.userInfo}
-              appInfo={page.appInfo ?? null}
-              policyInfo={page.policyInfo ?? null}
-              connectionStatus={effective.connectionStatus}
-              targetTabId={effective.targetTabId}
-              error={effective.error}
-              isLoading={effective.isLoading}
-              oktaOrigin={effective.oktaOrigin}
-              onRetry={handleRefreshAll}
-              onViewAllGroups={() => {
-                if (effective.userInfo) handleNavigateToUser(effective.userInfo.userId);
-              }}
-              onExportGroup={handleExportGroup}
-              onExportApp={handleExportApp}
-              onViewGroupRules={handleViewGroupRules}
-            />
-          )}
-          {activeTab === 'rules' && (
-            <RulesTab
-              targetTabId={tabContext.targetTabId ?? undefined}
-              currentGroupId={tabContext.currentGroupId}
-              oktaOrigin={tabContext.oktaOrigin ?? undefined}
-              selectedRuleId={selectedRuleId}
-              onRuleSelected={() => setSelectedRuleId(null)}
-              onNavigateToGroup={handleNavigateToGroup}
-              scopeToGroupId={scopeRulesToGroupId}
-              onScopeConsumed={() => setScopeRulesToGroupId(null)}
-            />
-          )}
-          {activeTab === 'users' && (
-            <UsersTab
-              targetTabId={tabContext.targetTabId ?? undefined}
-              currentGroupId={tabContext.currentGroupId}
-              onNavigateToRule={handleNavigateToRule}
-              selectedUserId={selectedUserId}
-              onUserSelected={() => setSelectedUserId(null)}
-            />
-          )}
-          {activeTab === 'groups' && (
-            <GroupsTab
-              targetTabId={tabContext.targetTabId ?? null}
-              oktaOrigin={tabContext.oktaOrigin ?? undefined}
-              onNavigateToRule={handleNavigateToRule}
-              selectedGroupId={selectedGroupId}
-              onGroupSelected={() => setSelectedGroupId(null)}
-            />
-          )}
-          {activeTab === 'apps' && (
-            <AppsTab
-              targetTabId={tabContext.targetTabId ?? null}
-              oktaOrigin={tabContext.oktaOrigin ?? undefined}
-            />
-          )}
-          {activeTab === 'policies' && (
-            <AuthPoliciesTab
-              targetTabId={tabContext.targetTabId ?? undefined}
-              oktaOrigin={tabContext.oktaOrigin ?? undefined}
-            />
-          )}
-          {activeTab === 'export' && (
-            <ExportTab
-              targetTabId={tabContext.targetTabId ?? undefined}
-              oktaOrigin={tabContext.oktaOrigin ?? undefined}
-              exportRequest={exportRequest}
-              onExportRequestConsumed={() => setExportRequest(null)}
-            />
-          )}
-          {activeTab === 'history' && (
-            <div
-              className="tab-content active"
-              style={{ fontFamily: 'var(--font-primary)', padding: 0 }}
-            >
-              <PageHeader title="Audit Log" subtitle="View history of actions performed" />
-              <div className="max-w-7xl mx-auto px-6 py-6">
-                <AuditLogViewer />
-              </div>
+        {/* Each tab mounts on first activation and is hidden — never unmounted —
+            thereafter, so its local state survives leaving the tab. */}
+        {renderTabPanel('overview', () => (
+          <OverviewTab
+            onTabChange={handleTabChange}
+            pageType={effective.pageType}
+            groupInfo={effective.groupInfo}
+            userInfo={effective.userInfo}
+            appInfo={page.appInfo ?? null}
+            policyInfo={page.policyInfo ?? null}
+            connectionStatus={effective.connectionStatus}
+            targetTabId={effective.targetTabId}
+            error={effective.error}
+            isLoading={effective.isLoading}
+            oktaOrigin={effective.oktaOrigin}
+            onRetry={handleRefreshAll}
+            onViewAllGroups={() => {
+              if (effective.userInfo) handleNavigateToUser(effective.userInfo.userId);
+            }}
+            onExportGroup={handleExportGroup}
+            onExportApp={handleExportApp}
+            onViewGroupRules={handleViewGroupRules}
+          />
+        ))}
+        {renderTabPanel('rules', (isActive) => (
+          <RulesTab
+            isActive={isActive}
+            targetTabId={tabContext.targetTabId ?? undefined}
+            currentGroupId={tabContext.currentGroupId}
+            oktaOrigin={tabContext.oktaOrigin ?? undefined}
+            selectedRuleId={selectedRuleId}
+            onRuleSelected={() => setSelectedRuleId(null)}
+            onNavigateToGroup={handleNavigateToGroup}
+            scopeToGroupId={scopeRulesToGroupId}
+            onScopeConsumed={() => setScopeRulesToGroupId(null)}
+          />
+        ))}
+        {renderTabPanel('users', (isActive) => (
+          <UsersTab
+            isActive={isActive}
+            targetTabId={tabContext.targetTabId ?? undefined}
+            currentGroupId={tabContext.currentGroupId}
+            onNavigateToRule={handleNavigateToRule}
+            selectedUserId={selectedUserId}
+            onUserSelected={() => setSelectedUserId(null)}
+          />
+        ))}
+        {renderTabPanel('groups', (isActive) => (
+          <GroupsTab
+            isActive={isActive}
+            targetTabId={tabContext.targetTabId ?? null}
+            oktaOrigin={tabContext.oktaOrigin ?? undefined}
+            onNavigateToRule={handleNavigateToRule}
+            selectedGroupId={selectedGroupId}
+            onGroupSelected={() => setSelectedGroupId(null)}
+          />
+        ))}
+        {renderTabPanel('apps', (isActive) => (
+          <AppsTab
+            isActive={isActive}
+            targetTabId={tabContext.targetTabId ?? null}
+            oktaOrigin={tabContext.oktaOrigin ?? undefined}
+          />
+        ))}
+        {renderTabPanel('policies', (isActive) => (
+          <AuthPoliciesTab
+            isActive={isActive}
+            targetTabId={tabContext.targetTabId ?? undefined}
+            oktaOrigin={tabContext.oktaOrigin ?? undefined}
+          />
+        ))}
+        {renderTabPanel('export', (isActive) => (
+          <ExportTab
+            isActive={isActive}
+            targetTabId={tabContext.targetTabId ?? undefined}
+            oktaOrigin={tabContext.oktaOrigin ?? undefined}
+            exportRequest={exportRequest}
+            onExportRequestConsumed={() => setExportRequest(null)}
+          />
+        ))}
+        {renderTabPanel('history', () => (
+          <div
+            className="tab-content active"
+            style={{ fontFamily: 'var(--font-primary)', padding: 0 }}
+          >
+            <PageHeader title="Audit Log" subtitle="View history of actions performed" />
+            <div className="max-w-7xl mx-auto px-6 py-6">
+              <AuditLogViewer />
             </div>
-          )}
-        </Suspense>
+          </div>
+        ))}
 
         <ActivityBar />
       </div>

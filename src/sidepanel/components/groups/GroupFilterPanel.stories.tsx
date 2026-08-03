@@ -19,8 +19,8 @@ const meta = {
       description: {
         component:
           'Expandable cached-mode filter + sort panel for the groups list.\n\n' +
-          'Filters by group type, member-count bucket, push status, push-target app, and ' +
-          'health/staleness, and sorts by a chosen field/direction. When any filters are ' +
+          'Filters by group type, member-count bucket, push status, and push-target app, ' +
+          'and sorts by a chosen field/direction. When any filters are ' +
           'active it surfaces a summary chips row with a "Clear all" link; the ' +
           'push-target-app row is hidden when no push apps are available.',
       },
@@ -36,8 +36,6 @@ const meta = {
     setPushFilter: { description: 'Sets the push-status filter.' },
     pushAppFilter: { description: 'Set of push-target app ids to filter by (empty = all).' },
     setPushAppFilter: { description: 'Updates the push-target-app id set.' },
-    stalenessFilter: { description: "Selected health/staleness bucket (`''` = all)." },
-    setStalenessFilter: { description: 'Sets the health/staleness bucket.' },
     availablePushApps: { description: 'Push-target apps available as filter chips.' },
     sortBy: { description: 'Active sort field.' },
     sortDesc: { description: 'Whether the active sort is descending.' },
@@ -54,8 +52,6 @@ const meta = {
     setPushFilter: fn(),
     pushAppFilter: new Set<string>(),
     setPushAppFilter: fn(),
-    stalenessFilter: '',
-    setStalenessFilter: fn(),
     availablePushApps,
     sortBy: 'name',
     sortDesc: false,
@@ -77,7 +73,6 @@ export const WithActiveFilters: Story = {
     typeFilter: 'OKTA_GROUP',
     sizeFilter: 'large',
     pushFilter: 'pushed',
-    stalenessFilter: 'stale',
   },
 };
 

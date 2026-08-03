@@ -33,6 +33,10 @@ const meta = {
     type: { description: 'Native button type. Defaults to `button`.' },
     title: { description: 'Tooltip text; defaults to `label`.' },
     active: { description: 'For toggle buttons — reflected as `aria-pressed`.' },
+    expanded: { description: 'For disclosure triggers — reflected as `aria-expanded`.' },
+    controls: {
+      description: '`id` of the region this button shows/hides — reflected as `aria-controls`.',
+    },
     className: { description: 'Extra classes merged onto the button.' },
   },
   args: {
@@ -83,6 +87,24 @@ export const Disabled: Story = {
 /** Toggle button — aria-pressed set when active. */
 export const Active: Story = {
   args: { active: true, label: 'Settings active' },
+};
+
+/**
+ * Disclosure trigger — `expanded` + `controls` emit `aria-expanded` and
+ * `aria-controls`, so assistive tech can tell the region is open and jump to it.
+ * The label flips with the state, which is what a screen reader announces.
+ */
+export const Disclosure: Story = {
+  render: (args) => (
+    <div>
+      <IconButton {...args} label="Collapse" expanded controls="disclosure-demo-panel">
+        <Icon type="chevron-right" className="rotate-90" />
+      </IconButton>
+      <div id="disclosure-demo-panel" className="mt-2 text-sm text-neutral-700">
+        The region the button controls.
+      </div>
+    </div>
+  ),
 };
 
 /** Small padding. */

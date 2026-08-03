@@ -11,6 +11,7 @@
 // Shared UI components following Overview tab design standards
 export { default as Button } from './Button';
 export { default as IconButton } from './IconButton';
+export { default as StretchedButton } from './StretchedButton';
 export { default as FilterPill } from './FilterPill';
 export { default as SortPill } from './SortPill';
 export { default as CopyButton } from './CopyButton';
@@ -21,6 +22,7 @@ export { default as Checkbox } from './Checkbox';
 export { default as Select } from './Select';
 export { default as Textarea } from './Textarea';
 export { default as PageHeader } from './PageHeader';
+export { default as Breadcrumbs } from './Breadcrumbs';
 export { default as Tabs } from './Tabs';
 export { default as CollapsibleSection } from './CollapsibleSection';
 export { default as AlertMessage } from './AlertMessage';
@@ -37,3 +39,4 @@ export type { AlertMessageData, AlertAction } from './AlertMessage';
 export type { StatusType, UserStatusVariant } from './status';
 export { userStatusVariant } from './status';
 export type { TabItem, TabsVariant } from './Tabs';
+export type { BreadcrumbItem, BreadcrumbsSize } from './Breadcrumbs';

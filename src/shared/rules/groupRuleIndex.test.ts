@@ -118,7 +118,7 @@ describe('annotateGroupsWithRuleCounts', () => {
       usedInRuleCount: 0,
     });
     // A group only referenced in a condition is NOT counted as fed — hasRules stays
-    // false so the "no feeding rule" staleness signal is preserved.
+    // false so the "no feeding rule" orphan signal is preserved.
     expect(annotated.find((g) => g.id === 'used')).toMatchObject({
       hasRules: false,
       ruleCount: 0,

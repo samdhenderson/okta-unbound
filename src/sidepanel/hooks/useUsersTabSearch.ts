@@ -40,6 +40,12 @@ interface UseUsersTabSearchOptions {
   debounceMs?: number;
   /** Minimum query length before searching. Defaults to 2. */
   minQueryLength?: number;
+  /**
+   * Whether the Users tab is the visible one. The tab stays mounted while hidden,
+   * so the debounce is suspended rather than re-issuing the standing query when
+   * `targetTabId` changes. Defaults to `true`.
+   */
+  enabled?: boolean;
 }
 
 /** Return shape of {@link useUsersTabSearch}. */
@@ -66,6 +72,7 @@ export function useUsersTabSearch({
   onSearchStart,
   debounceMs = 600,
   minQueryLength = 2,
+  enabled = true,
 }: UseUsersTabSearchOptions): UseUsersTabSearchReturn {
   return useDebouncedUserSearch({
     targetTabId,
@@ -74,5 +81,6 @@ export function useUsersTabSearch({
     debounceMs,
     minQueryLength,
     log,
+    enabled,
   });
 }

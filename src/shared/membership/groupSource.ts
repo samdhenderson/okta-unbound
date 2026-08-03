@@ -7,7 +7,10 @@
  * many members each feeding rule accounts for. Delegates the per-member
  * classification to the app's single source of truth
  * (`shared/utils/membershipAnalysis.analyzeMemberships`) so the answer matches
- * what the Users tab and user comparison already show.
+ * what the Users tab and user comparison already show. Members the classifier
+ * could only attribute by heuristic are additionally counted as
+ * `unattributed`, so callers can distinguish "rule-managed" from "probably
+ * rule-managed".
  *
  * @see {@link summarizeMemberSources}
  */
@@ -31,6 +34,17 @@ export interface MemberSourceBreakdown {
   direct: number;
   /** Members attributed to a feeding rule. */
   ruleBased: number;
+  /**
+   * Members counted as rule-managed only *inferentially* — at least one feeding
+   * rule's condition could not be evaluated client-side, so the classifier fell
+   * back to a heuristic (`attribution: 'inferred'`).
+   *
+   * **A subset of `ruleBased`, not a fourth disjoint bucket** — the invariants
+   * are `direct + ruleBased === total` and `unattributed <= ruleBased`. A UI
+   * that wants three exclusive buckets should render
+   * `ruleBased - unattributed` as "confirmed rule-managed".
+   */
+  unattributed: number;
   /** Per-rule contribution, sorted by count descending. */
   byRule: RuleContribution[];
 }
@@ -66,12 +80,14 @@ export function summarizeMemberSources(
 
   let direct = 0;
   let ruleBased = 0;
+  let unattributed = 0;
   const ruleCounts = new Map<string, RuleContribution>();
 
   for (const member of members) {
     const [membership] = analyzeMemberships([oktaGroup], rules, member);
     if (membership.membershipType === 'RULE_BASED') {
       ruleBased++;
+      if (membership.attribution === 'inferred') unattributed++;
       const rule = membership.rule;
       if (rule) {
         const existing = ruleCounts.get(rule.id);
@@ -85,5 +101,5 @@ export function summarizeMemberSources(
 
   const byRule = Array.from(ruleCounts.values()).sort((a, b) => b.count - a.count);
 
-  return { total: members.length, direct, ruleBased, byRule };
+  return { total: members.length, direct, ruleBased, unattributed, byRule };
 }

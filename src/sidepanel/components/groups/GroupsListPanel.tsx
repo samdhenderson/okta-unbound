@@ -41,10 +41,22 @@ interface GroupsListPanelProps {
   onLoadAllGroups: () => void;
   /** Clears all filters (cached empty-state action). */
   onClearFilters: () => void;
-  /** Opens the read-only membership-source insight for a group (A2). */
+  /** Drills into a group's read-only detail view (pushes onto the tab's view stack). */
+  onOpenDetail?: (group: GroupSummary) => void;
+  /**
+   * Runs the (paid) member-source analysis for a group, offered per row while no
+   * breakdown is cached. Rows never analyze on their own — see
+   * {@link sidepanel/components/groups/GroupListItem}.
+   */
   onAnalyzeSource?: (group: GroupSummary) => void;
   /** Group id to highlight (deep-link target from the Rules tab). */
   highlightedGroupId?: string;
+  /**
+   * Optional ref on the list's scroll container, so the tab shell can preserve
+   * `scrollTop` while the list is hidden behind a pushed detail view — see
+   * {@link sidepanel/hooks/useScrollPreservation.useScrollPreservation}.
+   */
+  scrollRef?: React.Ref<HTMLDivElement>;
 }
 
 /** Number of additional rows revealed per "Load more" (same as MemberList). */
@@ -74,8 +86,10 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
   oktaOrigin,
   onLoadAllGroups,
   onClearFilters,
+  onOpenDetail,
   onAnalyzeSource,
   highlightedGroupId,
+  scrollRef,
 }) => {
   const [visibleCount, setVisibleCount] = useState(PAGE);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -130,6 +144,7 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
         loading={loading}
         loadingMessage="Loading groups from Okta..."
         className="mt-4"
+        scrollRef={scrollRef}
         emptyState={
           searchMode === 'live' && liveSearchQuery.trim() && !isLiveSearching ? (
             <EmptyState
@@ -159,6 +174,7 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
             selected={selectedGroupIds.has(group.id)}
             onToggleSelect={onToggleSelect}
             oktaOrigin={oktaOrigin}
+            onOpenDetail={onOpenDetail}
             onAnalyzeSource={onAnalyzeSource}
             isHighlighted={highlightedGroupId === group.id}
           />

@@ -7,6 +7,12 @@
  * (suspend / unsuspend / reset password) behind confirm modals, an "Add to Group"
  * flow, and per-group membership attribution (rule-based vs. direct) computed by
  * `analyzeMemberships`. Security-sensitive profile fields are never shown.
+ *
+ * {@link App} hides this tab rather than unmounting it when another top-level tab
+ * is selected, so the selected user, their analysed memberships and the search box
+ * all survive leaving it. In exchange the tab must be inert while hidden:
+ * `isActive` suspends live user-page detection, the user-search debounce and the
+ * Add-to-Group type-ahead — the three things here that can reach Okta without a click.
  */
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import PageHeader from './shared/PageHeader';
@@ -48,6 +54,14 @@ interface UsersTabProps {
   selectedUserId?: string | null;
   /** Invoked once {@link UsersTabProps.selectedUserId} has been consumed. */
   onUserSelected?: () => void;
+  /**
+   * Whether this is the selected top-level tab. The tab stays mounted while
+   * hidden ({@link App} hides rather than unmounts it, so the selected user and
+   * their analysed memberships survive a trip to another tab), so live
+   * page-context re-detection is suspended while it is `false` — a resync is
+   * deferred until the tab is shown again. Defaults to `true`.
+   */
+  isActive?: boolean;
 }
 
 /**
@@ -61,8 +75,9 @@ const UsersTab: React.FC<UsersTabProps> = ({
   onNavigateToRule,
   selectedUserId,
   onUserSelected,
+  isActive = true,
 }) => {
-  const { userInfo, oktaOrigin } = useUserContext();
+  const { userInfo, oktaOrigin } = useUserContext(isActive);
   const [isLoadingMemberships, setIsLoadingMemberships] = useState(false);
   const [selectedUser, setSelectedUser] = useState<OktaUser | null>(null);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
@@ -92,7 +107,7 @@ const UsersTab: React.FC<UsersTabProps> = ({
   }, [clearMemberships]);
 
   const { searchQuery, setSearchQuery, searchResults, setSearchResults, isSearching } =
-    useUsersTabSearch({ targetTabId, onError: setError, onSearchStart });
+    useUsersTabSearch({ targetTabId, onError: setError, onSearchStart, enabled: isActive });
 
   const handleSelectUser = useCallback(
     async (user: OktaUser) => {
@@ -217,6 +232,7 @@ const UsersTab: React.FC<UsersTabProps> = ({
     selectedUser,
     onResult: setResultMessage,
     onAdded: handleUserAddedToGroup,
+    enabled: isActive,
   });
 
   return (

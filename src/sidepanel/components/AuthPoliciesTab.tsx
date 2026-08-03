@@ -28,6 +28,12 @@ interface AuthPoliciesTabProps {
   targetTabId?: number;
   /** Okta org origin of the connected tab (reserved for future deep links). */
   oktaOrigin?: string | null;
+  /**
+   * Whether this is the selected top-level tab. The tab stays mounted while
+   * hidden, so the one-per-connected-tab policy auto-load is deferred until it is
+   * shown rather than firing in the background. Defaults to `true`.
+   */
+  isActive?: boolean;
 }
 
 /**
@@ -51,7 +57,7 @@ function filterPolicies(policies: OktaPolicyListItem[], query: string): OktaPoli
  * Renders the Auth Policies tab: the app authentication policy list with search
  * and lazily expandable per-policy rules.
  */
-const AuthPoliciesTab: React.FC<AuthPoliciesTabProps> = ({ targetTabId }) => {
+const AuthPoliciesTab: React.FC<AuthPoliciesTabProps> = ({ targetTabId, isActive = true }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -66,12 +72,15 @@ const AuthPoliciesTab: React.FC<AuthPoliciesTabProps> = ({ targetTabId }) => {
   });
 
   // Load once per connected tab on arrival; the header action re-fetches on demand.
+  // Gated on visibility: the tab stays mounted once visited, and the auto-load
+  // re-arms on every new `targetTabId`, so without the gate switching Okta tabs
+  // would re-list every policy from a tab the user is not looking at.
   const autoLoadedRef = useRef<number | null>(null);
   useEffect(() => {
-    if (targetTabId == null || autoLoadedRef.current === targetTabId) return;
+    if (!isActive || targetTabId == null || autoLoadedRef.current === targetTabId) return;
     autoLoadedRef.current = targetTabId;
     void loadPolicies(false);
-  }, [targetTabId, loadPolicies]);
+  }, [isActive, targetTabId, loadPolicies]);
 
   const filteredPolicies = useMemo(
     () => filterPolicies(policies, searchQuery),

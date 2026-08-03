@@ -62,15 +62,16 @@ The two primitives worth building **once** and reusing across C/D:
 
 ## Catalog (ranked by impact ÷ effort)
 
-| Feature                                | Effort | Impact   | Verdict                        |
-| -------------------------------------- | ------ | -------- | ------------------------------ |
-| A. Orphan/Clutter + Rule Consolidation | M      | High     | `[x]` **Shipped (flagship)**   |
-| B. Rule Impact Preview                 | L–M    | High     | `[x]` **Shipped**              |
-| C. Bulk Attribute Editor               | M      | High     | `[ ]` **Build (next)**         |
-| D. Bulk Lifecycle Console              | M      | Med–High | Fast follow                    |
-| E. Group Push deploy                   | H      | Med      | Parked                         |
-| F. OEL Sandbox (full)                  | H      | Med      | Parked (B is the cheap slice)  |
-| G. Policy Migrator                     | XL     | Med      | Rejected (single-tenant block) |
+| Feature                                | Effort | Impact   | Verdict                         |
+| -------------------------------------- | ------ | -------- | ------------------------------- |
+| A. Orphan/Clutter + Rule Consolidation | M      | High     | `[x]` **Shipped (flagship)**    |
+| B. Rule Impact Preview                 | L–M    | High     | `[x]` **Shipped**               |
+| C. Bulk Attribute Editor               | M      | High     | `[ ]` **Build (next)**          |
+| D. Bulk Lifecycle Console              | M      | Med–High | Fast follow                     |
+| E. Group Push deploy                   | H      | Med      | Parked                          |
+| F. OEL Sandbox (full)                  | H      | Med      | Parked (interpreter now exists) |
+| G. Policy Migrator                     | XL     | Med      | Rejected (single-tenant block)  |
+| H. Clause-level rule explainer         | S–M    | High     | `[ ]` **Build**                 |
 
 ---
 
@@ -84,9 +85,11 @@ All four sub-features landed; the _why_ is captured in the code and ADRs.
   missing-description into one 0–100 review score. Surfaced as a **Cleanup** panel inside
   the Groups tab whose category counts are one-click selectors into the existing
   selection → bulk/export machinery — no new mutation surface.
-- **A2 — Membership-source insight** (`GroupSourceModal` + `useGroupSource` +
+- **A2 — Membership-source insight** (`useGroupSource` +
   `shared/membership/groupSource.ts`): per-group "why does this exist / who feeds it" —
-  feeding rules, app-push targets, and a gated manual-vs-rule split. Read-only.
+  feeding rules, app-push targets, and a gated manual-vs-rule split. Read-only. Its
+  original `GroupSourceModal` shell has since been retired: the content now lives in the
+  Group Detail view pushed from the groups list (ADR-0016).
 - **A3 — Group merge** (`GroupMergeModal` + `useGroupMerge` +
   `shared/membership/mergePlan.ts`): membership consolidation from the selection bar —
   copy sources into a survivor, empty the sources, block sources fed by an active rule;
@@ -132,6 +135,42 @@ fighting externally-mastered (AD/HR) profiles.
 
 ---
 
+## H. `[ ]` Clause-level rule explainer — _"why isn't this person in that group?"_
+
+The single most common Okta support question, answered directly. Today an admin can see that a
+user doesn't match a rule; they cannot see **which part** of the condition failed.
+
+`shared/ruleEvaluator.ts` now parses conditions into an AST rather than pattern-matching strings,
+so each sub-expression can be evaluated independently. For
+`user.department == "Engineering" && user.title != "Intern"` against a given user, the UI can show
+department ✓ (Engineering) and title ✗ (is "Intern") instead of a bare "no match". This is
+effectively impossible without an AST and nearly free with one — which is why it leads the list.
+
+- **Zero API cost.** Pure evaluation over a rule and a user the app has already loaded. No new
+  endpoint, no scheduler traffic, nothing to rate-limit.
+- Reuse: `tryEvaluateRuleExpression` and the allow-list evaluator in `shared/ruleEvaluator.ts`;
+  `analyzeMemberships` already calls it per user/group. The new work is a per-node walk that
+  records each clause's operands, its resolved values, and its outcome — then a component to
+  render the tree.
+- **Must degrade honestly.** The allow-list covers `String.*` plus comparison/logical operators;
+  group-membership functions (`isMemberOfGroup*`) return `unevaluable` because they need the
+  user's full group list. A clause the evaluator cannot resolve renders as _unevaluable_, never
+  as a fail — presenting "couldn't parse" as "didn't match" would be a worse bug than the one
+  this feature fixes. Show a per-rule summary like "3 of 4 clauses evaluated, 1 needs group
+  context".
+- **Highest-leverage follow-up:** supply the user's group list to the evaluator and close the
+  `isMemberOf*` seam (documented on `GROUP_MEMBERSHIP_FUNCTIONS`). The app already fetches user
+  groups elsewhere, and it would widen this feature — and every other consumer of the evaluator —
+  at once.
+- Surfaces: a rule's card in the Rules tab (explain against a picked user), and the group detail
+  view's membership-source section (explain why a listed member is attributed to a rule).
+- _Rendering note:_ rule expressions and profile values are end-user-controllable. Rely on React
+  escaping; never build HTML strings from them.
+- Done when: an admin picks a user and a rule and sees a per-clause pass/fail breakdown with the
+  actual profile values that drove each outcome, unevaluable clauses labelled as such, green.
+
+---
+
 ## Known tech debt / follow-ups
 
 Carried forward from the A/B build (surfaced while working, none blocking):
@@ -166,9 +205,12 @@ Carried forward from the A/B build (surfaced while working, none blocking):
 - **E. Group Push deploy** — the extension only **reads** push mappings
   (`getAppPushGroupMappings`); writing app group-push config is deep provisioning.
   High effort, parked.
-- **F. OEL Sandbox (full)** — no Okta evaluate-expression API means building a custom EL
-  interpreter. High effort; **Feature B is the affordable slice** that covers the common
-  need (impact before toggling).
+- **F. OEL Sandbox (full)** — _parking rationale superseded._ It was parked because "no Okta
+  evaluate-expression API means building a custom EL interpreter, high effort". That interpreter
+  now exists: `shared/ruleEvaluator.ts` parses with `jsep` and evaluates against an explicit
+  allow-list, returning `match` / `no-match` / `unevaluable`. What remains parked is only the
+  _full_ sandbox (arbitrary expression authoring against arbitrary users). **Feature H is the
+  affordable slice** of it, and Feature B still covers impact-before-toggling.
 - **G. Policy Migrator** — **rejected.** The single-tab session model cannot address two
   tenants at once, and policy ops are entirely absent. Would require a different
   transport plus persisted cross-tenant credentials, violating the never-persist-tokens

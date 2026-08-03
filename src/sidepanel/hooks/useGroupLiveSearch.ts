@@ -22,6 +22,13 @@ interface UseGroupLiveSearchOptions {
   searchMode: 'live' | 'cached';
   /** The shell's single error setter — three producers write it, so it stays there. */
   setError: Dispatch<SetStateAction<string | null>>;
+  /**
+   * When `false`, the debounced search never fires. The Groups tab stays mounted
+   * while another top-level tab is selected, and the debounce effect re-runs on a
+   * `targetTabId` change — which would otherwise re-issue the last typed query
+   * from a tab the user cannot see. Defaults to `true`.
+   */
+  enabled?: boolean;
 }
 
 /**
@@ -48,6 +55,7 @@ export function useGroupLiveSearch({
   targetTabId,
   searchMode,
   setError,
+  enabled = true,
 }: UseGroupLiveSearchOptions) {
   const [liveSearchQuery, setLiveSearchQuery] = useState('');
   const [liveSearchResults, setLiveSearchResults] = useState<GroupSummary[]>([]);
@@ -102,12 +110,15 @@ export function useGroupLiveSearch({
 
   // Debounced search effect: fires once the query has been stable for 300ms, and
   // re-fires with the settled query when the handler identity changes (i.e. a new
-  // `targetTabId`) or the mode flips back to live.
+  // `targetTabId`) or the mode flips back to live. Suppressed entirely while the
+  // tab is hidden, so a mounted-but-invisible tab never calls Okta. Coming back
+  // runs it once for the query still in the box (a no-op when that box is empty),
+  // which is the point of a *live* search: what it shows should be current.
   useEffect(() => {
-    if (searchMode === 'live') {
+    if (enabled && searchMode === 'live') {
       handleLiveSearch(debouncedQuery);
     }
-  }, [debouncedQuery, searchMode, handleLiveSearch]);
+  }, [debouncedQuery, searchMode, handleLiveSearch, enabled]);
 
   const resetLiveSearch = useCallback(() => {
     setLiveSearchQuery('');

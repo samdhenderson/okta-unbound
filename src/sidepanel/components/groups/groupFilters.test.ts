@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import type { GroupSummary } from '../../../shared/types';
 import {
   matchesSizeFilter,
-  matchesStalenessFilter,
   compareGroupsBy,
   filterAndSortGroups,
   computeActiveFilterCount,
@@ -26,7 +25,6 @@ const emptyState: GroupFilterState = {
   sizeFilter: '',
   pushFilter: '',
   pushAppFilter: new Set(),
-  stalenessFilter: '',
   sortBy: 'name',
   sortDesc: false,
 };
@@ -106,20 +104,6 @@ describe('matchesSizeFilter', () => {
   });
 });
 
-describe('matchesStalenessFilter', () => {
-  it('buckets by score with the documented boundaries', () => {
-    expect(matchesStalenessFilter(25, 'healthy')).toBe(true);
-    expect(matchesStalenessFilter(26, 'healthy')).toBe(false);
-    expect(matchesStalenessFilter(26, 'monitor')).toBe(true);
-    expect(matchesStalenessFilter(50, 'monitor')).toBe(true);
-    expect(matchesStalenessFilter(51, 'monitor')).toBe(false);
-    expect(matchesStalenessFilter(51, 'stale')).toBe(true);
-    expect(matchesStalenessFilter(75, 'stale')).toBe(true);
-    expect(matchesStalenessFilter(76, 'stale')).toBe(false);
-    expect(matchesStalenessFilter(76, 'very_stale')).toBe(true);
-  });
-});
-
 describe('compareGroupsBy', () => {
   it('sorts by name via localeCompare', () => {
     expect(
@@ -142,16 +126,6 @@ describe('compareGroupsBy', () => {
     const noDate = g({ id: 'b' });
     expect(compareGroupsBy(noDate, withDate, 'lastUpdated')).toBe(1);
     expect(compareGroupsBy(withDate, noDate, 'lastUpdated')).toBe(-1);
-  });
-
-  it('sorts by staleness score, treating a missing score as 0', () => {
-    expect(
-      compareGroupsBy(
-        g({ id: 'a', staleness: { score: 80 } as GroupSummary['staleness'] }),
-        g({ id: 'b' }),
-        'staleness',
-      ),
-    ).toBe(80);
   });
 });
 
@@ -251,13 +225,12 @@ describe('filterAndSortGroups', () => {
 });
 
 describe('computeActiveFilterCount', () => {
-  it('counts the 4 scalar filters plus one for any push-app selection', () => {
+  it('counts the 3 scalar filters plus one for any push-app selection', () => {
     expect(
       computeActiveFilterCount({
         typeFilter: '',
         sizeFilter: '',
         pushFilter: '',
-        stalenessFilter: '',
         pushAppFilter: new Set(),
       }),
     ).toBe(0);
@@ -266,16 +239,14 @@ describe('computeActiveFilterCount', () => {
         typeFilter: 'OKTA_GROUP',
         sizeFilter: 'small',
         pushFilter: 'pushed',
-        stalenessFilter: 'stale',
         pushAppFilter: new Set(['a1', 'a2']),
       }),
-    ).toBe(5);
+    ).toBe(4);
     expect(
       computeActiveFilterCount({
         typeFilter: 'OKTA_GROUP',
         sizeFilter: '',
         pushFilter: '',
-        stalenessFilter: '',
         pushAppFilter: new Set(),
       }),
     ).toBe(1);

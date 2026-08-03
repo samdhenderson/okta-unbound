@@ -61,6 +61,42 @@ describe('summarizeMemberSources', () => {
     expect(result).toMatchObject({ direct: 1, ruleBased: 0 });
   });
 
+  it('reports no unattributed members when every feeding rule can be evaluated', () => {
+    const members = [member('u1', { department: 'Eng' }), member('u2', { department: 'Sales' })];
+    const result = summarizeMemberSources(oktaGroup, members, [engRule]);
+    // u2 does not satisfy the only feeding rule → a manual add, exactly known.
+    expect(result).toMatchObject({ total: 2, direct: 1, ruleBased: 1, unattributed: 0 });
+  });
+
+  it('counts members as unattributed when a feeding rule cannot be evaluated', () => {
+    const opaqueRule: MembershipRule = {
+      ...engRule,
+      id: 'r9',
+      name: 'Opaque feeder',
+      conditionExpression: 'isMemberOfGroup("00gFAKE")',
+    };
+    const result = summarizeMemberSources(
+      oktaGroup,
+      [member('u1', { department: 'Eng' })],
+      [opaqueRule],
+    );
+    // Indeterminate: counted as rule-based (today's behavior) but flagged.
+    expect(result).toMatchObject({ total: 1, direct: 0, ruleBased: 1, unattributed: 1 });
+  });
+
+  it('keeps unattributed a subset of ruleBased, never a fourth bucket', () => {
+    const opaqueRule: MembershipRule = {
+      ...engRule,
+      id: 'r9',
+      name: 'Opaque feeder',
+      conditionExpression: 'isMemberOfGroup("00gFAKE")',
+    };
+    const members = [member('u1'), member('u2')];
+    const result = summarizeMemberSources(oktaGroup, members, [opaqueRule]);
+    expect(result.direct + result.ruleBased).toBe(result.total);
+    expect(result.unattributed).toBeLessThanOrEqual(result.ruleBased);
+  });
+
   it('tallies contributions across multiple rules, sorted by count', () => {
     const salesRule: MembershipRule = {
       id: 'r2',

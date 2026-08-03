@@ -57,4 +57,32 @@ describe('IconButton', () => {
     );
     expect(screen.getByRole('button', { name: 'Pin' })).toHaveAttribute('aria-pressed', 'true');
   });
+
+  it('reflects disclosure state as aria-expanded and points at the region it controls', () => {
+    const { rerender } = render(
+      <IconButton label="Expand" expanded={false} controls="panel-1">
+        {icon}
+      </IconButton>,
+    );
+    const collapsed = screen.getByRole('button', { name: 'Expand' });
+    expect(collapsed).toHaveAttribute('aria-expanded', 'false');
+    expect(collapsed).toHaveAttribute('aria-controls', 'panel-1');
+
+    rerender(
+      <IconButton label="Collapse" expanded controls="panel-1">
+        {icon}
+      </IconButton>,
+    );
+    expect(screen.getByRole('button', { name: 'Collapse' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  });
+
+  it('omits the disclosure attributes entirely when it is not a disclosure trigger', () => {
+    render(<IconButton label="Close">{icon}</IconButton>);
+    const btn = screen.getByRole('button', { name: 'Close' });
+    expect(btn).not.toHaveAttribute('aria-expanded');
+    expect(btn).not.toHaveAttribute('aria-controls');
+  });
 });

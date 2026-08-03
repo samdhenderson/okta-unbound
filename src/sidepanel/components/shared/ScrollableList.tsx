@@ -24,6 +24,14 @@ interface ScrollableListProps {
   maxHeight?: string;
   /** If true (default), uses flex-grow to fill remaining space */
   fillAvailable?: boolean;
+  /**
+   * Optional ref on the scrolling element itself. Only attached in the populated
+   * state (the loading/empty branches render no scroll box), so a consumer that
+   * reads `scrollTop` must tolerate `null`. Exists so a view can preserve scroll
+   * offset across a hide/show cycle — see
+   * {@link sidepanel/hooks/useScrollPreservation.useScrollPreservation}.
+   */
+  scrollRef?: React.Ref<HTMLDivElement>;
   /** Test ID for testing */
   testId?: string;
 }
@@ -59,6 +67,7 @@ const ScrollableList: React.FC<ScrollableListProps> = ({
   loadingMessage = 'Loading...',
   maxHeight,
   fillAvailable = true,
+  scrollRef,
   testId,
 }) => {
   // Check if children are empty
@@ -109,7 +118,7 @@ const ScrollableList: React.FC<ScrollableListProps> = ({
   const containerStyle: React.CSSProperties | undefined = maxHeight ? { maxHeight } : undefined;
 
   return (
-    <div className={containerClasses} style={containerStyle} data-testid={testId}>
+    <div ref={scrollRef} className={containerClasses} style={containerStyle} data-testid={testId}>
       <div className="space-y-3">{children}</div>
     </div>
   );

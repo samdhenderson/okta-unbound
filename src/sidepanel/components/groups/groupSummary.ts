@@ -4,7 +4,7 @@
  *
  * {@link toGroupSummary} handles full `/api/v1/groups` payloads (incl. app-group
  * source); {@link liveSearchToGroupSummary} is a narrower variant for live-search hits.
- * Neither computes staleness — the loader applies that separately.
+ * Neither attributes group rules — the loader applies that separately.
  */
 import type { GroupSummary, GroupType } from '../../../shared/types';
 
@@ -29,8 +29,9 @@ export interface RawOktaGroup {
 /**
  * Map a raw Okta group (from `getAllGroups`) to a {@link GroupSummary}.
  *
- * Does NOT compute `staleness` — the loader applies `api.calculateStaleness` in a
- * separate pass so the mapper stays pure. For `APP_GROUP`s, `source.id` takes
+ * Does NOT attribute group rules — `hasRules`/`ruleCount`/`usedInRuleCount` are
+ * left at their defaults and the loader applies `annotateGroupsWithRuleCounts` in
+ * a separate pass so the mapper stays pure. For `APP_GROUP`s, `source.id` takes
  * precedence over the id parsed out of the `_links.apps` href, and a `source.name`
  * is only surfaced when it differs from the id.
  */
@@ -74,7 +75,7 @@ export function toGroupSummary(group: RawOktaGroup): GroupSummary {
  * Map a raw Okta group from the live-search content-script response.
  *
  * Deliberately NARROWER than {@link toGroupSummary}: it omits `sourceAppId`/
- * `sourceAppName` (and staleness is never applied to live results). Not
+ * `sourceAppName` (and rule attribution is never applied to live results). Not
  * interchangeable with `toGroupSummary`; see the §7 decomposition map.
  */
 export function liveSearchToGroupSummary(group: RawOktaGroup): GroupSummary {

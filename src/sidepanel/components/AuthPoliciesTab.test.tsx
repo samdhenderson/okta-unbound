@@ -195,4 +195,16 @@ describe('AuthPoliciesTab', () => {
     await waitFor(() => expect(screen.getByText('No Okta tab connected')).toBeInTheDocument());
     expect(api.listPolicies).not.toHaveBeenCalled();
   });
+
+  it('defers the arrival load while the tab is mounted but not the visible one', async () => {
+    // App keeps every visited tab mounted and hides the inactive ones, so the
+    // auto-load must wait to be looked at rather than fire in the background.
+    const { rerender } = render(<AuthPoliciesTab targetTabId={1} isActive={false} />);
+
+    await waitFor(() => expect(api.listPolicies).not.toHaveBeenCalled());
+
+    rerender(<AuthPoliciesTab targetTabId={1} isActive />);
+    expect(await screen.findByText('Any two factors')).toBeInTheDocument();
+    expect(api.listPolicies).toHaveBeenCalledTimes(1);
+  });
 });

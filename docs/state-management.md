@@ -40,6 +40,45 @@ the same playbook for any future large component:
   `useGroupContext.ts` (62 lines) and `useUserContext.ts` (57 lines) are thin
   wrappers over it — a worked example of the extract-a-hook pattern.
 
+## Sub-navigation inside a tab: the view stack
+
+`useViewStack` (`hooks/useViewStack.ts`, ADR-0016) is a hook, not a context, because
+sub-navigation has one owner and one subtree, and each tab needs its **own** stack.
+Instantiate it once per tab shell; it returns `currentEntry`, `depth`, `isRoot`, a
+breadcrumb `trail`, and `push`/`pop`/`popTo`/`reset`.
+
+**It preserves navigation state only.** What a consumer must do so `pop` looks like a
+real "back", in order of preference:
+
+1. **Keep the list mounted and hide it** (`hidden` / `className="hidden"`), rendering
+   the pushed view as its **sibling**. Every `useState` inside the list survives,
+   however deep, and so does the element focus is restored to.
+2. **Lift the state** into a hook owned by the tab shell. Needed per piece, and it
+   cannot reach state owned by a row (e.g. a row's `expanded` flag), which is why
+   option 1 is preferred.
+
+**Scroll is the exception either way.** `display: none` destroys the scroll box, so
+`scrollTop` returns as `0`. `useScrollPreservation(ref, visible)` captures it before
+the hide and restores it in a layout effect on the way back.
+
+Focus moves into the pushed view and is restored to the trigger on `pop`, with **no
+focus trap** — see [ux-guidelines.md](./ux-guidelines.md).
+
+## Gating background work on visibility
+
+Tabs stay mounted when hidden (ADR-0018), so **any effect that can reach Okta, poll,
+re-probe page context, or attach a `window`/`document` listener must be gated on
+whether its tab is visible.** The convention:
+
+- The tab component takes `isActive?: boolean` (default `true`, so standalone/story
+  use is unaffected) and passes it down to hooks as `enabled?: boolean`.
+- **Deferred re-arm** — put `enabled` in the effect's guard _and_ its dependency
+  array. The work is deferred, not dropped: it runs on the next show (`useAppsData`).
+- **Owed-load latch** — when the effect must _not_ re-run on every return to the tab:
+  raise an `owedRef` in one effect keyed on the real inputs, pay it in a second effect
+  gated on `enabled` (`useGroupRuleReferences`). Without this, gating turns every tab
+  revisit into a refetch.
+
 ## Effects & subscriptions
 
 Guard against stale async results (request-id/abort guards — already done in the

@@ -29,6 +29,14 @@ export interface UseAppsDataOptions {
   onError: (message: string) => void;
   /** Connected Okta tab id; the auto-load is skipped while it is null. */
   targetTabId: number | null;
+  /**
+   * Whether the Applications tab is the visible one. The tab stays mounted while
+   * hidden, and the auto-load re-arms on every new `targetTabId` — so without this
+   * gate, switching Okta tabs would silently re-page the whole app inventory from a
+   * tab nobody is looking at. Deferred, not dropped: the load runs on the next time
+   * the tab is shown. Defaults to `true`.
+   */
+  enabled?: boolean;
 }
 
 /** Return shape of {@link useAppsData}. */
@@ -47,8 +55,9 @@ export interface UseAppsDataReturn {
  * Manage the Applications tab's data: the inventory, the loading flag, the
  * last-fetch timestamp, and the `loadApps` pipeline.
  *
- * The inventory loads once automatically when a tab is connected (a single
- * paginated read of `/api/v1/apps`); the tab's Refresh action re-runs it.
+ * The inventory loads once automatically when a tab is connected **and the
+ * Applications tab is visible** (a single paginated read of `/api/v1/apps`); the
+ * tab's Refresh action re-runs it.
  * `getAllApps` throws on a failed page — deliberately, so a truncated inventory is
  * never rendered as complete — so a failure clears nothing and reports the message
  * via `onError` instead.
@@ -56,7 +65,12 @@ export interface UseAppsDataReturn {
  * @param options - See {@link UseAppsDataOptions}.
  * @returns `{ apps, isLoading, lastFetchTime, loadApps }`.
  */
-export function useAppsData({ api, onError, targetTabId }: UseAppsDataOptions): UseAppsDataReturn {
+export function useAppsData({
+  api,
+  onError,
+  targetTabId,
+  enabled = true,
+}: UseAppsDataOptions): UseAppsDataReturn {
   const [apps, setApps] = useState<OktaAppListItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [lastFetchTime, setLastFetchTime] = useState<string | null>(null);
@@ -89,14 +103,15 @@ export function useAppsData({ api, onError, targetTabId }: UseAppsDataOptions): 
     }
   }, [onError, targetTabId]);
 
-  // Auto-load once per connected tab. Guarded by a ref (not a `apps.length` check)
-  // so an org with genuinely zero apps does not re-fetch on every render.
+  // Auto-load once per connected tab, and only while the Applications tab is the
+  // visible one. Guarded by a ref (not a `apps.length` check) so an org with
+  // genuinely zero apps does not re-fetch on every render.
   const autoLoadedFor = useRef<number | null>(null);
   useEffect(() => {
-    if (targetTabId == null || autoLoadedFor.current === targetTabId) return;
+    if (!enabled || targetTabId == null || autoLoadedFor.current === targetTabId) return;
     autoLoadedFor.current = targetTabId;
     void loadApps();
-  }, [targetTabId, loadApps]);
+  }, [enabled, targetTabId, loadApps]);
 
   return { apps, isLoading, lastFetchTime, loadApps };
 }

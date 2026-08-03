@@ -48,39 +48,58 @@ Okta's API budget.
 ## Features
 
 ### Overview tab
+
 Context-aware insights based on the current Okta page:
+
 - Automatic detection of group, user, app, and admin pages
 - Quick stats and relevant actions for each context
 
 ### Users tab
+
 User search and membership analysis:
+
 - Search by email, name, or login
 - Comprehensive user profile display
 - Group membership with type detection (`RULE_BASED`, `DIRECT`, `APP_GROUP`)
-- Rule attribution analysis
+- Rule attribution: each membership is tested against the conditions of the rules that
+  feed the group, so a hand-added user in a rule-fed group is no longer reported as
+  rule-managed. Conditions the extension cannot evaluate locally (notably
+  `isMemberOfGroup*`) are labelled indeterminate rather than guessed
 
 ### Groups tab
+
 Hybrid search and bulk operations:
+
 - **Live mode**: real-time API search with instant results
-- **Cached mode**: load all groups once, then filter by type, size, staleness
+- **Cached mode**: load all groups once, then filter by type, size, push status
+- A compact row per group answering _where do these members come from_ — rules that feed
+  the group and rules that merely reference it are counted separately, never merged
+- Drill into a group detail view: identity, member-source breakdown, both rule
+  relationships, app-push mappings, and metadata — with the list's filters, selection and
+  scroll position intact when you come back
 - Multi-select with bulk operations (remove inactive users, export)
 - Group collections for frequently used sets
 - Compare 2–5 groups with Venn-diagram visualization
 - Cross-group user search
-- Cleanup triage: a fused "review score" surfaces empty, duplicate-named, and stale groups
+- Cleanup triage: a fused "review score" surfaces empty, duplicate-named, and stale
+  groups (stale = no update in over a year, from Okta's own `lastUpdated`)
 - Group merge: consolidate membership into a survivor group, fully audited and reversible
 
 ### Rules tab
+
 Group-rule inspection and consolidation:
+
 - Load and cache all group rules
 - Conflict and duplicate-condition detection between rules
 - Rule condition parsing and display
-- **Rule Impact Preview**: see who loses access *before* deactivating a rule
+- **Rule Impact Preview**: see who loses access _before_ deactivating a rule
 - Rule consolidation: add a target group or merge identical-condition rules via a safe
   create → activate → retire sequence
 
 ### History tab
+
 Complete audit trail for compliance:
+
 - Logs all administrative operations
 - Configurable retention (30–365 days)
 - Export to CSV for reporting
@@ -113,24 +132,24 @@ Full detail: [`docs/architecture.md`](docs/architecture.md).
 
 This section is written for reviewers evaluating the extension before enterprise approval.
 Each control is enforced in code and covered by the repo's non-negotiable hardening rules
-([`CLAUDE.md`](CLAUDE.md)); the *why* behind each decision lives in [`docs/adr/`](docs/adr/).
+([`CLAUDE.md`](CLAUDE.md)); the _why_ behind each decision lives in [`docs/adr/`](docs/adr/).
 
 > **Full assessment:** [`docs/security.md`](docs/security.md) — trust model, threat model,
 > control-by-control evidence with links into the code, an honest residual-risk register,
 > and steps to verify the claims independently.
 
-| Control | How it's enforced |
-| --- | --- |
-| **Session-based auth, no stored credentials** | The extension reuses the admin's existing Okta session; it never asks for, stores, or transmits API tokens or passwords. |
-| **XSRF token isolation** | The token is read from the page DOM per request in the content script only — never persisted (`chrome.storage`/IndexedDB/`localStorage`), never sent across messages, never logged. |
-| **No dynamic code execution** | `eval`, `new Function`, string-arg `setTimeout`, and remotely loaded scripts are banned; MV3 CSP enforces this and the manifest CSP is never weakened. Rule expressions are parsed with a real parser, not `eval`. |
-| **Boundary validation** | Every Okta response is treated as untrusted input and validated with [zod](https://zod.dev) at the content-script boundary before rendering or branching (ADR-0006). |
-| **Validated message passing** | The background listener rejects foreign senders and tab-originated scheduling requests; the content script only fetches same-origin Okta paths with an allow-listed method. |
-| **Hostname parsing, not substring matching** | Every "is this Okta?" decision parses the hostname (`shared/utils/oktaUrl.ts`); substring URL matching is banned. |
-| **Least-privilege manifest** | Only Okta domains are in scope; any new permission requires an ADR justifying why a narrower alternative is insufficient. |
-| **Export safety** | Every CSV cell is escaped through `csvUtils.escapeCSV` (RFC 4180 quoting + spreadsheet-formula-injection guard). |
-| **XSS-safe rendering** | React escaping only; `dangerouslySetInnerHTML` and hand-built HTML strings are banned. External links are built from a validated Okta origin plus a validated ID, with `rel="noopener noreferrer"`. |
-| **Minimal, TTL'd storage** | `chrome.storage` and IndexedDB hold no credentials or session material; cached PII is minimal and time-limited, and audit retention is user-configurable. |
+| Control                                       | How it's enforced                                                                                                                                                                                                  |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Session-based auth, no stored credentials** | The extension reuses the admin's existing Okta session; it never asks for, stores, or transmits API tokens or passwords.                                                                                           |
+| **XSRF token isolation**                      | The token is read from the page DOM per request in the content script only — never persisted (`chrome.storage`/IndexedDB/`localStorage`), never sent across messages, never logged.                                |
+| **No dynamic code execution**                 | `eval`, `new Function`, string-arg `setTimeout`, and remotely loaded scripts are banned; MV3 CSP enforces this and the manifest CSP is never weakened. Rule expressions are parsed with a real parser, not `eval`. |
+| **Boundary validation**                       | Every Okta response is treated as untrusted input and validated with [zod](https://zod.dev) at the content-script boundary before rendering or branching (ADR-0006).                                               |
+| **Validated message passing**                 | The background listener rejects foreign senders and tab-originated scheduling requests; the content script only fetches same-origin Okta paths with an allow-listed method.                                        |
+| **Hostname parsing, not substring matching**  | Every "is this Okta?" decision parses the hostname (`shared/utils/oktaUrl.ts`); substring URL matching is banned.                                                                                                  |
+| **Least-privilege manifest**                  | Only Okta domains are in scope; any new permission requires an ADR justifying why a narrower alternative is insufficient.                                                                                          |
+| **Export safety**                             | Every CSV cell is escaped through `csvUtils.escapeCSV` (RFC 4180 quoting + spreadsheet-formula-injection guard).                                                                                                   |
+| **XSS-safe rendering**                        | React escaping only; `dangerouslySetInnerHTML` and hand-built HTML strings are banned. External links are built from a validated Okta origin plus a validated ID, with `rel="noopener noreferrer"`.                |
+| **Minimal, TTL'd storage**                    | `chrome.storage` and IndexedDB hold no credentials or session material; cached PII is minimal and time-limited, and audit retention is user-configurable.                                                          |
 
 Data-handling specifics are in [`PRIVACY.md`](PRIVACY.md).
 
@@ -141,14 +160,14 @@ Data-handling specifics are in [`PRIVACY.md`](PRIVACY.md).
 The extension requests the narrowest set of permissions its features require. Host access is
 scoped to Okta domains only.
 
-| Permission | Why it's needed |
-| --- | --- |
-| `activeTab` | Interact with the Okta admin tab the administrator is actively viewing. |
-| `storage` | Persist non-sensitive UI state, cached group/rule data (TTL'd), and audit history locally. |
-| `sidePanel` | Render the extension UI in Chrome's side panel. |
-| `contextMenus` | Provide right-click entry points into extension actions. |
-| `notifications` | Surface completion/failure of long-running bulk operations. |
-| `alarms` | Drive scheduled cache expiry and audit-retention cleanup. |
+| Permission      | Why it's needed                                                                            |
+| --------------- | ------------------------------------------------------------------------------------------ |
+| `activeTab`     | Interact with the Okta admin tab the administrator is actively viewing.                    |
+| `storage`       | Persist non-sensitive UI state, cached group/rule data (TTL'd), and audit history locally. |
+| `sidePanel`     | Render the extension UI in Chrome's side panel.                                            |
+| `contextMenus`  | Provide right-click entry points into extension actions.                                   |
+| `notifications` | Surface completion/failure of long-running bulk operations.                                |
+| `alarms`        | Drive scheduled cache expiry and audit-retention cleanup.                                  |
 
 **Host permissions** (content script + API access) are limited to:
 
@@ -169,7 +188,7 @@ No other origins are in scope, and the extension declares no `externally_connect
 - **No credential storage.** No API tokens, passwords, session cookies, or XSRF tokens are
   ever persisted.
 - **Minimal, expiring caches.** Group/rule/user caches are stored in `chrome.storage.local`
-  with a short TTL; audit logs store user *identifiers*, not emails, and honor a configurable
+  with a short TTL; audit logs store user _identifiers_, not emails, and honor a configurable
   retention window.
 - **User-initiated exports.** CSV exports are generated locally on demand and escaped against
   formula injection.
@@ -261,10 +280,10 @@ GitHub Pages ([`deploy-pages.yml`](.github/workflows/deploy-pages.yml)).
   controls, and residual risks for security reviewers.
 - **Specs & contributor docs:** [`docs/`](docs/README.md) — a routing index of small,
   single-purpose specs (architecture, design system, components, testing, UX, state).
-- **Architecture Decision Records:** [`docs/adr/`](docs/adr/README.md) — the *why* behind
+- **Architecture Decision Records:** [`docs/adr/`](docs/adr/README.md) — the _why_ behind
   each convention.
 - **Component explorer & API reference:** the Storybook site (built via `npm run
-  build-storybook`, published to GitHub Pages).
+build-storybook`, published to GitHub Pages).
 
 ---
 

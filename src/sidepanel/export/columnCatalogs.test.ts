@@ -36,7 +36,6 @@ const populatedRow = {
   activated: '2024-01-01T00:00:00.000Z',
   lastLogin: '2024-01-02T00:00:00.000Z',
   lastUpdated: '2024-01-03T00:00:00.000Z',
-  lastMembershipUpdated: '2024-01-03T00:00:00.000Z',
   name: 'Fake Entity',
   label: 'Fake Entity',
   type: 'OKTA_GROUP',

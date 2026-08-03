@@ -117,6 +117,8 @@ export const AllIcons: Story = {
       'shield',
       'clipboard',
       'clipboard-check',
+      'chevron-left',
+      'chevron-right',
     ];
 
     return (

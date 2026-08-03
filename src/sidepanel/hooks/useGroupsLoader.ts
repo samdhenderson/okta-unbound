@@ -3,8 +3,8 @@
  * @description Loads the full group list for the Groups tab and caches it in storage.
  *
  * On mount it rehydrates the last cached list from `chrome.storage.local`; `loadAllGroups`
- * runs the full pipeline (fetch → map to summaries → staleness → non-fatal push-mapping
- * enrichment → cache write) and switches the tab into cached mode.
+ * runs the full pipeline (fetch → map to summaries → rule attribution → non-fatal
+ * push-mapping enrichment → cache write) and switches the tab into cached mode.
  */
 
 import { useState, useEffect } from 'react';
@@ -12,7 +12,6 @@ import type { Dispatch, SetStateAction } from 'react';
 import { useOktaApi } from './useOktaApi';
 import type { GroupSummary } from '../../shared/types';
 import { createLogger } from '../../shared/utils/logger';
-import { RulesCache } from '../../shared/rulesCache';
 import { annotateGroupsWithRuleCounts } from '../../shared/rules/groupRuleIndex';
 import { toGroupSummary } from '../components/groups/groupSummary';
 import {
@@ -39,8 +38,8 @@ interface UseGroupsLoaderOptions {
 
 /**
  * Owns the cached group list + loading flag, the mount cache rehydrate, and the
- * `loadAllGroups` pipeline (fetch → map → staleness → non-fatal push enrichment →
- * cache write).
+ * `loadAllGroups` pipeline (fetch → map → rule attribution → non-fatal push
+ * enrichment → cache write).
  *
  * CHARACTERIZED: the mount rehydrate races `loadAllGroups` with no cancellation —
  * a late storage callback can overwrite freshly loaded groups (stale wins). The
@@ -85,21 +84,16 @@ export function useGroupsLoader({
 
       let groupSummaries: GroupSummary[] = allGroups.map(toGroupSummary);
 
-      // Attribute feeding rules from the shared rules cache (no extra API call).
-      // Only when the cache is populated do we actually *know* a group's rule
-      // count — otherwise `hasRules`/`ruleCount` stay at their false/0 defaults
-      // and the staleness step must not read them as "no rule feeds this group".
-      const cachedRules = await RulesCache.get();
-      const rulesKnown = cachedRules !== null;
-      if (cachedRules) {
-        groupSummaries = annotateGroupsWithRuleCounts(groupSummaries, cachedRules.rules);
+      // Attribute feeding rules. A warm shared rules cache costs no API call; a
+      // cold one costs exactly ONE org-wide rules listing (never one per group).
+      // Without that cold-start fetch every row's `hasRules`/`ruleCount` would
+      // silently read 0 on a first load — indistinguishable from a genuinely
+      // rule-less group. `ensureGroupRulesLoaded` returns null rather than
+      // throwing when the listing fails, so the group load still completes.
+      const rules = await api.ensureGroupRulesLoaded();
+      if (rules) {
+        groupSummaries = annotateGroupsWithRuleCounts(groupSummaries, rules);
       }
-
-      // Calculate staleness for each group
-      groupSummaries = groupSummaries.map((g) => ({
-        ...g,
-        staleness: api.calculateStaleness(g, rulesKnown),
-      }));
 
       // Auto-detect and apply push group mappings
       try {

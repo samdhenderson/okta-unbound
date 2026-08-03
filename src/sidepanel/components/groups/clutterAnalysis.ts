@@ -3,10 +3,10 @@
  * @description Local, read-only "directory clutter" triage over loaded groups.
  *
  * Fuses the signals already present on a {@link GroupSummary} — emptiness,
- * duplicate names, staleness, missing metadata — into a single per-group
- * `reviewScore` plus human-readable reasons, and buckets groups into the
- * categories an admin triages on. Pure and I/O-free: it runs over the group list
- * the Groups tab has already loaded, so it costs no extra API calls. It
+ * duplicate names, age since last update, missing metadata — into a single
+ * per-group `reviewScore` plus human-readable reasons, and buckets groups into
+ * the categories an admin triages on. Pure and I/O-free: it runs over the group
+ * list the Groups tab has already loaded, so it costs no extra API calls. It
  * deliberately only claims what is reliably knowable locally (it does not infer
  * rule-orphan status, which needs the rules payload).
  *
@@ -15,8 +15,37 @@
 
 import type { GroupSummary } from '../../../shared/types';
 
-/** Staleness score at or above which a group is treated as stale for triage. */
-export const STALE_SCORE_THRESHOLD = 60;
+/**
+ * Days since a group's real `lastUpdated` date at or beyond which it is treated
+ * as stale for triage.
+ *
+ * One full year: `lastUpdated` is the only age signal Okta actually returns on a
+ * group, so the threshold is deliberately conservative — a year of no change to
+ * a group's profile or membership is unambiguous enough to put it in front of an
+ * admin, where a 3- or 6-month cutoff would flag ordinary, healthy groups.
+ */
+export const STALE_AGE_DAYS = 365;
+
+/** Milliseconds in one day, for the {@link STALE_AGE_DAYS} comparison. */
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * Whether a group has gone at least {@link STALE_AGE_DAYS} without an update.
+ *
+ * A group with no `lastUpdated` date is NOT stale: absence of a date is missing
+ * data, not evidence of age, and claiming otherwise would flag groups on
+ * something the API never told us.
+ *
+ * @param group - The group to test.
+ * @param now - Current epoch ms; injected so the predicate stays deterministic.
+ * @returns `true` when the group's last update is at least a year old.
+ */
+export function isStaleByAge(group: GroupSummary, now: number = Date.now()): boolean {
+  if (!group.lastUpdated) return false;
+  const time = group.lastUpdated.getTime();
+  if (Number.isNaN(time)) return false;
+  return now - time >= STALE_AGE_DAYS * MS_PER_DAY;
+}
 
 /**
  * Relative weights fused into a group's `reviewScore`. Higher total = more worth
@@ -35,7 +64,7 @@ export interface GroupClutterSignals {
   empty: boolean;
   /** Group's normalized name is shared with at least one other group. */
   duplicateName: boolean;
-  /** Group's staleness score is at or above {@link STALE_SCORE_THRESHOLD}. */
+  /** Group has not been updated in at least {@link STALE_AGE_DAYS} days. */
   stale: boolean;
   /** Group has no description (metadata hygiene). */
   noDescription: boolean;
@@ -86,11 +115,13 @@ export function normalizeGroupName(name: string): string {
  * Analyze a loaded group list for directory clutter.
  *
  * @param groups - The groups the Groups tab has already loaded (with member
- * counts and staleness applied).
+ * counts applied).
+ * @param now - Current epoch ms, forwarded to {@link isStaleByAge}; injected so
+ * the report stays deterministic under test.
  * @returns A {@link ClutterReport} with per-group entries, category buckets, and
  * duplicate-name clusters. Runs entirely in-memory.
  */
-export function analyzeClutter(groups: GroupSummary[]): ClutterReport {
+export function analyzeClutter(groups: GroupSummary[], now: number = Date.now()): ClutterReport {
   // Build normalized-name -> group ids to detect duplicates.
   const byNormalizedName = new Map<string, string[]>();
   for (const g of groups) {
@@ -120,7 +151,7 @@ export function analyzeClutter(groups: GroupSummary[]): ClutterReport {
   for (const group of groups) {
     const empty = group.memberCount === 0;
     const duplicateName = duplicateIds.has(group.id);
-    const stale = (group.staleness?.score ?? 0) >= STALE_SCORE_THRESHOLD;
+    const stale = isStaleByAge(group, now);
     const noDescription = !group.description || group.description.trim() === '';
 
     if (empty) categories.empty.push(group.id);
@@ -134,7 +165,7 @@ export function analyzeClutter(groups: GroupSummary[]): ClutterReport {
     const reasons: string[] = [];
     if (empty) reasons.push('No members');
     if (duplicateName) reasons.push('Duplicate name');
-    if (stale) reasons.push('Stale (no recent activity)');
+    if (stale) reasons.push('Not updated in over a year');
     if (noDescription) reasons.push('No description');
 
     const reviewScore = Math.min(

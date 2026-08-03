@@ -39,6 +39,13 @@ export interface UseDebouncedUserSearchOptions {
   minQueryLength: number;
   /** The wrapping hook's scoped logger. */
   log: Logger;
+  /**
+   * When `false`, the debounce never commits a search. The Users tab stays mounted
+   * (hidden) once visited, and the effect re-fires whenever `targetTabId`
+   * changes — which would otherwise re-run the query still sitting in the box from
+   * a tab the user cannot see. Defaults to `true`.
+   */
+  enabled?: boolean;
 }
 
 /** Return shape of {@link useDebouncedUserSearch}. */
@@ -65,6 +72,7 @@ export function useDebouncedUserSearch({
   debounceMs,
   minQueryLength,
   log,
+  enabled = true,
 }: UseDebouncedUserSearchOptions): UseDebouncedUserSearchReturn {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<OktaUser[]>([]);
@@ -122,6 +130,12 @@ export function useDebouncedUserSearch({
       clearTimeout(debounceTimerRef.current);
     }
 
+    // Nothing typed can change while the host is hidden, so the only thing this
+    // effect could do there is re-issue the standing query against a new
+    // `targetTabId` — an Okta call with no reader. Coming back re-runs it for the
+    // query still on screen.
+    if (!enabled) return;
+
     // Empty query: clear results and the error channel.
     if (searchQuery.trim().length === 0) {
       setSearchResults([]);
@@ -147,7 +161,7 @@ export function useDebouncedUserSearch({
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [searchQuery, debounceMs, minQueryLength, performSearch, onError]);
+  }, [enabled, searchQuery, debounceMs, minQueryLength, performSearch, onError]);
 
   return {
     searchQuery,

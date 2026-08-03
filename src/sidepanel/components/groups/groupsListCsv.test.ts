@@ -23,7 +23,7 @@ describe('buildGroupsListCsv', () => {
   it('emits the expected header row', () => {
     const csv = buildGroupsListCsv([]);
     expect(csv.split('\n')[0]).toBe(
-      '"ID","Name","Description","Type","Member Count","Staleness Score","Push Status"',
+      '"ID","Name","Description","Type","Member Count","Push Status"',
     );
   });
 
@@ -61,34 +61,32 @@ describe('buildGroupsListCsv', () => {
   it('handles an empty description as an empty quoted field', () => {
     const csv = buildGroupsListCsv([makeGroup({ description: undefined })]);
     expect(dataRow(csv)).toBe(
-      '"00gFAKE00000000000001","Engineering","","OKTA_GROUP","3","","Not Pushed"',
+      '"00gFAKE00000000000001","Engineering","","OKTA_GROUP","3","Not Pushed"',
     );
   });
 
-  it('renders staleness score and push status when present', () => {
+  it('renders push status when present', () => {
     const csv = buildGroupsListCsv([
       makeGroup({
-        staleness: { score: 87, factors: [] },
         pushMappings: [
           {
             mappingId: 'm1',
             sourceUserGroupId: '00gFAKE00000000000001',
             targetGroupName: 'App One Group',
-            status: 'ACTIVE',
+            priority: 0,
             appId: '0oaFAKE0000000000001',
           },
           {
             mappingId: 'm2',
             sourceUserGroupId: '00gFAKE00000000000001',
             targetGroupName: 'App Two Group',
-            status: 'ACTIVE',
+            priority: 1,
             appId: '0oaFAKE0000000000002',
           },
         ],
       }),
     ]);
     const row = dataRow(csv);
-    expect(row).toContain('"87"');
     expect(row).toContain('"Pushed (2)"');
   });
 

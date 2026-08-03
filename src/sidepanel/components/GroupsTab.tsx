@@ -7,9 +7,32 @@
  * (`useGroupsLoader`, `useGroupLiveSearch`, `useGroupFilters`, `useGroupSelection`,
  * `useGroupMembersCache`) with presentational subcomponents (search bar, filter
  * panel, selection bar, list panel) plus the export and comparison modals.
+ *
+ * ## Sub-navigation
+ *
+ * The tab owns a {@link sidepanel/hooks/useViewStack.useViewStack} stack whose
+ * first (and currently only) pushed view is {@link GroupDetailView}. The browse
+ * body is **hidden rather than unmounted** while a detail view is open and the
+ * detail renders as its sibling, so every piece of list state — filters,
+ * selection, the loaded window, per-row expansion — survives a push→pop round
+ * trip. Scroll offset is DOM state that `display: none` destroys, so it is
+ * captured before the push and restored after the pop by
+ * {@link sidepanel/hooks/useScrollPreservation.useScrollPreservation}. One
+ * `PageHeader` stays mounted throughout and swaps its contents, per ADR-0008's
+ * stable-region precedent.
+ *
+ * ## Leaving the tab
+ *
+ * {@link App} applies the same treatment one level up: the tab is hidden, not
+ * unmounted, when another top-level tab is selected, so the pushed detail view and
+ * everything behind it survive a trip to the Rules tab and back. In exchange the
+ * tab must stay inert while hidden — `isActive` gates the live-search debounce (the
+ * one hook here that can issue an Okta request without a click) and extends the
+ * list's scroll preservation to cover the tab-level hide as well as the push/pop one.
  */
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import PageHeader from './shared/PageHeader';
+import Breadcrumbs from './shared/Breadcrumbs';
 import AlertMessage from './shared/AlertMessage';
 import Button from './shared/Button';
 import { useOktaApi } from '../hooks/useOktaApi';
@@ -18,8 +41,9 @@ import { useGroupLiveSearch } from '../hooks/useGroupLiveSearch';
 import { useGroupFilters } from '../hooks/useGroupFilters';
 import { useGroupSelection } from '../hooks/useGroupSelection';
 import { useGroupMembersCache } from '../hooks/useGroupMembersCache';
-import { useGroupSource } from '../hooks/useGroupSource';
 import { useGroupMerge } from '../hooks/useGroupMerge';
+import { useViewStack } from '../hooks/useViewStack';
+import { useScrollPreservation } from '../hooks/useScrollPreservation';
 import type { GroupSummary } from '../../shared/types';
 import GroupExportModal from './groups/GroupExportModal';
 import GroupComparisonModal from './groups/GroupComparisonModal';
@@ -32,7 +56,7 @@ import GroupFilterToggle from './groups/GroupFilterToggle';
 import GroupFilterPanel from './groups/GroupFilterPanel';
 import GroupSelectionBar, { type ActivePanel } from './groups/GroupSelectionBar';
 import GroupsListPanel from './groups/GroupsListPanel';
-import GroupSourceModal from './groups/GroupSourceModal';
+import GroupDetailView from './groups/detail/GroupDetailView';
 import GroupMergeModal from './groups/GroupMergeModal';
 import { downloadCSV, getDateForFilename } from '../../shared/utils/csvUtils';
 import { buildGroupsListCsv } from './groups/groupsListCsv';
@@ -48,7 +72,33 @@ interface GroupsTabProps {
   selectedGroupId?: string | null;
   /** Called once the highlighted group has been shown, so the parent can clear it. */
   onGroupSelected?: () => void;
+  /**
+   * Whether this is the selected top-level tab. The tab stays mounted while
+   * hidden, so background work that could reach Okta (the live-search debounce)
+   * is gated on it. Defaults to `true` for standalone use.
+   */
+  isActive?: boolean;
 }
+
+/** Breadcrumb label for a group pushed onto the view stack. */
+const groupCrumbLabel = (group: GroupSummary): string => group.name;
+
+/** Stable breadcrumb key for a group pushed onto the view stack. */
+const groupCrumbKey = (group: GroupSummary): string => group.id;
+
+/** PageHeader badge palette key for each Okta group type (its local `error`-keyed palette). */
+const groupTypeBadgeVariant: Record<GroupSummary['type'], 'primary' | 'warning' | 'neutral'> = {
+  OKTA_GROUP: 'primary',
+  APP_GROUP: 'warning',
+  BUILT_IN: 'neutral',
+};
+
+/** Human label for each Okta group type, shown as the detail header's badge. */
+const groupTypeBadgeText: Record<GroupSummary['type'], string> = {
+  OKTA_GROUP: 'Okta group',
+  APP_GROUP: 'App group',
+  BUILT_IN: 'Built-in',
+};
 
 /**
  * Renders the Groups tab and orchestrates the group loading/search/selection hooks
@@ -61,6 +111,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   onNavigateToRule,
   selectedGroupId,
   onGroupSelected,
+  isActive = true,
 }) => {
   // Shell-owned state: error has three producers (loader, live search, useOktaApi
   // onResult) so it stays here; searchMode is read by three hooks so it stays above
@@ -85,7 +136,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
 
   const api = useOktaApi({ targetTabId, onResult: handleResult });
 
-  const liveSearch = useGroupLiveSearch({ targetTabId, searchMode, setError });
+  const liveSearch = useGroupLiveSearch({ targetTabId, searchMode, setError, enabled: isActive });
   const loader = useGroupsLoader({
     api,
     setError,
@@ -99,8 +150,24 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   });
   const selection = useGroupSelection(loader.groups);
   const membersCache = useGroupMembersCache(api, loader.groups);
-  const groupSource = useGroupSource(targetTabId ?? undefined);
   const merge = useGroupMerge(targetTabId ?? undefined);
+
+  // Sub-navigation: the list stays mounted (hidden) and the detail view renders as
+  // its sibling, so nothing the list accumulated is lost on the way back.
+  const detailViewRef = useRef<HTMLDivElement>(null);
+  const listScrollRef = useRef<HTMLDivElement>(null);
+  // Set when a push was requested *in order to* analyze member source, so the
+  // pushed detail view runs that analysis instead of waiting for a second click.
+  const [autoAnalyzeGroupId, setAutoAnalyzeGroupId] = useState<string | null>(null);
+  const nav = useViewStack<GroupSummary>({
+    rootLabel: 'Groups',
+    getLabel: groupCrumbLabel,
+    getKey: groupCrumbKey,
+    viewRef: detailViewRef,
+  });
+  // Visible only when this tab is selected *and* no detail view is pushed — both
+  // hide the list with `display: none`, and both destroy its scroll box.
+  const captureListScroll = useScrollPreservation(listScrollRef, isActive && nav.isRoot);
 
   const handleCloseMerge = useCallback(() => {
     setShowMergeModal(false);
@@ -110,6 +177,36 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   const { groups, loading, loadAllGroups } = loader;
   const { filteredGroups, activeFilterCount } = filters;
   const { selectedGroupIds, selectedGroups } = selection;
+
+  // Re-resolve the pushed group against the live list so a refresh while drilled in
+  // updates the detail view instead of stranding it on the snapshot that was pushed.
+  const pushedGroup = nav.currentEntry;
+  const detailGroup = pushedGroup
+    ? (groups.find((g) => g.id === pushedGroup.id) ?? pushedGroup)
+    : undefined;
+
+  const { push: pushView } = nav;
+  const handleOpenDetail = useCallback(
+    (group: GroupSummary) => {
+      // `display: none` destroys the scroll box, so bank scrollTop before the push.
+      captureListScroll();
+      setAutoAnalyzeGroupId(null);
+      pushView(group);
+    },
+    [captureListScroll, pushView],
+  );
+
+  // A row's "Analyze member source" action: the analysis costs one paginated
+  // member read, so it runs in the detail view — the one surface that can show
+  // its cost, progress and failure — and banks its result for the row's meter.
+  const handleAnalyzeSource = useCallback(
+    (group: GroupSummary) => {
+      captureListScroll();
+      setAutoAnalyzeGroupId(group.id);
+      pushView(group);
+    },
+    [captureListScroll, pushView],
+  );
 
   // Deep-link from the Rules tab: when a group id arrives, switch to cached mode,
   // clear filters/search so it isn't hidden, then scroll to and highlight its row.
@@ -138,6 +235,9 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
     }
     navHandledRef.current = selectedGroupId;
 
+    // The deep-link contract targets a *row*, so pop any pushed detail view first —
+    // otherwise the list is hidden and the scroll-to-row below has nothing to find.
+    nav.reset();
     setSearchMode('cached');
     filters.clearFilters();
     filters.setSearchQuery('');
@@ -182,18 +282,27 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
 
   return (
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
+      {/* One header for the whole tab; its contents swap as views push/pop (ADR-0008). */}
       <PageHeader
-        title="Groups"
-        subtitle="Browse, search, and manage groups"
+        title={detailGroup ? detailGroup.name : 'Groups'}
+        subtitle={detailGroup ? undefined : 'Browse, search, and manage groups'}
+        onBack={detailGroup ? nav.pop : undefined}
+        backLabel="Back to groups"
+        breadcrumbs={detailGroup ? <Breadcrumbs items={nav.trail} /> : undefined}
         badge={
-          selectedGroupIds.size > 0
-            ? { text: `${selectedGroupIds.size} Selected`, variant: 'primary' }
-            : searchMode === 'cached'
-              ? { text: `${groups.length} Cached`, variant: 'success' }
-              : { text: 'Live', variant: 'primary' }
+          detailGroup
+            ? {
+                text: groupTypeBadgeText[detailGroup.type],
+                variant: groupTypeBadgeVariant[detailGroup.type],
+              }
+            : selectedGroupIds.size > 0
+              ? { text: `${selectedGroupIds.size} Selected`, variant: 'primary' }
+              : searchMode === 'cached'
+                ? { text: `${groups.length} Cached`, variant: 'success' }
+                : { text: 'Live', variant: 'primary' }
         }
         actions={
-          searchMode === 'live' ? (
+          detailGroup ? undefined : searchMode === 'live' ? (
             <Button
               variant="primary"
               onClick={loadAllGroups}
@@ -211,7 +320,15 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
       />
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
-        <div className="flex flex-col h-[calc(100vh-280px)] min-h-[400px]">
+        {/*
+          Hidden, never unmounted: `visibleCount`, per-row `expanded` and the focus
+          target the view stack restores to all live inside this subtree. The class
+          is swapped wholesale (rather than adding `hidden` alongside `flex`) because
+          Tailwind's `flex` would otherwise out-specify the `hidden` display rule.
+        */}
+        <div
+          className={nav.isRoot ? 'flex flex-col h-[calc(100vh-280px)] min-h-[400px]' : 'hidden'}
+        >
           {/* Fixed Header Section */}
           <div className="shrink-0 space-y-3">
             {/* Search Bar + Filter Toggle */}
@@ -246,8 +363,6 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
                 setPushFilter={filters.setPushFilter}
                 pushAppFilter={filters.pushAppFilter}
                 setPushAppFilter={filters.setPushAppFilter}
-                stalenessFilter={filters.stalenessFilter}
-                setStalenessFilter={filters.setStalenessFilter}
                 availablePushApps={filters.availablePushApps}
                 sortBy={filters.sortBy}
                 sortDesc={filters.sortDesc}
@@ -306,7 +421,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
               <GroupCleanupPanel
                 groups={groups}
                 onSelectGroups={selection.replaceSelection}
-                onAnalyzeSource={groupSource.open}
+                onAnalyzeSource={handleOpenDetail}
                 onClose={() => setActivePanel('none')}
               />
             )}
@@ -333,10 +448,26 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
             oktaOrigin={oktaOrigin}
             onLoadAllGroups={loadAllGroups}
             onClearFilters={filters.clearFilters}
-            onAnalyzeSource={groupSource.open}
+            onOpenDetail={handleOpenDetail}
+            onAnalyzeSource={handleAnalyzeSource}
             highlightedGroupId={selectedGroupId ?? undefined}
+            scrollRef={listScrollRef}
           />
         </div>
+
+        {/* Pushed detail view — a sibling of the list, never a replacement for it. */}
+        {detailGroup && (
+          <div ref={detailViewRef} tabIndex={-1} className="focus:outline-none">
+            <GroupDetailView
+              group={detailGroup}
+              targetTabId={targetTabId}
+              oktaOrigin={oktaOrigin}
+              onNavigateToRule={onNavigateToRule}
+              autoAnalyze={autoAnalyzeGroupId === detailGroup.id}
+              isActive={isActive}
+            />
+          </div>
+        )}
       </div>
 
       {/* Export Modal */}
@@ -357,26 +488,6 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
         groups={selectedGroups}
         compareGroups={api.compareGroups}
         memberCache={membersCache.groupMembersCache}
-      />
-
-      {/* Membership-source insight (A2) */}
-      <GroupSourceModal
-        group={groupSource.group}
-        feedingRules={groupSource.feedingRules}
-        rulesStatus={groupSource.rulesStatus}
-        breakdown={groupSource.breakdown}
-        memberStatus={groupSource.memberStatus}
-        error={groupSource.error}
-        onClose={groupSource.close}
-        onAnalyzeMembers={groupSource.analyzeMembers}
-        onNavigateToRule={
-          onNavigateToRule
-            ? (ruleId) => {
-                groupSource.close();
-                onNavigateToRule(ruleId);
-              }
-            : undefined
-        }
       />
 
       {/* Merge wizard (A3) */}

@@ -22,6 +22,9 @@ convention; the specs in [`../`](../README.md) describe the _what_.
 | [0013](./0013-plan-and-approval-gate.md)                          | Lightweight plan-and-approval gate before bigger changes                         | Accepted | Plan before work for >~2-file / plan-scoped changes; complements ADRs.     |
 | [0014](./0014-storybook-hardening.md)                             | Storybook hardening — enforce a11y, side-panel viewports, fixed-element framing  | Accepted | Closes 0011's a11y `todo → error` follow-up.                               |
 | [0015](./0015-scripting-permission-content-script-reinjection.md) | Add the `scripting` permission to re-inject content scripts after install/update | Accepted | Injection bounded by existing Okta host permissions; `onInstalled` only.   |
+| [0016](./0016-in-tab-view-stack-navigation.md)                    | In-tab sub-navigation via a per-tab view stack                                   | Accepted | `useViewStack` + `Breadcrumbs`; no focus trap (not an overlay).            |
+| [0017](./0017-jsep-expression-evaluation.md)                      | Parse Okta rule expressions with jsep plus an allow-list evaluator               | Accepted | AST-only parser + allow-list evaluator; `unevaluable` is never `no-match`. |
+| [0018](./0018-tabs-stay-mounted.md)                               | Keep every tab mounted; gate background work on `isActive`                       | Accepted | Every tab gates its mount effects on `isActive` — see the obligation.      |
 
 ## Adding an ADR
 

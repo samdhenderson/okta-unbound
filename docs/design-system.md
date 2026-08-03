@@ -16,13 +16,13 @@ doesn't exist, add a token; don't inline a literal.
 
 Semantic (each has base + variants where defined):
 
-| Token     | Base      | Variants                                                          |
-| --------- | --------- | ----------------------------------------------------------------- |
-| `primary` | `#546be7` | `-text`, `-dark`, `-light`, `-highlight`                          |
-| `danger`  | `#e72500` | `-text`, `-light`                                                 |
-| `success` | `#16884a` | `-text`, `-light`                                                 |
-| `warning` | `#a16c03` | `-text`, `-light`                                                 |
-| `info`    | `#546be7` | `-light`                                                          |
+| Token     | Base      | Variants                                                       |
+| --------- | --------- | -------------------------------------------------------------- |
+| `primary` | `#546be7` | `-text`, `-dark`, `-light`, `-highlight`                       |
+| `danger`  | `#e72500` | `-text`, `-light`                                              |
+| `success` | `#16884a` | `-text`, `-light`                                              |
+| `warning` | `#a16c03` | `-text`, `-light`                                              |
+| `info`    | `#546be7` | `-light`                                                       |
 | `accent`  | `#9333ea` | `-dark` — distinguishes the "user page" context (`ContextBar`) |
 
 Neutral scale: `neutral-50, 100, 200, 300, 400, 500, 600, 700, 900`

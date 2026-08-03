@@ -57,6 +57,13 @@ interface RulesTabProps {
   scopeToGroupId?: string | null;
   /** Invoked once {@link RulesTabProps.scopeToGroupId} has been applied. */
   onScopeConsumed?: () => void;
+  /**
+   * Whether this is the selected top-level tab. The tab stays mounted while
+   * hidden, so the page-level scroll listener that persists `scrollPosition` is
+   * only attached while it is visible — otherwise scrolling *another* tab would
+   * be recorded as this tab's offset. Defaults to `true`.
+   */
+  isActive?: boolean;
 }
 
 /**
@@ -72,6 +79,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
   onNavigateToGroup,
   scopeToGroupId,
   onScopeConsumed,
+  isActive = true,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<RulesFilterType>('all');
@@ -164,9 +172,15 @@ const RulesTab: React.FC<RulesTabProps> = ({
     };
 
     loadPersistedState();
-    TabStateManager.markTabVisited('rules');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Record the visit on every arrival, not just the first: the tab is mounted
+  // once and then hidden/shown, so a mount-only call would only ever see the
+  // first visit of a panel session.
+  useEffect(() => {
+    if (isActive) void TabStateManager.markTabVisited('rules');
+  }, [isActive]);
 
   // Fulfil a one-shot "View Rules for this group" request: pre-apply the
   // current-group filter so the list arrives scoped to the detected group. Runs
@@ -219,12 +233,15 @@ const RulesTab: React.FC<RulesTabProps> = ({
     }
   }, [rules, stats, data.lastFetchTime, searchQuery, activeFilter, sortMode]);
 
-  // Persist scroll position periodically.
+  // Persist scroll position periodically. Only while visible — the listener is on
+  // `window`, which is shared with every other mounted tab, so leaving it attached
+  // would record another tab's scrolling as this tab's restore point.
   useEffect(() => {
+    if (!isActive) return;
     const handleScroll = () => TabStateManager.updateScrollPosition('rules', window.scrollY);
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [isActive]);
 
   /** Build the minimal rule shape the impact preview needs. */
   const toRuleImpactInput = (rule: FormattedRule): RuleImpactInput => ({

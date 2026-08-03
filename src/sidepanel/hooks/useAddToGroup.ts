@@ -32,6 +32,12 @@ interface UseAddToGroupOptions {
   onResult: (result: { text: string; type: 'danger' }) => void;
   /** Called with the user after a successful add so the caller can reload memberships. */
   onAdded: (user: OktaUser) => Promise<void> | void;
+  /**
+   * Whether the Users tab is the visible one. The tab (and this modal's state)
+   * stays mounted while hidden, so the type-ahead is suspended rather than
+   * re-running a standing query when `targetTabId` changes. Defaults to `true`.
+   */
+  enabled?: boolean;
 }
 
 /** Return shape of {@link useAddToGroup}. */
@@ -66,6 +72,7 @@ export function useAddToGroup({
   selectedUser,
   onResult,
   onAdded,
+  enabled = true,
 }: UseAddToGroupOptions): UseAddToGroupReturn {
   const [isOpen, setIsOpen] = useState(false);
   const [groupSearchQuery, setGroupSearchQuery] = useState('');
@@ -91,9 +98,11 @@ export function useAddToGroup({
 
   // Debounced group search for the Add to Group modal. CHARACTERIZED (preserved):
   // no stale-response guard — the last-resolving search wins.
+  // Gated on tab visibility: a modal left open behind a hidden tab keeps its
+  // query, and this effect re-fires on a new `targetTabId`.
   useEffect(() => {
     const query = debouncedGroupQuery.trim();
-    if (query.length < 2) return;
+    if (!enabled || query.length < 2) return;
 
     void (async () => {
       setIsSearchingGroups(true);
@@ -108,7 +117,7 @@ export function useAddToGroup({
         setIsSearchingGroups(false);
       }
     })();
-  }, [debouncedGroupQuery, searchGroups]);
+  }, [enabled, debouncedGroupQuery, searchGroups]);
 
   const openModal = useCallback(() => {
     setGroupSearchQuery('');

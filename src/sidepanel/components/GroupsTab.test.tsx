@@ -170,7 +170,6 @@ function cachedGroup(over: Record<string, any> = {}) {
     hasRules: false,
     ruleCount: 0,
     selected: false,
-    staleness: { score: 10, factors: [] },
     ...over,
   };
 }
@@ -356,6 +355,28 @@ describe('live search: debounce contract', () => {
     expect(searchCalls()[0]).toMatchObject({ tabId: 2, priority: 'interactive' });
   });
 
+  it('does not re-fire on a targetTabId change while the tab is hidden, and catches up on return', async () => {
+    // App keeps every visited tab mounted, so this effect stays alive after the
+    // user has moved on. Re-issuing the last typed query from a tab nobody can
+    // see is Okta traffic with no reader.
+    useDebounceTimers();
+    routeSearch(() => ({ success: true, data: [] }));
+
+    const { rerender } = render(<GroupsTab targetTabId={1} isActive />);
+    typeInto(liveInput(), 'eng');
+    await advance(300);
+    runtimeSendMessage.mockClear();
+
+    rerender(<GroupsTab targetTabId={2} isActive={false} />);
+    await advance(300);
+    expect(searchCalls()).toHaveLength(0);
+
+    rerender(<GroupsTab targetTabId={2} isActive />);
+    await advance(300);
+    expect(searchCalls()).toHaveLength(1);
+    expect(searchCalls()[0]).toMatchObject({ tabId: 2, priority: 'interactive' });
+  });
+
   it('routes live search through the background scheduler, never a direct content call (§8)', async () => {
     useDebounceTimers();
     routeSearch(() => ({ success: true, data: [rawGroup()] }));
@@ -505,7 +526,7 @@ describe('live search: error paths', () => {
 // 3. loadAllGroups
 // ===========================================================================
 describe('loadAllGroups', () => {
-  it('maps, scores staleness, enriches with push mappings, caches, and flips to cached mode', async () => {
+  it('maps, enriches with push mappings, caches, and flips to cached mode', async () => {
     const uev = userEvent.setup();
     route(/^\/api\/v1\/groups\?limit=200&expand=stats$/, () => ({
       success: true,
@@ -551,10 +572,9 @@ describe('loadAllGroups', () => {
     expect(screen.getByText('2 Cached')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Refresh/ })).toBeInTheDocument();
 
-    // Staleness was computed for every group (GroupListItem renders the badge).
-    expect(screen.getAllByText(/Healthy|Monitor|Stale|Very Stale/).length).toBeGreaterThanOrEqual(
-      2,
-    );
+    // Every raw group was mapped to a summary: each row renders its type badge.
+    expect(screen.getByText('OKTA')).toBeInTheDocument();
+    expect(screen.getByText('APP')).toBeInTheDocument();
 
     // Push mappings applied to g1 and the app label resolved for the APP_GROUP.
     expect(screen.getByText('Slack')).toBeInTheDocument();
@@ -565,7 +585,8 @@ describe('loadAllGroups', () => {
     expect(written.groups[0].lastUpdated).toBe('2024-01-01T00:00:00.000Z');
     expect(written.groups[0].created).toBe('2020-01-01T00:00:00.000Z');
     expect(typeof written.timestamp).toBe('number');
-    expect(written.groups[0].staleness.score).toBeGreaterThan(0);
+    // Member counts came from the ?expand=stats payload, not a per-group fetch.
+    expect(written.groups[0].memberCount).toBe(10);
   });
 
   it('reads sourceAppId from group.source in preference to the _links.apps href', async () => {
@@ -664,7 +685,8 @@ describe('loadAllGroups', () => {
 
     await waitFor(() => expect(renderedGroupNames()).toEqual(['Slack Users']));
     expect(screen.queryByText('push mapping exploded')).not.toBeInTheDocument();
-    expect(screen.getAllByText(/Healthy|Monitor|Stale|Very Stale/).length).toBe(1);
+    // The single row still rendered fully — its type badge is present.
+    expect(screen.getAllByText('APP')).toHaveLength(1);
     expect(storageSet).toHaveBeenCalledTimes(1);
   });
 
@@ -798,15 +820,6 @@ describe('filter pipeline (cached mode)', () => {
     cachedGroup({ id: 'g', name: 'Size1000', memberCount: 1000 }),
   ];
 
-  const stalenessFixtures = [
-    cachedGroup({ id: 'a', name: 'Score25', staleness: { score: 25, factors: [] } }),
-    cachedGroup({ id: 'b', name: 'Score26', staleness: { score: 26, factors: [] } }),
-    cachedGroup({ id: 'c', name: 'Score50', staleness: { score: 50, factors: [] } }),
-    cachedGroup({ id: 'd', name: 'Score51', staleness: { score: 51, factors: [] } }),
-    cachedGroup({ id: 'e', name: 'Score75', staleness: { score: 75, factors: [] } }),
-    cachedGroup({ id: 'f', name: 'Score76', staleness: { score: 76, factors: [] } }),
-  ];
-
   async function openFilters(uev: ReturnType<typeof userEvent.setup>) {
     await uev.click(screen.getByRole('button', { name: /^Filters/ }));
   }
@@ -859,20 +872,6 @@ describe('filter pipeline (cached mode)', () => {
     await openFilters(uev);
 
     await uev.click(section('Group Size').getByRole('button', { name: label }));
-    expect(renderedGroupNames().sort()).toEqual([...want].sort());
-  });
-
-  it.each([
-    ['Healthy', ['Score25']],
-    ['Monitor', ['Score26', 'Score50']],
-    ['Stale', ['Score51', 'Score75']],
-    ['Critical', ['Score76']],
-  ])('health bucket %s selects exactly the right scores at its boundaries', async (label, want) => {
-    const uev = userEvent.setup();
-    renderCached(stalenessFixtures);
-    await openFilters(uev);
-
-    await uev.click(section('Group Health').getByRole('button', { name: label }));
     expect(renderedGroupNames().sort()).toEqual([...want].sort());
   });
 
@@ -939,7 +938,7 @@ describe('filter pipeline (cached mode)', () => {
     expect(renderedGroupNames()).toEqual(['Match']);
   });
 
-  it('the Filters badge counts the 4 scalar filters plus one for any push-app selection', async () => {
+  it('the Filters badge counts the 3 scalar filters plus one for any push-app selection', async () => {
     const uev = userEvent.setup();
     renderCached([
       cachedGroup({
@@ -1016,21 +1015,18 @@ describe('sorting (cached mode)', () => {
       name: 'Beta',
       memberCount: 5,
       lastUpdated: '2023-01-01T00:00:00.000Z',
-      staleness: { score: 50, factors: [] },
     }),
     cachedGroup({
       id: 'a',
       name: 'Alpha',
       memberCount: 99,
       lastUpdated: '2021-01-01T00:00:00.000Z',
-      staleness: { score: 10, factors: [] },
     }),
     cachedGroup({
       id: 'c',
       name: 'Gamma',
       memberCount: 1,
       lastUpdated: undefined,
-      staleness: { score: 90, factors: [] },
     }),
   ];
 
@@ -1066,11 +1062,6 @@ describe('sorting (cached mode)', () => {
     expect(renderedGroupNames()).toEqual(['Alpha', 'Beta', 'Gamma']); // 99, 5, 1 desc
     await uev.click(sortBtn('Size'));
     expect(renderedGroupNames()).toEqual(['Gamma', 'Beta', 'Alpha']);
-
-    await uev.click(sortBtn('Staleness'));
-    expect(renderedGroupNames()).toEqual(['Gamma', 'Beta', 'Alpha']); // 90, 50, 10 desc
-    await uev.click(sortBtn('Staleness'));
-    expect(renderedGroupNames()).toEqual(['Alpha', 'Beta', 'Gamma']);
 
     // Back to Name: resets to ascending rather than keeping the desc direction.
     await uev.click(sortBtn('Name'));
@@ -1274,7 +1265,6 @@ describe('Export List CSV', () => {
         description: 'has, comma',
         type: 'OKTA_GROUP',
         memberCount: 7,
-        staleness: { score: 42, factors: [] },
         pushMappings: [{ mappingId: 'm', appId: 'app1', appName: 'Slack', status: 'ACTIVE' }],
       }),
       cachedGroup({
@@ -1282,7 +1272,6 @@ describe('Export List CSV', () => {
         name: 'Plain',
         description: undefined,
         memberCount: 0,
-        staleness: undefined,
       }),
     ]);
 
@@ -1293,9 +1282,9 @@ describe('Export List CSV', () => {
     // Rows follow filteredGroups, i.e. the CURRENT sort (name ascending by default),
     // not the underlying cache order.
     expect(blobs[0].text.split('\n')).toEqual([
-      '"ID","Name","Description","Type","Member Count","Staleness Score","Push Status"',
-      '"b","Plain","","OKTA_GROUP","0","","Not Pushed"',
-      '"a","Say ""hi""","has, comma","OKTA_GROUP","7","42","Pushed (1)"',
+      '"ID","Name","Description","Type","Member Count","Push Status"',
+      '"b","Plain","","OKTA_GROUP","0","Not Pushed"',
+      '"a","Say ""hi""","has, comma","OKTA_GROUP","7","Pushed (1)"',
     ]);
 
     const anchor = clickSpy.mock.instances[0] as HTMLAnchorElement;

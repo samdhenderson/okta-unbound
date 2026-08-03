@@ -8,7 +8,7 @@
 import React from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { FilterPill, SortPill } from '../shared';
-import type { SortField, StalenessLevel, PushFilter } from './groupFilters';
+import type { SortField, PushFilter } from './groupFilters';
 
 interface GroupFilterPanelProps {
   /** Number of active filters (drives the active-chips row). */
@@ -25,9 +25,6 @@ interface GroupFilterPanelProps {
   /** Set of push-target app ids to filter by (empty = all). */
   pushAppFilter: Set<string>;
   setPushAppFilter: Dispatch<SetStateAction<Set<string>>>;
-  /** Selected health/staleness bucket (`''` = all). */
-  stalenessFilter: StalenessLevel;
-  setStalenessFilter: (value: StalenessLevel) => void;
   /** Push-target apps available as filter chips. */
   availablePushApps: { id: string; name: string }[];
   /** Active sort field. */
@@ -41,12 +38,11 @@ interface GroupFilterPanelProps {
 }
 
 /**
- * The expandable filter panel: active-filter chips, the 2×2 type/size/push/health
- * grid, the push-target-app row, and the sort row. The five filter/toggle groups
- * (type, size, push status, push-target app, and the semantic-colored health pills
- * via `FilterPill`'s `inactiveClassName` escape hatch) route through the shared
- * `FilterPill`, and the sort row through the shared `SortPill` (§3). Two controls
- * stay raw as documented exceptions: the "Clear all" text-link (no shared text-link
+ * The expandable filter panel: active-filter chips, the type/size/push grid, the
+ * push-target-app row, and the sort row. The four filter/toggle groups (type,
+ * size, push status, push-target app) route through the shared `FilterPill`, and
+ * the sort row through the shared `SortPill` (§3). Two controls stay raw as
+ * documented exceptions: the "Clear all" text-link (no shared text-link
  * primitive) and the active-filter chip's close button (a bespoke `rounded-full`
  * chip-remove).
  */
@@ -60,8 +56,6 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
   setPushFilter,
   pushAppFilter,
   setPushAppFilter,
-  stalenessFilter,
-  setStalenessFilter,
   availablePushApps,
   sortBy,
   sortDesc,
@@ -84,12 +78,6 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
         )}
         {pushFilter && (
           <FilterChip label={`Push: ${pushFilter}`} onRemove={() => setPushFilter('')} />
-        )}
-        {stalenessFilter && (
-          <FilterChip
-            label={`Health: ${stalenessFilter.replace('_', ' ')}`}
-            onRemove={() => setStalenessFilter('')}
-          />
         )}
         {pushAppFilter.size > 0 && (
           <FilterChip
@@ -175,49 +163,6 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
           ))}
         </div>
       </div>
-
-      {/* Health / Staleness Filter */}
-      <div>
-        <label className="block text-xs font-medium text-neutral-600 mb-1.5">Group Health</label>
-        <div className="flex flex-wrap gap-1.5">
-          {[
-            { value: '' as StalenessLevel, label: 'All', color: '' },
-            {
-              value: 'healthy' as StalenessLevel,
-              label: 'Healthy',
-              color: 'bg-success-light text-success-text border-success-light',
-            },
-            {
-              value: 'monitor' as StalenessLevel,
-              label: 'Monitor',
-              color: 'bg-warning-light text-warning-text border-warning-light',
-            },
-            {
-              value: 'stale' as StalenessLevel,
-              label: 'Stale',
-              color: 'bg-warning-light text-danger-text border-warning-light',
-            },
-            {
-              value: 'very_stale' as StalenessLevel,
-              label: 'Critical',
-              color: 'bg-danger-light text-danger-text border-danger-light',
-            },
-          ].map((opt) => (
-            // The colored inactive states carry their own semantic border+fill via
-            // `inactiveClassName`; the neutral "All" option falls back to FilterPill's
-            // default. Active uses FilterPill's standard borderless primary fill (the
-            // raw markup's invisible `border-primary` on the active pill is dropped).
-            <FilterPill
-              key={opt.value}
-              active={stalenessFilter === opt.value}
-              onClick={() => setStalenessFilter(opt.value)}
-              inactiveClassName={opt.color ? `border ${opt.color}` : undefined}
-            >
-              {opt.label}
-            </FilterPill>
-          ))}
-        </div>
-      </div>
     </div>
 
     {/* Push Target App Filter */}
@@ -256,7 +201,6 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
           { value: 'name' as SortField, label: 'Name' },
           { value: 'memberCount' as SortField, label: 'Size' },
           { value: 'lastUpdated' as SortField, label: 'Last Updated' },
-          { value: 'staleness' as SortField, label: 'Staleness' },
         ].map((opt) => (
           <SortPill
             key={opt.value}

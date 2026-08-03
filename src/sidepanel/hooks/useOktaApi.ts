@@ -202,6 +202,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       removeDeprovisioned,
       getAllGroups: groupDiscoveryOps.getAllGroups,
       getGroupMemberCount: groupDiscoveryOps.getGroupMemberCount,
+      ensureGroupRulesLoaded: groupDiscoveryOps.ensureGroupRulesLoaded,
       getGroupRulesForGroup: groupDiscoveryOps.getGroupRulesForGroup,
       executeBulkOperation: groupBulkOps.executeBulkOperation,
       searchGroups: groupDiscoveryOps.searchGroups,
@@ -243,7 +244,6 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       // Group analysis operations
       compareGroups: groupAnalysisOps.compareGroups,
       searchUserAcrossGroups: groupAnalysisOps.searchUserAcrossGroups,
-      calculateStaleness: groupAnalysisOps.calculateStaleness,
 
       // Rule impact preview (read-only)
       captureRuleImpact: ruleImpactOps.captureRuleImpact,
