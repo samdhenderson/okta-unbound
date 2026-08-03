@@ -21,7 +21,7 @@
  * - Display visual indicators when active
  *
  * **Supported Operations:**
- * - Page context (current group / user / app info, Okta origin)
+ * - Page context (current group / user / app / auth-policy info, Okta origin)
  * - Generic API requests (GET, POST, PUT, DELETE) relayed by the background scheduler
  *
  * **Security:**
@@ -37,9 +37,15 @@
 // Content script for Okta Unbound
 // Runs on Okta pages and handles API requests with proper session authentication
 
-import type { MessageRequest, MessageResponse } from '../shared/types';
+import type { MessageRequest, MessageResponse, PolicyInfo } from '../shared/types';
 import { createLogger } from '../shared/utils/logger';
-import { extractAppIdFromUrl, extractAppNameFromPage } from './pageContext';
+import { oktaPolicyListItemSchema, parseOkta } from '../shared/schemas/okta';
+import {
+  extractAppIdFromUrl,
+  extractAppNameFromPage,
+  extractPolicyIdFromUrl,
+  extractPolicyNameFromPage,
+} from './pageContext';
 import { handleMakeApiRequest } from './apiRequest';
 import { injectIndicator } from './indicator';
 import { handleGetGroupInfo } from './groupHandlers';
@@ -137,6 +143,10 @@ function handleMessage(
       handleGetAppInfo().then(sendResponse);
       return true;
 
+    case 'getPolicyInfo':
+      handleGetPolicyInfo().then(sendResponse);
+      return true;
+
     case 'makeApiRequest':
       if (!request.endpoint) {
         sendResponse({ success: false, error: 'Missing endpoint' });
@@ -214,6 +224,84 @@ async function handleGetAppInfo(): Promise<MessageResponse<import('../shared/typ
     };
   } catch (error) {
     log.error('getAppInfo error', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Resolve the current page's authentication/access policy ID, name and status.
+ *
+ * Mirrors {@link handleGetAppInfo}: the id comes from the URL, the name is scraped
+ * from the page heading (page wins), and a single `GET /api/v1/policies/{id}` read
+ * fills in whatever the page did not supply. Unlike the app handler the API payload
+ * is zod-validated (`oktaPolicyListItemSchema`) before any field is read — a
+ * validation failure, like a failed request, degrades silently to the URL/DOM data.
+ *
+ * Read-only and identity-only: nothing here scrapes policy settings or rules out of
+ * the page markup.
+ *
+ * @returns A response carrying {@link PolicyInfo}, or an error when not on a policy page.
+ */
+async function handleGetPolicyInfo(): Promise<MessageResponse<PolicyInfo>> {
+  log.debug('Processing getPolicyInfo request');
+
+  try {
+    const url = window.location.href;
+    log.debug('Current page location', { path: window.location.pathname });
+
+    const policyId = extractPolicyIdFromUrl(url);
+    log.debug('Extracted policyId', { policyId });
+
+    if (!policyId) {
+      return {
+        success: false,
+        error: 'Not on an authentication policy page. Please navigate to a specific policy page.',
+      };
+    }
+
+    let policyName = extractPolicyNameFromPage();
+    let policyStatus: string | undefined;
+    log.debug('Extracted policyName from page', { found: Boolean(policyName) });
+
+    // Enrich from the API. `policyId` already matched the strict `rst`/`00p`
+    // alphanumeric shape guard in extractPolicyIdFromUrl, so it is safe to
+    // interpolate into the same-origin path (mirroring the group/app handlers).
+    log.debug('Fetching policy details from API');
+    try {
+      const response = await handleMakeApiRequest(`/api/v1/policies/${policyId}`, 'GET');
+      if (response.success && response.data) {
+        const policy = parseOkta(
+          oktaPolicyListItemSchema,
+          response.data,
+          'GET /api/v1/policies/{id}',
+        );
+        policyName = policyName || policy.name || null;
+        policyStatus = policy.status;
+        log.debug('Fetched policy details from API', {
+          hasName: Boolean(policyName),
+          hasStatus: Boolean(policyStatus),
+        });
+      }
+    } catch (e) {
+      log.warn('Failed to fetch policy details from API', e);
+    }
+
+    const result: PolicyInfo = { policyId, policyName, policyStatus };
+
+    log.debug('getPolicyInfo result', {
+      policyId: result.policyId,
+      hasName: Boolean(result.policyName),
+      hasStatus: Boolean(result.policyStatus),
+    });
+    return {
+      success: true,
+      data: result,
+    };
+  } catch (error) {
+    log.error('getPolicyInfo error', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',

@@ -888,6 +888,112 @@ describe('getAppInfo', () => {
   });
 });
 
+describe('getPolicyInfo', () => {
+  // Obviously-fake ids matching Okta's two policy id prefixes.
+  const POLICY_ID = 'rstFAKE0123456789abc';
+  const POLICY_ID_00P = '00pFAKE0123456789abc';
+
+  it('returns literal true synchronously (never a promise)', async () => {
+    setPageUrl(`/admin/authn/policies/${POLICY_ID}`);
+    routeFetch([[`/api/v1/policies/${POLICY_ID}`, () => res({ id: POLICY_ID })]]);
+
+    const { returned, response } = send({ action: 'getPolicyInfo' });
+
+    expect(returned).toBe(true);
+    expect(returned).not.toBeInstanceOf(Promise);
+    await response;
+  });
+
+  it('detects a policy page: page name wins, the API supplies the status', async () => {
+    setPageUrl(`/admin/authn/policies/${POLICY_ID}`);
+    document.body.innerHTML = '<span data-se="policy-name"> Contractor MFA </span>';
+    routeFetch([
+      [
+        `/api/v1/policies/${POLICY_ID}`,
+        () => res({ id: POLICY_ID, name: 'API Policy Name', status: 'ACTIVE' }),
+      ],
+    ]);
+
+    await expect(send({ action: 'getPolicyInfo' }).response).resolves.toEqual({
+      success: true,
+      data: { policyId: POLICY_ID, policyName: 'Contractor MFA', policyStatus: 'ACTIVE' },
+    });
+    expect(fetchedEndpoints()).toEqual([`/api/v1/policies/${POLICY_ID}`]);
+  });
+
+  it('falls back to the API name when the page has none (00p-prefixed id)', async () => {
+    setPageUrl(`/admin/access/policies/${POLICY_ID_00P}`);
+    routeFetch([
+      [
+        `/api/v1/policies/${POLICY_ID_00P}`,
+        () => res({ id: POLICY_ID_00P, name: 'Any Two Factor', status: 'INACTIVE' }),
+      ],
+    ]);
+
+    await expect(send({ action: 'getPolicyInfo' }).response).resolves.toEqual({
+      success: true,
+      data: {
+        policyId: POLICY_ID_00P,
+        policyName: 'Any Two Factor',
+        policyStatus: 'INACTIVE',
+      },
+    });
+  });
+
+  it('errors when not on a policy page', async () => {
+    setPageUrl('/admin/dashboard');
+
+    await expect(send({ action: 'getPolicyInfo' }).response).resolves.toEqual({
+      success: false,
+      error: 'Not on an authentication policy page. Please navigate to a specific policy page.',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a policy-shaped route whose segment is not a policy id', async () => {
+    setPageUrl('/admin/authn/policies/new');
+
+    await expect(send({ action: 'getPolicyInfo' }).response).resolves.toEqual({
+      success: false,
+      error: 'Not on an authentication policy page. Please navigate to a specific policy page.',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('degrades to the DOM name (no status) when the enrichment request fails', async () => {
+    setPageUrl(`/admin/authn/policies/${POLICY_ID}`);
+    document.body.innerHTML = '<span data-se="policy-name">Contractor MFA</span>';
+    routeFetch([[`/api/v1/policies/${POLICY_ID}`, () => res({}, { status: 403 })]]);
+
+    await expect(send({ action: 'getPolicyInfo' }).response).resolves.toEqual({
+      success: true,
+      data: { policyId: POLICY_ID, policyName: 'Contractor MFA', policyStatus: undefined },
+    });
+  });
+
+  it('degrades when the enrichment payload fails the zod schema', async () => {
+    setPageUrl(`/admin/authn/policies/${POLICY_ID}`);
+    document.body.innerHTML = '<span data-se="policy-name">Contractor MFA</span>';
+    // `id` is required by oktaPolicyListItemSchema → parseOkta throws → swallowed.
+    routeFetch([[`/api/v1/policies/${POLICY_ID}`, () => res({ nope: true, status: 'ACTIVE' })]]);
+
+    await expect(send({ action: 'getPolicyInfo' }).response).resolves.toEqual({
+      success: true,
+      data: { policyId: POLICY_ID, policyName: 'Contractor MFA', policyStatus: undefined },
+    });
+  });
+
+  it('keeps policyName null when neither the DOM nor the API supplies one', async () => {
+    setPageUrl(`/admin/authn/policies/${POLICY_ID}`);
+    routeFetch([[`/api/v1/policies/${POLICY_ID}`, () => res({}, { status: 500 })]]);
+
+    await expect(send({ action: 'getPolicyInfo' }).response).resolves.toEqual({
+      success: true,
+      data: { policyId: POLICY_ID, policyName: null, policyStatus: undefined },
+    });
+  });
+});
+
 // ============================================================================
 // 16. Bootstrap: listener registration order + indicator lifecycle
 // ============================================================================

@@ -4,12 +4,13 @@
  *
  * Purely presentational now: the page context (live or pinned) is resolved by
  * {@link App} and passed in as props, so the Overview shows the same entity the
- * {@link ContextBar} names. Renders {@link GroupOverview} or {@link UserOverview}
- * for a group/user page, a retry/quick-start error state when disconnected, or a
- * guidance {@link EmptyState} otherwise.
+ * {@link ContextBar} names. Renders {@link GroupOverview}, {@link UserOverview},
+ * {@link AppOverview} or {@link AuthPolicyOverview} for a detected entity page, a
+ * retry/quick-start error state when disconnected, or a guidance
+ * {@link EmptyState} otherwise.
  */
 import React from 'react';
-import type { GroupInfo, UserInfo, AppInfo } from '../../shared/types';
+import type { GroupInfo, UserInfo, AppInfo, PolicyInfo } from '../../shared/types';
 import type { PageType } from '../hooks/useOktaPageContext';
 import type { ConnectionStatus } from '../hooks/useOktaTabContext';
 import AlertMessage from './shared/AlertMessage';
@@ -18,6 +19,7 @@ import LoadingSpinner from './shared/LoadingSpinner';
 import GroupOverview from './overview/GroupOverview';
 import UserOverview from './overview/UserOverview';
 import AppOverview from './overview/AppOverview';
+import AuthPolicyOverview from './overview/AuthPolicyOverview';
 
 interface OverviewTabProps {
   /** Navigates to another tab, optionally deep-linking to a specific rule id. */
@@ -30,6 +32,12 @@ interface OverviewTabProps {
   userInfo: UserInfo | null;
   /** App identity when `pageType === 'app'`. */
   appInfo: AppInfo | null;
+  /**
+   * Auth-policy identity when `pageType === 'policy'`. Optional so the orchestrator
+   * can adopt it independently; omitted, a policy page falls back to the
+   * waiting-for-context empty state.
+   */
+  policyInfo?: PolicyInfo | null;
   /** Connection state to the Okta tab. */
   connectionStatus: ConnectionStatus;
   /** Tab hosting the Okta session; every API call is routed to it. */
@@ -63,6 +71,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
   groupInfo,
   userInfo,
   appInfo,
+  policyInfo = null,
   connectionStatus,
   targetTabId,
   error,
@@ -129,12 +138,27 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
         )}
 
         {pageType === 'app' && appInfo && targetTabId && (
-          <AppOverview appId={appInfo.appId} appName={appInfo.appName} onExport={onExportApp} />
+          <AppOverview
+            appId={appInfo.appId}
+            appName={appInfo.appName}
+            targetTabId={targetTabId}
+            onExport={onExportApp}
+          />
+        )}
+
+        {pageType === 'policy' && policyInfo && targetTabId && (
+          <AuthPolicyOverview
+            policyId={policyInfo.policyId}
+            policyName={policyInfo.policyName}
+            policyStatus={policyInfo.policyStatus}
+            targetTabId={targetTabId}
+          />
         )}
 
         {(pageType === 'unknown' ||
           pageType === 'admin' ||
-          (pageType === 'app' && (!appInfo || !targetTabId))) && (
+          (pageType === 'app' && (!appInfo || !targetTabId)) ||
+          (pageType === 'policy' && (!policyInfo || !targetTabId))) && (
           <EmptyState
             icon="search"
             title="Waiting for Context"
