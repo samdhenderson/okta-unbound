@@ -10,10 +10,16 @@ describe('migrateLegacyTabId', () => {
     ['dashboard', 'overview'],
     ['operations', 'overview'],
     ['security', 'overview'],
-    ['apps', 'overview'],
     ['undo', 'history'],
   ])('migrates retired id %s to %s', (legacy, expected) => {
     expect(migrateLegacyTabId(legacy)).toBe(expected);
+  });
+
+  // `'apps'` used to be a retired id migrated to `'overview'`. The Applications
+  // tab now exists, so it is a real tab id and must pass through untouched — a
+  // saved `'apps'` selection restores the Applications tab.
+  it('passes the no-longer-retired apps id through', () => {
+    expect(migrateLegacyTabId('apps')).toBe('apps');
   });
 
   it('passes every current tab id through unchanged', () => {

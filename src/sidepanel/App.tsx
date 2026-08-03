@@ -27,6 +27,8 @@ import ActivityBar from './components/ActivityBar';
 const RulesTab = lazy(() => import('./components/RulesTab'));
 const UsersTab = lazy(() => import('./components/UsersTab'));
 const GroupsTab = lazy(() => import('./components/GroupsTab'));
+const AppsTab = lazy(() => import('./components/AppsTab'));
+const AuthPoliciesTab = lazy(() => import('./components/AuthPoliciesTab'));
 const ExportTab = lazy(() => import('./components/export').then((m) => ({ default: m.ExportTab })));
 const AuditLogViewer = lazy(() => import('./components/AuditLogViewer'));
 import { useGroupContext } from './hooks/useGroupContext';
@@ -139,7 +141,9 @@ const App: React.FC = () => {
         ? (effective.userInfo?.userName ?? undefined)
         : effective.pageType === 'app'
           ? (page.appInfo?.appName ?? undefined)
-          : undefined;
+          : effective.pageType === 'policy'
+            ? (page.policyInfo?.policyName ?? undefined)
+            : undefined;
   const entityId =
     effective.pageType === 'group'
       ? (effective.groupInfo?.groupId ?? undefined)
@@ -147,7 +151,9 @@ const App: React.FC = () => {
         ? (effective.userInfo?.userId ?? undefined)
         : effective.pageType === 'app'
           ? (page.appInfo?.appId ?? undefined)
-          : undefined;
+          : effective.pageType === 'policy'
+            ? (page.policyInfo?.policyId ?? undefined)
+            : undefined;
 
   const handleTogglePin = () => {
     if (pinned) {
@@ -295,6 +301,7 @@ const App: React.FC = () => {
               groupInfo={effective.groupInfo}
               userInfo={effective.userInfo}
               appInfo={page.appInfo ?? null}
+              policyInfo={page.policyInfo ?? null}
               connectionStatus={effective.connectionStatus}
               targetTabId={effective.targetTabId}
               error={effective.error}
@@ -337,6 +344,18 @@ const App: React.FC = () => {
               onNavigateToRule={handleNavigateToRule}
               selectedGroupId={selectedGroupId}
               onGroupSelected={() => setSelectedGroupId(null)}
+            />
+          )}
+          {activeTab === 'apps' && (
+            <AppsTab
+              targetTabId={tabContext.targetTabId ?? null}
+              oktaOrigin={tabContext.oktaOrigin ?? undefined}
+            />
+          )}
+          {activeTab === 'policies' && (
+            <AuthPoliciesTab
+              targetTabId={tabContext.targetTabId ?? undefined}
+              oktaOrigin={tabContext.oktaOrigin ?? undefined}
             />
           )}
           {activeTab === 'export' && (
