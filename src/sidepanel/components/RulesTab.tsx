@@ -29,6 +29,7 @@ import { useRuleImpact } from '../hooks/useRuleImpact';
 import { useRulesData } from '../hooks/useRulesData';
 import { useRuleLifecycle } from '../hooks/useRuleLifecycle';
 import { useRuleConsolidation } from '../hooks/useRuleConsolidation';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { RuleImpactInput } from '../hooks/useOktaApi/ruleImpact';
 import { TabStateManager, saveRulesTabState } from '../../shared/tabState/tabStateManager';
 import type { RulesTabState } from '../../shared/tabState/types';
@@ -99,6 +100,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
   // memoized identities (useOktaApi in particular memoizes on this callback).
   const handleError = useCallback((message: string) => setError(message || null), []);
 
+  const reducedMotion = useReducedMotion();
   const api = useOktaApi({ targetTabId: targetTabId ?? null, onResult: handleError });
   const impact = useRuleImpact(api.captureRuleImpact);
   const data = useRulesData({ targetTabId, onError: handleError, currentGroupId });
@@ -287,7 +289,10 @@ const RulesTab: React.FC<RulesTabProps> = ({
     log.debug('Navigating to rule:', activeRuleId);
     const ruleElement = document.querySelector(`[data-rule-id="${activeRuleId}"]`);
     if (ruleElement) {
-      ruleElement.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      ruleElement.scrollIntoView?.({
+        behavior: reducedMotion ? 'auto' : 'smooth',
+        block: 'center',
+      });
       const t = setTimeout(() => {
         onRuleSelected?.();
         setFocusRuleId(null);
@@ -296,7 +301,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
     } else {
       log.warn('Rule not found in DOM:', activeRuleId);
     }
-  }, [activeRuleId, rules, filteredRules, onRuleSelected]);
+  }, [activeRuleId, rules, filteredRules, onRuleSelected, reducedMotion]);
 
   return (
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>

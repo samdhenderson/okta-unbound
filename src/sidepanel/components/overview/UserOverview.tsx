@@ -154,9 +154,15 @@ const UserOverview: React.FC<UserOverviewProps> = ({
 
       {/* Quick Stats Grid */}
       <div className="grid grid-cols-2 gap-3">
-        <StatCard title="Total Groups" value={totalGroups} color="primary" icon="users" />
-        <StatCard title="Direct Assignments" value={directGroups} color="neutral" icon="hand" />
-        <StatCard title="Rule-Based" value={ruleBasedGroups} color="neutral" icon="bolt" />
+        <StatCard title="Total Groups" value={totalGroups} color="primary" icon="users" countUp />
+        <StatCard
+          title="Direct Assignments"
+          value={directGroups}
+          color="neutral"
+          icon="hand"
+          countUp
+        />
+        <StatCard title="Rule-Based" value={ruleBasedGroups} color="neutral" icon="bolt" countUp />
         <StatCard
           title="Status"
           value={userDetails?.status || 'Unknown'}

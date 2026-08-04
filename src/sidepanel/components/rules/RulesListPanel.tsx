@@ -4,7 +4,11 @@
  *
  * Renders a spinner while loading, an EmptyState when no rules are loaded or none
  * match the filters, otherwise the filtered {@link RuleCard} list (each wrapped in
- * a `data-rule-id` anchor for deep-link scrolling).
+ * a `data-rule-id` anchor for deep-link scrolling), staggered in via `.rise-in-stagger`.
+ *
+ * The list's shape (how many rows, how tall each is) isn't known ahead of a load,
+ * so the loading state stays a spinner rather than a `Skeleton` — unlike
+ * `AppsListPanel`/`PoliciesListPanel`, this panel doesn't go through `ScrollableList`.
  */
 import React from 'react';
 import RuleCard from '../RuleCard';
@@ -69,7 +73,7 @@ const RulesListPanel: React.FC<RulesListPanelProps> = ({
         description="No rules match your search or filter criteria"
       />
     ) : (
-      <div className="space-y-3">
+      <div className="space-y-3 rise-in-stagger">
         {filteredRules.map((rule) => (
           <div key={rule.id} data-rule-id={rule.id}>
             <RuleCard

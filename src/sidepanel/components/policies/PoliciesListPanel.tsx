@@ -2,15 +2,18 @@
  * @module sidepanel/components/policies/PoliciesListPanel
  * @description The Auth Policies tab's list region: loading, empty, and populated states.
  *
- * Wraps a {@link ScrollableList} of {@link PolicyCard}s and picks the right empty
- * state: "nothing loaded" (which also carries the admin-role caveat, since a `403`
- * on the policies endpoint is indistinguishable from an org with no policies) vs.
- * "nothing matches the search".
+ * Wraps a {@link ScrollableList} of {@link PolicyCard}s, staggered in via
+ * `.rise-in-stagger`, and picks the right empty state: "nothing loaded" (which
+ * also carries the admin-role caveat, since a `403` on the policies endpoint is
+ * indistinguishable from an org with no policies) vs. "nothing matches the
+ * search". The row shape is known ahead of a load, so the loading state is a
+ * {@link Skeleton} rather than the default spinner.
  */
 import React, { memo } from 'react';
 import PolicyCard from './PolicyCard';
 import ScrollableList from '../shared/ScrollableList';
 import EmptyState from '../shared/EmptyState';
+import Skeleton from '../shared/Skeleton';
 import type { OktaPolicyListItem, OktaPolicyRule } from '../../../shared/schemas/okta';
 
 interface PoliciesListPanelProps {
@@ -56,6 +59,7 @@ const PoliciesListPanel: React.FC<PoliciesListPanelProps> = memo(function Polici
       <ScrollableList
         loading={isLoading}
         loadingMessage="Loading auth policies…"
+        skeleton={<Skeleton variant="row" count={6} label="Loading auth policies" />}
         fillAvailable={false}
         testId="policies-list"
         emptyState={
@@ -70,9 +74,13 @@ const PoliciesListPanel: React.FC<PoliciesListPanelProps> = memo(function Polici
           )
         }
       >
-        {policies.map((policy) => (
-          <PolicyCard key={policy.id} policy={policy} loadRules={loadRules} />
-        ))}
+        {policies.length > 0 && (
+          <div className="space-y-3 rise-in-stagger">
+            {policies.map((policy) => (
+              <PolicyCard key={policy.id} policy={policy} loadRules={loadRules} />
+            ))}
+          </div>
+        )}
       </ScrollableList>
     </div>
   );

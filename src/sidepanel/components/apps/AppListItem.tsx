@@ -125,7 +125,7 @@ const AppListItem: React.FC<AppListItemProps> = memo(
                     size="md"
                   >
                     <svg
-                      className={`w-4 h-4 transition-transform duration-100 ${expanded ? 'rotate-90' : ''}`}
+                      className={`w-4 h-4 transition-transform duration-(--dur-instant) ${expanded ? 'rotate-90' : ''}`}
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -150,50 +150,59 @@ const AppListItem: React.FC<AppListItemProps> = memo(
           </div>
         </div>
 
-        {expanded && (
-          <div className="px-4 pb-4 pt-2 border-t border-neutral-100 space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-              <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
-                <div className="text-xs font-medium text-neutral-600 mb-0.5">Application ID</div>
-                <code className="text-xs font-mono text-neutral-900 break-all">{app.id}</code>
+        {/*
+          `.disclose` animates `grid-template-rows` between 0fr and 1fr, so the body
+          collapses to zero height with no JS measurement and stays mounted while
+          closed (held out of the tab order and accessible tree via `inert`) rather
+          than unmounting — `AssignmentCounts`' own `enabled={expanded}` gate is what
+          keeps its fetch from firing until the row is actually opened.
+        */}
+        <div className="disclose" data-open={expanded} inert={!expanded || undefined}>
+          <div>
+            <div className="px-4 pb-4 pt-2 border-t border-neutral-100 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
+                  <div className="text-xs font-medium text-neutral-600 mb-0.5">Application ID</div>
+                  <code className="text-xs font-mono text-neutral-900 break-all">{app.id}</code>
+                </div>
+
+                {app.signOnMode && (
+                  <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
+                    <div className="text-xs font-medium text-neutral-600 mb-0.5">Sign-on mode</div>
+                    <div className="text-xs text-neutral-900">{app.signOnMode}</div>
+                  </div>
+                )}
+
+                {app.created && (
+                  <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
+                    <div className="text-xs font-medium text-neutral-600 mb-0.5">Created</div>
+                    <div className="text-xs text-neutral-900">{formatDate(app.created)}</div>
+                  </div>
+                )}
+
+                {app.lastUpdated && (
+                  <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
+                    <div className="text-xs font-medium text-neutral-600 mb-0.5">Last updated</div>
+                    <div className="text-xs text-neutral-900">{formatDate(app.lastUpdated)}</div>
+                  </div>
+                )}
               </div>
 
-              {app.signOnMode && (
-                <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
-                  <div className="text-xs font-medium text-neutral-600 mb-0.5">Sign-on mode</div>
-                  <div className="text-xs text-neutral-900">{app.signOnMode}</div>
+              {fetchAssignmentCounts && (
+                <div className="space-y-1">
+                  <div className="text-xs font-medium text-neutral-600">Assignments</div>
+                  <AssignmentCounts
+                    appId={app.id}
+                    enabled={expanded}
+                    fetchAssignmentCounts={fetchAssignmentCounts}
+                  />
                 </div>
               )}
 
-              {app.created && (
-                <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
-                  <div className="text-xs font-medium text-neutral-600 mb-0.5">Created</div>
-                  <div className="text-xs text-neutral-900">{formatDate(app.created)}</div>
-                </div>
-              )}
-
-              {app.lastUpdated && (
-                <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
-                  <div className="text-xs font-medium text-neutral-600 mb-0.5">Last updated</div>
-                  <div className="text-xs text-neutral-900">{formatDate(app.lastUpdated)}</div>
-                </div>
-              )}
+              <OpenInOktaLink oktaOrigin={oktaOrigin} entityType="app" entityId={app.id} />
             </div>
-
-            {fetchAssignmentCounts && (
-              <div className="space-y-1">
-                <div className="text-xs font-medium text-neutral-600">Assignments</div>
-                <AssignmentCounts
-                  appId={app.id}
-                  enabled={expanded}
-                  fetchAssignmentCounts={fetchAssignmentCounts}
-                />
-              </div>
-            )}
-
-            <OpenInOktaLink oktaOrigin={oktaOrigin} entityType="app" entityId={app.id} />
           </div>
-        )}
+        </div>
       </div>
     );
   },

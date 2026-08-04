@@ -1,6 +1,10 @@
 /**
  * @module sidepanel/components/users/UserSearchResults
  * @description Clickable list of user search results with status badges.
+ *
+ * The row list uses `.rise-in-stagger` (a wrapper class, not a per-row index prop)
+ * so results feel like they land one after another rather than appearing as one
+ * block — see `tailwind.css` for the 24ms/child, 8-row-capped stagger.
  */
 import React from 'react';
 import type { OktaUser } from '../../../shared/types';
@@ -44,7 +48,7 @@ const UserSearchResults: React.FC<UserSearchResultsProps> = ({ results, onSelect
           {results.length} {results.length === 1 ? 'user' : 'users'}
         </span>
       </div>
-      <div className="space-y-3">
+      <div className="space-y-3 rise-in-stagger">
         {results.map((user) => (
           <div
             key={user.id}

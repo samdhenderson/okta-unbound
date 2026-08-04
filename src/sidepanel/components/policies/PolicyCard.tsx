@@ -86,7 +86,7 @@ const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
           onClick={toggleExpanded}
         >
           <svg
-            className={`h-4 w-4 transition-transform duration-100 ${isExpanded ? 'rotate-90' : ''}`}
+            className={`h-4 w-4 transition-transform duration-(--dur-instant) ${isExpanded ? 'rotate-90' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -96,6 +96,15 @@ const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
         </IconButton>
       </div>
 
+      {/*
+        Deliberately *not* the shared `.disclose` grid wrapper used elsewhere for
+        this same lazy-fetch-on-expand shape (`AppListItem`, `RuleCard`): disclose
+        keeps this subtree mounted (clipped + `inert`) while collapsed, and
+        `AuthPoliciesTab.test.tsx` asserts `queryByTestId('policy-rules-list')` is
+        absent immediately after collapsing — a `data-testid` lookup that, unlike
+        `queryByRole`, ignores `inert`/`aria-hidden`. Snaps open/closed instead;
+        the `useEntityQuery` cache below still means a re-expansion never re-fetches.
+      */}
       {isExpanded && (
         <div className="space-y-3 border-t border-neutral-100 bg-neutral-50 px-4 pb-4 pt-3">
           <div className="text-xs font-semibold uppercase tracking-wider text-neutral-600">

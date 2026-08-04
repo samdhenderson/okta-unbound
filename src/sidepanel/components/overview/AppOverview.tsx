@@ -92,12 +92,14 @@ const AppOverview: React.FC<AppOverviewProps> = ({ appId, appName, targetTabId, 
           value={countValue(counts?.users)}
           color="primary"
           icon="users"
+          countUp
         />
         <StatCard
           title="Assigned Groups"
           value={countValue(counts?.groups)}
           color="neutral"
           icon="building"
+          countUp
         />
       </div>
 

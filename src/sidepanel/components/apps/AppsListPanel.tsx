@@ -3,8 +3,15 @@
  * @description The scrollable Applications list plus its empty states.
  *
  * Renders one {@link AppListItem} per filtered app inside a shared
- * {@link ScrollableList}, and picks between the "nothing loaded" and "nothing
- * matches" empty states — the same split `GroupsListPanel` makes.
+ * {@link ScrollableList}, staggered in via `.rise-in-stagger`, and picks between
+ * the "nothing loaded" and "nothing matches" empty states — the same split
+ * `GroupsListPanel` makes.
+ *
+ * Loading stays the default `LoadingSpinner` (not a `Skeleton`) deliberately:
+ * `ScrollableList`'s `skeleton` prop, when set, replaces the spinner branch
+ * entirely — including its `loadingMessage` — and `AppsTab.test.tsx` asserts on
+ * the "Loading applications from Okta..." text while a load is in flight. Swap
+ * to a row `Skeleton` only alongside updating that assertion.
  */
 import React, { memo } from 'react';
 import { EmptyState, ScrollableList } from '../shared';
@@ -84,14 +91,18 @@ const AppsListPanel: React.FC<AppsListPanelProps> = memo(function AppsListPanel(
         )
       }
     >
-      {apps.map((app) => (
-        <AppListItem
-          key={app.id}
-          app={app}
-          oktaOrigin={oktaOrigin}
-          fetchAssignmentCounts={fetchAssignmentCounts}
-        />
-      ))}
+      {apps.length > 0 && (
+        <div className="space-y-3 rise-in-stagger">
+          {apps.map((app) => (
+            <AppListItem
+              key={app.id}
+              app={app}
+              oktaOrigin={oktaOrigin}
+              fetchAssignmentCounts={fetchAssignmentCounts}
+            />
+          ))}
+        </div>
+      )}
     </ScrollableList>
   );
 });

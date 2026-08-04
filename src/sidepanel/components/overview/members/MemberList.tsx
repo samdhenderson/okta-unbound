@@ -4,17 +4,28 @@
  *
  * Mounts only the first `visibleCount` rows and grows via a "Load more" footer and
  * an IntersectionObserver sentinel, capping DOM size for very large groups.
+ *
+ * Rows enter through the shared `.rise-in-stagger` wrapper: the first eight step in
+ * 24ms apart and the rest follow together. The cap is pure CSS (`:nth-child`), so
+ * {@link MemberRow} needs no index prop and its memo comparator is untouched. A
+ * reload swaps the rows for `Skeleton variant="row"` placeholders — the shape is
+ * known, so there is nothing for a spinner to explain.
  */
 import React, { useEffect, useRef } from 'react';
 import type { OktaUser, MemberMfaResult } from '../../../../shared/types';
 import ScrollableList from '../../shared/ScrollableList';
-import { Button } from '../../shared';
+import { Button, Skeleton } from '../../shared';
 import MemberRow from './MemberRow';
 
 /** Props for {@link MemberList}. */
 interface MemberListProps {
   /** Members to display, already filtered and sorted by the caller. */
   members: OktaUser[];
+  /**
+   * True while the member set is being re-fetched, replacing the rows with
+   * skeleton placeholders. Defaults to `false`.
+   */
+  loading?: boolean;
   /** Per-member MFA scan results, or null before a scan has run. */
   mfaResults: Map<string, MemberMfaResult> | null;
   /** True once a scan completed, so rows can render "No MFA" for 0-factor users. */
@@ -37,6 +48,7 @@ const PAGE = 50;
  */
 const MemberList: React.FC<MemberListProps> = ({
   members,
+  loading = false,
   mfaResults,
   mfaScanned,
   visibleCount,
@@ -62,7 +74,7 @@ const MemberList: React.FC<MemberListProps> = ({
     return () => observer.disconnect();
   }, [hasMore, onLoadMore]);
 
-  if (members.length === 0) {
+  if (!loading && members.length === 0) {
     return (
       <div className="text-center py-10 text-sm text-neutral-500">
         No members match the current search and filters.
@@ -72,16 +84,26 @@ const MemberList: React.FC<MemberListProps> = ({
 
   return (
     <div className="flex flex-col">
-      <ScrollableList maxHeight="50vh" fillAvailable={false}>
-        {visible.map((user) => (
-          <MemberRow
-            key={user.id}
-            user={user}
-            mfa={mfaResults?.get(user.id)}
-            mfaScanned={mfaScanned}
-            oktaOrigin={oktaOrigin}
-          />
-        ))}
+      <ScrollableList
+        maxHeight="50vh"
+        fillAvailable={false}
+        loading={loading}
+        skeleton={<Skeleton variant="row" count={6} label="Reloading members" />}
+      >
+        {/* One stagger wrapper around the rows: `.rise-in-stagger > *` drives the
+            entrance, so newly paged-in rows animate and already-mounted ones stay
+            put. The sentinel stays outside it — it must never be delayed. */}
+        <div className="space-y-3 rise-in-stagger">
+          {visible.map((user) => (
+            <MemberRow
+              key={user.id}
+              user={user}
+              mfa={mfaResults?.get(user.id)}
+              mfaScanned={mfaScanned}
+              oktaOrigin={oktaOrigin}
+            />
+          ))}
+        </div>
         {hasMore && <div ref={sentinelRef} className="h-px" aria-hidden="true" />}
       </ScrollableList>
 

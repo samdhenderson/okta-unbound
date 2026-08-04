@@ -86,6 +86,13 @@ const UsersTab: React.FC<UsersTabProps> = ({
   // Detected-user banner is hidden per id once dismissed (the tab stays pinned to
   // the user you explicitly selected; admin navigation never swaps it).
   const [dismissedDetectedId, setDismissedDetectedId] = useState<string | null>(null);
+  // Id of the group most recently added via the Add-to-Group modal, so its row in
+  // GroupMembershipsList can play a one-shot success flash (`animate-affirm-flash`)
+  // instead of the confirmation only showing in the banner above the fold.
+  // `pendingAddGroupIdRef` is set synchronously at confirm-click time (before the
+  // modal's own state resets), and read once the add resolves successfully.
+  const [recentlyAddedGroupId, setRecentlyAddedGroupId] = useState<string | null>(null);
+  const pendingAddGroupIdRef = useRef<string | null>(null);
 
   // Membership loading + attribution lives in the shared hook (also used by
   // UserOverview / user comparison). The orchestrator keeps owning the merged
@@ -113,6 +120,7 @@ const UsersTab: React.FC<UsersTabProps> = ({
     async (user: OktaUser) => {
       if (!targetTabId) return;
 
+      setRecentlyAddedGroupId(null);
       setSelectedUser(user);
       await loadMemberships(user);
     },
@@ -120,14 +128,30 @@ const UsersTab: React.FC<UsersTabProps> = ({
   );
 
   // After adding the user to a group their memberships have changed — drop the
-  // cached analysis so the reload reflects the new group.
+  // cached analysis so the reload reflects the new group, then flash the row for
+  // the group that was just added (captured in `pendingAddGroupIdRef` at
+  // confirm-click time, before the Add-to-Group modal resets its own state).
   const handleUserAddedToGroup = useCallback(
     async (user: OktaUser) => {
       invalidate(['userMemberships', user.id]);
       await handleSelectUser(user);
+      setRecentlyAddedGroupId(pendingAddGroupIdRef.current);
     },
     [handleSelectUser],
   );
+
+  // `animate-affirm-flash`'s final keyframe holds `border-color: transparent`
+  // (fill-mode `both`), which would permanently override the row's normal border
+  // once applied — clear the flash after its one-shot duration so the class comes
+  // back off and the row's ordinary border takes over again.
+  useEffect(() => {
+    if (!recentlyAddedGroupId) return;
+    // Mirrors `--dur-tell` (500ms), the `animate-affirm-flash` duration in
+    // tailwind.css — keep the two in step if that token moves.
+    const AFFIRM_FLASH_MS = 500;
+    const timer = window.setTimeout(() => setRecentlyAddedGroupId(null), AFFIRM_FLASH_MS);
+    return () => window.clearTimeout(timer);
+  }, [recentlyAddedGroupId]);
 
   // Compare-modal refresh: after a group is copied onto the selected user, drop the
   // cached analysis and reload their memberships in place. Crucially this does NOT
@@ -186,6 +210,7 @@ const UsersTab: React.FC<UsersTabProps> = ({
     setSearchQuery('');
     setSearchResults([]);
     setSelectedUser(null);
+    setRecentlyAddedGroupId(null);
     clearMemberships();
     setError(null);
     setResultMessage(null);
@@ -234,6 +259,14 @@ const UsersTab: React.FC<UsersTabProps> = ({
     onAdded: handleUserAddedToGroup,
     enabled: isActive,
   });
+
+  // Captures the group being confirmed BEFORE the modal resets its own
+  // `selectedGroup` state, so `handleUserAddedToGroup` (fired only on success)
+  // knows which row to flash even after the modal has already closed.
+  const handleConfirmAddToGroupWithFlash = useCallback(() => {
+    pendingAddGroupIdRef.current = selectedGroup?.id ?? null;
+    return handleConfirmAddToGroup();
+  }, [selectedGroup, handleConfirmAddToGroup]);
 
   return (
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
@@ -315,6 +348,7 @@ const UsersTab: React.FC<UsersTabProps> = ({
               currentGroupId={currentGroupId}
               oktaOrigin={oktaOrigin}
               onNavigateToRule={onNavigateToRule}
+              recentlyAddedGroupId={recentlyAddedGroupId}
               actions={
                 <>
                   <Button
@@ -378,7 +412,7 @@ const UsersTab: React.FC<UsersTabProps> = ({
         onClearSelectedGroup={clearSelectedGroup}
         isAddingToGroup={isAddingToGroup}
         onClose={handleCloseAddToGroupModal}
-        onConfirm={handleConfirmAddToGroup}
+        onConfirm={handleConfirmAddToGroupWithFlash}
       />
     </div>
   );
