@@ -4,18 +4,29 @@
  * persisted in `chrome.storage.local`.
  *
  * A collection captures the current selection so it can be re-selected later or
- * exported. Storage is local-only (no Okta API involved).
+ * exported. Storage is local-only (no Okta API involved). Deleting a collection
+ * slides its row out (`.animate-collapse-out`) before closing the gap, rather than
+ * removing it from the array immediately.
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button, IconButton, Input } from '../shared';
 import type { GroupCollection, GroupSummary } from '../../../shared/types';
 import { createLogger } from '../../../shared/utils/logger';
 import { formatDateShort } from '../../../shared/utils/dateFormat';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const log = createLogger('GroupCollections');
 
 /** `chrome.storage.local` key under which the collections array is persisted. */
 const COLLECTIONS_STORAGE_KEY = 'okta_unbound_group_collections';
+
+/**
+ * Upper bound on the delete exit hold, in milliseconds. Mirrors `--dur-quick`
+ * (140ms), the duration of `animate-collapse-out` in `tailwind.css` — keep the two
+ * in step if that token moves. Only a fallback: the hold is normally released by
+ * the row's own `animationend`.
+ */
+const DELETE_EXIT_MS = 140;
 
 interface GroupCollectionsProps {
   /** Currently selected group ids — the payload saved into a new/updated collection. */
@@ -46,6 +57,13 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
   const [newDescription, setNewDescription] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  // Id of the collection currently sliding out on delete, or null. Deletion is a
+  // JS mount-hold (mirrors `Modal`'s exit pattern): the row stays in the list
+  // wearing `.animate-collapse-out` until the animation ends (or the fallback
+  // timeout fires), then the id is actually removed — so the row slides away and
+  // the list closes the gap behind it, rather than snapping upward under the cursor.
+  const [exitingId, setExitingId] = useState<string | null>(null);
+  const reducedMotion = useReducedMotion();
 
   // Load collections from Chrome storage
   useEffect(() => {
@@ -83,12 +101,39 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
     setShowCreate(false);
   }, [newName, newDescription, selectedGroupIds, collections, saveCollections]);
 
+  // Actually removes the collection — called once the exit animation has run its
+  // course (or immediately, under reduced motion). Reads `collections` via the
+  // functional updater so it stays correct even if the exit hold outlives a
+  // create/rename that changed the array in the meantime.
+  const commitDelete = useCallback((id: string) => {
+    setCollections((prev) => {
+      const next = prev.filter((c) => c.id !== id);
+      chrome.storage.local.set({ [COLLECTIONS_STORAGE_KEY]: JSON.stringify(next) });
+      return next;
+    });
+    setExitingId((prev) => (prev === id ? null : prev));
+  }, []);
+
   const handleDelete = useCallback(
     (id: string) => {
-      saveCollections(collections.filter((c) => c.id !== id));
+      if (reducedMotion) {
+        commitDelete(id);
+        return;
+      }
+      setExitingId(id);
     },
-    [collections, saveCollections],
+    [reducedMotion, commitDelete],
   );
+
+  // Fallback release for the exit hold: the row's own `animationend` normally
+  // fires first, but this guarantees the delete still completes if the row is
+  // unmounted some other way or the animation never dispatches (jsdom, tests).
+  useEffect(() => {
+    if (!exitingId) return;
+    const id = exitingId;
+    const timer = window.setTimeout(() => commitDelete(id), DELETE_EXIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [exitingId, commitDelete]);
 
   const handleRename = useCallback(
     (id: string) => {
@@ -209,7 +254,15 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
         )}
 
         {collections.map((col) => (
-          <div key={col.id} className="p-3 border-b border-neutral-100 last:border-b-0">
+          <div
+            key={col.id}
+            className={`p-3 border-b border-neutral-100 last:border-b-0 ${
+              col.id === exitingId ? 'pointer-events-none animate-collapse-out' : ''
+            }`}
+            onAnimationEnd={() => {
+              if (col.id === exitingId) commitDelete(col.id);
+            }}
+          >
             {editingId === col.id ? (
               <div className="flex gap-2">
                 <Input

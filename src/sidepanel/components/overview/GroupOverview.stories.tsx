@@ -70,7 +70,11 @@ export const Empty: Story = {
   },
 };
 
-/** Members are still loading — full-panel spinner. */
+/**
+ * Members are still loading. The eventual layout is known exactly — a 2×2 stat grid
+ * over a member list — so it is drawn as a skeleton rather than a spinner, and the
+ * real content lands in place instead of pushing the page around.
+ */
 export const Loading: Story = {
   args: { groupId: 'group-loading' },
   beforeEach: () => {

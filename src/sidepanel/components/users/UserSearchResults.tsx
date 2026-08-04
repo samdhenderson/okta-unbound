@@ -1,10 +1,15 @@
 /**
  * @module sidepanel/components/users/UserSearchResults
  * @description Clickable list of user search results with status badges.
+ *
+ * The row list uses `.rise-in-stagger` (a wrapper class, not a per-row index prop)
+ * so results feel like they land one after another rather than appearing as one
+ * block — see `hooks/useStaggerReveal` for the scroll-triggered cascade.
  */
-import React from 'react';
+import React, { useRef } from 'react';
+import { useStaggerReveal } from '../../hooks/useStaggerReveal';
 import type { OktaUser } from '../../../shared/types';
-import { userStatusVariant } from '../shared';
+import { userStatusVariant, type UserStatusVariant } from '../shared';
 
 /** Props for {@link UserSearchResults}. */
 interface UserSearchResultsProps {
@@ -14,36 +19,49 @@ interface UserSearchResultsProps {
   onSelectUser: (user: OktaUser) => void;
 }
 
-/** Maps an Okta user status to its badge class via the shared variant map (ADR-0002). */
-const getStatusBadgeClass = (status: string) => `badge badge-${userStatusVariant(status)}`;
+/** Per-variant badge color classes (token palette, keyed by the shared variant map). */
+const VARIANT_CLASSES: Record<UserStatusVariant, string> = {
+  success: 'bg-success-light text-success-text',
+  info: 'bg-primary-light text-primary-text',
+  warning: 'bg-warning-light text-warning-text',
+  danger: 'bg-danger-light text-danger-text',
+  neutral: 'bg-neutral-100 text-neutral-700',
+};
+
+/** Maps an Okta user status to its badge classes via the shared variant map (ADR-0002). */
+const getStatusBadgeClass = (status: string) =>
+  `px-2 py-0.5 rounded-md text-xs font-medium ${VARIANT_CLASSES[userStatusVariant(status)]}`;
 
 /**
  * Displays a list of user search results as clickable cards; renders nothing when
  * there are no results.
  */
 const UserSearchResults: React.FC<UserSearchResultsProps> = ({ results, onSelectUser }) => {
+  const staggerRef = useRef<HTMLDivElement>(null);
+  useStaggerReveal(staggerRef);
+
   if (results.length === 0) {
     return null;
   }
 
   return (
-    <div className="space-y-4 animate-in slide-in-from-top-4 duration-500">
+    <div className="space-y-4 animate-rise-in">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-neutral-900">Search Results</h3>
         <span className="px-3 py-1 bg-neutral-100 text-neutral-700 text-sm font-medium rounded-md">
           {results.length} {results.length === 1 ? 'user' : 'users'}
         </span>
       </div>
-      <div className="space-y-3">
+      <div ref={staggerRef} className="space-y-3 rise-in-stagger">
         {results.map((user) => (
           <div
             key={user.id}
-            className="group bg-white rounded-md border border-neutral-200 p-5 cursor-pointer transition-all duration-100 hover:border-neutral-500"
+            className="group bg-white rounded-md border border-neutral-200 p-5 cursor-pointer transition-all duration-(--dur-instant) hover:border-neutral-500"
             onClick={() => onSelectUser(user)}
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
-                <h4 className="font-semibold text-neutral-900 mb-1 group-hover:text-primary-text transition-colors duration-100">
+                <h4 className="font-semibold text-neutral-900 mb-1 group-hover:text-primary-text transition-colors duration-(--dur-instant)">
                   {user.profile.firstName} {user.profile.lastName}
                 </h4>
                 <p className="text-sm text-neutral-600 mb-1">{user.profile.email}</p>

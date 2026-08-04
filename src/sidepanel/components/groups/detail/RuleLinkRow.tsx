@@ -61,7 +61,7 @@ const RuleLinkRow: React.FC<RuleLinkRowProps> = ({ name, trailing, detail, onSel
       type="button"
       onClick={onSelect}
       aria-label={`Open rule ${name} in the Rules tab`}
-      className={`${rowClasses} border-neutral-200 text-left transition-colors duration-100 hover:border-primary hover:bg-primary-light focus:outline-2 focus:outline-offset-2 focus:outline-primary`}
+      className={`${rowClasses} border-neutral-200 text-left transition-colors duration-(--dur-instant) hover:border-primary hover:bg-primary-light focus:outline-2 focus:outline-offset-2 focus:outline-primary`}
     >
       {body}
     </button>

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import GroupCollections from './GroupCollections';
 import type { GroupSummary } from '../../../shared/types';
 import { mockGroup } from '../../../test/mocks/handlers';
@@ -85,4 +85,23 @@ export const EmptySelection: Story = {
 /** A large selection, exercising the "N groups will be saved" count in the create form. */
 export const ManyGroupsSelected: Story = {
   args: { selectedGroupIds: new Set(sampleGroups.map((g) => g.id)) },
+};
+
+/**
+ * Saves a collection, then deletes it. The row plays `.animate-collapse-out` on
+ * delete (a 140ms slide, off by default in the explorer's motion-off stories — see
+ * `docs/component-explorer.md`), then is actually removed once the animation ends.
+ */
+export const DeletesACollection: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.click(canvas.getByRole('button', { name: 'Save' }));
+    await userEvent.type(canvas.getByPlaceholderText('Collection name...'), 'Q3 audit');
+    await userEvent.click(canvas.getByRole('button', { name: 'Create' }));
+    await waitFor(() => expect(canvas.getByText('Q3 audit')).toBeInTheDocument());
+
+    await userEvent.click(canvas.getByRole('button', { name: 'Delete collection' }));
+    await waitFor(() => expect(canvas.queryByText('Q3 audit')).not.toBeInTheDocument());
+  },
 };

@@ -86,7 +86,7 @@ const MemberFilterPanel: React.FC<MemberFilterPanelProps> = ({
   const realStatusRows = statusRows.filter((r) => r.count > 0);
 
   return (
-    <div className="p-4 bg-white rounded-md border border-neutral-200 space-y-4 animate-in slide-in-from-top-2 duration-100">
+    <div className="p-4 bg-white rounded-md border border-neutral-200 space-y-4 animate-rise-in">
       {/* Active filter chips */}
       <ActiveFilterChips filters={filters} onRemove={onRemoveFilter} onClearAll={onClearAll} />
 

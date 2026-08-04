@@ -3,7 +3,7 @@
  * @description Controlled search input for user search, with inline spinner and clear button.
  */
 import React, { useRef } from 'react';
-import { IconButton } from '../shared';
+import { IconButton, LoadingSpinner } from '../shared';
 
 /** Props for {@link UserSearchBar}. */
 interface UserSearchBarProps {
@@ -64,7 +64,7 @@ const UserSearchBar: React.FC<UserSearchBarProps> = ({
       <input
         ref={inputRef}
         type="text"
-        className="w-full pl-11 pr-12 py-3 bg-white border border-neutral-200 rounded-md text-sm placeholder-neutral-400 focus:outline-none focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary transition-all duration-100"
+        className="w-full pl-11 pr-12 py-3 bg-white border border-neutral-200 rounded-md text-sm placeholder-neutral-400 focus:outline-none focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary transition-all duration-(--dur-instant)"
         placeholder={placeholder}
         value={searchQuery}
         onChange={(e) => onSearchChange(e.target.value)}
@@ -89,7 +89,7 @@ const UserSearchBar: React.FC<UserSearchBarProps> = ({
       )}
       {isSearching && (
         <div className="absolute inset-y-0 right-12 flex items-center pr-3">
-          <div className="w-4 h-4 border-2 border-neutral-200 border-t-primary rounded-full animate-spin" />
+          <LoadingSpinner size="sm" />
         </div>
       )}
     </div>

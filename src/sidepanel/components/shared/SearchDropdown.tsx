@@ -7,6 +7,7 @@
  * the result type `T`; `renderResult` / `renderSelected` project each item to UI.
  */
 import React, { useRef } from 'react';
+import LoadingSpinner from './LoadingSpinner';
 
 interface SearchDropdownProps<T> {
   placeholder?: string;
@@ -143,7 +144,7 @@ function SearchDropdown<T>({
         <input
           ref={inputRef}
           type="text"
-          className="w-full pl-10 pr-10 py-2.5 bg-white border border-neutral-200 rounded-md text-sm placeholder-neutral-400 focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary transition-all duration-100 disabled:bg-neutral-100 disabled:cursor-not-allowed"
+          className="w-full pl-10 pr-10 py-2.5 bg-white border border-neutral-200 rounded-md text-sm placeholder-neutral-400 focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary transition-all duration-(--dur-instant) disabled:bg-neutral-100 disabled:cursor-not-allowed"
           placeholder={placeholder}
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
@@ -153,7 +154,7 @@ function SearchDropdown<T>({
         {/* Loading spinner */}
         {isSearching && (
           <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-            <div className="w-4 h-4 border-2 border-neutral-200 border-t-primary rounded-full animate-spin" />
+            <LoadingSpinner size="sm" />
           </div>
         )}
 

@@ -9,6 +9,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Modal from '../shared/Modal';
 import Button from '../shared/Button';
+import LoadingSpinner from '../shared/LoadingSpinner';
 import { generateCSV, downloadCSV, getDateForFilename } from '../../../shared/utils/csvUtils';
 import type { GroupSummary, GroupComparisonResult, OktaUser } from '../../../shared/types';
 
@@ -127,7 +128,9 @@ const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
     >
       {loading && (
         <div className="text-center py-8 space-y-3">
-          <div className="w-8 h-8 border-2 border-neutral-200 border-t-primary rounded-full animate-spin mx-auto" />
+          <div className="flex justify-center">
+            <LoadingSpinner size="md" />
+          </div>
           <p className="text-sm text-neutral-600">{progress || 'Loading group members...'}</p>
         </div>
       )}
@@ -191,7 +194,7 @@ const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
                   {/* Overlap bar */}
                   <div className="mt-2 h-1.5 bg-white/50 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-primary rounded-full transition-all duration-300"
+                      className="h-full bg-primary rounded-full transition-all duration-(--dur-move)"
                       style={{ width: `${overlapPct}%` }}
                     />
                   </div>

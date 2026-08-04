@@ -44,6 +44,13 @@ type FactorMode = 'off' | 'has' | 'missing';
 interface MemberExplorerProps {
   /** The group's full member set (the explorer filters/sorts locally). */
   members: OktaUser[];
+  /**
+   * True while the member set is being re-fetched behind an already-rendered
+   * explorer (after a bulk removal, or a retry). The rows below are stale, so the
+   * list swaps to skeleton placeholders rather than showing figures that are about
+   * to change. Defaults to `false`.
+   */
+  isReloading?: boolean;
   /** Per-member MFA scan results, or null before a scan has run. */
   mfaResults: Map<string, MemberMfaResult> | null;
   /** Current MFA scan lifecycle status. */
@@ -67,6 +74,7 @@ const PAGE = 50;
  */
 const MemberExplorer: React.FC<MemberExplorerProps> = ({
   members,
+  isReloading = false,
   mfaResults,
   scanStatus,
   onRunScan,
@@ -210,7 +218,7 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
         <button
           type="button"
           onClick={() => setShowFilters((prev) => !prev)}
-          className={`px-4 py-2 rounded-md border text-sm font-medium transition-all duration-100 flex items-center gap-2 ${
+          className={`px-4 py-2 rounded-md border text-sm font-medium transition-all duration-(--dur-instant) flex items-center gap-2 ${
             showFilters || activeFilterCount > 0
               ? 'bg-primary-light border-primary text-primary-text'
               : 'bg-white border-neutral-200 text-neutral-700 hover:border-neutral-400'
@@ -293,6 +301,7 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
         </div>
         <MemberList
           members={sorted}
+          loading={isReloading}
           mfaResults={mfaResults}
           mfaScanned={mfaScanned}
           visibleCount={visibleCount}

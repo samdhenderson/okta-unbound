@@ -2,9 +2,10 @@
  * Tests for useViewStack — the generic push/pop sub-navigation stack.
  *
  * Pins the stack semantics (push/pop/popTo/reset, including popping an empty
- * stack), the breadcrumb trail's shape at every depth, and the focus contract it
- * borrows from `Modal`: record the trigger on push, move focus into the pushed
- * view, restore it to the trigger on pop — with no focus trap.
+ * stack), the breadcrumb trail's shape at every depth, the reported transition
+ * direction consumers animate from, and the focus contract it borrows from `Modal`:
+ * record the trigger on push, move focus into the pushed view, restore it to the
+ * trigger on pop — with no focus trap.
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen, act, renderHook } from '@testing-library/react';
@@ -124,6 +125,50 @@ describe('useViewStack', () => {
       expect(result.current.depth).toBe(0);
       expect(result.current.isRoot).toBe(true);
       expect(result.current.currentEntry).toBeUndefined();
+    });
+  });
+
+  describe('transition direction', () => {
+    it('is null before the first navigation, so the initial render never animates', () => {
+      const { result } = renderStack();
+
+      expect(result.current.transition).toBeNull();
+    });
+
+    it('reports push and pop, and commits the direction with the entries', () => {
+      const { result } = renderStack();
+
+      act(() => result.current.push(ENGINEERING));
+      expect(result.current.transition).toBe('push');
+      // Same commit: the arriving view and its entrance class land together.
+      expect(result.current.depth).toBe(1);
+
+      act(() => result.current.pop());
+      expect(result.current.transition).toBe('pop');
+      expect(result.current.depth).toBe(0);
+    });
+
+    it('reports pop for popTo and reset', () => {
+      const { result } = renderStack();
+
+      act(() => result.current.push(ENGINEERING));
+      act(() => result.current.push(PLATFORM));
+      act(() => result.current.popTo(1));
+      expect(result.current.transition).toBe('pop');
+
+      act(() => result.current.push(ON_CALL));
+      act(() => result.current.reset());
+      expect(result.current.transition).toBe('pop');
+    });
+
+    it('stays null when a pop is a no-op at the root', () => {
+      const { result } = renderStack();
+
+      act(() => result.current.pop());
+      act(() => result.current.popTo(3));
+      act(() => result.current.reset());
+
+      expect(result.current.transition).toBeNull();
     });
   });
 

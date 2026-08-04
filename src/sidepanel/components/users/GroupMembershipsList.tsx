@@ -7,6 +7,11 @@
  * plus its condition expression and an optional deep link to the Rules tab. The
  * card header exposes an `actions` slot for caller-supplied controls (e.g. the
  * "Add to Group" button in UsersTab).
+ *
+ * A caller can mark one row as the freshly-added group (e.g. right after
+ * UsersTab's "Add to Group" flow succeeds) via `recentlyAddedGroupId`; that row
+ * plays a one-shot `animate-affirm-flash` so the confirmation lands on the group
+ * that changed rather than only in a banner above the fold.
  */
 import React from 'react';
 import { Button, IconButton, LoadingSpinner } from '../shared';
@@ -27,6 +32,13 @@ interface GroupMembershipsListProps {
   onNavigateToRule?: (ruleId: string) => void;
   /** Caller-supplied header controls, rendered on the right of the title row. */
   actions?: React.ReactNode;
+  /**
+   * Id of a group that was just successfully added this session; its row plays a
+   * one-shot `animate-affirm-flash` (success background/border fading to
+   * transparent) instead of the confirmation only showing in a banner. Absent or
+   * non-matching ids render no flash.
+   */
+  recentlyAddedGroupId?: string | null;
 }
 
 /** Maps a membership type to its Tailwind badge class (rule-based, direct, or fallback). */
@@ -52,6 +64,7 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
   oktaOrigin,
   onNavigateToRule,
   actions,
+  recentlyAddedGroupId,
 }) => {
   const highlightCurrentGroup = (groupId: string) => {
     return currentGroupId && groupId === currentGroupId;
@@ -78,12 +91,13 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
             <div
               key={membership.group.id}
               className={`
-                rounded-md border p-4 transition-all duration-100
+                rounded-md border p-4 transition-all duration-(--dur-instant)
                 ${
                   highlightCurrentGroup(membership.group.id)
                     ? 'border-primary bg-primary-light ring-1 ring-primary/20'
                     : 'border-neutral-200 bg-white hover:border-neutral-500'
                 }
+                ${membership.group.id === recentlyAddedGroupId ? 'animate-affirm-flash' : ''}
               `}
             >
               <div className="flex items-start justify-between gap-4 mb-3">

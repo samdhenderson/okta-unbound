@@ -214,7 +214,7 @@ const ContextBar: React.FC<ContextBarProps> = ({
                   ? 'Pin this context while you cross-reference another page'
                   : 'Navigate to a group or user page to pin it'
             }
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed ${
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors duration-(--dur-instant) disabled:opacity-40 disabled:cursor-not-allowed ${
               isPinned
                 ? 'bg-primary text-white hover:bg-primary-dark'
                 : 'bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-50 hover:border-neutral-500'

@@ -1,3 +1,5 @@
+@import 'tailwindcss';
+
 @theme {
   /* Odyssey Design System - Color Tokens */
   --color-primary: #546be7;
@@ -41,7 +43,151 @@
   --font-mono: 'Roboto Mono', SFMono-Regular, Consolas, 'Liberation Mono', monospace;
 }
 
-@import 'tailwindcss';
+/*
+ * Motion scale — the single source of truth for durations and easings across the
+ * side panel. Never write a raw `ms` or `cubic-bezier()` outside this file; add a
+ * token here instead (sibling of the "no raw hex" color rule).
+ *
+ * `--dur-*` sits in no Tailwind theme namespace and generates no utilities on its
+ * own, so it would normally be tree-shaken out of the build; `static` forces it to
+ * always emit so the custom properties exist for `@layer components` rules and the
+ * `duration-(--dur-*)` arbitrary-value shorthand to consume.
+ */
+@theme static {
+  /* Durations */
+  --dur-instant: 80ms; /* colour / opacity / focus rings / border shifts */
+  --dur-quick: 140ms; /* small transforms — chevrons, pills, modal exit */
+  --dur-move: 220ms; /* things arriving or leaving — rows, modal enter, popovers */
+  --dur-travel: 320ms; /* panel-crossing — drawer, view push/pop */
+  --dur-tell: 500ms; /* deliberately noticeable — count-up, success flash, progress */
+
+  /* Easings */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1); /* the workhorse */
+  --ease-entrance: cubic-bezier(0, 0, 0, 1); /* arriving */
+  --ease-exit: cubic-bezier(0.3, 0, 1, 1); /* leaving — one step faster than entrance */
+  --ease-affirm: cubic-bezier(
+    0.2,
+    1.3,
+    0.4,
+    1
+  ); /* confirmation only — the one curve that overshoots */
+
+  /* Keyframe-driven animation primitives */
+  --animate-rise-in: rise-in var(--dur-move) var(--ease-entrance) both;
+  --animate-collapse-out: collapse-out var(--dur-quick) var(--ease-exit) both;
+  --animate-affirm-flash: affirm-flash var(--dur-tell) var(--ease-standard) both;
+  --animate-overlay-in: overlay-in var(--dur-move) var(--ease-entrance) both;
+  --animate-overlay-out: overlay-out var(--dur-quick) var(--ease-exit) both;
+  --animate-panel-in: panel-in var(--dur-move) var(--ease-entrance) both;
+  --animate-panel-out: panel-out var(--dur-quick) var(--ease-exit) both;
+  --animate-push-in: push-in var(--dur-travel) var(--ease-standard) both;
+  --animate-pop-in: pop-in var(--dur-travel) var(--ease-standard) both;
+  --animate-skeleton-sweep: skeleton-sweep 1.4s linear infinite;
+
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes collapse-out {
+    from {
+      opacity: 1;
+      transform: none;
+    }
+    to {
+      opacity: 0;
+      transform: translateX(12px);
+    }
+  }
+
+  @keyframes affirm-flash {
+    from {
+      background-color: var(--color-success-light);
+      border-color: var(--color-success);
+    }
+    to {
+      background-color: transparent;
+      border-color: transparent;
+    }
+  }
+
+  @keyframes overlay-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes overlay-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes panel-in {
+    from {
+      opacity: 0;
+      transform: scale(0.97) translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes panel-out {
+    from {
+      opacity: 1;
+      transform: none;
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.97) translateY(8px);
+    }
+  }
+
+  @keyframes push-in {
+    from {
+      opacity: 0;
+      transform: translateX(16%);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: translateX(-16%);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes skeleton-sweep {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+}
 
 @layer components {
   .tab-content {
@@ -50,7 +196,7 @@
 
   .tab-content.active {
     @apply block;
-    animation: fadeIn 0.2s ease-out;
+    animation: fadeIn var(--dur-quick) var(--ease-entrance);
   }
 
   @keyframes fadeIn {
@@ -79,4 +225,136 @@
   .scrollable-list::-webkit-scrollbar-thumb:hover {
     background: var(--color-neutral-500);
   }
+
+  /*
+   * Disclosure wrapper — animates height with no JS measurement. The wrapper
+   * transitions its `grid-template-rows` between `1fr` (open) and `0fr`
+   * (`data-open="false"`); the single child must have `overflow: hidden` and
+   * `min-height: 0` so a 0fr row can actually collapse it to zero height
+   * instead of clamping at its content's intrinsic size.
+   */
+  .disclose {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows var(--dur-move) var(--ease-standard);
+  }
+
+  .disclose[data-open='false'] {
+    grid-template-rows: 0fr;
+  }
+
+  .disclose > * {
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  /*
+   * Staggered rise-in for list rows. Applied via a wrapper class rather than a
+   * per-row index prop so the (memoised, hand-comparator) row components stay
+   * untouched. Steps 24ms per child, capped at the 8th — children beyond that
+   * animate together with no added delay.
+   */
+  .rise-in-stagger > * {
+    animation: var(--animate-rise-in);
+  }
+
+  .rise-in-stagger > *:nth-child(1) {
+    animation-delay: 0ms;
+  }
+
+  .rise-in-stagger > *:nth-child(2) {
+    animation-delay: 24ms;
+  }
+
+  .rise-in-stagger > *:nth-child(3) {
+    animation-delay: 48ms;
+  }
+
+  .rise-in-stagger > *:nth-child(4) {
+    animation-delay: 72ms;
+  }
+
+  .rise-in-stagger > *:nth-child(5) {
+    animation-delay: 96ms;
+  }
+
+  .rise-in-stagger > *:nth-child(6) {
+    animation-delay: 120ms;
+  }
+
+  .rise-in-stagger > *:nth-child(7) {
+    animation-delay: 144ms;
+  }
+
+  .rise-in-stagger > *:nth-child(8) {
+    animation-delay: 168ms;
+  }
+
+  /*
+    Scroll-reveal takeover. `useStaggerReveal` sets `data-stagger-reveal="on"`
+    only AFTER it has constructed the IntersectionObserver that clears the hold,
+    so if the API is missing, the effect never runs, or reduced motion is on, this
+    block simply never matches and the plain on-mount stagger above stays in
+    charge. A row can never be stranded invisible.
+
+    Without this, every row past the eighth animates at zero delay — so in a panel
+    showing ~9 rows the cascade appears to stop, and rows below the fold finish
+    their entrance off-screen.
+  */
+  .rise-in-stagger[data-stagger-reveal='on'] > *:not([data-revealed]) {
+    opacity: 0;
+    animation: none;
+  }
+
+  .rise-in-stagger[data-stagger-reveal='on'] > *[data-revealed] {
+    animation: var(--animate-rise-in);
+    animation-delay: var(--reveal-delay, 0ms);
+  }
+
+  /* Shimmer surface for skeleton loading placeholders. */
+  .skeleton {
+    background-color: var(--color-neutral-100);
+    background-image: linear-gradient(
+      90deg,
+      var(--color-neutral-100) 25%,
+      var(--color-neutral-200) 50%,
+      var(--color-neutral-100) 75%
+    );
+    background-size: 200% 100%;
+    animation: var(--animate-skeleton-sweep);
+  }
+}
+
+/*
+ * Reduced motion — a blanket rule with an opt-in exemption marker.
+ *
+ * Applies both to the OS-level `prefers-reduced-motion: reduce` media query and
+ * to `[data-motion='off']` set on an ancestor, so Storybook can force the
+ * reduced-motion path deterministically without touching the OS setting.
+ *
+ * `1ms`, not `0s`: a `0s` transition fires no `transitionend` event, which would
+ * strand consumers (e.g. the Modal mount-hold) on their timeout fallback for
+ * every reduced-motion user. `.motion-exempt` is a marker class, not a hardcoded
+ * selector list, because a list goes stale the first time someone adds a new
+ * spinner. `revert` is deliberately not used inside the `!important` block — it
+ * reverts to the UA value (`0s`) and defeats the exemption.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.motion-exempt, .motion-exempt *),
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+[data-motion='off'] *:not(.motion-exempt, .motion-exempt *),
+[data-motion='off'] *::before,
+[data-motion='off'] *::after {
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 1ms !important;
+  scroll-behavior: auto !important;
 }

@@ -51,7 +51,7 @@ const Textarea: React.FC<TextareaProps> = ({
   const textareaClasses = `
     px-3 py-2 text-sm
     border rounded-md
-    transition-all duration-100
+    transition-all duration-(--dur-instant)
     focus:outline-2 focus:outline-offset-2 focus:outline-primary
     disabled:bg-neutral-50 disabled:text-neutral-500 disabled:cursor-not-allowed
     resize-vertical

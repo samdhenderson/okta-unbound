@@ -4,9 +4,14 @@
  *
  * Renders a spinner while loading, an EmptyState when no rules are loaded or none
  * match the filters, otherwise the filtered {@link RuleCard} list (each wrapped in
- * a `data-rule-id` anchor for deep-link scrolling).
+ * a `data-rule-id` anchor for deep-link scrolling), staggered in via `.rise-in-stagger`.
+ *
+ * The list's shape (how many rows, how tall each is) isn't known ahead of a load,
+ * so the loading state stays a spinner rather than a `Skeleton` — unlike
+ * `AppsListPanel`/`PoliciesListPanel`, this panel doesn't go through `ScrollableList`.
  */
-import React from 'react';
+import React, { useRef } from 'react';
+import { useStaggerReveal } from '../../hooks/useStaggerReveal';
 import RuleCard from '../RuleCard';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import EmptyState from '../shared/EmptyState';
@@ -47,45 +52,50 @@ const RulesListPanel: React.FC<RulesListPanelProps> = ({
   onAddTargetGroup,
   oktaOrigin,
   selectedRuleId,
-}) => (
-  <div className="min-h-[400px]">
-    {isLoading ? (
-      <LoadingSpinner
-        size="lg"
-        message={selectedRuleId ? 'Loading requested rule…' : 'Loading rules...'}
-        centered
-      />
-    ) : !hasRules ? (
-      <EmptyState
-        icon="list"
-        title="No Rules Loaded"
-        description='Click "Load Rules" to analyze your Okta group rules'
-        actions={[{ label: 'Load Rules', onClick: onLoad, variant: 'primary' }]}
-      />
-    ) : filteredRules.length === 0 ? (
-      <EmptyState
-        icon="search"
-        title="No Matching Rules"
-        description="No rules match your search or filter criteria"
-      />
-    ) : (
-      <div className="space-y-3">
-        {filteredRules.map((rule) => (
-          <div key={rule.id} data-rule-id={rule.id}>
-            <RuleCard
-              rule={rule}
-              onActivate={onActivate}
-              onDeactivate={onDeactivate}
-              onPreviewImpact={onPreviewImpact}
-              onAddTargetGroup={onAddTargetGroup}
-              oktaOrigin={oktaOrigin}
-              isHighlighted={selectedRuleId === rule.id}
-            />
-          </div>
-        ))}
-      </div>
-    )}
-  </div>
-);
+}) => {
+  const staggerRef = useRef<HTMLDivElement>(null);
+  useStaggerReveal(staggerRef);
+
+  return (
+    <div className="min-h-[400px]">
+      {isLoading ? (
+        <LoadingSpinner
+          size="lg"
+          message={selectedRuleId ? 'Loading requested rule…' : 'Loading rules...'}
+          centered
+        />
+      ) : !hasRules ? (
+        <EmptyState
+          icon="list"
+          title="No Rules Loaded"
+          description='Click "Load Rules" to analyze your Okta group rules'
+          actions={[{ label: 'Load Rules', onClick: onLoad, variant: 'primary' }]}
+        />
+      ) : filteredRules.length === 0 ? (
+        <EmptyState
+          icon="search"
+          title="No Matching Rules"
+          description="No rules match your search or filter criteria"
+        />
+      ) : (
+        <div ref={staggerRef} className="space-y-3 rise-in-stagger">
+          {filteredRules.map((rule) => (
+            <div key={rule.id} data-rule-id={rule.id}>
+              <RuleCard
+                rule={rule}
+                onActivate={onActivate}
+                onDeactivate={onDeactivate}
+                onPreviewImpact={onPreviewImpact}
+                onAddTargetGroup={onAddTargetGroup}
+                oktaOrigin={oktaOrigin}
+                isHighlighted={selectedRuleId === rule.id}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default RulesListPanel;

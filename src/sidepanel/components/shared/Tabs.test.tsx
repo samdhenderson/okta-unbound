@@ -53,4 +53,23 @@ describe('Tabs', () => {
     expect(screen.getByRole('tablist')).toBeInTheDocument();
     expect(screen.getAllByRole('tab')).toHaveLength(3);
   });
+
+  describe('rail variant', () => {
+    const RAIL_TABS: TabItem[] = [
+      { key: 'overview', label: 'Overview', icon: 'chart' },
+      { key: 'groups', label: 'Groups', icon: 'users' },
+    ];
+
+    it('names every icon-only tab after its label, exactly once', () => {
+      render(<Tabs tabs={RAIL_TABS} activeKey="overview" onChange={vi.fn()} variant="rail" />);
+      // The collapsed label is still in the DOM (it animates, it is not display:none),
+      // so the accessible name has to come from `aria-label` — which overrides the
+      // contents — or it would read "Groups Groups".
+      expect(screen.getByRole('tab', { name: 'Groups' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+    });
+  });
 });

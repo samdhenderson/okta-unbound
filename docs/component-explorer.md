@@ -204,6 +204,31 @@ renders at its own window size, so exercise width-dependent logic through the
 presentational prop — e.g. `ActivityBarView`'s `collapsed` — for automated
 coverage.)
 
+## Motion is off by default in stories
+
+`preview.tsx`'s `withMotion` decorator stamps `data-motion="off"` on every story
+root, which `tailwind.css` matches with the same declaration block as
+`@media (prefers-reduced-motion: reduce)`. Two reasons: every story is a render
+test in headless Chromium (and the suite already carries `retry: 2` for a Vite
+dep-optimizer race, so a second timing-shaped flake source is unwelcome), and
+`npm run shoot` would otherwise catch entrance animations mid-flight and produce a
+different contact sheet each run. A useful side effect is that the reduced-motion
+path gets exercised by all ~550 story tests on every CI run.
+
+A story whose _subject_ is the animation opts back in:
+
+```tsx
+export const ExitTransition: Story = {
+  parameters: { motion: 'on' },
+  // …no `play` function — see below
+};
+```
+
+Keep `play` functions off motion-enabled stories: an interaction assertion racing a
+220ms transition is exactly the flake the default is there to prevent. If a
+motion-enabled story does need one, drive it with `findBy*`/`waitFor`, never
+`getBy*`.
+
 ## Fixed / bottom-anchored components
 
 A `position: fixed` component (the `ActivityBar`/`ActivityBarView`, which pin to

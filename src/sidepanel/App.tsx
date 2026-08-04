@@ -6,8 +6,12 @@
  * migration) and the highlighted rule id. Reads live Okta page context via
  * `useGroupContext`/`useOktaPageContext` and renders the {@link ContextBar} masthead
  * (app wordmark + entity identity + connection), {@link TabNavigation}, the per-tab
- * content, and the fixed {@link ActivityBar} (the unified scheduler + progress bar),
- * all inside the SchedulerProvider.
+ * content, the fixed {@link ActivityBar} (the unified scheduler + progress bar), and
+ * the ⌘K {@link TabJumpPalette}, all inside the SchedulerProvider.
+ *
+ * The shell is also the **single owner of app-wide keyboard shortcuts**
+ * ({@link useCommandPalette}) — see the tab-lifetime note below for why a `window`
+ * listener may not live in a tab.
  *
  * ## Tab lifetime
  *
@@ -29,6 +33,8 @@ import ContextBar from './components/ContextBar';
 import PageHeader from './components/shared/PageHeader';
 import TabNavigation from './components/TabNavigation';
 import TabPanel from './components/TabPanel';
+import TabJumpPalette from './components/TabJumpPalette';
+import { useCommandPalette } from './hooks/useCommandPalette';
 import { migrateLegacyTabId, type TabType } from './tabs';
 import OverviewTab from './components/OverviewTab';
 import type { ExportRequest } from './components/export';
@@ -95,6 +101,12 @@ const App: React.FC = () => {
   // The one element that actually scrolls (see the JSX below). Handed to every
   // `TabPanel` so each can bank and restore its own offset on it.
   const scrollRootRef = useRef<HTMLDivElement>(null);
+
+  // The ⌘K jump-to palette. The shortcut listener lives here, in the shell, and
+  // nowhere else: every tab is mounted at once (ADR-0018), so the same `window`
+  // listener registered inside a tab would be registered up to eight times and
+  // fire once per mounted tab.
+  const jumpPalette = useCommandPalette();
 
   // Always-on tab targeting + connection health (used by every tab and the header).
   const {
@@ -439,6 +451,16 @@ const App: React.FC = () => {
 
         <ActivityBar />
       </div>
+
+      {/* Rendered outside the scroll root: it is a viewport-fixed overlay, not
+          part of any tab's scrollable content. Selecting a result goes through
+          the same `handleTabChange` the icon rail calls. */}
+      <TabJumpPalette
+        isOpen={jumpPalette.isOpen}
+        onClose={jumpPalette.close}
+        activeTab={activeTab}
+        onSelect={handleTabChange}
+      />
     </SchedulerProvider>
   );
 };

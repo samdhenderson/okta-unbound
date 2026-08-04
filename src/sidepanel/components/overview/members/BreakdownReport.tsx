@@ -59,7 +59,7 @@ const BreakdownReport: React.FC<BreakdownReportProps> = ({
             }}
             className={`
               relative w-full text-left rounded-md px-2.5 py-1.5
-              transition-colors duration-100
+              transition-colors duration-(--dur-instant)
               ${clickable ? 'cursor-pointer hover:bg-neutral-50' : 'cursor-default'}
               ${isActive ? 'ring-1 ring-primary bg-primary-light/40' : ''}
             `

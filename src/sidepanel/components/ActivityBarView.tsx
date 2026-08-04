@@ -14,6 +14,24 @@
  * chevron the user clicks to reveal the rest. Whether it is currently condensed
  * (`collapsed`) and whether the toggle is offered at all (`collapsible`) are
  * decided by the container from the panel width; this view just renders them.
+ *
+ * ## Motion policy: values animate, layout does not
+ *
+ * ADR-0008 exists because this bar used to reflow. So the only motion here is on
+ * things that cannot move their neighbours: the progress track's `width` (over
+ * `--dur-tell`, so a stream of sub-percent scheduler ticks reads as one sweep
+ * rather than a twitching stub) and the collapse chevron's `rotate`. Both the busy
+ * pulse dot and the progress width carry `.motion-exempt` — they encode live state,
+ * so they keep animating under `prefers-reduced-motion`.
+ *
+ * The condensed and full layouts are deliberately **not** cross-faded into one
+ * another. A crossfade needs both trees in the DOM at once, and each tree carries a
+ * Cancel button, the collapse toggle and the bar's `role="status"` live region:
+ * overlapping them would duplicate two interactive controls in the tab order and
+ * announce the bar's state twice, while the two trees' differing heights would move
+ * the bar's top edge — the exact reflow ADR-0008 forbids. The swap is driven by the
+ * user dragging the panel across 640px, which is already a layout change they are
+ * causing directly and can see; a transition would be decoration, not explanation.
  */
 import React from 'react';
 import { Button, IconButton } from './shared';
@@ -74,7 +92,9 @@ const MetricSlot: React.FC<{
 const CollapseChevron: React.FC<{ collapsed: boolean }> = ({ collapsed }) => (
   <svg
     aria-hidden="true"
-    className={`h-4 w-4 transition-transform duration-100 ${collapsed ? '' : 'rotate-90'}`}
+    className={`h-4 w-4 transition-transform duration-(--dur-quick) ease-standard ${
+      collapsed ? '' : 'rotate-90'
+    }`}
     fill="none"
     stroke="currentColor"
     viewBox="0 0 24 24"
@@ -101,7 +121,9 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({
   const statusDot = (
     <div
       aria-hidden="true"
-      className={`h-2 w-2 shrink-0 rounded-full shadow-sm ${view.busy ? 'animate-pulse' : ''}`}
+      // motion-exempt: the pulse encodes live "busy" state, not a decorative
+      // entrance/exit — it must keep animating under prefers-reduced-motion.
+      className={`motion-exempt h-2 w-2 shrink-0 rounded-full shadow-sm ${view.busy ? 'animate-pulse' : ''}`}
       style={{ backgroundColor: view.statusColorVar }}
     />
   );
@@ -140,7 +162,15 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({
       className="h-1 w-full bg-neutral-100"
     >
       <div
-        className="h-full bg-primary transition-all duration-150"
+        // motion-exempt: the width transition encodes live progress state, not a
+        // decorative entrance/exit — it must keep animating under prefers-reduced-motion.
+        //
+        // `--dur-tell` (not the old 150ms): each scheduler tick advances the bar by a
+        // fraction of a percent, and at 150ms that read as a stub twitching in place.
+        // Over half a second the same ticks blend into one continuous sweep, so
+        // throughput reads as motion. Width only — the track's height is fixed, so
+        // nothing around it can move (ADR-0008).
+        className="motion-exempt h-full bg-primary transition-[width] duration-(--dur-tell) ease-standard"
         style={{ width: `${view.percentage}%` }}
       />
     </div>

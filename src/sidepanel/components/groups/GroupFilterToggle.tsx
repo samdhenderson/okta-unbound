@@ -26,7 +26,7 @@ const GroupFilterToggle: React.FC<GroupFilterToggleProps> = ({
 }) => (
   <button
     onClick={onToggle}
-    className={`px-4 py-3 rounded-md border text-sm font-medium transition-all duration-100 flex items-center gap-2 ${
+    className={`px-4 py-3 rounded-md border text-sm font-medium transition-all duration-(--dur-instant) flex items-center gap-2 ${
       showFilters || activeFilterCount > 0
         ? 'bg-primary-light border-primary text-primary-text'
         : 'bg-white border-neutral-200 text-neutral-700 hover:border-neutral-400'
