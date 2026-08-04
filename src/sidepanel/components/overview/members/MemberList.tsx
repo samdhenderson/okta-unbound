@@ -5,7 +5,8 @@
  * Mounts only the first `visibleCount` rows and grows via a "Load more" footer and
  * an IntersectionObserver sentinel, capping DOM size for very large groups.
  *
- * Rows enter through the shared `.rise-in-stagger` wrapper: the first eight step in
+ * Rows enter through the shared `.rise-in-stagger` wrapper, driven by
+ * `useStaggerReveal`: rows hold until they scroll into view, then cascade in
  * 24ms apart and the rest follow together. The cap is pure CSS (`:nth-child`), so
  * {@link MemberRow} needs no index prop and its memo comparator is untouched. A
  * reload swaps the rows for `Skeleton variant="row"` placeholders — the shape is

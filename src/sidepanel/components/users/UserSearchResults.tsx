@@ -4,7 +4,7 @@
  *
  * The row list uses `.rise-in-stagger` (a wrapper class, not a per-row index prop)
  * so results feel like they land one after another rather than appearing as one
- * block — see `tailwind.css` for the 24ms/child, 8-row-capped stagger.
+ * block — see `hooks/useStaggerReveal` for the scroll-triggered cascade.
  */
 import React, { useRef } from 'react';
 import { useStaggerReveal } from '../../hooks/useStaggerReveal';

@@ -22,12 +22,12 @@ Consume a token two ways:
   `duration-(--dur-instant)` (equivalent to `duration-[var(--dur-instant)]`) for a
   one-off utility site, e.g. `transition-colors duration-(--dur-instant)`.
 
-**Migration status.** The scale itself, the nine primitives below, and the
-reduced-motion contract are all in place. Retrofitting every pre-existing
-`transition-*`/`duration-100`-style utility across the codebase to the token scale
-is a separate, larger cleanup and was not part of this change — treat the rule as
-binding on new and touched code, not as a claim that every call site is migrated
-yet (unlike the color-token rule, which has no known outstanding violations).
+**Migration status.** Complete. The scale, the nine primitives below, and the
+reduced-motion contract are all in place, and every pre-existing
+`duration-100`/`duration-300` utility has been retrofitted to the scale — `src/`
+contains no raw `ms` literal and no `cubic-bezier()` outside `tailwind.css`. Like
+the color-token rule, this one has no known outstanding violations, so a raw
+literal appearing in a diff is a regression rather than legacy debt.
 
 ## Durations
 
@@ -91,10 +91,28 @@ Two related, non-`animate-*` primitives in `@layer components`:
   `inert` while collapsed rather than unmounting, so collapsing never resets
   state.
 - **`.rise-in-stagger`** — a wrapper that applies `animate-rise-in` to each direct
-  child with a 24ms delay step, capped at the 8th child (children beyond that
-  animate together, unstaggered). Applied via a wrapper class rather than a
-  per-row index prop so the memoised, hand-comparator row components stay
-  untouched. `Skeleton`'s repeated placeholder blocks use it.
+  child. Applied via a wrapper class rather than a per-row index prop so the
+  memoised, hand-comparator row components stay untouched. `Skeleton`'s repeated
+  placeholder blocks use it.
+
+  Pair it with [`useStaggerReveal`](../src/sidepanel/hooks/useStaggerReveal.ts) on
+  any real list. The bare CSS only delays the first eight children and animates
+  the rest at once, which means rows below the fold finish their entrance
+  off-screen and a tall viewport shows eight rows cascade and the remainder pop
+  together. The hook holds each row until it scrolls into view, then cascades the
+  arriving batch.
+
+  **Budget the total, never the row count.** The cascade's step is
+  `min(24ms, 320ms / gaps)` — the preferred step when a batch can afford it,
+  compressed when it can't, so the whole cascade lands within `--dur-travel`
+  whatever the viewport height. A fixed cap ("stagger the first N") is really a
+  guess about how many rows fit on screen, and it is wrong on every display it
+  was not tuned for.
+
+  The hook is safe by construction: it marks the container
+  `data-stagger-reveal="on"` — the attribute the CSS hold keys on — only _after_
+  its `IntersectionObserver` exists, so a missing API, a disabled hook, or reduced
+  motion falls back to the plain on-mount stagger. No path leaves a row invisible.
 
 A tenth keyframe, `skeleton-sweep` (`.skeleton`, 1.4s linear infinite), drives the
 shimmer surface behind loading placeholders — categorically different from the

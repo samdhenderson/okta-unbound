@@ -16,11 +16,25 @@
 import { useEffect } from 'react';
 import { useReducedMotion } from './useReducedMotion';
 
-/** Step between rows within one reveal batch, mirroring the CSS stagger. */
+/** Preferred step between rows, mirroring the CSS stagger, when the batch affords it. */
 const STEP_MS = 24;
 
-/** Cap on the cascade — past this a stagger reads as lag rather than life. */
-const MAX_STEPS = 8;
+/**
+ * Longest a whole cascade may run, hand-kept in sync with `--dur-travel` (320ms)
+ * in `tailwind.css` — the same mirrored-constant arrangement `Modal`'s `EXIT_MS`
+ * and `useCountUp`'s duration use, since jsdom never parses the stylesheet and a
+ * custom property cannot be read back at runtime.
+ *
+ * The budget is on the *total*, not on a row count. A fixed step cap (say, eight
+ * rows) is really a guess about how many rows fit on screen, and that guess is
+ * wrong on any display it wasn't tuned for: a 900px-tall panel shows about nine
+ * rows, a large high-resolution monitor shows several times that, and every row
+ * past the cap would share one delay and pop together — the exact thing the
+ * cascade exists to avoid. Budgeting the total instead lets the step shrink as
+ * the batch grows, so every row still arrives in sequence and the last one lands
+ * at a predictable moment regardless of viewport size.
+ */
+const CASCADE_BUDGET_MS = 320;
 
 /**
  * Hold `.rise-in-stagger` children until they scroll into view, then cascade them.
@@ -66,8 +80,14 @@ export function useStaggerReveal(
             a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
           );
 
+        // Spend the preferred step when the batch is small enough to afford it,
+        // and compress it when the viewport is tall enough to reveal many rows at
+        // once, so the cascade always finishes inside the budget.
+        const gaps = Math.max(arrived.length - 1, 1);
+        const step = Math.min(STEP_MS, CASCADE_BUDGET_MS / gaps);
+
         arrived.forEach((el, index) => {
-          el.style.setProperty('--reveal-delay', `${Math.min(index, MAX_STEPS) * STEP_MS}ms`);
+          el.style.setProperty('--reveal-delay', `${Math.round(index * step)}ms`);
           el.setAttribute('data-revealed', '');
           observer.unobserve(el);
         });

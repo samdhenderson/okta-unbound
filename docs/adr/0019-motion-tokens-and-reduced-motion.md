@@ -155,7 +155,9 @@ without modification.
   this today.
 - The full nine-primitive catalog, the reduced-motion contract in detail, and the
   skeleton-vs-spinner rule live in `docs/motion.md`, not duplicated here.
-- **Not done in this change:** retrofitting every pre-existing raw
-  `duration-100`-style utility class across the codebase to the token scale. The
-  "no raw `ms`" rule is binding on new and touched code; it is not yet true that
-  every call site in the repo already complies, unlike the color-token rule.
+- Every pre-existing raw `duration-100`/`duration-300` utility across the codebase
+  was retrofitted to the scale as part of this change (46 occurrences in 34
+  files). `src/` now contains no raw `ms` literal and no `cubic-bezier()` outside
+  `tailwind.css`, so — as with the color-token rule — a raw literal in a diff is a
+  regression rather than legacy debt. This was deliberate: a hard rule documented
+  with a standing exemption is one people learn to ignore.

@@ -23,7 +23,7 @@ interface SkeletonProps {
   size?: SkeletonSize;
   /**
    * Number of repeated blocks to render, so a caller doesn't loop at the call
-   * site. Repeats share one `.rise-in-stagger` wrapper (capped at the 8th child)
+   * site. Repeats share one `.rise-in-stagger` wrapper (one cascade, budgeted)
    * rather than each entering independently. Defaults to `1`.
    */
   count?: number;
@@ -118,7 +118,7 @@ function SkeletonBone({
  * A shimmering placeholder for content whose shape is already known.
  *
  * Renders `count` repeated blocks (staggered entrance via `.rise-in-stagger`,
- * capped at the 8th) plus one hidden `role="status"` node carrying the
+ * one budgeted cascade) plus one hidden `role="status"` node carrying the
  * accessible name — the visual bones are `aria-hidden` so they never announce
  * as content to assistive tech.
  *

@@ -94,18 +94,39 @@ describe('useStaggerReveal', () => {
     expect(children[2].style.getPropertyValue('--reveal-delay')).toBe('48ms');
   });
 
-  it('caps the cascade so a large batch never reads as lag', () => {
+  it('keeps the full step when a small batch can afford it', () => {
     const { fire } = stubObserver();
-    const { el, ref } = makeContainer(12);
+    const { el, ref } = makeContainer(9);
 
     renderHook(() => useStaggerReveal(ref));
 
     const children = Array.from(el.children) as HTMLElement[];
     fire(children.map((target) => ({ target, isIntersecting: true })));
 
-    // 8 steps max => 192ms, and everything past the cap shares it.
+    // 8 gaps * 24ms = 192ms, comfortably inside the 320ms budget.
+    expect(children[1].style.getPropertyValue('--reveal-delay')).toBe('24ms');
     expect(children[8].style.getPropertyValue('--reveal-delay')).toBe('192ms');
-    expect(children[11].style.getPropertyValue('--reveal-delay')).toBe('192ms');
+  });
+
+  it('compresses the step on a tall viewport so the cascade still fits its budget', () => {
+    const { fire } = stubObserver();
+    // A large monitor can show far more rows at once than the ~9 a default panel
+    // does. Every one must still arrive in sequence, not share one delay.
+    const { el, ref } = makeContainer(40);
+
+    renderHook(() => useStaggerReveal(ref));
+
+    const children = Array.from(el.children) as HTMLElement[];
+    fire(children.map((target) => ({ target, isIntersecting: true })));
+
+    const delays = children.map((c) => parseFloat(c.style.getPropertyValue('--reveal-delay')));
+
+    // Strictly increasing — no plateau where rows pop together.
+    for (let i = 1; i < delays.length; i++) {
+      expect(delays[i]).toBeGreaterThan(delays[i - 1]);
+    }
+    // And the whole cascade still lands within the budget.
+    expect(delays[delays.length - 1]).toBeLessThanOrEqual(320);
   });
 
   it('leaves rows that have not intersected alone', () => {
