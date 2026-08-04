@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import Button from './Button';
 import Modal from './Modal';
 
@@ -165,4 +165,31 @@ export const MotionShowcase: Story = {
     children: <p>Closing this dialog animates it out; focus returns to the trigger at once.</p>,
   },
   render: (args) => <ExitDemo {...args} />,
+};
+
+/**
+ * Interaction test for the exit mount-hold. Runs with motion suppressed (the
+ * suite default), where the exit animation collapses to `1ms` but still fires
+ * `animationend` — so this exercises the event-driven release of the hold, which
+ * jsdom cannot (it never runs animations, leaving only the timeout fallback
+ * covered there). The removal is asserted inside a window shorter than the
+ * `EXIT_MS` fallback: if the event path regressed, the panel would linger past it
+ * and this would fail rather than silently fall back.
+ */
+export const ExitInteraction: Story = {
+  args: {
+    title: 'Confirm removal',
+    children: <p>This dialog is opened and dismissed by the interaction test.</p>,
+  },
+  render: (args) => <ExitDemo {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Open modal' }));
+    const dialog = await canvas.findByRole('dialog');
+
+    await userEvent.click(canvas.getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(dialog.isConnected).toBe(false), { timeout: 120 });
+    expect(canvas.queryByRole('dialog')).toBeNull();
+  },
 };

@@ -58,8 +58,21 @@ pointing at that card's title. First consumer: `GroupListItem`'s row-body
 drill-in.
 
 `Tabs` is the accessible tab-bar primitive (`role="tablist"/"tab"`, roving
-`tabindex`, arrow-key nav) with two variants: `underline` (section nav) and
-`segmented` (compact toggle).
+`tabindex`, arrow-key nav) with three variants: `underline` (section nav),
+`segmented` (compact toggle) and `rail` (icon-first primary nav).
+
+The **`rail`** variant is what `TabNavigation` uses for the panel's eight
+top-level sections. Inactive tabs are icon-only (`TabItem.icon`, an `IconType`);
+the active tab's label unfurls via `grid-template-columns: 0fr → 1fr` at
+`--dur-move`, so the strip never toggles `display` to make room. What still
+overflows scrolls, with the scrollbar hidden and `mask-image` edge fades keyed
+off a `data-overflow` attribute. Every rail tab's `aria-label` is derived from
+its own `label` inside `Tabs` — never passed separately — so an icon-only tab
+always has an accessible name and it cannot drift from the visible one. (A rail
+tab's `count` badge is therefore _not_ in its accessible name; see the JSDoc on
+`TabItem.label` before adding counts to the rail.) The measurement behind the
+edge state, the scroll-active-into-view and the sliding indicator lives in
+`hooks/useTabRail.ts`, not the component.
 
 `Breadcrumbs` is the trail primitive for **in-tab push/pop sub-navigation**
 (`nav > ol`, ancestor crumbs are buttons, the last carries `aria-current="page"`).
