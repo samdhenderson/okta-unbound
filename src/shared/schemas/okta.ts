@@ -160,6 +160,14 @@ export const oktaAppListItemSchema = z
     signOnMode: z.string().optional(),
     created: z.string().nullish(),
     lastUpdated: z.string().nullish(),
+    // Declared as `z.unknown()` (the same choice as `oktaGroupRuleSchema` below)
+    // because the link set varies per app and per endpoint, and none of it is
+    // contractually stable. It survived `.passthrough()` already; naming it here
+    // only makes it reachable from TypeScript, so the app Overview can derive an
+    // attached access-policy id from a record it already holds instead of issuing a
+    // second `GET /api/v1/apps/{id}`. Readers must validate what they pull out of it
+    // — see `extractAccessPolicyId`.
+    _links: z.unknown().optional(),
   })
   .passthrough();
 

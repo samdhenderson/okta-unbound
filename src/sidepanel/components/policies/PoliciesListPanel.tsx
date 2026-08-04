@@ -7,7 +7,7 @@
  * on the policies endpoint is indistinguishable from an org with no policies) vs.
  * "nothing matches the search".
  */
-import React from 'react';
+import React, { memo } from 'react';
 import PolicyCard from './PolicyCard';
 import ScrollableList from '../shared/ScrollableList';
 import EmptyState from '../shared/EmptyState';
@@ -36,37 +36,46 @@ const noPoliciesState = (onLoad: () => void) => (
   />
 );
 
-/** Renders the loading / empty / populated states of the auth policies list. */
-const PoliciesListPanel: React.FC<PoliciesListPanelProps> = ({
+/**
+ * Renders the loading / empty / populated states of the auth policies list.
+ *
+ * `memo`ised on a default shallow prop compare, which holds because the tab passes a
+ * `useMemo`d `policies` array, `useCallback`ed `onLoad`, and a `loadRules` taken from
+ * the memoized `useOktaApi` facade. Without it every keystroke in the tab's search
+ * box re-rendered the whole card list.
+ */
+const PoliciesListPanel: React.FC<PoliciesListPanelProps> = memo(function PoliciesListPanel({
   isLoading,
   policies,
   hasPolicies,
   onLoad,
   loadRules,
-}) => (
-  <div className="min-h-[400px]">
-    <ScrollableList
-      loading={isLoading}
-      loadingMessage="Loading auth policies…"
-      fillAvailable={false}
-      testId="policies-list"
-      emptyState={
-        hasPolicies ? (
-          <EmptyState
-            icon="search"
-            title="No Matching Policies"
-            description="No auth policies match your search."
-          />
-        ) : (
-          noPoliciesState(onLoad)
-        )
-      }
-    >
-      {policies.map((policy) => (
-        <PolicyCard key={policy.id} policy={policy} loadRules={loadRules} />
-      ))}
-    </ScrollableList>
-  </div>
-);
+}) {
+  return (
+    <div className="min-h-[400px]">
+      <ScrollableList
+        loading={isLoading}
+        loadingMessage="Loading auth policies…"
+        fillAvailable={false}
+        testId="policies-list"
+        emptyState={
+          hasPolicies ? (
+            <EmptyState
+              icon="search"
+              title="No Matching Policies"
+              description="No auth policies match your search."
+            />
+          ) : (
+            noPoliciesState(onLoad)
+          )
+        }
+      >
+        {policies.map((policy) => (
+          <PolicyCard key={policy.id} policy={policy} loadRules={loadRules} />
+        ))}
+      </ScrollableList>
+    </div>
+  );
+});
 
 export default PoliciesListPanel;

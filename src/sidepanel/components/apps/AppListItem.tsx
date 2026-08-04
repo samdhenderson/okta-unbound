@@ -42,8 +42,12 @@ const AssignmentCounts: React.FC<{
   enabled: boolean;
   fetchAssignmentCounts: (appId: string) => Promise<AppAssignmentCounts | null>;
 }> = ({ appId, enabled, fetchAssignmentCounts }) => {
+  // Same key, same shape as the app Overview's own counts read
+  // (`useAppOverviewData`): both screens are mounted at once (ADR-0018), so sharing
+  // one entry means whichever the user reaches first warms the other — and, unlike
+  // the two-shapes-one-key arrangement this replaced, neither can corrupt the other.
   const { data, isLoading, error } = useEntityQuery<AppAssignmentCounts | null>(
-    ['appAssignments', appId],
+    ['appAssignmentCounts', appId],
     () => fetchAssignmentCounts(appId),
     { enabled },
   );

@@ -125,6 +125,41 @@ async function drillInto(uev: ReturnType<typeof userEvent.setup>, name: string) 
   await uev.click(within(row).getByRole('button', { name: 'View group details' }));
 }
 
+/** How many `/api/v1/apps` reads the panel has issued through the scheduler. */
+const appCalls = () =>
+  runtimeSendMessage.mock.calls.filter(([m]) => String(m?.endpoint ?? '').includes('/apps')).length;
+
+/**
+ * Point the panel at a different Okta tab, optionally on a different org, and wait
+ * for the re-probe to land so the new target has reached every mounted tab.
+ *
+ * Then give any re-armed auto-load a real chance to fire: a hidden tab must not take
+ * it, and asserting that requires waiting long enough that a failure to gate would
+ * actually show up.
+ */
+async function retargetTo({ id, origin }: { id: number; origin?: string }) {
+  const probesBefore = tabsSendMessage.mock.calls.length;
+  const onUpdated = (chrome.tabs.onUpdated.addListener as ReturnType<typeof vi.fn>).mock
+    .calls[0][0] as (
+    tabId: number,
+    changeInfo: { status?: string; url?: string },
+    tab: typeof OKTA_TAB,
+  ) => void;
+
+  if (origin) {
+    tabsSendMessage.mockImplementation(async (_tabId: number, msg: { action: string }) => {
+      if (msg.action === 'getOktaOrigin') return { success: true, data: origin };
+      return { success: false };
+    });
+  }
+  const tab = { ...OKTA_TAB, id, url: `${origin ?? 'https://example.okta.com'}/admin/groups` };
+  (chrome.tabs.query as ReturnType<typeof vi.fn>).mockResolvedValue([tab]);
+  onUpdated(id, { status: 'complete' }, tab);
+
+  await waitFor(() => expect(tabsSendMessage.mock.calls.length).toBeGreaterThan(probesBefore));
+  await new Promise((resolve) => setTimeout(resolve, 250));
+}
+
 describe('App tab lifetime', () => {
   it('mounts a tab only once it has been activated', async () => {
     const uev = userEvent.setup();
@@ -219,40 +254,46 @@ describe('App tab lifetime', () => {
 
     await openTab(uev, 'Apps');
     await screen.findByRole('heading', { name: 'Applications' });
-    await waitFor(() =>
-      expect(
-        runtimeSendMessage.mock.calls.some(([m]) => String(m?.endpoint ?? '').includes('/apps')),
-      ).toBe(true),
-    );
+    await waitFor(() => expect(appCalls()).toBeGreaterThan(0));
 
     await openTab(uev, 'Groups');
     await screen.findByLabelText('Select Engineering');
-    const appCalls = () =>
-      runtimeSendMessage.mock.calls.filter(([m]) => String(m?.endpoint ?? '').includes('/apps'))
-        .length;
     const before = appCalls();
 
-    // Re-target the panel at a different Okta tab. That re-arms the Apps
-    // auto-load (it is armed once per connected tab id), which must stay armed
-    // rather than fire from a tab the user cannot see.
-    const probesBefore = tabsSendMessage.mock.calls.length;
-    const onUpdated = (chrome.tabs.onUpdated.addListener as ReturnType<typeof vi.fn>).mock
-      .calls[0][0] as (
-      tabId: number,
-      changeInfo: { status?: string; url?: string },
-      tab: typeof OKTA_TAB,
-    ) => void;
-    (chrome.tabs.query as ReturnType<typeof vi.fn>).mockResolvedValue([{ ...OKTA_TAB, id: 2 }]);
-    onUpdated(2, { status: 'complete' }, { ...OKTA_TAB, id: 2 });
-
-    // The re-probe has landed (a fresh `getOktaOrigin` round trip), so the new
-    // target tab id has reached every mounted tab. Give the re-armed auto-load
-    // every chance to fire anyway.
-    await waitFor(() => expect(tabsSendMessage.mock.calls.length).toBeGreaterThan(probesBefore));
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    // Re-target the panel at a different Okta tab on the SAME org. That re-arms the
+    // Apps auto-load, which must stay armed rather than fire from a tab the user
+    // cannot see.
+    await retargetTo({ id: 2 });
     expect(appCalls()).toBe(before);
 
-    // Deferred, not dropped: it runs the moment the tab is shown again.
+    // Showing the tab pays the owed load — and it is served from the entity cache,
+    // because the inventory is keyed by org origin and this is the same org. The
+    // re-target changed which Chrome tab the panel talks to, not what it would find.
+    await openTab(uev, 'Apps');
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(appCalls()).toBe(before);
+  });
+
+  it('re-fetches the inventory when the connected tab moves to a different org', async () => {
+    const uev = userEvent.setup();
+    renderApp();
+
+    await openTab(uev, 'Apps');
+    await screen.findByRole('heading', { name: 'Applications' });
+    await waitFor(() => expect(appCalls()).toBeGreaterThan(0));
+
+    await openTab(uev, 'Groups');
+    await screen.findByLabelText('Select Engineering');
+    const before = appCalls();
+
+    // A different org is a cache miss by construction — the inventory is keyed by
+    // origin precisely so one org's apps can never be served for another's.
+    await retargetTo({ id: 2, origin: 'https://other.okta.com' });
+
+    // Still inert while hidden: deferred, not dropped.
+    expect(appCalls()).toBe(before);
+
+    // …and paid on the next show, this time with a real request.
     await openTab(uev, 'Apps');
     await waitFor(() => expect(appCalls()).toBe(before + 1));
   });

@@ -75,7 +75,19 @@ describe('AppOverview', () => {
   });
 
   it('notes an app-specific authentication policy without linking to it', async () => {
-    api.getAppAccessPolicyId.mockResolvedValue('rstFAKE0123456789abc');
+    // The attachment is now *derived* from the app record the Overview already
+    // fetched (`_links.accessPolicy.href`) rather than fetched again via
+    // `getAppAccessPolicyId`, so the fixture moves onto `getAppById`. Same
+    // behaviour, one request instead of two.
+    api.getAppById.mockResolvedValue({
+      id: '0oaPOLICY',
+      label: 'Salesforce',
+      _links: {
+        accessPolicy: {
+          href: 'https://example.okta.com/api/v1/policies/rstFAKE0123456789abc',
+        },
+      },
+    });
 
     render(
       <AppOverview appId="0oaPOLICY" appName="Salesforce" targetTabId={1} onExport={vi.fn()} />,

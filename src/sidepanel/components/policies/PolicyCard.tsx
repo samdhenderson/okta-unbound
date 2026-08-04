@@ -110,7 +110,29 @@ const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
       )}
     </div>
   );
-});
+}, arePolicyCardPropsEqual);
+
+/**
+ * Field-wise prop comparison, mirroring `RuleCard` and `GroupListItem`.
+ *
+ * The default shallow compare holds `policy` by reference, so a refresh that returns
+ * an identical policy in a fresh object re-renders every card. Comparing the fields
+ * the card actually reads keeps expanded cards (and their loaded rules) undisturbed.
+ *
+ * **Add a field here whenever the card starts rendering one** — a missing field shows
+ * as a card that never updates.
+ */
+function arePolicyCardPropsEqual(prev: PolicyCardProps, next: PolicyCardProps): boolean {
+  return (
+    prev.loadRules === next.loadRules &&
+    prev.policy.id === next.policy.id &&
+    prev.policy.name === next.policy.name &&
+    prev.policy.status === next.policy.status &&
+    prev.policy.description === next.policy.description &&
+    prev.policy.priority === next.policy.priority &&
+    prev.policy.system === next.policy.system
+  );
+}
 
 PolicyCard.displayName = 'PolicyCard';
 
