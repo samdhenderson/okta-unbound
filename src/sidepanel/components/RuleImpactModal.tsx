@@ -122,7 +122,7 @@ const TargetGroupRow: React.FC<{
               className="p-1 rounded hover:bg-neutral-100"
             >
               <svg
-                className={`w-4 h-4 text-neutral-400 transition-transform duration-100 ${
+                className={`w-4 h-4 text-neutral-400 transition-transform duration-(--dur-instant) ${
                   expanded ? 'rotate-90' : ''
                 }`}
                 fill="none"

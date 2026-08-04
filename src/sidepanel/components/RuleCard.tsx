@@ -177,7 +177,7 @@ const RuleCard: React.FC<RuleCardProps> = memo(
       <div
         ref={cardRef}
         className={`
-        bg-white rounded-md border transition-all duration-100 overflow-hidden
+        bg-white rounded-md border transition-all duration-(--dur-instant) overflow-hidden
         ${rule.affectsCurrentGroup ? 'border-primary' : 'border-neutral-200'}
         ${isFlashing ? 'animate-affirm-flash' : ''}
         hover:border-neutral-300
@@ -186,7 +186,7 @@ const RuleCard: React.FC<RuleCardProps> = memo(
       >
         {/* Header */}
         <div
-          className="p-4 cursor-pointer hover:bg-neutral-50 transition-colors duration-100 flex items-center justify-between gap-4"
+          className="p-4 cursor-pointer hover:bg-neutral-50 transition-colors duration-(--dur-instant) flex items-center justify-between gap-4"
           onClick={toggleExpanded}
         >
           <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -380,7 +380,7 @@ const RuleCard: React.FC<RuleCardProps> = memo(
                     href={`${oktaOrigin}/admin/groups#rules`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-white text-neutral-900 border border-neutral-200 rounded-md hover:bg-neutral-50 hover:border-neutral-500 transition-colors duration-100"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-white text-neutral-900 border border-neutral-200 rounded-md hover:bg-neutral-50 hover:border-neutral-500 transition-colors duration-(--dur-instant)"
                     style={{ fontFamily: 'var(--font-heading)', minHeight: '36px' }}
                     title="Open Rules page in Okta Admin Console (you can search for this rule by name)"
                   >

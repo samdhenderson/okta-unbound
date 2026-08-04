@@ -52,12 +52,12 @@ const UserSearchResults: React.FC<UserSearchResultsProps> = ({ results, onSelect
         {results.map((user) => (
           <div
             key={user.id}
-            className="group bg-white rounded-md border border-neutral-200 p-5 cursor-pointer transition-all duration-100 hover:border-neutral-500"
+            className="group bg-white rounded-md border border-neutral-200 p-5 cursor-pointer transition-all duration-(--dur-instant) hover:border-neutral-500"
             onClick={() => onSelectUser(user)}
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
-                <h4 className="font-semibold text-neutral-900 mb-1 group-hover:text-primary-text transition-colors duration-100">
+                <h4 className="font-semibold text-neutral-900 mb-1 group-hover:text-primary-text transition-colors duration-(--dur-instant)">
                   {user.profile.firstName} {user.profile.lastName}
                 </h4>
                 <p className="text-sm text-neutral-600 mb-1">{user.profile.email}</p>

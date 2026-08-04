@@ -66,7 +66,7 @@ const RulesToolbar: React.FC<RulesToolbarProps> = ({
       </div>
       <input
         type="text"
-        className="w-full pl-11 pr-4 py-2.5 bg-white border border-neutral-200 rounded-md text-sm placeholder-neutral-400 focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary transition-all duration-100"
+        className="w-full pl-11 pr-4 py-2.5 bg-white border border-neutral-200 rounded-md text-sm placeholder-neutral-400 focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary transition-all duration-(--dur-instant)"
         placeholder="Search rules by name, condition, or attributes..."
         value={searchQuery}
         onChange={(e) => onSearchChange(e.target.value)}

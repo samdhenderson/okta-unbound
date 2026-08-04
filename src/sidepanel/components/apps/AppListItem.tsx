@@ -89,14 +89,14 @@ const AppListItem: React.FC<AppListItemProps> = memo(
     return (
       <div
         data-app-id={app.id}
-        className="group/item relative overflow-hidden rounded-md border border-neutral-200 bg-white hover:border-neutral-500 transition-all duration-100"
+        className="group/item relative overflow-hidden rounded-md border border-neutral-200 bg-white hover:border-neutral-500 transition-all duration-(--dur-instant)"
       >
         <div className="p-4">
           <div className="flex items-start gap-3">
             <div className="flex-1 min-w-0 cursor-pointer" onClick={toggleExpanded}>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold text-neutral-900 truncate group-hover/item:text-primary-text transition-colors duration-100">
+                  <h3 className="text-sm font-semibold text-neutral-900 truncate group-hover/item:text-primary-text transition-colors duration-(--dur-instant)">
                     {label}
                   </h3>
 

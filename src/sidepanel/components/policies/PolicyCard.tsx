@@ -49,7 +49,7 @@ const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
 
   return (
     <div
-      className="overflow-hidden rounded-md border border-neutral-200 bg-white transition-all duration-100 hover:border-neutral-300"
+      className="overflow-hidden rounded-md border border-neutral-200 bg-white transition-all duration-(--dur-instant) hover:border-neutral-300"
       style={{ fontFamily: 'var(--font-primary)' }}
       data-testid={`policy-${policy.id}`}
     >

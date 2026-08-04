@@ -91,7 +91,7 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
             <div
               key={membership.group.id}
               className={`
-                rounded-md border p-4 transition-all duration-100
+                rounded-md border p-4 transition-all duration-(--dur-instant)
                 ${
                   highlightCurrentGroup(membership.group.id)
                     ? 'border-primary bg-primary-light ring-1 ring-primary/20'

@@ -82,7 +82,7 @@ const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
               <button
                 type="button"
                 onClick={item.onSelect}
-                className="max-w-48 truncate rounded-md px-1 font-medium text-neutral-600 transition-colors duration-100 hover:text-neutral-900 hover:underline focus:outline-2 focus:outline-offset-2 focus:outline-primary"
+                className="max-w-48 truncate rounded-md px-1 font-medium text-neutral-600 transition-colors duration-(--dur-instant) hover:text-neutral-900 hover:underline focus:outline-2 focus:outline-offset-2 focus:outline-primary"
               >
                 {item.label}
               </button>

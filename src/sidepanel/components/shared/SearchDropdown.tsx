@@ -144,7 +144,7 @@ function SearchDropdown<T>({
         <input
           ref={inputRef}
           type="text"
-          className="w-full pl-10 pr-10 py-2.5 bg-white border border-neutral-200 rounded-md text-sm placeholder-neutral-400 focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary transition-all duration-100 disabled:bg-neutral-100 disabled:cursor-not-allowed"
+          className="w-full pl-10 pr-10 py-2.5 bg-white border border-neutral-200 rounded-md text-sm placeholder-neutral-400 focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary transition-all duration-(--dur-instant) disabled:bg-neutral-100 disabled:cursor-not-allowed"
           placeholder={placeholder}
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}

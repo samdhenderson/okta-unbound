@@ -46,6 +46,9 @@ Details: `docs/architecture.md`.
   failure is not. (ADR-0012, `docs/testing.md`)
 - **No raw hex.** Use Odyssey tokens; add a token before inlining a color.
   (`docs/design-system.md`)
+- **No raw `ms` or `cubic-bezier()`.** Use the motion tokens (`--dur-*`,
+  `--ease-*`); add one before inlining a duration or curve. (`docs/motion.md`,
+  ADR-0019)
 - **Never hand-roll a `<button>/<input>/<select>/<textarea>`** — use the shared
   components; import from the `components/shared` barrel. (`docs/components.md`)
 - **No raw `console.*`.** Use `src/shared/utils/logger.ts`. **Never log XSRF tokens,
@@ -115,6 +118,7 @@ should be reviewed with `security-logging-reviewer`.
 | Building / using a shared component            | `docs/components.md`, `docs/design-system.md`      | `component-builder`         |
 | Building / exploring a component visually      | `docs/component-explorer.md`                       | `component-builder`         |
 | Modal / a11y / loading-empty-error UX          | `docs/ux-guidelines.md`                            | `ui-reviewer`               |
+| Motion / animation / reduced motion            | `docs/motion.md`                                   | `ui-reviewer`               |
 | Refactoring a god component / pipeline / hooks | `docs/architecture.md`, `docs/state-management.md` | `architecture-refactor`     |
 | Adding / fixing tests                          | `docs/testing.md`                                  | `test-writer`               |
 | Logging / secrets / validation / `any` removal | `docs/development.md`                              | `security-logging-reviewer` |

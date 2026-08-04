@@ -182,12 +182,12 @@ const Tabs: React.FC<TabsProps> = ({
         const tabClasses = isRail
           ? railClasses
           : isSegmented
-            ? `${TAB_BASE} flex-1 justify-center gap-1.5 rounded-md px-3 py-1.5 transition-all duration-100 ${
+            ? `${TAB_BASE} flex-1 justify-center gap-1.5 rounded-md px-3 py-1.5 transition-all duration-(--dur-instant) ${
                 active
                   ? 'bg-white text-neutral-900 shadow-sm'
                   : 'text-neutral-600 hover:text-neutral-900'
               }`
-            : `${TAB_BASE} gap-1.5 whitespace-nowrap px-3 py-2.5 border-b-2 transition-colors duration-100 ${
+            : `${TAB_BASE} gap-1.5 whitespace-nowrap px-3 py-2.5 border-b-2 transition-colors duration-(--dur-instant) ${
                 active
                   ? 'text-primary border-primary'
                   : 'text-neutral-600 border-transparent hover:text-neutral-900'

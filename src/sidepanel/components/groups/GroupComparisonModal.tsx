@@ -194,7 +194,7 @@ const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
                   {/* Overlap bar */}
                   <div className="mt-2 h-1.5 bg-white/50 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-primary rounded-full transition-all duration-300"
+                      className="h-full bg-primary rounded-full transition-all duration-(--dur-move)"
                       style={{ width: `${overlapPct}%` }}
                     />
                   </div>

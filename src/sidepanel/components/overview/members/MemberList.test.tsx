@@ -62,9 +62,7 @@ describe('MemberList', () => {
   });
 
   it('keeps the paging sentinel out of the stagger wrapper', () => {
-    const { container } = render(
-      <MemberList {...baseProps} members={members} visibleCount={5} />,
-    );
+    const { container } = render(<MemberList {...baseProps} members={members} visibleCount={5} />);
 
     const stagger = container.querySelector('.rise-in-stagger');
     expect(stagger?.children).toHaveLength(5);

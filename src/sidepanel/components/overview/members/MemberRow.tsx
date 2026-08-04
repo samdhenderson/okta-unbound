@@ -70,7 +70,7 @@ const MemberRow: React.FC<MemberRowProps> = ({ user, mfa, mfaScanned, oktaOrigin
   );
 
   const baseClass =
-    'block bg-white rounded-md border border-neutral-200 p-3 transition-colors duration-100 hover:border-neutral-500';
+    'block bg-white rounded-md border border-neutral-200 p-3 transition-colors duration-(--dur-instant) hover:border-neutral-500';
 
   const adminUrl = oktaAdminEntityUrl(oktaOrigin, 'user', user.id);
   if (adminUrl) {

@@ -51,7 +51,7 @@ import { oktaAdminEntityUrl } from '../../../shared/utils/oktaUrl';
  * would otherwise never reveal them — hence the explicit `hover: none` branch.
  */
 const REVEAL_ON_HOVER =
-  'opacity-0 transition-opacity duration-100 ' +
+  'opacity-0 transition-opacity duration-(--dur-instant) ' +
   'group-hover/row:opacity-100 group-focus-within/row:opacity-100 ' +
   'focus-within:opacity-100 [@media(hover:none)]:opacity-100';
 
@@ -138,7 +138,7 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
     return (
       <div
         data-group-id={group.id}
-        className={`group/row rounded-md border transition-colors duration-100 ${
+        className={`group/row rounded-md border transition-colors duration-(--dur-instant) ${
           selected
             ? 'border-primary bg-primary-light'
             : 'border-neutral-200 bg-white hover:border-neutral-500'
@@ -230,7 +230,7 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
                   <Icon
                     type="chevron-right"
                     size="sm"
-                    className={`transition-transform duration-100 ${expanded ? 'rotate-90' : ''}`}
+                    className={`transition-transform duration-(--dur-instant) ${expanded ? 'rotate-90' : ''}`}
                   />
                 </IconButton>
               </div>
