@@ -14,16 +14,9 @@
 
 import { useOktaApi } from './useOktaApi';
 import { useEntityQuery } from '../cache/useEntityQuery';
+import { extractAccessPolicyId } from './useOktaApi/policyOperations';
 import type { OktaAppListItem } from '@/shared/schemas/okta';
 import type { AppAssignmentCounts } from './useOktaApi/appOperations';
-
-/** The enrichment payload cached under `['appAssignments', appId]`. */
-export interface AppAssignmentSummary {
-  /** Assignment totals, or `null` when the walk failed / was forbidden. */
-  counts: AppAssignmentCounts | null;
-  /** Id of the app-specific access policy, or `null` when none is attached. */
-  accessPolicyId: string | null;
-}
 
 /** What {@link useAppOverviewData} exposes to the app Overview. */
 export interface AppOverviewData {
@@ -43,9 +36,21 @@ export interface AppOverviewData {
  * Load the supplementary detail shown on a detected app's Overview.
  *
  * Two independent cache entries so the cheap identity read is not held up by the
- * potentially many-request assignment walk:
- * `['appDetail', appId]` (status + sign-on mode) and `['appAssignments', appId]`
- * (user/group counts + access-policy id).
+ * potentially many-request assignment walk: `['appDetail', appId]` (status,
+ * sign-on mode, and the `_links` the access policy is derived from) and
+ * `['appAssignmentCounts', appId]` (user/group totals).
+ *
+ * The access-policy id is **derived, not fetched**. Okta exposes it only on
+ * `GET /api/v1/apps/{id}` — the very request `['appDetail', appId]` already made —
+ * so it is pulled out of that record with the pure {@link extractAccessPolicyId}
+ * rather than by calling `getAppAccessPolicyId`, which would issue the identical
+ * request a second time.
+ *
+ * `['appAssignmentCounts', appId]` is deliberately the same key, holding the same
+ * shape, that the Applications tab's expanded row uses. Both are mounted at once
+ * (ADR-0018), so they must agree: an earlier revision had them storing two different
+ * shapes under one key, and whichever populated first corrupted the other's read.
+ * Sharing the entry means whichever screen the user reaches first warms the other.
  *
  * @param appId - The detected Okta app instance id.
  * @param targetTabId - Browser tab hosting the Okta session; every call is routed
@@ -54,7 +59,7 @@ export interface AppOverviewData {
  *   `null` data, which the Overview renders as an em dash.
  */
 export function useAppOverviewData(appId: string, targetTabId?: number | null): AppOverviewData {
-  const { getAppById, getAppAssignmentCounts, getAppAccessPolicyId } = useOktaApi({
+  const { getAppById, getAppAssignmentCounts } = useOktaApi({
     targetTabId: targetTabId ?? null,
   });
 
@@ -66,24 +71,18 @@ export function useAppOverviewData(appId: string, targetTabId?: number | null): 
     { enabled },
   );
 
-  const { data: assignments, isLoading: isLoadingAssignments } =
-    useEntityQuery<AppAssignmentSummary>(
-      ['appAssignments', appId],
-      async () => {
-        const [counts, accessPolicyId] = await Promise.all([
-          getAppAssignmentCounts(appId),
-          getAppAccessPolicyId(appId),
-        ]);
-        return { counts, accessPolicyId };
-      },
+  const { data: counts, isLoading: isLoadingAssignments } =
+    useEntityQuery<AppAssignmentCounts | null>(
+      ['appAssignmentCounts', appId],
+      () => getAppAssignmentCounts(appId),
       { enabled },
     );
 
   return {
     app: app ?? null,
     isLoadingApp,
-    counts: assignments?.counts ?? null,
-    accessPolicyId: assignments?.accessPolicyId ?? null,
+    counts: counts ?? null,
+    accessPolicyId: extractAccessPolicyId(app?._links),
     isLoadingAssignments,
   };
 }

@@ -88,6 +88,31 @@ function trailingSegment(href: string): string | null {
 }
 
 /**
+ * Resolve the attached access-policy id from an app's `_links`, without trusting it.
+ *
+ * Pure and side-effect free, so a caller that already holds the app record — the app
+ * Overview reads it through the `['appDetail', appId]` cache entry — can derive the
+ * policy id without issuing a second `GET /api/v1/apps/{id}`.
+ *
+ * @param links - The app's `_links` value (typed `unknown`; shape varies per app).
+ * @returns The access policy id, or `null` when there is no access-policy link, the
+ * href is unparseable, or the extracted segment does not look like an Okta policy id.
+ * @remarks Okta exposes the attachment only as `_links.accessPolicy.href`, whose
+ * shape is not contractually stable. It is read defensively off an `unknown` and the
+ * extracted segment checked against {@link POLICY_ID_PATTERN}, so a hostile or
+ * malformed href can never flow into a follow-up request path.
+ */
+export function extractAccessPolicyId(links: unknown): string | null {
+  const href = readAccessPolicyHref(links);
+  if (!href) return null;
+
+  const candidate = trailingSegment(href);
+  if (!candidate || !POLICY_ID_PATTERN.test(candidate)) return null;
+
+  return candidate;
+}
+
+/**
  * Build read-only policy operations bound to a {@link CoreApi} transport.
  *
  * @param coreApi - Shared transport surface.
@@ -155,10 +180,10 @@ export function createPolicyOperations(coreApi: CoreApi) {
    * link, the link is unparseable, the extracted id does not look like an Okta
    * policy id, or the request fails. Never throws.
    * @remarks Okta exposes the attachment only as `_links.accessPolicy.href` on
-   * `GET /api/v1/apps/{id}`, whose shape is not contractually stable — it is read
-   * defensively off an `unknown` and the extracted segment is then checked against
-   * {@link POLICY_ID_PATTERN}, so a hostile or malformed href can never flow into
-   * a follow-up request path.
+   * `GET /api/v1/apps/{id}`; the parsing and validation live in the pure
+   * {@link extractAccessPolicyId}. Prefer that helper directly when the app record
+   * is already in hand (see `useAppOverviewData`) — this wrapper exists for callers
+   * that hold only an id, and costs a request.
    */
   const getAppAccessPolicyId = async (appId: string): Promise<string | null> => {
     try {
@@ -170,13 +195,7 @@ export function createPolicyOperations(coreApi: CoreApi) {
       );
       if (!response.success || !response.data || typeof response.data !== 'object') return null;
 
-      const href = readAccessPolicyHref((response.data as Record<string, unknown>)._links);
-      if (!href) return null;
-
-      const candidate = trailingSegment(href);
-      if (!candidate || !POLICY_ID_PATTERN.test(candidate)) return null;
-
-      return candidate;
+      return extractAccessPolicyId((response.data as Record<string, unknown>)._links);
     } catch {
       // Identifier + outcome only.
       log.error('getAppAccessPolicyId failed', { code: 'app_access_policy_failed', appId });

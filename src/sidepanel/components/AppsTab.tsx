@@ -67,6 +67,7 @@ const AppsTab: React.FC<AppsTabProps> = ({ targetTabId, oktaOrigin, isActive = t
     api,
     onError: handleError,
     targetTabId,
+    oktaOrigin,
     enabled: isActive,
   });
 
@@ -75,7 +76,10 @@ const AppsTab: React.FC<AppsTabProps> = ({ targetTabId, oktaOrigin, isActive = t
     [apps, searchQuery, statusFilter, sortBy, sortDesc],
   );
 
-  const activeFilterCount = computeActiveAppFilterCount({ statusFilter });
+  const activeFilterCount = useMemo(
+    () => computeActiveAppFilterCount({ statusFilter }),
+    [statusFilter],
+  );
 
   const handleToggleSort = useCallback((field: AppSortField) => {
     setSortBy((prev) => {

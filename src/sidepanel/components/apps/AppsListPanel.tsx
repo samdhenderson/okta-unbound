@@ -6,7 +6,7 @@
  * {@link ScrollableList}, and picks between the "nothing loaded" and "nothing
  * matches" empty states — the same split `GroupsListPanel` makes.
  */
-import React from 'react';
+import React, { memo } from 'react';
 import { EmptyState, ScrollableList } from '../shared';
 import AppListItem from './AppListItem';
 import type { AppAssignmentCounts } from '../../hooks/useOktaApi/appOperations';
@@ -39,8 +39,13 @@ export interface AppsListPanelProps {
  * "no applications loaded" (offering a reload) when the inventory is empty, and
  * "no applications match" (offering a filter reset) when filtering excluded
  * everything.
+ *
+ * `memo`ised on a default shallow prop compare, which holds because every prop the
+ * tab passes is either a primitive, a `useMemo`d array, or a `useCallback`ed handler.
+ * Without it, a whole org's worth of rows re-rendered on every search keystroke —
+ * the toolbar's `searchQuery` state lives in the same component as this list.
  */
-const AppsListPanel: React.FC<AppsListPanelProps> = ({
+const AppsListPanel: React.FC<AppsListPanelProps> = memo(function AppsListPanel({
   loading,
   apps,
   hasApps,
@@ -50,43 +55,45 @@ const AppsListPanel: React.FC<AppsListPanelProps> = ({
   onReload,
   oktaOrigin,
   fetchAssignmentCounts,
-}) => (
-  <ScrollableList
-    loading={loading}
-    loadingMessage="Loading applications from Okta..."
-    className="mt-4"
-    testId="apps-list"
-    emptyState={
-      hasApps ? (
-        <EmptyState
-          icon="app"
-          title="No applications match your filters"
-          description="Try adjusting your search or status filter."
-          actions={
-            activeFilterCount > 0 || hasSearchQuery
-              ? [{ label: 'Clear filters', onClick: onClearFilters, variant: 'secondary' }]
-              : undefined
-          }
+}) {
+  return (
+    <ScrollableList
+      loading={loading}
+      loadingMessage="Loading applications from Okta..."
+      className="mt-4"
+      testId="apps-list"
+      emptyState={
+        hasApps ? (
+          <EmptyState
+            icon="app"
+            title="No applications match your filters"
+            description="Try adjusting your search or status filter."
+            actions={
+              activeFilterCount > 0 || hasSearchQuery
+                ? [{ label: 'Clear filters', onClick: onClearFilters, variant: 'secondary' }]
+                : undefined
+            }
+          />
+        ) : (
+          <EmptyState
+            icon="app"
+            title="No applications loaded"
+            description="Load the org's application inventory to browse it here."
+            actions={[{ label: 'Load applications', onClick: onReload, variant: 'primary' }]}
+          />
+        )
+      }
+    >
+      {apps.map((app) => (
+        <AppListItem
+          key={app.id}
+          app={app}
+          oktaOrigin={oktaOrigin}
+          fetchAssignmentCounts={fetchAssignmentCounts}
         />
-      ) : (
-        <EmptyState
-          icon="app"
-          title="No applications loaded"
-          description="Load the org's application inventory to browse it here."
-          actions={[{ label: 'Load applications', onClick: onReload, variant: 'primary' }]}
-        />
-      )
-    }
-  >
-    {apps.map((app) => (
-      <AppListItem
-        key={app.id}
-        app={app}
-        oktaOrigin={oktaOrigin}
-        fetchAssignmentCounts={fetchAssignmentCounts}
-      />
-    ))}
-  </ScrollableList>
-);
+      ))}
+    </ScrollableList>
+  );
+});
 
 export default AppsListPanel;

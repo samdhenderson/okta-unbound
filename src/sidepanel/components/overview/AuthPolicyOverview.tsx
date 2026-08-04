@@ -18,13 +18,20 @@
  * has no validated admin-URL builder for policies yet, and hand-assembling an admin
  * path is banned. Adding a `policy` entity to that helper is the follow-up.
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import AlertMessage from '../shared/AlertMessage';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import StatCard from './shared/StatCard';
 import { useOktaApi } from '../../hooks/useOktaApi';
 import { useEntityQuery } from '../../cache/useEntityQuery';
 import type { OktaPolicyRule } from '@/shared/schemas/okta';
+
+/**
+ * Stable empty list for the not-yet-loaded case. A `?? []` literal would mint a new
+ * array on every render, so every derivation downstream of it would re-run even when
+ * the rules had not changed.
+ */
+const NO_RULES: readonly OktaPolicyRule[] = [];
 
 /** Props for {@link AuthPolicyOverview}. */
 interface AuthPolicyOverviewProps {
@@ -76,12 +83,19 @@ const AuthPolicyOverview: React.FC<AuthPolicyOverviewProps> = ({
     enabled: Boolean(targetTabId && policyId),
   });
 
-  const rules = rulesData ?? [];
+  const rules = rulesData ?? NO_RULES;
   // `priority` is nullish in the schema; unprioritized rules sort last.
-  const sortedRules = [...rules].sort(
-    (a, b) => (a.priority ?? Number.MAX_SAFE_INTEGER) - (b.priority ?? Number.MAX_SAFE_INTEGER),
+  const sortedRules = useMemo(
+    () =>
+      [...rules].sort(
+        (a, b) => (a.priority ?? Number.MAX_SAFE_INTEGER) - (b.priority ?? Number.MAX_SAFE_INTEGER),
+      ),
+    [rules],
   );
-  const activeCount = sortedRules.filter((rule) => rule.status === 'ACTIVE').length;
+  const activeCount = useMemo(
+    () => sortedRules.filter((rule) => rule.status === 'ACTIVE').length,
+    [sortedRules],
+  );
 
   return (
     <div className="space-y-6">
