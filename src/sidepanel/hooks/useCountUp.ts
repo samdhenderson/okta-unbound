@@ -93,6 +93,8 @@ export function useCountUp(target: number, options: UseCountUpOptions = {}): num
 
   // Mirrors `display` so the animation effect can read where the count is *now*
   // without depending on it — a `display` dependency would restart it every frame.
+  // Written only from effects and animation frames, never during render (a render
+  // can be discarded, a ref write cannot be taken back).
   const displayRef = useRef(display);
 
   // Adjust state during render rather than in an effect (the documented React
@@ -101,16 +103,21 @@ export function useCountUp(target: number, options: UseCountUpOptions = {}): num
   // very visible to a test asserting synchronously after the data arrives.
   if (target !== seenTarget) {
     setSeenTarget(target);
-    if (!animates) {
-      displayRef.current = target;
-      setDisplay(target);
-    }
+    if (!animates) setDisplay(target);
   }
+
+  // Declared before the animation effect so that effect always sees the value that
+  // is actually on screen this commit.
+  useEffect(() => {
+    displayRef.current = display;
+  }, [display]);
 
   useEffect(() => {
     const from = displayRef.current;
     if (!animates || from === target) {
-      if (!animates && from !== target) {
+      // The render-phase adjustment above already handles a target change while
+      // motion is off; this only catches motion being switched off mid-flight.
+      if (from !== target) {
         displayRef.current = target;
         setDisplay(target);
       }

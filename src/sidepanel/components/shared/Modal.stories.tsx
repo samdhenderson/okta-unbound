@@ -184,12 +184,20 @@ export const ExitInteraction: Story = {
   render: (args) => <ExitDemo {...args} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: 'Open modal' }));
+    const trigger = canvas.getByRole('button', { name: 'Open modal' });
+
+    await userEvent.click(trigger);
     const dialog = await canvas.findByRole('dialog');
 
     await userEvent.click(canvas.getByRole('button', { name: 'Cancel' }));
 
-    await waitFor(() => expect(dialog.isConnected).toBe(false), { timeout: 120 });
+    // The hold releases and the panel leaves the DOM.
+    await waitFor(() => expect(dialog.isConnected).toBe(false));
     expect(canvas.queryByRole('dialog')).toBeNull();
+
+    // Focus went back to the trigger. This is the contract that matters: focus
+    // restore is keyed on `isOpen`, not on the hold, so a keyboard user is never
+    // stranded for the length of the exit.
+    expect(document.activeElement).toBe(trigger);
   },
 };

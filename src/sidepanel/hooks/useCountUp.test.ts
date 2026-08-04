@@ -2,13 +2,14 @@
  * Tests for useCountUp — the stat-card "count to" interpolator.
  *
  * Two shapes are exercised. First the **instant** path, which is what jsdom gets for
- * free (no stylesheet, so `--dur-tell` resolves to nothing) and what every other
- * unit test in the repo therefore relies on: the hook must yield the final number on
- * the very first render. Then the **animated** path, driven by stubbing the token on
- * `document.documentElement` and pumping `requestAnimationFrame` by hand, to pin
- * that the count starts at zero, moves monotonically, lands exactly on the target,
- * and — the rule that keeps the Overview from looking like a slot machine — does not
- * restart when the component re-renders with an unchanged target.
+ * free (no stylesheet, so the `--dur-tell` capability probe finds nothing) and what
+ * every other unit test in the repo therefore relies on: the hook must yield the
+ * final number in the same render the target changes, not one commit later. Then the
+ * **animated** path, enabled by declaring the token on `document.documentElement`
+ * and driven by a hand-pumped `requestAnimationFrame`, to pin that the count starts
+ * at zero, moves monotonically, lands exactly on the target, and — the rule that
+ * keeps the Overview from looking like a slot machine — does not restart when the
+ * component re-renders with an unchanged target.
  */
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
@@ -30,7 +31,7 @@ function installFrameClock() {
   vi.spyOn(performance, 'now').mockImplementation(() => now);
 }
 
-/** Run exactly one queued frame at `now + ms`. */
+/** Run every queued frame at `now + ms`. */
 function advance(ms: number) {
   now += ms;
   const queued = frames;
@@ -40,9 +41,12 @@ function advance(ms: number) {
   });
 }
 
-/** Make `--dur-tell` resolve, so the hook takes its animated path. */
-function enableMotionToken(value: string) {
-  document.documentElement.style.setProperty('--dur-tell', value);
+/**
+ * Declare `--dur-tell`, which is the hook's probe for "the motion scale is loaded".
+ * jsdom parses no stylesheet, so without this the hook stays on its instant path.
+ */
+function enableMotionScale() {
+  document.documentElement.style.setProperty('--dur-tell', '500ms');
 }
 
 describe('useCountUp', () => {
@@ -54,12 +58,12 @@ describe('useCountUp', () => {
   });
 
   describe('instant path', () => {
-    it('returns the target on the first render when no motion token resolves', () => {
+    it('returns the target on the first render when the motion scale is absent', () => {
       const { result } = renderHook(() => useCountUp(1250));
       expect(result.current).toBe(1250);
     });
 
-    it('tracks a changed target immediately', () => {
+    it('tracks a changed target in the same render, not a commit later', () => {
       const { result, rerender } = renderHook(({ n }) => useCountUp(n), {
         initialProps: { n: 3 },
       });
@@ -69,9 +73,9 @@ describe('useCountUp', () => {
       expect(result.current).toBe(9);
     });
 
-    it('stays instant when disabled even though the token resolves', () => {
+    it('stays instant when disabled even though the motion scale is loaded', () => {
       installFrameClock();
-      enableMotionToken('500ms');
+      enableMotionScale();
 
       const { result } = renderHook(() => useCountUp(42, { enabled: false }));
 
@@ -81,7 +85,7 @@ describe('useCountUp', () => {
 
     it('stays instant when an ancestor has opted out with data-motion="off"', () => {
       installFrameClock();
-      enableMotionToken('500ms');
+      enableMotionScale();
       document.body.innerHTML = '<div data-motion="off"></div>';
 
       const { result } = renderHook(() => useCountUp(42));
@@ -94,7 +98,7 @@ describe('useCountUp', () => {
   describe('animated path', () => {
     beforeEach(() => {
       installFrameClock();
-      enableMotionToken('500ms');
+      enableMotionScale();
     });
 
     it('starts at zero and lands exactly on the target', () => {
@@ -146,21 +150,24 @@ describe('useCountUp', () => {
       advance(500);
       expect(result.current).toBe(100);
 
-      rerender({ n: 200 });
-      // Still showing the old number until the next frame — no jump to 0.
+      act(() => {
+        rerender({ n: 200 });
+      });
+      // Still showing the old number until the next frame — never a jump back to 0.
       expect(result.current).toBe(100);
 
       advance(500);
       expect(result.current).toBe(200);
     });
 
-    it('accepts a second-suffixed duration token', () => {
-      enableMotionToken('0.5s');
-      const { result } = renderHook(() => useCountUp(80));
+    it('stops animating and cancels its frame on unmount', () => {
+      const cancel = vi.fn();
+      vi.stubGlobal('cancelAnimationFrame', cancel);
 
-      expect(result.current).toBe(0);
-      advance(500);
-      expect(result.current).toBe(80);
+      const { unmount } = renderHook(() => useCountUp(100));
+      unmount();
+
+      expect(cancel).toHaveBeenCalled();
     });
   });
 });

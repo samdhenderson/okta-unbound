@@ -7,14 +7,14 @@
  * the "nothing loaded" and "nothing matches" empty states — the same split
  * `GroupsListPanel` makes.
  *
- * Loading stays the default `LoadingSpinner` (not a `Skeleton`) deliberately:
- * `ScrollableList`'s `skeleton` prop, when set, replaces the spinner branch
- * entirely — including its `loadingMessage` — and `AppsTab.test.tsx` asserts on
- * the "Loading applications from Okta..." text while a load is in flight. Swap
- * to a row `Skeleton` only alongside updating that assertion.
+ * The app row shape is known before the inventory resolves, so loading shows a
+ * row `Skeleton` rather than a spinner. `Skeleton`'s `label` carries the same
+ * announcement the spinner's `loadingMessage` did — it renders as visually-hidden
+ * text in a `role="status"` node, so the message is still announced and still
+ * findable by `getByText`.
  */
 import React, { memo } from 'react';
-import { EmptyState, ScrollableList } from '../shared';
+import { EmptyState, ScrollableList, Skeleton } from '../shared';
 import AppListItem from './AppListItem';
 import type { AppAssignmentCounts } from '../../hooks/useOktaApi/appOperations';
 import type { OktaAppListItem } from '../../../shared/schemas/okta';
@@ -67,6 +67,7 @@ const AppsListPanel: React.FC<AppsListPanelProps> = memo(function AppsListPanel(
     <ScrollableList
       loading={loading}
       loadingMessage="Loading applications from Okta..."
+      skeleton={<Skeleton variant="row" count={6} label="Loading applications from Okta..." />}
       className="mt-4"
       testId="apps-list"
       emptyState={

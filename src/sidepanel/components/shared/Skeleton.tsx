@@ -29,7 +29,18 @@ interface SkeletonProps {
   count?: number;
   /** Tailwind width class for the `text` variant's line (e.g. `w-1/2`). Ignored for `row`/`card`. Defaults to `w-full`. */
   width?: string;
-  /** Accessible name for the single `role="status"` node announced to assistive tech. Defaults to `"Loading"`. */
+  /**
+   * Announcement for the single `role="status"` node, applied both as the node's
+   * `aria-label` and as its visually-hidden text content.
+   *
+   * Both are deliberate. A live region announces its *content* when it changes,
+   * so the text is what a screen-reader user actually hears; but `role="status"`
+   * does not support name-from-content under ARIA, so without the `aria-label`
+   * the region would have no accessible name at all. Carrying the text as well
+   * also keeps the message findable by `getByText`, which lets a caller pass the
+   * same string its spinner's `loadingMessage` used and keeps existing
+   * loading-state assertions working. Defaults to `"Loading"`.
+   */
   label?: string;
   /** Extra classes merged onto the outer wrapper. */
   className?: string;
@@ -123,7 +134,9 @@ const Skeleton: React.FC<SkeletonProps> = ({
 
   return (
     <div className={className}>
-      <div role="status" aria-label={label} className="sr-only" />
+      <div role="status" aria-label={label} className="sr-only">
+        {label}
+      </div>
       <div className={n > 1 ? 'space-y-2 rise-in-stagger' : ''}>{bones}</div>
     </div>
   );

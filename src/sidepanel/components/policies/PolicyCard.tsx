@@ -97,26 +97,33 @@ const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
       </div>
 
       {/*
-        Deliberately *not* the shared `.disclose` grid wrapper used elsewhere for
-        this same lazy-fetch-on-expand shape (`AppListItem`, `RuleCard`): disclose
-        keeps this subtree mounted (clipped + `inert`) while collapsed, and
-        `AuthPoliciesTab.test.tsx` asserts `queryByTestId('policy-rules-list')` is
-        absent immediately after collapsing — a `data-testid` lookup that, unlike
-        `queryByRole`, ignores `inert`/`aria-hidden`. Snaps open/closed instead;
-        the `useEntityQuery` cache below still means a re-expansion never re-fetches.
+        `.disclose` animates `grid-template-rows` between 0fr and 1fr, so the body
+        collapses to zero height with no JS measurement and stays mounted while
+        closed (held out of the tab order and accessible tree via `inert`) rather
+        than unmounting — matching `AppListItem` and `RuleCard`, which share this
+        lazy-fetch-on-expand shape. `useEntityQuery`'s `enabled` gate is what keeps
+        the rules request from firing until the card is actually opened, and its
+        cache is what makes a re-expansion cost no second request.
       */}
-      {isExpanded && (
-        <div className="space-y-3 border-t border-neutral-100 bg-neutral-50 px-4 pb-4 pt-3">
-          <div className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
-            Rules
-          </div>
-          <PolicyRulesList rules={rules} isLoading={isLoading} error={error} />
-          <div className="border-t border-neutral-200 pt-2 text-xs text-neutral-600">
-            <span className="font-semibold">Policy ID:</span>{' '}
-            <span className="font-mono text-neutral-500">{policy.id}</span>
+      <div
+        className="disclose"
+        data-open={isExpanded}
+        data-testid="policy-rules-disclosure"
+        inert={!isExpanded || undefined}
+      >
+        <div>
+          <div className="space-y-3 border-t border-neutral-100 bg-neutral-50 px-4 pb-4 pt-3">
+            <div className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
+              Rules
+            </div>
+            <PolicyRulesList rules={rules} isLoading={isLoading} error={error} />
+            <div className="border-t border-neutral-200 pt-2 text-xs text-neutral-600">
+              <span className="font-semibold">Policy ID:</span>{' '}
+              <span className="font-mono text-neutral-500">{policy.id}</span>
+            </div>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }, arePolicyCardPropsEqual);
