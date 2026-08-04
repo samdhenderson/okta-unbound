@@ -61,6 +61,16 @@ real "back", in order of preference:
 `scrollTop` returns as `0`. `useScrollPreservation(ref, visible)` captures it before
 the hide and restores it in a layout effect on the way back.
 
+## Scroll across a top-level tab switch — already handled
+
+Do **not** add scroll handling to a new tab. Only Groups and Users own a scroll box
+(`ScrollableList`); every other tab scrolls the single `h-screen overflow-y-auto`
+root div in `App`, shared by all of them. `TabPanel` (`components/TabPanel.tsx`)
+wraps every panel and runs `useScrollPreservation` against that shared element, so
+each tab banks and restores its own offset and a first visit opens at the top
+(ADR-0018). A tab reaching for `window.scrollY` / `window.scrollTo` is a bug — the
+window never scrolls in this layout, so both are inert.
+
 Focus moves into the pushed view and is restored to the trigger on `pop`, with **no
 focus trap** — see [ux-guidelines.md](./ux-guidelines.md).
 

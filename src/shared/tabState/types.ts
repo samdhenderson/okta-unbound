@@ -13,10 +13,17 @@ import type { RuleSortMode } from '../rules/similarity';
 /** Identifiers for the side-panel tabs whose state is persisted. */
 export type TabName = 'overview' | 'rules' | 'users' | 'groups' | 'history';
 
-/** Fields common to every persisted tab state. */
+/**
+ * Fields common to every persisted tab state.
+ *
+ * @remarks Scroll offset is deliberately **not** here. It is DOM state on the shared
+ * app-root scroller, preserved in memory per tab by
+ * {@link sidepanel/components/TabPanel} — not serialised across panel sessions
+ * (ADR-0018). Older persisted records may still carry a vestigial `scrollPosition`;
+ * it is ignored on read.
+ */
 export interface BaseTabState {
   lastVisited: number;
-  scrollPosition: number;
 }
 
 /** Persisted state for the Rules tab (search, filter, sort, and cached rules). */

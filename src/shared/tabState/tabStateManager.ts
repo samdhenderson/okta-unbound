@@ -163,20 +163,6 @@ export class TabStateManager {
   }
 
   /**
-   * Update scroll position for a tab
-   */
-  static async updateScrollPosition(tabName: TabName, scrollPosition: number): Promise<void> {
-    const currentState = await this.loadTabState(tabName);
-    if (currentState) {
-      await this.saveTabState(tabName, {
-        ...currentState,
-        scrollPosition,
-        lastVisited: Date.now(),
-      });
-    }
-  }
-
-  /**
    * Mark tab as visited
    */
   static async markTabVisited(tabName: TabName): Promise<void> {
@@ -294,7 +280,6 @@ export async function saveRulesTabState(state: Partial<RulesTabState>): Promise<
   const currentState = await TabStateManager.loadTabState<RulesTabState>('rules');
   const newState: RulesTabState = {
     lastVisited: Date.now(),
-    scrollPosition: 0,
     searchQuery: '',
     activeFilter: 'all',
     sortMode: 'default',

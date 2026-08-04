@@ -58,10 +58,11 @@ interface RulesTabProps {
   /** Invoked once {@link RulesTabProps.scopeToGroupId} has been applied. */
   onScopeConsumed?: () => void;
   /**
-   * Whether this is the selected top-level tab. The tab stays mounted while
-   * hidden, so the page-level scroll listener that persists `scrollPosition` is
-   * only attached while it is visible — otherwise scrolling *another* tab would
-   * be recorded as this tab's offset. Defaults to `true`.
+   * Whether this is the selected top-level tab. The tab stays mounted while hidden
+   * (ADR-0018), so anything that should mean "on arrival" rather than "on mount"
+   * keys off this — currently the `markTabVisited` record. Scroll is **not** this
+   * component's concern: the offset lives on the shared app-root scroller and is
+   * preserved per tab by {@link sidepanel/components/TabPanel}. Defaults to `true`.
    */
   isActive?: boolean;
 }
@@ -160,9 +161,6 @@ const RulesTab: React.FC<RulesTabProps> = ({
           if (savedState.searchQuery) setSearchQuery(savedState.searchQuery);
           if (savedState.activeFilter) setActiveFilter(savedState.activeFilter);
           if (savedState.sortMode) setSortMode(savedState.sortMode);
-          if (savedState.scrollPosition) {
-            setTimeout(() => window.scrollTo(0, savedState.scrollPosition), 100);
-          }
         }
       } catch (err) {
         log.error('Failed to load persisted state:', err);
@@ -228,20 +226,9 @@ const RulesTab: React.FC<RulesTabProps> = ({
         searchQuery,
         activeFilter,
         sortMode,
-        scrollPosition: window.scrollY,
       }).catch((err) => log.error('Failed to persist state:', err));
     }
   }, [rules, stats, data.lastFetchTime, searchQuery, activeFilter, sortMode]);
-
-  // Persist scroll position periodically. Only while visible — the listener is on
-  // `window`, which is shared with every other mounted tab, so leaving it attached
-  // would record another tab's scrolling as this tab's restore point.
-  useEffect(() => {
-    if (!isActive) return;
-    const handleScroll = () => TabStateManager.updateScrollPosition('rules', window.scrollY);
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [isActive]);
 
   /** Build the minimal rule shape the impact preview needs. */
   const toRuleImpactInput = (rule: FormattedRule): RuleImpactInput => ({
