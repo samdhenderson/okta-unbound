@@ -175,7 +175,12 @@ const Tabs: React.FC<TabsProps> = ({
       {tabs.map((tab, index) => {
         const active = tab.key === activeKey;
 
-        const railClasses = `${TAB_BASE} shrink-0 rounded-t-md px-2.5 py-2.5 transition-colors duration-(--dur-instant) ${
+        // Same padding as the `underline` variant — the rail is a sibling of it,
+        // not its own sizing system. The wider target also matters here, where an
+        // inactive tab is a bare 16px icon. Overflow past the panel edge is the
+        // expected case, not a reason to shave padding: the edge masks and
+        // scroll-active-into-view exist precisely to absorb it.
+        const railClasses = `${TAB_BASE} shrink-0 rounded-t-md px-3 py-2.5 transition-colors duration-(--dur-instant) ${
           active ? 'text-primary' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
         }`;
 

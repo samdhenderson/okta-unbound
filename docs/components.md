@@ -92,6 +92,16 @@ comment at the call site:
   `UserSearchBar`, `GroupSearchBar`, and the Add-to-Group type-ahead (leading-glyph
   search inputs with an absolutely-positioned spinner/dropdown), plus
   `GroupFilterToggle`.
+- **Roving-focus rows:** `TabJumpPalette`'s result rows. A palette row is a
+  left-aligned icon + label + status row carrying a roving `tabIndex` and a ref
+  for programmatic focus; `Button` is a centred CTA and exposes neither
+  `tabIndex` nor a ref, so the gap is structural rather than stylistic and a new
+  variant would not discharge it. (The same file records why the palette uses
+  roving focus rather than combobox ARIA: `Input` deliberately does not spread
+  arbitrary props, and adding `role`/`aria-expanded`/`aria-controls`/
+  `aria-activedescendant` to a shared primitive for one consumer is the wrong
+  trade. A `Input`-level combobox mode is accepted future work, gated on a second
+  consumer.)
 - **Genuinely custom controls:** `ComparisonTabBar` (a documented one-off
   `role="tab"` bar that predates and has not been migrated to the shared `Tabs`
   primitive), the dynamic-color banner, radio-cards, the `AttributeFacet`

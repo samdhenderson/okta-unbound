@@ -7,7 +7,7 @@
  * badges), referenced user attributes, target groups, conflict details, metadata,
  * and activate/deactivate plus "View in Okta" actions. Memoised for list rendering.
  */
-import React, { useState, useCallback, useEffect, useRef, memo } from 'react';
+import React, { useState, useCallback, useEffect, useId, useRef, memo } from 'react';
 import type { FormattedRule } from '../../shared/types';
 import { timeAgo } from '../../shared/ruleUtils';
 import { Button, IconButton } from './shared';
@@ -119,6 +119,7 @@ const RuleCard: React.FC<RuleCardProps> = memo(
     isHighlighted = false,
   }) => {
     const [isExpanded, setIsExpanded] = useState(false);
+    const detailsId = useId();
     // One-shot arrival flash, decoupled from `isHighlighted` itself: `RulesTab`
     // holds `isHighlighted` true for ~2s (long enough to scroll + read), but the
     // flash should decay on its own `--dur-tell` beat rather than leaving the
@@ -217,6 +218,8 @@ const RuleCard: React.FC<RuleCardProps> = memo(
             label={isExpanded ? 'Collapse' : 'Expand'}
             variant="ghost"
             size="md"
+            expanded={isExpanded}
+            controls={detailsId}
             className="shrink-0"
           >
             <svg
@@ -237,7 +240,12 @@ const RuleCard: React.FC<RuleCardProps> = memo(
           via `inert`) rather than unmounting — nothing here fetches on demand, so
           staying mounted while collapsed has no behavioural cost.
         */}
-        <div className="disclose" data-open={isExpanded} inert={!isExpanded || undefined}>
+        <div
+          id={detailsId}
+          className="disclose"
+          data-open={isExpanded}
+          inert={!isExpanded || undefined}
+        >
           <div>
             <div className="px-4 pb-4 pt-2 space-y-4 bg-neutral-50 border-t border-neutral-100">
               {/* Condition */}

@@ -12,7 +12,7 @@
  * mutation affordance. Only validated scalar fields are rendered, as text through
  * React's escaping — policy names and descriptions are end-user-controlled input.
  */
-import React, { memo, useCallback, useState } from 'react';
+import React, { memo, useCallback, useId, useState } from 'react';
 import IconButton from '../shared/IconButton';
 import PolicyRulesList from './PolicyRulesList';
 import { useEntityQuery } from '../../cache/useEntityQuery';
@@ -32,6 +32,7 @@ interface PolicyCardProps {
  */
 const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const rulesId = useId();
 
   const toggleExpanded = useCallback(() => setIsExpanded((prev) => !prev), []);
 
@@ -81,7 +82,8 @@ const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
           label={isExpanded ? `Hide rules for ${name}` : `Show rules for ${name}`}
           variant="ghost"
           size="md"
-          active={isExpanded}
+          expanded={isExpanded}
+          controls={rulesId}
           className="shrink-0"
           onClick={toggleExpanded}
         >
@@ -106,6 +108,7 @@ const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
         cache is what makes a re-expansion cost no second request.
       */}
       <div
+        id={rulesId}
         className="disclose"
         data-open={isExpanded}
         data-testid="policy-rules-disclosure"

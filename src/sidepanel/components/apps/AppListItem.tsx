@@ -7,7 +7,7 @@
  * lazily, only once opened — the app's user/group assignment counts, plus an
  * "Open in Okta" deep link. Memoised so unaffected rows skip re-render.
  */
-import React, { memo, useCallback, useState } from 'react';
+import React, { memo, useCallback, useId, useState } from 'react';
 import { IconButton, LoadingSpinner, OpenInOktaLink } from '../shared';
 import { useEntityQuery } from '../../cache/useEntityQuery';
 import type { AppAssignmentCounts } from '../../hooks/useOktaApi/appOperations';
@@ -81,6 +81,7 @@ const AssignmentCounts: React.FC<{
 const AppListItem: React.FC<AppListItemProps> = memo(
   ({ app, oktaOrigin, fetchAssignmentCounts }) => {
     const [expanded, setExpanded] = useState(false);
+    const detailsId = useId();
     const toggleExpanded = useCallback(() => setExpanded((prev) => !prev), []);
 
     const label = appDisplayLabel(app);
@@ -123,6 +124,8 @@ const AppListItem: React.FC<AppListItemProps> = memo(
                     }}
                     variant="ghost"
                     size="md"
+                    expanded={expanded}
+                    controls={detailsId}
                   >
                     <svg
                       className={`w-4 h-4 transition-transform duration-(--dur-instant) ${expanded ? 'rotate-90' : ''}`}
@@ -157,7 +160,12 @@ const AppListItem: React.FC<AppListItemProps> = memo(
           than unmounting — `AssignmentCounts`' own `enabled={expanded}` gate is what
           keeps its fetch from firing until the row is actually opened.
         */}
-        <div className="disclose" data-open={expanded} inert={!expanded || undefined}>
+        <div
+          id={detailsId}
+          className="disclose"
+          data-open={expanded}
+          inert={!expanded || undefined}
+        >
           <div>
             <div className="px-4 pb-4 pt-2 border-t border-neutral-100 space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
