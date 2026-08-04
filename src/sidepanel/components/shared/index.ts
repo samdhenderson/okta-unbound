@@ -28,6 +28,7 @@ export { default as CollapsibleSection } from './CollapsibleSection';
 export { default as AlertMessage } from './AlertMessage';
 export { default as EmptyState } from './EmptyState';
 export { default as LoadingSpinner } from './LoadingSpinner';
+export { default as Skeleton } from './Skeleton';
 export { default as ScrollableList } from './ScrollableList';
 export { default as SearchDropdown } from './SearchDropdown';
 export { default as SelectionChips } from './SelectionChips';
@@ -35,6 +36,7 @@ export { default as SelectionChips } from './SelectionChips';
 // Re-export commonly used types
 export type { ButtonVariant, ButtonSize } from './Button';
 export type { IconButtonVariant, IconButtonSize } from './IconButton';
+export type { SkeletonVariant, SkeletonSize } from './Skeleton';
 export type { AlertMessageData, AlertAction } from './AlertMessage';
 export type { StatusType, UserStatusVariant } from './status';
 export { userStatusVariant } from './status';

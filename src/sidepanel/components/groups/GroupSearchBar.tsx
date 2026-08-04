@@ -3,6 +3,7 @@
  * @description The groups search input row; swaps its bound query by search mode.
  */
 import React from 'react';
+import LoadingSpinner from '../shared/LoadingSpinner';
 
 interface GroupSearchBarProps {
   /** `live` queries Okta directly; `cached` filters the loaded list. */
@@ -68,7 +69,7 @@ const GroupSearchBar: React.FC<GroupSearchBarProps> = ({
     )}
     {isLiveSearching && (
       <div className="absolute inset-y-0 right-0 pr-4 flex items-center">
-        <div className="w-5 h-5 border-2 border-neutral-200 border-t-primary rounded-full animate-spin"></div>
+        <LoadingSpinner size="sm" />
       </div>
     )}
   </div>

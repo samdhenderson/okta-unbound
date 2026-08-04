@@ -12,14 +12,17 @@ const meta = {
       description: {
         component:
           'Bordered card whose clickable header toggles its body open or closed.\n\n' +
-          'Manages its own open/closed state internally (uncontrolled), seeded by `defaultOpen`. A chevron rotates on toggle and an optional count badge shows next to the title (rendered even when the count is zero).',
+          'Manages its own open/closed state internally (uncontrolled), seeded by `defaultOpen`. A chevron rotates on toggle and an optional count badge shows next to the title (rendered even when the count is zero). The header button carries `aria-expanded`/`aria-controls` for the body region.\n\n' +
+          "The body height animates via the shared `.disclose` grid wrapper (`grid-template-rows: 0fr → 1fr`, no JS measurement), so children **stay mounted while collapsed** — held out of the tab order and the accessible tree with `inert`. Don't rely on collapsing to reset or unmount body state. See the **Motion Showcase** story.",
       },
     },
   },
   argTypes: {
     title: { description: 'Header label.' },
     defaultOpen: { description: 'Whether the section starts expanded. Defaults to `true`.' },
-    children: { description: 'Body content, rendered only while expanded.' },
+    children: {
+      description: 'Body content. Stays mounted (and `inert`) while the section is collapsed.',
+    },
     itemCount: { description: 'Optional count rendered as a small badge next to the title.' },
   },
   args: {
@@ -65,6 +68,21 @@ export const WithItemCount: Story = {
 export const WithZeroCount: Story = {
   args: {
     itemCount: 0,
+  },
+};
+
+/**
+ * Motion showcase — click the header to watch the body's height animate open and
+ * closed (`grid-template-rows: 0fr → 1fr`) and the chevron rotate. Every other
+ * story runs with motion suppressed, so this is the one place the disclosure is
+ * visible; it deliberately has no `play` function, which would race the animation.
+ */
+export const MotionShowcase: Story = {
+  parameters: { motion: 'on' },
+  args: {
+    title: 'Advanced Filters',
+    defaultOpen: false,
+    itemCount: 2,
   },
 };
 

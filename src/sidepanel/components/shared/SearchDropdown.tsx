@@ -7,6 +7,7 @@
  * the result type `T`; `renderResult` / `renderSelected` project each item to UI.
  */
 import React, { useRef } from 'react';
+import LoadingSpinner from './LoadingSpinner';
 
 interface SearchDropdownProps<T> {
   placeholder?: string;
@@ -153,7 +154,7 @@ function SearchDropdown<T>({
         {/* Loading spinner */}
         {isSearching && (
           <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-            <div className="w-4 h-4 border-2 border-neutral-200 border-t-primary rounded-full animate-spin" />
+            <LoadingSpinner size="sm" />
           </div>
         )}
 

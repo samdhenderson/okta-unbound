@@ -169,7 +169,14 @@ await mkdir(OUT, { recursive: true });
 // System Chrome — Playwright's own browser download is not part of `npm ci`
 // (see the VITEST_BROWSER_EXECUTABLE note in vitest.config.ts).
 const browser = await chromium.launch({ channel: 'chrome' });
-const page = await browser.newPage({ viewport: { width: WIDTH, height: HEIGHT } });
+// `reducedMotion: 'reduce'` makes contact sheets deterministic: without it a shot
+// can catch an entrance animation mid-flight, so the same story renders differently
+// run to run. It pairs with the `withMotion` decorator in preview.tsx, which already
+// defaults stories to `data-motion="off"`.
+const page = await browser.newPage({
+  viewport: { width: WIDTH, height: HEIGHT },
+  reducedMotion: 'reduce',
+});
 
 /**
  * Union bounding box of every visible top-level element, padded. Spans `body > *`

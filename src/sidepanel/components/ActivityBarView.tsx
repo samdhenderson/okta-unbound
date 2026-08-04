@@ -101,7 +101,9 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({
   const statusDot = (
     <div
       aria-hidden="true"
-      className={`h-2 w-2 shrink-0 rounded-full shadow-sm ${view.busy ? 'animate-pulse' : ''}`}
+      // motion-exempt: the pulse encodes live "busy" state, not a decorative
+      // entrance/exit — it must keep animating under prefers-reduced-motion.
+      className={`motion-exempt h-2 w-2 shrink-0 rounded-full shadow-sm ${view.busy ? 'animate-pulse' : ''}`}
       style={{ backgroundColor: view.statusColorVar }}
     />
   );
@@ -140,7 +142,9 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({
       className="h-1 w-full bg-neutral-100"
     >
       <div
-        className="h-full bg-primary transition-all duration-150"
+        // motion-exempt: the width transition encodes live progress state, not a
+        // decorative entrance/exit — it must keep animating under prefers-reduced-motion.
+        className="motion-exempt h-full bg-primary transition-all duration-150"
         style={{ width: `${view.percentage}%` }}
       />
     </div>

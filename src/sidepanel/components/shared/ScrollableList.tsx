@@ -4,7 +4,10 @@
  *
  * Renders a {@link LoadingSpinner} while `loading`, the `emptyState` node when it
  * has no children, otherwise a scroll region (its own scrollbar) that by default
- * flex-grows to fill available space so surrounding chrome stays visible.
+ * flex-grows to fill available space so surrounding chrome stays visible. A caller
+ * whose loading state has a known shape (a list of rows, a stat grid) can pass a
+ * `Skeleton` (`shared/Skeleton`) via the optional `skeleton` prop instead of the
+ * default spinner.
  */
 import React from 'react';
 import LoadingSpinner from './LoadingSpinner';
@@ -20,6 +23,12 @@ interface ScrollableListProps {
   loading?: boolean;
   /** Custom message for loading state */
   loadingMessage?: string;
+  /**
+   * Optional known-shape placeholder (typically a `Skeleton`) rendered instead of
+   * the default {@link LoadingSpinner} while `loading` is true. Additive and
+   * opt-in: when omitted, the spinner path is unchanged.
+   */
+  skeleton?: React.ReactNode;
   /** Optional explicit max-height (e.g., "400px", "50vh") */
   maxHeight?: string;
   /** If true (default), uses flex-grow to fill remaining space */
@@ -67,6 +76,7 @@ const ScrollableList: React.FC<ScrollableListProps> = ({
   loadingMessage = 'Loading...',
   maxHeight,
   fillAvailable = true,
+  skeleton,
   scrollRef,
   testId,
 }) => {
@@ -76,6 +86,14 @@ const ScrollableList: React.FC<ScrollableListProps> = ({
 
   // Loading state
   if (loading) {
+    if (skeleton) {
+      return (
+        <div className={fillAvailable ? 'flex-1' : ''} data-testid={testId}>
+          {skeleton}
+        </div>
+      );
+    }
+
     return (
       <div
         className={`flex items-center justify-center py-12 ${fillAvailable ? 'flex-1' : ''}`}

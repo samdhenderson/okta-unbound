@@ -4,6 +4,7 @@
  */
 import React from 'react';
 import Icon from '../../overview/shared/Icon';
+import LoadingSpinner from '../../shared/LoadingSpinner';
 import UserSearchResults from '../UserSearchResults';
 import type { OktaUser } from '../../../../shared/types';
 
@@ -27,8 +28,8 @@ interface ComparisonSearchPhaseProps {
 
 /**
  * Phase 1 of the comparison modal: pick a second user to compare against.
- * The raw <input> and hand-rolled spinner are kept verbatim — migrating them to
- * shared Input/LoadingSpinner is a separate, non-pixel-neutral §3 follow-up.
+ * The raw <input> is kept verbatim — migrating it to a shared Input component is
+ * a separate, non-pixel-neutral §3 follow-up.
  */
 const ComparisonSearchPhase: React.FC<ComparisonSearchPhaseProps> = ({
   contextUser,
@@ -80,21 +81,7 @@ const ComparisonSearchPhase: React.FC<ComparisonSearchPhaseProps> = ({
 
       {isSearching && (
         <div className="flex items-center justify-center gap-2 py-4 text-sm text-neutral-500">
-          <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-            />
-          </svg>
+          <LoadingSpinner size="sm" />
           Searching directory…
         </div>
       )}

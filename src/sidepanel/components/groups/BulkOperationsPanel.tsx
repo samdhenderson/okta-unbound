@@ -7,7 +7,7 @@
  * and renders live progress plus a success/failure summary.
  */
 import React, { useState, useCallback } from 'react';
-import { Button, IconButton, Input } from '../shared';
+import { Button, IconButton, Input, LoadingSpinner } from '../shared';
 import type { GroupSummary, BulkOperation, BulkOperationResult } from '../../../shared/types';
 
 /** The bulk operations this panel can launch. */
@@ -218,7 +218,7 @@ const BulkOperationsPanel: React.FC<BulkOperationsPanelProps> = ({
       {running && (
         <div className="p-4 space-y-3">
           <div className="flex items-center gap-3">
-            <div className="w-5 h-5 border-2 border-neutral-200 border-t-primary rounded-full animate-spin shrink-0" />
+            <LoadingSpinner size="sm" className="shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="text-sm font-medium text-neutral-900">
                 {currentOp === 'cleanup_inactive'
