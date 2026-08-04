@@ -272,7 +272,7 @@ const UsersTab: React.FC<UsersTabProps> = ({
           <AlertMessage
             message={{ text: error, type: 'danger' }}
             onDismiss={() => setError(null)}
-            className="animate-in slide-in-from-top-2 duration-300"
+            className="animate-rise-in"
           />
         )}
 
@@ -281,7 +281,7 @@ const UsersTab: React.FC<UsersTabProps> = ({
           <AlertMessage
             message={resultMessage}
             onDismiss={() => setResultMessage(null)}
-            className="animate-in slide-in-from-top-2 duration-300"
+            className="animate-rise-in"
           />
         )}
 
@@ -292,7 +292,7 @@ const UsersTab: React.FC<UsersTabProps> = ({
 
         {/* Selected User Details - Positioned directly under search */}
         {selectedUser && (
-          <div className="space-y-6 animate-in slide-in-from-top-4 duration-500">
+          <div className="space-y-6 animate-rise-in">
             <UserProfileCard
               user={selectedUser}
               oktaOrigin={oktaOrigin}
