@@ -6,7 +6,8 @@
  * so results feel like they land one after another rather than appearing as one
  * block — see `tailwind.css` for the 24ms/child, 8-row-capped stagger.
  */
-import React from 'react';
+import React, { useRef } from 'react';
+import { useStaggerReveal } from '../../hooks/useStaggerReveal';
 import type { OktaUser } from '../../../shared/types';
 import { userStatusVariant, type UserStatusVariant } from '../shared';
 
@@ -36,6 +37,9 @@ const getStatusBadgeClass = (status: string) =>
  * there are no results.
  */
 const UserSearchResults: React.FC<UserSearchResultsProps> = ({ results, onSelectUser }) => {
+  const staggerRef = useRef<HTMLDivElement>(null);
+  useStaggerReveal(staggerRef);
+
   if (results.length === 0) {
     return null;
   }
@@ -48,7 +52,7 @@ const UserSearchResults: React.FC<UserSearchResultsProps> = ({ results, onSelect
           {results.length} {results.length === 1 ? 'user' : 'users'}
         </span>
       </div>
-      <div className="space-y-3 rise-in-stagger">
+      <div ref={staggerRef} className="space-y-3 rise-in-stagger">
         {results.map((user) => (
           <div
             key={user.id}

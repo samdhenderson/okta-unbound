@@ -9,7 +9,8 @@
  * search". The row shape is known ahead of a load, so the loading state is a
  * {@link Skeleton} rather than the default spinner.
  */
-import React, { memo } from 'react';
+import React, { memo, useRef } from 'react';
+import { useStaggerReveal } from '../../hooks/useStaggerReveal';
 import PolicyCard from './PolicyCard';
 import ScrollableList from '../shared/ScrollableList';
 import EmptyState from '../shared/EmptyState';
@@ -54,12 +55,15 @@ const PoliciesListPanel: React.FC<PoliciesListPanelProps> = memo(function Polici
   onLoad,
   loadRules,
 }) {
+  const staggerRef = useRef<HTMLDivElement>(null);
+  useStaggerReveal(staggerRef);
+
   return (
     <div className="min-h-[400px]">
       <ScrollableList
         loading={isLoading}
         loadingMessage="Loading auth policies…"
-        skeleton={<Skeleton variant="row" count={6} label="Loading auth policies" />}
+        skeleton={<Skeleton variant="row" size="lg" count={6} label="Loading auth policies" />}
         fillAvailable={false}
         testId="policies-list"
         emptyState={
@@ -75,7 +79,7 @@ const PoliciesListPanel: React.FC<PoliciesListPanelProps> = memo(function Polici
         }
       >
         {policies.length > 0 && (
-          <div className="space-y-3 rise-in-stagger">
+          <div ref={staggerRef} className="space-y-3 rise-in-stagger">
             {policies.map((policy) => (
               <PolicyCard key={policy.id} policy={policy} loadRules={loadRules} />
             ))}

@@ -290,6 +290,27 @@
     animation-delay: 168ms;
   }
 
+  /*
+    Scroll-reveal takeover. `useStaggerReveal` sets `data-stagger-reveal="on"`
+    only AFTER it has constructed the IntersectionObserver that clears the hold,
+    so if the API is missing, the effect never runs, or reduced motion is on, this
+    block simply never matches and the plain on-mount stagger above stays in
+    charge. A row can never be stranded invisible.
+
+    Without this, every row past the eighth animates at zero delay — so in a panel
+    showing ~9 rows the cascade appears to stop, and rows below the fold finish
+    their entrance off-screen.
+  */
+  .rise-in-stagger[data-stagger-reveal='on'] > *:not([data-revealed]) {
+    opacity: 0;
+    animation: none;
+  }
+
+  .rise-in-stagger[data-stagger-reveal='on'] > *[data-revealed] {
+    animation: var(--animate-rise-in);
+    animation-delay: var(--reveal-delay, 0ms);
+  }
+
   /* Shimmer surface for skeleton loading placeholders. */
   .skeleton {
     background-color: var(--color-neutral-100);

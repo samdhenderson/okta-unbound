@@ -12,6 +12,7 @@
  * known, so there is nothing for a spinner to explain.
  */
 import React, { useEffect, useRef } from 'react';
+import { useStaggerReveal } from '../../../hooks/useStaggerReveal';
 import type { OktaUser, MemberMfaResult } from '../../../../shared/types';
 import ScrollableList from '../../shared/ScrollableList';
 import { Button, Skeleton } from '../../shared';
@@ -55,6 +56,9 @@ const MemberList: React.FC<MemberListProps> = ({
   onLoadMore,
   oktaOrigin,
 }) => {
+  const staggerRef = useRef<HTMLDivElement>(null);
+  useStaggerReveal(staggerRef);
+
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const hasMore = visibleCount < members.length;
   const visible = members.slice(0, visibleCount);
@@ -88,12 +92,12 @@ const MemberList: React.FC<MemberListProps> = ({
         maxHeight="50vh"
         fillAvailable={false}
         loading={loading}
-        skeleton={<Skeleton variant="row" count={6} label="Reloading members" />}
+        skeleton={<Skeleton variant="row" size="md" count={6} label="Reloading members" />}
       >
         {/* One stagger wrapper around the rows: `.rise-in-stagger > *` drives the
             entrance, so newly paged-in rows animate and already-mounted ones stay
             put. The sentinel stays outside it — it must never be delayed. */}
-        <div className="space-y-3 rise-in-stagger">
+        <div ref={staggerRef} className="space-y-3 rise-in-stagger">
           {visible.map((user) => (
             <MemberRow
               key={user.id}

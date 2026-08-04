@@ -13,7 +13,8 @@
  * text in a `role="status"` node, so the message is still announced and still
  * findable by `getByText`.
  */
-import React, { memo } from 'react';
+import React, { memo, useRef } from 'react';
+import { useStaggerReveal } from '../../hooks/useStaggerReveal';
 import { EmptyState, ScrollableList, Skeleton } from '../shared';
 import AppListItem from './AppListItem';
 import type { AppAssignmentCounts } from '../../hooks/useOktaApi/appOperations';
@@ -63,11 +64,16 @@ const AppsListPanel: React.FC<AppsListPanelProps> = memo(function AppsListPanel(
   oktaOrigin,
   fetchAssignmentCounts,
 }) {
+  const staggerRef = useRef<HTMLDivElement>(null);
+  useStaggerReveal(staggerRef);
+
   return (
     <ScrollableList
       loading={loading}
       loadingMessage="Loading applications from Okta..."
-      skeleton={<Skeleton variant="row" count={6} label="Loading applications from Okta..." />}
+      skeleton={
+        <Skeleton variant="row" size="lg" count={6} label="Loading applications from Okta..." />
+      }
       className="mt-4"
       testId="apps-list"
       emptyState={
@@ -93,7 +99,7 @@ const AppsListPanel: React.FC<AppsListPanelProps> = memo(function AppsListPanel(
       }
     >
       {apps.length > 0 && (
-        <div className="space-y-3 rise-in-stagger">
+        <div ref={staggerRef} className="space-y-3 rise-in-stagger">
           {apps.map((app) => (
             <AppListItem
               key={app.id}

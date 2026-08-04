@@ -15,6 +15,7 @@
  * do not replay their entrance.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useStaggerReveal } from '../../hooks/useStaggerReveal';
 import EmptyState from '../shared/EmptyState';
 import ScrollableList from '../shared/ScrollableList';
 import Button from '../shared/Button';
@@ -96,6 +97,9 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
   highlightedGroupId,
   scrollRef,
 }) => {
+  const staggerRef = useRef<HTMLDivElement>(null);
+  useStaggerReveal(staggerRef);
+
   const [visibleCount, setVisibleCount] = useState(PAGE);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
@@ -181,7 +185,7 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
           keys, so that case intentionally re-enters as a fresh rise-in.
         */}
         {visibleGroups.length > 0 && (
-          <div className="rise-in-stagger space-y-3">
+          <div ref={staggerRef} className="rise-in-stagger space-y-3">
             {visibleGroups.map((group) => (
               <GroupListItem
                 key={group.id}

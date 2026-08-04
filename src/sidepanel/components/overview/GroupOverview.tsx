@@ -45,7 +45,7 @@ const GroupOverviewSkeleton: React.FC = () => (
         <Skeleton key={label} variant="card" label={label} />
       ))}
     </div>
-    <Skeleton variant="row" count={6} label="Loading group members" />
+    <Skeleton variant="row" size="md" count={6} label="Loading group members" />
   </div>
 );
 

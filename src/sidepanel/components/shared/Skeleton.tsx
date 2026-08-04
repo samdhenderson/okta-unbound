@@ -75,14 +75,23 @@ function SkeletonBone({
   width: string;
 }) {
   if (variant === 'row') {
+    // Mirrors the real list-row anatomy — title, a badge strip, a meta line and a
+    // trailing control — so the placeholder occupies roughly the height the loaded
+    // row will, and the list doesn't lurch when content arrives. Match `size` to the
+    // row's own padding at the call site (`lg` = p-4 for AppListItem/PolicyCard,
+    // `md` = p-3 for MemberRow, `sm` = the compact GroupListItem).
     return (
       <div aria-hidden="true" className={`${containerClasses.row} ${paddingClasses[size]}`}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1 space-y-2">
             <div className="skeleton h-4 w-2/5 rounded" />
+            <div className="flex gap-1.5">
+              <div className="skeleton h-5 w-16 rounded-md" />
+              <div className="skeleton h-5 w-14 rounded-md" />
+            </div>
             <div className="skeleton h-3 w-3/5 rounded" />
           </div>
-          <div className="skeleton h-5 w-12 shrink-0 rounded" />
+          <div className="skeleton h-6 w-6 shrink-0 rounded-md" />
         </div>
       </div>
     );
@@ -137,7 +146,9 @@ const Skeleton: React.FC<SkeletonProps> = ({
       <div role="status" aria-label={label} className="sr-only">
         {label}
       </div>
-      <div className={n > 1 ? 'space-y-2 rise-in-stagger' : ''}>{bones}</div>
+      {/* `space-y-3` matches the gap every real list uses, so the placeholder
+          rhythm is the loaded rhythm and nothing shifts on resolve. */}
+      <div className={n > 1 ? 'space-y-3 rise-in-stagger' : ''}>{bones}</div>
     </div>
   );
 };
