@@ -36,6 +36,7 @@ import {
   bucketApps,
   type TabKey,
 } from '../components/users/comparison/comparisonAnalytics';
+import { classifyAccessCauses } from '../components/users/comparison/accessCause';
 import type { OktaUser, GroupMembership } from '../../shared/types';
 
 /** Options for {@link useUserComparison}. */
@@ -72,10 +73,17 @@ export interface UseUserComparisonOptions {
  * @param options - See `UseUserComparisonOptions`.
  * @returns The comparison view model: `comparedUser` and search state, `activeTab`
  *   control, `groupBuckets` / `appBuckets` with their diff counts and per-facet
- *   plus `overallSimilarity`, aggregated `isLoading` / `loadError`, group-copy
- *   state (`addingGroupId`, `addError`) and the bidirectional `addToContext` /
- *   `addToCompared` actions, display names, and the `selectUser` / `changeUser`
- *   actions.
+ *   plus `overallSimilarity`, the classified `causes` worklist and the
+ *   `ruleInventory` it was derived from, aggregated `isLoading` / `loadError`,
+ *   group-copy state (`addingGroupId`, `addError`) and the bidirectional
+ *   `addToContext` / `addToCompared` actions, display names, and the `selectUser`
+ *   / `changeUser` actions.
+ *
+ *   `causes` classifies the `onlyCompared` bucket by remedy
+ *   ({@link classifyAccessCauses}); `ruleInventory` is the org rule list that
+ *   classification ran against, re-exported from `useUserMemberships` — `null`
+ *   there means "could not be obtained", never "the org has none", and is passed
+ *   through unchanged.
  */
 export function useUserComparison({
   isActive,
@@ -97,6 +105,10 @@ export function useUserComparison({
     memberships: comparedGroups,
     isLoading: isLoadingGroups,
     error: groupsError,
+    // The org rule inventory that load already had in hand — re-exported, never
+    // re-fetched. `null` ("we could not obtain it") is threaded through as
+    // `null`; see `classifyAccessCauses` below.
+    rules: ruleInventory,
     loadMemberships,
     clearMemberships,
   } = useUserMemberships({ targetTabId });
@@ -184,6 +196,28 @@ export function useUserComparison({
     [contextApps, comparedApps],
   );
 
+  // Why the compared user has group access the context user lacks, grouped by the
+  // remedy that would close it. Memoized because classification parses every
+  // targeting rule's condition: the comparison is a pushed view that re-renders on
+  // every nav change (ADR-0016), and re-parsing on each of those would be pure
+  // waste. The deps are the same references `groupBuckets` is keyed on, so a
+  // re-render that changes nothing reuses the previous array.
+  //
+  // `ruleInventory` is passed **as-is**: `null` means the inventory could not be
+  // obtained and must stay `null`, so every row reports `cannot-determine` /
+  // `no-rule-inventory`. Defaulting it to `[]` would read as "the org has no
+  // rules" and produce a confident `manual-add` — an instruction to add a user by
+  // hand, derived from rules nobody ever saw.
+  const causes = useMemo(
+    () =>
+      classifyAccessCauses({
+        onlyCompared: groupBuckets.onlyCompared,
+        contextUser,
+        rules: ruleInventory,
+      }),
+    [groupBuckets.onlyCompared, contextUser, ruleInventory],
+  );
+
   const groupDiffCount = groupBuckets.onlyCompared.length + groupBuckets.onlyContext.length;
   const appDiffCount = appBuckets.onlyCompared.length + appBuckets.onlyContext.length;
 
@@ -213,6 +247,8 @@ export function useUserComparison({
     setActiveTab,
     groupBuckets,
     appBuckets,
+    causes,
+    ruleInventory,
     groupDiffCount,
     appDiffCount,
     groupSimilarity,

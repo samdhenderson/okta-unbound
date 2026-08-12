@@ -27,6 +27,11 @@
  * obtain the rules is **not** degraded gracefully into an analysis: the load
  * reports `unclassifiedMemberships` (`UNKNOWN` / `ambiguous`) and the degraded
  * result is dropped from the cache so the next visit retries.
+ *
+ * The same inventory is handed back to callers as {@link UseUserMembershipsReturn.rules},
+ * carrying that `[]`-vs-`null` distinction intact — it is the *same* bytes this
+ * load already obtained, re-exported rather than re-fetched, so reading it costs
+ * no additional API request (see the field's own doc comment).
  */
 
 import { useState, useCallback, useRef } from 'react';
@@ -62,6 +67,33 @@ interface UseUserMembershipsReturn {
   isLoading: boolean;
   error: string | null;
   /**
+   * The org-wide group-rule inventory the last completed load classified
+   * against — **not** a second fetch. It is the array this hook already read
+   * from `RulesCache` (or already fetched on a miss) and then used for
+   * `analyzeMemberships`, re-exported so callers that must answer "why does this
+   * user *not* have that group" can ask the same question of the same rules.
+   * Reading it issues nothing.
+   *
+   * ## `[]` and `null` are different facts — never conflate them
+   *
+   * - `[]` — the load obtained the inventory and **the org genuinely has no
+   *   rules**. Anything untargeted really is untargeted.
+   * - `null` — **the inventory could not be obtained** (the fetch failed, or no
+   *   load has completed in this hook instance yet). Nothing may be concluded
+   *   from a group looking untargeted.
+   *
+   * This is the same distinction that makes a failed rules fetch report
+   * `UNKNOWN` / `ambiguous` instead of a confident `DIRECT` (see the module
+   * header). Consumers must thread `null` through **as `null`** — defaulting it
+   * with `?? []` turns "we do not know" into "there are no rules", which is
+   * exactly the confident-wrong-answer this hook exists to avoid.
+   *
+   * Survives `clearMemberships` and a change of user on purpose: the inventory
+   * is org-wide, not user-scoped, so discarding it would manufacture a "we do
+   * not know" out of knowledge already in hand.
+   */
+  rules: FormattedRule[] | null;
+  /**
    * (Re)load a user's analyzed memberships. A fresh cached analysis is served
    * instantly; pass `{ force: true }` after a mutation (e.g. add-to-group) to
    * bypass the cache and refetch.
@@ -80,8 +112,10 @@ interface UseUserMembershipsReturn {
  *
  * @param options - See `UseUserMembershipsOptions`.
  * @returns `memberships` (each annotated with its inferred type), `isLoading`,
- *   `error`, `loadMemberships(user)` to (re)load for a user, and
- *   `clearMemberships` to reset.
+ *   `error`, `rules` (the inventory the last load classified against — `null`
+ *   when it could not be obtained, which is **not** `[]`),
+ *   `loadMemberships(user)` to (re)load for a user, and `clearMemberships` to
+ *   reset.
  */
 export function useUserMemberships({
   targetTabId,
@@ -91,6 +125,10 @@ export function useUserMemberships({
   const [memberships, setMemberships] = useState<GroupMembership[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The inventory the last completed load classified against. Starts `null` —
+  // "we have not obtained the org's rules" — and is only ever written with what
+  // a load actually saw, `null` included. See `UseUserMembershipsReturn.rules`.
+  const [ruleInventory, setRuleInventory] = useState<FormattedRule[] | null>(null);
 
   // §8: own a useOktaApi slice so the group fetch routes through the background
   // scheduler. `makeApiRequest` is stable per `targetTabId`, so it does not widen
@@ -187,6 +225,12 @@ export function useUserMemberships({
               }
             }
 
+            // Publish the inventory this load will classify against, exactly as
+            // obtained — `null` stays `null`. No request is issued here: either
+            // the RulesCache read above served it or the single scheduler-routed
+            // fetch above already paid for it.
+            setRuleInventory(rules);
+
             // Extract raw groups from membership wrapper objects
             // groupsResponse.data is an array of { group, membershipType, addedDate }
             const membershipData: Array<{ group?: OktaGroup }> = groupsResponse.data || [];
@@ -236,6 +280,7 @@ export function useUserMemberships({
     memberships,
     isLoading,
     error,
+    rules: ruleInventory,
     loadMemberships,
     clearMemberships,
   };

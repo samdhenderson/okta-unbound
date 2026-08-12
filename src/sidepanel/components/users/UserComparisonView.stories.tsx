@@ -2,20 +2,33 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import UserComparisonView from './UserComparisonView';
 import { mockUsers, mockGroup } from '../../../test/mocks/handlers';
+import { classifyAccessCauses } from './comparison/accessCause';
 import type { UserComparisonState } from '../../hooks/useUserComparison';
-import type { GroupMembership, MembershipRule } from '../../../shared/types';
+import type { FormattedRule, GroupMembership } from '../../../shared/types';
 
 const contextUser = mockUsers[10];
 const comparedUser = mockUsers[11];
 
-/** An obviously-fake rule, used to give a story membership real provenance. */
-const vpnRule: MembershipRule = {
+/**
+ * An obviously-fake rule, used to give a story membership real provenance.
+ *
+ * Typed as the wider {@link FormattedRule} — the shape `useUserMemberships`
+ * actually hands back as its rule inventory — because this one fixture stands in
+ * both places a story needs it: the inventory the comparison classifies against,
+ * and a membership's own `rules` (a `MembershipRule`, which `FormattedRule`
+ * structurally satisfies). One rule in both slots is what makes the story's
+ * worklist agree with its group rows.
+ */
+const vpnRule: FormattedRule = {
   id: '0prFAKErule00001',
   name: 'Contractors → VPN Access',
   status: 'ACTIVE',
+  condition: 'user.userType == "Contractor"',
   conditionExpression: 'user.userType == "Contractor"',
   groupIds: ['group456'],
   userAttributes: ['userType'],
+  created: '2026-01-01T00:00:00.000Z',
+  lastUpdated: '2026-01-01T00:00:00.000Z',
 };
 
 /**
@@ -59,6 +72,10 @@ const comparison = (over: Partial<UserComparisonState> = {}): UserComparisonStat
   setActiveTab: fn(),
   groupBuckets: { onlyCompared: [], shared: [], onlyContext: [] },
   appBuckets: { onlyCompared: [], shared: [], onlyContext: [] },
+  // Nothing loaded yet: no differences to explain, and no rule inventory in hand.
+  // `null` means "we did not obtain the rules", never "the org has none".
+  causes: [],
+  ruleInventory: null,
   groupDiffCount: 0,
   appDiffCount: 0,
   groupSimilarity: 0,
@@ -99,6 +116,15 @@ const loaded = (over: Partial<UserComparisonState> = {}): UserComparisonState =>
       shared: [{ id: 'app1', label: 'Slack', scope: 'USER' }],
       onlyContext: [{ id: 'app3', label: 'Figma', scope: 'GROUP' }],
     },
+    // Classified from the very buckets above, exactly as `useUserComparison`
+    // memoizes it — so the worklist a story shows is the real classifier's
+    // output rather than hand-written copy that could drift from it.
+    ruleInventory: [vpnRule],
+    causes: classifyAccessCauses({
+      onlyCompared: [gOnlyCompared],
+      contextUser,
+      rules: [vpnRule],
+    }),
     groupDiffCount: 2,
     appDiffCount: 2,
     groupSimilarity: 33,

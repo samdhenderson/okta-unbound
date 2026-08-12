@@ -20,6 +20,23 @@
  * "Change user" is rendered here rather than by the host: the dialog has a footer and
  * the pushed view does not, so the one affordance that must exist in both lives with
  * the surface it acts on.
+ *
+ * ## Why `onViewClauses` is not passed to the overview tab
+ *
+ * {@link ComparisonOverviewTab} accepts an optional `onViewClauses` that would deep-link
+ * a worklist row into a full clause checklist. It is left unpassed, which the worklist
+ * degrades to cleanly: every row still renders its failing-clause evidence inline and
+ * simply offers no jump.
+ *
+ * Passing it would put an "Open clause checklist" button on **every** row —
+ * `CauseWorklistRow` renders the button whenever the callback exists, and that is
+ * pinned by its tests. But a `manual-add` row is, by construction, one that **no rule
+ * targets at all**, and a rule-less `cannot-determine` row carries no `ruleId` either
+ * ({@link AccessCause} names a rule only when exactly one is implicated), so for a
+ * whole remedy group there would be no condition to explain and the button would
+ * dead-end. Wiring it therefore needs a per-row decision about whether the jump exists
+ * plus a clause-detail surface that does not exist yet — a UX change, not the
+ * integration this module performs.
  */
 import React from 'react';
 import Button from '../shared/Button';
@@ -62,6 +79,7 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({ contextUser, co
     setActiveTab,
     groupBuckets,
     appBuckets,
+    causes,
     groupDiffCount,
     appDiffCount,
     groupSimilarity,
@@ -147,6 +165,11 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({ contextUser, co
                   appSimilarity={appSimilarity}
                   onJumpToGroups={() => setActiveTab('groups')}
                   onJumpToApps={() => setActiveTab('apps')}
+                  // Classified upstream (`useUserComparison`), not here: the
+                  // classification is a memoized derivation of the same buckets,
+                  // and this component stays presentational. `onViewClauses` is
+                  // deliberately not passed — see the module header.
+                  causes={causes}
                 />
               )}
 

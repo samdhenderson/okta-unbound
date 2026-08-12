@@ -72,6 +72,10 @@ const comparison = (appBuckets: AppBucketFixture = DEFAULT_APPS): UserComparison
     setActiveTab: vi.fn(),
     groupBuckets: { onlyCompared: [], shared: [], onlyContext: [] },
     appBuckets,
+    // No group differences to explain, and no inventory was loaded for this
+    // fixture. `null` is "we did not obtain the rules", never "there are none".
+    causes: [],
+    ruleInventory: null,
     groupDiffCount: 0,
     appDiffCount: 4,
     groupSimilarity: 0,
