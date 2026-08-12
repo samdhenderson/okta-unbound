@@ -14,7 +14,7 @@
  */
 
 import { useCallback, useRef, useState } from 'react';
-import type { GroupSummary, MembershipRule } from '../../shared/types';
+import type { GroupSummary } from '../../shared/types';
 import { useOktaApi } from './useOktaApi';
 import {
   summarizeMemberSources,
@@ -90,9 +90,7 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
       getGroupRulesForGroup(nextGroup.id)
         .then((rules) => {
           if (runId !== runIdRef.current) return;
-          setFeedingRules(
-            (rules as MembershipRule[]).map((r) => ({ id: r.id, name: r.name, status: r.status })),
-          );
+          setFeedingRules(rules.map((r) => ({ id: r.id, name: r.name, status: r.status })));
           setRulesStatus('done');
         })
         .catch((err) => {
@@ -117,7 +115,7 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
         const summary = summarizeMemberSources(
           { id: group.id, name: group.name, type: group.type },
           members,
-          rules as MembershipRule[],
+          rules,
         );
         setBreakdown(summary);
         // Bank it for the session: the groups list renders this split in each
