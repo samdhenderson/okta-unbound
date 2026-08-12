@@ -43,12 +43,7 @@ import React, { useRef } from 'react';
 import PageHeader from './shared/PageHeader';
 import Breadcrumbs from './shared/Breadcrumbs';
 import AlertMessage from './shared/AlertMessage';
-import {
-  AddToGroupModal,
-  UserComparisonPanel,
-  UserDetailPanel,
-  UserSearchPanel,
-} from './users';
+import { AddToGroupModal, UserComparisonPanel, UserDetailPanel, UserSearchPanel } from './users';
 import { useUsersTabState } from '../hooks/useUsersTabState';
 import { userDisplayName } from '../../shared/utils/userDisplay';
 

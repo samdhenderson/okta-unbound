@@ -101,7 +101,7 @@ const meta = {
     onRequestLifecycleAction: { description: 'Arm the confirm modal for a lifecycle action.' },
     onCancelLifecycleAction: { description: 'Dismiss the lifecycle confirm modal.' },
     onConfirmLifecycleAction: { description: 'Run the armed lifecycle action.' },
-    onCompare: { description: 'Opens the user-comparison modal.' },
+    onCompare: { description: 'Pushes the user-comparison view (ADR-0016).' },
     onAddToGroup: { description: 'Opens the Add-to-Group modal.' },
   },
 } satisfies Meta<typeof UserDetailPanel>;

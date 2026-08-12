@@ -216,6 +216,30 @@ describe('UsersTab sub-navigation', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('swaps the visibility class wholesale and keeps the tab body container', async () => {
+    const uev = userEvent.setup();
+    await renderWithAda(uev);
+
+    const view = screen.getByTestId('user-comparison-view');
+    const body = view.previousElementSibling as HTMLElement;
+
+    // The comparison is laid out by the page, not portalled over it: it and the
+    // browse body are siblings inside the tab's own `max-w-7xl` content container,
+    // which is what makes the pushed view inherit the tab's gutters and max width.
+    expect(view.parentElement).toHaveClass('max-w-7xl', 'mx-auto', 'px-6', 'py-6');
+    expect(body).toContainElement(screen.getByRole('button', { name: /Compare/ }));
+
+    // Each side carries `hidden` and NOTHING else when away. The class has to be
+    // swapped wholesale: `hidden` alongside a layout class does not out-specify it.
+    expect(body.className).toBe('space-y-6');
+    expect(view.className).toBe('hidden');
+
+    await pushCompare(uev);
+
+    expect(body.className).toBe('hidden');
+    expect(view.className).toBe('space-y-6 focus:outline-none');
+  });
+
   it('renders a breadcrumb trail back to the profile', async () => {
     const uev = userEvent.setup();
     await renderWithAda(uev);
