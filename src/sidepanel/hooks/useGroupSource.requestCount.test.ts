@@ -38,6 +38,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useGroupSource } from './useGroupSource';
 import { OKTA_PAGE_SIZE } from '../../shared/utils/oktaPagination';
+import { setEntry, resetEntityCache } from '../cache/entityCache';
 import type { GroupSummary, OktaGroupRule } from '../../shared/types';
 
 const runtimeSendMessage = chrome.runtime.sendMessage as ReturnType<typeof vi.fn>;
@@ -114,6 +115,12 @@ function memberPage(url: string, total: number) {
  */
 function installHarness(memberCount: number) {
   // Reset first: a test that runs two cycles must count each one on its own.
+  // That now includes the module-level entity cache, which banks the member walk
+  // under `['groupMembers', groupId]` — without this reset a second cycle in the
+  // same test would be served the FIRST cycle's member list (see the warm-cache
+  // case below, which opts into that behaviour deliberately). The global
+  // `afterEach` in `src/test/setup.ts` only resets it between tests.
+  resetEntityCache();
   runtimeSendMessage.mockReset();
   storageGet.mockReset();
   storageSet.mockReset();
@@ -239,4 +246,71 @@ describe('useGroupSource scheduler cost', () => {
       expect(endpoints.filter((e) => /^\/api\/v1\/users\//.test(e))).toEqual([]);
     },
   );
+});
+
+/**
+ * Drive open → analyze against the harness already installed by the caller, so a
+ * test can seed the entity cache (or fire two analyses) in between.
+ *
+ * @param onOpened - Optional hook run after `open()` settles and before the
+ *   analysis, used by the de-duplication case to fire two analyses at once.
+ * @returns The rendered hook result, once `memberStatus` is `done`.
+ */
+async function openAndAnalyze(
+  onOpened?: (analyze: () => void) => void,
+): Promise<ReturnType<typeof renderHook<ReturnType<typeof useGroupSource>, unknown>>['result']> {
+  const { result } = renderHook(() => useGroupSource(1));
+
+  await act(async () => {
+    result.current.open(group);
+  });
+  await waitFor(() => expect(result.current.rulesStatus).toBe('done'));
+
+  await act(async () => {
+    if (onOpened) onOpened(result.current.analyzeMembers);
+    else result.current.analyzeMembers();
+  });
+  await waitFor(() => expect(result.current.memberStatus).toBe('done'));
+
+  return result;
+}
+
+/** Every member-listing endpoint scheduled so far. */
+function memberPageEndpoints(): string[] {
+  return scheduledEndpoints().filter((e) => e.startsWith(`/api/v1/groups/${GROUP_ID}/users`));
+}
+
+describe('useGroupSource entity-cache reuse', () => {
+  const MEMBER_COUNT = 500;
+
+  it('costs ZERO member requests when ["groupMembers", id] is already banked', async () => {
+    installHarness(MEMBER_COUNT);
+    // Bank the member list exactly as any earlier consumer would — the same key
+    // and the same `OktaUser[]` shape `useGroupMembersCache.fetchMembers` and
+    // `GroupOverview` write. Re-opening this group's analysis must then read
+    // memory, not re-walk every page.
+    const banked = Array.from({ length: MEMBER_COUNT }, (_, i) => makeMember(i));
+    setEntry(['groupMembers', GROUP_ID], banked);
+
+    const result = await openAndAnalyze();
+
+    expect(result.current.breakdown?.total).toBe(MEMBER_COUNT);
+    // The member walk contributes nothing; only the rules read remains.
+    expect(memberPageEndpoints()).toEqual([]);
+    expect(scheduledEndpoints()).toHaveLength(RULES_LISTING_REQUESTS);
+  });
+
+  it('coalesces two concurrent analyses of the same group onto ONE member walk', async () => {
+    installHarness(MEMBER_COUNT);
+
+    const result = await openAndAnalyze((analyze) => {
+      // Both start before either resolves: `getOrFetch` must hand the second
+      // caller the first one's in-flight promise rather than start a second walk.
+      analyze();
+      analyze();
+    });
+
+    expect(result.current.breakdown?.total).toBe(MEMBER_COUNT);
+    expect(memberPageEndpoints()).toHaveLength(Math.ceil(MEMBER_COUNT / OKTA_PAGE_SIZE));
+  });
 });
