@@ -73,17 +73,15 @@ export interface UseUserComparisonOptions {
  * @param options - See `UseUserComparisonOptions`.
  * @returns The comparison view model: `comparedUser` and search state, `activeTab`
  *   control, `groupBuckets` / `appBuckets` with their diff counts and per-facet
- *   plus `overallSimilarity`, the classified `causes` worklist and the
- *   `ruleInventory` it was derived from, aggregated `isLoading` / `loadError`,
- *   group-copy state (`addingGroupId`, `addError`) and the bidirectional
- *   `addToContext` / `addToCompared` actions, display names, and the `selectUser`
- *   / `changeUser` actions.
+ *   plus `overallSimilarity`, the classified `causes` worklist, aggregated
+ *   `isLoading` / `loadError`, group-copy state (`addingGroupId`, `addError`) and
+ *   the bidirectional `addToContext` / `addToCompared` actions, display names, and
+ *   the `selectUser` / `changeUser` actions.
  *
  *   `causes` classifies the `onlyCompared` bucket by remedy
- *   ({@link classifyAccessCauses}); `ruleInventory` is the org rule list that
- *   classification ran against, re-exported from `useUserMemberships` — `null`
- *   there means "could not be obtained", never "the org has none", and is passed
- *   through unchanged.
+ *   ({@link classifyAccessCauses}), and is **`undefined` until the org rule
+ *   inventory has been resolved** — "not computed", which consumers must not render
+ *   as a finding. Once resolved it is always an array, one entry per difference.
  */
 export function useUserComparison({
   isActive,
@@ -203,20 +201,26 @@ export function useUserComparison({
   // waste. The deps are the same references `groupBuckets` is keyed on, so a
   // re-render that changes nothing reuses the previous array.
   //
-  // `ruleInventory` is passed **as-is**: `null` means the inventory could not be
-  // obtained and must stay `null`, so every row reports `cannot-determine` /
-  // `no-rule-inventory`. Defaulting it to `[]` would read as "the org has no
-  // rules" and produce a confident `manual-add` — an instruction to add a user by
-  // hand, derived from rules nobody ever saw.
-  const causes = useMemo(
-    () =>
-      classifyAccessCauses({
-        onlyCompared: groupBuckets.onlyCompared,
-        contextUser,
-        rules: ruleInventory,
-      }),
-    [groupBuckets.onlyCompared, contextUser, ruleInventory],
-  );
+  // Each inventory state maps to a DIFFERENT answer, and the three must not merge:
+  //
+  // - `unresolved` → `undefined`, which the worklist renders as "not computed".
+  //   Classifying here would report `no-rule-inventory` ("the rules could not be
+  //   loaded") for every row during the ordinary gap before they arrive — naming a
+  //   failure that has not happened.
+  // - `unavailable` → classify against `null`, which really does mean every row is
+  //   `cannot-determine`. That is a true finding, not a placeholder.
+  // - `available` → classify against the rules, empty array included. Substituting
+  //   `[]` for either state above would read as "the org has no rules" and yield a
+  //   confident `manual-add` — an instruction to add a user by hand, derived from
+  //   rules nobody ever saw.
+  const causes = useMemo(() => {
+    if (ruleInventory.status === 'unresolved') return undefined;
+    return classifyAccessCauses({
+      onlyCompared: groupBuckets.onlyCompared,
+      contextUser,
+      rules: ruleInventory.status === 'available' ? ruleInventory.rules : null,
+    });
+  }, [groupBuckets.onlyCompared, contextUser, ruleInventory]);
 
   const groupDiffCount = groupBuckets.onlyCompared.length + groupBuckets.onlyContext.length;
   const appDiffCount = appBuckets.onlyCompared.length + appBuckets.onlyContext.length;
@@ -248,7 +252,6 @@ export function useUserComparison({
     groupBuckets,
     appBuckets,
     causes,
-    ruleInventory,
     groupDiffCount,
     appDiffCount,
     groupSimilarity,

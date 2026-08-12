@@ -163,3 +163,36 @@ describe('ComparisonDiffTab — the groups path is untouched by renderMeta', () 
     expect(screen.getByText('Nothing unique to Alice Context.')).toBeInTheDocument();
   });
 });
+
+describe('ComparisonDiffTab — a long detail never displaces the row action', () => {
+  it('stacks the detail under the label, outside the element holding the action', () => {
+    render(
+      <ComparisonDiffTab
+        {...baseProps}
+        noun="group"
+        comparedItems={items('a1')}
+        sharedItems={[]}
+        contextItems={[]}
+        renderAction={() => <button type="button">Add</button>}
+        renderMeta={() => (
+          <span>Likely added by rule: Contractors → VPN Access, Remote Access Baseline</span>
+        )}
+      />,
+    );
+
+    const row = rowFor('Label a1');
+    const action = within(row).getByRole('button', { name: 'Add' });
+    const detail = within(row).getByText(/Likely added by rule/);
+
+    // The detail shares a column with the label — that column is what truncates.
+    const column = detail.parentElement;
+    expect(column).toContainElement(within(row).getByTitle('Label a1'));
+    expect(column?.className).toContain('min-w-0');
+    expect(column?.className).toContain('flex-col');
+
+    // The action sits OUTSIDE that column and does not shrink, so no length of
+    // rule name can push it out of view (the bug this pins).
+    expect(column).not.toContainElement(action);
+    expect(action.parentElement?.className).toContain('shrink-0');
+  });
+});

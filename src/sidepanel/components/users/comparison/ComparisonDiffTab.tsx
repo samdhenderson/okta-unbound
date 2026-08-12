@@ -221,6 +221,7 @@ const BucketCard: React.FC<BucketCardProps> = ({
             <ul className="scrollable-list max-h-44 divide-y divide-neutral-100 overflow-y-auto border-t border-neutral-100">
               {items.map((item) => {
                 const meta = renderMeta?.(item);
+                const action = renderAction?.(item);
                 const label = (
                   <span className="truncate text-sm text-neutral-800" title={item.label}>
                     {item.label}
@@ -231,18 +232,29 @@ const BucketCard: React.FC<BucketCardProps> = ({
                     key={item.id}
                     className="flex items-center justify-between gap-3 px-4 py-2 hover:bg-neutral-50/70"
                   >
-                    {/* No `renderMeta` (the Groups tab) renders the bare label
-                        exactly as before — the wrapper only appears when there is
-                        something to sit beside it. */}
+                    {/* With a detail to show, it sits UNDER the label rather than
+                        beside it. A source line ("Likely added by rule:
+                        Contractors → VPN Access") is easily wider than a side
+                        panel, and on one line it grew the row until the Add button
+                        was pushed out of view. `min-w-0 flex-1` is what lets both
+                        lines truncate instead of widening the row.
+
+                        No `renderMeta` still renders the bare label exactly as
+                        before — the wrapper only appears when there is a second
+                        line to stack, which `ComparisonDiffTab.test.tsx` pins. Those
+                        rows are also the ones with no action to push out of view. */}
                     {meta ? (
-                      <span className="flex min-w-0 items-center gap-2">
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                         {label}
                         {meta}
                       </span>
                     ) : (
                       label
                     )}
-                    {renderAction?.(item)}
+                    {/* `shrink-0`: whatever the label and its detail do, the
+                        action keeps its full width. The button is never the
+                        thing that gives way. */}
+                    {action && <span className="shrink-0">{action}</span>}
                   </li>
                 );
               })}

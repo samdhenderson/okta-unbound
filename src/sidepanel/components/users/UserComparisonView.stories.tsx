@@ -72,10 +72,9 @@ const comparison = (over: Partial<UserComparisonState> = {}): UserComparisonStat
   setActiveTab: fn(),
   groupBuckets: { onlyCompared: [], shared: [], onlyContext: [] },
   appBuckets: { onlyCompared: [], shared: [], onlyContext: [] },
-  // Nothing loaded yet: no differences to explain, and no rule inventory in hand.
-  // `null` means "we did not obtain the rules", never "the org has none".
-  causes: [],
-  ruleInventory: null,
+  // Nothing loaded yet, so the inventory has not resolved: `undefined` is "not
+  // computed", which the worklist renders differently from an empty array.
+  causes: undefined,
   groupDiffCount: 0,
   appDiffCount: 0,
   groupSimilarity: 0,
@@ -119,7 +118,6 @@ const loaded = (over: Partial<UserComparisonState> = {}): UserComparisonState =>
     // Classified from the very buckets above, exactly as `useUserComparison`
     // memoizes it — so the worklist a story shows is the real classifier's
     // output rather than hand-written copy that could drift from it.
-    ruleInventory: [vpnRule],
     causes: classifyAccessCauses({
       onlyCompared: [gOnlyCompared],
       contextUser,
