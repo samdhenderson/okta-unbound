@@ -1,8 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
 import {
   canEvaluateClientSide,
+  checkRuleNodeSupport,
+  evaluateParsedRule,
   evaluateRuleExpression,
+  evaluateRuleNode,
+  parseRuleExpression,
   tryEvaluateRuleExpression,
+  tryEvaluateRuleExpressionDetailed,
+  RULE_CONNECTIVE_OPERATORS,
 } from './ruleEvaluator';
 import type { OktaUser } from './types';
 
@@ -509,5 +515,183 @@ describe('parse memoisation', () => {
     expect(tryEvaluateRuleExpression(expression, user)).toBe('match');
     expect(tryEvaluateRuleExpression(expression, otherUser)).toBe('no-match');
     expect(canEvaluateClientSide(expression)).toBe(true);
+  });
+});
+
+// ===========================================================================
+// The reason-code payload. `RuleMatchOutcome` stays a bare 3-string union (it is
+// pinned everywhere); `RuleMatchResult` carries WHY an answer was `unevaluable`,
+// which previously existed only as a `log.debug` line — a no-op in production.
+// ===========================================================================
+describe('tryEvaluateRuleExpressionDetailed', () => {
+  const user: OktaUser = {
+    id: '00uFAKE',
+    status: 'ACTIVE',
+    profile: {
+      login: 'ada@example.com',
+      email: 'ada@example.com',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      department: 'Engineering',
+      city: 'San Francisco',
+      employeeNumber: 42,
+    },
+  } as unknown as OktaUser;
+
+  /** Every expression the two APIs are asserted to agree on. */
+  const expressions = [
+    'user.department == "Engineering"',
+    'user.department == "Sales"',
+    'user.department eq "Engineering" and user.city eq "San Francisco"',
+    'String.startsWith(user.firstName, "Ad")',
+    '!(user.department == "Sales")',
+    'user.employeeNumber > 10',
+    '',
+    '   ',
+    'user.department ==',
+    '(user.department == "Engineering"',
+    'isMemberOfGroup("00gFAKE")',
+    'isMemberOfGroup("00gFAKE") || user.department == "Engineering"',
+    'app.clientId == "x"',
+    'session.amr == "pwd"',
+    'user["department"] == "Engineering"',
+    'String.substring(user.email, 0, 3) == "ada"',
+    'String.startsWith(user.firstName)',
+    'user.department + "x" == "Engineeringx"',
+    'user.department > "A"',
+    'user.department',
+    '"Engineering"',
+    'this.foo == 1',
+    `user.department == "${'x'.repeat(5000)}"`,
+  ];
+
+  it.each(expressions)(
+    'returns the same outcome as tryEvaluateRuleExpression for %s',
+    (expression) => {
+      expect(tryEvaluateRuleExpressionDetailed(expression, user).outcome).toBe(
+        tryEvaluateRuleExpression(expression, user),
+      );
+    },
+  );
+
+  it('carries no reason code on a decided answer', () => {
+    expect(tryEvaluateRuleExpressionDetailed('user.department == "Engineering"', user)).toEqual({
+      outcome: 'match',
+    });
+    expect(tryEvaluateRuleExpressionDetailed('user.department == "Sales"', user)).toEqual({
+      outcome: 'no-match',
+    });
+  });
+
+  it.each([
+    { expression: '', reasonCode: 'empty' },
+    { expression: '   ', reasonCode: 'empty' },
+    { expression: `user.department == "${'x'.repeat(5000)}"`, reasonCode: 'too-long' },
+    { expression: 'user.department ==', reasonCode: 'parse-error' },
+    { expression: 'user.department + "x" == "Engineeringx"', reasonCode: 'unsupported-operator' },
+    { expression: 'isMemberOfGroupName("Eng")', reasonCode: 'group-membership-fn' },
+    { expression: 'Arrays.contains(user.department, "Eng")', reasonCode: 'unknown-fn' },
+    { expression: 'String.startsWith(user.firstName)', reasonCode: 'fn-arity' },
+    { expression: 'app.clientId == "x"', reasonCode: 'unsupported-node' },
+    { expression: 'user["department"] == "Engineering"', reasonCode: 'unsupported-node' },
+    { expression: 'user.department > "A"', reasonCode: 'operand-type' },
+    { expression: 'String.startsWith(user.employeeNumber, "4")', reasonCode: 'operand-type' },
+    { expression: 'user.department', reasonCode: 'not-a-boolean' },
+    { expression: '"Engineering"', reasonCode: 'not-a-boolean' },
+  ])('attributes $reasonCode to $expression', ({ expression, reasonCode }) => {
+    expect(tryEvaluateRuleExpressionDetailed(expression, user)).toEqual({
+      outcome: 'unevaluable',
+      reasonCode,
+    });
+  });
+});
+
+// ===========================================================================
+// The AST seam the clause-level explainer builds on. It must expose the SAME
+// parse (memoised) and the SAME allow-list — never a second one.
+// ===========================================================================
+describe('AST seam', () => {
+  const user: OktaUser = {
+    id: '00uFAKE',
+    status: 'ACTIVE',
+    profile: {
+      login: 'ada@example.com',
+      email: 'ada@example.com',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      department: 'Engineering',
+    },
+  } as unknown as OktaUser;
+
+  it('hands back the memoised AST rather than a fresh parse', () => {
+    const expression = 'user.department == "Engineering" && user.firstName == "Ada"';
+    const first = parseRuleExpression(expression);
+    const second = parseRuleExpression(expression);
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    // Same object identity: one parse, shared (and therefore read-only) tree.
+    if (first.ok && second.ok) expect(second.ast).toBe(first.ast);
+  });
+
+  it('classifies why an expression never became an AST', () => {
+    expect(parseRuleExpression('')).toEqual({ ok: false, reasonCode: 'empty' });
+    expect(parseRuleExpression('user.department ==')).toEqual({
+      ok: false,
+      reasonCode: 'parse-error',
+    });
+    expect(parseRuleExpression(`user.department == "${'x'.repeat(5000)}"`)).toEqual({
+      ok: false,
+      reasonCode: 'too-long',
+    });
+  });
+
+  it('gates a sub-tree with the same allow-list as canEvaluateClientSide', () => {
+    const parsed = parseRuleExpression('isMemberOfGroup("00gFAKE") && user.department == "Eng"');
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const binary = parsed.ast as unknown as { left: never; right: never };
+    expect(checkRuleNodeSupport(parsed.ast)).toEqual({
+      supported: false,
+      reasonCode: 'group-membership-fn',
+    });
+    expect(checkRuleNodeSupport(binary.left)).toEqual({
+      supported: false,
+      reasonCode: 'group-membership-fn',
+    });
+    expect(checkRuleNodeSupport(binary.right)).toEqual({ supported: true });
+  });
+
+  it('surfaces the UNRESOLVED sentinel as a reason code instead of a value', () => {
+    const resolved = parseRuleExpression('user.department');
+    expect(resolved.ok).toBe(true);
+    if (resolved.ok) {
+      expect(evaluateRuleNode(resolved.ast, { user })).toEqual({
+        resolved: true,
+        value: 'Engineering',
+      });
+    }
+
+    const unresolvable = parseRuleExpression('isMemberOfGroup("00gFAKE")');
+    expect(unresolvable.ok).toBe(true);
+    if (unresolvable.ok) {
+      expect(evaluateRuleNode(unresolvable.ast, { user })).toEqual({
+        resolved: false,
+        reasonCode: 'group-membership-fn',
+      });
+    }
+  });
+
+  it('evaluates an already-parsed condition without re-parsing it', () => {
+    const parsed = parseRuleExpression('user.department == "Engineering"');
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect(evaluateParsedRule(parsed.ast, { user })).toEqual({ outcome: 'match' });
+  });
+
+  it('exposes the connective set the clause splitter descends through', () => {
+    expect([...RULE_CONNECTIVE_OPERATORS].sort()).toEqual(
+      ['&&', 'AND', 'OR', '||', 'and', 'or'].sort(),
+    );
   });
 });
