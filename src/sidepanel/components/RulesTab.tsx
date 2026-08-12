@@ -19,6 +19,7 @@ import RulesStatsGrid from './rules/RulesStatsGrid';
 import RulesToolbar, { type RulesFilterType } from './rules/RulesToolbar';
 import RulesListPanel from './rules/RulesListPanel';
 import RulesMergeBanner from './rules/RulesMergeBanner';
+import CurrentGroupRuleRelations from './rules/CurrentGroupRuleRelations';
 import RuleConsolidationModal from './RuleConsolidationModal';
 import type { FormattedRule, OktaGroupRule } from '../../shared/types';
 import { filterRules } from '../../shared/ruleUtils';
@@ -374,6 +375,14 @@ const RulesTab: React.FC<RulesTabProps> = ({
           <RulesMergeBanner
             clusters={mergeableClusters}
             onMerge={handleMergeCluster}
+            onFocusRule={setFocusRuleId}
+          />
+        )}
+
+        {rules.length > 0 && (
+          <CurrentGroupRuleRelations
+            rules={rules}
+            currentGroupId={currentGroupId}
             onFocusRule={setFocusRuleId}
           />
         )}
