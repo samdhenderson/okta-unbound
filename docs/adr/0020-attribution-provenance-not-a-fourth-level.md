@@ -1,9 +1,10 @@
-# ADR-0020: Reconcile the two membership-attribution paths by provenance, not by a fourth attribution level
+# ADR-0020: Reconcile the two attribution paths by provenance, not a fourth attribution level
 
 - Status: Accepted
 - Date: 2026-08-12
 - Relates to: ADR-0006 (untrusted Okta data validated at the boundary),
-  ADR-0017 (`unevaluable` is never `no-match`), `docs/security.md` §6
+  ADR-0012 (the one characterization flip this required), ADR-0017 (`unevaluable`
+  is never `no-match`), `docs/security.md` §6
 
 ## Context
 
@@ -113,7 +114,11 @@ Stale authority reads exactly like fresh authority. Rejected.
   counts distinctly from its client-inferred ones.
 - The user view will show `UNKNOWN` memberships in a case where it previously
   showed confident `DIRECT` ones. That is the point: it is the honest rendering of
-  a failed load, and `UNKNOWN` was already a supported display state.
+  a failed load, and `UNKNOWN` was already a supported display state. One
+  characterization test pinned the old answer and was flipped under ADR-0012 with
+  the before/after recorded in its comment and in this change's PR body:
+  `UsersTab.test.tsx`'s "degrades to all-DIRECT (no error) when rules cannot be
+  fetched". No other assertion changed.
 - `unclassifiedMemberships` is additive and available to any future caller that
   loses its inputs. Callers must not cache its result as an analysis.
 - The `attribution` union stays at three members, so the two exhaustive tables

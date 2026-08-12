@@ -1,5 +1,4 @@
 /**
-/**
  * @module sidepanel/hooks/useUserMemberships
  * @description Loads a user's groups and classifies each membership as DIRECT or RULE_BASED.
  *

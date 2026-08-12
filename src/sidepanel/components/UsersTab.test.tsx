@@ -494,7 +494,18 @@ describe('membership classification (in-file heuristic)', () => {
     expect(screen.queryByText('Eng auto-assign')).not.toBeInTheDocument();
   });
 
-  it('CHARACTERIZED: degrades to all-DIRECT (no error) when rules cannot be fetched', async () => {
+  // FLIPPED (ADR-0012): this case used to assert `expect(screen.getByText('DIRECT'))`
+  // under the title "CHARACTERIZED: degrades to all-DIRECT (no error) when rules
+  // cannot be fetched". It pinned a defect — with no rule inventory every group
+  // looks untargeted, so the heuristic answered DIRECT / `attribution: 'exact'`
+  // for all of them: a confident "added by hand" manufactured out of a failed
+  // fetch, and one the group view (which reads Okta's own
+  // `_embedded['group-rules']`) would flatly contradict. `useUserMemberships` now
+  // distinguishes "the org has no rules" from "we could not obtain the rules" and
+  // reports the latter as unclassified (ADR-0020). The no-error-banner half of the
+  // old assertion is unchanged and still pinned below: a rules-fetch failure
+  // degrades the answer, it does not fail the load.
+  it('reports memberships as UNKNOWN, not a confident DIRECT, when rules cannot be fetched', async () => {
     route(USER_GROUPS, () => ({ success: true, data: [rawGroup()] }));
     rulesCacheGet.mockResolvedValue(null);
     route(GROUP_RULES, () => ({ success: false, error: 'nope' }));
@@ -504,7 +515,12 @@ describe('membership classification (in-file heuristic)', () => {
     fireEvent.click(await screen.findByText('Ada Lovelace', {}, { timeout: 2000 }));
 
     expect(await screen.findByText('Engineering')).toBeInTheDocument();
-    expect(screen.getByText('DIRECT')).toBeInTheDocument();
+    expect(screen.getByText('UNKNOWN')).toBeInTheDocument();
+    expect(screen.queryByText('DIRECT')).not.toBeInTheDocument();
+    // ...and nothing claims the user was hand-added.
+    expect(
+      screen.queryByText('This user was added directly to the group (not through a rule)'),
+    ).not.toBeInTheDocument();
     // the rules-fetch failure is swallowed — no error banner.
     expect(screen.queryByText('nope')).not.toBeInTheDocument();
   });
