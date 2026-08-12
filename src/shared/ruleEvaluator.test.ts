@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
 import {
   canEvaluateClientSide,
   evaluateRuleExpression,
@@ -401,5 +401,113 @@ describe('supported subset', () => {
       expect(evaluateRuleExpression('String.startsWith(user.firstName)', user)).toBe(false);
       expect(evaluateRuleExpression('-user.employeeNumber == -42', user)).toBe(false);
     });
+  });
+});
+
+// ===========================================================================
+// Bounded parse memo. The cache itself is module-private and deliberately not
+// exported — its keys are expression text, which can carry tenant PII. These
+// tests therefore observe it through the one signal the parser already emits:
+// `parseExpression` logs exactly one `parse-error` reason code per REAL parse
+// attempt that throws, and nothing at all on a cache hit. Counting those lines
+// counts parses without a test-only export and without mocking jsep.
+// ===========================================================================
+describe('parse memoisation', () => {
+  const user: OktaUser = {
+    id: '00uFAKE',
+    status: 'ACTIVE',
+    profile: {
+      login: 'ada@example.com',
+      email: 'ada@example.com',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      department: 'Engineering',
+      city: 'San Francisco',
+    },
+  } as unknown as OktaUser;
+
+  /** Cap and eviction policy mirrored from `PARSE_CACHE_LIMIT` (module-private). */
+  const PARSE_CACHE_LIMIT = 128;
+
+  let debugSpy: MockInstance;
+
+  beforeEach(() => {
+    debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    debugSpy.mockRestore();
+  });
+
+  /** How many times jsep was actually invoked on an ungrammatical expression. */
+  const parseAttempts = (): number =>
+    debugSpy.mock.calls.filter(
+      (args) =>
+        args[1] === 'Rule expression rejected' &&
+        (args[2] as { reason?: string } | undefined)?.reason === 'parse-error',
+    ).length;
+
+  /**
+   * A distinct ungrammatical expression per test: the memo is module state that
+   * outlives an individual test, so tests must not share cache keys.
+   */
+  const ungrammatical = (tag: string): string => `user.${tag} ==`;
+  /** A distinct grammatical expression, used only to occupy a cache slot. */
+  const filler = (tag: string, index: number): string => `user.${tag}${index} == "x"`;
+
+  it('caches a parse failure so an ungrammatical expression is not re-parsed', () => {
+    const bad = ungrammatical('memoFailureCached');
+
+    expect(canEvaluateClientSide(bad)).toBe(false);
+    expect(parseAttempts()).toBe(1);
+
+    // Repeat through both entry points: a cached `undefined` must read as a hit
+    // (`cache.has`), not as a miss via a truthiness check.
+    expect(canEvaluateClientSide(bad)).toBe(false);
+    expect(tryEvaluateRuleExpression(bad, user)).toBe('unevaluable');
+    expect(evaluateRuleExpression(bad, user)).toBe(false);
+    expect(parseAttempts()).toBe(1);
+  });
+
+  it(`evicts the oldest entry only once a ${PARSE_CACHE_LIMIT + 1}th expression arrives`, () => {
+    const victim = ungrammatical('memoEviction');
+
+    // Fill the cache to exactly its cap first, so the victim's position in the
+    // FIFO queue is deterministic regardless of what earlier tests cached.
+    for (let i = 0; i < PARSE_CACHE_LIMIT; i++) canEvaluateClientSide(filler('pre', i));
+
+    canEvaluateClientSide(victim); // newest of PARSE_CACHE_LIMIT entries
+    expect(parseAttempts()).toBe(1);
+
+    // One short of the cap: the victim is now the oldest entry, but still cached.
+    for (let i = 0; i < PARSE_CACHE_LIMIT - 1; i++) canEvaluateClientSide(filler('post', i));
+    expect(canEvaluateClientSide(victim)).toBe(false);
+    expect(parseAttempts()).toBe(1);
+
+    // The entry that takes the cache one over the cap evicts it.
+    canEvaluateClientSide(filler('post', PARSE_CACHE_LIMIT - 1));
+    expect(canEvaluateClientSide(victim)).toBe(false);
+    expect(parseAttempts()).toBe(2);
+  });
+
+  it('never lets a shared cached AST drift between calls, users, or entry points', () => {
+    // One expression, one cached AST, walked by both the allow-list gate and
+    // the evaluator, for two different users. Every answer must be reproducible:
+    // it would not be if either walk annotated or rewrote the shared nodes.
+    const expression =
+      'String.toUpperCase(user.department) == "ENGINEERING" and user.city == "San Francisco"';
+    const otherUser: OktaUser = {
+      ...user,
+      profile: { ...user.profile, department: 'Sales' },
+    } as unknown as OktaUser;
+
+    expect(canEvaluateClientSide(expression)).toBe(true);
+    expect(tryEvaluateRuleExpression(expression, user)).toBe('match');
+    expect(tryEvaluateRuleExpression(expression, otherUser)).toBe('no-match');
+    expect(evaluateRuleExpression(expression, user)).toBe(true);
+
+    expect(tryEvaluateRuleExpression(expression, user)).toBe('match');
+    expect(tryEvaluateRuleExpression(expression, otherUser)).toBe('no-match');
+    expect(canEvaluateClientSide(expression)).toBe(true);
   });
 });

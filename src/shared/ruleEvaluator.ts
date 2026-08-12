@@ -21,6 +21,11 @@
  * app-context (`app.*`) expressions cannot be resolved client-side — see
  * {@link GROUP_MEMBERSHIP_FUNCTIONS} for the seam that would resolve the former.
  *
+ * Parsing is memoised in a bounded, FIFO-evicting cache ({@link PARSE_CACHE_LIMIT}
+ * entries) because attribution evaluates the same few rule conditions once per
+ * group member. Cached ASTs are shared across calls and users, so both walks
+ * treat them as strictly read-only.
+ *
  * @see {@link tryEvaluateRuleExpression} — the three-outcome API new code should use.
  * @see {@link evaluateRuleExpression} — legacy boolean API (cannot distinguish
  *   "false" from "could not tell").
@@ -231,6 +236,55 @@ function calleeName(node: jsep.CallExpression): string | undefined {
   return undefined;
 }
 
+/**
+ * Hard cap on {@link parseCache} entries. Bounded on purpose — see the cache's
+ * own note. 128 comfortably covers every distinct rule condition a group (or a
+ * whole org's worth of open tabs) realistically feeds through the evaluator,
+ * while keeping worst-case retention trivially small.
+ */
+const PARSE_CACHE_LIMIT = 128;
+
+/**
+ * Bounded memo of parsed expressions, keyed by the raw expression text.
+ *
+ * Membership attribution evaluates the same handful of rule conditions once per
+ * member, so a 500-member group re-parses the same 3 strings 1,500 times. The
+ * memo makes that one parse each.
+ *
+ * **Bounded, with FIFO eviction.** Expressions are untrusted, user-controllable
+ * Okta data and the side panel is long-lived, so an unbounded `Map` keyed by
+ * expression text is unbounded memory growth. `Map` preserves insertion order,
+ * so deleting the first key evicts the oldest entry. Entries are only ever
+ * inserted *after* the empty/length gates in {@link parseExpression}, so every
+ * retained key is at most {@link MAX_EXPRESSION_LENGTH} characters by
+ * construction. Keys are primitive strings, so a `WeakMap` is not applicable.
+ *
+ * **Parse failures are cached too** (as `undefined`), read back with `has`
+ * rather than a truthiness check — otherwise an ungrammatical expression, which
+ * is exactly what an adversarial tenant would supply, re-parses on every member.
+ *
+ * **Cached ASTs are shared across calls and across users, so every consumer must
+ * treat them as strictly read-only.** Both walks ({@link isSupportedNode} and
+ * {@link evaluateNode}) only read; neither annotates or rewrites nodes.
+ *
+ * Nothing about this cache is ever logged — its keys are expression text, which
+ * can carry tenant PII.
+ */
+const parseCache = new Map<string, jsep.Expression | undefined>();
+
+/** Record a parse outcome, evicting the oldest entry once the cap is reached. */
+function rememberParse(
+  expression: string,
+  ast: jsep.Expression | undefined,
+): jsep.Expression | undefined {
+  if (parseCache.size >= PARSE_CACHE_LIMIT) {
+    const oldest = parseCache.keys().next();
+    if (!oldest.done) parseCache.delete(oldest.value);
+  }
+  parseCache.set(expression, ast);
+  return ast;
+}
+
 /** Parse an expression, or `undefined` if it is empty, oversized, or ungrammatical. */
 function parseExpression(expression: string): jsep.Expression | undefined {
   if (!expression || !expression.trim()) return undefined;
@@ -238,12 +292,15 @@ function parseExpression(expression: string): jsep.Expression | undefined {
     log.debug('Rule expression rejected', { reason: 'too-long', length: expression.length });
     return undefined;
   }
+  // `has`, not a truthiness check: a cached parse *failure* is `undefined` and
+  // must still count as a hit.
+  if (parseCache.has(expression)) return parseCache.get(expression);
   try {
-    return jsep(expression.trim());
+    return rememberParse(expression, jsep(expression.trim()));
   } catch {
     // Never log the expression itself: literals can carry tenant PII.
     log.debug('Rule expression rejected', { reason: 'parse-error' });
-    return undefined;
+    return rememberParse(expression, undefined);
   }
 }
 
@@ -376,10 +433,15 @@ function evaluateNode(node: jsep.Expression, user: OktaUser): EvalResult {
   return UNRESOLVED;
 }
 
-/** Parse + walk. Returns {@link UNRESOLVED} for anything outside the allow-list. */
-function evaluate(expression: string, user: OktaUser): EvalResult {
-  const ast = parseExpression(expression);
-  if (!ast) return UNRESOLVED;
+/**
+ * Walk an already-parsed AST. Returns {@link UNRESOLVED} for anything outside
+ * the allow-list, and never throws.
+ *
+ * Takes the AST rather than the expression text so callers that also need the
+ * {@link canEvaluateAst} gate can parse once and share the tree. **Read-only:**
+ * the node may come from {@link parseCache} and be shared with other calls.
+ */
+function evaluateAst(ast: jsep.Expression, user: OktaUser): EvalResult {
   try {
     return evaluateNode(ast, user);
   } catch {
@@ -387,6 +449,13 @@ function evaluate(expression: string, user: OktaUser): EvalResult {
     log.debug('Rule expression not evaluable', { reason: 'walk-failed' });
     return UNRESOLVED;
   }
+}
+
+/** Parse + walk. Returns {@link UNRESOLVED} for anything outside the allow-list. */
+function evaluate(expression: string, user: OktaUser): EvalResult {
+  const ast = parseExpression(expression);
+  if (!ast) return UNRESOLVED;
+  return evaluateAst(ast, user);
 }
 
 // ---------------------------------------------------------------------------
@@ -421,11 +490,21 @@ export type RuleMatchOutcome = 'match' | 'no-match' | 'unevaluable';
  * @returns The {@link RuleMatchOutcome}. Pure — no API calls, no code execution.
  */
 export function tryEvaluateRuleExpression(expression: string, user: OktaUser): RuleMatchOutcome {
-  if (!canEvaluateClientSide(expression)) return 'unevaluable';
+  // Parsed once and shared by both gates below; the AST is walked twice but jsep
+  // runs at most once (and not at all on a {@link parseCache} hit).
+  const ast = parseExpression(expression);
+  if (!ast) return 'unevaluable';
 
-  const result = evaluate(expression, user);
-  // A condition that does not reduce to a boolean is not a condition we
-  // understand, whatever it reduced to.
+  // Gate 1 — grammar: is every node of the expression on the allow-list?
+  if (!canEvaluateAst(ast)) return 'unevaluable';
+
+  // Gate 2 — shape, and deliberately INDEPENDENT of gate 1: an expression can
+  // be entirely allow-listed and still not be a condition (`user.department`,
+  // `"Engineering"`, `String.toUpperCase(user.department)` all pass gate 1). A
+  // condition that does not reduce to a boolean is not a condition we
+  // understand, whatever it reduced to. Collapsing the two gates would turn
+  // those into `no-match`, which membership attribution reads as a manual add.
+  const result = evaluateAst(ast, user);
   if (typeof result !== 'boolean') return 'unevaluable';
   return result ? 'match' : 'no-match';
 }
@@ -490,6 +569,21 @@ function isSupportedNode(node: jsep.Expression): boolean {
 }
 
 /**
+ * Check an already-parsed AST against the allow-list, defensively.
+ *
+ * Takes the AST rather than the expression text so {@link tryEvaluateRuleExpression}
+ * can share one parse between this gate and {@link evaluateAst}. **Read-only:**
+ * the node may come from {@link parseCache} and be shared with other calls.
+ */
+function canEvaluateAst(ast: jsep.Expression): boolean {
+  try {
+    return isSupportedNode(ast);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Pre-validate whether an expression can be resolved client-side at all.
  *
  * Call this before {@link evaluateRuleExpression} to avoid presenting a
@@ -509,9 +603,5 @@ function isSupportedNode(node: jsep.Expression): boolean {
 export function canEvaluateClientSide(expression: string): boolean {
   const ast = parseExpression(expression);
   if (!ast) return false;
-  try {
-    return isSupportedNode(ast);
-  } catch {
-    return false;
-  }
+  return canEvaluateAst(ast);
 }
