@@ -30,6 +30,7 @@ import ComparisonHero from './comparison/ComparisonHero';
 import ComparisonTabBar from './comparison/ComparisonTabBar';
 import ComparisonOverviewTab from './comparison/ComparisonOverviewTab';
 import ComparisonDiffTab from './comparison/ComparisonDiffTab';
+import AppScopeIndicator from './comparison/AppScopeIndicator';
 import { groupDiffItem } from './comparison/comparisonAnalytics';
 import type { UserComparisonState } from '../../hooks/useUserComparison';
 import type { OktaUser } from '../../../shared/types';
@@ -227,6 +228,23 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({ contextUser, co
                   emptySharedText="No apps in common yet."
                   emptyContextText={`No apps unique to ${contextName}.`}
                   noun="app"
+                  renderMeta={(item, bucket) => {
+                    // The `shared` bucket is derived from the COMPARED user's
+                    // assignments alone (see `bucketApps`), so the only scope in
+                    // hand for a shared row describes one of the two users the row
+                    // is about. Rendering it would present one user's source as if
+                    // it described both, so the row says that instead. Naming both
+                    // would mean carrying both sides through bucketing.
+                    if (bucket === 'shared') return <AppScopeIndicator state="notCompared" />;
+
+                    // Re-find the entry in the LIVE bucket rather than widening the
+                    // row model, mirroring `renderAction` above. A row whose entry
+                    // cannot be found reads as unknown, never as "via group".
+                    const entries =
+                      bucket === 'onlyCompared' ? appBuckets.onlyCompared : appBuckets.onlyContext;
+                    const entry = entries.find((a) => a.id === item.id);
+                    return <AppScopeIndicator state={entry?.scope ?? 'unknown'} />;
+                  }}
                 />
               )}
             </>

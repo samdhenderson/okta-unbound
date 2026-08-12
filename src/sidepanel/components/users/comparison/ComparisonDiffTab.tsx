@@ -4,11 +4,24 @@
  *
  * Reused for both the Groups and Apps tabs; `noun` and the empty-state strings
  * are supplied by the parent. `renderAction` (used only on the Groups tab)
- * injects the per-row "Add" affordance.
+ * injects the per-row "Add" affordance, and `renderMeta` (used only on the Apps
+ * tab) injects a per-row detail whose meaning depends on which bucket the row is
+ * in.
  */
 import React from 'react';
 import Icon from '../../overview/shared/Icon';
 import type { DiffItem } from './comparisonAnalytics';
+
+/**
+ * Which of the three buckets a row is being rendered in, named after the
+ * corresponding props.
+ *
+ * Handed to {@link ComparisonDiffTabProps.renderMeta} because a bucket's rows do
+ * not all describe the same thing: an only-compared or only-context row is about
+ * exactly one user, while a `shared` row is about both — and a facet the caller
+ * only holds for one side must therefore be renderable differently there.
+ */
+export type DiffBucketKind = 'onlyCompared' | 'shared' | 'onlyContext';
 
 /** Props for {@link ComparisonDiffTab}. */
 interface ComparisonDiffTabProps {
@@ -34,6 +47,18 @@ interface ComparisonDiffTabProps {
   renderAction?: (item: DiffItem) => React.ReactNode;
   /** Optional per-row action for the only-context bucket (Add to compared user); groups only. */
   renderContextAction?: (item: DiffItem) => React.ReactNode;
+  /**
+   * **Apps tab only** — optional per-row detail rendered immediately after the
+   * row's label (today: how Okta reports the app assignment).
+   *
+   * A render prop rather than a field on {@link DiffItem} on purpose. The honest
+   * answer depends on the bucket, not just the row — the compared/context buckets
+   * hold one user's data, `shared` holds a row about both users backed by one
+   * user's data — and only the caller knows what its facet means per bucket. Left
+   * `undefined` by the Groups tab, which renders exactly as it did before this
+   * prop existed.
+   */
+  renderMeta?: (item: DiffItem, bucket: DiffBucketKind) => React.ReactNode;
 }
 
 /** Groups/Apps diff view: three tone-coded buckets (add / shared / neutral). */
@@ -49,6 +74,7 @@ const ComparisonDiffTab: React.FC<ComparisonDiffTabProps> = ({
   noun,
   renderAction,
   renderContextAction,
+  renderMeta,
 }) => (
   <div className="space-y-3">
     <BucketCard
@@ -59,6 +85,7 @@ const ComparisonDiffTab: React.FC<ComparisonDiffTabProps> = ({
       items={comparedItems}
       emptyText={emptyComparedText}
       renderAction={renderAction}
+      renderMeta={renderMeta && ((item) => renderMeta(item, 'onlyCompared'))}
     />
     <BucketCard
       tone="shared"
@@ -67,6 +94,7 @@ const ComparisonDiffTab: React.FC<ComparisonDiffTabProps> = ({
       count={sharedItems.length}
       items={sharedItems}
       emptyText={emptySharedText}
+      renderMeta={renderMeta && ((item) => renderMeta(item, 'shared'))}
     />
     <BucketCard
       tone="neutral"
@@ -80,6 +108,7 @@ const ComparisonDiffTab: React.FC<ComparisonDiffTabProps> = ({
       items={contextItems}
       emptyText={emptyContextText}
       renderAction={renderContextAction}
+      renderMeta={renderMeta && ((item) => renderMeta(item, 'onlyContext'))}
     />
   </div>
 );
@@ -103,6 +132,8 @@ interface BucketCardProps {
   emptyText: string;
   /** Optional per-row action renderer. */
   renderAction?: (item: DiffItem) => React.ReactNode;
+  /** Optional per-row detail renderer, already bound to this card's bucket by the parent. */
+  renderMeta?: (item: DiffItem) => React.ReactNode;
 }
 
 /** Per-tone accent styles (border, bar, icon, badge) keyed by {@link Tone}. */
@@ -152,6 +183,7 @@ const BucketCard: React.FC<BucketCardProps> = ({
   items,
   emptyText,
   renderAction,
+  renderMeta,
 }) => {
   const s = toneStyles[tone];
   return (
@@ -187,17 +219,33 @@ const BucketCard: React.FC<BucketCardProps> = ({
             </div>
           ) : (
             <ul className="scrollable-list max-h-44 divide-y divide-neutral-100 overflow-y-auto border-t border-neutral-100">
-              {items.map((item) => (
-                <li
-                  key={item.id}
-                  className="flex items-center justify-between gap-3 px-4 py-2 hover:bg-neutral-50/70"
-                >
+              {items.map((item) => {
+                const meta = renderMeta?.(item);
+                const label = (
                   <span className="truncate text-sm text-neutral-800" title={item.label}>
                     {item.label}
                   </span>
-                  {renderAction?.(item)}
-                </li>
-              ))}
+                );
+                return (
+                  <li
+                    key={item.id}
+                    className="flex items-center justify-between gap-3 px-4 py-2 hover:bg-neutral-50/70"
+                  >
+                    {/* No `renderMeta` (the Groups tab) renders the bare label
+                        exactly as before — the wrapper only appears when there is
+                        something to sit beside it. */}
+                    {meta ? (
+                      <span className="flex min-w-0 items-center gap-2">
+                        {label}
+                        {meta}
+                      </span>
+                    ) : (
+                      label
+                    )}
+                    {renderAction?.(item)}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

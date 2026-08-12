@@ -88,10 +88,16 @@ const loaded = (over: Partial<UserComparisonState> = {}): UserComparisonState =>
       shared: [gShared],
       onlyContext: [gOnlyContext],
     },
+    // Apps carry Okta's assignment `scope` (phase 4.1) and the Apps tab renders
+    // it (4.2). `app4` deliberately has none — Okta did not report one, which the
+    // row must show as unknown rather than silently reading as "via group".
     appBuckets: {
-      onlyCompared: [{ id: 'app2', label: 'Salesforce' }],
-      shared: [{ id: 'app1', label: 'Slack' }],
-      onlyContext: [{ id: 'app3', label: 'Figma' }],
+      onlyCompared: [
+        { id: 'app2', label: 'Salesforce', scope: 'USER' },
+        { id: 'app4', label: 'Zoom' },
+      ],
+      shared: [{ id: 'app1', label: 'Slack', scope: 'USER' }],
+      onlyContext: [{ id: 'app3', label: 'Figma', scope: 'GROUP' }],
     },
     groupDiffCount: 2,
     appDiffCount: 2,
@@ -167,7 +173,15 @@ export const GroupsTab: Story = {
   args: { comparison: loaded({ activeTab: 'groups' }) },
 };
 
-/** Phase 2, Apps tab: the same diff shape with no copy affordance. */
+/**
+ * Phase 2, Apps tab: the same diff shape with no copy affordance, plus each row's
+ * assignment source.
+ *
+ * `Direct` means Okta reports a direct assignment — **not** that no group also
+ * grants the app; Okta returns one scope per app-user. A row Okta reported no
+ * scope for says "Source unknown", and a shared row says "Source not compared",
+ * because the buckets carry only the compared user's scope for it.
+ */
 export const AppsTab: Story = {
   args: { comparison: loaded({ activeTab: 'apps' }) },
 };

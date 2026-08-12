@@ -1,8 +1,20 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import ComparisonDiffTab from './ComparisonDiffTab';
+import AppScopeIndicator, { type AppScopeIndicatorState } from './AppScopeIndicator';
 import { groupDiffItem, type DiffItem } from './comparisonAnalytics';
 import type { GroupMembership } from '../../../../shared/types';
+
+/**
+ * Assignment sources for the apps story, by app id — standing in for the
+ * `AppEntry.scope` the real Apps tab reads off its live buckets. `a3` is absent
+ * on purpose: Okta reported no scope for it.
+ */
+const appScopes: Record<string, AppScopeIndicatorState> = {
+  a1: 'USER',
+  a2: 'GROUP',
+  a5: 'GROUP',
+};
 
 const comparedItems: DiffItem[] = [
   { id: 'g1', label: 'Engineering - Platform' },
@@ -60,7 +72,8 @@ const meta = {
       description: {
         component:
           'Three tone-coded diff buckets (only-compared / shared / only-context) for groups or apps.\n\n' +
-          'Reused for both the Groups and Apps detail tabs via the `noun` and empty-text props. Optional `renderAction` / `renderContextAction` render-props add per-row "Add" controls to the compared-only and context-only buckets (groups only), enabling one-way or bidirectional copy. Each bucket scrolls within a fixed-height list and shows its empty-state text when the bucket is empty.',
+          'Reused for both the Groups and Apps detail tabs via the `noun` and empty-text props. Optional `renderAction` / `renderContextAction` render-props add per-row "Add" controls to the compared-only and context-only buckets (groups only), enabling one-way or bidirectional copy. Each bucket scrolls within a fixed-height list and shows its empty-state text when the bucket is empty.\n\n' +
+          'The optional `renderMeta` render-prop (Apps tab only) adds a per-row detail beside the label and is told **which bucket** the row is in — because an only-compared or only-context row is about one user while a `shared` row is about both, so a facet held for only one side must be renderable differently there.',
       },
     },
   },
@@ -92,6 +105,10 @@ const meta = {
     renderContextAction: {
       description:
         'Optional per-row action for the only-context bucket (Add to compared user); groups only.',
+    },
+    renderMeta: {
+      description:
+        "Apps tab only — optional per-row detail rendered beside the label, receiving the bucket the row is in so a caller can answer differently where a bucket holds one user's data rather than both's.",
     },
   },
 } satisfies Meta<typeof ComparisonDiffTab>;
@@ -161,6 +178,36 @@ export const AppsVariant: Story = {
     emptyComparedText: 'No apps unique to John Smith.',
     emptySharedText: 'No shared apps.',
     emptyContextText: 'No apps unique to Jane Doe.',
+  },
+};
+
+/**
+ * The Apps tab as `UserComparisonView` renders it: every row states how Okta
+ * reports its assignment, via `renderMeta` and {@link AppScopeIndicator}.
+ *
+ * Note the three registers. Only-compared / only-context rows are about one user,
+ * so they carry that user's scope (or an explicit "Source unknown" when Okta
+ * reported none). Shared rows are about *both* users but the buckets carry only
+ * the compared user's scope, so they say "Source not compared" rather than
+ * presenting one user's source as if it described both.
+ */
+export const AppsWithAssignmentSource: Story = {
+  args: {
+    noun: 'app',
+    comparedItems: [
+      { id: 'a1', label: 'Directly Assigned App' },
+      { id: 'a2', label: 'Group Granted App' },
+      { id: 'a3', label: 'App Okta Reported No Source For' },
+    ],
+    sharedItems: [{ id: 'a4', label: 'Shared App' }],
+    contextItems: [{ id: 'a5', label: 'Context-only App' }],
+    emptyComparedText: 'No apps unique to John Smith.',
+    emptySharedText: 'No shared apps.',
+    emptyContextText: 'No apps unique to Jane Doe.',
+    renderMeta: (item, bucket) => {
+      if (bucket === 'shared') return <AppScopeIndicator state="notCompared" />;
+      return <AppScopeIndicator state={appScopes[item.id] ?? 'unknown'} />;
+    },
   },
 };
 
