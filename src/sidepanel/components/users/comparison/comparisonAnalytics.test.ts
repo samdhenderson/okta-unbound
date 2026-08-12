@@ -3,10 +3,16 @@ import {
   jaccard,
   bucketGroups,
   bucketApps,
+  groupDiffItem,
   similarityColor,
   type AppEntry,
 } from './comparisonAnalytics';
-import type { GroupMembership, OktaGroup, GroupType } from '../../../../shared/types';
+import type {
+  GroupMembership,
+  MembershipRule,
+  OktaGroup,
+  GroupType,
+} from '../../../../shared/types';
 
 const group = (id: string, name = id, type: GroupType = 'OKTA_GROUP'): OktaGroup => ({
   id,
@@ -19,6 +25,15 @@ const membership = (id: string): GroupMembership => ({
   membershipType: 'DIRECT',
   rules: [],
   attribution: 'exact',
+});
+
+/** An obviously-fake rule, for the provenance fixtures. */
+const rule = (id: string): MembershipRule => ({
+  id,
+  name: `Rule ${id}`,
+  status: 'ACTIVE',
+  conditionExpression: 'user.userType == "Contractor"',
+  userAttributes: ['userType'],
 });
 
 const app = (id: string, label = id): AppEntry => ({ id, label });
@@ -40,6 +55,13 @@ describe('jaccard', () => {
   });
 });
 
+/**
+ * Bucket ids, read through the membership wrapper. Phase 3.6 changed the bucket
+ * ELEMENT from `OktaGroup` to `GroupMembership`; the assertions below are
+ * unchanged, only the path to the id is.
+ */
+const ids = (bucket: GroupMembership[]): string[] => bucket.map((m) => m.group.id);
+
 describe('bucketGroups', () => {
   it('splits into onlyCompared / shared / onlyContext by group id', () => {
     const contextGroups = [membership('a'), membership('b')];
@@ -51,9 +73,9 @@ describe('bucketGroups', () => {
       new Set(),
     );
 
-    expect(onlyCompared.map((g) => g.id)).toEqual(['c']);
-    expect(shared.map((g) => g.id)).toEqual(['b']);
-    expect(onlyContext.map((g) => g.id)).toEqual(['a']);
+    expect(ids(onlyCompared)).toEqual(['c']);
+    expect(ids(shared)).toEqual(['b']);
+    expect(ids(onlyContext)).toEqual(['a']);
   });
 
   it('treats addedToContextIds as shared before contextGroups catches up', () => {
@@ -62,8 +84,8 @@ describe('bucketGroups', () => {
 
     const { onlyCompared, shared } = bucketGroups(contextGroups, comparedGroups, new Set(['b']));
 
-    expect(shared.map((g) => g.id)).toEqual(['b']);
-    expect(onlyCompared.map((g) => g.id)).toEqual(['c']);
+    expect(ids(shared)).toEqual(['b']);
+    expect(ids(onlyCompared)).toEqual(['c']);
   });
 
   it('treats addedToComparedIds as shared, moving a context-only group out of onlyContext', () => {
@@ -79,7 +101,7 @@ describe('bucketGroups', () => {
     );
 
     expect(onlyCompared).toEqual([]);
-    expect(shared.map((g) => g.id)).toEqual(['b', 'a']);
+    expect(ids(shared)).toEqual(['b', 'a']);
     expect(onlyContext).toEqual([]);
   });
 
@@ -96,13 +118,123 @@ describe('bucketGroups', () => {
 
     expect(onlyCompared).toEqual([]);
     expect(onlyContext).toEqual([]);
-    expect(shared.map((g) => g.id).sort()).toEqual(['a', 'c', 'shared']);
+    expect(ids(shared).sort()).toEqual(['a', 'c', 'shared']);
   });
 
   it('preserves comparedGroups order within onlyCompared/shared', () => {
     const comparedGroups = [membership('z'), membership('a'), membership('m')];
     const { onlyCompared } = bucketGroups([], comparedGroups, new Set());
-    expect(onlyCompared.map((g) => g.id)).toEqual(['z', 'a', 'm']);
+    expect(ids(onlyCompared)).toEqual(['z', 'a', 'm']);
+  });
+
+  // Phase 3.6: buckets carry the whole GroupMembership, not the bare group, so
+  // the comparison can say WHY a user is in a group and not merely that they are.
+  describe('provenance pass-through', () => {
+    const ruleBased = (id: string, over: Partial<GroupMembership> = {}): GroupMembership => ({
+      group: group(id),
+      membershipType: 'RULE_BASED',
+      rules: [rule(`0prFAKE${id}`)],
+      attribution: 'inferred',
+      ...over,
+    });
+
+    it('carries membershipType, rules and attribution into all three buckets', () => {
+      const onlyContextM = ruleBased('ctx-only', { attribution: 'ambiguous' });
+      const sharedM = ruleBased('both');
+      const onlyComparedM = ruleBased('cmp-only', { attribution: 'exact' });
+
+      const { onlyCompared, shared, onlyContext } = bucketGroups(
+        [onlyContextM, membership('both')],
+        [sharedM, onlyComparedM],
+        new Set(),
+      );
+
+      expect(onlyCompared[0]).toEqual(onlyComparedM);
+      expect(onlyCompared[0].rules.map((r) => r.id)).toEqual(['0prFAKEcmp-only']);
+      expect(onlyCompared[0].attribution).toBe('exact');
+
+      // `shared` is taken from the COMPARED side's pass, so it reports the
+      // compared user's membership — the context user may hold it another way.
+      expect(shared[0]).toEqual(sharedM);
+      expect(shared[0].membershipType).toBe('RULE_BASED');
+      expect(shared[0].rules.map((r) => r.id)).toEqual(['0prFAKEboth']);
+
+      expect(onlyContext[0]).toEqual(onlyContextM);
+      expect(onlyContext[0].attribution).toBe('ambiguous');
+      expect(onlyContext[0].rules.map((r) => r.id)).toEqual(['0prFAKEctx-only']);
+    });
+
+    it('keeps provenance on a group re-bucketed from onlyContext to shared', () => {
+      const copied = ruleBased('a');
+
+      const { shared } = bucketGroups(
+        [copied, membership('b')],
+        [membership('b')],
+        new Set(),
+        new Set(['a']),
+      );
+
+      expect(ids(shared)).toEqual(['b', 'a']);
+      expect(shared[1]).toBe(copied);
+      expect(shared[1].rules).toHaveLength(1);
+      expect(shared[1].attribution).toBe('inferred');
+    });
+
+    it('passes the membership objects through by reference, unmutated', () => {
+      const m = ruleBased('x');
+      const { onlyCompared } = bucketGroups([], [m], new Set());
+
+      expect(onlyCompared[0]).toBe(m);
+      expect(m.rules).toHaveLength(1);
+    });
+  });
+});
+
+describe('groupDiffItem', () => {
+  it('projects id and label from the membership group', () => {
+    const item = groupDiffItem(membership('g1'));
+    expect(item.id).toBe('g1');
+    expect(item.label).toBe('g1');
+  });
+
+  it('carries the membership whole, so rules and attribution reach the row', () => {
+    const m: GroupMembership = {
+      group: group('g2', 'VPN Access'),
+      membershipType: 'RULE_BASED',
+      rules: [rule('0prFAKE0001'), rule('0prFAKE0002')],
+      attribution: 'ambiguous',
+    };
+
+    const item = groupDiffItem(m);
+
+    expect(item.membership).toBe(m);
+    expect(item.membership?.membershipType).toBe('RULE_BASED');
+    expect(item.membership?.rules.map((r) => r.id)).toEqual(['0prFAKE0001', '0prFAKE0002']);
+    expect(item.membership?.attribution).toBe('ambiguous');
+  });
+
+  it('keeps group.type and the description, which the old id+label projection dropped', () => {
+    const m: GroupMembership = {
+      group: {
+        id: 'g3',
+        type: 'APP_GROUP',
+        profile: { name: 'Salesforce Users', description: 'Mastered by Salesforce' },
+      },
+      membershipType: 'RULE_BASED',
+      rules: [],
+      attribution: 'exact',
+    };
+
+    const item = groupDiffItem(m);
+
+    expect(item.membership?.group.type).toBe('APP_GROUP');
+    expect(item.membership?.group.profile.description).toBe('Mastered by Salesforce');
+  });
+
+  it('survives Array.prototype.map, which passes an index and the array', () => {
+    const items = [membership('a'), membership('b')].map(groupDiffItem);
+    expect(items.map((i) => i.id)).toEqual(['a', 'b']);
+    expect(items.every((i) => i.membership !== undefined)).toBe(true);
   });
 });
 

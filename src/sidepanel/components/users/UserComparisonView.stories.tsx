@@ -3,20 +3,45 @@ import { fn } from 'storybook/test';
 import UserComparisonView from './UserComparisonView';
 import { mockUsers, mockGroup } from '../../../test/mocks/handlers';
 import type { UserComparisonState } from '../../hooks/useUserComparison';
-import type { OktaGroup } from '../../../shared/types';
+import type { GroupMembership, MembershipRule } from '../../../shared/types';
 
 const contextUser = mockUsers[10];
 const comparedUser = mockUsers[11];
 
-const group = (id: string, name: string): OktaGroup => ({
-  ...mockGroup,
-  id,
-  profile: { name, description: '' },
+/** An obviously-fake rule, used to give a story membership real provenance. */
+const vpnRule: MembershipRule = {
+  id: '0prFAKErule00001',
+  name: 'Contractors → VPN Access',
+  status: 'ACTIVE',
+  conditionExpression: 'user.userType == "Contractor"',
+  groupIds: ['group456'],
+  userAttributes: ['userType'],
+};
+
+/**
+ * Buckets carry whole memberships (phase 3.6), so the stories' fixtures are
+ * memberships rather than bare groups — including one rule-based membership, so
+ * a story exercises a row that has provenance to show.
+ */
+const membership = (
+  id: string,
+  name: string,
+  over: Partial<GroupMembership> = {},
+): GroupMembership => ({
+  group: { ...mockGroup, id, profile: { name, description: '' } },
+  membershipType: 'DIRECT',
+  rules: [],
+  attribution: 'exact',
+  ...over,
 });
 
-const gShared = group('group123', 'Engineering');
-const gOnlyCompared = group('group456', 'VPN Access');
-const gOnlyContext = group('group789', 'Design Review');
+const gShared = membership('group123', 'Engineering');
+const gOnlyCompared = membership('group456', 'VPN Access', {
+  membershipType: 'RULE_BASED',
+  rules: [vpnRule],
+  attribution: 'exact',
+});
+const gOnlyContext = membership('group789', 'Design Review');
 
 /**
  * A whole comparison view model, as {@link useUserComparison} would return it.
@@ -170,6 +195,6 @@ export const AddError: Story = {
  */
 export const CopyInFlight: Story = {
   args: {
-    comparison: loaded({ activeTab: 'groups', addingGroupId: gOnlyCompared.id }),
+    comparison: loaded({ activeTab: 'groups', addingGroupId: gOnlyCompared.group.id }),
   },
 };

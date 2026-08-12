@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import ComparisonDiffTab from './ComparisonDiffTab';
-import type { DiffItem } from './comparisonAnalytics';
+import { groupDiffItem, type DiffItem } from './comparisonAnalytics';
+import type { GroupMembership } from '../../../../shared/types';
 
 const comparedItems: DiffItem[] = [
   { id: 'g1', label: 'Engineering - Platform' },
@@ -15,6 +16,38 @@ const sharedItems: DiffItem[] = [
 ];
 
 const contextItems: DiffItem[] = [{ id: 'g6', label: 'Finance Approvers' }];
+
+/**
+ * Group memberships with real provenance, for the story that pins the enriched
+ * row shape: one attributed to a rule, one application-managed.
+ */
+const provenanceMemberships: GroupMembership[] = [
+  {
+    group: {
+      id: '00gFAKEgroup0001',
+      type: 'OKTA_GROUP',
+      profile: { name: 'VPN Access', description: 'Remote access for contractors' },
+    },
+    membershipType: 'RULE_BASED',
+    rules: [
+      {
+        id: '0prFAKErule00001',
+        name: 'Contractors → VPN Access',
+        status: 'ACTIVE',
+        conditionExpression: 'user.userType == "Contractor"',
+        groupIds: ['00gFAKEgroup0001'],
+        userAttributes: ['userType'],
+      },
+    ],
+    attribution: 'exact',
+  },
+  {
+    group: { id: '00gFAKEgroup0002', type: 'APP_GROUP', profile: { name: 'Salesforce Users' } },
+    membershipType: 'RULE_BASED',
+    rules: [],
+    attribution: 'exact',
+  },
+];
 
 /** Three tone-coded diff buckets (only-compared / shared / only-context) for groups or apps. */
 const meta = {
@@ -128,6 +161,23 @@ export const AppsVariant: Story = {
     emptyComparedText: 'No apps unique to John Smith.',
     emptySharedText: 'No shared apps.',
     emptyContextText: 'No apps unique to Jane Doe.',
+  },
+};
+
+/**
+ * Group rows built by `groupDiffItem`, so each carries its whole
+ * {@link GroupMembership} on `DiffItem.membership` — including a rule-based row
+ * whose `rules` and `attribution` say *why* the user holds the group.
+ *
+ * Renders identically to {@link Default} on purpose: phase 3.6 only delivers the
+ * provenance to the row, and the two-line row that states it lands in 3.7. This
+ * story exists to pin the enriched shape (and to give 3.7 its fixture).
+ */
+export const GroupRowsCarryProvenance: Story = {
+  args: {
+    comparedItems: provenanceMemberships.map(groupDiffItem),
+    sharedItems: [],
+    contextItems: [],
   },
 };
 

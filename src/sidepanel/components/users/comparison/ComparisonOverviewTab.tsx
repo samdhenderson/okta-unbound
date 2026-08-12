@@ -4,8 +4,7 @@
  */
 import React from 'react';
 import Icon from '../../overview/shared/Icon';
-import type { OktaGroup } from '../../../../shared/types';
-import type { AppEntry } from './comparisonAnalytics';
+import type { AppEntry, GroupBuckets } from './comparisonAnalytics';
 
 /** Props for {@link ComparisonOverviewTab}. */
 interface ComparisonOverviewTabProps {
@@ -13,8 +12,13 @@ interface ComparisonOverviewTabProps {
   contextName: string;
   /** Display name for the compared user. */
   comparedName: string;
-  /** Bucketed group memberships (only-compared / shared / only-context). */
-  groupBuckets: { onlyCompared: OktaGroup[]; shared: OktaGroup[]; onlyContext: OktaGroup[] };
+  /**
+   * Bucketed group memberships (only-compared / shared / only-context). Only the
+   * three lengths are read here — the memberships' provenance is the Groups
+   * tab's business — but the prop takes the real {@link GroupBuckets} so this
+   * card cannot drift from what `bucketGroups` produces.
+   */
+  groupBuckets: GroupBuckets;
   /** Bucketed app assignments (only-compared / shared / only-context). */
   appBuckets: { onlyCompared: AppEntry[]; shared: AppEntry[]; onlyContext: AppEntry[] };
   /** Group overlap as a whole percent (0–100). */

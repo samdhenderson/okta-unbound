@@ -2,19 +2,27 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import ComparisonOverviewTab from './ComparisonOverviewTab';
 import { mockGroup } from '../../../../test/mocks/handlers';
-import type { OktaGroup } from '../../../../shared/types';
-import type { AppEntry } from './comparisonAnalytics';
+import type { GroupMembership } from '../../../../shared/types';
+import type { AppEntry, GroupBuckets } from './comparisonAnalytics';
 
-const makeGroup = (id: string, name: string): OktaGroup => ({
-  ...mockGroup,
-  id,
-  profile: { ...mockGroup.profile, name },
+/**
+ * Buckets carry whole memberships, so a fixture must too — this card reads only
+ * the lengths, but the shape has to be the real one.
+ */
+const makeMembership = (id: string, name: string): GroupMembership => ({
+  group: { ...mockGroup, id, profile: { ...mockGroup.profile, name } },
+  membershipType: 'DIRECT',
+  rules: [],
+  attribution: 'exact',
 });
 
-const groupBuckets = {
-  onlyCompared: [makeGroup('g1', 'Engineering - Platform'), makeGroup('g2', 'VPN Access')],
-  shared: [makeGroup('g3', 'All Employees')],
-  onlyContext: [makeGroup('g4', 'Finance Approvers')],
+const groupBuckets: GroupBuckets = {
+  onlyCompared: [
+    makeMembership('g1', 'Engineering - Platform'),
+    makeMembership('g2', 'VPN Access'),
+  ],
+  shared: [makeMembership('g3', 'All Employees')],
+  onlyContext: [makeMembership('g4', 'Finance Approvers')],
 };
 
 const appBuckets: {

@@ -30,6 +30,7 @@ import ComparisonHero from './comparison/ComparisonHero';
 import ComparisonTabBar from './comparison/ComparisonTabBar';
 import ComparisonOverviewTab from './comparison/ComparisonOverviewTab';
 import ComparisonDiffTab from './comparison/ComparisonDiffTab';
+import { groupDiffItem } from './comparison/comparisonAnalytics';
 import type { UserComparisonState } from '../../hooks/useUserComparison';
 import type { OktaUser } from '../../../shared/types';
 
@@ -151,18 +152,11 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({ contextUser, co
                 <ComparisonDiffTab
                   contextName={contextName}
                   comparedName={comparedName}
-                  comparedItems={groupBuckets.onlyCompared.map((g) => ({
-                    id: g.id,
-                    label: g.profile.name,
-                  }))}
-                  sharedItems={groupBuckets.shared.map((g) => ({
-                    id: g.id,
-                    label: g.profile.name,
-                  }))}
-                  contextItems={groupBuckets.onlyContext.map((g) => ({
-                    id: g.id,
-                    label: g.profile.name,
-                  }))}
+                  // groupDiffItem carries the whole membership onto the row, so the
+                  // diff can say why a group is held and not merely that it is.
+                  comparedItems={groupBuckets.onlyCompared.map(groupDiffItem)}
+                  sharedItems={groupBuckets.shared.map(groupDiffItem)}
+                  contextItems={groupBuckets.onlyContext.map(groupDiffItem)}
                   emptyComparedText={`${comparedName} has no groups ${contextName} is missing.`}
                   emptySharedText="No groups in common yet."
                   emptyContextText={`No groups unique to ${contextName}.`}
@@ -173,16 +167,18 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({ contextUser, co
                     // and the Add button vanishes — that disappearance IS the success
                     // affordance. `disabled={addingGroupId !== null}` is a GLOBAL
                     // single-flight lock, not a per-row one. Keep both verbatim.
-                    const group = groupBuckets.onlyCompared.find((g) => g.id === item.id);
-                    if (!group) return null;
+                    // (`item.membership` holds the same membership, but re-finding
+                    // in the live bucket is what makes the button disappear.)
+                    const m = groupBuckets.onlyCompared.find((b) => b.group.id === item.id);
+                    if (!m) return null;
                     return (
                       <Button
                         size="sm"
                         variant="primary"
                         icon="plus"
-                        loading={addingGroupId === group.id}
+                        loading={addingGroupId === m.group.id}
                         disabled={addingGroupId !== null}
-                        onClick={() => addToContext(group)}
+                        onClick={() => addToContext(m.group)}
                       >
                         Add
                       </Button>
@@ -193,16 +189,16 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({ contextUser, co
                     // group the context user has onto the compared user. On success it
                     // re-buckets from onlyContext into `shared`, so the button vanishes
                     // the same way. Same GLOBAL single-flight lock.
-                    const group = groupBuckets.onlyContext.find((g) => g.id === item.id);
-                    if (!group) return null;
+                    const m = groupBuckets.onlyContext.find((b) => b.group.id === item.id);
+                    if (!m) return null;
                     return (
                       <Button
                         size="sm"
                         variant="primary"
                         icon="plus"
-                        loading={addingGroupId === group.id}
+                        loading={addingGroupId === m.group.id}
                         disabled={addingGroupId !== null}
-                        onClick={() => addToCompared(group)}
+                        onClick={() => addToCompared(m.group)}
                       >
                         Add
                       </Button>
