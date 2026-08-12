@@ -1,7 +1,7 @@
 /**
  * @module shared/utils/membershipAnalysis
- * @description Group-membership attribution heuristic — single source of truth,
- * and the *fallback* attribution path.
+ * @description Group-membership attribution heuristic — the app's single
+ * *client-side* classifier, and the **fallback** attribution path.
  *
  * Okta's API does not directly say whether a user was placed in a group by a
  * group rule or added manually, so `analyzeMemberships` infers it. This is the
@@ -15,10 +15,46 @@
  * DIRECT. Only when some condition is unevaluable does the legacy coarse
  * heuristic apply, and the result is then labelled `inferred` or `ambiguous`.
  *
- * On the **group** path, Okta's own `_embedded['group-rules']` outranks this
- * module (see `shared/membership/groupSource`); on the **user** path this is
- * still the only mechanism, which is why every answer it produces carries an
- * explicit {@link MembershipAttribution} saying what evidence backs it.
+ * ## "Single source of truth" is now **conditional** — read this before relying on it
+ *
+ * There are two attribution mechanisms in the app, not one, and they do not
+ * cover the same ground (ADR-0020):
+ *
+ * - The **group** path (`shared/membership/groupSource`) reads Okta's own
+ *   `_embedded['group-rules']` first. When Okta answers — `rules` or the
+ *   positive `no-rules` — that answer *outranks this module entirely*.
+ * - The **user** path (`sidepanel/hooks/useUserMemberships`) has no such source:
+ *   `GET /api/v1/users/{id}/groups` carries no attribution embed, so this module
+ *   is the whole of what that screen knows.
+ *
+ * So this module is the single source of truth **only where Okta itself said
+ * nothing**. The contract that replaces the old unconditional claim, and the one
+ * `shared/membership/attributionParity.test.ts` pins, is:
+ *
+ * > For a given user and group, the two paths produce the **same** verdict
+ * > whenever `readEmbeddedGroupRules` returns `unknown`. Where it does not, the
+ * > group path is Okta-asserted, the user path is client-evaluated, and the
+ * > difference is **provenance** — which the UI states rather than hides.
+ *
+ * Provenance is deliberately *not* a fourth {@link MembershipAttribution} value.
+ * Attribution answers "how strong is the evidence?"; provenance answers "who
+ * produced it?", and the two compose rather than nest. It is already carried
+ * beside the attribution — `RuleMemberCounts.oktaAttributedCount` vs
+ * `clientAttributedCount` on the group path — and that is where it belongs.
+ *
+ * ## What `exact` does and does not promise
+ *
+ * `exact` means *exact given the inputs supplied* — it is not a claim about
+ * Okta's own books. Two input gaps can make a truthful-looking `exact` wrong,
+ * and both are the caller's responsibility, not this module's:
+ *
+ * 1. **An incomplete rule inventory.** Classifying against a partial (or empty)
+ *    rule list makes every group look untargeted, i.e. `DIRECT` / `exact`. A
+ *    caller that failed to load the org's rules must report
+ *    {@link unclassifiedMemberships} instead of calling this function.
+ * 2. **An incomplete user profile.** `shared/ruleEvaluator` resolves an absent
+ *    profile attribute to `null`, which compares as a definitive `no-match`
+ *    rather than `unevaluable`. Feed this function the full profile.
  *
  * Any change to the classification behavior belongs in its own commit with the
  * characterization assertions flipped — do not "improve" it here.
@@ -201,6 +237,33 @@ const direct = (): Classification => ({
   rules: [],
   attribution: 'exact',
 });
+
+/**
+ * The honest answer for a set of groups that could **not** be classified at all,
+ * because the inputs the classifier needs were unavailable.
+ *
+ * The failure mode this exists to prevent: calling {@link analyzeMemberships}
+ * with an empty or partial rule list. Every group then looks untargeted and
+ * comes back `DIRECT` with `attribution: 'exact'` — a *fact* claim ("this person
+ * was added by hand") manufactured out of a failed rules fetch. `UNKNOWN` plus
+ * `ambiguous` is the vocabulary's sanctioned way to say "not classified"
+ * (see {@link MembershipAttribution}), and every consumer already renders it as
+ * an absence of an answer rather than as an answer.
+ *
+ * Callers must not cache the result as if it were an analysis — it describes the
+ * load that failed, not the org.
+ *
+ * @param groups - The user's groups, exactly as fetched.
+ * @returns One unclassified {@link GroupMembership} per group, in input order.
+ */
+export function unclassifiedMemberships(groups: OktaGroup[]): GroupMembership[] {
+  return groups.map((group) => ({
+    group,
+    membershipType: 'UNKNOWN' as const,
+    rules: [],
+    attribution: 'ambiguous' as const,
+  }));
+}
 
 /**
  * Classify each of a user's groups as `RULE_BASED` or `DIRECT`.

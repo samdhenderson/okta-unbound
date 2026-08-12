@@ -9,9 +9,10 @@
  * {@link GroupMembershipsList} (with the Compare / Add to Group controls in its
  * `actions` slot) and forwards intent.
  *
- * The user-comparison modal is deliberately **not** mounted here: it stays a
- * sibling of this panel in {@link UsersTab} so its mount/unmount timing — and hence
- * `useUserComparison`'s `isOpen`-keyed reset — is unchanged.
+ * The user comparison is deliberately **not** mounted here: it is a pushed view
+ * (ADR-0016) and stays a sibling of this panel in {@link UsersTab}, so this panel is
+ * one of the things that survives — hidden, not unmounted — behind it. Compare is
+ * therefore a push, and the button below is the element focus returns to on pop.
  */
 import React from 'react';
 import { Button } from '../shared';
@@ -45,7 +46,7 @@ export interface UserDetailPanelProps {
   onCancelLifecycleAction: () => void;
   /** Run the armed lifecycle action (the confirm button). */
   onConfirmLifecycleAction: () => void;
-  /** Opens the user-comparison modal. */
+  /** Pushes the user-comparison view. */
   onCompare: () => void;
   /** Opens the Add-to-Group modal. */
   onAddToGroup: () => void;

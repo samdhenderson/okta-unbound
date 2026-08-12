@@ -22,6 +22,13 @@
  * either way is precisely the mis-reporting this module exists to remove; see
  * {@link MemberRuleAttribution}.
  *
+ * **This module is the seam where the two views may legitimately diverge.** The
+ * user view has no equivalent embed to read, so `unknown` is the only state it
+ * ever sees. That makes {@link readEmbeddedGroupRules}'s answer the exact
+ * predicate for "are the group and user views allowed to disagree about this
+ * member?" — `unknown` means no, anything else means yes-and-for-a-stated-reason
+ * (ADR-0020, pinned by `attributionParity.test.ts`).
+ *
  * @see {@link readEmbeddedGroupRules}
  */
 

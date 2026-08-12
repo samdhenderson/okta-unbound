@@ -15,18 +15,29 @@
  * inert while hidden: `isActive` is threaded into the three things here that can
  * reach Okta without a click — live user-page detection, the user-search debounce
  * and the Add-to-Group type-ahead (ADR-0018).
+ *
+ * ## Sub-navigation
+ *
+ * The hook also owns the tab's {@link sidepanel/hooks/useViewStack.useViewStack}
+ * stack, whose one pushed view is the user comparison (ADR-0016). "Compare" is a
+ * push rather than a modal open, so `isCompareOpen` is now derived from the stack
+ * (`!nav.isRoot`) and the cross-tab deep link resets the stack before loading its
+ * user — a pushed view would otherwise hide the profile that deep link is for.
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import type React from 'react';
 import type { GroupMembership, OktaUser, UserInfo } from '../../shared/types';
 import type { AlertMessageData } from '../components/shared/AlertMessage';
 import { invalidate } from '../cache/entityCache';
+import { userDisplayName } from '../../shared/utils/userDisplay';
 import { useUserContext } from './useUserContext';
 import { useUserMemberships } from './useUserMemberships';
 import { useUsersTabSearch } from './useUsersTabSearch';
 import { useDetectedUser } from './useDetectedUser';
 import { useUserLifecycleActions } from './useUserLifecycleActions';
 import { useAddToGroup } from './useAddToGroup';
+import { useViewStack, type ViewStack } from './useViewStack';
 
 /** Options for {@link useUsersTabState}. */
 export interface UseUsersTabStateOptions {
@@ -46,6 +57,20 @@ export interface UseUsersTabStateOptions {
    * tab spends no scheduler budget. Defaults to `true`.
    */
   isActive?: boolean;
+  /**
+   * Ref on the pushed view's container, owned by the tab. Handed to
+   * {@link sidepanel/hooks/useViewStack.useViewStack} so focus moves into a pushed
+   * comparison; passed **in** rather than returned, per that hook's contract.
+   */
+  compareViewRef?: React.RefObject<HTMLElement | null>;
+}
+
+/** One pushed view of the Users tab's stack: a comparison anchored on a user. */
+export interface UserCompareEntry {
+  /** Id of the user the comparison is anchored on (its left-hand side). */
+  userId: string;
+  /** That user's display name at push time, for the breadcrumb/subtitle. */
+  userName: string;
 }
 
 /** Return shape of {@link useUsersTabState}. */
@@ -87,16 +112,18 @@ export interface UseUsersTabStateReturn {
   selectUser: (user: OktaUser) => Promise<void>;
   /** Clears the search, selection, memberships and both banners. */
   clearSearch: () => void;
-  /** Whether the user-comparison modal is open. */
+  /** The tab's sub-navigation stack; its one pushed view is the comparison. */
+  nav: ViewStack<UserCompareEntry>;
+  /** Whether a comparison view is pushed (i.e. the stack is not at its root). */
   isCompareOpen: boolean;
-  /** Opens the user-comparison modal. */
+  /** Pushes the comparison view for the selected user. No-op without one. */
   openCompare: () => void;
-  /** Closes the user-comparison modal. */
+  /** Pops the comparison view, returning to the search + profile body. */
   closeCompare: () => void;
   /**
-   * Reloads the selected user's memberships in place after the comparison modal
+   * Reloads the selected user's memberships in place after the comparison view
    * copies a group onto them. Deliberately does NOT touch the selected user or the
-   * modal's open state, so adding a group never closes the comparison.
+   * view stack, so adding a group never closes the comparison.
    */
   refreshSelectedUserMemberships: () => void;
   /** Lifecycle actions (suspend / unsuspend / reset password) and their confirm modal. */
@@ -104,6 +131,12 @@ export interface UseUsersTabStateReturn {
   /** The Add-to-Group modal's state machine (type-ahead, selection, add). */
   addToGroup: ReturnType<typeof useAddToGroup>;
 }
+
+/** Breadcrumb label for the comparison view. The stack holds at most this one entry. */
+const compareCrumbLabel = (): string => 'Compare users';
+
+/** Stable breadcrumb key for a pushed comparison. */
+const compareCrumbKey = (entry: UserCompareEntry): string => `compare-${entry.userId}`;
 
 /**
  * Hook owning all Users-tab state and the hook wiring between its features.
@@ -116,16 +149,27 @@ export function useUsersTabState({
   selectedUserId,
   onUserSelected,
   isActive = true,
+  compareViewRef,
 }: UseUsersTabStateOptions): UseUsersTabStateReturn {
   const { userInfo, oktaOrigin } = useUserContext(isActive);
   const [isLoadingMemberships, setIsLoadingMemberships] = useState(false);
   const [selectedUser, setSelectedUser] = useState<OktaUser | null>(null);
-  const [isCompareOpen, setIsCompareOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultMessage, setResultMessage] = useState<AlertMessageData | null>(null);
   // Detected-user banner is hidden per id once dismissed (the tab stays pinned to
   // the user you explicitly selected; admin navigation never swaps it).
   const [dismissedDetectedId, setDismissedDetectedId] = useState<string | null>(null);
+
+  // Sub-navigation (ADR-0016): the search + profile body stays mounted (hidden) and
+  // the comparison renders as its sibling, so the selected user, their analysed
+  // memberships and the search box all survive a push→pop round trip.
+  const nav = useViewStack<UserCompareEntry>({
+    rootLabel: 'User Search',
+    getLabel: compareCrumbLabel,
+    getKey: compareCrumbKey,
+    viewRef: compareViewRef,
+  });
+  const isCompareOpen = !nav.isRoot;
 
   // Membership loading + attribution lives in the shared hook (also used by
   // UserOverview / user comparison). The orchestrator keeps owning the merged
@@ -201,6 +245,7 @@ export function useUsersTabState({
   // exactly once — load that user + memberships, then clear the request so it can
   // fire again for a repeat navigation.
   const requestedUserRef = useRef<string | null>(null);
+  const { reset: resetNav } = nav;
   useEffect(() => {
     if (!selectedUserId) {
       requestedUserRef.current = null;
@@ -208,9 +253,12 @@ export function useUsersTabState({
     }
     if (selectedUserId === requestedUserRef.current) return;
     requestedUserRef.current = selectedUserId;
+    // The deep-link contract targets a *profile*, so pop any pushed comparison
+    // first — otherwise the body it loads into is hidden behind that view.
+    resetNav();
     loadUserById(selectedUserId);
     onUserSelected?.();
-  }, [selectedUserId, loadUserById, onUserSelected]);
+  }, [selectedUserId, loadUserById, onUserSelected, resetNav]);
 
   // Show the detected-user banner only when the page's user differs from the one
   // explicitly selected and hasn't been dismissed — never while searching.
@@ -226,7 +274,9 @@ export function useUsersTabState({
     setDismissedDetectedId(userInfo.userId);
   }, [userInfo]);
 
-  // Clear search and reset to initial state
+  // Clear search and reset to initial state. Also pops the view stack: clearing the
+  // selected user unmounts the comparison's host, and a pushed view with no host
+  // would render an empty screen behind a back button.
   const clearSearch = useCallback(() => {
     setSearchQuery('');
     setSearchResults([]);
@@ -234,7 +284,8 @@ export function useUsersTabState({
     clearMemberships();
     setError(null);
     setResultMessage(null);
-  }, [setSearchQuery, setSearchResults, clearMemberships]);
+    resetNav();
+  }, [setSearchQuery, setSearchResults, clearMemberships, resetNav]);
 
   // Lifecycle actions (suspend / unsuspend / reset password) behind the confirm
   // modal. The hook owns its own scheduler slice; the orchestrator keeps the result
@@ -263,8 +314,13 @@ export function useUsersTabState({
 
   const dismissError = useCallback(() => setError(null), []);
   const dismissResultMessage = useCallback(() => setResultMessage(null), []);
-  const openCompare = useCallback(() => setIsCompareOpen(true), []);
-  const closeCompare = useCallback(() => setIsCompareOpen(false), []);
+
+  const { push: pushCompare, pop: popCompare } = nav;
+  const openCompare = useCallback(() => {
+    if (!selectedUser) return;
+    pushCompare({ userId: selectedUser.id, userName: userDisplayName(selectedUser) });
+  }, [selectedUser, pushCompare]);
+  const closeCompare = popCompare;
 
   return {
     oktaOrigin,
@@ -284,6 +340,7 @@ export function useUsersTabState({
     dismissDetectedUser,
     selectUser: handleSelectUser,
     clearSearch,
+    nav,
     isCompareOpen,
     openCompare,
     closeCompare,

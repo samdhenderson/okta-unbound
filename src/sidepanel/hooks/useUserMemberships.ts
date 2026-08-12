@@ -1,18 +1,40 @@
 /**
+/**
  * @module sidepanel/hooks/useUserMemberships
  * @description Loads a user's groups and classifies each membership as DIRECT or RULE_BASED.
  *
  * Okta's API does not report how a user landed in a group, so this module infers
- * it heuristically (APP_GROUP → rule, rule-exclusion → direct, matching active
- * rules → rule with confidence, otherwise direct). See OKTA_API_LIMITATIONS.md §2.
+ * it heuristically via `shared/utils/membershipAnalysis` (APP_GROUP → rule,
+ * rule-exclusion → direct, matching active rules → rule, otherwise direct).
  * Group rules are read from the shared `RulesCache` and refetched on a miss.
+ *
+ * ## This is the *heuristic-only* attribution path (ADR-0020)
+ *
+ * The group view resolves the same question authoritatively — it reads Okta's
+ * own `_embedded['group-rules']` off the member listing
+ * (`shared/membership/memberRuleAttribution`). **This path has no equivalent**:
+ * `GET /api/v1/users/{id}/groups` carries no attribution embed (see
+ * `getUserGroupsRequest`), so every answer here is client-evaluated and is
+ * labelled as such by the `attribution` each membership carries. Where Okta
+ * asserted nothing the two views agree exactly; where it asserted something they
+ * may differ, and the difference is provenance, not a bug —
+ * `shared/membership/attributionParity.test.ts` pins both halves of that.
+ *
+ * ## The rule inventory is load-bearing
+ *
+ * Classifying against an empty or partial rule list makes every group look
+ * untargeted, which the heuristic reports as `DIRECT` / `attribution: 'exact'` —
+ * a confident "added by hand" invented out of a failed fetch. So a failure to
+ * obtain the rules is **not** degraded gracefully into an analysis: the load
+ * reports `unclassifiedMemberships` (`UNKNOWN` / `ambiguous`) and the degraded
+ * result is dropped from the cache so the next visit retries.
  */
 
 import { useState, useCallback, useRef } from 'react';
 import type { OktaUser, GroupMembership, OktaGroup, FormattedRule } from '../../shared/types';
 import { RulesCache } from '../../shared/rulesCache';
-import { getOrFetch, peek } from '../cache/entityCache';
-import { analyzeMemberships } from '../../shared/utils/membershipAnalysis';
+import { getOrFetch, peek, invalidate } from '../cache/entityCache';
+import { analyzeMemberships, unclassifiedMemberships } from '../../shared/utils/membershipAnalysis';
 import { createLogger } from '../../shared/utils/logger';
 import { useOktaApi } from './useOktaApi';
 import { getUserGroupsRequest } from './getUserGroupsRequest';
@@ -116,6 +138,10 @@ export function useUserMemberships({
 
       reportLoading(true);
 
+      // Set by the fetcher when it had to fall back to an unclassified result.
+      // Read after the await so a coalesced caller sees it too.
+      let degraded = false;
+
       try {
         // Fetch + analyze through the entity cache so concurrent callers de-dup and
         // the result is reused on remount. `force` bypasses cache + in-flight.
@@ -131,8 +157,11 @@ export function useUserMemberships({
               throw new Error(groupsResponse.error || 'Failed to fetch user groups');
             }
 
-            // Check cache for rules first
-            let rules: FormattedRule[] = [];
+            // Check cache for rules first. `rules === null` is "we do not have
+            // the org's rules", which is NOT the same as "the org has none" —
+            // conflating them is what turns a failed fetch into a confident
+            // "added by hand" for every group (see the module header).
+            let rules: FormattedRule[] | null = null;
             const cachedRules = await RulesCache.get();
 
             if (cachedRules) {
@@ -165,13 +194,29 @@ export function useUserMemberships({
             const rawGroups: OktaGroup[] = membershipData.map(
               (m) => m.group || (m as unknown as OktaGroup),
             );
+
+            // No rule inventory → say "unknown", never "added by hand".
+            if (rules === null) {
+              degraded = true;
+              log.warn('Rules unavailable; reporting memberships as unclassified', {
+                userId: user.id,
+                groups: rawGroups.length,
+              });
+              return unclassifiedMemberships(rawGroups);
+            }
+
             return analyzeMemberships(rawGroups, rules, user);
           },
           { force: options?.force },
         );
 
+        // An unclassified result describes the load that failed, not the org —
+        // banking it would keep the user staring at "UNKNOWN" for the whole TTL
+        // even after the rules became available. Show it, then forget it.
+        if (degraded) invalidate(['userMemberships', user.id]);
+
         setMemberships(analyzedMemberships);
-        log.debug('Loaded memberships:', { count: analyzedMemberships.length });
+        log.debug('Loaded memberships:', { count: analyzedMemberships.length, degraded });
       } catch (err) {
         reportError(err instanceof Error ? err.message : 'Failed to load user memberships');
         setMemberships([]);

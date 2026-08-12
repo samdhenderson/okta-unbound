@@ -8,6 +8,22 @@
  * pagination, the `{ group, membershipType: 'UNKNOWN', addedDate: undefined }`
  * membership wrapper, and the `{ success, data, count }` result shape are preserved
  * verbatim from `content/userHandlers.ts` so consumers are unchanged.
+ *
+ * ## Why every membership here is `UNKNOWN` (ADR-0020)
+ *
+ * The group path gets Okta's own attribution for free: `GET
+ * /api/v1/groups/{id}/users?expand=group-rules` embeds the feeding rules on each
+ * member row (`shared/membership/memberRuleAttribution`). **There is no analogous
+ * expand on this endpoint** — `/users/{id}/groups` returns plain group objects and
+ * says nothing about how the user got into any of them. That asymmetry, not an
+ * oversight, is why `useUserMemberships` is heuristic-only and why the two views
+ * are reconciled by *labelling* provenance rather than by sharing an answer.
+ *
+ * This module is the seam where that would change. If Okta ever exposes a
+ * per-membership attribution on this endpoint, add it here and have
+ * `useUserMemberships` prefer it exactly as `groupSource` prefers the embed —
+ * and update `shared/membership/attributionParity.test.ts`, which currently pins
+ * the divergence as expected.
  */
 
 import type { OktaGroup } from '../../shared/types';

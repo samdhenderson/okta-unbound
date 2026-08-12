@@ -511,8 +511,10 @@ describe('membership classification (in-file heuristic)', () => {
 });
 
 // ===========================================================================
-// 3b. Compare entry point: the selected-user actions expose a Compare button that
-//     opens the user-comparison modal (same feature as the Overview tab).
+// 3b. Compare entry point: the selected-user actions expose a Compare button.
+//     It now PUSHES a comparison view onto the tab's view stack (ADR-0016)
+//     instead of opening a dialog; the Overview tab still hosts the same feature
+//     in a modal, which UserComparisonModal.test.tsx covers.
 // ===========================================================================
 describe('compare entry point', () => {
   async function renderWithSelectedUser() {
@@ -530,18 +532,22 @@ describe('compare entry point', () => {
     await screen.findByRole('heading', { name: 'Ada Lovelace' });
   }
 
-  it('opens the comparison modal from the Compare action', async () => {
+  it('pushes the comparison view from the Compare action', async () => {
     await renderWithSelectedUser();
 
-    // Closed by default — the dialog is not mounted.
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    // At the root of the view stack: the tab's own header, and no comparison.
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('User Search');
+    expect(screen.queryByRole('button', { name: 'Back to user' })).not.toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /Compare/ }));
     });
 
-    const dialog = await screen.findByRole('dialog');
-    expect(dialog).toHaveAccessibleName('Compare with another user');
+    // A pushed view, not a dialog: the tab's single PageHeader swaps its contents
+    // in place (ADR-0008) and grows a back affordance.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Compare users');
+    expect(screen.getByRole('button', { name: 'Back to user' })).toBeInTheDocument();
   });
 });
 

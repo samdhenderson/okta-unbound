@@ -8,6 +8,7 @@ import {
   attributionNamesRules,
   attributionSemantics,
   isDeducedAttribution,
+  unclassifiedMemberships,
 } from './membershipAnalysis';
 import type { OktaGroup, OktaUser, MembershipRule, MembershipAttribution } from '../types';
 
@@ -264,6 +265,31 @@ describe('attribution semantics', () => {
       expect(['fact', 'deduction']).toContain(semantics.evidence);
       expect(typeof semantics.namesRules).toBe('boolean');
     }
+  });
+});
+
+describe('unclassifiedMemberships', () => {
+  it('says "unknown", never "added by hand", for every group', () => {
+    // The whole point: a caller without a rule inventory must not go through
+    // `analyzeMemberships`, which would read the missing rules as "no rule
+    // targets this group" and answer DIRECT/exact — a fact it does not have.
+    const groups = [group({ id: 'g1' }), group({ id: 'g2', type: 'APP_GROUP' })];
+
+    const result = unclassifiedMemberships(groups);
+
+    expect(result.map((m) => m.group.id)).toEqual(['g1', 'g2']);
+    for (const membership of result) {
+      expect(membership.membershipType).toBe('UNKNOWN');
+      expect(membership.attribution).toBe('ambiguous');
+      expect(membership.rules).toEqual([]);
+      expect(isDeducedAttribution(membership.attribution)).toBe(true);
+      expect(attributionNamesRules(membership.attribution)).toBe(false);
+    }
+  });
+
+  it('gives every membership its own rules array', () => {
+    const [first, second] = unclassifiedMemberships([group({ id: 'g1' }), group({ id: 'g2' })]);
+    expect(first.rules).not.toBe(second.rules);
   });
 });
 

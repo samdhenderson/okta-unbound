@@ -1,11 +1,27 @@
 /**
  * @module sidepanel/hooks/useUserComparison
- * @description Orchestrator for the two-user comparison modal.
+ * @description Orchestrator for the two-user comparison surface.
  *
  * Composes the search, memberships, apps and group-copy hooks, owns the phase
- * switch (`comparedUser`) and `activeTab`, drives the two reset paths (modal
- * close and change-user), and derives the shared/only buckets plus Jaccard
- * similarity for groups and apps.
+ * switch (`comparedUser`) and `activeTab`, drives the two reset paths (the
+ * surface going away and change-user), and derives the shared/only buckets plus
+ * Jaccard similarity for groups and apps.
+ *
+ * ## Two hosts, one hook
+ *
+ * The comparison has two mount sites and they hide it differently:
+ * {@link UserComparisonModal} (the Overview's dialog, which has no view stack) and
+ * {@link UserComparisonPanel} (the Users tab's pushed view, ADR-0016). So the hook
+ * takes an abstract {@link UseUserComparisonOptions.isActive} — "the surface is on
+ * screen" — rather than the dialog's `isOpen`: the dialog passes `isOpen`, the
+ * pushed view passes `!nav.isRoot`. Both hosts keep the hook mounted while the
+ * surface is away, so that flag going false is the **only** thing preventing a
+ * stale comparison from coming back on the next open/push.
+ *
+ * A mounted-but-hidden surface must also stay inert (ADR-0018): the debounced user
+ * search is the one thing here that reaches Okta without a click, so it is gated on
+ * {@link UseUserComparisonOptions.searchEnabled}, which the Users tab additionally
+ * folds its own tab-level `isActive` into.
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -23,9 +39,20 @@ import {
 import type { OktaUser, GroupMembership } from '../../shared/types';
 
 /** Options for {@link useUserComparison}. */
-interface UseUserComparisonOptions {
-  /** Whether the comparison modal is open; going false triggers a full reset. */
-  isOpen: boolean;
+export interface UseUserComparisonOptions {
+  /**
+   * Whether the comparison surface is on screen — `isOpen` for the dialog host,
+   * "a comparison view is pushed" for the Users tab's view-stack host. Going false
+   * triggers a full reset, so the next open/push starts pristine.
+   */
+  isActive: boolean;
+  /**
+   * Whether the surface may issue background user-search requests. Defaults to
+   * {@link UseUserComparisonOptions.isActive}; the Users tab narrows it further with
+   * its own tab-level `isActive`, because a hidden tab stays mounted (ADR-0018) and
+   * must not spend scheduler budget on a screen nobody is looking at.
+   */
+  searchEnabled?: boolean;
   /** The anchor user being compared against (left-hand side). */
   contextUser: OktaUser;
   /** The context user's memberships, used to build the group buckets. */
@@ -51,7 +78,8 @@ interface UseUserComparisonOptions {
  *   actions.
  */
 export function useUserComparison({
-  isOpen,
+  isActive,
+  searchEnabled,
   contextUser,
   contextGroups,
   targetTabId,
@@ -59,6 +87,10 @@ export function useUserComparison({
 }: UseUserComparisonOptions) {
   const { searchQuery, setSearchQuery, searchResults, isSearching, clearSearch } = useUserSearch({
     targetTabId,
+    // ADR-0018: both hosts keep this hook mounted while the surface is hidden, and
+    // the debounce effect re-fires on `targetTabId` changes — so without this gate a
+    // hidden comparison would re-run whatever query was last in its box.
+    enabled: searchEnabled ?? isActive,
   });
 
   const {
@@ -103,12 +135,13 @@ export function useUserComparison({
     onComparedGroupsChanged,
   });
 
-  // Reset everything when the modal closes. The parent keeps this component mounted
-  // across close (only Modal's children unmount), so this effect is the sole thing
-  // preventing a reopened modal from showing the previous comparison. It also runs
-  // harmlessly on first mount (isOpen=false).
+  // Reset everything when the surface goes away — the dialog closing, or the pushed
+  // view being popped. Both hosts keep this hook mounted across that (the dialog
+  // unmounts only Modal's children; the pushed view is hidden, not unmounted), so
+  // this effect is the sole thing preventing the next open/push from showing the
+  // previous comparison. It also runs harmlessly on first mount (isActive=false).
   useEffect(() => {
-    if (!isOpen) {
+    if (!isActive) {
       setComparedUser(null);
       resetApps();
       resetCopyState();
@@ -116,7 +149,7 @@ export function useUserComparison({
       clearSearch();
       clearMemberships();
     }
-  }, [isOpen, resetApps, resetCopyState, clearSearch, clearMemberships]);
+  }, [isActive, resetApps, resetCopyState, clearSearch, clearMemberships]);
 
   // Load the compared user's memberships whenever the selection changes.
   // Fire-and-forget and intentionally NOT cancellable (only the apps half is
@@ -198,3 +231,12 @@ export function useUserComparison({
     changeUser,
   };
 }
+
+/**
+ * The comparison view model produced by {@link useUserComparison}.
+ *
+ * Passed whole into {@link UserComparisonView}, which is presentational: the hook
+ * is instantiated by the *host* (dialog or pushed view) rather than by the view, so
+ * that the hook's mount lifetime is the host's, not the visible surface's.
+ */
+export type UserComparisonState = ReturnType<typeof useUserComparison>;

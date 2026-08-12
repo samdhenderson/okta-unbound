@@ -14,15 +14,28 @@
  *    shows. Free (no extra request) and authoritative, so it wins outright.
  *    See {@link module:shared/membership/memberRuleAttribution}.
  * 2. **The client-side heuristic**, for any member Okta said nothing about:
- *    `shared/utils/membershipAnalysis.analyzeMemberships`, the app's single
- *    source of truth, so those answers still match what the Users tab and user
- *    comparison show. Members it could only attribute by guessing are counted
- *    as `unattributed`, letting callers distinguish "rule-managed" from
- *    "probably rule-managed".
+ *    `shared/utils/membershipAnalysis.analyzeMemberships`. Members it could only
+ *    attribute by guessing are counted as `unattributed`, letting callers
+ *    distinguish "rule-managed" from "probably rule-managed".
  *
  * The fallback is not vestigial: `expand=group-rules` is a private,
  * undocumented parameter, so an org that ignores it degrades to exactly the
  * previous behaviour rather than to nothing.
+ *
+ * ## Where this agrees with the user view, and where it deliberately does not
+ *
+ * The user view (`sidepanel/hooks/useUserMemberships`) has **no** source 1 —
+ * `GET /api/v1/users/{id}/groups` carries no attribution embed — so it runs
+ * source 2 alone. The reconciliation contract (ADR-0020, pinned by
+ * `attributionParity.test.ts`) is therefore:
+ *
+ * - Where {@link readEmbeddedGroupRules} answers `unknown`, both views run the
+ *   same heuristic over the same inputs and **must** produce the same verdict.
+ * - Where it answers `rules` or `no-rules`, this view is Okta-asserted and the
+ *   user view is client-evaluated. They may differ, and the difference is
+ *   *provenance*, which {@link RuleMemberCounts.oktaAttributedCount} /
+ *   {@link RuleMemberCounts.clientAttributedCount} already carry so a UI can say
+ *   so out loud. Provenance is not a fourth `MembershipAttribution` value.
  *
  * ## Two ways to count a rule
  *
