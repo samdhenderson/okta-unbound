@@ -8,7 +8,11 @@ import type { OktaUser } from './types';
 import type { BatchOutcome } from '@/shared/scheduler/runBatch';
 import { logAction } from '../../../shared/undoManager';
 import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
-import { oktaUserListItemSchema, type OktaUserListItem } from '@/shared/schemas/okta';
+import {
+  GROUP_RULES_EXPAND,
+  memberWithGroupRulesSchema,
+  type MemberWithGroupRules,
+} from '@/shared/membership/memberRuleAttribution';
 
 /**
  * Build add/remove/list operations for individual group memberships.
@@ -102,19 +106,32 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
    * Fetch every member of a group, following `Link` pagination (200 per page).
    *
    * @param groupId - Group whose members to load.
-   * @returns All members across all pages.
+   * @returns All members across all pages. Each row carries Okta's own rule
+   * attribution under `_embedded['group-rules']` — see
+   * {@link module:shared/membership/memberRuleAttribution}.
    * @remarks Emits per-page `onResult` progress. Throws on the first failed page.
+   *
+   * Requests `expand=group-rules`, the private parameter the Okta admin console
+   * uses to fill its own "assigned by rule" column. It rides along on the
+   * listing this method already issues, so the attribution costs **no extra
+   * requests** — the no-fan-out guarantee in
+   * `useGroupSource.requestCount.test.ts` is unchanged.
    */
   const getAllGroupMembers = async (groupId: string): Promise<OktaUser[]> => {
     let pageCount = 0;
 
-    const allMembers: OktaUser[] = await fetchAllPages<OktaUserListItem>(
+    const allMembers: OktaUser[] = await fetchAllPages<MemberWithGroupRules>(
       (url) => coreApi.makeApiRequest(url),
-      `/api/v1/groups/${groupId}/users?limit=${OKTA_PAGE_SIZE}`,
+      `/api/v1/groups/${groupId}/users?limit=${OKTA_PAGE_SIZE}&expand=${GROUP_RULES_EXPAND}`,
       {
         // Validated at the response boundary (ADR-0006): malformed rows are
         // dropped leniently by parseOktaList, never thrown on.
-        schema: oktaUserListItemSchema,
+        schema: memberWithGroupRulesSchema,
+        // Okta does NOT echo the private `expand` into its rel="next" link, so
+        // without this page 2+ would arrive with no embed at all — attribution
+        // exact for the first 200 members and inferred for the rest. The only
+        // caller of fetchAllPages that opts in.
+        preserveParams: ['expand'],
         errorMessage: 'Failed to fetch group members',
         onBeforePage: (pageNumber) => {
           pageCount = pageNumber;

@@ -264,6 +264,116 @@ describe('fetchAllPages', () => {
     expect(calls).toEqual([`before:1`, `request:${page1Url}`, `before:2`, `request:${page2Url}`]);
   });
 
+  // Okta drops the admin console's private `expand=group-rules` from its
+  // rel="next" link, so page 2+ would arrive without the embed. `preserveParams`
+  // re-applies it. It is opt-in precisely so the other ten fetchAllPages call
+  // sites keep issuing byte-identical URLs.
+  describe('preserveParams', () => {
+    const firstUrl = '/api/v1/groups/00gFAKE1/users?limit=200&expand=group-rules';
+    const droppedNext = '/api/v1/groups/00gFAKE1/users?limit=200&after=cursor2';
+    const restoredNext = `${droppedNext}&expand=group-rules`;
+
+    it('re-applies a named param the next link dropped', async () => {
+      const request = routedRequest({
+        [firstUrl]: {
+          success: true,
+          data: [{ id: '00uFAKE1' }],
+          headers: { link: nextLink(droppedNext) },
+        },
+        [restoredNext]: { success: true, data: [{ id: '00uFAKE2' }] },
+      });
+
+      const rows = await fetchAllPages<{ id: string }>(request, firstUrl, {
+        preserveParams: ['expand'],
+      });
+
+      expect(rows.map((r) => r.id)).toEqual(['00uFAKE1', '00uFAKE2']);
+      expect(request).toHaveBeenNthCalledWith(2, restoredNext);
+    });
+
+    it('does not duplicate a param the next link already carries', async () => {
+      // The public `expand=stats` case: Okta DOES echo this one, and re-applying
+      // it must be a no-op — the URL is passed through untouched.
+      const statsFirst = '/api/v1/groups?limit=200&expand=stats';
+      const statsNext = '/api/v1/groups?limit=200&after=cursor2&expand=stats';
+      const request = routedRequest({
+        [statsFirst]: {
+          success: true,
+          data: [{ id: '00gFAKE1' }],
+          headers: { link: nextLink(statsNext) },
+        },
+        [statsNext]: { success: true, data: [{ id: '00gFAKE2' }] },
+      });
+
+      await fetchAllPages<{ id: string }>(request, statsFirst, { preserveParams: ['expand'] });
+
+      expect(request).toHaveBeenNthCalledWith(2, statsNext);
+      expect(statsNext.match(/expand=/g)).toHaveLength(1);
+    });
+
+    it('does not invent a param that was never on the first URL', async () => {
+      const request = routedRequest({
+        [page1Url]: {
+          success: true,
+          data: [{ id: '00uFAKE1' }],
+          headers: { link: nextLink(page2Url) },
+        },
+        [page2Url]: { success: true, data: [{ id: '00uFAKE2' }] },
+      });
+
+      await fetchAllPages<{ id: string }>(request, page1Url, { preserveParams: ['expand'] });
+
+      expect(request).toHaveBeenNthCalledWith(2, page2Url);
+    });
+
+    // The blast-radius guard for the other ten fetchAllPages call sites: they
+    // omit the option, so every URL they issue must be exactly what Okta handed
+    // back, byte for byte.
+    it('leaves URLs byte-for-byte unchanged for callers that omit the option', async () => {
+      const opaqueNext = '/api/v1/users?limit=200&after=a%2Bb%3D&filter=status+eq+%22ACTIVE%22';
+      const routes = {
+        [page1Url]: {
+          success: true,
+          data: [{ id: '00uFAKE1' }],
+          headers: { link: nextLink(opaqueNext) },
+        },
+        [opaqueNext]: { success: true, data: [{ id: '00uFAKE2' }] },
+      };
+
+      const withoutOption = routedRequest(routes);
+      await fetchAllPages<{ id: string }>(withoutOption, page1Url);
+
+      // Same walk with an empty preserveParams list, to pin that the opt-in
+      // plumbing itself never rewrites a URL.
+      const withEmptyOption = routedRequest(routes);
+      await fetchAllPages<{ id: string }>(withEmptyOption, page1Url, { preserveParams: [] });
+
+      for (const request of [withoutOption, withEmptyOption]) {
+        expect(request).toHaveBeenNthCalledWith(1, page1Url);
+        expect(request).toHaveBeenNthCalledWith(2, opaqueNext);
+      }
+    });
+
+    it('still stops on a self-referential cursor once the param is re-applied', async () => {
+      // Without re-running the guard against the preserved URL, the appended
+      // param would make a self-referential link look like a new page forever.
+      const request = routedRequest({
+        [firstUrl]: {
+          success: true,
+          data: [{ id: '00uFAKE1' }],
+          headers: { link: nextLink('/api/v1/groups/00gFAKE1/users?limit=200') },
+        },
+      });
+
+      const rows = await fetchAllPages<{ id: string }>(request, firstUrl, {
+        preserveParams: ['expand'],
+      });
+
+      expect(rows).toHaveLength(1);
+      expect(request).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('honors maxPages, stopping even though more pages exist', async () => {
     const request = routedRequest({
       [page1Url]: {
