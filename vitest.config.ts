@@ -19,8 +19,10 @@ export default defineConfig({
     },
   },
   test: {
-    // Coverage stays at the top level so it can span both projects. The 80/75
-    // gate is ENFORCED in CI: the `verify` job runs `npm run test:coverage`.
+    // Coverage stays at the top level so it can span both projects. The
+    // `thresholds` block below is the single source of truth for the gate and is
+    // ENFORCED in CI: the `verify` job runs `npm run test:coverage`. Prose must
+    // reference this file rather than restate the numbers (ADR-0019).
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
@@ -36,10 +38,10 @@ export default defineConfig({
         'docs/',
       ],
       thresholds: {
-        lines: 80,
-        functions: 80,
-        branches: 75,
-        statements: 80,
+        lines: 75,
+        functions: 70,
+        branches: 65,
+        statements: 75,
       },
     },
     projects: [

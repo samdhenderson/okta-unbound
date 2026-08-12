@@ -25,6 +25,7 @@ convention; the specs in [`../`](../README.md) describe the _what_.
 | [0016](./0016-in-tab-view-stack-navigation.md)                    | In-tab sub-navigation via a per-tab view stack                                   | Accepted | `useViewStack` + `Breadcrumbs`; no focus trap (not an overlay).            |
 | [0017](./0017-jsep-expression-evaluation.md)                      | Parse Okta rule expressions with jsep plus an allow-list evaluator               | Accepted | AST-only parser + allow-list evaluator; `unevaluable` is never `no-match`. |
 | [0018](./0018-tabs-stay-mounted.md)                               | Keep every tab mounted; gate background work on `isActive`                       | Accepted | Every tab gates its mount effects on `isActive` — see the obligation.      |
+| [0019](./0019-coverage-threshold-recalibration.md)                | Recalibrate the coverage gate and stop restating its numbers                     | Accepted | Amends 0005's thresholds; `vitest.config.ts` is the single source.         |
 
 ## Adding an ADR
 

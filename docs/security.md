@@ -246,8 +246,8 @@ A reviewer can reproduce the core claims without trusting this document:
 - **No dynamic execution / HTML injection:** `grep -rn "eval(\|new Function\|dangerouslySetInnerHTML\|innerHTML\|document.write" src` → production hits are zero (matches are tests/JSDoc).
 - **No secrets:** `grep -rn "SSWS \|Bearer \|Authorization" src` → prohibition text only.
 - **XSRF never stored/logged:** read `getXsrfToken` in [`content/apiRequest.ts`](../src/content/apiRequest.ts); run the regression test in [`content/index.test.ts`](../src/content/index.test.ts).
-- **Quality gates:** every PR runs lint (0 errors), strict type-check, the 80/75 coverage
-  gate, and the Storybook build/story tests
+- **Quality gates:** every PR runs lint (0 errors), strict type-check, the coverage
+  gate (thresholds in [`vitest.config.ts`](../vitest.config.ts)), and the Storybook build/story tests
   ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)).
 
 The security-hardening rules these controls enforce are codified in

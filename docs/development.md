@@ -11,7 +11,7 @@
 | `npm run format`            | Prettier (added — ADR-0003)                             |
 | `npm run test` / `test:run` | Vitest jsdom `unit` project (watch / once)              |
 | `npm run test:storybook`    | Run every story as a headless-browser render test       |
-| `npm run test:coverage`     | Coverage against 80/75 thresholds (`unit` project)      |
+| `npm run test:coverage`     | Coverage gate — thresholds in `vitest.config.ts`        |
 | `npm run docs`              | TypeDoc → Markdown + bundle for the Storybook Internals |
 | `npm run docs:clean`        | Delete the generated `.storybook/generated/`            |
 | `npm run storybook`         | Component + docs explorer dev server (`:6006`)          |
@@ -64,8 +64,9 @@ type-check gate, not a follow-up.
   `vitest related --run --project unit` on staged `*.{ts,tsx}` (the `unit` scope keeps
   the pre-commit browser-free).
 - **PR CI** (`.github/workflows/ci.yml`, ADR-0005) runs lint (0 errors required) +
-  type-check + `npm run test:coverage` (the 80/75 gate is enforced) on every PR, plus
-  a parallel `storybook` job that builds the docs site and runs the browser story
+  type-check + `npm run test:coverage` (the coverage gate is enforced; thresholds
+  live in `vitest.config.ts` — ADR-0019) on every PR, plus a parallel `storybook`
+  job that builds the docs site and runs the browser story
   tests (ADR-0010/0011) — a broken story fails the PR. Green CI is required to merge.
   The docs site deploys to GitHub Pages on `main` (`deploy-pages.yml`). The
   `--max-warnings=0` lint mode stays deferred while a small number of warn-level
