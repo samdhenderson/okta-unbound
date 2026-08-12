@@ -195,11 +195,15 @@ const UsersTab: React.FC<UsersTabProps> = ({
         {/* Pushed comparison view — a sibling of the body, never a replacement for
             it. Mounted on the same condition the comparison dialog used to be, so
             the reset that clears a finished comparison is the hook's, not an
-            unmount's. */}
+            unmount's. The `data-testid` is a scoping handle for the navigation
+            tests: unlike the Groups tab's detail view this one is always mounted,
+            so its presence tracks nothing — tests scope queries with it because the
+            hidden browse body still answers `getByRole` under jsdom. */}
         {selectedUser && targetTabId != null && (
           <div
             ref={compareViewRef}
             tabIndex={-1}
+            data-testid="user-comparison-view"
             className={isCompareOpen ? 'space-y-6 focus:outline-none' : 'hidden'}
           >
             <UserComparisonPanel
