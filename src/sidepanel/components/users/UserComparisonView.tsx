@@ -31,6 +31,7 @@ import ComparisonTabBar from './comparison/ComparisonTabBar';
 import ComparisonOverviewTab from './comparison/ComparisonOverviewTab';
 import ComparisonDiffTab from './comparison/ComparisonDiffTab';
 import AppScopeIndicator from './comparison/AppScopeIndicator';
+import GroupSourceIndicator from './comparison/GroupSourceIndicator';
 import { groupDiffItem } from './comparison/comparisonAnalytics';
 import type { UserComparisonState } from '../../hooks/useUserComparison';
 import type { OktaUser } from '../../../shared/types';
@@ -204,6 +205,23 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({ contextUser, co
                         Add
                       </Button>
                     );
+                  }}
+                  renderMeta={(item, bucket) => {
+                    // The `shared` bucket holds ONE user's membership — the
+                    // compared user's, except for a context-only group
+                    // optimistically copied onto them (see `bucketGroups`), so
+                    // which user it describes varies row to row. Stating a source
+                    // there would present one user's provenance as if it
+                    // described both, so a shared row says nothing about how the
+                    // group was granted.
+                    if (bucket === 'shared') return null;
+
+                    // The membership rides on the row itself (`groupDiffItem`),
+                    // so unlike `renderAction` there is nothing to re-find: this
+                    // states how the membership was granted, not whether it can
+                    // still be copied. Absent — which cannot happen here, but can
+                    // for an app row or a hand-built fixture — renders nothing.
+                    return <GroupSourceIndicator membership={item.membership} />;
                   }}
                 />
               )}
