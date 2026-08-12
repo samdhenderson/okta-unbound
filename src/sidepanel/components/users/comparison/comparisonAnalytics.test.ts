@@ -17,6 +17,8 @@ const group = (id: string, name = id, type: GroupType = 'OKTA_GROUP'): OktaGroup
 const membership = (id: string): GroupMembership => ({
   group: group(id),
   membershipType: 'DIRECT',
+  rules: [],
+  attribution: 'exact',
 });
 
 const app = (id: string, label = id): AppEntry => ({ id, label });

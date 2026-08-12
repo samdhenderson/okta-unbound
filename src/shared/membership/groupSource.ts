@@ -41,7 +41,11 @@
  */
 
 import type { OktaGroup, OktaUser, MembershipRule, GroupType } from '../types';
-import { analyzeMemberships } from '../utils/membershipAnalysis';
+import {
+  analyzeMemberships,
+  attributionNamesRules,
+  isDeducedAttribution,
+} from '../utils/membershipAnalysis';
 import { readEmbeddedGroupRules } from './memberRuleAttribution';
 
 /** A feeding rule and how many of the group's members it accounts for. */
@@ -72,9 +76,10 @@ export interface RuleMemberCounts {
    * Mutually exclusive across rules, and disjoint from both
    * {@link MemberSourceBreakdown.multiRuleMembers} and
    * {@link MemberSourceBreakdown.unattributed} — which is exactly what makes a
-   * stacked meter's segments add up. A member attributed by the fallback
-   * heuristic with `attribution: 'inferred'` is deliberately **excluded**: it is
-   * already carried by `unattributed`, so counting it here too would double it.
+   * stacked meter's segments add up. A member the fallback heuristic could only
+   * *deduce* (`attribution: 'inferred'` or `'ambiguous'`) is deliberately
+   * **excluded**: it is already carried by `unattributed`, so counting it here
+   * too would double it.
    */
   soleCount: number;
   /**
@@ -84,8 +89,12 @@ export interface RuleMemberCounts {
   oktaAttributedCount: number;
   /**
    * Attributions to this rule the **client-side heuristic** produced (whether it
-   * evaluated the rule's condition or fell back to a guess). Never Okta's own
-   * answer, so a UI must not present these with the weight of a fact.
+   * evaluated the rule's condition or fell back to an evidenced guess). Never
+   * Okta's own answer, so a UI must not present these with the weight of a fact.
+   *
+   * A member the heuristic classified `ambiguous` is credited to **no** rule at
+   * all — it has a candidate set rather than an answer — so it appears only in
+   * {@link MemberSourceBreakdown.unattributed}.
    *
    * `oktaAttributedCount + clientAttributedCount` equals this rule's entry in
    * {@link MemberSourceBreakdown.byRule}.
@@ -104,7 +113,9 @@ export interface MemberSourceBreakdown {
   /**
    * Members counted as rule-managed only *inferentially* — at least one feeding
    * rule's condition could not be evaluated client-side, so the classifier fell
-   * back to a heuristic (`attribution: 'inferred'`).
+   * back to a heuristic and produced a deduction rather than a fact
+   * (`attribution: 'inferred'` or `'ambiguous'`; see
+   * `shared/utils/membershipAnalysis.isDeducedAttribution`).
    *
    * **A subset of `ruleBased`, not a fourth disjoint bucket** — the invariants
    * are `direct + ruleBased === total` and `unattributed <= ruleBased`. A UI
@@ -244,22 +255,34 @@ export function summarizeMemberSources(
 
     // Okta told us nothing about this member — fall back to the heuristic.
     const [membership] = analyzeMemberships([oktaGroup], rules, member);
-    if (membership.membershipType === 'RULE_BASED') {
-      ruleBased++;
-      const inferred = membership.attribution === 'inferred';
-      if (inferred) unattributed++;
-      const rule = membership.rule;
-      if (rule) {
-        credit(rule.id, rule.name);
-        const counts = memberCounts(rule.id, rule.name);
-        counts.clientAttributedCount++;
-        // An inferred member is already carried by `unattributed`; giving it a
-        // rule segment too would count one person in two segments.
-        if (!inferred) counts.soleCount++;
-      }
-    } else {
+    if (membership.membershipType !== 'RULE_BASED') {
       direct++;
+      continue;
     }
+
+    ruleBased++;
+    const deduced = isDeducedAttribution(membership.attribution);
+    if (deduced) unattributed++;
+
+    // An `ambiguous` attribution carries a candidate *set*, not an answer.
+    // Crediting its entries would manufacture an attribution the classifier
+    // explicitly does not have — and inflate every candidate rule's count by a
+    // member none of them was shown to explain. The member is already carried
+    // by `unattributed`, which is the whole of what is known about them.
+    if (!attributionNamesRules(membership.attribution)) continue;
+
+    for (const rule of membership.rules) {
+      credit(rule.id, rule.name);
+      memberCounts(rule.id, rule.name).clientAttributedCount++;
+    }
+
+    // Exclusive counting, mirroring the Okta path. A deduced member is already
+    // carried by `unattributed`; giving it a rule segment too would count one
+    // person in two segments.
+    if (deduced) continue;
+    const [only] = membership.rules;
+    if (membership.rules.length === 1) memberCounts(only.id, only.name).soleCount++;
+    else if (membership.rules.length > 1) multiRuleMembers++;
   }
 
   const byRule = Array.from(ruleCounts.values()).sort((a, b) => b.count - a.count);

@@ -116,6 +116,110 @@ describe('summarizeMemberSources', () => {
     expect(result.byRule[0]).toEqual({ ruleId: 'r1', ruleName: 'Eng feeder', count: 2 });
     expect(result.byRule[1]).toEqual({ ruleId: 'r2', ruleName: 'Sales feeder', count: 1 });
   });
+
+  it('credits EVERY rule a member provably matches, counting the person once', () => {
+    // Two rules really can both put the same user in the same group; the
+    // heuristic used to report only whichever came first in the array.
+    const secondFeeder: MembershipRule = { ...engRule, id: 'r2', name: 'Second feeder' };
+    const result = summarizeMemberSources(
+      oktaGroup,
+      [member('u1', { department: 'Eng' })],
+      [engRule, secondFeeder],
+    );
+
+    expect(result).toMatchObject({
+      total: 1,
+      direct: 0,
+      ruleBased: 1,
+      unattributed: 0,
+      multiRuleMembers: 1,
+    });
+    // byRule counts attributions, so the one member appears under both rules.
+    expect(result.byRule).toEqual([
+      { ruleId: 'r1', ruleName: 'Eng feeder', count: 1 },
+      { ruleId: 'r2', ruleName: 'Second feeder', count: 1 },
+    ]);
+    // …but neither rule *solely* explains them, so neither may own a meter
+    // segment — the person is carried once, by multiRuleMembers.
+    expect(result.byRuleMembers).toEqual([
+      {
+        ruleId: 'r1',
+        ruleName: 'Eng feeder',
+        soleCount: 0,
+        oktaAttributedCount: 0,
+        clientAttributedCount: 1,
+      },
+      {
+        ruleId: 'r2',
+        ruleName: 'Second feeder',
+        soleCount: 0,
+        oktaAttributedCount: 0,
+        clientAttributedCount: 1,
+      },
+    ]);
+  });
+
+  it('credits NO rule for a member that two indistinguishable candidates could explain', () => {
+    const opaqueA: MembershipRule = {
+      ...engRule,
+      id: 'r1',
+      name: 'Opaque A',
+      conditionExpression: 'isMemberOfGroup("00gFAKE1")',
+    };
+    const opaqueB: MembershipRule = {
+      ...engRule,
+      id: 'r2',
+      name: 'Opaque B',
+      conditionExpression: 'isMemberOfGroup("00gFAKE2")',
+    };
+
+    const result = summarizeMemberSources(oktaGroup, [member('u1')], [opaqueA, opaqueB]);
+
+    expect(result).toMatchObject({
+      total: 1,
+      direct: 0,
+      ruleBased: 1,
+      unattributed: 1,
+      multiRuleMembers: 0,
+    });
+    // Naming either rule would invent an attribution the classifier explicitly
+    // does not have, and inflate both rules' counts by a member neither was
+    // shown to explain. All that is known is "indeterminate".
+    expect(result.byRule).toEqual([]);
+    expect(result.byRuleMembers).toEqual([]);
+  });
+
+  it('COUNTS the indeterminate case, not just its invariants', () => {
+    // The subset invariants above hold even when the numbers are wrong, so pin
+    // the numbers too: a sole unevaluable candidate is credited (it is the only
+    // possible source) but owns no meter segment (it is already indeterminate).
+    const opaqueRule: MembershipRule = {
+      ...engRule,
+      id: 'r9',
+      name: 'Opaque feeder',
+      conditionExpression: 'isMemberOfGroup("00gFAKE")',
+    };
+
+    const result = summarizeMemberSources(oktaGroup, [member('u1'), member('u2')], [opaqueRule]);
+
+    expect(result).toEqual({
+      total: 2,
+      direct: 0,
+      ruleBased: 2,
+      unattributed: 2,
+      byRule: [{ ruleId: 'r9', ruleName: 'Opaque feeder', count: 2 }],
+      byRuleMembers: [
+        {
+          ruleId: 'r9',
+          ruleName: 'Opaque feeder',
+          soleCount: 0,
+          oktaAttributedCount: 0,
+          clientAttributedCount: 2,
+        },
+      ],
+      multiRuleMembers: 0,
+    });
+  });
 });
 
 /**

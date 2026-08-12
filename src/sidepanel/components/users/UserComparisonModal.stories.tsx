@@ -5,10 +5,12 @@ import { mockUsers, mockGroup } from '../../../test/mocks/handlers';
 import type { GroupMembership } from '../../../shared/types';
 
 const contextGroups: GroupMembership[] = [
-  { group: mockGroup, membershipType: 'DIRECT' },
+  { group: mockGroup, membershipType: 'DIRECT', rules: [], attribution: 'exact' },
   {
     group: { ...mockGroup, id: 'group456', profile: { name: 'VPN Access', description: '' } },
     membershipType: 'RULE_BASED',
+    rules: [],
+    attribution: 'exact',
   },
 ];
 

@@ -16,6 +16,8 @@ const suspendedUser: OktaUser = { ...activeUser, status: 'SUSPENDED' };
 const directMembership: GroupMembership = {
   group: mockGroup,
   membershipType: 'DIRECT',
+  rules: [],
+  attribution: 'exact',
 };
 
 const ruleMembership: GroupMembership = {
@@ -25,17 +27,20 @@ const ruleMembership: GroupMembership = {
     profile: { name: 'Engineering Team', description: 'All engineering department employees' },
   },
   membershipType: 'RULE_BASED',
-  rule: {
-    id: 'rule1',
-    name: 'Auto-add Engineers',
-    status: 'ACTIVE',
-    conditions: {
-      expression: {
-        value: 'String.stringContains(user.department, "Engineering")',
-        type: 'urn:okta:expression:1.0',
+  rules: [
+    {
+      id: 'rule1',
+      name: 'Auto-add Engineers',
+      status: 'ACTIVE',
+      conditions: {
+        expression: {
+          value: 'String.stringContains(user.department, "Engineering")',
+          type: 'urn:okta:expression:1.0',
+        },
       },
     },
-  },
+  ],
+  attribution: 'exact',
 };
 
 /** The Users tab's selected-user surface: profile card, lifecycle actions, memberships. */

@@ -81,6 +81,8 @@ const gComparedOnly2 = group('g4', 'Compared Only Group 2');
 const membership = (g: OktaGroup): GroupMembership => ({
   group: g,
   membershipType: 'DIRECT',
+  rules: [],
+  attribution: 'exact',
 });
 
 /** Context user's groups, as the parent (UserOverview) passes them in. */

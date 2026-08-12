@@ -43,6 +43,7 @@
  */
 
 import type { MemberSourceBreakdown } from '../../../shared/membership/groupSource';
+import type { MembershipAttribution } from '../../../shared/types';
 import { INDIGO_RAMP, CHART_OTHER_COLOR } from '../../theme/chartPalette';
 
 /**
@@ -82,11 +83,22 @@ export interface MemberSourceBucket {
   aggregatedRuleCount?: number;
 }
 
+/**
+ * The bucket keys that carry fixed presentation — everything except the
+ * per-rule `rule:<ruleId>` segments, whose label and colour are per-rule.
+ */
+export type StaticMemberSourceBucketKey = 'ruleBased' | 'direct' | 'unattributed' | 'multiRule';
+
+/** Label, blurb and token classes for one fixed bucket. */
+export interface MemberSourceBucketMeta {
+  label: string;
+  description: string;
+  barClass: string;
+  dotClass: string;
+}
+
 /** Static per-bucket presentation, keyed by bucket. */
-const BUCKET_META: Record<
-  'ruleBased' | 'direct' | 'unattributed' | 'multiRule',
-  { label: string; description: string; barClass: string; dotClass: string }
-> = {
+const BUCKET_META: Record<StaticMemberSourceBucketKey, MemberSourceBucketMeta> = {
   ruleBased: {
     label: 'Rule-managed',
     description: "Matched a targeting rule's condition, so that rule accounts for this membership.",
@@ -120,6 +132,54 @@ const BUCKET_ORDER: ('ruleBased' | 'direct' | 'unattributed')[] = [
   'direct',
   'unattributed',
 ];
+
+/**
+ * Which meter bucket a single membership's {@link MembershipAttribution} lands
+ * in — the mapping that decides whether a classification is drawn as a confident
+ * answer or as an unconfirmed one.
+ *
+ * **This table is the enforcement device for the union.** `MembershipAttribution`
+ * had exactly one consumer that branched on it and no exhaustive switch
+ * anywhere, so widening the union used to produce *zero* compiler errors and a
+ * brand-new guess would have silently rendered as confident blue "Rule-managed".
+ * A `Record` keyed by the union (checked via `satisfies`, which keeps the literal
+ * value types so the {@link BUCKET_META} lookup below stays total) makes a new
+ * member a compile error right here, at the point where someone has to decide
+ * how honest the new answer is.
+ *
+ * Only `exact` — a proven classification — may map to `ruleBased`. Every guessing
+ * class maps to `unattributed`, the warning-toned "Indeterminate" bucket.
+ *
+ * @see `shared/utils/membershipAnalysis.ATTRIBUTION_SEMANTICS` — the sibling
+ * exhaustive table, in the shared layer, that the group aggregation uses.
+ */
+export const ATTRIBUTION_BUCKET = {
+  exact: 'ruleBased',
+  inferred: 'unattributed',
+  ambiguous: 'unattributed',
+} as const satisfies Record<MembershipAttribution, MemberSourceBucketKey>;
+
+/** A bucket key plus its presentation, as {@link describeAttribution} returns it. */
+export interface AttributionBucketDescription extends MemberSourceBucketMeta {
+  /** The meter bucket this attribution belongs to. */
+  key: StaticMemberSourceBucketKey;
+}
+
+/**
+ * Describe one membership's attribution the way the meter's legend does, so a
+ * per-membership surface (a row badge, a tooltip) and the aggregate meter cannot
+ * drift into telling the user two different stories about the same evidence.
+ *
+ * @param attribution - The classification's attribution label.
+ * @returns The bucket key it belongs to plus that bucket's label, description
+ *   and Odyssey token classes.
+ */
+export function describeAttribution(
+  attribution: MembershipAttribution,
+): AttributionBucketDescription {
+  const key = ATTRIBUTION_BUCKET[attribution];
+  return { key, ...BUCKET_META[key] };
+}
 
 /**
  * The hard cap on individually-named rule segments: the chart ramp's length.

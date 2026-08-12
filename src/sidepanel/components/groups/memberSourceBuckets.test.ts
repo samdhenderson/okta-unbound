@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
+  ATTRIBUTION_BUCKET,
   MAX_RULE_SEGMENTS,
+  describeAttribution,
   toMemberSourceBuckets,
   toMemberSourceSegments,
   toRuleAttributionRows,
@@ -9,6 +11,7 @@ import type {
   MemberSourceBreakdown,
   RuleMemberCounts,
 } from '../../../shared/membership/groupSource';
+import type { MembershipAttribution } from '../../../shared/types';
 
 const breakdown = (over: Partial<MemberSourceBreakdown> = {}): MemberSourceBreakdown => ({
   total: 0,
@@ -326,5 +329,48 @@ describe('toRuleAttributionRows', () => {
     );
 
     expect(rows.map((r) => r.count)).toEqual([2, 1]);
+  });
+});
+
+// ===========================================================================
+// The attribution → bucket table. This is the enforcement device for
+// `MembershipAttribution`: a `Record` keyed by the union is what makes adding a
+// new member a compile error here rather than a silent fall-through into the
+// confident blue "Rule-managed" segment. These cases guard the *values*; the
+// compiler guards the *coverage*.
+// ===========================================================================
+describe('ATTRIBUTION_BUCKET', () => {
+  const ALL_ATTRIBUTIONS: MembershipAttribution[] = ['exact', 'inferred', 'ambiguous'];
+
+  it('maps ONLY a proven classification to the confident bucket', () => {
+    expect(ATTRIBUTION_BUCKET.exact).toBe('ruleBased');
+  });
+
+  it('sends every guess to the indeterminate bucket, never to Rule-managed', () => {
+    for (const attribution of ALL_ATTRIBUTIONS) {
+      if (attribution === 'exact') continue;
+      expect(ATTRIBUTION_BUCKET[attribution]).toBe('unattributed');
+    }
+  });
+
+  it('describes every attribution with the same labels the meter legend uses', () => {
+    const indeterminate = describeAttribution('ambiguous');
+    expect(indeterminate.key).toBe('unattributed');
+    expect(indeterminate.label).toBe('Indeterminate');
+    expect(indeterminate.barClass).toBe('bg-warning');
+
+    const confident = describeAttribution('exact');
+    expect(confident.key).toBe('ruleBased');
+    expect(confident.label).toBe('Rule-managed');
+    expect(confident.barClass).toBe('bg-primary');
+  });
+
+  it('gives every attribution class a described, non-empty bucket', () => {
+    for (const attribution of ALL_ATTRIBUTIONS) {
+      const described = describeAttribution(attribution);
+      expect(described.label).not.toBe('');
+      expect(described.description).not.toBe('');
+      expect(described.dotClass).not.toBe('');
+    }
   });
 });
