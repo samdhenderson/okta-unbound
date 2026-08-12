@@ -90,6 +90,7 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
       {/* Group Memberships */}
       <GroupMembershipsList
         memberships={memberships}
+        user={user}
         isLoading={isLoadingMemberships}
         currentGroupId={currentGroupId}
         oktaOrigin={oktaOrigin}

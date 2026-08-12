@@ -10,6 +10,13 @@
  * The analysis is **opt-in** — it costs one paginated read of the group's
  * members — so the idle state explains the cost and offers a button rather than
  * fetching on mount.
+ *
+ * The meter's *indeterminate* segment is named for what it is: members whose
+ * feeding rule's condition the client-side evaluator could not resolve. That is a
+ * limit of the evaluator, **not** a failed match, so it is spelled out in words
+ * next to the meter and pointed at the surface that breaks the same condition down
+ * clause by clause ({@link ClauseChecklist}, rendered per membership in the Users
+ * tab).
  */
 import React from 'react';
 import { AlertMessage, Button, LoadingSpinner } from '../../shared';
@@ -99,6 +106,23 @@ const RuleAttributionList: React.FC<RuleAttributionListProps> = ({
 };
 
 /**
+ * Explains the meter's indeterminate segment: those members are ones a feeding
+ * rule's condition could not be **evaluated** for in the panel, which is a limit
+ * of the client-side evaluator — not a failed match, and not a member who does
+ * not belong. Says so in words so the segment is never read as a fault, and
+ * points at the surface where the same condition is broken down clause by clause
+ * ({@link sidepanel/components/groups/detail/ClauseChecklist}, rendered per
+ * membership in the Users tab).
+ */
+const IndeterminateNote: React.FC<{ count: number }> = ({ count }) => (
+  <p className="text-xs text-neutral-600">
+    {count.toLocaleString()} member{count === 1 ? '' : 's'} could not be checked against a feeding
+    rule&apos;s condition here — that is a limit of the client-side evaluator, not a failed match.
+    Open one of them in the Users tab to see the rule explained clause by clause.
+  </p>
+);
+
+/**
  * Renders the manual-vs-rule membership split for a group: a gate button while
  * idle, then the {@link MemberSourceMeter} plus each feeding rule's contribution.
  */
@@ -151,6 +175,7 @@ const GroupMembershipSourceSection: React.FC<GroupMembershipSourceSectionProps> 
       ) : breakdown ? (
         <div className="space-y-4">
           <MemberSourceMeter breakdown={breakdown} />
+          {breakdown.unattributed > 0 && <IndeterminateNote count={breakdown.unattributed} />}
           <RuleAttributionList breakdown={breakdown} onNavigateToRule={onNavigateToRule} />
         </div>
       ) : null}

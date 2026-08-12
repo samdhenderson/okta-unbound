@@ -3,20 +3,51 @@
  * @description Renders a user's group memberships, distinguishing direct vs rule-based membership.
  *
  * Direct/rule-based classification is heuristic — the Okta API does not expose
- * which rule (if any) added a user. Rule-based rows surface the matched rule name
- * plus its condition expression and an optional deep link to the Rules tab. The
- * card header exposes an `actions` slot for caller-supplied controls (e.g. the
- * "Add to Group" button in UsersTab).
+ * which rule (if any) added a user. A rule-based row renders one block per
+ * attributed rule, captioned by the membership's `attribution` so a candidate from
+ * a guess never reads as the rule that added the user, each carrying a deep link to
+ * the Rules tab and — when the user is supplied — that rule's condition explained
+ * **clause by clause** against them
+ * ({@link sidepanel/components/groups/detail/ClauseChecklist}) instead of a flat
+ * expression dump. The card header exposes an `actions` slot for caller-supplied
+ * controls (e.g. the "Add to Group" button in UsersTab).
  */
 import React from 'react';
 import { Button, IconButton, LoadingSpinner } from '../shared';
-import type { GroupMembership } from '../../../shared/types';
+import ClauseChecklist from '../groups/detail/ClauseChecklist';
+import type {
+  GroupMembership,
+  MembershipAttribution,
+  MembershipRule,
+  OktaUser,
+} from '../../../shared/types';
 import { oktaAdminEntityUrl } from '../../../shared/utils/oktaUrl';
+
+/**
+ * A rule's condition expression, whichever shape the rule arrived in — the same
+ * two-source fallback the classifier uses
+ * (`shared/utils/membershipAnalysis.conditionExpressionOf`, which is
+ * module-private). The Users tab supplies a `FormattedRule`, which carries
+ * `conditionExpression` and no `conditions` at all, so reading only
+ * `conditions.expression.value` here rendered nothing on this surface.
+ *
+ * An empty result is *not* "no conditions, so everything passes": it is reported
+ * as unevaluable, and {@link ClauseChecklist} says so.
+ */
+const conditionExpressionOf = (rule: MembershipRule): string =>
+  rule.conditionExpression || rule.conditions?.expression?.value || '';
 
 /** Props for {@link GroupMembershipsList}. */
 interface GroupMembershipsListProps {
   /** The user's group memberships, each already classified as direct or rule-based. */
   memberships: GroupMembership[];
+  /**
+   * The user the memberships belong to. When supplied, a rule-based row explains
+   * that rule's condition clause by clause against them; without it the row falls
+   * back to showing the raw condition, since an explanation would have nothing to
+   * evaluate against.
+   */
+  user?: OktaUser;
   /** When true, shows a spinner instead of the list. */
   isLoading: boolean;
   /** Group id to visually highlight as the "current" group, if any. */
@@ -28,6 +59,83 @@ interface GroupMembershipsListProps {
   /** Caller-supplied header controls, rendered on the right of the title row. */
   actions?: React.ReactNode;
 }
+
+/** Props for {@link RuleAttributionBlock}. */
+interface RuleAttributionBlockProps {
+  /** One rule this membership is attributed to. */
+  rule: MembershipRule;
+  /** How much evidence stands behind the attribution, which decides the block's label. */
+  attribution: MembershipAttribution;
+  /** The user to explain the rule's condition against; omitted, the raw condition is shown. */
+  user?: OktaUser;
+  /** Invoked with the rule id to navigate to it in the Rules tab. */
+  onNavigateToRule?: (ruleId: string) => void;
+}
+
+/**
+ * How a rule is introduced, by the evidence behind the attribution — a candidate
+ * from a guess must never be captioned as the rule that added the user.
+ */
+const attributionLabel: Record<MembershipAttribution, string> = {
+  exact: 'Added by Rule:',
+  inferred: 'Likely added by rule:',
+  ambiguous: 'Possible rule:',
+};
+
+/**
+ * One attributed rule: its name, the "View Rule" deep link, and its condition
+ * explained clause by clause against the user (or the raw condition when no user
+ * was supplied).
+ */
+const RuleAttributionBlock: React.FC<RuleAttributionBlockProps> = ({
+  rule,
+  attribution,
+  user,
+  onNavigateToRule,
+}) => (
+  <div className="p-3 bg-primary-light rounded-md border border-primary-highlight">
+    <div className="flex items-center gap-2 mb-2">
+      <svg
+        className="w-4 h-4 text-primary-text"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M13 10V3L4 14h7v7l9-11h-7z"
+        />
+      </svg>
+      <span className="text-sm font-semibold text-primary-dark">
+        {attributionLabel[attribution]}
+      </span>
+      <span className="text-sm text-primary-text">{rule.name}</span>
+      {onNavigateToRule && (
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => onNavigateToRule(rule.id)}
+          title="View this rule in Rules tab"
+          className="ml-auto"
+        >
+          View Rule
+        </Button>
+      )}
+    </div>
+    <div className="mt-2">
+      <span className="text-xs font-semibold text-primary-text block mb-1">Condition:</span>
+      {user ? (
+        <ClauseChecklist expression={conditionExpressionOf(rule)} user={user} />
+      ) : (
+        <code className="block text-xs font-mono text-neutral-900 bg-white p-2 rounded-md border border-primary-highlight overflow-x-auto break-words whitespace-pre-wrap">
+          {conditionExpressionOf(rule) || 'No condition expression'}
+        </code>
+      )}
+    </div>
+  </div>
+);
 
 /** Maps a membership type to its Tailwind badge class (rule-based, direct, or fallback). */
 const getMembershipTypeBadge = (type: string) => {
@@ -47,6 +155,7 @@ const getMembershipTypeBadge = (type: string) => {
  */
 const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
   memberships,
+  user,
   isLoading,
   currentGroupId,
   oktaOrigin,
@@ -140,46 +249,17 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
               </div>
 
               {/* Show rule details if rule-based */}
-              {membership.membershipType === 'RULE_BASED' && membership.rule && (
-                <div className="mt-3 p-3 bg-primary-light rounded-md border border-primary-highlight">
-                  <div className="flex items-center gap-2 mb-2">
-                    <svg
-                      className="w-4 h-4 text-primary-text"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 10V3L4 14h7v7l9-11h-7z"
-                      />
-                    </svg>
-                    <span className="text-sm font-semibold text-primary-dark">Added by Rule:</span>
-                    <span className="text-sm text-primary-text">{membership.rule.name}</span>
-                    {onNavigateToRule && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => onNavigateToRule(membership.rule!.id)}
-                        title="View this rule in Rules tab"
-                        className="ml-auto"
-                      >
-                        View Rule
-                      </Button>
-                    )}
-                  </div>
-                  {membership.rule.conditions?.expression?.value && (
-                    <div className="mt-2">
-                      <span className="text-xs font-semibold text-primary-text block mb-1">
-                        Condition:
-                      </span>
-                      <code className="block text-xs font-mono text-neutral-900 bg-white p-2 rounded-md border border-primary-highlight overflow-x-auto">
-                        {membership.rule.conditions.expression.value}
-                      </code>
-                    </div>
-                  )}
+              {membership.membershipType === 'RULE_BASED' && membership.rules.length > 0 && (
+                <div className="mt-3 space-y-3">
+                  {membership.rules.map((rule) => (
+                    <RuleAttributionBlock
+                      key={rule.id}
+                      rule={rule}
+                      attribution={membership.attribution}
+                      user={user}
+                      onNavigateToRule={onNavigateToRule}
+                    />
+                  ))}
                 </div>
               )}
 

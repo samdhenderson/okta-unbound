@@ -104,6 +104,26 @@ describe('GroupMembershipSourceSection', () => {
     expect(screen.getByText('Indeterminate')).toBeInTheDocument();
   });
 
+  it('explains the indeterminate bucket as unevaluated, not as a failed match', () => {
+    render(
+      <GroupMembershipSourceSection
+        {...base}
+        status="done"
+        breakdown={{ ...breakdown, unattributed: 1, total: 5 }}
+      />,
+    );
+
+    expect(
+      screen.getByText(/limit of the client-side evaluator, not a failed match/),
+    ).toBeInTheDocument();
+  });
+
+  it('omits the indeterminate explanation when every member was classified', () => {
+    render(<GroupMembershipSourceSection {...base} status="done" breakdown={breakdown} />);
+
+    expect(screen.queryByText(/limit of the client-side evaluator/)).not.toBeInTheDocument();
+  });
+
   it('lists each rule contribution and deep-links it', async () => {
     const onNavigateToRule = vi.fn();
     render(
