@@ -120,6 +120,49 @@ describe('bucketApps', () => {
     const { shared } = bucketApps([], [app('x')]);
     expect(shared).toEqual([]);
   });
+
+  // Phase 4.1: entries now carry Okta's assignment `scope`. Bucketing is by id
+  // alone, so the scope must ride through every bucket untouched — and an entry
+  // without one must bucket exactly as it did before the field existed.
+  describe('assignment scope pass-through', () => {
+    const scoped = (id: string, scope: AppEntry['scope']): AppEntry => ({ id, label: id, scope });
+
+    it('carries scope through all three buckets', () => {
+      const contextApps = [scoped('a', 'USER'), scoped('b', 'GROUP')];
+      const comparedApps = [scoped('b', 'USER'), scoped('c', 'GROUP')];
+
+      const { onlyCompared, shared, onlyContext } = bucketApps(contextApps, comparedApps);
+
+      expect(onlyCompared).toEqual([scoped('c', 'GROUP')]);
+      expect(onlyContext).toEqual([scoped('a', 'USER')]);
+      // `shared` is derived from comparedApps only, so a shared app reports the
+      // COMPARED user's scope ('USER' here), not the context user's ('GROUP').
+      expect(shared).toEqual([scoped('b', 'USER')]);
+    });
+
+    it('buckets by id alone — a differing scope never splits a shared app', () => {
+      const { shared, onlyCompared, onlyContext } = bucketApps(
+        [scoped('a', 'GROUP')],
+        [scoped('a', 'USER')],
+      );
+
+      expect(shared.map((a) => a.id)).toEqual(['a']);
+      expect(onlyCompared).toEqual([]);
+      expect(onlyContext).toEqual([]);
+    });
+
+    it('buckets an entry with no scope exactly as before (unknown, not "no direct")', () => {
+      const { onlyCompared, shared, onlyContext } = bucketApps(
+        [app('a'), scoped('b', 'USER')],
+        [app('b'), app('c')],
+      );
+
+      expect(onlyCompared.map((a) => a.id)).toEqual(['c']);
+      expect(shared.map((a) => a.id)).toEqual(['b']);
+      expect(onlyContext.map((a) => a.id)).toEqual(['a']);
+      expect(shared[0].scope).toBeUndefined();
+    });
+  });
 });
 
 describe('similarityColor', () => {

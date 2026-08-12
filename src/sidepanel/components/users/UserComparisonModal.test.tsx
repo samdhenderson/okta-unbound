@@ -438,7 +438,7 @@ describe('UserComparisonModal', () => {
       expect(mockRuntimeSendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           action: 'scheduleApiRequest',
-          endpoint: '/api/v1/apps?filter=user.id+eq+"cmp-1"&limit=200',
+          endpoint: '/api/v1/apps?filter=user.id+eq+"cmp-1"&limit=200&expand=user/cmp-1',
           method: 'GET',
           tabId: TAB_ID,
           priority: 'normal',

@@ -6,11 +6,28 @@
  * comparison subcomponents and `useUserComparison`.
  */
 import type { OktaGroup, GroupMembership } from '../../../../shared/types';
+import type { AppAssignmentScope } from '../../../../shared/schemas/okta';
 
 /** An app assignment reduced to the fields the comparison UI needs. */
 export interface AppEntry {
   id: string;
   label: string;
+  /**
+   * How Okta reports this assignment, when it reported one at all
+   * ({@link AppAssignmentScope}).
+   *
+   * `'USER'` means the user **has a direct assignment** — NOT that no group path
+   * also exists. Okta returns one scope per app-user and reports `'USER'` when a
+   * user is both directly assigned and in an assigned group, so a UI reading this
+   * may label it "Direct" but must never label it "Direct only" or imply the app
+   * would be lost by removing the user from its groups.
+   *
+   * `undefined` = unknown, not "no direct assignment": the row arrived without a
+   * usable embed (an older cached result, an unexpanded response, or a malformed
+   * `_embedded`). Bucketing ignores it entirely — an app is never dropped or
+   * re-bucketed over a missing scope.
+   */
+  scope?: AppAssignmentScope;
 }
 
 /** Identifier for the three comparison tabs. */
@@ -107,6 +124,12 @@ export interface AppBuckets {
  * Split the two users' app assignments into onlyCompared / shared / onlyContext.
  * NOTE: not symmetric with {@link bucketGroups} — there are no added ids, and
  * `shared` is derived from `comparedApps` only.
+ *
+ * Bucketing is by `id` alone: {@link AppEntry.scope} is carried through untouched
+ * (the same entry objects come out) and never affects which bucket an app lands
+ * in. One consequence of the `comparedApps`-only `shared` derivation above: a
+ * shared entry's `scope` is the **compared** user's scope — the context user may
+ * hold the same app by a different path.
  *
  * @param contextApps - The context user's app assignments (baseline).
  * @param comparedApps - The compared user's app assignments.
