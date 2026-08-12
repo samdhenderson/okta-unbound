@@ -16,6 +16,7 @@ import { AlertMessage, Button, LoadingSpinner } from '../../shared';
 import DetailSection from './DetailSection';
 import MemberSourceMeter from './MemberSourceMeter';
 import RuleLinkRow from './RuleLinkRow';
+import { toRuleAttributionRows } from '../memberSourceBuckets';
 import type { SourceStatus } from '../../../hooks/useGroupSource';
 import type { MemberSourceBreakdown } from '../../../../shared/membership/groupSource';
 
@@ -36,6 +37,66 @@ interface GroupMembershipSourceSectionProps {
   /** Deep-links a contributing rule in the Rules tab. */
   onNavigateToRule?: (ruleId: string) => void;
 }
+
+/** Props for {@link RuleAttributionList}. */
+interface RuleAttributionListProps {
+  /** The analyzed split whose `byRule` contributions are listed. */
+  breakdown: MemberSourceBreakdown;
+  /** Deep-links a contributing rule in the Rules tab. */
+  onNavigateToRule?: (ruleId: string) => void;
+}
+
+/**
+ * The "Attributed to" list: one deep-linkable row per feeding rule, each
+ * carrying how many members it accounts for.
+ *
+ * A row that Okta itself attributed and one the client-side heuristic deduced
+ * are **not** rendered with the same weight — the deduced row carries a warning
+ * chip naming it an inference, so a guess never reads as a fact.
+ */
+const RuleAttributionList: React.FC<RuleAttributionListProps> = ({
+  breakdown,
+  onNavigateToRule,
+}) => {
+  const rows = toRuleAttributionRows(breakdown);
+
+  return (
+    <div>
+      <h3 className="text-xs font-medium text-neutral-600">Attributed to</h3>
+      {rows.length === 0 ? (
+        <p className="mt-1.5 text-sm text-neutral-500">
+          No member was attributed to a specific rule.
+        </p>
+      ) : (
+        <ul className="mt-1.5 space-y-1.5">
+          {rows.map((row) => (
+            <li key={row.ruleId}>
+              <RuleLinkRow
+                name={row.ruleName}
+                onSelect={onNavigateToRule ? () => onNavigateToRule(row.ruleId) : undefined}
+                trailing={
+                  <span className="flex items-center gap-2">
+                    {row.provenanceLabel && (
+                      <span
+                        title={row.provenanceTitle}
+                        className={`rounded-md border px-2 py-0.5 text-xs font-medium ${row.provenanceClass}`}
+                      >
+                        {row.provenanceLabel}
+                      </span>
+                    )}
+                    <span className="text-xs font-semibold text-neutral-600">
+                      {row.count.toLocaleString()} member{row.count === 1 ? '' : 's'}
+                    </span>
+                  </span>
+                }
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
 
 /**
  * Renders the manual-vs-rule membership split for a group: a gate button while
@@ -90,34 +151,7 @@ const GroupMembershipSourceSection: React.FC<GroupMembershipSourceSectionProps> 
       ) : breakdown ? (
         <div className="space-y-4">
           <MemberSourceMeter breakdown={breakdown} />
-
-          <div>
-            <h3 className="text-xs font-medium text-neutral-600">Attributed to</h3>
-            {breakdown.byRule.length === 0 ? (
-              <p className="mt-1.5 text-sm text-neutral-500">
-                No member was attributed to a specific rule.
-              </p>
-            ) : (
-              <ul className="mt-1.5 space-y-1.5">
-                {breakdown.byRule.map((contribution) => (
-                  <li key={contribution.ruleId}>
-                    <RuleLinkRow
-                      name={contribution.ruleName}
-                      onSelect={
-                        onNavigateToRule ? () => onNavigateToRule(contribution.ruleId) : undefined
-                      }
-                      trailing={
-                        <span className="text-xs font-semibold text-neutral-600">
-                          {contribution.count.toLocaleString()} member
-                          {contribution.count === 1 ? '' : 's'}
-                        </span>
-                      }
-                    />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          <RuleAttributionList breakdown={breakdown} onNavigateToRule={onNavigateToRule} />
         </div>
       ) : null}
     </DetailSection>

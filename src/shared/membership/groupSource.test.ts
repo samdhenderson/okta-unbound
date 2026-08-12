@@ -244,6 +244,114 @@ describe('summarizeMemberSources with Okta-embedded rule attribution', () => {
     ]);
   });
 
+  it('counts a two-rule member once, in multiRuleMembers, and in no rule’s soleCount', () => {
+    const members = [
+      memberWithEmbed(
+        'u1',
+        groupRulesEmbed([
+          { id: '0prFAKE1', name: 'Eng feeder' },
+          { id: '0prFAKE2', name: 'Contractor feeder' },
+        ]),
+      ),
+      memberWithEmbed('u2', groupRulesEmbed([{ id: '0prFAKE1', name: 'Eng feeder' }])),
+    ];
+
+    const result = summarizeMemberSources(oktaGroup, members, [engRule]);
+
+    // byRule credits the shared member to both rules (2 + 1 = 3 attributions for
+    // 2 people); the exclusive counts must not.
+    expect(result.byRule.map((r) => r.count)).toEqual([2, 1]);
+    expect(result.multiRuleMembers).toBe(1);
+    expect(result.byRuleMembers).toEqual([
+      {
+        ruleId: '0prFAKE1',
+        ruleName: 'Eng feeder',
+        soleCount: 1,
+        oktaAttributedCount: 2,
+        clientAttributedCount: 0,
+      },
+      {
+        ruleId: '0prFAKE2',
+        ruleName: 'Contractor feeder',
+        soleCount: 0,
+        oktaAttributedCount: 1,
+        clientAttributedCount: 0,
+      },
+    ]);
+  });
+
+  it('keeps the exclusive counts within the rule-managed member budget', () => {
+    // The invariant every stacked-meter segment set is built on:
+    // Σ soleCount + multiRuleMembers + unattributed <= ruleBased.
+    const opaque: MembershipRule = {
+      ...engRule,
+      id: '0prFAKEOPAQUE2',
+      conditionExpression: 'isMemberOfGroup("00gFAKE")',
+    };
+    const members = [
+      memberWithEmbed('u1', groupRulesEmbed([{ id: '0prFAKE1', name: 'Eng feeder' }])),
+      memberWithEmbed(
+        'u2',
+        groupRulesEmbed([
+          { id: '0prFAKE1', name: 'Eng feeder' },
+          { id: '0prFAKE2', name: 'Contractor feeder' },
+        ]),
+      ),
+      member('u3'), // no embed → heuristic, and the rule cannot be evaluated
+      memberWithEmbed('u4', groupRulesEmbed([])), // Okta: manual add
+    ];
+
+    const result = summarizeMemberSources(oktaGroup, members, [opaque]);
+
+    const sole = (result.byRuleMembers ?? []).reduce((sum, r) => sum + r.soleCount, 0);
+    expect(sole + (result.multiRuleMembers ?? 0) + result.unattributed).toBeLessThanOrEqual(
+      result.ruleBased,
+    );
+    expect(result.direct + result.ruleBased).toBe(result.total);
+  });
+
+  it('separates Okta-asserted attributions from client-side deductions per rule', () => {
+    const members = [
+      memberWithEmbed('u1', groupRulesEmbed([{ id: 'r1', name: 'Eng feeder' }]), {
+        department: 'Sales',
+      }),
+      member('u2', { department: 'Eng' }), // no embed → the heuristic matches engRule
+    ];
+
+    const result = summarizeMemberSources(oktaGroup, members, [engRule]);
+
+    expect(result.byRule).toEqual([{ ruleId: 'r1', ruleName: 'Eng feeder', count: 2 }]);
+    expect(result.byRuleMembers).toEqual([
+      {
+        ruleId: 'r1',
+        ruleName: 'Eng feeder',
+        soleCount: 2,
+        oktaAttributedCount: 1,
+        clientAttributedCount: 1,
+      },
+    ]);
+  });
+
+  it('gives an inferred member no rule segment — it is already counted as indeterminate', () => {
+    const opaque: MembershipRule = {
+      ...engRule,
+      conditionExpression: 'isMemberOfGroup("00gFAKE")',
+    };
+
+    const result = summarizeMemberSources(oktaGroup, [member('u1')], [opaque]);
+
+    expect(result).toMatchObject({ ruleBased: 1, unattributed: 1, multiRuleMembers: 0 });
+    expect(result.byRuleMembers).toEqual([
+      {
+        ruleId: 'r1',
+        ruleName: 'Eng feeder',
+        soleCount: 0,
+        oktaAttributedCount: 0,
+        clientAttributedCount: 1,
+      },
+    ]);
+  });
+
   it('keeps an APP_GROUP application-managed despite an empty group-rules embed', () => {
     // Group rules are not what feeds an APP_GROUP, so "no group rule" says
     // nothing about it — the application-managed classification still stands.

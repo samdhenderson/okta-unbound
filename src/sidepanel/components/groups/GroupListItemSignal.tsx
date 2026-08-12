@@ -8,7 +8,11 @@
  *
  * 1. the compact member-source meter — rendered **only** when a breakdown has
  *    already been computed elsewhere (see
- *    {@link module:sidepanel/cache/memberSourceCache}); never fetched here,
+ *    {@link module:sidepanel/cache/memberSourceCache}); never fetched here. Its
+ *    56px bar draws one segment per attributing rule, capped at
+ *    {@link module:sidepanel/components/groups/groupSourceSummary.COMPACT_RULE_SEGMENTS}
+ *    named rules with the tail aggregated, and a `min-w-0.5` floor so a
+ *    one-member segment is still a visible sliver rather than nothing,
  * 2. the exact member count, which Okta returns free with `?expand=stats`,
  * 3. what the source split says, or an honest "not analyzed",
  * 4. the exact rule and push facts, with "fed by" and "used in" kept apart.
@@ -43,8 +47,8 @@ const GroupListItemSignal: React.FC<GroupListItemSignalProps> = ({ model }) => {
           {source.segments.map((segment) => (
             <span
               key={segment.key}
-              className={segment.barClass}
-              style={{ width: `${segment.percent}%` }}
+              className={`min-w-0.5 ${segment.barClass}`}
+              style={{ width: `${segment.percent}%`, backgroundColor: segment.color }}
             />
           ))}
         </span>

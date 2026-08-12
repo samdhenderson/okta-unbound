@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  COMPACT_RULE_SEGMENTS,
   describeMemberSource,
   groupIdentityLine,
   groupRowFacts,
@@ -213,5 +214,70 @@ describe('summarizeGroupRow', () => {
 
   it('uses the singular member noun for a group of one', () => {
     expect(summarizeGroupRow(group({ memberCount: 1 }), null).memberNoun).toBe('member');
+  });
+});
+
+describe('describeMemberSource per-rule segments', () => {
+  const rule = (ruleId: string, soleCount: number) => ({
+    ruleId,
+    ruleName: `Rule ${ruleId}`,
+    soleCount,
+    oktaAttributedCount: soleCount,
+    clientAttributedCount: 0,
+  });
+
+  it('gives the bar one segment per rule while the text stays coarse', () => {
+    const state = describeMemberSource(
+      10,
+      breakdown({
+        total: 10,
+        direct: 2,
+        ruleBased: 8,
+        byRuleMembers: [rule('r1', 5), rule('r2', 3)],
+        multiRuleMembers: 0,
+      }),
+    );
+
+    if (state.kind !== 'computed') throw new Error('unreachable');
+    expect(state.segments.map((s) => s.key)).toEqual(['rule:r1', 'rule:r2', 'direct']);
+    // Rule names are unbounded; a row's one line is not. The text collapses.
+    expect(state.summary).toBe('Rule-managed 8 · Manual 2');
+    expect(state.title).toContain('Rule r1');
+  });
+
+  it('shows at most COMPACT_RULE_SEGMENTS named rules, aggregating the rest', () => {
+    const rules = Array.from({ length: COMPACT_RULE_SEGMENTS + 2 }, (_, i) =>
+      rule(`r${i + 1}`, 10 - i),
+    );
+    const total = rules.reduce((n, r) => n + r.soleCount, 0);
+
+    const state = describeMemberSource(
+      total,
+      breakdown({ total, direct: 0, ruleBased: total, byRuleMembers: rules }),
+    );
+
+    if (state.kind !== 'computed') throw new Error('unreachable');
+    expect(state.segments.filter((s) => s.key.startsWith('rule:'))).toHaveLength(
+      COMPACT_RULE_SEGMENTS,
+    );
+    expect(state.segments.find((s) => s.key === 'otherRules')?.aggregatedRuleCount).toBe(2);
+    expect(state.segments.reduce((n, s) => n + s.count, 0)).toBe(total);
+  });
+
+  it('keeps a two-rule member in one segment, counted once', () => {
+    const state = describeMemberSource(
+      70,
+      breakdown({
+        total: 70,
+        direct: 1,
+        ruleBased: 69,
+        byRuleMembers: [rule('r1', 68)],
+        multiRuleMembers: 1,
+      }),
+    );
+
+    if (state.kind !== 'computed') throw new Error('unreachable');
+    expect(state.segments.find((s) => s.key === 'multiRule')?.count).toBe(1);
+    expect(state.segments.reduce((n, s) => n + s.count, 0)).toBe(70);
   });
 });

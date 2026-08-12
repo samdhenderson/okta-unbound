@@ -122,6 +122,82 @@ describe('GroupMembershipSourceSection', () => {
     expect(onNavigateToRule).toHaveBeenCalledWith('r1');
   });
 
+  it('distinguishes an Okta-attributed rule from one the heuristic only inferred', () => {
+    render(
+      <GroupMembershipSourceSection
+        {...base}
+        status="done"
+        breakdown={{
+          total: 4,
+          direct: 0,
+          ruleBased: 4,
+          unattributed: 0,
+          byRule: [
+            { ruleId: 'r1', ruleName: 'All Engineers', count: 3 },
+            { ruleId: 'r2', ruleName: 'Contractors', count: 1 },
+          ],
+          byRuleMembers: [
+            {
+              ruleId: 'r1',
+              ruleName: 'All Engineers',
+              soleCount: 3,
+              oktaAttributedCount: 3,
+              clientAttributedCount: 0,
+            },
+            {
+              ruleId: 'r2',
+              ruleName: 'Contractors',
+              soleCount: 1,
+              oktaAttributedCount: 0,
+              clientAttributedCount: 1,
+            },
+          ],
+          multiRuleMembers: 0,
+        }}
+      />,
+    );
+
+    // A fact and a deduction must not read with the same weight.
+    const fact = screen.getByText('Okta-attributed');
+    const guess = screen.getByText('Inferred');
+    expect(fact).toBeInTheDocument();
+    expect(guess).toHaveAttribute('title', expect.stringContaining('deduction, not a fact'));
+    expect(fact.className).not.toBe(guess.className);
+  });
+
+  it('renders one meter segment per rule, plus the shared-member segment', () => {
+    render(
+      <GroupMembershipSourceSection
+        {...base}
+        memberCount={70}
+        status="done"
+        breakdown={{
+          total: 70,
+          direct: 1,
+          ruleBased: 69,
+          unattributed: 0,
+          byRule: [{ ruleId: 'r1', ruleName: 'All Engineers', count: 69 }],
+          byRuleMembers: [
+            {
+              ruleId: 'r1',
+              ruleName: 'All Engineers',
+              soleCount: 68,
+              oktaAttributedCount: 69,
+              clientAttributedCount: 0,
+            },
+          ],
+          multiRuleMembers: 1,
+        }}
+      />,
+    );
+
+    // "All Engineers" appears twice: once as a meter segment, once as a rule row.
+    expect(screen.getAllByText('All Engineers').length).toBeGreaterThan(1);
+    expect(screen.getByText('Matched by 2+ rules')).toBeInTheDocument();
+    expect(screen.getByText('Manual')).toBeInTheDocument();
+    expect(screen.queryByText('Rule-managed')).not.toBeInTheDocument();
+  });
+
   it('says so when no member could be attributed to a rule', () => {
     render(
       <GroupMembershipSourceSection
