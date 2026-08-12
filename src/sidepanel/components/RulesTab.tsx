@@ -36,6 +36,24 @@ import { createLogger } from '../../shared/utils/logger';
 
 const log = createLogger('RulesTab');
 
+/**
+ * Does this rule assign users into the given group?
+ *
+ * Derived from the rule's own target `groupIds` rather than read off its
+ * `affectsCurrentGroup` flag. That flag is only meaningful on a fresh,
+ * group-scoped fetch: the org-wide `RulesCache` is deliberately formatted
+ * *without* a current group (baking one group's flag into a shared entry would
+ * be wrong — see `useOktaApi/groupDiscovery.ts`), and persisted TabState freezes
+ * whatever flag was current when it was written. Deriving here is correct on
+ * every path.
+ *
+ * @param rule - The rule to test.
+ * @param groupId - The current group id, if one is detected.
+ * @returns `true` when a group is detected and the rule targets it.
+ */
+const targetsGroup = (rule: FormattedRule, groupId?: string): boolean =>
+  groupId ? rule.groupIds.includes(groupId) : false;
+
 interface RulesTabProps {
   /** Chrome tab id of the connected Okta tab; required to fetch or mutate rules. */
   targetTabId?: number;
@@ -253,10 +271,25 @@ const RulesTab: React.FC<RulesTabProps> = ({
     if (ruleId) void lifecycle.deactivateRule(ruleId);
   };
 
+  // Re-derive each rule's current-group relation before anything reads it. This
+  // tab is the only place that knows the detected group, so it stamps the truth
+  // onto the rules it hands down (RuleCard's "Current Group" badge and border
+  // read the same field) instead of trusting a flag baked at cache-write time.
+  const scopedRules = React.useMemo(
+    () =>
+      rules.map((r) => {
+        const affectsCurrentGroup = targetsGroup(r, currentGroupId);
+        return Boolean(r.affectsCurrentGroup) === affectsCurrentGroup
+          ? r
+          : { ...r, affectsCurrentGroup };
+      }),
+    [rules, currentGroupId],
+  );
+
   // Apply search, the active filter chip, then the chosen sort order (which can
   // pair up similar rules so near-duplicates sit next to each other for review).
   const filteredRules = React.useMemo(() => {
-    let result = filterRules(rules, searchQuery);
+    let result = filterRules(scopedRules, searchQuery);
     switch (activeFilter) {
       case 'active':
         result = result.filter((r) => r.status === 'ACTIVE');
@@ -265,11 +298,11 @@ const RulesTab: React.FC<RulesTabProps> = ({
         result = result.filter((r) => r.conflicts && r.conflicts.length > 0);
         break;
       case 'current-group':
-        result = result.filter((r) => r.affectsCurrentGroup);
+        result = result.filter((r) => targetsGroup(r, currentGroupId));
         break;
     }
     return sortRules(result, sortMode);
-  }, [rules, searchQuery, activeFilter, sortMode]);
+  }, [scopedRules, searchQuery, activeFilter, sortMode, currentGroupId]);
 
   // Scroll to and highlight the active rule (cross-tab deep-link or a local focus)
   // once it is in the DOM. If it is loaded but hidden by the current search/filter,

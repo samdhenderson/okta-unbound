@@ -25,6 +25,25 @@ const log = createLogger('RulesTab');
 /** The zeroed stats object, reused as the default and the fetch fallback. */
 const EMPTY_STATS: RuleStats = { total: 0, active: 0, inactive: 0, conflicts: 0 };
 
+/**
+ * Strip the caller-scoped `affectsCurrentGroup` flag from rules on their way
+ * into the **org-wide** `RulesCache`.
+ *
+ * The cache is a single shared slot read by every group (see
+ * `useOktaApi/groupDiscovery.ts`, which formats its own writes with
+ * `currentGroupId === undefined` for exactly this reason). This load, by
+ * contrast, formats for whichever group the panel currently has open — writing
+ * those flags into the shared entry would hand every other group a wrong
+ * "Current Group" answer for the next 5 minutes. Consumers derive the relation
+ * from `groupIds` instead.
+ *
+ * @param rules - Rules as returned by this load (possibly group-flagged).
+ * @returns The same rules with no `affectsCurrentGroup` field.
+ */
+function toOrgWideRules(rules: FormattedRule[] | undefined): FormattedRule[] {
+  return (rules ?? []).map(({ affectsCurrentGroup: _scoped, ...rest }) => rest);
+}
+
 /** State restored from persistence on mount (persisted fields may be null). */
 export interface RulesDataSnapshot {
   rules?: FormattedRule[] | null;
@@ -137,9 +156,10 @@ export function useRulesData({
           // OPTIMIZED: Populate global cache for other components to use. The
           // raw rules come from the same single fetch as the formatted ones, so
           // raw-rule consumers (rule-impact analysis) are served from this cache
-          // instead of re-paginating /api/v1/groups/rules.
+          // instead of re-paginating /api/v1/groups/rules. The entry is org-wide,
+          // so this load's group-scoped flags are stripped first ({@link toOrgWideRules}).
           await RulesCache.set(
-            response.rules || [],
+            toOrgWideRules(response.rules),
             response.rawRules || [],
             response.stats || EMPTY_STATS,
             response.conflicts || [],
