@@ -86,6 +86,20 @@ export type ClauseStatus = 'pass' | 'fail' | 'not-evaluated';
 export type ClauseGroupMatch = 'id' | 'name' | 'nameStartsWith' | 'nameContains';
 
 /**
+ * Which way round an `isMemberOf*` clause asks its question.
+ *
+ * `member` is the bare call: the user must be in one of the groups it names.
+ * `non-member` is the negated form (`!isMemberOfAnyGroup(…)`): the rule *excludes*
+ * members of those groups, so the user must be in none of them.
+ *
+ * The distinction is not cosmetic — it inverts which references are the problem.
+ * A failing `member` clause is blamed on the groups the user is **missing**; a
+ * failing `non-member` clause is blamed on the one they **have**, and adding a
+ * group could never fix it.
+ */
+export type ClauseGroupRequirement = 'member' | 'non-member';
+
+/**
  * One group an `isMemberOf*` clause asks about, and whether the user is in it.
  *
  * Carried structurally rather than left for the UI to re-parse out of
@@ -139,8 +153,20 @@ export interface ClauseExplanation {
    * satisfied" while reading as a definite `false`. A *failing* clause carrying
    * these is the "they would need to be in X" case; a passing one names the
    * group that already qualifies them.
+   *
+   * Read {@link groupRequirement} before acting on these: under `non-member` it
+   * is the **satisfied** entries that explain a failure.
    */
   readonly groupReferences?: readonly ClauseGroupReference[];
+  /**
+   * Which way round the clause asks — present exactly when
+   * {@link groupReferences} is.
+   *
+   * Carried on the clause rather than on each reference because every argument of
+   * one call shares it: `!isMemberOfAnyGroup(a, b)` negates the whole call, not
+   * individual groups.
+   */
+  readonly groupRequirement?: ClauseGroupRequirement;
 }
 
 /** Per-rule counts the UI renders above the clause list. */
@@ -421,23 +447,40 @@ function findMatchingGroup(
   });
 }
 
+/** What one group-membership clause asks about, and which way round. */
+interface GroupClauseFacts {
+  readonly requirement: ClauseGroupRequirement;
+  readonly references: readonly ClauseGroupReference[];
+}
+
 /**
- * The groups an `isMemberOf*` clause asks about, read off the AST — or
- * `undefined` when the clause is not one of those calls.
+ * The groups an `isMemberOf*` clause asks about and its polarity, read off the
+ * AST — or `undefined` when the clause is not one of those calls.
+ *
+ * **A negation is looked through.** `!isMemberOfAnyGroup(a, b)` names the same
+ * groups as the bare call; only the meaning of a match flips. Missing that was a
+ * real bug: the clause node is a `UnaryExpression`, so a plain `asCallExpression`
+ * found nothing, the clause carried no references at all, and a twenty-group
+ * exclusion was reported to the admin as a profile attribute to fix.
+ *
+ * Only `!` is unwrapped — no other unary operator expresses polarity — and only
+ * one level, so `!!isMemberOfGroup(x)` is declined rather than guessed at.
  *
  * Returns `undefined` rather than a partial list for any argument that is not a
  * string literal: naming the wrong group is worse than naming none.
  */
-function groupReferencesOf(
+function groupClauseFactsOf(
   node: jsep.Expression,
   groups: RuleGroupContext | undefined,
-): readonly ClauseGroupReference[] | undefined {
+): GroupClauseFacts | undefined {
   // Without a group list there is no `satisfied` to report — only "not known to
   // be satisfied", which reads identically and is not the same fact. The clause
   // is `not-evaluated` in that case anyway, so there is nothing to act on.
   if (!groups) return undefined;
 
-  const call = asCallExpression(node);
+  const unary = asUnaryExpression(node);
+  const negated = unary?.operator === '!';
+  const call = asCallExpression(negated && unary ? unary.argument : node);
   if (!call) return undefined;
   const match = GROUP_MATCH_BY_FUNCTION.get(asIdentifier(call.callee)?.name ?? '');
   if (!match) return undefined;
@@ -454,7 +497,8 @@ function groupReferencesOf(
       ...(matched ? { matchedGroupName: matched.name } : {}),
     });
   }
-  return references.length > 0 ? references : undefined;
+  if (references.length === 0) return undefined;
+  return { requirement: negated ? 'non-member' : 'member', references };
 }
 
 /**
@@ -475,8 +519,14 @@ function explainClause(
   const resolvedValue = resolveClauseValue(node, user);
   // Attached to every outcome, including the unevaluated ones: naming the groups
   // a clause asks about is useful even when we could not answer it.
-  const groupReferences = groupReferencesOf(node, groups);
-  const base = { expressionText, resolvedValue, ...(groupReferences ? { groupReferences } : {}) };
+  const groupFacts = groupClauseFactsOf(node, groups);
+  const base = {
+    expressionText,
+    resolvedValue,
+    ...(groupFacts
+      ? { groupReferences: groupFacts.references, groupRequirement: groupFacts.requirement }
+      : {}),
+  };
 
   const support = checkRuleNodeSupport(node, { hasGroupContext: groups !== undefined });
   if (!support.supported) {

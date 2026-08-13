@@ -162,6 +162,67 @@ describe('group-membership clauses are answered, not shrugged at', () => {
     expect(cause.undeterminedReason).toBe('needs-group-context');
   });
 
+  it('reports a negated clause as a membership to REMOVE, not an attribute to fix', () => {
+    // Before polarity was understood the clause carried no group references, so
+    // the classifier fell through to `blocked-by-attribute` — telling an admin to
+    // change a profile value to satisfy an exclusion.
+    const exclusionRule: MembershipRule = {
+      ...prereqRule,
+      conditionExpression: `!isMemberOfAnyGroup("${PREREQ_ID}", "00gFAKEVENDORS1")`,
+    };
+    const cause = classify(
+      [membership()],
+      [exclusionRule],
+      [inGroup(PREREQ_ID, 'emea.contractors')],
+    );
+
+    expect(cause.remedy).toBe('blocked-by-group-membership');
+    // Only the membership they actually hold. The other excluded group is not a
+    // finding, and listing it would bury the one that is.
+    expect(cause.blockingGroups).toEqual([
+      { match: 'id', value: PREREQ_ID, satisfied: true, matchedGroupName: 'emea.contractors' },
+    ]);
+    expect(cause.requiredGroups ?? []).toEqual([]);
+  });
+
+  it('leaving outranks joining when a rule asks for both', () => {
+    // While they hold the excluded membership the rule rejects them whatever
+    // else they join, so the heading names the removal.
+    const bothWays: MembershipRule = {
+      ...prereqRule,
+      conditionExpression: `isMemberOfGroup("00gFAKENEEDED01") && !isMemberOfGroup("${PREREQ_ID}")`,
+    };
+    const cause = classify([membership()], [bothWays], [inGroup(PREREQ_ID, 'emea.contractors')]);
+
+    expect(cause.remedy).toBe('blocked-by-group-membership');
+    expect(cause.blockingGroups?.map((r) => r.value)).toEqual([PREREQ_ID]);
+    expect(cause.requiredGroups?.map((r) => r.value)).toEqual(['00gFAKENEEDED01']);
+  });
+
+  it('keeps the attribute remedy when a profile clause fails alongside an exclusion', () => {
+    const mixed: MembershipRule = {
+      ...prereqRule,
+      conditionExpression: `user.department == "Sales" && !isMemberOfGroup("${PREREQ_ID}")`,
+    };
+    const cause = classify([membership()], [mixed], [inGroup(PREREQ_ID, 'emea.contractors')]);
+
+    expect(cause.remedy).toBe('blocked-by-attribute');
+    expect(cause.blockingGroups?.map((r) => r.value)).toEqual([PREREQ_ID]);
+  });
+
+  it('does not blame an exclusion the user is outside of', () => {
+    // They are in none of the excluded groups, so that clause passes and cannot
+    // be the reason they lack the group.
+    const exclusionRule: MembershipRule = {
+      ...prereqRule,
+      conditionExpression: `!isMemberOfAnyGroup("00gFAKEVENDORS1") && user.department == "Sales"`,
+    };
+    const cause = classify([membership()], [exclusionRule], [inGroup('00gFAKEOTHER', 'Everyone')]);
+
+    expect(cause.remedy).toBe('blocked-by-attribute');
+    expect(cause.blockingGroups ?? []).toEqual([]);
+  });
+
   it('resolves a satisfied prerequisite rather than blaming it', () => {
     // The user IS in the prerequisite group, so the rule matches and there is no
     // attribute to fix — the contradictory case, reported as undetermined.

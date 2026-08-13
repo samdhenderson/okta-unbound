@@ -88,6 +88,8 @@ const comparison = (over: Partial<UserComparisonState> = {}): UserComparisonStat
   addToContext: fn(),
   addToCompared: fn(),
   contextName: 'First11 Last11',
+  // No name for any id: stories exercise the id fallback, not the lookup.
+  resolveGroupName: () => undefined,
   comparedName: '',
   selectUser: fn(),
   changeUser: fn(),

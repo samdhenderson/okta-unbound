@@ -37,6 +37,7 @@ import {
   type TabKey,
 } from '../components/users/comparison/comparisonAnalytics';
 import { classifyAccessCauses } from '../components/users/comparison/accessCause';
+import { loadCachedGroupNames } from './fetchGroupRulesRequest';
 import type { OktaUser, GroupMembership } from '../../shared/types';
 
 /** Options for {@link useUserComparison}. */
@@ -228,6 +229,44 @@ export function useUserComparison({
     });
   }, [groupBuckets.onlyCompared, contextUser, contextGroups, ruleInventory]);
 
+  // Group ids embedded in a rule condition — `isMemberOfGroup("00g…")` — are
+  // unreadable on their own, and the comparison's rules are fetched with
+  // `resolveGroupNames: false`, so nothing upstream labels them. Build the labels
+  // here from what is already in hand, cheapest source first and no API traffic:
+  //
+  // 1. Both users' membership lists, which carry id AND name and cover the common
+  //    case (a prerequisite group the compared user qualified through).
+  // 2. The Groups tab's `chrome.storage.local` cache — one read, the same source
+  //    the Rules tab labels its rule targets from.
+  //
+  // An id in neither falls back to the id itself at the point of use, exactly as
+  // `RuleCard` does. Deliberately NOT solved by flipping `resolveGroupNames` in
+  // `useUserMemberships`: that path keeps ids-as-names out of the shared
+  // `RulesCache`, and this map also works when the Groups tab was never opened.
+  const [cachedGroupNames, setCachedGroupNames] = useState<ReadonlyMap<string, string>>(
+    () => new Map(),
+  );
+
+  useEffect(() => {
+    if (!isActive) return;
+    let cancelled = false;
+    void loadCachedGroupNames().then((names) => {
+      if (!cancelled) setCachedGroupNames(names);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isActive]);
+
+  const resolveGroupName = useMemo(() => {
+    const byId = new Map(cachedGroupNames);
+    // Live memberships last so they win over a possibly stale cache entry.
+    for (const membership of [...contextGroups, ...comparedGroups]) {
+      byId.set(membership.group.id, membership.group.profile.name);
+    }
+    return (groupId: string): string | undefined => byId.get(groupId);
+  }, [cachedGroupNames, contextGroups, comparedGroups]);
+
   const groupDiffCount = groupBuckets.onlyCompared.length + groupBuckets.onlyContext.length;
   const appDiffCount = appBuckets.onlyCompared.length + appBuckets.onlyContext.length;
 
@@ -272,6 +311,7 @@ export function useUserComparison({
     addToCompared,
     contextName,
     comparedName,
+    resolveGroupName,
     selectUser,
     changeUser,
   };

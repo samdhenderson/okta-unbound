@@ -250,6 +250,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
       {/* User comparison modal */}
       {userDetails && (
         <UserComparisonModal
+          oktaOrigin={oktaOrigin}
           isOpen={isCompareOpen}
           onClose={() => setIsCompareOpen(false)}
           contextUser={userDetails}

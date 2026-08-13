@@ -34,6 +34,11 @@ interface UserComparisonModalProps {
   contextUser: OktaUser;
   /** The context user's group memberships, used as the left-hand comparison baseline. */
   contextGroups: GroupMembership[];
+  /**
+   * Okta org origin, used to build the deep link offered for a group the user
+   * must *leave*. Absent, the link simply does not render.
+   */
+  oktaOrigin?: string | null;
   /** Tab id of the Okta admin tab; API calls are scheduled against it. */
   targetTabId: number;
   /** Called after a group is successfully copied onto the context user so the parent can refresh. */
@@ -50,6 +55,7 @@ const UserComparisonModal: React.FC<UserComparisonModalProps> = ({
   onClose,
   contextUser,
   contextGroups,
+  oktaOrigin,
   targetTabId,
   onGroupsChanged,
 }) => {
@@ -73,7 +79,11 @@ const UserComparisonModal: React.FC<UserComparisonModalProps> = ({
         </Button>
       }
     >
-      <UserComparisonView contextUser={contextUser} comparison={comparison} />
+      <UserComparisonView
+        contextUser={contextUser}
+        comparison={comparison}
+        oktaOrigin={oktaOrigin}
+      />
     </Modal>
   );
 };

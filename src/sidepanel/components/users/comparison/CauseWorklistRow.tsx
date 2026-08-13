@@ -20,10 +20,12 @@
  */
 import React from 'react';
 import { Button } from '../../shared';
+import ClauseGroupList from './ClauseGroupList';
 import type { AccessCause, UndeterminedReason } from './accessCause';
 import type {
   ClauseExplanation,
   ClauseGroupReference,
+  ClauseGroupRequirement,
 } from '../../../../shared/rules/explainExpression';
 import type { RuleExprValue } from '../../../../shared/ruleEvaluator';
 
@@ -71,6 +73,33 @@ interface CauseWorklistRowProps {
    * for a group the host cannot resolve is expected, and the row still names it.
    */
   renderGroupAction?: (reference: ClauseGroupReference) => React.ReactNode;
+  /**
+   * Optional per-blocking-group action — for a group the user must *leave*.
+   * Separate from {@link renderGroupAction} because the two are opposite
+   * operations and must never be wired to the same handler by accident.
+   */
+  renderBlockingGroupAction?: (reference: ClauseGroupReference) => React.ReactNode;
+  /**
+   * Turns a group id embedded in a rule condition into its name. Without it the
+   * row falls back to showing the raw id, as the Rules tab does.
+   */
+  resolveGroupName?: (groupId: string) => string | undefined;
+}
+
+/**
+ * Every group reference of one polarity across a cause's failing clauses.
+ *
+ * Read off the clauses rather than the cause's own `blockingGroups`, which is
+ * deliberately filtered down to the satisfied entries: the list needs the whole
+ * excluded set so it can say how many others the rule excludes.
+ */
+function referencesOfPolarity(
+  cause: AccessCause,
+  requirement: ClauseGroupRequirement,
+): readonly ClauseGroupReference[] {
+  return cause.failingClauses
+    .filter((clause) => clause.groupRequirement === requirement)
+    .flatMap((clause) => clause.groupReferences ?? []);
 }
 
 /**
@@ -84,6 +113,8 @@ const CauseWorklistRow: React.FC<CauseWorklistRowProps> = ({
   onViewClauses,
   contextName,
   renderGroupAction,
+  renderBlockingGroupAction,
+  resolveGroupName,
 }) => (
   <li className="rounded-md border border-neutral-200 bg-white p-3">
     <p className="text-sm font-semibold break-words text-neutral-900" title={cause.groupName}>
@@ -104,9 +135,21 @@ const CauseWorklistRow: React.FC<CauseWorklistRowProps> = ({
       </p>
     )}
 
-    <RequiredGroups
-      references={cause.requiredGroups ?? []}
+    {/* Groups to LEAVE come first: while the user holds an excluded membership
+        the rule rejects them whatever else they join. */}
+    <ClauseGroupList
+      references={referencesOfPolarity(cause, 'non-member')}
+      requirement="non-member"
       contextName={contextName}
+      resolveGroupName={resolveGroupName}
+      renderGroupAction={renderBlockingGroupAction}
+    />
+
+    <ClauseGroupList
+      references={cause.requiredGroups ?? []}
+      requirement="member"
+      contextName={contextName}
+      resolveGroupName={resolveGroupName}
       renderGroupAction={renderGroupAction}
     />
 
@@ -126,66 +169,6 @@ const CauseWorklistRow: React.FC<CauseWorklistRowProps> = ({
     )}
   </li>
 );
-
-/** How each match kind reads when naming what the rule asks for. */
-const groupMatchLabel: Record<ClauseGroupReference['match'], (value: string) => string> = {
-  id: (value) => `group ${value}`,
-  name: (value) => value,
-  nameStartsWith: (value) => `any group whose name starts with “${value}”`,
-  nameContains: (value) => `any group whose name contains “${value}”`,
-};
-
-/**
- * The prerequisite groups a failing `isMemberOf*` clause named.
- *
- * Every candidate is listed, satisfied ones included, because that is what makes
- * an `isMemberOfAnyGroup` failure legible: the rule wanted any one of these and
- * the user has none of them. Marking the satisfied ones also stops the list
- * reading as "all of these are missing" when only some are.
- */
-const RequiredGroups: React.FC<{
-  references: readonly ClauseGroupReference[];
-  contextName?: string;
-  renderGroupAction?: (reference: ClauseGroupReference) => React.ReactNode;
-}> = ({ references, contextName, renderGroupAction }) => {
-  if (references.length === 0) return null;
-  const missing = references.filter((reference) => !reference.satisfied);
-  const who = contextName ?? 'This user';
-
-  return (
-    <div className="mt-2">
-      <p className="text-xs font-medium text-neutral-700">
-        {missing.length === references.length
-          ? `${who} would qualify by joining ${references.length === 1 ? 'this group' : 'any one of these groups'}:`
-          : `The rule asks for ${references.length === 1 ? 'this group' : 'one of these groups'}:`}
-      </p>
-      <ul className="mt-1 space-y-1">
-        {references.map((reference) => (
-          <li
-            key={`${reference.match}-${reference.value}`}
-            className="flex items-center justify-between gap-2 rounded-md bg-neutral-50 px-2 py-1"
-          >
-            <span className="flex min-w-0 flex-1 items-center gap-1.5">
-              <span
-                className="truncate text-xs text-neutral-900"
-                title={reference.matchedGroupName ?? reference.value}
-              >
-                {reference.matchedGroupName ?? groupMatchLabel[reference.match](reference.value)}
-              </span>
-              {reference.satisfied && (
-                // Stated in words, never by colour alone.
-                <span className="shrink-0 text-xs font-medium text-success-text">already in</span>
-              )}
-            </span>
-            {!reference.satisfied && (
-              <span className="shrink-0">{renderGroupAction?.(reference)}</span>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-};
 
 /**
  * Render a resolved value as plain text, keeping quotes on strings so a trailing
@@ -214,12 +197,19 @@ const FailingClauses: React.FC<{ clauses: readonly ClauseExplanation[] }> = ({ c
             <code className="block font-mono text-xs break-words whitespace-pre-wrap text-neutral-900">
               {clause.expressionText}
             </code>
-            <span className="mt-0.5 block text-xs text-neutral-600">
-              Resolved value:{' '}
-              {clause.resolvedValue === undefined
-                ? 'no value could be read for this clause'
-                : formatResolvedValue(clause.resolvedValue)}
-            </span>
+            {/* A group-membership call takes only string literals, and
+                `resolveClauseValue` skips literals by design — so "no value could
+                be read" is structurally guaranteed on these clauses and reads as
+                an error that has not occurred. The group list above already says
+                everything this line could. */}
+            {clause.groupReferences === undefined && (
+              <span className="mt-0.5 block text-xs text-neutral-600">
+                Resolved value:{' '}
+                {clause.resolvedValue === undefined
+                  ? 'no value could be read for this clause'
+                  : formatResolvedValue(clause.resolvedValue)}
+              </span>
+            )}
           </li>
         ))}
       </ul>

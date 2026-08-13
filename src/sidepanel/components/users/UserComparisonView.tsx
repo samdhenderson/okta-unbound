@@ -42,6 +42,7 @@ import React from 'react';
 import Button from '../shared/Button';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import AlertMessage from '../shared/AlertMessage';
+import OpenInOktaLink from '../shared/OpenInOktaLink';
 import ComparisonSearchPhase from './comparison/ComparisonSearchPhase';
 import ComparisonHero from './comparison/ComparisonHero';
 import ComparisonTabBar from './comparison/ComparisonTabBar';
@@ -59,6 +60,12 @@ export interface UserComparisonViewProps {
   contextUser: OktaUser;
   /** The whole comparison view model, from the host's `useUserComparison` instance. */
   comparison: UserComparisonState;
+  /**
+   * Okta org origin, for the deep link offered against a group the context user
+   * must *leave*. Absent, {@link OpenInOktaLink} renders nothing and the group is
+   * named without an action — which is the correct degradation, not a failure.
+   */
+  oktaOrigin?: string | null;
 }
 
 /**
@@ -68,7 +75,11 @@ export interface UserComparisonViewProps {
  *
  * @param props - See {@link UserComparisonViewProps}.
  */
-const UserComparisonView: React.FC<UserComparisonViewProps> = ({ contextUser, comparison }) => {
+const UserComparisonView: React.FC<UserComparisonViewProps> = ({
+  contextUser,
+  comparison,
+  oktaOrigin,
+}) => {
   const {
     comparedUser,
     searchQuery,
@@ -94,6 +105,7 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({ contextUser, co
     addToCompared,
     contextName,
     comparedName,
+    resolveGroupName,
     selectUser,
     changeUser,
   } = comparison;
@@ -195,6 +207,33 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({ contextUser, co
                       >
                         Add
                       </Button>
+                    );
+                  }}
+                  resolveGroupName={resolveGroupName}
+                  renderBlockingGroupAction={(reference) => {
+                    // Deliberately NOT a Remove button. Dropping a membership is
+                    // a destructive write on a group this surface never granted,
+                    // and the admin needs the group's own page — its other
+                    // members, its rules, why they are in it — to judge whether
+                    // removing them is right. So: name it, and open it in Okta.
+                    //
+                    // `matchedGroupName` proves the user is in this group, but
+                    // only an `id` reference carries something linkable; a
+                    // name/prefix match resolves through their own memberships.
+                    const groupId =
+                      reference.match === 'id'
+                        ? reference.value
+                        : groupBuckets.onlyContext
+                            .concat(groupBuckets.shared)
+                            .find((m) => m.group.profile.name === reference.matchedGroupName)?.group
+                            .id;
+                    return (
+                      <OpenInOktaLink
+                        oktaOrigin={oktaOrigin}
+                        entityType="group"
+                        entityId={groupId}
+                        label="Open group"
+                      />
                     );
                   }}
                 />

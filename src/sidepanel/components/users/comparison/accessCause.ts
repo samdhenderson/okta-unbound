@@ -24,6 +24,7 @@ import {
   explainRuleExpression,
   type ClauseExplanation,
   type ClauseGroupReference,
+  type ClauseGroupRequirement,
 } from '../../../../shared/rules/explainExpression';
 import type { RuleGroupContext } from '../../../../shared/ruleEvaluator';
 import { isDeducedAttribution } from '../../../../shared/utils/membershipAnalysis';
@@ -54,6 +55,13 @@ import type { GroupMembership, MembershipRule, OktaUser } from '../../../../shar
  *   qualify once they are in one of the groups it names. Remedy: grant the
  *   prerequisite group. Distinguished from `blocked-by-attribute` because no
  *   profile edit closes it.
+ * - `blocked-by-group-membership` — the failing clause is a **negated**
+ *   `isMemberOf*` call: the rule excludes members of certain groups and this user
+ *   is in one. Remedy: remove that membership. The mirror image of
+ *   `needs-group-membership`, and a separate remedy because the action is the
+ *   opposite one — adding a group could never close it. Outranks
+ *   `needs-group-membership` when both apply: a group they must leave is a
+ *   precondition for any group they might join mattering.
  * - `excluded-by-rule` — the user is on a targeting rule's explicit exclusion
  *   list, so they would otherwise qualify. Remedy: remove the exclusion.
  * - `manual-add` — the other user was added by hand. Remedy: add this user by hand
@@ -69,6 +77,7 @@ import type { GroupMembership, MembershipRule, OktaUser } from '../../../../shar
 export type AccessRemedy =
   | 'blocked-by-attribute'
   | 'needs-group-membership'
+  | 'blocked-by-group-membership'
   | 'excluded-by-rule'
   | 'manual-add'
   | 'app-managed'
@@ -138,6 +147,22 @@ export interface AccessCause {
    * **Untrusted:** ids and names are tenant data. Render escaped, never log.
    */
   readonly requiredGroups?: readonly ClauseGroupReference[];
+  /**
+   * The groups a failing **negated** `isMemberOf*` clause excludes and this user
+   * is nonetheless in — "this membership is what disqualifies them".
+   *
+   * The mirror of {@link requiredGroups}, and deliberately filtered where that one
+   * is not: a rule may exclude twenty groups, of which the user is in one. Listing
+   * all twenty would bury the only actionable fact, so only the **satisfied**
+   * references — the memberships they actually hold — are carried here. The full
+   * excluded set stays on the clause's own `groupReferences` for any surface that
+   * wants to show it.
+   *
+   * Optional for the same reason as {@link requiredGroups}: absent ≡ empty.
+   *
+   * **Untrusted:** ids and names are tenant data. Render escaped, never log.
+   */
+  readonly blockingGroups?: readonly ClauseGroupReference[];
 }
 
 /** Input for {@link classifyAccessCauses}. */
@@ -241,14 +266,16 @@ type RuleAssessment =
       readonly rule: MembershipRule;
       readonly failingClauses: readonly ClauseExplanation[];
       /**
-       * Whether **every** failing clause was a group-membership call. Decides
-       * `needs-group-membership` over `blocked-by-attribute`: a rule that also
-       * fails a profile clause needs the profile fixed, so it keeps the attribute
-       * remedy and merely lists the groups alongside.
+       * Whether **every** failing clause was a group-membership call. Decides a
+       * group remedy over `blocked-by-attribute`: a rule that also fails a profile
+       * clause needs the profile fixed, so it keeps the attribute remedy and
+       * merely lists the groups alongside.
        */
       readonly onlyGroupClausesFailed: boolean;
-      /** The groups those failing clauses named, in clause order. */
+      /** Groups a failing positive clause named, in clause order — ones to join. */
       readonly requiredGroups: readonly ClauseGroupReference[];
+      /** Memberships a failing negated clause objects to — ones to leave. */
+      readonly blockingGroups: readonly ClauseGroupReference[];
     }
   | { readonly kind: 'grants'; readonly rule: MembershipRule }
   | {
@@ -295,7 +322,6 @@ function assessRule(
   // `truncated` needs no special case: the verdict is computed over the whole
   // expression, and every clause carried here still genuinely failed.
   if (summary.result.outcome === 'no-match' && failingClauses.length > 0) {
-    const requiredGroups = failingClauses.flatMap((clause) => clause.groupReferences ?? []);
     return {
       kind: 'blocked',
       rule,
@@ -303,7 +329,17 @@ function assessRule(
       onlyGroupClausesFailed: failingClauses.every(
         (clause) => (clause.groupReferences?.length ?? 0) > 0,
       ),
-      requiredGroups,
+      // Polarity decides which references explain the failure. A positive clause
+      // failed because none of its groups matched, so every candidate is worth
+      // naming. A negated clause failed because one DID match, so only the
+      // satisfied ones are the problem — the other nineteen an exclusion lists
+      // are noise the admin must not be asked to read.
+      requiredGroups: groupsFromClauses(failingClauses, 'member', () => true),
+      blockingGroups: groupsFromClauses(
+        failingClauses,
+        'non-member',
+        (reference) => reference.satisfied,
+      ),
     };
   }
 
@@ -314,6 +350,22 @@ function assessRule(
     // a shrug. Prefer the former whenever the rule contains one.
     reason: summary.needsGroupContext > 0 ? 'needs-group-context' : 'unevaluable-clause',
   };
+}
+
+/**
+ * Group references from the failing clauses of one polarity, kept if `keep` says
+ * so. A clause with no `groupRequirement` carries no group references either, so
+ * it contributes nothing to any polarity.
+ */
+function groupsFromClauses(
+  clauses: readonly ClauseExplanation[],
+  requirement: ClauseGroupRequirement,
+  keep: (reference: ClauseGroupReference) => boolean,
+): readonly ClauseGroupReference[] {
+  return clauses
+    .filter((clause) => clause.groupRequirement === requirement)
+    .flatMap((clause) => clause.groupReferences ?? [])
+    .filter(keep);
 }
 
 /** An {@link AccessCause} shell for one membership, before the remedy is decided. */
@@ -410,16 +462,23 @@ function classifyOne(
   //    implicated keeps `ruleId` a fact rather than array order.
   const blocked = assessments.filter((a) => a.kind === 'blocked');
   if (blocked.length > 0) {
-    // A prerequisite group is a different job from a profile edit, so it gets its
-    // own remedy — but only when nothing else failed. If a profile clause failed
-    // too, the profile still needs fixing and the groups ride along as evidence.
+    const requiredGroups = blocked.flatMap((b) => b.requiredGroups);
+    const blockingGroups = blocked.flatMap((b) => b.blockingGroups);
+    // A group to join or a group to leave is a different job from a profile edit,
+    // so each gets its own remedy — but only when nothing else failed. If a
+    // profile clause failed too, the profile still needs fixing and the groups
+    // ride along as evidence. Leaving outranks joining: while they hold an
+    // excluded membership the rule rejects them whatever else they join.
     const onlyGroups = blocked.every((b) => b.onlyGroupClausesFailed);
+    const groupRemedy: AccessRemedy =
+      blockingGroups.length > 0 ? 'blocked-by-group-membership' : 'needs-group-membership';
     return {
       ...causeFor(membership),
-      remedy: onlyGroups ? 'needs-group-membership' : 'blocked-by-attribute',
+      remedy: onlyGroups ? groupRemedy : 'blocked-by-attribute',
       ...(blocked.length === 1 ? ruleRef(blocked[0].rule) : {}),
       failingClauses: blocked.flatMap((b) => b.failingClauses),
-      requiredGroups: blocked.flatMap((b) => b.requiredGroups),
+      requiredGroups,
+      blockingGroups,
     };
   }
 
@@ -458,6 +517,7 @@ export function groupCausesByRemedy(
   const order: AccessRemedy[] = [
     'blocked-by-attribute',
     'needs-group-membership',
+    'blocked-by-group-membership',
     'excluded-by-rule',
     'manual-add',
     'app-managed',

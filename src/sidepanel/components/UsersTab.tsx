@@ -202,6 +202,7 @@ const UsersTab: React.FC<UsersTabProps> = ({
             className={isCompareOpen ? 'space-y-6 focus:outline-none' : 'hidden'}
           >
             <UserComparisonPanel
+              oktaOrigin={state.oktaOrigin}
               isActive={isCompareOpen}
               searchEnabled={isCompareOpen && isActive}
               contextUser={selectedUser}

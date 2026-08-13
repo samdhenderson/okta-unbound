@@ -42,6 +42,11 @@ export interface UserComparisonPanelProps {
   contextUser: OktaUser;
   /** The context user's group memberships, used as the left-hand comparison baseline. */
   contextGroups: GroupMembership[];
+  /**
+   * Okta org origin, used to build the deep link offered for a group the user
+   * must *leave*. Absent, the link simply does not render.
+   */
+  oktaOrigin?: string | null;
   /** Tab id of the Okta admin tab; API calls are scheduled against it. */
   targetTabId: number;
   /** Called after a group is copied onto the context user so the tab can refresh it. */
@@ -58,6 +63,7 @@ const UserComparisonPanel: React.FC<UserComparisonPanelProps> = ({
   searchEnabled,
   contextUser,
   contextGroups,
+  oktaOrigin,
   targetTabId,
   onGroupsChanged,
 }) => {
@@ -70,7 +76,9 @@ const UserComparisonPanel: React.FC<UserComparisonPanelProps> = ({
     onGroupsChanged,
   });
 
-  return <UserComparisonView contextUser={contextUser} comparison={comparison} />;
+  return (
+    <UserComparisonView contextUser={contextUser} comparison={comparison} oktaOrigin={oktaOrigin} />
+  );
 };
 
 export default UserComparisonPanel;

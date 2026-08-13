@@ -75,6 +75,16 @@ const remedyPresentation: Record<AccessRemedy, RemedyPresentation> = {
     groupClass: 'border-primary-highlight bg-primary-light',
     iconClass: 'text-primary-text',
   },
+  'blocked-by-group-membership': {
+    heading: 'Remove a blocking membership',
+    description:
+      'A rule feeds this group but excludes members of certain other groups, and this user is in one of them. No profile edit or added group closes it — the membership has to go.',
+    icon: 'hand',
+    // The danger palette, matching `excluded-by-rule`: this IS an exclusion,
+    // expressed through a group membership rather than a people list.
+    groupClass: 'border-danger-light bg-danger-light',
+    iconClass: 'text-danger',
+  },
   'excluded-by-rule': {
     heading: 'Remove a rule exclusion',
     description:
@@ -132,6 +142,10 @@ interface CauseWorklistProps {
    * {@link CauseWorklistRow}.
    */
   renderGroupAction?: (reference: ClauseGroupReference) => React.ReactNode;
+  /** Optional per-blocking-group action — a group the user must leave. */
+  renderBlockingGroupAction?: (reference: ClauseGroupReference) => React.ReactNode;
+  /** Turns a group id embedded in a rule condition into its name. */
+  resolveGroupName?: (groupId: string) => string | undefined;
 }
 
 /**
@@ -146,6 +160,8 @@ const CauseWorklist: React.FC<CauseWorklistProps> = ({
   comparedName,
   onViewClauses,
   renderGroupAction,
+  renderBlockingGroupAction,
+  resolveGroupName,
 }) => (
   <section
     aria-labelledby="cause-worklist-heading"
@@ -183,6 +199,8 @@ const CauseWorklist: React.FC<CauseWorklistProps> = ({
             contextName={contextName}
             onViewClauses={onViewClauses}
             renderGroupAction={renderGroupAction}
+            renderBlockingGroupAction={renderBlockingGroupAction}
+            resolveGroupName={resolveGroupName}
           />
         ))}
       </div>
@@ -210,6 +228,10 @@ interface RemedyGroupProps {
   contextName: string;
   /** Forwarded to each row's prerequisite-group action. */
   renderGroupAction?: (reference: ClauseGroupReference) => React.ReactNode;
+  /** Forwarded to each row's blocking-group action. */
+  renderBlockingGroupAction?: (reference: ClauseGroupReference) => React.ReactNode;
+  /** Forwarded to each row's group-id label lookup. */
+  resolveGroupName?: (groupId: string) => string | undefined;
 }
 
 /** One remedy's heading, what-it-means line, row count, and its rows. */
@@ -219,6 +241,8 @@ const RemedyGroup: React.FC<RemedyGroupProps> = ({
   contextName,
   onViewClauses,
   renderGroupAction,
+  renderBlockingGroupAction,
+  resolveGroupName,
 }) => {
   const presentation = remedyPresentation[remedy];
 
@@ -250,6 +274,8 @@ const RemedyGroup: React.FC<RemedyGroupProps> = ({
             contextName={contextName}
             onViewClauses={onViewClauses}
             renderGroupAction={renderGroupAction}
+            renderBlockingGroupAction={renderBlockingGroupAction}
+            resolveGroupName={resolveGroupName}
           />
         ))}
       </ul>

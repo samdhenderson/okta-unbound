@@ -54,6 +54,13 @@ interface ComparisonOverviewTabProps {
    * the "Add" that grants a group a failing `isMemberOf*` clause asks for.
    */
   renderGroupAction?: (reference: ClauseGroupReference) => React.ReactNode;
+  /**
+   * Optional per-blocking-group action, forwarded to {@link CauseWorklist} — for
+   * a group the user must *leave* to qualify.
+   */
+  renderBlockingGroupAction?: (reference: ClauseGroupReference) => React.ReactNode;
+  /** Turns a group id embedded in a rule condition into its name. */
+  resolveGroupName?: (groupId: string) => string | undefined;
 }
 
 /**
@@ -72,6 +79,8 @@ const ComparisonOverviewTab: React.FC<ComparisonOverviewTabProps> = ({
   causes,
   onViewClauses,
   renderGroupAction,
+  renderBlockingGroupAction,
+  resolveGroupName,
 }) => (
   <div className="space-y-4">
     <OverviewCard
@@ -102,6 +111,8 @@ const ComparisonOverviewTab: React.FC<ComparisonOverviewTabProps> = ({
       comparedName={comparedName}
       onViewClauses={onViewClauses}
       renderGroupAction={renderGroupAction}
+      renderBlockingGroupAction={renderBlockingGroupAction}
+      resolveGroupName={resolveGroupName}
     />
   </div>
 );

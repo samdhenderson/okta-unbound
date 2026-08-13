@@ -88,6 +88,7 @@ const comparison = (appBuckets: AppBucketFixture = DEFAULT_APPS): UserComparison
     addToContext: vi.fn(),
     addToCompared: vi.fn(),
     contextName: 'Alice Context',
+    resolveGroupName: () => undefined,
     comparedName: 'Bob Compared',
     selectUser: vi.fn(),
     changeUser: vi.fn(),
