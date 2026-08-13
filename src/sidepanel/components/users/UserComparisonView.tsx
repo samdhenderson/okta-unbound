@@ -50,7 +50,7 @@ import ComparisonOverviewTab from './comparison/ComparisonOverviewTab';
 import ComparisonDiffTab from './comparison/ComparisonDiffTab';
 import AppScopeIndicator from './comparison/AppScopeIndicator';
 import GroupSourceIndicator from './comparison/GroupSourceIndicator';
-import { groupDiffItem } from './comparison/comparisonAnalytics';
+import { groupParityRows, appParityRows } from './comparison/comparisonAnalytics';
 import type { UserComparisonState } from '../../hooks/useUserComparison';
 import type { OktaUser } from '../../../shared/types';
 
@@ -243,31 +243,31 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
                 <ComparisonDiffTab
                   contextName={contextName}
                   comparedName={comparedName}
-                  // groupDiffItem carries the whole membership onto the row, so the
-                  // diff can say why a group is held and not merely that it is.
-                  comparedItems={groupBuckets.onlyCompared.map(groupDiffItem)}
-                  sharedItems={groupBuckets.shared.map(groupDiffItem)}
-                  contextItems={groupBuckets.onlyContext.map(groupDiffItem)}
-                  emptyComparedText={`${comparedName} has no groups ${contextName} is missing.`}
-                  emptySharedText="No groups in common yet."
-                  emptyContextText={`No groups unique to ${contextName}.`}
+                  // One row per group either user holds, differences first. The
+                  // buckets stay the source of truth — `groupParityRows` only
+                  // reshapes them — so the worklist and this list can never
+                  // disagree about which groups are shared.
+                  rows={groupParityRows(groupBuckets)}
                   noun="group"
-                  renderAction={(item) => {
-                    // Re-find the group in the LIVE onlyCompared bucket: after a
-                    // successful add it moves to `shared`, the find returns undefined,
-                    // and the Add button vanishes — that disappearance IS the success
-                    // affordance. `disabled={addingGroupId !== null}` is a GLOBAL
-                    // single-flight lock, not a per-row one. Keep both verbatim.
-                    // (`item.membership` holds the same membership, but re-finding
-                    // in the live bucket is what makes the button disappear.)
-                    const m = groupBuckets.onlyCompared.find((b) => b.group.id === item.id);
-                    if (!m) return null;
+                  emptyText="Neither user is in any groups."
+                  renderContextAction={(row) => {
+                    // Re-find in the LIVE bucket rather than trusting the row:
+                    // after a successful add the group moves to `shared`, the
+                    // find returns undefined, and the cell flips to a check —
+                    // which is the success affordance, in place.
+                    const m = groupBuckets.onlyCompared.find((b) => b.group.id === row.id);
+                    // An app masters its own roster; adding a member through the
+                    // group API would be rejected. The row states "Managed by
+                    // app" instead of offering a button that cannot work.
+                    if (!m || m.group.type === 'APP_GROUP') return null;
                     return (
                       <Button
                         size="sm"
                         variant="primary"
                         icon="plus"
                         loading={addingGroupId === m.group.id}
+                        // GLOBAL single-flight lock, not a per-row one: a copy
+                        // started anywhere disables every other Add. Keep verbatim.
                         disabled={addingGroupId !== null}
                         onClick={() => addToContext(m.group)}
                       >
@@ -275,13 +275,11 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
                       </Button>
                     );
                   }}
-                  renderContextAction={(item) => {
-                    // Mirror image of renderAction, in the other direction: copy a
-                    // group the context user has onto the compared user. On success it
-                    // re-buckets from onlyContext into `shared`, so the button vanishes
-                    // the same way. Same GLOBAL single-flight lock.
-                    const m = groupBuckets.onlyContext.find((b) => b.group.id === item.id);
-                    if (!m) return null;
+                  renderComparedAction={(row) => {
+                    // Mirror image, in the other direction. Same lock, same
+                    // in-place success.
+                    const m = groupBuckets.onlyContext.find((b) => b.group.id === row.id);
+                    if (!m || m.group.type === 'APP_GROUP') return null;
                     return (
                       <Button
                         size="sm"
@@ -295,22 +293,15 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
                       </Button>
                     );
                   }}
-                  renderMeta={(item, bucket) => {
-                    // The `shared` bucket holds ONE user's membership — the
-                    // compared user's, except for a context-only group
-                    // optimistically copied onto them (see `bucketGroups`), so
-                    // which user it describes varies row to row. Stating a source
+                  renderMeta={(row) => {
+                    // A shared row's membership is ONE user's — the compared
+                    // user's, except for a context-only group optimistically
+                    // copied onto them (see `bucketGroups`). Stating a source
                     // there would present one user's provenance as if it
                     // described both, so a shared row says nothing about how the
                     // group was granted.
-                    if (bucket === 'shared') return null;
-
-                    // The membership rides on the row itself (`groupDiffItem`),
-                    // so unlike `renderAction` there is nothing to re-find: this
-                    // states how the membership was granted, not whether it can
-                    // still be copied. Absent — which cannot happen here, but can
-                    // for an app row or a hand-built fixture — renders nothing.
-                    return <GroupSourceIndicator membership={item.membership} />;
+                    if (row.inContext && row.inCompared) return null;
+                    return <GroupSourceIndicator membership={row.membership} />;
                   }}
                 />
               )}
@@ -319,37 +310,23 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
                 <ComparisonDiffTab
                   contextName={contextName}
                   comparedName={comparedName}
-                  comparedItems={appBuckets.onlyCompared.map((a) => ({
-                    id: a.id,
-                    label: a.label,
-                  }))}
-                  sharedItems={appBuckets.shared.map((a) => ({
-                    id: a.id,
-                    label: a.label,
-                  }))}
-                  contextItems={appBuckets.onlyContext.map((a) => ({
-                    id: a.id,
-                    label: a.label,
-                  }))}
-                  emptyComparedText={`${comparedName} has no apps ${contextName} is missing.`}
-                  emptySharedText="No apps in common yet."
-                  emptyContextText={`No apps unique to ${contextName}.`}
+                  rows={appParityRows(appBuckets)}
                   noun="app"
-                  renderMeta={(item, bucket) => {
-                    // The `shared` bucket is derived from the COMPARED user's
-                    // assignments alone (see `bucketApps`), so the only scope in
-                    // hand for a shared row describes one of the two users the row
-                    // is about. Rendering it would present one user's source as if
-                    // it described both, so the row says that instead. Naming both
-                    // would mean carrying both sides through bucketing.
-                    if (bucket === 'shared') return <AppScopeIndicator state="notCompared" />;
-
-                    // Re-find the entry in the LIVE bucket rather than widening the
-                    // row model, mirroring `renderAction` above. A row whose entry
-                    // cannot be found reads as unknown, never as "via group".
-                    const entries =
-                      bucket === 'onlyCompared' ? appBuckets.onlyCompared : appBuckets.onlyContext;
-                    const entry = entries.find((a) => a.id === item.id);
+                  emptyText="Neither user is assigned any apps."
+                  // No actions: an app assignment is not copyable from this
+                  // surface, so both sides are read-only and the row is a pure
+                  // parity statement.
+                  renderMeta={(row) => {
+                    // `shared` is derived from the COMPARED user's assignments
+                    // alone (see `bucketApps`), so the only scope in hand for a
+                    // shared row describes one of the two users it is about.
+                    if (row.inContext && row.inCompared) {
+                      return <AppScopeIndicator state="notCompared" />;
+                    }
+                    const entries = row.inCompared
+                      ? appBuckets.onlyCompared
+                      : appBuckets.onlyContext;
+                    const entry = entries.find((a) => a.id === row.id);
                     return <AppScopeIndicator state={entry?.scope ?? 'unknown'} />;
                   }}
                 />

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import UserComparisonView from './UserComparisonView';
 import type { UserComparisonState } from '../../hooks/useUserComparison';
 import type { AppEntry } from './comparison/comparisonAnalytics';
@@ -97,8 +97,20 @@ const comparison = (appBuckets: AppBucketFixture = DEFAULT_APPS): UserComparison
 const renderApps = (appBuckets?: AppBucketFixture) =>
   render(<UserComparisonView contextUser={contextUser} comparison={comparison(appBuckets)} />);
 
-/** The <li> row for an app, found through the `title` attr on its label span. */
+/**
+ * Show every row regardless of the diff tab's filter.
+ *
+ * The tab renders ONE list of parity rows and opens on `Differences`, so a shared
+ * row is simply not mounted until the filter is widened. Synchronous and
+ * idempotent. A locator concern only — the assertions below are unchanged.
+ */
+const showAllRows = (): void => {
+  const all = screen.queryByRole('button', { name: /^All / });
+  if (all && all.getAttribute('aria-pressed') !== 'true') fireEvent.click(all);
+};
+
 const rowFor = (label: string): HTMLElement => {
+  showAllRows();
   const li = screen.getByTitle(label).closest('li');
   if (!li) throw new Error(`no row for "${label}"`);
   return li;
@@ -169,6 +181,7 @@ describe('UserComparisonView — apps tab assignment source', () => {
 
   it('marks every app row, so an unmarked row never has to be interpreted', () => {
     const { container } = renderApps();
+    showAllRows();
     const rows = Array.from(container.querySelectorAll('li'));
 
     expect(rows).toHaveLength(5);
@@ -195,8 +208,11 @@ describe('UserComparisonView — the groups tab gains no marker', () => {
     );
 
     expect(container.textContent).not.toMatch(/Source unknown|Source not compared|Via group/);
-    expect(rowFor('All Employees').innerHTML).toBe(
-      '<span class="truncate text-sm text-neutral-800" title="All Employees">All Employees</span>',
-    );
+    // The row's LABEL is still exactly the group name — the parity cells beside it
+    // are the comparison, not a marker on the label. (This used to assert the whole
+    // `<li>` innerHTML, which only worked while a group row was a bare label span.)
+    const row = rowFor('All Employees');
+    expect(row.querySelector('span[title]')?.textContent).toBe('All Employees');
+    expect(within(row).queryByText(/Source|Via group/)).not.toBeInTheDocument();
   });
 });

@@ -59,6 +59,99 @@ export interface DiffItem {
 }
 
 /**
+ * One row of the parity list: a group or app, and which of the two users holds it.
+ *
+ * The union of both users' items rather than a slice of one side, because the row
+ * *is* the comparison — it states who has the item and who does not, in place. The
+ * three-bucket split answered the same question by putting rows in different
+ * boxes, which meant reading a row required knowing which box you were in, and
+ * gave the most screen space to `shared` (the one nobody acts on).
+ *
+ * `inContext` and `inCompared` are never both `false`: a row exists because at
+ * least one user holds the item.
+ */
+export interface ParityRow {
+  /** Group or app id. */
+  readonly id: string;
+  /** Display label. **Untrusted** — render escaped, never log. */
+  readonly label: string;
+  /** Whether the context user (the baseline) holds it. */
+  readonly inContext: boolean;
+  /** Whether the compared user holds it. */
+  readonly inCompared: boolean;
+  /**
+   * **Groups only** — the membership behind the row, from whichever side holds
+   * it. On a shared row this is one user's provenance, not a claim about both
+   * (see {@link GroupBuckets}). `undefined` on app rows.
+   */
+  readonly membership?: GroupMembership;
+}
+
+/**
+ * Order the parity list: differences first, then alphabetically within each part.
+ *
+ * Sorting rather than bucketing is what lets one list serve the whole tab. The
+ * rows an admin can act on rise to the top on their own, so the filter becomes a
+ * convenience rather than the only way to find them.
+ */
+const byDifferenceThenName = (a: ParityRow, b: ParityRow): number => {
+  const differs = (row: ParityRow) => (row.inContext !== row.inCompared ? 0 : 1);
+  return differs(a) - differs(b) || a.label.localeCompare(b.label);
+};
+
+/**
+ * Project the group buckets into one parity list.
+ *
+ * Derived from {@link GroupBuckets} rather than replacing it: the Overview tab and
+ * the cause worklist still consume the buckets, and re-deriving the split here
+ * would risk the two disagreeing about what "shared" means (which includes
+ * optimistically-copied groups).
+ *
+ * @param buckets - Output of {@link bucketGroups}.
+ * @returns One row per group either user holds, differences first then A–Z.
+ */
+export const groupParityRows = (buckets: GroupBuckets): ParityRow[] =>
+  [
+    ...buckets.onlyCompared.map((m) => parityRowOf(m, false, true)),
+    ...buckets.shared.map((m) => parityRowOf(m, true, true)),
+    ...buckets.onlyContext.map((m) => parityRowOf(m, true, false)),
+  ].sort(byDifferenceThenName);
+
+/** One membership as a parity row. */
+const parityRowOf = (
+  membership: GroupMembership,
+  inContext: boolean,
+  inCompared: boolean,
+): ParityRow => ({
+  id: membership.group.id,
+  label: membership.group.profile.name,
+  inContext,
+  inCompared,
+  membership,
+});
+
+/**
+ * Project the app buckets into one parity list.
+ *
+ * @param buckets - Output of {@link bucketApps}.
+ * @returns One row per app either user is assigned, differences first then A–Z.
+ */
+export const appParityRows = (buckets: AppBuckets): ParityRow[] =>
+  [
+    ...buckets.onlyCompared.map((a) => appRowOf(a, false, true)),
+    ...buckets.shared.map((a) => appRowOf(a, true, true)),
+    ...buckets.onlyContext.map((a) => appRowOf(a, true, false)),
+  ].sort(byDifferenceThenName);
+
+/** One app entry as a parity row. */
+const appRowOf = (app: AppEntry, inContext: boolean, inCompared: boolean): ParityRow => ({
+  id: app.id,
+  label: app.label,
+  inContext,
+  inCompared,
+});
+
+/**
  * Jaccard overlap as a whole-percent (0–100).
  *
  * CHARACTERIZED CONTRACT: an empty union scores 0, not 100 — two users with

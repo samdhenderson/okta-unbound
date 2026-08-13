@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import UserComparisonView from './UserComparisonView';
 import type { UserComparisonState } from '../../hooks/useUserComparison';
 import type { GroupMembership, MembershipRule, OktaUser } from '../../../shared/types';
@@ -134,7 +134,20 @@ const renderView = (over?: Partial<UserComparisonState>) =>
   render(<UserComparisonView contextUser={contextUser} comparison={comparison(over)} />);
 
 /** The <li> row for a group, found through the `title` attr on its label span. */
+/**
+ * Show every row regardless of the diff tab's filter.
+ *
+ * The tab renders ONE list of parity rows and opens on `Differences`, so a shared
+ * row is simply not mounted until the filter is widened. Synchronous and
+ * idempotent. A locator concern only — the assertions below are unchanged.
+ */
+const showAllRows = (): void => {
+  const all = screen.queryByRole('button', { name: /^All / });
+  if (all && all.getAttribute('aria-pressed') !== 'true') fireEvent.click(all);
+};
+
 const rowFor = (label: string): HTMLElement => {
+  showAllRows();
   const li = screen.getByTitle(label).closest('li');
   if (!li) throw new Error(`no row for "${label}"`);
   return li;
@@ -195,7 +208,12 @@ describe('UserComparisonView — the groups tab says how a membership was grante
     const row = rowFor('All Employees');
 
     expect(within(row).queryByText('Added directly')).not.toBeInTheDocument();
-    expect(row.textContent).toBe('All Employees');
+    // No provenance wording of any kind on a shared row. This used to assert the
+    // row's whole `textContent` equalled the label, which held only while a group
+    // row was a bare label span; the row now also carries the parity marker, which
+    // is the comparison itself rather than a claim about how the group was granted.
+    expect(row.querySelector('span[title]')?.textContent).toBe('All Employees');
+    expect(row.textContent).not.toMatch(/Added|Likely|Possible|Managed|Source/);
   });
 });
 

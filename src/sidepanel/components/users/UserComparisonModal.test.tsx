@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import UserComparisonModal from './UserComparisonModal';
 import type { OktaUser, OktaGroup, GroupMembership } from '../../../shared/types';
@@ -272,8 +272,23 @@ const tab = (name: 'Overview' | 'Groups' | 'Apps') =>
 
 const gotoTab = async (name: 'Overview' | 'Groups' | 'Apps') => userEvent.click(tab(name));
 
+/**
+ * Show every row regardless of the diff tab's filter.
+ *
+ * The tab now renders ONE list of parity rows and opens on `Differences`, so a
+ * shared row is simply not mounted until the filter is widened. Synchronous
+ * (`fireEvent`) and idempotent, so it is safe to call from inside `waitFor`.
+ *
+ * A locator concern only — every assertion below is unchanged.
+ */
+function showAllRows(): void {
+  const all = screen.queryByRole('button', { name: /^All / });
+  if (all && all.getAttribute('aria-pressed') !== 'true') fireEvent.click(all);
+}
+
 /** The <li> row for a diff item, found via the `title` attr on its label span. */
 function rowFor(label: string): HTMLElement {
+  showAllRows();
   const span = screen.getByTitle(label);
   const li = span.closest('li');
   if (!li) throw new Error(`No row found for "${label}"`);
@@ -282,27 +297,29 @@ function rowFor(label: string): HTMLElement {
 
 const addButtonFor = (label: string) => within(rowFor(label)).getByRole('button', { name: 'Add' });
 
-/** Which bucket card a given diff item currently lives in, by the card's heading. */
+/**
+ * Which bucket a given item WOULD be in, read off the row itself.
+ *
+ * The three bucket cards are gone; a parity row states both facts in place, so
+ * the bucket is derived from which side shows a "has this" cell. The returned
+ * strings are the old card headings, so the assertions keep their vocabulary.
+ */
 function bucketTitleOf(label: string): string {
-  const card = rowFor(label).closest('div.overflow-hidden');
-  if (!card) throw new Error(`No bucket card for "${label}"`);
-  // The bucket heading is the first element carrying a title attr inside the card.
-  return (
-    card.querySelector('[title]')?.getAttribute('title') ??
-    (() => {
-      throw new Error('no bucket title');
-    })()
-  );
+  const li = rowFor(label);
+  const inContext = li.querySelector('[title="Alice Context has this"]') !== null;
+  const inCompared = li.querySelector('[title="Bob Compared has this"]') !== null;
+  if (!inContext && !inCompared) throw new Error(`No side holds "${label}"`);
+  if (inContext && inCompared) return 'Shared';
+  return inCompared ? 'Only Bob Compared' : 'Only Alice Context';
 }
 
-/** Item labels currently listed in the bucket whose heading is `title`. */
+/** Item labels that currently fall in the bucket named `title`. */
 function bucketItems(title: string): string[] {
-  const heading = screen.getByTitle(title);
-  const card = heading.closest('div.overflow-hidden');
-  if (!card) throw new Error(`No bucket card titled "${title}"`);
-  return Array.from(card.querySelectorAll('li')).map((li) =>
-    (li.querySelector('span[title]')?.textContent ?? '').trim(),
-  );
+  showAllRows();
+  return Array.from(document.querySelectorAll('li'))
+    .filter((li) => li.querySelector('span[title]'))
+    .map((li) => (li.querySelector('span[title]')?.textContent ?? '').trim())
+    .filter((label) => label !== '' && bucketTitleOf(label) === title);
 }
 
 const getUserAppsCalls = () =>
@@ -482,7 +499,10 @@ describe('UserComparisonModal', () => {
       await waitFor(() => expect(bucketItems('Shared')).toContain('Compared Only Group 1'));
 
       // The parent's contextGroups has NOT refreshed yet — assert no double-count.
-      expect(bucketItems('Shared')).toEqual(['Shared Group A', 'Compared Only Group 1']);
+      // Order follows the parity list's sort (differences first, then A–Z) rather than
+      // the append order the bucket cards happened to produce; the claim this case
+      // pins is that the copied group appears in `shared` exactly ONCE.
+      expect(bucketItems('Shared')).toEqual(['Compared Only Group 1', 'Shared Group A']);
       expect(bucketItems('Only Bob Compared')).toEqual(['Compared Only Group 2']);
       expect(bucketItems('Only Alice Context')).toEqual(['Context Only Group']);
     });
@@ -518,7 +538,7 @@ describe('UserComparisonModal', () => {
       });
 
       // The disappearing Add button IS the success affordance — there is no other one.
-      // It vanishes because renderAction re-finds the group in the live onlyCompared
+      // It vanishes because renderContextAction re-finds the group in the live onlyCompared
       // bucket by id, and addedGroupIds has already moved it to `shared`.
       expect(bucketTitleOf('Compared Only Group 1')).toBe('Shared');
       expect(

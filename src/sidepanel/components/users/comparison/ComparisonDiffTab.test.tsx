@@ -1,216 +1,201 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
-import ComparisonDiffTab, { type DiffBucketKind } from './ComparisonDiffTab';
-import { groupDiffItem, type DiffItem } from './comparisonAnalytics';
-import type { GroupMembership } from '../../../../shared/types';
+import userEvent from '@testing-library/user-event';
+import ComparisonDiffTab from './ComparisonDiffTab';
+import type { ParityRow } from './comparisonAnalytics';
 
 /**
- * Phase 4.2 — `renderMeta`, the one prop the Apps tab added to this shared
- * component.
+ * The parity row: every row states who holds the item and what closes the gap.
  *
- * `ComparisonDiffTab` is rendered by BOTH the Groups and the Apps tab, so the
- * suite below pins two things: that a caller can render a per-row detail *and
- * tell which bucket it is in*, and that the Groups tab — which passes no
- * `renderMeta` — produces exactly the markup it did before the prop existed.
+ * This replaces the three-bucket suite. Three of its assertions were about real
+ * defects and are carried forward here against the new row — a long detail never
+ * displaces the action, the detail does not stretch across the row, and the list
+ * is not capped at a fixed height — because those were reported bugs, not
+ * artefacts of the old structure.
+ *
+ * Fixtures use obviously fake placeholders only.
  */
 
 const baseProps = {
   contextName: 'Alice Context',
   comparedName: 'Bob Compared',
-  emptyComparedText: 'Nothing unique to Bob Compared.',
-  emptySharedText: 'Nothing in common.',
-  emptyContextText: 'Nothing unique to Alice Context.',
+  noun: 'group',
+  emptyText: 'Neither user is in any groups.',
 };
 
-const items = (...ids: string[]): DiffItem[] => ids.map((id) => ({ id, label: `Label ${id}` }));
+const row = (over: Partial<ParityRow> = {}): ParityRow => ({
+  id: '00gFAKE1',
+  label: 'VPN Access',
+  inContext: false,
+  inCompared: true,
+  ...over,
+});
 
-/** The <li> row for an item, found through the `title` attr on its label span. */
+/** The <li> for an item, found through the `title` on its label span. */
 const rowFor = (label: string): HTMLElement => {
   const li = screen.getByTitle(label).closest('li');
   if (!li) throw new Error(`no row for "${label}"`);
   return li;
 };
 
-describe('ComparisonDiffTab — renderMeta', () => {
-  it('renders the per-row detail in every bucket, telling the caller which bucket it is', () => {
-    const seen: Array<[string, DiffBucketKind]> = [];
+describe('the row states the comparison', () => {
+  it('marks a shared item with = and a difference with ≠', () => {
+    render(
+      <ComparisonDiffTab
+        {...baseProps}
+        rows={[
+          row({ id: 'g1', label: 'Shared Group', inContext: true, inCompared: true }),
+          row({ id: 'g2', label: 'Only Bob' }),
+        ]}
+      />,
+    );
+
+    // `All`, because the default filter hides shared rows.
+    return userEvent.click(screen.getByRole('button', { name: /^All/ })).then(() => {
+      expect(within(rowFor('Shared Group')).getByText('=')).toBeInTheDocument();
+      expect(within(rowFor('Only Bob')).getByText('≠')).toBeInTheDocument();
+    });
+  });
+
+  it('gives the marker a label and keeps it out of the tab order', () => {
+    render(<ComparisonDiffTab {...baseProps} rows={[row()]} />);
+
+    const marker = within(rowFor('VPN Access')).getByRole('img', {
+      name: /only one user has this/i,
+    });
+    // It borrows the button silhouette but must never be a control.
+    expect(marker.tagName).toBe('SPAN');
+    expect(marker).not.toHaveAttribute('tabindex');
+  });
+
+  it('offers the action on the side that LACKS the item, in each direction', () => {
+    const toContext = vi.fn((r: ParityRow) => (
+      <button type="button">Add to Alice {r.label}</button>
+    ));
+    const toCompared = vi.fn((r: ParityRow) => <button type="button">Add to Bob {r.label}</button>);
 
     render(
       <ComparisonDiffTab
         {...baseProps}
-        noun="app"
-        comparedItems={items('a1')}
-        sharedItems={items('a2')}
-        contextItems={items('a3')}
-        renderMeta={(item, bucket) => {
-          seen.push([item.id, bucket]);
-          return <span>meta:{bucket}</span>;
-        }}
+        rows={[
+          row({ id: 'g1', label: 'Only Bob', inContext: false, inCompared: true }),
+          row({ id: 'g2', label: 'Only Alice', inContext: true, inCompared: false }),
+        ]}
+        renderContextAction={toContext}
+        renderComparedAction={toCompared}
       />,
     );
 
-    expect(seen).toEqual([
-      ['a1', 'onlyCompared'],
-      ['a2', 'shared'],
-      ['a3', 'onlyContext'],
-    ]);
-
-    expect(within(rowFor('Label a1')).getByText('meta:onlyCompared')).toBeInTheDocument();
-    expect(within(rowFor('Label a2')).getByText('meta:shared')).toBeInTheDocument();
-    expect(within(rowFor('Label a3')).getByText('meta:onlyContext')).toBeInTheDocument();
-  });
-
-  it('keeps the row label first and separately titled, so a row still reads as its label', () => {
-    render(
-      <ComparisonDiffTab
-        {...baseProps}
-        noun="app"
-        comparedItems={items('a1')}
-        sharedItems={[]}
-        contextItems={[]}
-        renderMeta={() => <span title="a caveat">detail</span>}
-      />,
-    );
-
-    const row = rowFor('Label a1');
-    expect(row.querySelector('span[title]')?.textContent).toBe('Label a1');
-    expect(row).toHaveTextContent('Label a1detail');
-  });
-
-  it('renders nothing extra when renderMeta returns null for a bucket', () => {
-    render(
-      <ComparisonDiffTab
-        {...baseProps}
-        noun="app"
-        comparedItems={items('a1')}
-        sharedItems={items('a2')}
-        contextItems={[]}
-        renderMeta={(_item, bucket) => (bucket === 'shared' ? null : <span>detail</span>)}
-      />,
-    );
-
-    expect(within(rowFor('Label a1')).getByText('detail')).toBeInTheDocument();
-    expect(within(rowFor('Label a2')).queryByText('detail')).not.toBeInTheDocument();
-    expect(rowFor('Label a2').innerHTML).toBe(
-      '<span class="truncate text-sm text-neutral-800" title="Label a2">Label a2</span>',
-    );
-  });
-});
-
-describe('ComparisonDiffTab — the groups path is untouched by renderMeta', () => {
-  const membership = (id: string, name: string): GroupMembership => ({
-    group: { id, type: 'OKTA_GROUP', profile: { name } },
-    membershipType: 'DIRECT',
-    rules: [],
-    attribution: 'exact',
-  });
-
-  const groupsProps = {
-    ...baseProps,
-    noun: 'group',
-    comparedItems: [membership('g1', 'VPN Access')].map(groupDiffItem),
-    sharedItems: [membership('g2', 'All Employees')].map(groupDiffItem),
-    contextItems: [membership('g3', 'Finance Approvers')].map(groupDiffItem),
-  };
-
-  it('renders a group row as the bare label span it always was', () => {
-    const { container } = render(<ComparisonDiffTab {...groupsProps} />);
-
-    for (const name of ['VPN Access', 'All Employees', 'Finance Approvers']) {
-      expect(rowFor(name).innerHTML).toBe(
-        `<span class="truncate text-sm text-neutral-800" title="${name}">${name}</span>`,
-      );
-    }
-
-    // No stray wrapper element crept in around any label.
-    expect(container.querySelectorAll('li > span')).toHaveLength(3);
-  });
-
-  it('still renders bucket headings, counts, and the per-row Add affordance', () => {
-    render(
-      <ComparisonDiffTab
-        {...groupsProps}
-        renderAction={(item) => <button type="button">Add {item.label}</button>}
-        renderContextAction={(item) => <button type="button">Copy {item.label}</button>}
-      />,
-    );
-
-    expect(screen.getByTitle('Only Bob Compared')).toBeInTheDocument();
-    expect(screen.getByTitle('Add groups to Alice Context')).toBeInTheDocument();
-    expect(screen.getByTitle('Common groups between both users')).toBeInTheDocument();
-    expect(screen.getByTitle('Add groups to Bob Compared')).toBeInTheDocument();
-
-    expect(within(rowFor('VPN Access')).getByRole('button', { name: 'Add VPN Access' }));
     expect(
-      within(rowFor('Finance Approvers')).getByRole('button', { name: 'Copy Finance Approvers' }),
-    );
-    expect(within(rowFor('All Employees')).queryByRole('button')).not.toBeInTheDocument();
+      within(rowFor('Only Bob')).getByRole('button', { name: 'Add to Alice Only Bob' }),
+    ).toBeInTheDocument();
+    expect(
+      within(rowFor('Only Alice')).getByRole('button', { name: 'Add to Bob Only Alice' }),
+    ).toBeInTheDocument();
   });
 
-  it('renders empty buckets with their empty text, unchanged', () => {
-    render(
-      <ComparisonDiffTab
-        {...baseProps}
-        noun="group"
-        comparedItems={[]}
-        sharedItems={[]}
-        contextItems={[]}
-      />,
-    );
+  it('states a non-answer rather than a button that would fail', () => {
+    // An app-mastered group: the host returns null because adding a member
+    // through the group API would be rejected.
+    render(<ComparisonDiffTab {...baseProps} rows={[row()]} renderContextAction={() => null} />);
 
-    expect(screen.getByText('Nothing unique to Bob Compared.')).toBeInTheDocument();
-    expect(screen.getByText('Nothing in common.')).toBeInTheDocument();
-    expect(screen.getByText('Nothing unique to Alice Context.')).toBeInTheDocument();
+    expect(within(rowFor('VPN Access')).queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.getByTitle('Alice Context does not have this')).toBeInTheDocument();
+  });
+
+  it('names both users once, in the column header', () => {
+    render(<ComparisonDiffTab {...baseProps} rows={[row()]} />);
+
+    expect(screen.getByText('Alice Context')).toBeInTheDocument();
+    expect(screen.getByText('Bob Compared')).toBeInTheDocument();
   });
 });
 
-describe('ComparisonDiffTab — a long detail never displaces the row action', () => {
-  it('stacks the detail under the label, outside the element holding the action', () => {
+describe('filtering and search', () => {
+  const rows = [
+    row({ id: 'g1', label: 'Only Bob' }),
+    row({ id: 'g2', label: 'Shared Group', inContext: true, inCompared: true }),
+    row({ id: 'g3', label: 'Also Shared', inContext: true, inCompared: true }),
+  ];
+
+  it('opens on the differences, so the actionable rows are not buried', () => {
+    render(<ComparisonDiffTab {...baseProps} rows={rows} />);
+
+    expect(screen.getByTitle('Only Bob')).toBeInTheDocument();
+    expect(screen.queryByTitle('Shared Group')).not.toBeInTheDocument();
+  });
+
+  it('counts each filter so the split is visible without switching', () => {
+    render(<ComparisonDiffTab {...baseProps} rows={rows} />);
+
+    expect(screen.getByRole('button', { name: /Differences 1/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Shared 2/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /All 3/ })).toBeInTheDocument();
+  });
+
+  it('shows the shared rows on demand', async () => {
+    render(<ComparisonDiffTab {...baseProps} rows={rows} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^Shared/ }));
+    expect(screen.getByTitle('Shared Group')).toBeInTheDocument();
+    expect(screen.queryByTitle('Only Bob')).not.toBeInTheDocument();
+  });
+
+  it('filters by name within the current selection', async () => {
+    render(<ComparisonDiffTab {...baseProps} rows={rows} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^All/ }));
+    await userEvent.type(screen.getByLabelText('Filter groups by name'), 'shared');
+
+    expect(screen.getByTitle('Shared Group')).toBeInTheDocument();
+    expect(screen.getByTitle('Also Shared')).toBeInTheDocument();
+    expect(screen.queryByTitle('Only Bob')).not.toBeInTheDocument();
+  });
+
+  it('distinguishes "nothing here" from "nothing matches"', async () => {
+    const { rerender } = render(<ComparisonDiffTab {...baseProps} rows={[]} />);
+    expect(screen.getByText('Neither user is in any groups.')).toBeInTheDocument();
+
+    rerender(<ComparisonDiffTab {...baseProps} rows={rows} />);
+    await userEvent.type(screen.getByLabelText('Filter groups by name'), 'zzz');
+    expect(screen.getByText('No groups match this filter.')).toBeInTheDocument();
+  });
+});
+
+describe('carried forward from the bucket suite', () => {
+  it('never lets a long detail displace the row action', () => {
     render(
       <ComparisonDiffTab
         {...baseProps}
-        noun="group"
-        comparedItems={items('a1')}
-        sharedItems={[]}
-        contextItems={[]}
-        renderAction={() => <button type="button">Add</button>}
+        rows={[row()]}
+        renderContextAction={() => <button type="button">Add</button>}
         renderMeta={() => (
           <span>Likely added by rule: Contractors → VPN Access, Remote Access Baseline</span>
         )}
       />,
     );
 
-    const row = rowFor('Label a1');
-    const action = within(row).getByRole('button', { name: 'Add' });
-    const detail = within(row).getByText(/Likely added by rule/);
+    const li = rowFor('VPN Access');
+    const action = within(li).getByRole('button', { name: 'Add' });
+    const detail = within(li).getByText(/Likely added by rule/);
 
-    // The detail shares a column with the label — that column is what truncates.
+    // The detail shares the label's column — that column is what truncates — and
+    // the action lives outside it, so no length of rule name can push it away.
     const column = detail.parentElement;
-    expect(column).toContainElement(within(row).getByTitle('Label a1'));
-    expect(column?.className).toContain('min-w-0');
-    expect(column?.className).toContain('flex-col');
-
-    // The action sits OUTSIDE that column and does not shrink, so no length of
-    // rule name can push it out of view (the bug this pins).
+    expect(column).toContainElement(within(li).getByTitle('VPN Access'));
     expect(column).not.toContainElement(action);
-    expect(action.parentElement?.className).toContain('shrink-0');
   });
-});
 
-describe('ComparisonDiffTab — the list fills the panel and the detail hugs its text', () => {
   it('stacks the detail in a column that does not stretch it across the row', () => {
     render(
       <ComparisonDiffTab
         {...baseProps}
-        noun="group"
-        comparedItems={items('a1')}
-        sharedItems={[]}
-        contextItems={[]}
+        rows={[row()]}
         renderMeta={() => <span>Managed by app</span>}
       />,
     );
 
-    const column = within(rowFor('Label a1')).getByText('Managed by app').parentElement;
+    const column = within(rowFor('VPN Access')).getByText('Managed by app').parentElement;
     // Flex children stretch by default, which turned every source chip into a
     // full-width grey bar spanning the row.
     expect(column?.className).toContain('items-start');
@@ -221,16 +206,13 @@ describe('ComparisonDiffTab — the list fills the panel and the detail hugs its
     render(
       <ComparisonDiffTab
         {...baseProps}
-        noun="group"
-        comparedItems={items('a1', 'a2', 'a3')}
-        sharedItems={[]}
-        contextItems={[]}
+        rows={[row({ id: 'g1', label: 'A' }), row({ id: 'g2', label: 'B' })]}
       />,
     );
 
-    const list = rowFor('Label a1').closest('ul');
+    const list = rowFor('A').closest('ul');
     // A fixed cap is what made 9 rows scroll inside a 176px box while the page
-    // below sat empty; the list now takes the height its card is given.
+    // below sat empty.
     expect(list?.className).not.toContain('max-h-44');
     expect(list?.className).toContain('flex-1');
   });
