@@ -21,7 +21,10 @@
 import React from 'react';
 import { Button } from '../../shared';
 import type { AccessCause, UndeterminedReason } from './accessCause';
-import type { ClauseExplanation } from '../../../../shared/rules/explainExpression';
+import type {
+  ClauseExplanation,
+  ClauseGroupReference,
+} from '../../../../shared/rules/explainExpression';
 import type { RuleExprValue } from '../../../../shared/ruleEvaluator';
 
 /**
@@ -56,6 +59,18 @@ interface CauseWorklistRowProps {
    * navigate there), the row still previews its failing clauses but offers no jump.
    */
   onViewClauses?: (cause: AccessCause) => void;
+  /** Display name of the user who LACKS the access, for the prerequisite copy. */
+  contextName?: string;
+  /**
+   * Optional per-prerequisite-group action — the "Add" that grants the group a
+   * failing `isMemberOf*` clause asks for.
+   *
+   * A render prop because only the host can turn a rule's group *reference* into
+   * something actionable: the rule names an id or a name, and granting it needs a
+   * real `OktaGroup` plus the copy hook's single-flight state. Returning `null`
+   * for a group the host cannot resolve is expected, and the row still names it.
+   */
+  renderGroupAction?: (reference: ClauseGroupReference) => React.ReactNode;
 }
 
 /**
@@ -64,7 +79,12 @@ interface CauseWorklistRowProps {
  *
  * @param props - See {@link CauseWorklistRowProps}.
  */
-const CauseWorklistRow: React.FC<CauseWorklistRowProps> = ({ cause, onViewClauses }) => (
+const CauseWorklistRow: React.FC<CauseWorklistRowProps> = ({
+  cause,
+  onViewClauses,
+  contextName,
+  renderGroupAction,
+}) => (
   <li className="rounded-md border border-neutral-200 bg-white p-3">
     <p className="text-sm font-semibold break-words text-neutral-900" title={cause.groupName}>
       {cause.groupName}
@@ -84,6 +104,12 @@ const CauseWorklistRow: React.FC<CauseWorklistRowProps> = ({ cause, onViewClause
       </p>
     )}
 
+    <RequiredGroups
+      references={cause.requiredGroups ?? []}
+      contextName={contextName}
+      renderGroupAction={renderGroupAction}
+    />
+
     <FailingClauses clauses={cause.failingClauses} />
 
     {onViewClauses && (
@@ -100,6 +126,66 @@ const CauseWorklistRow: React.FC<CauseWorklistRowProps> = ({ cause, onViewClause
     )}
   </li>
 );
+
+/** How each match kind reads when naming what the rule asks for. */
+const groupMatchLabel: Record<ClauseGroupReference['match'], (value: string) => string> = {
+  id: (value) => `group ${value}`,
+  name: (value) => value,
+  nameStartsWith: (value) => `any group whose name starts with “${value}”`,
+  nameContains: (value) => `any group whose name contains “${value}”`,
+};
+
+/**
+ * The prerequisite groups a failing `isMemberOf*` clause named.
+ *
+ * Every candidate is listed, satisfied ones included, because that is what makes
+ * an `isMemberOfAnyGroup` failure legible: the rule wanted any one of these and
+ * the user has none of them. Marking the satisfied ones also stops the list
+ * reading as "all of these are missing" when only some are.
+ */
+const RequiredGroups: React.FC<{
+  references: readonly ClauseGroupReference[];
+  contextName?: string;
+  renderGroupAction?: (reference: ClauseGroupReference) => React.ReactNode;
+}> = ({ references, contextName, renderGroupAction }) => {
+  if (references.length === 0) return null;
+  const missing = references.filter((reference) => !reference.satisfied);
+  const who = contextName ?? 'This user';
+
+  return (
+    <div className="mt-2">
+      <p className="text-xs font-medium text-neutral-700">
+        {missing.length === references.length
+          ? `${who} would qualify by joining ${references.length === 1 ? 'this group' : 'any one of these groups'}:`
+          : `The rule asks for ${references.length === 1 ? 'this group' : 'one of these groups'}:`}
+      </p>
+      <ul className="mt-1 space-y-1">
+        {references.map((reference) => (
+          <li
+            key={`${reference.match}-${reference.value}`}
+            className="flex items-center justify-between gap-2 rounded-md bg-neutral-50 px-2 py-1"
+          >
+            <span className="flex min-w-0 flex-1 items-center gap-1.5">
+              <span
+                className="truncate text-xs text-neutral-900"
+                title={reference.matchedGroupName ?? reference.value}
+              >
+                {reference.matchedGroupName ?? groupMatchLabel[reference.match](reference.value)}
+              </span>
+              {reference.satisfied && (
+                // Stated in words, never by colour alone.
+                <span className="shrink-0 text-xs font-medium text-success-text">already in</span>
+              )}
+            </span>
+            {!reference.satisfied && (
+              <span className="shrink-0">{renderGroupAction?.(reference)}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
 
 /**
  * Render a resolved value as plain text, keeping quotes on strings so a trailing

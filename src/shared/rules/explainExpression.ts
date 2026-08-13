@@ -62,6 +62,8 @@ import {
   evaluateRuleNode,
   parseRuleExpression,
   type RuleExprValue,
+  type RuleGroupContext,
+  type RuleGroupContextEntry,
   type RuleMatchResult,
   type RuleUnevaluableReason,
 } from '../ruleEvaluator';
@@ -79,6 +81,33 @@ export const DEFAULT_MAX_CLAUSES = 64;
 
 /** Outcome of a single clause. `fail` means "resolved to false", nothing else. */
 export type ClauseStatus = 'pass' | 'fail' | 'not-evaluated';
+
+/** How an `isMemberOf*` argument identifies the group it asks about. */
+export type ClauseGroupMatch = 'id' | 'name' | 'nameStartsWith' | 'nameContains';
+
+/**
+ * One group an `isMemberOf*` clause asks about, and whether the user is in it.
+ *
+ * Carried structurally rather than left for the UI to re-parse out of
+ * `expressionText`: the arguments are read straight off the AST the clause was
+ * explained from, so a name containing a bracket or a comma cannot be
+ * mis-recovered. This is what lets a caller say "they would need to be in
+ * <group>" instead of "a clause failed".
+ */
+export interface ClauseGroupReference {
+  /** Which field of the user's groups this argument is matched against. */
+  readonly match: ClauseGroupMatch;
+  /** The rule's literal — a group id, a full name, or a prefix/substring. **Untrusted.** */
+  readonly value: string;
+  /** Whether any of the user's groups satisfies this argument. */
+  readonly satisfied: boolean;
+  /**
+   * The name of the user's group that satisfied it, when one did. Absent for an
+   * unsatisfied reference — there is no group to name — and for a clause
+   * explained without a group list. **Untrusted.**
+   */
+  readonly matchedGroupName?: string;
+}
 
 /** One clause of a rule condition, explained against one user. */
 export interface ClauseExplanation {
@@ -102,6 +131,16 @@ export interface ClauseExplanation {
   readonly status: ClauseStatus;
   /** Present exactly when `status` is `not-evaluated`: why the evaluator gave up. */
   readonly reasonCode?: RuleUnevaluableReason;
+  /**
+   * Present only for an `isMemberOf*` clause explained **with** a group list:
+   * the groups it asks about, and whether the user is in each.
+   *
+   * Absent without a list, because `satisfied` would then mean "not known to be
+   * satisfied" while reading as a definite `false`. A *failing* clause carrying
+   * these is the "they would need to be in X" case; a passing one names the
+   * group that already qualifies them.
+   */
+  readonly groupReferences?: readonly ClauseGroupReference[];
 }
 
 /** Per-rule counts the UI renders above the clause list. */
@@ -117,8 +156,13 @@ export interface RuleExplanationSummary {
   /** Rows the evaluator could not resolve. Never counted as failures. */
   readonly notEvaluatedClauses: number;
   /**
-   * Rows blocked specifically on `isMemberOf*` — the "1 needs group context" of
-   * the summary line, and the one gap the deferred group-list seam would close.
+   * Rows blocked specifically on `isMemberOf*` for want of a group list — the
+   * "1 needs group context" of the summary line.
+   *
+   * Always `0` once {@link ExplainRuleOptions.groups} is supplied: those clauses
+   * then carry a real verdict. It does **not** count the `group-name-regex`
+   * rows, which are unevaluated for a different reason and would not be fixed by
+   * any group list.
    */
   readonly needsGroupContext: number;
   /**
@@ -149,6 +193,19 @@ export interface RuleExplanation {
 export interface ExplainRuleOptions {
   /** Cap on clause rows. Defaults to {@link DEFAULT_MAX_CLAUSES}; values below 1 are ignored. */
   readonly maxClauses?: number;
+  /**
+   * The user's **complete** group list, which turns every `isMemberOf*` clause
+   * from `not-evaluated` / `group-membership-fn` into a real `pass` or `fail`.
+   *
+   * Omit it rather than passing a partial list: absent, those clauses stay
+   * honestly unevaluated, whereas a subset would report groups the user *is* in
+   * as clauses they failed. See {@link RuleGroupContext}.
+   *
+   * `isMemberOfGroupNameRegex` stays unevaluated either way, under its own
+   * `group-name-regex` reason — the evaluator declines to run tenant-authored
+   * patterns.
+   */
+  readonly groups?: RuleGroupContext;
 }
 
 // ---------------------------------------------------------------------------
@@ -331,6 +388,75 @@ function resolveClauseValue(node: jsep.Expression, user: OktaUser): RuleExprValu
   return undefined;
 }
 
+/** `isMemberOf*` function → the group field its arguments are matched against. */
+const GROUP_MATCH_BY_FUNCTION = new Map<string, ClauseGroupMatch>([
+  ['isMemberOfGroup', 'id'],
+  ['isMemberOfAnyGroup', 'id'],
+  ['isMemberOfGroupName', 'name'],
+  ['isMemberOfAnyGroupName', 'name'],
+  ['isMemberOfGroupNameStartsWith', 'nameStartsWith'],
+  ['isMemberOfGroupNameContains', 'nameContains'],
+  // `isMemberOfGroupNameRegex` is absent on purpose: the evaluator declines to
+  // run tenant-authored patterns, so listing its groups would imply a check that
+  // never happened.
+]);
+
+/** Which of the user's groups satisfies one reference, if any. */
+function findMatchingGroup(
+  match: ClauseGroupMatch,
+  value: string,
+  groups: RuleGroupContext,
+): RuleGroupContextEntry | undefined {
+  return groups.find((group) => {
+    switch (match) {
+      case 'id':
+        return group.id === value;
+      case 'name':
+        return group.name === value;
+      case 'nameStartsWith':
+        return group.name.startsWith(value);
+      case 'nameContains':
+        return group.name.includes(value);
+    }
+  });
+}
+
+/**
+ * The groups an `isMemberOf*` clause asks about, read off the AST — or
+ * `undefined` when the clause is not one of those calls.
+ *
+ * Returns `undefined` rather than a partial list for any argument that is not a
+ * string literal: naming the wrong group is worse than naming none.
+ */
+function groupReferencesOf(
+  node: jsep.Expression,
+  groups: RuleGroupContext | undefined,
+): readonly ClauseGroupReference[] | undefined {
+  // Without a group list there is no `satisfied` to report — only "not known to
+  // be satisfied", which reads identically and is not the same fact. The clause
+  // is `not-evaluated` in that case anyway, so there is nothing to act on.
+  if (!groups) return undefined;
+
+  const call = asCallExpression(node);
+  if (!call) return undefined;
+  const match = GROUP_MATCH_BY_FUNCTION.get(asIdentifier(call.callee)?.name ?? '');
+  if (!match) return undefined;
+
+  const references: ClauseGroupReference[] = [];
+  for (const argument of call.arguments) {
+    const value = asLiteral(argument)?.value;
+    if (typeof value !== 'string') return undefined;
+    const matched = findMatchingGroup(match, value, groups);
+    references.push({
+      match,
+      value,
+      satisfied: matched !== undefined,
+      ...(matched ? { matchedGroupName: matched.name } : {}),
+    });
+  }
+  return references.length > 0 ? references : undefined;
+}
+
 /**
  * Explain one clause: grammar gate first, then evaluation, then the
  * "is it actually a condition?" gate.
@@ -340,34 +466,32 @@ function resolveClauseValue(node: jsep.Expression, user: OktaUser): RuleExprValu
  * `"Engineering"`, `String.toUpperCase(user.department)`). Collapsing them would
  * turn those into `fail`.
  */
-function explainClause(node: jsep.Expression, user: OktaUser): ClauseExplanation {
+function explainClause(
+  node: jsep.Expression,
+  user: OktaUser,
+  groups: RuleGroupContext | undefined,
+): ClauseExplanation {
   const expressionText = stringifyNode(node);
   const resolvedValue = resolveClauseValue(node, user);
+  // Attached to every outcome, including the unevaluated ones: naming the groups
+  // a clause asks about is useful even when we could not answer it.
+  const groupReferences = groupReferencesOf(node, groups);
+  const base = { expressionText, resolvedValue, ...(groupReferences ? { groupReferences } : {}) };
 
-  const support = checkRuleNodeSupport(node);
+  const support = checkRuleNodeSupport(node, { hasGroupContext: groups !== undefined });
   if (!support.supported) {
-    return {
-      expressionText,
-      resolvedValue,
-      status: 'not-evaluated',
-      reasonCode: support.reasonCode,
-    };
+    return { ...base, status: 'not-evaluated', reasonCode: support.reasonCode };
   }
 
-  const evaluation = evaluateRuleNode(node, { user });
+  const evaluation = evaluateRuleNode(node, { user, groups });
   if (!evaluation.resolved) {
-    return {
-      expressionText,
-      resolvedValue,
-      status: 'not-evaluated',
-      reasonCode: evaluation.reasonCode,
-    };
+    return { ...base, status: 'not-evaluated', reasonCode: evaluation.reasonCode };
   }
   if (typeof evaluation.value !== 'boolean') {
-    return { expressionText, resolvedValue, status: 'not-evaluated', reasonCode: 'not-a-boolean' };
+    return { ...base, status: 'not-evaluated', reasonCode: 'not-a-boolean' };
   }
 
-  return { expressionText, resolvedValue, status: evaluation.value ? 'pass' : 'fail' };
+  return { ...base, status: evaluation.value ? 'pass' : 'fail' };
 }
 
 /** Tally the clause rows into the summary the UI renders above them. */
@@ -460,10 +584,15 @@ export function explainRuleExpression(
   try {
     const collection: ClauseCollection = { nodes: [], truncated: false };
     collectClauseNodes(parsed.ast, collection, clauseLimit(options?.maxClauses));
-    const clauses = collection.nodes.map((node) => explainClause(node, user));
+    const groups = options?.groups;
+    const clauses = collection.nodes.map((node) => explainClause(node, user, groups));
     return {
       clauses,
-      summary: summarise(clauses, evaluateParsedRule(parsed.ast, { user }), collection.truncated),
+      summary: summarise(
+        clauses,
+        evaluateParsedRule(parsed.ast, { user, groups }),
+        collection.truncated,
+      ),
     };
   } catch {
     // Defensive, mirroring the evaluator: a pathologically nested expression can

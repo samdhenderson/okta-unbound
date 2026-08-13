@@ -35,6 +35,7 @@ import React from 'react';
 import Icon, { type IconType } from '../../overview/shared/Icon';
 import CauseWorklistRow from './CauseWorklistRow';
 import { groupCausesByRemedy, type AccessCause, type AccessRemedy } from './accessCause';
+import type { ClauseGroupReference } from '../../../../shared/rules/explainExpression';
 
 /** How one {@link AccessRemedy} is presented. Colour never carries the meaning alone. */
 interface RemedyPresentation {
@@ -66,6 +67,14 @@ const remedyPresentation: Record<AccessRemedy, RemedyPresentation> = {
     groupClass: 'border-warning-light bg-warning-light',
     iconClass: 'text-warning',
   },
+  'needs-group-membership': {
+    heading: 'Grant a prerequisite group',
+    description:
+      'A rule feeds this group but asks for another group membership this user does not have. Add them to one of the groups it names.',
+    icon: 'users',
+    groupClass: 'border-primary-highlight bg-primary-light',
+    iconClass: 'text-primary-text',
+  },
   'excluded-by-rule': {
     heading: 'Remove a rule exclusion',
     description:
@@ -81,6 +90,14 @@ const remedyPresentation: Record<AccessRemedy, RemedyPresentation> = {
     icon: 'plus',
     groupClass: 'border-primary-highlight bg-primary-light',
     iconClass: 'text-primary-text',
+  },
+  'app-managed': {
+    heading: 'Assign the application',
+    description:
+      'An app masters this group and manages its own members. No profile edit or manual add reproduces it — assign the app instead.',
+    icon: 'app',
+    groupClass: 'border-neutral-200 bg-neutral-50',
+    iconClass: 'text-neutral-500',
   },
   'cannot-determine': {
     heading: 'Needs investigation',
@@ -109,6 +126,12 @@ interface CauseWorklistProps {
    * previews its failing clauses inline but offers no jump.
    */
   onViewClauses?: (cause: AccessCause) => void;
+  /**
+   * Optional per-prerequisite-group action, forwarded to every row — the "Add"
+   * that grants a group a failing `isMemberOf*` clause asks for. See
+   * {@link CauseWorklistRow}.
+   */
+  renderGroupAction?: (reference: ClauseGroupReference) => React.ReactNode;
 }
 
 /**
@@ -122,6 +145,7 @@ const CauseWorklist: React.FC<CauseWorklistProps> = ({
   contextName,
   comparedName,
   onViewClauses,
+  renderGroupAction,
 }) => (
   <section
     aria-labelledby="cause-worklist-heading"
@@ -152,7 +176,14 @@ const CauseWorklist: React.FC<CauseWorklistProps> = ({
     ) : (
       <div className="mt-3 space-y-3">
         {groupCausesByRemedy(causes).map(({ remedy, causes: rows }) => (
-          <RemedyGroup key={remedy} remedy={remedy} causes={rows} onViewClauses={onViewClauses} />
+          <RemedyGroup
+            key={remedy}
+            remedy={remedy}
+            causes={rows}
+            contextName={contextName}
+            onViewClauses={onViewClauses}
+            renderGroupAction={renderGroupAction}
+          />
         ))}
       </div>
     )}
@@ -175,10 +206,20 @@ interface RemedyGroupProps {
   causes: readonly AccessCause[];
   /** Forwarded to each row's clause-checklist jump. */
   onViewClauses?: (cause: AccessCause) => void;
+  /** Display name of the user who LACKS the access, for the prerequisite copy. */
+  contextName: string;
+  /** Forwarded to each row's prerequisite-group action. */
+  renderGroupAction?: (reference: ClauseGroupReference) => React.ReactNode;
 }
 
 /** One remedy's heading, what-it-means line, row count, and its rows. */
-const RemedyGroup: React.FC<RemedyGroupProps> = ({ remedy, causes, onViewClauses }) => {
+const RemedyGroup: React.FC<RemedyGroupProps> = ({
+  remedy,
+  causes,
+  contextName,
+  onViewClauses,
+  renderGroupAction,
+}) => {
   const presentation = remedyPresentation[remedy];
 
   return (
@@ -203,7 +244,13 @@ const RemedyGroup: React.FC<RemedyGroupProps> = ({ remedy, causes, onViewClauses
 
       <ul className="mt-2 space-y-2">
         {causes.map((cause) => (
-          <CauseWorklistRow key={cause.groupId} cause={cause} onViewClauses={onViewClauses} />
+          <CauseWorklistRow
+            key={cause.groupId}
+            cause={cause}
+            contextName={contextName}
+            onViewClauses={onViewClauses}
+            renderGroupAction={renderGroupAction}
+          />
         ))}
       </ul>
     </section>

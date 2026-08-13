@@ -27,6 +27,7 @@ convention; the specs in [`../`](../README.md) describe the _what_.
 | [0018](./0018-tabs-stay-mounted.md)                               | Keep every tab mounted; gate background work on `isActive`                        | Accepted | Every tab gates its mount effects on `isActive` — see the obligation.      |
 | [0019](./0019-coverage-threshold-recalibration.md)                | Recalibrate the coverage gate and stop restating its numbers                      | Accepted | Amends 0005's thresholds; `vitest.config.ts` is the single source.         |
 | [0020](./0020-attribution-provenance-not-a-fourth-level.md)       | Reconcile the two attribution paths by provenance, not a fourth attribution level | Accepted | Parity test pins where the group and user views may differ.                |
+| [0021](./0021-group-context-rule-evaluation.md)                   | Answer `isMemberOf*` rule clauses from the user's own group list                  | Accepted | Optional, complete group list; the regex variant is still never run.       |
 
 ## Adding an ADR
 

@@ -12,6 +12,7 @@ import React from 'react';
 import Icon from '../../overview/shared/Icon';
 import CauseWorklist from './CauseWorklist';
 import type { AccessCause } from './accessCause';
+import type { ClauseGroupReference } from '../../../../shared/rules/explainExpression';
 import type { AppEntry, GroupBuckets } from './comparisonAnalytics';
 
 /** Props for {@link ComparisonOverviewTab}. */
@@ -48,6 +49,11 @@ interface ComparisonOverviewTabProps {
    * inline but offers no jump.
    */
   onViewClauses?: (cause: AccessCause) => void;
+  /**
+   * Optional per-prerequisite-group action, forwarded to {@link CauseWorklist} —
+   * the "Add" that grants a group a failing `isMemberOf*` clause asks for.
+   */
+  renderGroupAction?: (reference: ClauseGroupReference) => React.ReactNode;
 }
 
 /**
@@ -65,6 +71,7 @@ const ComparisonOverviewTab: React.FC<ComparisonOverviewTabProps> = ({
   onJumpToApps,
   causes,
   onViewClauses,
+  renderGroupAction,
 }) => (
   <div className="space-y-4">
     <OverviewCard
@@ -94,6 +101,7 @@ const ComparisonOverviewTab: React.FC<ComparisonOverviewTabProps> = ({
       contextName={contextName}
       comparedName={comparedName}
       onViewClauses={onViewClauses}
+      renderGroupAction={renderGroupAction}
     />
   </div>
 );

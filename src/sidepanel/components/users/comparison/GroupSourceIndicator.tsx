@@ -169,9 +169,16 @@ function ruleDescription(namesRules: boolean, deduced: boolean): string {
 /** Classes shared by both registers; the rule text truncates instead of overflowing the row. */
 const baseClasses = 'min-w-0 truncate text-xs';
 
-/** The neutral chip recipe for a proven answer — a rule grant is not a problem, so no status colour. */
-const chipClasses =
-  'rounded-md border border-neutral-200 bg-neutral-100 px-2 py-0.5 font-medium text-neutral-700';
+/**
+ * The neutral chip recipe for a proven answer — a rule grant is not a problem, so
+ * no status colour.
+ *
+ * Deliberately border-less: with one of these on every row of a long diff, the
+ * outline read as a grid of boxes rather than as annotation. The neutral fill is
+ * what carries "this is a proven answer" (and is pinned by
+ * `GroupSourceIndicator.test.tsx`, which is also why it stays).
+ */
+const chipClasses = 'rounded bg-neutral-100 px-1.5 py-0.5 font-medium text-neutral-700';
 
 /** Muted, un-chipped treatment for a deduction or a missing classification. */
 const nonAnswerClasses = 'italic text-neutral-400';

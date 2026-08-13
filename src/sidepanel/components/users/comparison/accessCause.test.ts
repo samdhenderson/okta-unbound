@@ -38,14 +38,28 @@ const group = (id = GROUP_ID, name = 'VPN Access'): OktaGroup => ({
   profile: { name },
 });
 
-/** A membership of the COMPARED user — the access the context user is missing. */
+/**
+ * A membership of the COMPARED user — the access the context user is missing.
+ *
+ * Defaults to RULE_BASED/exact because the remedy now follows the **provenance**
+ * before any rule is assessed: a group the compared user was added to by hand is
+ * `manual-add` however many rules target it, since no rule granted the access
+ * there is nothing for an attribute fix to reproduce. So a test about what a
+ * targeting rule does to the *context* user must first establish that a rule is
+ * what grants it. Tests about a hand-added membership use
+ * {@link directMembership}, which states that explicitly.
+ */
 const membership = (over: Partial<GroupMembership> = {}): GroupMembership => ({
   group: group(),
-  membershipType: 'DIRECT',
+  membershipType: 'RULE_BASED',
   rules: [],
   attribution: 'exact',
   ...over,
 });
+
+/** A membership the compared user holds BY HAND — the `manual-add` precondition. */
+const directMembership = (over: Partial<GroupMembership> = {}): GroupMembership =>
+  membership({ membershipType: 'DIRECT', ...over });
 
 const rule = (over: Partial<MembershipRule> = {}): MembershipRule => ({
   id: '0prFAKE0001',
@@ -114,7 +128,7 @@ describe('classifyAccessCauses', () => {
 
     it('is distinct from an EMPTY inventory, which can still say manual-add', () => {
       expect(one(null).remedy).toBe('cannot-determine');
-      expect(one([]).remedy).toBe('manual-add');
+      expect(one([], [directMembership()]).remedy).toBe('manual-add');
     });
   });
 
@@ -208,7 +222,7 @@ describe('classifyAccessCauses', () => {
 
     it('is unaffected by an INACTIVE rule, which grants nothing', () => {
       // Only the inactive rule targets the group, so the group is untargeted.
-      const cause = one([rule({ status: 'INACTIVE' })]);
+      const cause = one([rule({ status: 'INACTIVE' })], [directMembership()]);
       expect(cause.remedy).toBe('manual-add');
     });
 
@@ -224,7 +238,7 @@ describe('classifyAccessCauses', () => {
     });
 
     it('ignores rules targeting a different group', () => {
-      const cause = one([rule({ groupIds: ['00gFAKEOTHER'] })]);
+      const cause = one([rule({ groupIds: ['00gFAKEOTHER'] })], [directMembership()]);
       expect(cause.remedy).toBe('manual-add');
     });
   });
@@ -381,7 +395,7 @@ describe('classifyAccessCauses', () => {
   // ── 4. manual add ───────────────────────────────────────────────────────
   describe('manual-add', () => {
     it('is claimed when no rule targets the group and the membership is DIRECT/exact', () => {
-      const cause = one([rule({ groupIds: ['00gFAKEOTHER'] })]);
+      const cause = one([rule({ groupIds: ['00gFAKEOTHER'] })], [directMembership()]);
 
       expect(cause.remedy).toBe('manual-add');
       expect(cause.undeterminedReason).toBeUndefined();
@@ -478,7 +492,7 @@ describe('classifyAccessCauses', () => {
         [
           membership({ group: group('00gFAKEBLOCKED', 'Blocked') }),
           membership({ group: group('00gFAKEEXCLUDED', 'Excluded') }),
-          membership({ group: group('00gFAKEMANUAL', 'Manual') }),
+          directMembership({ group: group('00gFAKEMANUAL', 'Manual') }),
           membership({ group: group('00gFAKEUNKNOWN', 'Unknown') }),
         ],
       );

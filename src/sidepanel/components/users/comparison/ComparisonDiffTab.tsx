@@ -76,7 +76,16 @@ const ComparisonDiffTab: React.FC<ComparisonDiffTabProps> = ({
   renderContextAction,
   renderMeta,
 }) => (
-  <div className="space-y-3">
+  // A flex column that fills the panel, so the three buckets share the height
+  // instead of each capping its list and leaving the page below blank.
+  //
+  // The minimum is viewport-derived rather than `h-full` because there is no
+  // definite-height chain to inherit: the side panel's scroller is `App`'s
+  // `h-screen` div and every tab below it is content-sized, so `h-full` would
+  // resolve against `auto` and collapse. `22rem` is the comparison's own chrome
+  // above this point (header, change-user row, hero, tab bar). `flex-1` is kept
+  // so that if a host ever does give this a real height, it uses that instead.
+  <div className="flex min-h-[calc(100vh-22rem)] flex-1 flex-col gap-3">
     <BucketCard
       tone="add"
       title={`Only ${comparedName}`}
@@ -187,14 +196,24 @@ const BucketCard: React.FC<BucketCardProps> = ({
 }) => {
   const s = toneStyles[tone];
   return (
-    <div className={`overflow-hidden rounded-lg border ${s.border} bg-white`}>
-      <div className="flex items-stretch">
-        <div className={`w-1 ${s.bar}`} aria-hidden />
-        <div className="flex-1">
-          <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+    // `flex-grow` in proportion to the row count, with `min-h-0` so the list
+    // inside can actually shrink: three cards used to cap their lists at a fixed
+    // height, so a 53-group bucket scrolled inside a 176px box while half the
+    // panel below sat empty. `basis-0` keeps the split governed by the counts
+    // rather than by each card's natural height.
+    <div
+      className={`flex min-h-0 basis-0 flex-col overflow-hidden rounded-lg border ${s.border} bg-white`}
+      style={{ flexGrow: Math.max(1, count) }}
+    >
+      <div className="flex min-h-0 flex-1 items-stretch">
+        <div className={`w-1 shrink-0 ${s.bar}`} aria-hidden />
+        {/* `min-w-0` so a long group name truncates instead of widening the card
+            past the `overflow-hidden` that would then clip the Add button. */}
+        <div className="flex min-h-0 w-0 flex-1 flex-col">
+          <div className="flex shrink-0 items-center justify-between gap-3 px-3 py-2">
             <div className="flex items-center gap-2.5 min-w-0">
               <span
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${s.iconBg} ${s.iconColor}`}
+                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded ${s.iconBg} ${s.iconColor}`}
               >
                 <Icon type={s.icon} size="sm" />
               </span>
@@ -214,11 +233,11 @@ const BucketCard: React.FC<BucketCardProps> = ({
             </span>
           </div>
           {items.length === 0 ? (
-            <div className="border-t border-neutral-100 px-4 py-3 text-xs italic text-neutral-400">
+            <div className="border-t border-neutral-100 px-3 py-2 text-xs italic text-neutral-400">
               {emptyText}
             </div>
           ) : (
-            <ul className="scrollable-list max-h-44 divide-y divide-neutral-100 overflow-y-auto border-t border-neutral-100">
+            <ul className="scrollable-list min-h-0 flex-1 divide-y divide-neutral-100 overflow-y-auto border-t border-neutral-100">
               {items.map((item) => {
                 const meta = renderMeta?.(item);
                 const action = renderAction?.(item);
@@ -230,7 +249,7 @@ const BucketCard: React.FC<BucketCardProps> = ({
                 return (
                   <li
                     key={item.id}
-                    className="flex items-center justify-between gap-3 px-4 py-2 hover:bg-neutral-50/70"
+                    className="flex items-center justify-between gap-2 px-3 py-1.5 hover:bg-neutral-50/70"
                   >
                     {/* With a detail to show, it sits UNDER the label rather than
                         beside it. A source line ("Likely added by rule:
@@ -244,7 +263,11 @@ const BucketCard: React.FC<BucketCardProps> = ({
                         line to stack, which `ComparisonDiffTab.test.tsx` pins. Those
                         rows are also the ones with no action to push out of view. */}
                     {meta ? (
-                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      // `items-start` matters: flex children stretch by default,
+                      // which turned every source chip into a full-width grey bar
+                      // spanning the row. Hugging its text is what keeps a list of
+                      // rows readable.
+                      <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
                         {label}
                         {meta}
                       </span>

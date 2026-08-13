@@ -219,8 +219,14 @@ export function useUserComparison({
       onlyCompared: groupBuckets.onlyCompared,
       contextUser,
       rules: ruleInventory.status === 'available' ? ruleInventory.rules : null,
+      // The context user's whole membership list, which is what lets an
+      // `isMemberOfGroup` / `isMemberOfAnyGroup` clause resolve instead of
+      // reporting "needs investigation". It is the same list the buckets were
+      // built from — Okta's own answer for this user, not a filtered view — so
+      // a clause finding no match really is a miss.
+      contextGroups,
     });
-  }, [groupBuckets.onlyCompared, contextUser, ruleInventory]);
+  }, [groupBuckets.onlyCompared, contextUser, contextGroups, ruleInventory]);
 
   const groupDiffCount = groupBuckets.onlyCompared.length + groupBuckets.onlyContext.length;
   const appDiffCount = appBuckets.onlyCompared.length + appBuckets.onlyContext.length;

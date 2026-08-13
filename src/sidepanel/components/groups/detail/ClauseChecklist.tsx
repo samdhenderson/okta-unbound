@@ -121,6 +121,8 @@ const reasonText: Record<RuleUnevaluableReason, string> = {
   'parse-error': 'The condition could not be parsed here.',
   'unsupported-operator': 'Uses an operator this panel cannot evaluate.',
   'group-membership-fn': "Needs the user's full group list, which this panel does not have.",
+  'group-name-regex':
+    'Matches group names with a regular expression, which this panel does not run.',
   'unknown-fn': 'Calls a function this panel cannot evaluate.',
   'fn-arity': 'Calls a function with an unexpected number of arguments.',
   'unsupported-node': 'Uses a form of expression this panel cannot evaluate.',

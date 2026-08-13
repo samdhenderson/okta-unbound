@@ -170,6 +170,33 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({ contextUser, co
                   // and this component stays presentational. `onViewClauses` is
                   // deliberately not passed — see the module header.
                   causes={causes}
+                  renderGroupAction={(reference) => {
+                    // A rule names a prerequisite group by id or by name; granting
+                    // it needs a real OktaGroup. The only groups we hold in full
+                    // are the compared user's own — which is the common case, since
+                    // they qualified for the rule this clause belongs to. Anything
+                    // else is named without an action rather than fetched.
+                    const match = groupBuckets.onlyCompared.find((m) =>
+                      reference.match === 'id'
+                        ? m.group.id === reference.value
+                        : m.group.profile.name === reference.value,
+                    );
+                    if (!match) return null;
+                    return (
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        icon="plus"
+                        loading={addingGroupId === match.group.id}
+                        // The same GLOBAL single-flight lock the diff rows use, so
+                        // a copy started here cannot race one started there.
+                        disabled={addingGroupId !== null}
+                        onClick={() => addToContext(match.group)}
+                      >
+                        Add
+                      </Button>
+                    );
+                  }}
                 />
               )}
 

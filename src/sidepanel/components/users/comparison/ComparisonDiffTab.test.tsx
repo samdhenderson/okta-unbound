@@ -196,3 +196,42 @@ describe('ComparisonDiffTab — a long detail never displaces the row action', (
     expect(action.parentElement?.className).toContain('shrink-0');
   });
 });
+
+describe('ComparisonDiffTab — the list fills the panel and the detail hugs its text', () => {
+  it('stacks the detail in a column that does not stretch it across the row', () => {
+    render(
+      <ComparisonDiffTab
+        {...baseProps}
+        noun="group"
+        comparedItems={items('a1')}
+        sharedItems={[]}
+        contextItems={[]}
+        renderMeta={() => <span>Managed by app</span>}
+      />,
+    );
+
+    const column = within(rowFor('Label a1')).getByText('Managed by app').parentElement;
+    // Flex children stretch by default, which turned every source chip into a
+    // full-width grey bar spanning the row.
+    expect(column?.className).toContain('items-start');
+    expect(column?.className).toContain('flex-col');
+  });
+
+  it('lets the list grow instead of capping it at a fixed height', () => {
+    render(
+      <ComparisonDiffTab
+        {...baseProps}
+        noun="group"
+        comparedItems={items('a1', 'a2', 'a3')}
+        sharedItems={[]}
+        contextItems={[]}
+      />,
+    );
+
+    const list = rowFor('Label a1').closest('ul');
+    // A fixed cap is what made 9 rows scroll inside a 176px box while the page
+    // below sat empty; the list now takes the height its card is given.
+    expect(list?.className).not.toContain('max-h-44');
+    expect(list?.className).toContain('flex-1');
+  });
+});

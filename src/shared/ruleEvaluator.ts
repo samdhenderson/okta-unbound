@@ -103,8 +103,10 @@ export type RuleExprValue = ExprValue;
  * - `too-long` — longer than {@link MAX_EXPRESSION_LENGTH}; rejected before parsing.
  * - `parse-error` — jsep could not parse it.
  * - `unsupported-operator` — a binary operator outside {@link SUPPORTED_BINARY_OPERATORS}.
- * - `group-membership-fn` — a {@link GROUP_MEMBERSHIP_FUNCTIONS} call; needs the
- *   user's full group list, which this module is not given.
+ * - `group-membership-fn` — a {@link GROUP_MEMBERSHIP_FUNCTIONS} call made without
+ *   a {@link RuleGroupContext}; answering it needs the user's full group list.
+ * - `group-name-regex` — `isMemberOfGroupNameRegex`, which this module declines to
+ *   run **even with** a group list. See {@link GROUP_MEMBERSHIP_FUNCTIONS}.
  * - `unknown-fn` — a call outside {@link SUPPORTED_FUNCTIONS}.
  * - `fn-arity` — an allow-listed function called with the wrong argument count.
  * - `unsupported-node` — a node shape we do not model (computed or non-`user.*`
@@ -123,6 +125,7 @@ export type RuleUnevaluableReason =
   | 'parse-error'
   | 'unsupported-operator'
   | 'group-membership-fn'
+  | 'group-name-regex'
   | 'unknown-fn'
   | 'fn-arity'
   | 'unsupported-node'
@@ -131,16 +134,54 @@ export type RuleUnevaluableReason =
   | 'walk-failed';
 
 /**
+ * One group the user belongs to, as the `isMemberOf*` functions need to see it.
+ *
+ * Both fields are required because the two families of membership function ask
+ * different questions of the same list: `isMemberOfGroup` matches on `id`, and
+ * every `…Name*` variant matches on `name`.
+ */
+export interface RuleGroupContextEntry {
+  /** Okta group id, matched by the id-taking functions. */
+  readonly id: string;
+  /** Group display name, matched by the name-taking functions. **Untrusted.** */
+  readonly name: string;
+}
+
+/**
+ * The user's resolved group memberships — **every** group they are in.
+ *
+ * ## This list must be complete, or the answers are wrong
+ *
+ * The membership functions are answered in *both* directions: finding no match
+ * returns `false`, not "don't know". That is only sound when the list is the
+ * user's whole membership set, which is why the intended source is Okta's own
+ * `GET /api/v1/users/{id}/groups` — authoritative, and inclusive of
+ * directory-sourced groups that the side panel's cached Okta group list would
+ * miss.
+ *
+ * Supplying a *partial* list (e.g. only the groups one screen happens to have
+ * loaded) turns every unlisted group into a confident `false`. Omit the option
+ * entirely rather than passing a subset: absent means the functions stay
+ * `group-membership-fn` unevaluable, which is the honest answer.
+ */
+export type RuleGroupContext = readonly RuleGroupContextEntry[];
+
+/**
  * Everything the evaluation walk needs, as an object rather than positional
  * arguments.
- *
- * **Seam:** the deferred `isMemberOf*` work adds the user's resolved group list
- * here — one additive, optional field — instead of re-threading a new parameter
- * through every visitor.
  */
 export interface RuleEvaluationOptions {
   /** The user whose profile `user.<attribute>` reads resolve against. */
   readonly user: OktaUser;
+  /**
+   * The user's complete group list, enabling the `isMemberOf*` functions.
+   *
+   * Omitted, those functions remain unevaluable (`group-membership-fn`) exactly
+   * as before this option existed — so no existing caller changes behaviour by
+   * upgrading. See {@link RuleGroupContext} for why a partial list is worse than
+   * none at all.
+   */
+  readonly groups?: RuleGroupContext;
 }
 
 /**
@@ -159,6 +200,15 @@ interface EvaluationWalkOptions extends RuleEvaluationOptions {
 /** Internal grammar-walk options. Same observer contract as {@link EvaluationWalkOptions}. */
 interface GrammarWalkOptions {
   readonly onUnsupported?: (reason: RuleUnevaluableReason) => void;
+  /**
+   * Whether a {@link RuleGroupContext} will be available at evaluation time.
+   *
+   * The grammar gate answers "can this be resolved client-side at all", and for
+   * the `isMemberOf*` functions that now depends on whether the caller holds the
+   * user's group list. The gate and the evaluation walk must agree, or an
+   * expression would pass support and then fail to resolve.
+   */
+  readonly hasGroupContext?: boolean;
 }
 
 /**
@@ -278,13 +328,22 @@ export const SUPPORTED_FUNCTIONS: ReadonlyMap<string, SupportedFunction> = new M
 /**
  * Okta EL functions that ask whether the user is in some other group.
  *
- * They are always unevaluable here because answering them needs the user's full
- * group list, which this module is not given. **Seam for a future version:**
- * thread the user's resolved groups (ids *and* names) into the evaluator and
- * implement these against that list. Note `isMemberOfGroupName` matches across
- * all group sources — an Okta group and a directory-sourced group sharing a name
- * both match — so name-based resolution needs the full, multi-source list rather
- * than just the Okta groups the side panel happens to have cached.
+ * Answered against a {@link RuleGroupContext} when the caller supplies one, and
+ * reported as `group-membership-fn` unevaluable when it does not — the module's
+ * behaviour before the group list existed, preserved for every caller that has no
+ * list to give. Note `isMemberOfGroupName` matches across all group sources — an
+ * Okta group and a directory-sourced group sharing a name both match — which is
+ * why `RuleGroupContext` insists on the user's *complete* membership set rather
+ * than the Okta groups a screen happens to have cached.
+ *
+ * ## `isMemberOfGroupNameRegex` is deliberately never run
+ *
+ * It is the one member of this set that stays unevaluable even with a group list,
+ * under its own reason code (`group-name-regex`). The pattern is tenant-authored
+ * text, and building a `RegExp` from it hands an untrusted author a
+ * catastrophic-backtracking lever over the side panel's only thread — a rule
+ * whose evaluation hangs the UI. There is no way to bound backtracking in a
+ * JavaScript `RegExp`, so the honest, safe answer is to say we did not check.
  */
 export const GROUP_MEMBERSHIP_FUNCTIONS: ReadonlySet<string> = new Set([
   'isMemberOfGroup',
@@ -294,6 +353,37 @@ export const GROUP_MEMBERSHIP_FUNCTIONS: ReadonlySet<string> = new Set([
   'isMemberOfGroupNameStartsWith',
   'isMemberOfGroupNameContains',
   'isMemberOfGroupNameRegex',
+]);
+
+/** The one membership function that stays unevaluable even with a group list. */
+const GROUP_NAME_REGEX_FUNCTION = 'isMemberOfGroupNameRegex';
+
+/**
+ * How one membership function reads its arguments against the group list.
+ *
+ * `variadic` distinguishes the `…Any…` forms, which Okta lets take any number of
+ * groups, from the single-argument forms. Both require at least one argument, so
+ * arity is checked as a minimum rather than an exact count.
+ */
+interface GroupMembershipFunction {
+  /** Whether the user is in a group matching one argument. */
+  readonly matches: (group: RuleGroupContextEntry, argument: string) => boolean;
+  /** Whether Okta allows more than one group argument. */
+  readonly variadic: boolean;
+}
+
+/**
+ * Name matching is case-sensitive, mirroring Okta's own evaluation: two groups
+ * differing only in case are two different groups, and lower-casing here would
+ * report a membership the tenant does not have.
+ */
+const GROUP_MEMBERSHIP_IMPLEMENTATIONS: ReadonlyMap<string, GroupMembershipFunction> = new Map([
+  ['isMemberOfGroup', { matches: (g, a) => g.id === a, variadic: false }],
+  ['isMemberOfAnyGroup', { matches: (g, a) => g.id === a, variadic: true }],
+  ['isMemberOfGroupName', { matches: (g, a) => g.name === a, variadic: false }],
+  ['isMemberOfAnyGroupName', { matches: (g, a) => g.name === a, variadic: true }],
+  ['isMemberOfGroupNameStartsWith', { matches: (g, a) => g.name.startsWith(a), variadic: false }],
+  ['isMemberOfGroupNameContains', { matches: (g, a) => g.name.includes(a), variadic: false }],
 ]);
 
 // ---------------------------------------------------------------------------
@@ -518,14 +608,52 @@ function evaluateBinary(node: jsep.BinaryExpression, options: EvaluationWalkOpti
   return giveUpLogged('unsupported-operator', options);
 }
 
+/**
+ * Answer one `isMemberOf*` call against the supplied group list.
+ *
+ * Returns {@link UNRESOLVED} only for reasons that are genuinely unknowable here
+ * — no group list, the regex variant, a bad arity, or a non-string argument.
+ * Otherwise the answer is definite in both directions: finding no matching group
+ * is `false`, which is sound precisely because {@link RuleGroupContext} is
+ * documented to be the user's complete membership set.
+ */
+function evaluateGroupMembershipCall(
+  node: jsep.CallExpression,
+  name: string,
+  options: EvaluationWalkOptions,
+): EvalResult {
+  if (name === GROUP_NAME_REGEX_FUNCTION) return giveUpLogged('group-name-regex', options);
+
+  const { groups } = options;
+  if (!groups) return giveUpLogged('group-membership-fn', options);
+
+  const fn = GROUP_MEMBERSHIP_IMPLEMENTATIONS.get(name);
+  if (!fn) return giveUpLogged('group-membership-fn', options);
+
+  const wrongArity = fn.variadic ? node.arguments.length < 1 : node.arguments.length !== 1;
+  if (wrongArity) return giveUpLogged('fn-arity', options);
+
+  const targets: string[] = [];
+  for (const argument of node.arguments) {
+    const value = evaluateNode(argument, options);
+    if (isUnresolved(value)) return UNRESOLVED;
+    // Okta names every group by a string literal; anything else is a rule we do
+    // not model rather than a membership we can rule out.
+    if (typeof value !== 'string') return giveUp('operand-type', options);
+    targets.push(value);
+  }
+
+  return targets.some((target) => groups.some((group) => fn.matches(group, target)));
+}
+
 function evaluateCall(node: jsep.CallExpression, options: EvaluationWalkOptions): EvalResult {
   const name = calleeName(node);
   const fn = name ? SUPPORTED_FUNCTIONS.get(name) : undefined;
   if (!name || !fn) {
-    return giveUpLogged(
-      name && GROUP_MEMBERSHIP_FUNCTIONS.has(name) ? 'group-membership-fn' : 'unknown-fn',
-      options,
-    );
+    if (name && GROUP_MEMBERSHIP_FUNCTIONS.has(name)) {
+      return evaluateGroupMembershipCall(node, name, options);
+    }
+    return giveUpLogged('unknown-fn', options);
   }
   if (node.arguments.length !== fn.arity) {
     return giveUpLogged('fn-arity', options);
@@ -615,21 +743,29 @@ export type RuleMatchOutcome = 'match' | 'no-match' | 'unevaluable';
  * must use. It returns `unevaluable` — **never** `no-match` — when the
  * expression is empty, oversized, ungrammatical, uses an unsupported node type
  * or operator, calls a function outside {@link SUPPORTED_FUNCTIONS} (including
- * every {@link GROUP_MEMBERSHIP_FUNCTIONS} entry), references anything other
- * than a `user.*` profile attribute, or does not reduce to a boolean.
+ * every {@link GROUP_MEMBERSHIP_FUNCTIONS} entry **unless** `groups` is supplied),
+ * references anything other than a `user.*` profile attribute, or does not reduce
+ * to a boolean.
  *
  * @param expression - The rule's condition expression (untrusted Okta data).
  * @param user - The user to evaluate the condition against.
+ * @param groups - The user's **complete** group list, enabling the `isMemberOf*`
+ *   functions. Omit it rather than passing a partial list — see
+ *   {@link RuleGroupContext}.
  * @returns The {@link RuleMatchOutcome}. Pure — no API calls, no code execution.
  */
-export function tryEvaluateRuleExpression(expression: string, user: OktaUser): RuleMatchOutcome {
+export function tryEvaluateRuleExpression(
+  expression: string,
+  user: OktaUser,
+  groups?: RuleGroupContext,
+): RuleMatchOutcome {
   // Parsed once and shared by both gates below; the AST is walked twice but jsep
   // runs at most once (and not at all on a {@link parseCache} hit).
   const ast = parseExpression(expression);
   if (!ast) return 'unevaluable';
 
   // Gate 1 — grammar: is every node of the expression on the allow-list?
-  if (!canEvaluateAst(ast)) return 'unevaluable';
+  if (!canEvaluateAst(ast, { hasGroupContext: groups !== undefined })) return 'unevaluable';
 
   // Gate 2 — shape, and deliberately INDEPENDENT of gate 1: an expression can
   // be entirely allow-listed and still not be a condition (`user.department`,
@@ -637,7 +773,7 @@ export function tryEvaluateRuleExpression(expression: string, user: OktaUser): R
   // condition that does not reduce to a boolean is not a condition we
   // understand, whatever it reduced to. Collapsing the two gates would turn
   // those into `no-match`, which membership attribution reads as a manual add.
-  const result = evaluateAst(ast, { user });
+  const result = evaluateAst(ast, { user, groups });
   if (typeof result !== 'boolean') return 'unevaluable';
   return result ? 'match' : 'no-match';
 }
@@ -692,10 +828,19 @@ function isSupportedNode(node: jsep.Expression, options: GrammarWalkOptions = {}
     const name = calleeName(node);
     const fn = name ? SUPPORTED_FUNCTIONS.get(name) : undefined;
     if (!fn) {
-      return reject(
-        name && GROUP_MEMBERSHIP_FUNCTIONS.has(name) ? 'group-membership-fn' : 'unknown-fn',
-        options,
-      );
+      if (!name || !GROUP_MEMBERSHIP_FUNCTIONS.has(name)) return reject('unknown-fn', options);
+      // Support for these tracks what the evaluation walk can actually do, so the
+      // two never disagree: the regex variant is refused outright, and the rest
+      // are supported exactly when a group list will be there to answer them.
+      if (name === GROUP_NAME_REGEX_FUNCTION) return reject('group-name-regex', options);
+      if (!options.hasGroupContext) return reject('group-membership-fn', options);
+      const membershipFn = GROUP_MEMBERSHIP_IMPLEMENTATIONS.get(name);
+      if (!membershipFn) return reject('group-membership-fn', options);
+      const wrongArity = membershipFn.variadic
+        ? node.arguments.length < 1
+        : node.arguments.length !== 1;
+      if (wrongArity) return reject('fn-arity', options);
+      return node.arguments.every((argument) => isSupportedNode(argument, options));
     }
     if (node.arguments.length !== fn.arity) return reject('fn-arity', options);
     // Arrow, not a bare reference: `every` would otherwise pass the index as the
@@ -816,11 +961,18 @@ export type RuleNodeSupport =
  * answer.
  *
  * @param node - A node from {@link parseRuleExpression}. Treated as read-only.
+ * @param options - Set `hasGroupContext` when a {@link RuleGroupContext} will be
+ *   supplied at evaluation time, so the `isMemberOf*` calls this gate would
+ *   otherwise reject are recognised as answerable.
  * @returns Supported, or the **first** reason the walk rejected it.
  */
-export function checkRuleNodeSupport(node: jsep.Expression): RuleNodeSupport {
+export function checkRuleNodeSupport(
+  node: jsep.Expression,
+  options: { readonly hasGroupContext?: boolean } = {},
+): RuleNodeSupport {
   let reasonCode: RuleUnevaluableReason | undefined;
   const supported = canEvaluateAst(node, {
+    hasGroupContext: options.hasGroupContext,
     onUnsupported: (reason) => {
       reasonCode ??= reason;
     },
@@ -894,7 +1046,9 @@ export function evaluateParsedRule(
   ast: jsep.Expression,
   options: RuleEvaluationOptions,
 ): RuleMatchResult {
-  const support = checkRuleNodeSupport(ast);
+  // The gate must be told what the walk will have: with a group list in hand the
+  // `isMemberOf*` calls it would otherwise reject are answerable.
+  const support = checkRuleNodeSupport(ast, { hasGroupContext: options.groups !== undefined });
   if (!support.supported) return { outcome: 'unevaluable', reasonCode: support.reasonCode };
 
   const evaluation = evaluateRuleNode(ast, options);
@@ -918,13 +1072,17 @@ export function evaluateParsedRule(
  *
  * @param expression - The rule's condition expression (untrusted Okta data).
  * @param user - The user to evaluate the condition against.
+ * @param groups - The user's **complete** group list, enabling the `isMemberOf*`
+ *   functions. Omit it rather than passing a partial list — see
+ *   {@link RuleGroupContext}.
  * @returns A {@link RuleMatchResult}. Pure — no API calls, no code execution.
  */
 export function tryEvaluateRuleExpressionDetailed(
   expression: string,
   user: OktaUser,
+  groups?: RuleGroupContext,
 ): RuleMatchResult {
   const parsed = parseRuleExpression(expression);
   if (!parsed.ok) return { outcome: 'unevaluable', reasonCode: parsed.reasonCode };
-  return evaluateParsedRule(parsed.ast, { user });
+  return evaluateParsedRule(parsed.ast, { user, groups });
 }

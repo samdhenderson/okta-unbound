@@ -23,7 +23,9 @@
 import {
   explainRuleExpression,
   type ClauseExplanation,
+  type ClauseGroupReference,
 } from '../../../../shared/rules/explainExpression';
+import type { RuleGroupContext } from '../../../../shared/ruleEvaluator';
 import { isDeducedAttribution } from '../../../../shared/utils/membershipAnalysis';
 import type { GroupMembership, MembershipRule, OktaUser } from '../../../../shared/types';
 
@@ -34,21 +36,43 @@ import type { GroupMembership, MembershipRule, OktaUser } from '../../../../shar
  * is deliberate: "their department is wrong" and "their title is wrong" are
  * different causes needing the same action, and belong together on a worklist.
  *
- * - `blocked-by-attribute` — a rule feeds the group and the user's profile fails
- *   at least one clause that was **actually evaluated**. Remedy: fix the profile
- *   value (or the rule). Only ever assigned on a `fail`, never on a
- *   `not-evaluated`.
+ * ## The remedy follows the PROVENANCE, not merely the rules
+ *
+ * The first cut asked only "does a rule target this group, and does the context
+ * user fail it?". That reported `blocked-by-attribute` for a group the other user
+ * had been **added to by hand** — telling an admin to go change a profile value
+ * when no rule granted the access in the first place, so no attribute fix could
+ * reproduce it. How the compared user actually holds the membership
+ * (`membershipType`, `attribution`, `group.type`) is therefore consulted *first*,
+ * and rule assessment only refines the rule-based case.
+ *
+ * - `blocked-by-attribute` — a rule grants the other user the group, and this
+ *   user's profile fails at least one clause that was **actually evaluated**.
+ *   Remedy: fix the profile value (or the rule). Only ever assigned on a `fail`,
+ *   never on a `not-evaluated`.
+ * - `needs-group-membership` — the failing clause is an `isMemberOf*` call: they
+ *   qualify once they are in one of the groups it names. Remedy: grant the
+ *   prerequisite group. Distinguished from `blocked-by-attribute` because no
+ *   profile edit closes it.
  * - `excluded-by-rule` — the user is on a targeting rule's explicit exclusion
  *   list, so they would otherwise qualify. Remedy: remove the exclusion.
- * - `manual-add` — no rule accounts for the other user's membership either; they
- *   were added by hand. Remedy: add this user by hand too.
+ * - `manual-add` — the other user was added by hand. Remedy: add this user by hand
+ *   too. Claimed **whether or not** a rule also targets the group: a rule that did
+ *   not grant their access is not the thing to reproduce.
+ * - `app-managed` — the group is mastered by an application, which manages its own
+ *   members. Remedy: neither a profile edit nor a manual add — assign the app.
  * - `cannot-determine` — at least one relevant clause could not be evaluated, the
  *   attribution was `ambiguous`, or the rule inventory was unavailable. Remedy:
  *   none that can be named — investigate. **Never** merged into another bucket,
  *   and never presented as a failure.
  */
 export type AccessRemedy =
-  'blocked-by-attribute' | 'excluded-by-rule' | 'manual-add' | 'cannot-determine';
+  | 'blocked-by-attribute'
+  | 'needs-group-membership'
+  | 'excluded-by-rule'
+  | 'manual-add'
+  | 'app-managed'
+  | 'cannot-determine';
 
 /**
  * Why `cannot-determine` was reached, so the UI can say something more useful
@@ -85,14 +109,35 @@ export interface AccessCause {
   /** Rule display name. **Untrusted** — render escaped, never log. */
   readonly ruleName?: string;
   /**
-   * The clauses that actually failed, for `blocked-by-attribute`. Empty for every
-   * other remedy. **Never** populated from `not-evaluated` rows — that is the
-   * distinction this module exists to preserve.
+   * The clauses that actually failed, for `blocked-by-attribute` and
+   * `needs-group-membership`. Empty for every other remedy. **Never** populated
+   * from `not-evaluated` rows — that is the distinction this module exists to
+   * preserve.
    *
    * **PII:** `resolvedValue` is profile data. Render escaped, never log, and
    * escape for CSV.
    */
   readonly failingClauses: readonly ClauseExplanation[];
+  /**
+   * The groups a failing `isMemberOf*` clause asks about — "they would need to be
+   * in one of these to qualify".
+   *
+   * Every candidate is listed with its own `satisfied` flag rather than only the
+   * unsatisfied ones, because an `isMemberOfAnyGroup` that failed did so with
+   * *none* satisfied, and showing the whole set is what makes that legible.
+   * Non-empty exactly when a failing clause named groups, which is usually — but
+   * not only — the `needs-group-membership` remedy: a rule that fails on both a
+   * profile clause and a group clause reports `blocked-by-attribute` and still
+   * lists them here.
+   *
+   * Optional rather than always-an-array so that every existing `AccessCause`
+   * literal stays valid: absent and empty mean the same thing here — no failing
+   * clause named a group — unlike the `[]`-vs-`null` distinctions elsewhere in
+   * this module, where the difference is knowledge versus ignorance.
+   *
+   * **Untrusted:** ids and names are tenant data. Render escaped, never log.
+   */
+  readonly requiredGroups?: readonly ClauseGroupReference[];
 }
 
 /** Input for {@link classifyAccessCauses}. */
@@ -104,6 +149,16 @@ export interface AccessCauseInput {
   readonly onlyCompared: readonly GroupMembership[];
   /** The user who LACKS the access — the one whose profile is evaluated. */
   readonly contextUser: OktaUser;
+  /**
+   * **All** of the context user's group memberships, which turn `isMemberOf*`
+   * clauses from unevaluable shrugs into real verdicts.
+   *
+   * Must be their complete membership set — the same list the comparison bucketed
+   * — because a rule clause finding no match here is reported as a failure the
+   * admin can act on. Omit it rather than passing a subset; see
+   * {@link RuleGroupContext}.
+   */
+  readonly contextGroups?: readonly GroupMembership[];
   /**
    * Every rule known to target the groups in question. `null` means the rule
    * inventory could not be obtained, which yields `cannot-determine` /
@@ -122,8 +177,21 @@ export interface AccessCauseInput {
  * @returns One {@link AccessCause} per input membership, in input order.
  */
 export function classifyAccessCauses(input: AccessCauseInput): AccessCause[] {
-  const { onlyCompared, contextUser, rules } = input;
-  return onlyCompared.map((membership) => classifyOne(membership, contextUser, rules));
+  const { onlyCompared, contextUser, rules, contextGroups } = input;
+  // Built once for the whole batch: it is the same user's group list for every
+  // membership, and rebuilding it per row would re-map it dozens of times.
+  const groupContext = contextGroups ? groupContextOf(contextGroups) : undefined;
+  return onlyCompared.map((membership) =>
+    classifyOne(membership, contextUser, rules, groupContext),
+  );
+}
+
+/** The context user's memberships in the shape the evaluator matches against. */
+function groupContextOf(memberships: readonly GroupMembership[]): RuleGroupContext {
+  return memberships.map((membership) => ({
+    id: membership.group.id,
+    name: membership.group.profile.name,
+  }));
 }
 
 /**
@@ -172,6 +240,15 @@ type RuleAssessment =
       readonly kind: 'blocked';
       readonly rule: MembershipRule;
       readonly failingClauses: readonly ClauseExplanation[];
+      /**
+       * Whether **every** failing clause was a group-membership call. Decides
+       * `needs-group-membership` over `blocked-by-attribute`: a rule that also
+       * fails a profile clause needs the profile fixed, so it keeps the attribute
+       * remedy and merely lists the groups alongside.
+       */
+      readonly onlyGroupClausesFailed: boolean;
+      /** The groups those failing clauses named, in clause order. */
+      readonly requiredGroups: readonly ClauseGroupReference[];
     }
   | { readonly kind: 'grants'; readonly rule: MembershipRule }
   | {
@@ -196,20 +273,38 @@ type RuleAssessment =
  *   yet be true. Counting rows would call that "blocked by `a`" and send an
  *   admin to change a value that was never the problem, so it is `unknown`.
  */
-function assessRule(rule: MembershipRule, contextUser: OktaUser): RuleAssessment {
+function assessRule(
+  rule: MembershipRule,
+  contextUser: OktaUser,
+  groupContext: RuleGroupContext | undefined,
+): RuleAssessment {
   if (isUserExcludedFromRule(rule, contextUser.id)) return { kind: 'excluded', rule };
 
   const expression = conditionExpressionOf(rule);
   if (expression.trim() === '') return { kind: 'unknown', rule, reason: 'no-condition' };
 
-  const { clauses, summary } = explainRuleExpression(expression, contextUser);
+  // With the group list in hand, `isMemberOf*` clauses resolve instead of
+  // reporting `needs-group-context` — which is what turns a whole class of rows
+  // from "needs investigation" into a nameable prerequisite.
+  const { clauses, summary } = explainRuleExpression(expression, contextUser, {
+    groups: groupContext,
+  });
   if (summary.result.outcome === 'match') return { kind: 'grants', rule };
 
   const failingClauses = clauses.filter((clause) => clause.status === 'fail');
   // `truncated` needs no special case: the verdict is computed over the whole
   // expression, and every clause carried here still genuinely failed.
   if (summary.result.outcome === 'no-match' && failingClauses.length > 0) {
-    return { kind: 'blocked', rule, failingClauses };
+    const requiredGroups = failingClauses.flatMap((clause) => clause.groupReferences ?? []);
+    return {
+      kind: 'blocked',
+      rule,
+      failingClauses,
+      onlyGroupClausesFailed: failingClauses.every(
+        (clause) => (clause.groupReferences?.length ?? 0) > 0,
+      ),
+      requiredGroups,
+    };
   }
 
   return {
@@ -224,6 +319,11 @@ function assessRule(rule: MembershipRule, contextUser: OktaUser): RuleAssessment
 /** An {@link AccessCause} shell for one membership, before the remedy is decided. */
 function causeFor(membership: GroupMembership): Pick<AccessCause, 'groupId' | 'groupName'> {
   return { groupId: membership.group.id, groupName: membership.group.profile.name };
+}
+
+/** A cause with no clause evidence — every remedy decided from provenance alone. */
+function plainCause(membership: GroupMembership, remedy: AccessRemedy): AccessCause {
+  return { ...causeFor(membership), remedy, failingClauses: [] };
 }
 
 /** A `cannot-determine` cause — the only remedy that carries a reason. */
@@ -242,43 +342,56 @@ function undetermined(
 }
 
 /**
- * The answer when no ACTIVE rule in the inventory targets the group.
+ * Classify one membership.
  *
- * `manual-add` is a **confident** claim ("nothing but a person put them here"),
- * so it is licensed only by a membership the classifier proved: `DIRECT` with
- * fact-grade evidence, read through `membershipAnalysis`'s table rather than
- * re-derived here. Every deduction stays undetermined, as does a `RULE_BASED`
- * membership no supplied rule accounts for — an app-mastered group, a rule since
- * deactivated, or an inventory narrower than the groups it was asked about.
- */
-function untargetedCause(membership: GroupMembership): AccessCause {
-  const { attribution, membershipType } = membership;
-  if (isDeducedAttribution(attribution)) {
-    return undetermined(membership, 'ambiguous-attribution');
-  }
-  if (membershipType === 'DIRECT') {
-    return { ...causeFor(membership), remedy: 'manual-add', failingClauses: [] };
-  }
-  return undetermined(membership, 'no-rule-inventory');
-}
-
-/**
- * Classify one membership. Priority order, highest first: no inventory →
- * exclusion → a proven attribute block → manual add → undetermined.
+ * **Provenance decides first.** How the compared user actually holds the group is
+ * a fact already carried on the membership; what a rule would do to the *context*
+ * user is a separate question that only matters once we know a rule is what
+ * granted the access. Asking the second question first is what produced
+ * "fix a profile attribute" for a group somebody had simply been added to.
+ *
+ * Order: app-mastered → no inventory → any deduction → proven manual add →
+ * rule assessment (exclusion → block → undetermined).
  */
 function classifyOne(
   membership: GroupMembership,
   contextUser: OktaUser,
   rules: readonly MembershipRule[] | null,
+  groupContext: RuleGroupContext | undefined,
 ): AccessCause {
-  // 1. "We could not fetch the rules" is not "nobody was added by a rule".
-  //    Without the inventory nothing below can be asked, let alone answered.
+  // 1. An app masters this group's roster. No rule assigns into it and no manual
+  //    add reproduces it, so neither of those remedies may be offered — this is
+  //    true regardless of what the rule inventory says, hence before the check.
+  if (membership.group.type === 'APP_GROUP') return plainCause(membership, 'app-managed');
+
+  // 2. "We could not fetch the rules" is not "nobody was added by a rule".
   if (rules === null) return undetermined(membership, 'no-rule-inventory');
 
-  const targeting = rulesTargeting(rules, membership.group.id);
-  if (targeting.length === 0) return untargetedCause(membership);
+  const deduced = isDeducedAttribution(membership.attribution);
 
-  const assessments = targeting.map((rule) => assessRule(rule, contextUser));
+  // 3. Proven added-by-hand. Reproduce it by hand — **whatever rules also target
+  //    the group**. A rule that did not grant their access is not the thing to
+  //    copy, and sending an admin to change a profile value to satisfy it would
+  //    be acting on a rule nobody used. Gated on fact-grade evidence because
+  //    `manual-add` claims "nothing but a person put them here".
+  if (!deduced && membership.membershipType === 'DIRECT') {
+    return plainCause(membership, 'manual-add');
+  }
+
+  // 4. Otherwise a rule is (or may be) what grants it, so what the targeting
+  //    rules do to the CONTEXT user is the question worth asking. Note this is
+  //    reached even on a deduced attribution: how the compared user came to hold
+  //    the group says nothing about why this user is blocked, and a proven
+  //    failing clause about them is a hard finding either way.
+  const targeting = rulesTargeting(rules, membership.group.id);
+  if (targeting.length === 0) {
+    // Nothing to assess. A deduction can support no confident answer; a
+    // membership no supplied rule accounts for is simply unexplained — an
+    // app-mastered group, a rule since deactivated, or a narrow inventory.
+    return undetermined(membership, deduced ? 'ambiguous-attribution' : 'no-rule-inventory');
+  }
+
+  const assessments = targeting.map((rule) => assessRule(rule, contextUser, groupContext));
 
   // 2. An exclusion is the one cause that is stated outright in the rule rather
   //    than deduced from a profile, so it outranks everything below it.
@@ -297,11 +410,16 @@ function classifyOne(
   //    implicated keeps `ruleId` a fact rather than array order.
   const blocked = assessments.filter((a) => a.kind === 'blocked');
   if (blocked.length > 0) {
+    // A prerequisite group is a different job from a profile edit, so it gets its
+    // own remedy — but only when nothing else failed. If a profile clause failed
+    // too, the profile still needs fixing and the groups ride along as evidence.
+    const onlyGroups = blocked.every((b) => b.onlyGroupClausesFailed);
     return {
       ...causeFor(membership),
-      remedy: 'blocked-by-attribute',
+      remedy: onlyGroups ? 'needs-group-membership' : 'blocked-by-attribute',
       ...(blocked.length === 1 ? ruleRef(blocked[0].rule) : {}),
       failingClauses: blocked.flatMap((b) => b.failingClauses),
+      requiredGroups: blocked.flatMap((b) => b.requiredGroups),
     };
   }
 
@@ -339,8 +457,10 @@ export function groupCausesByRemedy(
 ): { remedy: AccessRemedy; causes: AccessCause[] }[] {
   const order: AccessRemedy[] = [
     'blocked-by-attribute',
+    'needs-group-membership',
     'excluded-by-rule',
     'manual-add',
+    'app-managed',
     'cannot-determine',
   ];
   return order
