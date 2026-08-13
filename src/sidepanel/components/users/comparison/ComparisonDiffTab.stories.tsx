@@ -4,6 +4,7 @@ import ComparisonDiffTab from './ComparisonDiffTab';
 import GroupSourceIndicator from './GroupSourceIndicator';
 import AppScopeIndicator from './AppScopeIndicator';
 import Button from '../../shared/Button';
+import type { CellDirection } from './ComparisonDiffTab';
 import type { ParityRow } from './comparisonAnalytics';
 import type { GroupMembership, MembershipRule } from '../../../../shared/types';
 
@@ -63,6 +64,23 @@ const APP_ROWS: ParityRow[] = [
   { id: 'app3', label: 'Slack', inContext: true, inCompared: true },
 ];
 
+/** An Add button's label: the arrow sits on the edge nearest the marker and points at it. */
+const AddLabel = ({ direction }: { direction: CellDirection }) => (
+  <span className="inline-flex items-center gap-1">
+    {direction === 'left' && (
+      <span aria-hidden="true" className="text-base leading-none">
+        ←
+      </span>
+    )}
+    Add
+    {direction === 'right' && (
+      <span aria-hidden="true" className="text-base leading-none">
+        →
+      </span>
+    )}
+  </span>
+);
+
 /** One list where every row states the comparison: two sides, a marker, and the action that closes the gap. */
 const meta = {
   title: 'Users/Comparison/ComparisonDiffTab',
@@ -106,15 +124,15 @@ type Story = StoryObj<typeof meta>;
 /** The groups tab: both copy directions, provenance under each differing row. */
 export const Groups: Story = {
   args: {
-    renderContextAction: (row) =>
+    renderContextAction: (row, direction) =>
       row.membership?.group.type === 'APP_GROUP' ? null : (
-        <Button size="sm" variant="primary" icon="plus" onClick={fn()}>
-          Add
+        <Button size="sm" variant="primary" onClick={fn()}>
+          <AddLabel direction={direction} />
         </Button>
       ),
-    renderComparedAction: () => (
-      <Button size="sm" variant="primary" icon="plus" onClick={fn()}>
-        Add
+    renderComparedAction: (_row, direction) => (
+      <Button size="sm" variant="primary" onClick={fn()}>
+        <AddLabel direction={direction} />
       </Button>
     ),
     renderMeta: (row) =>
@@ -125,22 +143,21 @@ export const Groups: Story = {
 /** A copy in flight: the global single-flight lock disables every other Add. */
 export const CopyInFlight: Story = {
   args: {
-    renderContextAction: (row) =>
+    renderContextAction: (row, direction) =>
       row.membership?.group.type === 'APP_GROUP' ? null : (
         <Button
           size="sm"
           variant="primary"
-          icon="plus"
           loading={row.id === '00gFAKEgroup0001'}
           disabled
           onClick={fn()}
         >
-          Add
+          <AddLabel direction={direction} />
         </Button>
       ),
-    renderComparedAction: () => (
-      <Button size="sm" variant="primary" icon="plus" disabled onClick={fn()}>
-        Add
+    renderComparedAction: (_row, direction) => (
+      <Button size="sm" variant="primary" disabled onClick={fn()}>
+        <AddLabel direction={direction} />
       </Button>
     ),
   },
@@ -178,9 +195,9 @@ export const LongList: Story = {
         groupRow(`00gFAKEbulk${i}`, `bulk.group.${String(i).padStart(2, '0')}`, true, true),
       ),
     ],
-    renderContextAction: () => (
-      <Button size="sm" variant="primary" icon="plus" onClick={fn()}>
-        Add
+    renderContextAction: (_row, direction) => (
+      <Button size="sm" variant="primary" onClick={fn()}>
+        <AddLabel direction={direction} />
       </Button>
     ),
   },

@@ -42,6 +42,12 @@ import type { ParityRow } from './comparisonAnalytics';
 /** Which rows the list is showing. */
 export type ParityFilter = 'differences' | 'shared' | 'all';
 
+/**
+ * Which way the equality marker lies from a side cell — so an action can point
+ * **inward**, at the `≠` it would close.
+ */
+export type CellDirection = 'left' | 'right';
+
 /** Props for {@link ComparisonDiffTab}. */
 interface ComparisonDiffTabProps {
   /** Display name of the context user (baseline) — the LEFT side of every row. */
@@ -58,10 +64,14 @@ interface ComparisonDiffTabProps {
    * Optional action for the LEFT cell of a row the context user lacks — "add it
    * to them". Returning `null` renders a plain unmet marker instead, which is
    * what an app row (nothing to copy) and an app-mastered group both do.
+   *
+   * `direction` is which way the marker lies from this cell, so the caller can
+   * put the arrow **inside** the control it belongs to (`Add →` on the left,
+   * `← Add` on the right) rather than beside it.
    */
-  renderContextAction?: (row: ParityRow) => React.ReactNode;
+  renderContextAction?: (row: ParityRow, direction: CellDirection) => React.ReactNode;
   /** Optional action for the RIGHT cell of a row the compared user lacks. */
-  renderComparedAction?: (row: ParityRow) => React.ReactNode;
+  renderComparedAction?: (row: ParityRow, direction: CellDirection) => React.ReactNode;
   /**
    * Optional per-row detail under the label — today, how the membership was
    * granted. Kept a render prop because only the caller knows what its facet
@@ -127,11 +137,6 @@ const ComparisonDiffTab: React.FC<ComparisonDiffTabProps> = ({
       />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white">
-        <ColumnHeader
-          contextName={contextName}
-          comparedName={comparedName}
-          count={visible.length}
-        />
         {visible.length === 0 ? (
           <p className="px-3 py-3 text-xs text-neutral-500 italic">
             {rows.length === 0 ? emptyText : `No ${noun}s match this filter.`}
@@ -156,33 +161,13 @@ const ComparisonDiffTab: React.FC<ComparisonDiffTabProps> = ({
   );
 };
 
-/** Names the two columns once, so a row's cells need not repeat them. */
-const ColumnHeader: React.FC<{ contextName: string; comparedName: string; count: number }> = ({
-  contextName,
-  comparedName,
-  count,
-}) => (
-  <div className="flex shrink-0 items-center gap-2 border-b border-neutral-200 bg-neutral-50 px-3 py-1.5">
-    <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-neutral-500">
-      {count} showing
-    </span>
-    <span className="w-20 shrink-0 truncate text-center text-[11px] font-semibold text-neutral-600">
-      {contextName}
-    </span>
-    <span className="w-8 shrink-0" aria-hidden="true" />
-    <span className="w-20 shrink-0 truncate text-center text-[11px] font-semibold text-neutral-600">
-      {comparedName}
-    </span>
-  </div>
-);
-
 /** One item: its label and provenance, then the two sides and the marker between. */
 const ParityListRow: React.FC<{
   row: ParityRow;
   contextName: string;
   comparedName: string;
-  renderContextAction?: (row: ParityRow) => React.ReactNode;
-  renderComparedAction?: (row: ParityRow) => React.ReactNode;
+  renderContextAction?: (row: ParityRow, direction: CellDirection) => React.ReactNode;
+  renderComparedAction?: (row: ParityRow, direction: CellDirection) => React.ReactNode;
   renderMeta?: (row: ParityRow) => React.ReactNode;
 }> = ({
   row,
@@ -207,12 +192,13 @@ const ParityListRow: React.FC<{
         {meta}
       </span>
 
+      {/* Equal thirds around a fixed marker, so the strip spans the row and an
+          action can never overflow the cell it lives in. */}
       <span className="flex items-stretch gap-2">
         <SideCell
           held={row.inContext}
           userName={contextName}
-          direction="right"
-          action={renderContextAction?.(row)}
+          action={renderContextAction?.(row, 'right')}
         />
         {/* Not a button, not focusable: a status that borrows the silhouette. */}
         <span
@@ -229,8 +215,7 @@ const ParityListRow: React.FC<{
         <SideCell
           held={row.inCompared}
           userName={comparedName}
-          direction="left"
-          action={renderComparedAction?.(row)}
+          action={renderComparedAction?.(row, 'left')}
         />
       </span>
     </li>
@@ -238,27 +223,34 @@ const ParityListRow: React.FC<{
 };
 
 /**
- * One side of a row.
+ * One side of a row: a third of the strip, whatever it holds.
  *
- * Three states, and the middle one is the whole point of the design: a user who
- * lacks the item and *can* be given it gets a real button, with the arrow on the
- * edge nearest the marker pointing inward — the gesture and the goal are the same,
- * close the `≠`. A user who lacks it and cannot be given it (an app row, an
- * app-mastered group) gets a stated non-answer, never a button that would fail.
+ * The side that HAS the item is **named**. That is what makes the row readable
+ * without a column header — with two users, naming the holder identifies the
+ * other side by elimination, which is how the design was drawn
+ * (`[Add →] ≠ [Jordan]`). An earlier cut showed a bare check here and put the
+ * names in a header above the list; the header's columns could not line up with a
+ * strip that sits on its own line, so the check identified nobody.
+ *
+ * A side that lacks the item and *can* be given it renders the caller's action —
+ * which carries the inward-pointing arrow in its own label, so button and arrow
+ * are one target rather than a glyph floating beside it. A side that lacks it and
+ * cannot be given it (an app row, an app-mastered group) gets a stated
+ * non-answer, never a button that would fail.
  */
 const SideCell: React.FC<{
   held: boolean;
   userName: string;
-  direction: 'left' | 'right';
   action: React.ReactNode;
-}> = ({ held, userName, direction, action }) => {
+}> = ({ held, userName, action }) => {
   if (held) {
     return (
       <span
-        className="flex w-20 shrink-0 items-center justify-center gap-1 truncate rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs text-neutral-600"
+        className="flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs text-neutral-600"
         title={`${userName} has this`}
       >
         <Icon type="check" size="sm" className="shrink-0 text-success-text" />
+        <span className="truncate">{userName}</span>
       </span>
     );
   }
@@ -266,7 +258,7 @@ const SideCell: React.FC<{
   if (!action) {
     return (
       <span
-        className="flex w-20 shrink-0 items-center justify-center rounded-md border border-dashed border-neutral-200 px-2 py-1 text-xs text-neutral-400"
+        className="flex min-w-0 flex-1 items-center justify-center rounded-md border border-dashed border-neutral-200 px-2 py-1 text-xs text-neutral-400"
         title={`${userName} does not have this`}
       >
         —
@@ -274,25 +266,7 @@ const SideCell: React.FC<{
     );
   }
 
-  return (
-    <span className="flex w-20 shrink-0 items-center justify-center">
-      {direction === 'right' ? (
-        <>
-          {action}
-          <span aria-hidden="true" className="ml-0.5 font-mono text-xs text-neutral-400">
-            →
-          </span>
-        </>
-      ) : (
-        <>
-          <span aria-hidden="true" className="mr-0.5 font-mono text-xs text-neutral-400">
-            ←
-          </span>
-          {action}
-        </>
-      )}
-    </span>
-  );
+  return <span className="flex min-w-0 flex-1 items-center justify-center">{action}</span>;
 };
 
 export default ComparisonDiffTab;
