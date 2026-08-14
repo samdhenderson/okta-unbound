@@ -31,10 +31,16 @@
  * data (rule text and profile attributes). They are rendered through React's
  * escaping — never `dangerouslySetInnerHTML`, never a hand-built HTML string — and
  * are **never logged**; this component logs nothing at all.
+ *
+ * ## Chrome
+ *
+ * Each clause row is a {@link sidepanel/components/shared/ListRow} at `compact`
+ * density (ADR-0029); the old hand-written `p-3` sat between the two sanctioned
+ * densities and rounds to the nearer one.
  */
 import React, { useMemo } from 'react';
 import Icon, { type IconType } from '../../overview/shared/Icon';
-import { AlertMessage } from '../../shared';
+import { AlertMessage, ListRow } from '../../shared';
 import {
   explainRuleExpression,
   type ClauseExplanation,
@@ -168,7 +174,9 @@ const ClauseRow: React.FC<ClauseRowProps> = ({ clause }) => {
   const presentation = statusPresentation[clause.status];
 
   return (
-    <li className="rounded-md border border-neutral-200 bg-white p-3">
+    // `compact` rather than `comfortable`: the old `p-3` sat between the two, and
+    // `compact`'s `px-3` keeps the horizontal padding identical (ADR-0029).
+    <ListRow as="li" density="compact">
       <div className="flex items-start justify-between gap-3">
         <code className="min-w-0 flex-1 font-mono text-xs break-words whitespace-pre-wrap text-neutral-900">
           {clause.expressionText}
@@ -188,7 +196,7 @@ const ClauseRow: React.FC<ClauseRowProps> = ({ clause }) => {
       {clause.reasonCode && (
         <p className="mt-1 text-xs text-neutral-600">{reasonText[clause.reasonCode]}</p>
       )}
-    </li>
+    </ListRow>
   );
 };
 

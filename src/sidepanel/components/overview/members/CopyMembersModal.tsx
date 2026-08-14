@@ -5,12 +5,17 @@
  * The user picks a format (full name, email, username, or "name &lt;email&gt;"); the
  * modal renders a live preview and copies the full list via the shared CopyButton.
  * Blank identifiers are dropped so the count reflects only copyable lines.
+ *
+ * Each format is a {@link sidepanel/components/shared/ListRow} rendered as a
+ * `button` with `state="selected"` for the active one (ADR-0029), so the picker
+ * carries the same chrome as every other selectable row in the panel.
  */
 import React, { useMemo, useState } from 'react';
 import type { OktaUser } from '../../../../shared/types';
 import Modal from '../../shared/Modal';
 import Button from '../../shared/Button';
 import CopyButton from '../../shared/CopyButton';
+import { ListRow } from '../../shared';
 import { memberFullName } from './memberAnalytics';
 
 /** Props for {@link CopyMembersModal}. */
@@ -110,16 +115,14 @@ const CopyMembersModal: React.FC<CopyMembersModalProps> = ({ isOpen, onClose, me
             {FORMATS.map((f) => {
               const active = f.id === formatId;
               return (
-                <button
+                <ListRow
                   key={f.id}
-                  type="button"
+                  as="button"
+                  density="compact"
+                  state={active ? 'selected' : 'default'}
                   onClick={() => setFormatId(f.id)}
-                  aria-pressed={active}
-                  className={`flex items-start gap-2.5 rounded-md border p-2.5 text-left transition-colors duration-(--dur-instant) ${
-                    active
-                      ? 'border-primary bg-primary-light'
-                      : 'border-neutral-200 bg-white hover:border-neutral-400'
-                  }`}
+                  ariaPressed={active}
+                  className="flex items-start gap-2.5"
                 >
                   <span
                     className={`mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border ${
@@ -129,14 +132,10 @@ const CopyMembersModal: React.FC<CopyMembersModalProps> = ({ isOpen, onClose, me
                     {active && <span className="h-2 w-2 rounded-full bg-primary" />}
                   </span>
                   <span className="min-w-0">
-                    <span
-                      className={`block text-sm font-medium ${active ? 'text-primary-text' : 'text-neutral-900'}`}
-                    >
-                      {f.label}
-                    </span>
-                    <span className="block truncate text-xs text-neutral-500">{f.hint}</span>
+                    <span className="block text-sm font-semibold text-neutral-900">{f.label}</span>
+                    <span className="block truncate text-xs text-neutral-600">{f.hint}</span>
                   </span>
-                </button>
+                </ListRow>
               );
             })}
           </div>

@@ -12,6 +12,8 @@ import type { UndoAction } from '../../shared/undoTypes';
 import { getUndoHistory, clearUndoHistory, formatActionTime } from '../../shared/undoManager';
 import Button from './shared/Button';
 import EmptyState from './shared/EmptyState';
+import ListRow from './shared/ListRow';
+import Icon from './overview/shared/Icon';
 
 /**
  * Displays the logged undo/audit action history as an expandable, clearable list.
@@ -120,43 +122,38 @@ const AuditLogViewer: React.FC = () => {
 
       <div className="space-y-2">
         {actions.map((action) => (
-          <div
+          // The detail panel is rendered conditionally rather than through
+          // `.disclose`, so `body` is absent while collapsed. `ListRow` still
+          // builds the header wrapper because `onHeaderClick` is set — otherwise
+          // a collapsed row would lose the control that expands it.
+          <ListRow
             key={action.id}
-            className="bg-white rounded-md border border-neutral-200 overflow-hidden"
+            density="compact"
+            headerClassName="flex cursor-pointer items-center justify-between gap-3"
+            onHeaderClick={() => setExpandedId(expandedId === action.id ? null : action.id)}
+            body={expandedId === action.id ? renderDetails(action) : undefined}
           >
-            <div
-              className="p-3 cursor-pointer hover:bg-neutral-50 flex items-center justify-between gap-3"
-              onClick={() => setExpandedId(expandedId === action.id ? null : action.id)}
-            >
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-neutral-900 truncate">
-                  {action.description}
-                </div>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="px-2 py-0.5 bg-neutral-100 text-neutral-600 text-xs font-medium rounded">
-                    {getTypeLabel(action.type)}
-                  </span>
-                  <span className="text-xs text-neutral-500">
-                    {formatActionTime(action.timestamp)}
-                  </span>
-                </div>
+            <div className="flex-1 min-w-0">
+              <div className="truncate text-sm font-semibold text-neutral-900">
+                {action.description}
               </div>
-              <svg
-                className={`w-4 h-4 text-neutral-400 transition-transform ${expandedId === action.id ? 'rotate-90' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="px-2 py-0.5 bg-neutral-100 text-neutral-600 text-xs font-medium rounded-md">
+                  {getTypeLabel(action.type)}
+                </span>
+                <span className="text-xs text-neutral-600">
+                  {formatActionTime(action.timestamp)}
+                </span>
+              </div>
             </div>
-            {expandedId === action.id && renderDetails(action)}
-          </div>
+            <Icon
+              type="chevron-right"
+              size="sm"
+              className={`shrink-0 text-neutral-400 transition-transform duration-(--dur-instant) ${
+                expandedId === action.id ? 'rotate-90' : ''
+              }`}
+            />
+          </ListRow>
         ))}
       </div>
     </div>

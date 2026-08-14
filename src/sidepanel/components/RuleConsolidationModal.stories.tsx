@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { fn, userEvent, within } from 'storybook/test';
 import RuleConsolidationModal from './RuleConsolidationModal';
 import type {
   ConsolidationPreview,
@@ -100,6 +100,20 @@ type Story = StoryObj<typeof meta>;
 
 /** Add-target flow: the group search-select step. */
 export const Default: Story = {};
+
+/**
+ * The search results themselves: each hit is a `ListRow` rendered as a button, so
+ * the whole row is the click target and carries the shared focus ring. Only
+ * reachable after typing, which is why it needs its own story to be rendered (and
+ * axe-checked) at all.
+ */
+export const SearchHits: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(canvas.getByPlaceholderText('Search groups by name…'), 'eng');
+    await canvas.findByRole('button', { name: 'Engineering' });
+  },
+};
 
 /** Loading the source rule before the wizard can proceed. */
 export const Loading: Story = {

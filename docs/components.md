@@ -50,7 +50,8 @@ info`) — never `error`.
 `SearchDropdown`, `SelectionChips`.
 
 `ListRow` is the **row chrome** primitive (ADR-0029): border, radius, hover,
-`density` (`compact` | `comfortable`), `state` (`default` | `selected` |
+`variant` (`card` | `nested`), `density` (`tight` | `compact` | `comfortable`),
+`state` (`default` | `selected` |
 `highlighted`) and `as` (`div` | `li` | `a` | `button`). It owns the box and
 never the interior — the interior follows the typography contract in
 `docs/design-system.md`. Never hand-roll a row container. Prefer

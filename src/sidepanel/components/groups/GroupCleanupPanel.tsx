@@ -7,10 +7,14 @@
  * one-click selectors that feed the existing selection → bulk/export machinery,
  * plus a ranked preview of the most review-worthy groups. No API calls and no
  * mutations of its own — it only helps the admin decide what to look at.
+ *
+ * The ranked preview rows are {@link sidepanel/components/shared/ListRow}s
+ * (ADR-0029), so their chrome matches every other row in the panel.
  */
 import React, { useMemo } from 'react';
 import Button from '../shared/Button';
 import EmptyState from '../shared/EmptyState';
+import { ListRow } from '../shared';
 import StatCard from '../overview/shared/StatCard';
 import type { GroupSummary } from '../../../shared/types';
 import { analyzeClutter } from './clutterAnalysis';
@@ -128,12 +132,13 @@ const GroupCleanupPanel: React.FC<GroupCleanupPanelProps> = ({
           {/* Ranked preview of the most review-worthy groups */}
           <div className="space-y-2">
             {preview.map((entry) => (
-              <div
+              <ListRow
                 key={entry.group.id}
-                className="flex items-center justify-between gap-3 rounded-md border border-neutral-200 px-3 py-2"
+                density="compact"
+                className="flex items-center justify-between gap-3"
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-neutral-900 truncate">
+                  <p className="text-sm font-semibold text-neutral-900 truncate">
                     {entry.group.name}
                   </p>
                   <div className="mt-1 flex flex-wrap gap-1.5">
@@ -149,7 +154,7 @@ const GroupCleanupPanel: React.FC<GroupCleanupPanelProps> = ({
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span
-                    className={`px-2 py-0.5 rounded-md text-xs font-bold border ${reviewScoreColor(
+                    className={`px-2 py-0.5 rounded-md text-xs font-medium border ${reviewScoreColor(
                       entry.reviewScore,
                     )}`}
                     title="Review confidence (fused signal, 0–100)"
@@ -165,7 +170,7 @@ const GroupCleanupPanel: React.FC<GroupCleanupPanelProps> = ({
                     Why?
                   </Button>
                 </div>
-              </div>
+              </ListRow>
             ))}
             {overflow > 0 && (
               <p className="text-xs text-neutral-500">

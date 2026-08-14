@@ -129,9 +129,9 @@ const CrossGroupSearch: React.FC<CrossGroupSearchProps> = ({
 
       {/* Results */}
       {groupedResults.length > 0 && (
-        <div className="max-h-[300px] overflow-y-auto">
+        <div className="max-h-[300px] divide-y divide-neutral-100 overflow-y-auto">
           {groupedResults.map(({ user, groups }) => (
-            <div key={user.id} className="p-3 border-b border-neutral-100 last:border-b-0">
+            <div key={user.id} className="px-3 py-2">
               <div className="flex items-center justify-between mb-1.5">
                 <div>
                   <span className="text-sm font-medium text-neutral-900">

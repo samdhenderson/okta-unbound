@@ -6,9 +6,16 @@
  * the same wherever it is listed. With `onSelect` it renders as a real `<button>`
  * whose accessible name names the rule (never a bare "Open"); without one it is
  * inert markup.
+ *
+ * The card is {@link sidepanel/components/shared/ListRow} at `compact` density
+ * (ADR-0029), with `as` following the same `onSelect` switch the row already made
+ * by hand. The row used to carry its own chrome string — including a
+ * `hover:border-primary hover:bg-primary-light` treatment that was one of the five
+ * the ADR consolidates, and which is now the shared `hover:border-neutral-500`.
  */
 import React from 'react';
 import Icon from '../../overview/shared/Icon';
+import { ListRow } from '../../shared';
 
 /** Props for {@link RuleLinkRow}. */
 interface RuleLinkRowProps {
@@ -22,8 +29,6 @@ interface RuleLinkRowProps {
   onSelect?: () => void;
 }
 
-const rowClasses = 'flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2';
-
 /**
  * Renders one rule row, as a button when it can deep-link into the Rules tab.
  *
@@ -32,40 +37,31 @@ const rowClasses = 'flex w-full items-center justify-between gap-3 rounded-md bo
  * <RuleLinkRow name="All Engineers" trailing={<RuleStatusPill status="ACTIVE" />} onSelect={open} />
  * ```
  */
-const RuleLinkRow: React.FC<RuleLinkRowProps> = ({ name, trailing, detail, onSelect }) => {
-  const body = (
-    <>
-      <span className="flex min-w-0 flex-col items-start text-left">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-sm text-neutral-900">{name}</span>
-          {onSelect && (
-            <span aria-hidden="true" className="flex shrink-0 text-neutral-400">
-              <Icon type="chevron-right" size="sm" />
-            </span>
-          )}
-        </span>
-        {detail && (
-          <span className="mt-0.5 truncate font-mono text-xs text-neutral-500">{detail}</span>
+const RuleLinkRow: React.FC<RuleLinkRowProps> = ({ name, trailing, detail, onSelect }) => (
+  // Both callers already wrap this in their own <li>, so the row stays a button
+  // (when it deep-links) or a plain container (when it does not).
+  <ListRow
+    as={onSelect ? 'button' : 'div'}
+    density="compact"
+    onClick={onSelect}
+    ariaLabel={onSelect ? `Open rule ${name} in the Rules tab` : undefined}
+    className="flex w-full items-center justify-between gap-3"
+  >
+    <span className="flex min-w-0 flex-col items-start text-left">
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span className="truncate text-sm font-semibold text-neutral-900">{name}</span>
+        {onSelect && (
+          <span aria-hidden="true" className="flex shrink-0 text-neutral-400">
+            <Icon type="chevron-right" size="sm" />
+          </span>
         )}
       </span>
-      {trailing && <span className="shrink-0">{trailing}</span>}
-    </>
-  );
-
-  if (!onSelect) {
-    return <div className={`${rowClasses} border-neutral-200`}>{body}</div>;
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-label={`Open rule ${name} in the Rules tab`}
-      className={`${rowClasses} border-neutral-200 text-left transition-colors duration-(--dur-instant) hover:border-primary hover:bg-primary-light focus:outline-2 focus:outline-offset-2 focus:outline-primary`}
-    >
-      {body}
-    </button>
-  );
-};
+      {detail && (
+        <span className="mt-0.5 truncate font-mono text-xs text-neutral-500">{detail}</span>
+      )}
+    </span>
+    {trailing && <span className="shrink-0">{trailing}</span>}
+  </ListRow>
+);
 
 export default RuleLinkRow;

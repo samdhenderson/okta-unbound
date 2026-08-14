@@ -10,6 +10,10 @@
  * **not** repeated here: it lives (with its copy control) in the {@link ContextBar}
  * masthead.
  *
+ * The rules list sits inside a bordered card, so each rule is a
+ * {@link sidepanel/components/shared/ListRow} `variant="nested"` at
+ * `density="tight"` — no border of its own, separation on hover (ADR-0029).
+ *
  * Strictly read-only: nothing here mutates a policy or a rule, and no policy
  * settings are scraped out of the Okta page markup (identity comes from the URL +
  * page heading, everything else from `GET /api/v1/policies/{id}/rules`).
@@ -21,6 +25,7 @@
 import React, { useMemo } from 'react';
 import AlertMessage from '../shared/AlertMessage';
 import LoadingSpinner from '../shared/LoadingSpinner';
+import { ListRow } from '../shared';
 import StatCard from './shared/StatCard';
 import { useOktaApi } from '../../hooks/useOktaApi';
 import { useEntityQuery } from '../../cache/useEntityQuery';
@@ -136,20 +141,23 @@ const AuthPolicyOverview: React.FC<AuthPolicyOverviewProps> = ({
         ) : (
           <ul className="space-y-2">
             {sortedRules.map((rule) => (
-              <li
+              <ListRow
                 key={rule.id}
-                className="flex items-center justify-between gap-2 rounded-md p-2 hover:bg-neutral-50"
+                as="li"
+                variant="nested"
+                density="tight"
+                className="flex items-center justify-between gap-2"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-neutral-900">
+                  <div className="truncate text-sm font-semibold text-neutral-900">
                     {rule.name || rule.id}
                   </div>
-                  <div className="text-xs text-neutral-500">
+                  <div className="text-xs text-neutral-600">
                     {rule.priority == null ? 'No priority' : `Priority ${rule.priority}`}
                   </div>
                 </div>
                 {rule.status && <StatusBadge status={rule.status} />}
-              </li>
+              </ListRow>
             ))}
           </ul>
         )}

@@ -153,12 +153,12 @@ function SearchDropdown<T>({
 
         {/* Dropdown results */}
         {showDropdown && results.length > 0 && (
-          <div className="absolute z-50 w-full mt-1 bg-white border border-neutral-200 rounded-md shadow-lg max-h-60 overflow-auto">
+          <div className="absolute z-50 w-full mt-1 bg-white border border-neutral-200 rounded-md shadow-lg max-h-60 divide-y divide-neutral-100 overflow-auto">
             {results.map((item, index) => (
               <button
                 key={index}
                 type="button"
-                className="w-full px-4 py-3 text-left hover:bg-neutral-50 border-b border-neutral-100 last:border-b-0 transition-colors"
+                className="w-full px-3 py-2 text-left transition-colors duration-(--dur-instant) hover:bg-neutral-50"
                 onClick={() => onSelect(item)}
               >
                 {renderResult(item)}

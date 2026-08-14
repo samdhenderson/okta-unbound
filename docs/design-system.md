@@ -84,17 +84,28 @@ row container — the radius, resting border, hover border and transition are fi
 there on purpose, and a row wanting a different hover colour is the drift the
 component exists to stop.
 
-| Prop      | Values                                          |
-| --------- | ----------------------------------------------- |
-| `density` | `compact` (`px-3 py-2`) · `comfortable` (`p-4`) |
-| `state`   | `default` · `selected` · `highlighted`          |
-| `as`      | `div` · `li` · `a` · `button`                   |
-| `body`    | expandable region below the header              |
+| Prop      | Values                                                                     |
+| --------- | -------------------------------------------------------------------------- |
+| `variant` | `card` (bordered) · `nested` (inside a card — no border, hover background) |
+| `density` | `tight` (`px-2 py-1.5`) · `compact` (`px-3 py-2`) · `comfortable` (`p-4`)  |
+| `state`   | `default` · `selected` · `highlighted`                                     |
+| `as`      | `div` · `li` · `a` · `button`                                              |
+| `body`    | expandable region below the header                                         |
+
+**`card` versus `nested`.** A `card` row carries the border that separates it from
+its neighbours. A `nested` row sits inside something already bordered — an
+overview preview list — so it draws no border (a box inside a box is noise) and
+separates on hover background instead. It usually wants `tight`, because the
+containing card already pays for one level of padding.
 
 **Expandable rows use the `body` slot**, not a hand-built wrapper. The border
 belongs to the card, the padding belongs to the header, and a `.disclose` body
 sets its own — so passing `body` moves the density padding onto an inner header
 wrapper and clips the card, and the row still owns exactly one border.
+
+**Hover applies to `default` rows only.** A selected row already says so with its
+border (or, nested, its fill); repainting that on hover would make it look less
+selected the moment you point at it.
 
 **The interior is a contract, not a component** — `ListRow` deliberately does not
 own it, because interiors genuinely differ. Follow these:
@@ -110,11 +121,18 @@ No arbitrary type values in a row (`text-[11px]`, `text-[10px]`) and no unsized
 primary line — an unsized `font-semibold` renders at 16px next to a peer's 14px,
 which is how two rows ended up a size apart.
 
-**Two separator patterns, not four.** `space-y-3` with a bordered row is the
+**Two separator patterns, not four.** `space-y-3` with a bordered `ListRow` is the
 default. `divide-y divide-neutral-100` inside one bordered container is for a
-dense, table-like surface (`ComparisonDiffTab`, `RuleImpactModal`), whose rows
-opt out of the per-row border. `divide-neutral-200` and
+dense, table-like surface (`ComparisonDiffTab`, `RuleImpactModal`,
+`UserProfileCard`, `SearchDropdown`). `divide-neutral-200` and
 `border-b last:border-b-0` are not sanctioned.
+
+**A `divide-y` row is not a `ListRow`.** In that idiom the separator belongs to
+the container, and the row is a plain padded element (`px-3 py-2`) with no chrome
+of its own. `ListRow` has no border-less escape hatch on purpose — one would hand
+every consumer a way out of the chrome it exists to enforce. `nested` is not that
+hatch either: it still owns radius, padding, hover and state, and it is for rows
+inside a card rather than rows in a divided list.
 
 ## Token violations
 

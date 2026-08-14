@@ -70,12 +70,13 @@ across all thirty is the box they sit in, and that is exactly what is drifting.
 Props follow the house `Record<Variant, string>` convention
 (`docs/components.md`):
 
-| Prop      | Values                                         | Replaces                    |
-| --------- | ---------------------------------------------- | --------------------------- |
-| `density` | `compact` (`px-3 py-2`), `comfortable` (`p-4`) | the ten padding values      |
-| `state`   | `default`, `selected`, `highlighted`           | four selected-state recipes |
-| `flash`   | boolean → `animate-affirm-flash`               | three hand-rolled copies    |
-| `as`      | `div`, `li`, `a`, `button`                     | the `<div onClick>` rows    |
+| Prop      | Values                                                                  | Replaces                    |
+| --------- | ----------------------------------------------------------------------- | --------------------------- |
+| `variant` | `card`, `nested`                                                        | two conflated idioms        |
+| `density` | `tight` (`px-2 py-1.5`), `compact` (`px-3 py-2`), `comfortable` (`p-4`) | the ten padding values      |
+| `state`   | `default`, `selected`, `highlighted`                                    | four selected-state recipes |
+| `flash`   | boolean → `animate-affirm-flash`                                        | three hand-rolled copies    |
+| `as`      | `div`, `li`, `a`, `button`                                              | the `<div onClick>` rows    |
 
 Fixed and **not** configurable: `rounded-md border border-neutral-200 bg-white`,
 `hover:border-neutral-500`, `transition-colors duration-(--dur-instant)`, and the
@@ -100,6 +101,23 @@ meta line. Every other value in the inventory is drift, not intent. Rows landing
 between the two (`p-3`, `px-2.5 py-1.5`) round to the nearer one; that is a
 visible change, and it is the point.
 
+**Amended during migration: a third density and a second variant.** Working
+through the detail and modal rows surfaced a genuinely different idiom that the
+`card`-only design would have damaged rather than consolidated.
+
+Four rows — `UserOverview`, `AuthPolicyOverview`, `BreakdownReport`,
+`ClauseGroupList` — are **nested inside a card that already has a border**. They
+carry no border of their own and separate on hover background instead. Giving
+them `card` chrome would draw a box inside a box: a visible regression dressed up
+as consistency. They also sit tighter than `compact`, because the containing card
+already pays for one level of padding, so `compact` indents the content twice.
+
+Hence `variant: 'card' | 'nested'` and `density: 'tight'`. Both clear the bar this
+ADR set — four real call sites each, discovered rather than anticipated. A
+`nested` row says "selected" with fill and a thinner ring, since it has no border
+to say it with; the `primary-light` background is shared with `card` so the two
+idioms read as the same state.
+
 ### 2. Write the row typography contract into `docs/design-system.md`
 
 `ListRow` cannot own the interior, so the interior needs a rule the reviewer can
@@ -120,11 +138,43 @@ This is what retires the arbitrary values the inventory found (`text-[11px]` and
   for. Six lists already use it.
 - **`divide-y divide-neutral-100` inside one bordered container** — legitimate
   for a dense list that reads as a single table-like surface rather than a stack
-  of cards (`ComparisonDiffTab`, `RuleImpactModal`). These rows pass
-  `as="li"` and opt out of the card border.
+  of cards (`ComparisonDiffTab`, `RuleImpactModal`, `UserProfileCard`).
 
 `divide-neutral-200` and `border-b last:border-b-0` are **not** sanctioned;
 they are the same two ideas spelled differently.
+
+**Corrected: a `divide-y` row is not a `ListRow`.** This ADR originally said such
+rows "pass `as="li"` and opt out of the card border" — which `ListRow` has no way
+to do, and should not. In that idiom the separator belongs to the _container_, not
+the row; the row is a padded `<li>` with no chrome of its own. Adding a
+border-less escape hatch would hand every consumer a way out of the chrome this
+ADR exists to enforce, to serve three call sites that do not want a row primitive
+in the first place. Those three keep plain `<li>` elements at the sanctioned
+`px-3 py-2`, and the container owns the `divide-y`.
+
+`nested` is deliberately not that escape hatch: it still owns radius, padding,
+hover and state, and it is for rows inside a card, not rows in a divided list.
+
+### 4. Three kinds of row stay out, by decision
+
+Found during the migration; each was attempted and rejected for a reason, not
+skipped for convenience.
+
+- **Data-viz rows** — `BreakdownReport`, `AttributeFacet`. These are proportion
+  bars wearing a row's shape: absolutely-positioned fills layered under the text,
+  an active state entangled with the bar colours, and a `relative` ancestor the
+  bars resolve against. `ListRow` would supply padding and radius and threaten
+  everything else. `docs/components.md` already lists the `AttributeFacet` spread
+  bars as a custom control; `BreakdownReport` joins them.
+- **A resting fill that is not a hover** — `ClauseGroupList`. Its non-interactive
+  `<li>`s use `bg-neutral-50` as a _resting_ separator, and `nested` paints that
+  colour only on hover, so migrating would flatten the list. Its `blocking`
+  branch is worse: `nested`'s `hover:bg-neutral-50` is a variant utility and
+  therefore ordered after anything passed through `className`, so a danger row
+  would turn grey exactly when you pointed at it. This file wants a `danger` row
+  state before it is worth migrating.
+- **Table rows** — `ExportPreviewTable`'s `<tr>`. A table row is not a card, and
+  `border-b` on `<tr>` is the correct idiom there.
 
 ## Consequences
 

@@ -10,9 +10,15 @@
  * Distinguishes "not pushed anywhere" (an empty array — a loaded fact) from "push
  * mappings were never loaded" (`undefined` — the group load's push enrichment is
  * non-fatal and can be skipped), so an unknown is never rendered as a zero.
+ *
+ * Each mapping is a {@link sidepanel/components/shared/ListRow} at `compact`
+ * density (ADR-0029). The row's chrome was previously a verbatim hand-copy of
+ * {@link RuleLinkRow}'s container string — the copy the ADR cites as the reason a
+ * primitive was needed.
  */
 import React from 'react';
 import DetailSection from './DetailSection';
+import { ListRow } from '../../shared';
 import type { PushGroupMapping } from '../../../../shared/types';
 
 /** Props for {@link GroupPushSection}. */
@@ -42,16 +48,18 @@ const GroupPushSection: React.FC<GroupPushSectionProps> = ({ mappings }) => (
     ) : (
       <ul className="space-y-1.5">
         {mappings.map((mapping) => (
-          <li
+          <ListRow
             key={mapping.mappingId}
-            className="flex items-center justify-between gap-3 rounded-md border border-neutral-200 px-3 py-2"
+            as="li"
+            density="compact"
+            className="flex items-center justify-between gap-3"
           >
             <span className="flex min-w-0 flex-col">
-              <span className="truncate text-sm text-neutral-900">
+              <span className="truncate text-sm font-semibold text-neutral-900">
                 {mapping.appName || mapping.appId}
               </span>
               {mapping.targetGroupName && (
-                <span className="mt-0.5 truncate text-xs text-neutral-500">
+                <span className="mt-0.5 truncate text-xs text-neutral-600">
                   Target group: {mapping.targetGroupName}
                 </span>
               )}
@@ -64,7 +72,7 @@ const GroupPushSection: React.FC<GroupPushSectionProps> = ({ mappings }) => (
                 Priority {mapping.priority}
               </span>
             )}
-          </li>
+          </ListRow>
         ))}
       </ul>
     )}
