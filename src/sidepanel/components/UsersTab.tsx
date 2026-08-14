@@ -68,8 +68,6 @@ interface UsersTabProps {
   targetTabId?: number;
   /** Id of the currently detected group; highlights that group in the membership list. */
   currentGroupId?: string;
-  /** Navigates to the Rules tab and deep-links to the rule that added a membership. */
-  onNavigateToRule?: (ruleId: string) => void;
   /**
    * One-shot request to open a specific user (e.g. from the Overview's "View all
    * groups"): the tab fetches that user + their memberships, then calls
@@ -96,7 +94,6 @@ interface UsersTabProps {
 const UsersTab: React.FC<UsersTabProps> = ({
   targetTabId,
   currentGroupId,
-  onNavigateToRule,
   selectedUserId,
   onUserSelected,
   isActive = true,
@@ -257,7 +254,6 @@ const UsersTab: React.FC<UsersTabProps> = ({
                 memberships={memberships}
                 isLoadingMemberships={state.isLoadingMemberships}
                 currentGroupId={currentGroupId}
-                onNavigateToRule={onNavigateToRule}
                 recentlyAddedGroupId={state.recentlyAddedGroupId}
                 isLifecycleLoading={lifecycle.isLifecycleLoading}
                 pendingLifecycleAction={lifecycle.pendingLifecycleAction}

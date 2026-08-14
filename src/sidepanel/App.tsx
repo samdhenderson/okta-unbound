@@ -422,7 +422,6 @@ const App: React.FC = () => {
               isActive={isActive}
               targetTabId={tabContext.targetTabId ?? undefined}
               currentGroupId={tabContext.currentGroupId}
-              onNavigateToRule={handleNavigateToRule}
               selectedUserId={selectedUserId}
               onUserSelected={() => setSelectedUserId(null)}
             />

@@ -75,12 +75,32 @@ describe('GroupMembershipsList', () => {
     expect(screen.queryByText('Fail')).not.toBeInTheDocument();
   });
 
-  it('keeps the View Rule deep link beside the explanation', async () => {
-    const onNavigateToRule = vi.fn();
-    render(<GroupMembershipsList {...base} user={user} onNavigateToRule={onNavigateToRule} />);
+  /**
+   * The deep link is now an `EntityLink` (ADR-0030's typed chip) rather than a
+   * bespoke "View Rule" button, so it navigates through `NavigationContext`
+   * instead of a threaded callback — which is why this surface no longer takes
+   * one. Without a provider every kind reports unreachable and the chip degrades
+   * to plain text, so what is asserted here is that the rule is still named and
+   * still identified as a rule.
+   */
+  it('states the answer on the row and keeps the evidence collapsed until asked', async () => {
+    render(<GroupMembershipsList {...base} user={user} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'View Rule' }));
-    expect(onNavigateToRule).toHaveBeenCalledWith('0prFAKE1');
+    // The answer is one line, always visible.
+    expect(screen.getByText('Added by Rule:')).toBeInTheDocument();
+
+    // The evidence is present but collapsed — this list is as long as the user
+    // has groups, and twelve open clause checklists is what it used to cost to
+    // find the one row you came for.
+    const toggle = screen.getByRole('button', { name: 'Check the condition' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(toggle);
+
+    expect(screen.getByRole('button', { name: 'Hide the condition' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
   });
 
   it('falls back to the raw condition when no user is supplied to explain it against', () => {
@@ -145,8 +165,13 @@ describe('GroupMembershipsList', () => {
       />,
     );
 
-    expect(screen.getAllByText('Possible rule:')).toHaveLength(2);
+    // The caption is now stated ONCE, on the row's chip, rather than repeated
+    // per rule — the hedge belongs to the answer, not to each piece of evidence,
+    // and stacking it three times for one hedged answer was how this row used to
+    // read. Both rules are still named and still explained; none is credited.
+    expect(screen.getByText('Possible rule:')).toBeInTheDocument();
     expect(screen.queryByText('Added by Rule:')).not.toBeInTheDocument();
+    expect(screen.getByText(/Auto-add Engineers, On-call rotation/)).toBeInTheDocument();
     expect(screen.getByText('Pass')).toBeInTheDocument();
     expect(screen.getByText('Not evaluated')).toBeInTheDocument();
   });
@@ -214,11 +239,17 @@ describe('GroupMembershipsList — memberships with no rule to name', () => {
     expect(screen.getByText('Rule-managed, rule not identified')).toBeInTheDocument();
   });
 
-  /**
-   * `DIRECT` is deliberately absent from this describe: it already had its own
-   * sentence and still uses it (pinned by `UsersTab.test.tsx`). This change only
-   * fills the branches that rendered nothing.
-   */
+  it('explains a direct membership in the shared wording', () => {
+    withSource({ membershipType: 'DIRECT', rules: [] });
+
+    expect(screen.getByText('Added directly')).toBeInTheDocument();
+  });
+
+  it('softens a direct membership the classifier only deduced', () => {
+    withSource({ membershipType: 'DIRECT', rules: [], attribution: 'inferred' });
+
+    expect(screen.getByText('Likely added directly')).toBeInTheDocument();
+  });
 
   /**
    * The caveat a reader needs before acting on any of these is longer than the

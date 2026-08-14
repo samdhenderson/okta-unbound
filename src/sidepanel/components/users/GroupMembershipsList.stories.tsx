@@ -134,7 +134,6 @@ const meta = {
     memberships: [directMembership, ruleMembership],
     user,
     isLoading: false,
-    onNavigateToRule: fn(),
   },
   argTypes: {
     memberships: {
@@ -151,9 +150,6 @@ const meta = {
     oktaOrigin: {
       description:
         'Okta origin used to build admin-console deep links; links are hidden when absent.',
-    },
-    onNavigateToRule: {
-      description: 'Invoked with a rule id to navigate to that rule in the Rules tab.',
     },
     actions: {
       description: 'Caller-supplied header controls, rendered on the right of the title row.',

@@ -38,8 +38,6 @@ export interface UserDetailPanelProps {
   isLoadingMemberships: boolean;
   /** Id of the currently detected group; highlights that group in the membership list. */
   currentGroupId?: string;
-  /** Invoked with a rule id to navigate to that rule in the Rules tab. */
-  onNavigateToRule?: (ruleId: string) => void;
   /**
    * Id of the group just added via the Add-to-Group flow, forwarded so that row
    * plays its one-shot success flash rather than the confirmation only landing in
@@ -73,7 +71,6 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
   memberships,
   isLoadingMemberships,
   currentGroupId,
-  onNavigateToRule,
   recentlyAddedGroupId,
   isLifecycleLoading,
   pendingLifecycleAction,
@@ -109,7 +106,6 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
         isLoading={isLoadingMemberships}
         currentGroupId={currentGroupId}
         oktaOrigin={oktaOrigin}
-        onNavigateToRule={onNavigateToRule}
         recentlyAddedGroupId={recentlyAddedGroupId}
         onProveMembershipSource={onProveMembershipSource}
       />

@@ -67,7 +67,6 @@ const meta = {
     isLoadingMemberships: false,
     isLifecycleLoading: false,
     pendingLifecycleAction: null,
-    onNavigateToRule: fn(),
     onRequestLifecycleAction: fn(),
     onCancelLifecycleAction: fn(),
     onConfirmLifecycleAction: fn(),
@@ -87,9 +86,6 @@ const meta = {
     currentGroupId: {
       description:
         'Id of the currently detected group; highlights that group in the membership list.',
-    },
-    onNavigateToRule: {
-      description: 'Invoked with a rule id to navigate to that rule in the Rules tab.',
     },
     isLifecycleLoading: {
       description: 'True while a confirmed lifecycle action is in flight.',
