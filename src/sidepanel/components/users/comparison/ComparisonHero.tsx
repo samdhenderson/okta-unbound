@@ -40,6 +40,13 @@ interface ComparisonHeroProps {
   comparedName: string;
   /** Overall similarity as a whole percent (0–100), shown as the bar's fill. */
   similarity: number;
+  /**
+   * What the percentage actually covers, when that is less than everything —
+   * `"groups only"` while the app half could not be read. Appended to the `Match`
+   * label so the qualifier travels with the number rather than sitting elsewhere
+   * on the page; omitted, the label reads plain `Match`.
+   */
+  scopeNote?: string;
   /** When true, renders placeholder glyphs instead of the match percentage. */
   isLoading: boolean;
 }
@@ -56,6 +63,7 @@ const ComparisonHero: React.FC<ComparisonHeroProps> = ({
   contextName,
   comparedName,
   similarity,
+  scopeNote,
   isLoading,
 }) => (
   <div className="overflow-hidden rounded-lg border border-neutral-200 bg-gradient-to-br from-white via-white to-primary-light/40 p-3">
@@ -68,8 +76,8 @@ const ComparisonHero: React.FC<ComparisonHeroProps> = ({
     </div>
 
     <div className="mt-3 flex items-baseline justify-between gap-2">
-      <span className="text-[10px] font-bold tracking-[0.12em] text-neutral-500 uppercase">
-        {isLoading ? '— —' : 'Match'}
+      <span className="min-w-0 truncate text-[10px] font-bold tracking-[0.12em] text-neutral-500 uppercase">
+        {isLoading ? '— —' : scopeNote ? `Match · ${scopeNote}` : 'Match'}
       </span>
       <span
         className="font-mono text-sm leading-none font-bold"

@@ -101,7 +101,10 @@ const meta = {
       description: 'Bucketed app assignments (only-compared / shared / only-context).',
     },
     groupSimilarity: { description: 'Group overlap as a whole percent (0–100).' },
-    appSimilarity: { description: 'App overlap as a whole percent (0–100).' },
+    appSimilarity: {
+      description:
+        'App overlap as a whole percent (0–100), or `null` when the assignments could not be fully read — the card reports "overlap unavailable" rather than a percentage it cannot stand behind.',
+    },
     onJumpToGroups: { description: 'Jumps to the Groups detail tab.' },
     onJumpToApps: { description: 'Jumps to the Apps detail tab.' },
     causes: {
@@ -141,6 +144,18 @@ export const NoOverlap: Story = {
     appBuckets: { onlyCompared: appBuckets.onlyCompared, shared: [], onlyContext: [] },
     groupSimilarity: 0,
     appSimilarity: 0,
+  },
+};
+
+/**
+ * The app walk did not finish. Its card drops the overlap percentage and reports
+ * its count as a floor — the groups card beside it is untouched, which is the
+ * point: one failed read must not discredit the half that loaded.
+ */
+export const AppOverlapUnavailable: Story = {
+  args: {
+    appBuckets: { onlyCompared: [], shared: [], onlyContext: [] },
+    appSimilarity: null,
   },
 };
 

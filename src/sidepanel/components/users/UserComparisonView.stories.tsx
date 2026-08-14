@@ -80,6 +80,8 @@ const comparison = (over: Partial<UserComparisonState> = {}): UserComparisonStat
   groupSimilarity: 0,
   appSimilarity: 0,
   overallSimilarity: 0,
+  similarityScope: 'both',
+  appsIncomplete: false,
   isLoading: false,
   loadError: null,
   addingGroupId: null,
@@ -220,6 +222,41 @@ export const Loading: Story = {
 /** A failed membership load replaces the tab body with a `danger` alert; the hero survives. */
 export const LoadError: Story = {
   args: { comparison: loaded({ loadError: 'Failed to load memberships' }) },
+};
+
+/**
+ * A failed app read is **advisory, not blocking**: the group half loaded, so the
+ * tabs stay and a `warning` alert caveats them. The app card reports "overlap
+ * unavailable" rather than 0%, and the hero's headline says it covers groups only
+ * — because averaging in an app score of zero would silently halve it.
+ */
+export const AppsIncomplete: Story = {
+  args: {
+    comparison: loaded({
+      appsIncomplete: true,
+      appSimilarity: null,
+      similarityScope: 'groups-only',
+      // The group figure alone, not the blended 33% the other stories show.
+      overallSimilarity: 33,
+    }),
+  },
+};
+
+/** The same failure seen from the Apps tab, where the diff itself is the caveated thing. */
+export const AppsIncompleteOnAppsTab: Story = {
+  args: {
+    comparison: loaded({
+      activeTab: 'apps',
+      appsIncomplete: true,
+      appSimilarity: null,
+      similarityScope: 'groups-only',
+      overallSimilarity: 33,
+      // Nothing arrived at all — the case where the old empty text would have
+      // claimed "Neither user is assigned any apps."
+      appBuckets: { onlyCompared: [], shared: [], onlyContext: [] },
+      appDiffCount: 0,
+    }),
+  },
 };
 
 /** A failed group copy surfaces a dismissible `danger` alert above the diff. */

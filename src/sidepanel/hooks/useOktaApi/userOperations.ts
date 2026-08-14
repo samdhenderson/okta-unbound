@@ -17,6 +17,38 @@ import { createLogger } from '../../../shared/utils/logger';
 
 const log = createLogger('useOktaApi');
 
+/** One app assignment as {@link createUserOperations.getUserApps} reports it. */
+export interface UserAppAssignment {
+  /** Okta app id. */
+  id: string;
+  /** Display label, falling back to the app name and then the id. */
+  label: string;
+  /** How the assignment was granted, when Okta reported it. */
+  scope?: AppAssignmentScope;
+}
+
+/**
+ * The outcome of listing a user's apps: the assignments **and** whether the walk
+ * that produced them finished.
+ *
+ * This is an object rather than a bare array on purpose. The walk accumulates
+ * page-by-page and a failure part-way through still leaves real rows in hand, so
+ * returning just the array makes "Okta returned nothing" and "we never got an
+ * answer" the same value — and the caller renders a transport failure as *zero
+ * apps*, which is a confident, wrong statement about someone's access. Carrying
+ * `complete` alongside the rows makes the difference impossible to drop silently.
+ */
+export interface UserAppsResult {
+  /** Every assignment collected — all of them when `complete`, otherwise a prefix. */
+  apps: UserAppAssignment[];
+  /**
+   * `true` when the pagination walk ran to the end. `false` means the list is
+   * short by an unknown amount: treat any count, percentage or "missing app"
+   * conclusion drawn from it as unavailable, not as zero.
+   */
+  complete: boolean;
+}
+
 /**
  * Build per-user read and lifecycle operations.
  *
@@ -81,7 +113,10 @@ export function createUserOperations(coreApi: CoreApi) {
    * List all apps assigned to a user (id + display label + assignment scope).
    *
    * @param userId - User whose apps to list.
-   * @returns Every assigned app across all pages; `[]` on error. Each entry carries
+   * @returns A {@link UserAppsResult}: the assignments collected across all pages,
+   * plus `complete` saying whether the walk finished. A failed or part-way-failed
+   * walk resolves with `complete: false` and whatever was collected — it never
+   * rejects, and it never reports a failure as an empty list. Each entry carries
    * an optional {@link AppAssignmentScope}: `'USER'` when the user **has a direct
    * assignment** to the app, `'GROUP'` when the assignment comes from a group, and
    * `undefined` when Okta did not report one. Okta reports a single scope per
@@ -102,10 +137,8 @@ export function createUserOperations(coreApi: CoreApi) {
    * consequence is `scope: undefined` past page 1 — apps are never lost — so this
    * deliberately does not rewrite the cursor URL.
    */
-  const getUserApps = async (
-    userId: string,
-  ): Promise<Array<{ id: string; label: string; scope?: AppAssignmentScope }>> => {
-    const apps: Array<{ id: string; label: string; scope?: AppAssignmentScope }> = [];
+  const getUserApps = async (userId: string): Promise<UserAppsResult> => {
+    const apps: UserAppAssignment[] = [];
 
     try {
       // Accumulate via onPage so a mid-walk failure still returns the pages
@@ -133,9 +166,10 @@ export function createUserOperations(coreApi: CoreApi) {
       );
     } catch (error) {
       log.error(`Failed to list apps for user ${userId}:`, error);
+      return { apps, complete: false };
     }
 
-    return apps;
+    return { apps, complete: true };
   };
 
   /**

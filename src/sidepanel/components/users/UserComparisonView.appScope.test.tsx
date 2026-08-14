@@ -80,6 +80,8 @@ const comparison = (appBuckets: AppBucketFixture = DEFAULT_APPS): UserComparison
     groupSimilarity: 0,
     appSimilarity: 20,
     overallSimilarity: 10,
+    similarityScope: 'both',
+    appsIncomplete: false,
     isLoading: false,
     loadError: null,
     addingGroupId: null,
