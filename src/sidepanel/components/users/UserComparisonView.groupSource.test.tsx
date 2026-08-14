@@ -191,9 +191,9 @@ describe('UserComparisonView — the groups tab says how a membership was grante
   it('keeps the per-row Add affordance beside the new source line', () => {
     renderView();
 
-    expect(within(rowFor('VPN Access')).getByRole('button', { name: 'Add' })).toBeInTheDocument();
+    expect(within(rowFor('VPN Access')).getByRole('button', { name: /^Add / })).toBeInTheDocument();
     expect(
-      within(rowFor('Finance Approvers')).getByRole('button', { name: 'Add' }),
+      within(rowFor('Finance Approvers')).getByRole('button', { name: /^Add / }),
     ).toBeInTheDocument();
   });
 

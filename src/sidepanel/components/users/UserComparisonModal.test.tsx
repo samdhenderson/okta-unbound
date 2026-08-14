@@ -295,7 +295,8 @@ function rowFor(label: string): HTMLElement {
   return li;
 }
 
-const addButtonFor = (label: string) => within(rowFor(label)).getByRole('button', { name: 'Add' });
+const addButtonFor = (label: string) =>
+  within(rowFor(label)).getByRole('button', { name: /^Add / });
 
 /**
  * Which bucket a given item WOULD be in, read off the row itself.
@@ -512,7 +513,7 @@ describe('UserComparisonModal', () => {
       await openComparison();
       await gotoTab('Apps');
 
-      expect(screen.queryByRole('button', { name: 'Add' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Add / })).not.toBeInTheDocument();
     });
   });
 
@@ -542,7 +543,7 @@ describe('UserComparisonModal', () => {
       // bucket by id, and addedGroupIds has already moved it to `shared`.
       expect(bucketTitleOf('Compared Only Group 1')).toBe('Shared');
       expect(
-        within(rowFor('Compared Only Group 1')).queryByRole('button', { name: 'Add' }),
+        within(rowFor('Compared Only Group 1')).queryByRole('button', { name: /^Add / }),
       ).toBeNull();
 
       // Badge decrements, and the remaining row's Add button is enabled again.
@@ -579,7 +580,7 @@ describe('UserComparisonModal', () => {
       // Optimistically re-buckets into Shared and the Add button vanishes.
       await waitFor(() => expect(bucketTitleOf('Context Only Group')).toBe('Shared'));
       expect(
-        within(rowFor('Context Only Group')).queryByRole('button', { name: 'Add' }),
+        within(rowFor('Context Only Group')).queryByRole('button', { name: /^Add / }),
       ).toBeNull();
 
       // The parent's CONTEXT refresh is not called — this add changed the compared user.
