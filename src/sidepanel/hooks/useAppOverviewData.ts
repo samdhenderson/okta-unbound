@@ -14,6 +14,7 @@
 
 import { useOktaApi } from './useOktaApi';
 import { useEntityQuery } from '../cache/useEntityQuery';
+import { cacheKeys } from '../cache/keys';
 import { extractAccessPolicyId } from './useOktaApi/policyOperations';
 import type { OktaAppListItem } from '@/shared/schemas/okta';
 import type { AppAssignmentCounts } from './useOktaApi/appOperations';
@@ -66,14 +67,14 @@ export function useAppOverviewData(appId: string, targetTabId?: number | null): 
   const enabled = Boolean(appId && targetTabId);
 
   const { data: app, isLoading: isLoadingApp } = useEntityQuery<OktaAppListItem | null>(
-    ['appDetail', appId],
+    cacheKeys.appDetail(appId),
     () => getAppById(appId),
     { enabled },
   );
 
   const { data: counts, isLoading: isLoadingAssignments } =
     useEntityQuery<AppAssignmentCounts | null>(
-      ['appAssignmentCounts', appId],
+      cacheKeys.appAssignmentCounts(appId),
       () => getAppAssignmentCounts(appId),
       { enabled },
     );

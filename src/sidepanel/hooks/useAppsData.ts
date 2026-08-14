@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getOrFetch, peek, type EntityKey } from '../cache/entityCache';
+import { cacheKeys } from '../cache/keys';
 import type { OktaAppListItem } from '../../shared/schemas/okta';
 import { createLogger } from '../../shared/utils/logger';
 import type { useOktaApi } from './useOktaApi';
@@ -38,7 +39,7 @@ type OktaApi = ReturnType<typeof useOktaApi>;
  * @returns The composite key for that org's inventory.
  */
 export function appsCacheKey(oktaOrigin?: string | null): EntityKey {
-  return ['apps', oktaOrigin ?? 'unknown'];
+  return cacheKeys.apps(oktaOrigin);
 }
 
 /** Options for {@link useAppsData}. */

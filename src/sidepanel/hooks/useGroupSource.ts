@@ -28,6 +28,7 @@ import {
 } from '../../shared/membership/groupSource';
 import { writeMemberSource } from '../cache/memberSourceCache';
 import { getOrFetch } from '../cache/entityCache';
+import { cacheKeys } from '../cache/keys';
 import { createLogger } from '../../shared/utils/logger';
 
 const log = createLogger('useGroupSource');
@@ -137,7 +138,7 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
     // after such a mutation the meter can show a pre-mutation count until the
     // TTL lapses. Building that invalidation is deliberately out of scope here.
     Promise.all([
-      getOrFetch(['groupMembers', group.id], () => getAllGroupMembers(group.id)),
+      getOrFetch(cacheKeys.groupMembers(group.id), () => getAllGroupMembers(group.id)),
       getGroupRulesForGroup(group.id),
     ])
       .then(([members, rules]) => {

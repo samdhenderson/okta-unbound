@@ -21,6 +21,7 @@
  */
 
 import { peek, setEntry, subscribe, type EntityKey } from './entityCache';
+import { cacheKeys, TTL_LONG } from './keys';
 import type { MemberSourceBreakdown } from '../../shared/membership/groupSource';
 
 /**
@@ -30,7 +31,7 @@ import type { MemberSourceBreakdown } from '../../shared/membership/groupSource'
  * a membership split does not churn minute to minute; short enough that a row
  * stops asserting a split that predates a bulk membership change.
  */
-export const MEMBER_SOURCE_TTL = 30 * 60 * 1000;
+export const MEMBER_SOURCE_TTL = TTL_LONG;
 
 /**
  * The entity-cache key a group's breakdown is stored under.
@@ -39,7 +40,7 @@ export const MEMBER_SOURCE_TTL = 30 * 60 * 1000;
  * @returns A composite key, so `invalidate(['memberSource'])` drops them all.
  */
 export function memberSourceKey(groupId: string): EntityKey {
-  return ['memberSource', groupId];
+  return cacheKeys.memberSource(groupId);
 }
 
 /**

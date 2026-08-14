@@ -37,6 +37,7 @@ import { useState, useCallback, useRef } from 'react';
 import type { OktaUser, GroupMembership, OktaGroup, FormattedRule } from '../../shared/types';
 import { RulesCache } from '../../shared/rulesCache';
 import { getOrFetch, peek, invalidate } from '../cache/entityCache';
+import { cacheKeys } from '../cache/keys';
 import { analyzeMemberships, unclassifiedMemberships } from '../../shared/utils/membershipAnalysis';
 import { createLogger } from '../../shared/utils/logger';
 import { useOktaApi } from './useOktaApi';
@@ -269,7 +270,7 @@ export function useUserMemberships({
       // Serve a fresh cached analysis instantly (no loading flash) unless forcing.
       // Re-navigating back to a user, or re-selecting one, then costs nothing.
       if (!options?.force) {
-        const cached = peek<GroupMembership[]>(['userMemberships', user.id]);
+        const cached = peek<GroupMembership[]>(cacheKeys.userMemberships(user.id));
         if (cached) {
           setMemberships(cached);
           // Own the loading lifecycle fully: a caller (e.g. the Users tab's detected-
@@ -299,7 +300,7 @@ export function useUserMemberships({
         // Fetch + analyze through the entity cache so concurrent callers de-dup and
         // the result is reused on remount. `force` bypasses cache + in-flight.
         const analyzedMemberships = await getOrFetch<GroupMembership[]>(
-          ['userMemberships', user.id],
+          cacheKeys.userMemberships(user.id),
           async () => {
             log.debug('Loading memberships for user:', user.id);
 
@@ -341,7 +342,7 @@ export function useUserMemberships({
         // An unclassified result describes the load that failed, not the org —
         // banking it would keep the user staring at "UNKNOWN" for the whole TTL
         // even after the rules became available. Show it, then forget it.
-        if (degraded) invalidate(['userMemberships', user.id]);
+        if (degraded) invalidate(cacheKeys.userMemberships(user.id));
 
         setMemberships(analyzedMemberships);
         log.debug('Loaded memberships:', { count: analyzedMemberships.length, degraded });
