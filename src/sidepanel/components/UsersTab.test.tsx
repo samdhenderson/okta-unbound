@@ -494,7 +494,18 @@ describe('membership classification (in-file heuristic)', () => {
     expect(screen.queryByText('Eng auto-assign')).not.toBeInTheDocument();
   });
 
-  it('CHARACTERIZED: degrades to all-DIRECT (no error) when rules cannot be fetched', async () => {
+  // FLIPPED (ADR-0012): this case used to assert `expect(screen.getByText('DIRECT'))`
+  // under the title "CHARACTERIZED: degrades to all-DIRECT (no error) when rules
+  // cannot be fetched". It pinned a defect — with no rule inventory every group
+  // looks untargeted, so the heuristic answered DIRECT / `attribution: 'exact'`
+  // for all of them: a confident "added by hand" manufactured out of a failed
+  // fetch, and one the group view (which reads Okta's own
+  // `_embedded['group-rules']`) would flatly contradict. `useUserMemberships` now
+  // distinguishes "the org has no rules" from "we could not obtain the rules" and
+  // reports the latter as unclassified (ADR-0020). The no-error-banner half of the
+  // old assertion is unchanged and still pinned below: a rules-fetch failure
+  // degrades the answer, it does not fail the load.
+  it('reports memberships as UNKNOWN, not a confident DIRECT, when rules cannot be fetched', async () => {
     route(USER_GROUPS, () => ({ success: true, data: [rawGroup()] }));
     rulesCacheGet.mockResolvedValue(null);
     route(GROUP_RULES, () => ({ success: false, error: 'nope' }));
@@ -504,15 +515,22 @@ describe('membership classification (in-file heuristic)', () => {
     fireEvent.click(await screen.findByText('Ada Lovelace', {}, { timeout: 2000 }));
 
     expect(await screen.findByText('Engineering')).toBeInTheDocument();
-    expect(screen.getByText('DIRECT')).toBeInTheDocument();
+    expect(screen.getByText('UNKNOWN')).toBeInTheDocument();
+    expect(screen.queryByText('DIRECT')).not.toBeInTheDocument();
+    // ...and nothing claims the user was hand-added.
+    expect(
+      screen.queryByText('This user was added directly to the group (not through a rule)'),
+    ).not.toBeInTheDocument();
     // the rules-fetch failure is swallowed — no error banner.
     expect(screen.queryByText('nope')).not.toBeInTheDocument();
   });
 });
 
 // ===========================================================================
-// 3b. Compare entry point: the selected-user actions expose a Compare button that
-//     opens the user-comparison modal (same feature as the Overview tab).
+// 3b. Compare entry point: the selected-user actions expose a Compare button.
+//     It now PUSHES a comparison view onto the tab's view stack (ADR-0016)
+//     instead of opening a dialog; the Overview tab still hosts the same feature
+//     in a modal, which UserComparisonModal.test.tsx covers.
 // ===========================================================================
 describe('compare entry point', () => {
   async function renderWithSelectedUser() {
@@ -530,18 +548,22 @@ describe('compare entry point', () => {
     await screen.findByRole('heading', { name: 'Ada Lovelace' });
   }
 
-  it('opens the comparison modal from the Compare action', async () => {
+  it('pushes the comparison view from the Compare action', async () => {
     await renderWithSelectedUser();
 
-    // Closed by default — the dialog is not mounted.
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    // At the root of the view stack: the tab's own header, and no comparison.
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('User Search');
+    expect(screen.queryByRole('button', { name: 'Back to user' })).not.toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /Compare/ }));
     });
 
-    const dialog = await screen.findByRole('dialog');
-    expect(dialog).toHaveAccessibleName('Compare with another user');
+    // A pushed view, not a dialog: the tab's single PageHeader swaps its contents
+    // in place (ADR-0008) and grows a back affordance.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Compare users');
+    expect(screen.getByRole('button', { name: 'Back to user' })).toBeInTheDocument();
   });
 });
 

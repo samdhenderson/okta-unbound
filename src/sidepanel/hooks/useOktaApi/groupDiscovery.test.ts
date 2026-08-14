@@ -12,6 +12,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createGroupDiscoveryOperations } from './groupDiscovery';
 import type { CoreApi } from './core';
 import { RulesCache } from '../../../shared/rulesCache';
+import { formatRuleForDisplay } from '../../../shared/ruleUtils';
 
 // Control the rules cache directly so we can exercise both the cache-hit and
 // cache-miss branches of getGroupRulesForGroup deterministically.
@@ -209,6 +210,101 @@ describe('getGroupRulesForGroup', () => {
 
     expect(rules.map((r) => (r as { id: string }).id)).toEqual(['r1']);
     expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/groups/rules?limit=200');
+  });
+
+  it('populates userAttributes on the cache-miss path', async () => {
+    // `userAttributes` is NOT an Okta field: it is synthesised client-side by
+    // `formatRuleForDisplay`. Returning raw rules here strands every downstream
+    // consumer with `userAttributes === undefined`, which collapses
+    // `membershipAnalysis.inferBestMatchRule` into a positional guess.
+    const core = makeCore({
+      makeApiRequest: vi.fn().mockResolvedValue({
+        success: true,
+        data: [
+          {
+            id: 'r1',
+            name: 'Engineering feeder',
+            status: 'ACTIVE',
+            conditions: {
+              expression: {
+                value: 'user.department == "Engineering" && user.title == "Engineer"',
+                type: 'urn:okta:expression:1.0',
+              },
+            },
+            actions: { assignUserToGroups: { groupIds: ['g1'] } },
+          },
+        ],
+      }),
+    });
+
+    const rules = await createGroupDiscoveryOperations(core).getGroupRulesForGroup('g1');
+
+    expect(rules).toHaveLength(1);
+    expect(rules[0].userAttributes).toEqual(['department', 'title']);
+  });
+
+  it('returns the same shape from the cache-hit and cache-miss paths', async () => {
+    const raw = {
+      id: 'r1',
+      name: 'Engineering feeder',
+      status: 'ACTIVE' as const,
+      type: 'group_rule',
+      created: '2020-01-01T00:00:00.000Z',
+      lastUpdated: '2024-01-01T00:00:00.000Z',
+      conditions: {
+        expression: {
+          value: 'user.department == "Engineering"',
+          type: 'urn:okta:expression:1.0',
+        },
+      },
+      actions: { assignUserToGroups: { groupIds: ['g1'] } },
+    };
+
+    // Cache miss: fetched, formatted, filtered.
+    const missCore = makeCore({
+      makeApiRequest: vi.fn().mockResolvedValue({ success: true, data: [raw] }),
+    });
+    const missRules = await createGroupDiscoveryOperations(missCore).getGroupRulesForGroup('g1');
+
+    // Cache hit: served straight from RulesCache, which stores exactly what
+    // `formatRuleForDisplay` produced (see fetchAndCacheAllGroupRules).
+    getRulesForGroupMock.mockResolvedValue([formatRuleForDisplay(raw, undefined, [])]);
+    const hitCore = makeCore();
+    const hitRules = await createGroupDiscoveryOperations(hitCore).getGroupRulesForGroup('g1');
+    expect(hitCore.makeApiRequest).not.toHaveBeenCalled();
+
+    expect(missRules).toHaveLength(1);
+    expect(hitRules).toHaveLength(1);
+    expect(Object.keys(missRules[0]).sort()).toEqual(Object.keys(hitRules[0]).sort());
+    expect(missRules[0]).toEqual(hitRules[0]);
+  });
+
+  it('selects exactly the formatted rules targeting the requested group', async () => {
+    const withGroups = (id: string, groupIds: string[]) => ({
+      id,
+      name: `rule ${id}`,
+      status: 'ACTIVE',
+      conditions: { expression: { value: `user.department == "${id}"` } },
+      actions: { assignUserToGroups: { groupIds } },
+    });
+    const core = makeCore({
+      makeApiRequest: vi.fn().mockResolvedValue({
+        success: true,
+        data: [
+          withGroups('r1', ['g1', 'g9']),
+          withGroups('r2', ['g2']),
+          withGroups('r3', ['g9', 'g1']),
+          { id: 'r4', name: 'no actions', status: 'ACTIVE' },
+        ],
+      }),
+    });
+
+    const rules = await createGroupDiscoveryOperations(core).getGroupRulesForGroup('g1');
+
+    expect(rules.map((r) => r.id)).toEqual(['r1', 'r3']);
+    // Filtering happens on the FORMATTED shape, whose target ids live on
+    // `groupIds` rather than `actions.assignUserToGroups.groupIds`.
+    expect(rules.every((r) => r.groupIds.includes('g1'))).toBe(true);
   });
 
   it('treats missing data as no rules on a cache-miss fetch', async () => {

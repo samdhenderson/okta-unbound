@@ -5,7 +5,9 @@ import {
   oktaUserListItemSchema,
   oktaGroupListItemSchema,
   oktaAppUserSchema,
+  oktaAppListItemSchema,
   oktaAppGroupSchema,
+  extractAppAssignmentScope,
   oktaPolicyListItemSchema,
   oktaPolicyRuleSchema,
   parseOkta,
@@ -334,5 +336,71 @@ describe('parseOktaList', () => {
     );
     expect(groups).toHaveLength(1);
     expect(groups[0].id).toBe(validListGroup.id);
+  });
+});
+
+/**
+ * `expand=user/{userId}` on `GET /api/v1/apps` embeds the app-user under
+ * `_embedded.user`, carrying the assignment `scope`. The schema deliberately
+ * leaves `_embedded` as `z.unknown()` so no embed shape can make `parseOktaList`
+ * drop the app; `extractAppAssignmentScope` does the validation on read.
+ */
+describe('app-assignment scope (_embedded on oktaAppListItemSchema)', () => {
+  it('never drops an app row over its _embedded value, whatever shape it has', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const rows = [
+      { id: '0oaFAKE1', label: 'One', _embedded: { user: { id: '00uFAKE1', scope: 'USER' } } },
+      { id: '0oaFAKE2', label: 'Two' },
+      { id: '0oaFAKE3', label: 'Three', _embedded: 'nonsense' },
+      { id: '0oaFAKE4', label: 'Four', _embedded: null },
+      { id: '0oaFAKE5', label: 'Five', _embedded: { user: 42 } },
+    ];
+
+    const apps = parseOktaList(oktaAppListItemSchema, rows, 'test');
+
+    // Under-reporting a user's access is worse than a missing scope: every row survives.
+    expect(apps.map((a) => a.id)).toEqual([
+      '0oaFAKE1',
+      '0oaFAKE2',
+      '0oaFAKE3',
+      '0oaFAKE4',
+      '0oaFAKE5',
+    ]);
+    // The embed is reachable from TypeScript now (typed `unknown`), not stripped.
+    expect(apps[0]._embedded).toEqual({ user: { id: '00uFAKE1', scope: 'USER' } });
+  });
+
+  it('reads USER and GROUP off a well-formed embed', () => {
+    expect(extractAppAssignmentScope({ user: { id: '00uFAKE1', scope: 'USER' } })).toBe('USER');
+    expect(extractAppAssignmentScope({ user: { id: '00uFAKE1', scope: 'GROUP' } })).toBe('GROUP');
+  });
+
+  it.each([
+    ['undefined', undefined],
+    ['null', null],
+    ['a string', 'nonsense'],
+    ['a number', 7],
+    ['an empty object', {}],
+    ['an array', [{ user: { id: '00uFAKE1', scope: 'USER' } }]],
+    ['a non-object user', { user: 'nonsense' }],
+    ['a user missing its id', { user: { scope: 'USER' } }],
+    ['a user with no scope', { user: { id: '00uFAKE1' } }],
+    ['an unrecognized scope', { user: { id: '00uFAKE1', scope: 'SOMETHING_NEW' } }],
+    ['a non-string scope', { user: { id: '00uFAKE1', scope: 7 } }],
+  ])('returns undefined (never throws, never guesses) for %s', (_label, embedded) => {
+    expect(extractAppAssignmentScope(embedded)).toBeUndefined();
+  });
+
+  it('reuses the app-user schema, so passthrough extras on the embed are harmless', () => {
+    const scope = extractAppAssignmentScope({
+      user: {
+        id: '00uFAKE1',
+        scope: 'GROUP',
+        status: 'PROVISIONED',
+        credentials: { userName: 'user@example.com' },
+        orgSpecificExtra: { anything: true },
+      },
+    });
+    expect(scope).toBe('GROUP');
   });
 });

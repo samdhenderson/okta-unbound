@@ -1,8 +1,10 @@
 # Testing
 
 Stack: **Vitest 4** + **@testing-library/react** + **MSW** (`src/test/mocks/handlers.ts`,
-`src/test/setup.ts`), jsdom env. Coverage via v8, thresholds lines/functions/
-statements 80%, branches 75% (enforced in CI).
+`src/test/setup.ts`), jsdom env. Coverage via v8, thresholds lines 75%,
+statements 75%, functions 70%, branches 65% (enforced in CI). This is the one
+place prose spells the numbers out; everywhere else refers to `vitest.config.ts`,
+which is authoritative ([adr/0019](./adr/0019-coverage-threshold-recalibration.md)).
 
 ## What to test where
 
@@ -53,7 +55,10 @@ statements 80%, branches 75% (enforced in CI).
 
 ## Coverage gate
 
-The 80/75 thresholds (`vitest.config.ts`) are enforced in CI — the `verify` job
-runs `npm run test:coverage`. Keep new code covered so the gate stays green; the
-`test-writer` agent owns this. Malformed-Okta-payload rejection is covered by the
-zod schema tests (see [adr/0006](./adr/0006-zod-boundary-validation.md)).
+The thresholds in `vitest.config.ts` are enforced in CI — the `verify` job runs
+`npm run test:coverage`. The gate is a **ratchet against regression, not a quality
+target**: it sits a few points below actual coverage so a real drop trips it while
+routine work stays green ([adr/0019](./adr/0019-coverage-threshold-recalibration.md)).
+Keep new code covered so the gate stays green; the `test-writer` agent owns this.
+Malformed-Okta-payload rejection is covered by the zod schema tests (see
+[adr/0006](./adr/0006-zod-boundary-validation.md)).

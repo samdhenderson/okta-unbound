@@ -23,6 +23,14 @@ interface UseUserSearchOptions {
   debounceMs?: number;
   /** Minimum query length before searching. Defaults to 2. */
   minQueryLength?: number;
+  /**
+   * When `false`, the debounce never commits a search. Consumers that stay mounted
+   * while hidden (the comparison surface behind a closed dialog or a popped view,
+   * inside a tab that itself stays mounted — ADR-0018) pass their visibility here so
+   * a standing query cannot re-fire against a new `targetTabId` with no reader.
+   * Defaults to `true`.
+   */
+  enabled?: boolean;
 }
 
 /** Return shape of {@link useUserSearch}. */
@@ -43,6 +51,7 @@ interface UseUserSearchReturn {
  * - Minimum query length enforcement
  * - Error handling
  * - Clear search functionality
+ * - An `enabled` gate for hosts that stay mounted while hidden
  *
  * @param options - See `UseUserSearchOptions`.
  * @returns `searchQuery` / `setSearchQuery` (which drives the debounced search),
@@ -52,6 +61,7 @@ export function useUserSearch({
   targetTabId,
   debounceMs = 600,
   minQueryLength = 2,
+  enabled = true,
 }: UseUserSearchOptions): UseUserSearchReturn {
   const [error, setError] = useState<string | null>(null);
 
@@ -62,6 +72,7 @@ export function useUserSearch({
       debounceMs,
       minQueryLength,
       log,
+      enabled,
     });
 
   const clearSearch = useCallback(() => {

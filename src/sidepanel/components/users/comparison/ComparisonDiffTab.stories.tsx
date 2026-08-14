@@ -1,142 +1,204 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import ComparisonDiffTab from './ComparisonDiffTab';
-import type { DiffItem } from './comparisonAnalytics';
+import GroupSourceIndicator from './GroupSourceIndicator';
+import AppScopeIndicator from './AppScopeIndicator';
+import Button from '../../shared/Button';
+import type { CellDirection } from './ComparisonDiffTab';
+import type { ParityRow } from './comparisonAnalytics';
+import type { GroupMembership, MembershipRule } from '../../../../shared/types';
 
-const comparedItems: DiffItem[] = [
-  { id: 'g1', label: 'Engineering - Platform' },
-  { id: 'g2', label: 'VPN Access' },
-  { id: 'g3', label: 'On-call Rotation' },
+const rule = (id: string, name: string): MembershipRule => ({
+  id,
+  name,
+  status: 'ACTIVE',
+  conditionExpression: 'user.userType == "Contractor"',
+  groupIds: ['00gFAKEgroup0001'],
+  userAttributes: ['userType'],
+});
+
+const membership = (
+  id: string,
+  name: string,
+  over: Partial<GroupMembership> = {},
+): GroupMembership => ({
+  group: { id, type: 'OKTA_GROUP', profile: { name } },
+  membershipType: 'RULE_BASED',
+  rules: [rule('0prFAKErule00001', 'Contractors → VPN Access')],
+  attribution: 'exact',
+  ...over,
+});
+
+const groupRow = (
+  id: string,
+  name: string,
+  inContext: boolean,
+  inCompared: boolean,
+  over: Partial<GroupMembership> = {},
+): ParityRow => ({
+  id,
+  label: name,
+  inContext,
+  inCompared,
+  membership: membership(id, name, over),
+});
+
+const GROUP_ROWS: ParityRow[] = [
+  groupRow('00gFAKEgroup0001', 'us.employees.union', false, true),
+  groupRow('00gFAKEgroup0002', 'okta.admins', false, true, {
+    group: { id: '00gFAKEgroup0002', type: 'APP_GROUP', profile: { name: 'okta.admins' } },
+    membershipType: 'DIRECT',
+    rules: [],
+  }),
+  groupRow('00gFAKEgroup0003', 'emea.contractors', true, false, {
+    membershipType: 'DIRECT',
+    rules: [],
+  }),
+  groupRow('00gFAKEgroup0004', 'build.engineers', true, true),
+  groupRow('00gFAKEgroup0005', 'all.employees', true, true),
 ];
 
-const sharedItems: DiffItem[] = [
-  { id: 'g4', label: 'All Employees' },
-  { id: 'g5', label: 'Slack Workspace' },
+const APP_ROWS: ParityRow[] = [
+  { id: 'app1', label: 'Salesforce', inContext: false, inCompared: true },
+  { id: 'app2', label: 'Figma', inContext: true, inCompared: false },
+  { id: 'app3', label: 'Slack', inContext: true, inCompared: true },
 ];
 
-const contextItems: DiffItem[] = [{ id: 'g6', label: 'Finance Approvers' }];
+/** An Add button's label: the arrow sits on the edge nearest the marker and points at it. */
+const AddLabel = ({ direction }: { direction: CellDirection }) => (
+  <span className="inline-flex items-center gap-1">
+    {direction === 'left' && (
+      <span aria-hidden="true" className="text-base leading-none">
+        ←
+      </span>
+    )}
+    Add
+    {direction === 'right' && (
+      <span aria-hidden="true" className="text-base leading-none">
+        →
+      </span>
+    )}
+  </span>
+);
 
-/** Three tone-coded diff buckets (only-compared / shared / only-context) for groups or apps. */
+/** One list where every row states the comparison: two sides, a marker, and the action that closes the gap. */
 const meta = {
   title: 'Users/Comparison/ComparisonDiffTab',
   component: ComparisonDiffTab,
   tags: ['autodocs'],
   parameters: {
-    layout: 'fullscreen',
+    layout: 'padded',
     docs: {
       description: {
         component:
-          'Three tone-coded diff buckets (only-compared / shared / only-context) for groups or apps.\n\n' +
-          'Reused for both the Groups and Apps detail tabs via the `noun` and empty-text props. Optional `renderAction` / `renderContextAction` render-props add per-row "Add" controls to the compared-only and context-only buckets (groups only), enabling one-way or bidirectional copy. Each bucket scrolls within a fixed-height list and shows its empty-state text when the bucket is empty.',
+          'One list where **every row states the comparison**: the context user on the left, the compared user ' +
+          'on the right, and an equality marker between them.\n\n' +
+          'This replaced three tone-coded buckets (onlyCompared / shared / onlyContext) that shared the ' +
+          "panel's height in proportion to their row counts. That failed twice over: it separated the two users " +
+          '*spatially*, so reading a row meant knowing which card you were in, and it gave most of the screen ' +
+          'to `shared` — the one group nobody acts on. A 65-group comparison handed 53 shared rows ~80% of the ' +
+          'panel and left the 12 actionable ones scrolling in a sliver.\n\n' +
+          'The arrow on an Add button sits on the edge nearest the marker and points **inward**, so the gesture ' +
+          'and the goal are the same thing: close the `≠`. The middle cell borrows the button silhouette so the ' +
+          'three cells read as one set, but it is inert — no `<button>`, not focusable, `role="img"` with a ' +
+          'label. `=` and `≠` are different glyphs, so the state never depends on colour.\n\n' +
+          'A side that lacks the item and *cannot* be given it (an app row, an app-mastered group) renders a ' +
+          'stated non-answer rather than a button that would fail.\n\n' +
+          'It also fixes a subtler wrong: under buckets a successful copy made the Add button *vanish*, because ' +
+          'the row moved to another card. Here the row flips `≠` → `=` where you are already looking.',
       },
     },
   },
   args: {
-    contextName: 'Jane Doe',
-    comparedName: 'John Smith',
-    comparedItems,
-    sharedItems,
-    contextItems,
-    emptyComparedText: 'No groups unique to John Smith.',
-    emptySharedText: 'No shared groups.',
-    emptyContextText: 'No groups unique to Jane Doe.',
+    contextName: 'Sam',
+    comparedName: 'Jordan',
     noun: 'group',
-  },
-  argTypes: {
-    contextName: { description: 'Display name of the context user (baseline).' },
-    comparedName: { description: 'Display name of the compared user.' },
-    comparedItems: { description: 'Items unique to the compared user (the "add" bucket).' },
-    sharedItems: { description: 'Items both users share.' },
-    contextItems: { description: 'Items unique to the context user.' },
-    emptyComparedText: { description: 'Empty-state text for the only-compared bucket.' },
-    emptySharedText: { description: 'Empty-state text for the shared bucket.' },
-    emptyContextText: { description: 'Empty-state text for the only-context bucket.' },
-    noun: { description: 'Singular noun for the items ("group" or "app"), used in subtitles.' },
-    renderAction: {
-      description:
-        'Optional per-row action for the only-compared bucket (Add to context user); groups only.',
-    },
-    renderContextAction: {
-      description:
-        'Optional per-row action for the only-context bucket (Add to compared user); groups only.',
-    },
+    emptyText: 'Neither user is in any groups.',
+    rows: GROUP_ROWS,
   },
 } satisfies Meta<typeof ComparisonDiffTab>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Default three-bucket diff with a mix of items in each bucket. */
-export const Default: Story = {};
-
-/** Groups tab variant with a per-row "Add" action rendered in the compared-only bucket. */
-export const WithRowAction: Story = {
+/** The groups tab: both copy directions, provenance under each differing row. */
+export const Groups: Story = {
   args: {
-    renderAction: (item) => (
-      <button
-        type="button"
-        onClick={fn()}
-        className="text-xs font-semibold text-primary-text hover:text-primary-dark"
-      >
-        Add {item.label}
-      </button>
+    renderContextAction: (row, direction) =>
+      row.membership?.group.type === 'APP_GROUP' ? null : (
+        <Button size="sm" variant="primary" onClick={fn()}>
+          <AddLabel direction={direction} />
+        </Button>
+      ),
+    renderComparedAction: (_row, direction) => (
+      <Button size="sm" variant="primary" onClick={fn()}>
+        <AddLabel direction={direction} />
+      </Button>
+    ),
+    renderMeta: (row) =>
+      row.inContext && row.inCompared ? null : <GroupSourceIndicator membership={row.membership} />,
+  },
+};
+
+/** A copy in flight: the global single-flight lock disables every other Add. */
+export const CopyInFlight: Story = {
+  args: {
+    renderContextAction: (row, direction) =>
+      row.membership?.group.type === 'APP_GROUP' ? null : (
+        <Button
+          size="sm"
+          variant="primary"
+          loading={row.id === '00gFAKEgroup0001'}
+          disabled
+          onClick={fn()}
+        >
+          <AddLabel direction={direction} />
+        </Button>
+      ),
+    renderComparedAction: (_row, direction) => (
+      <Button size="sm" variant="primary" disabled onClick={fn()}>
+        <AddLabel direction={direction} />
+      </Button>
     ),
   },
 };
 
-/**
- * Bidirectional groups variant: Add actions in BOTH the compared-only bucket
- * (copy onto the context user) and the context-only bucket (copy onto the
- * compared user). Their subtitles flip to read "Add groups to <the other user>".
- */
-export const WithBidirectionalActions: Story = {
-  args: {
-    renderAction: (item) => (
-      <button
-        type="button"
-        onClick={fn()}
-        className="text-xs font-semibold text-primary-text hover:text-primary-dark"
-      >
-        Add {item.label} to Jane Doe
-      </button>
-    ),
-    renderContextAction: (item) => (
-      <button
-        type="button"
-        onClick={fn()}
-        className="text-xs font-semibold text-primary-text hover:text-primary-dark"
-      >
-        Add {item.label} to John Smith
-      </button>
-    ),
-  },
-};
+/** No actions at all — how the list reads before the copy hooks are wired. */
+export const ReadOnly: Story = {};
 
-/** All three buckets empty (identical or brand-new users). */
-export const Empty: Story = {
-  args: {
-    comparedItems: [],
-    sharedItems: [],
-    contextItems: [],
-  },
-};
-
-/** Apps tab: no row action, different noun and copy. */
-export const AppsVariant: Story = {
+/** The apps tab: same row, no buttons, scope instead of provenance. */
+export const Apps: Story = {
   args: {
     noun: 'app',
-    emptyComparedText: 'No apps unique to John Smith.',
-    emptySharedText: 'No shared apps.',
-    emptyContextText: 'No apps unique to Jane Doe.',
+    emptyText: 'Neither user is assigned any apps.',
+    rows: APP_ROWS,
+    renderMeta: (row) =>
+      row.inContext && row.inCompared ? (
+        <AppScopeIndicator state="notCompared" />
+      ) : (
+        <AppScopeIndicator state={row.inCompared ? 'USER' : 'GROUP'} />
+      ),
   },
 };
 
-/** A bucket with many items scrolls within its fixed-height list. */
-export const LongLists: Story = {
+/** Nothing to compare at all — distinct from "nothing matches the filter". */
+export const Empty: Story = {
+  args: { rows: [] },
+};
+
+/** Enough rows that the list scrolls inside the panel rather than the page. */
+export const LongList: Story = {
   args: {
-    comparedItems: Array.from({ length: 20 }, (_, i) => ({
-      id: `long-${i}`,
-      label: `Group with a fairly long descriptive name #${i + 1}`,
-    })),
+    rows: [
+      ...GROUP_ROWS,
+      ...Array.from({ length: 24 }, (_, i) =>
+        groupRow(`00gFAKEbulk${i}`, `bulk.group.${String(i).padStart(2, '0')}`, true, true),
+      ),
+    ],
+    renderContextAction: (_row, direction) => (
+      <Button size="sm" variant="primary" onClick={fn()}>
+        <AddLabel direction={direction} />
+      </Button>
+    ),
   },
 };

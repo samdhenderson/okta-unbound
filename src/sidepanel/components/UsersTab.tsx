@@ -8,36 +8,44 @@
  * flow, and per-group membership attribution (rule-based vs. direct) computed by
  * `analyzeMemberships`. Security-sensitive profile fields are never shown.
  *
+ * The tab itself is composition only: all state and hook wiring live in
+ * {@link sidepanel/hooks/useUsersTabState.useUsersTabState}, the search surface in
+ * {@link UserSearchPanel} and the selected-user surface in {@link UserDetailPanel}.
+ *
+ * ## Sub-navigation
+ *
+ * "Compare" **pushes a view** rather than opening a dialog (ADR-0016). The tab owns
+ * a {@link sidepanel/hooks/useViewStack.useViewStack} stack — instantiated inside
+ * `useUsersTabState`, with this component's `compareViewRef` passed in — whose one
+ * pushed view is {@link UserComparisonPanel}. The search + profile body is **hidden
+ * rather than unmounted** while it is pushed and the comparison renders as its
+ * sibling, so the search box, the selected user and their analysed memberships all
+ * survive a push→pop round trip. One `PageHeader` stays mounted throughout and swaps
+ * its contents, per ADR-0008's stable-region precedent.
+ *
+ * The comparison host is mounted on the same condition the dialog used to be
+ * (a selected user + a live tab) and hidden with the same wholesale class swap, so
+ * what clears a finished comparison is `useUserComparison`'s reset effect — keyed on
+ * "a comparison is pushed" — rather than an unmount.
+ *
+ * Unlike the Groups tab this one owns no scroll box of its own: its body scrolls the
+ * app root scroller, whose offset belongs to {@link TabPanel} (ADR-0018). There is
+ * therefore nothing here for `useScrollPreservation` to capture before a push.
+ *
  * {@link App} hides this tab rather than unmounting it when another top-level tab
- * is selected, so the selected user, their analysed memberships and the search box
- * all survive leaving it. In exchange the tab must be inert while hidden:
- * `isActive` suspends live user-page detection, the user-search debounce and the
- * Add-to-Group type-ahead — the three things here that can reach Okta without a click.
+ * is selected, so the selected user, their analysed memberships, the search box and
+ * a pushed comparison all survive leaving it. In exchange the tab must be inert
+ * while hidden: `isActive` suspends live user-page detection, the user-search
+ * debounce, the Add-to-Group type-ahead and the comparison's own user search — the
+ * four things here that can reach Okta without a click.
  */
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import PageHeader from './shared/PageHeader';
+import Breadcrumbs from './shared/Breadcrumbs';
 import AlertMessage from './shared/AlertMessage';
-import Button from './shared/Button';
-import EmptyState from './shared/EmptyState';
-import {
-  AddToGroupModal,
-  DetectedUserBanner,
-  GroupMembershipsList,
-  UserComparisonModal,
-  UserLifecycleActions,
-  UserProfileCard,
-  UserSearchBar,
-  UserSearchResults,
-} from './users';
-import type { OktaUser } from '../../shared/types';
-import type { AlertMessageData } from './shared/AlertMessage';
-import { useUserContext } from '../hooks/useUserContext';
-import { useUserMemberships } from '../hooks/useUserMemberships';
-import { invalidate } from '../cache/entityCache';
-import { useUsersTabSearch } from '../hooks/useUsersTabSearch';
-import { useDetectedUser } from '../hooks/useDetectedUser';
-import { useUserLifecycleActions } from '../hooks/useUserLifecycleActions';
-import { useAddToGroup } from '../hooks/useAddToGroup';
+import { AddToGroupModal, UserComparisonPanel, UserDetailPanel, UserSearchPanel } from './users';
+import { useUsersTabState } from '../hooks/useUsersTabState';
+import { userDisplayName } from '../../shared/utils/userDisplay';
 
 interface UsersTabProps {
   /** Chrome tab id of the connected Okta tab; required for all user/group API calls. */
@@ -66,8 +74,8 @@ interface UsersTabProps {
 
 /**
  * Renders the Users tab: user search/auto-load, the detailed profile card and its
- * collapsible sections, lifecycle actions, the Add-to-Group modal, and the analysed
- * group-membership list.
+ * collapsible sections, lifecycle actions, the Add-to-Group modal, the analysed
+ * group-membership list, and the pushed user-comparison view.
  */
 const UsersTab: React.FC<UsersTabProps> = ({
   targetTabId,
@@ -77,308 +85,150 @@ const UsersTab: React.FC<UsersTabProps> = ({
   onUserSelected,
   isActive = true,
 }) => {
-  const { userInfo, oktaOrigin } = useUserContext(isActive);
-  const [isLoadingMemberships, setIsLoadingMemberships] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<OktaUser | null>(null);
-  const [isCompareOpen, setIsCompareOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [resultMessage, setResultMessage] = useState<AlertMessageData | null>(null);
-  // Detected-user banner is hidden per id once dismissed (the tab stays pinned to
-  // the user you explicitly selected; admin navigation never swaps it).
-  const [dismissedDetectedId, setDismissedDetectedId] = useState<string | null>(null);
-
-  // Membership loading + attribution lives in the shared hook (also used by
-  // UserOverview / user comparison). The orchestrator keeps owning the merged
-  // `error` banner and the `isLoadingMemberships` flag via the hook's callbacks,
-  // so last-write-wins across search / auto-load / lifecycle is preserved.
-  const { memberships, loadMemberships, clearMemberships } = useUserMemberships({
+  const compareViewRef = useRef<HTMLDivElement>(null);
+  const state = useUsersTabState({
     targetTabId,
-    onError: setError,
-    onLoadingChange: setIsLoadingMemberships,
+    selectedUserId,
+    onUserSelected,
+    isActive,
+    compareViewRef,
   });
+  const { selectedUser, memberships, lifecycle, addToGroup, nav, isCompareOpen } = state;
 
-  // Debounced user search. The raw `searchUsers` read path (a §8-preserved
-  // scheduler bypass) lives in the hook; a fresh search clears the selected user
-  // and its memberships via `onSearchStart` and reports failures through the tab's
-  // single merged `error` channel.
-  const onSearchStart = useCallback(() => {
-    setSelectedUser(null);
-    clearMemberships();
-  }, [clearMemberships]);
-
-  const { searchQuery, setSearchQuery, searchResults, setSearchResults, isSearching } =
-    useUsersTabSearch({ targetTabId, onError: setError, onSearchStart, enabled: isActive });
-
-  const handleSelectUser = useCallback(
-    async (user: OktaUser) => {
-      if (!targetTabId) return;
-
-      setSelectedUser(user);
-      await loadMemberships(user);
-    },
-    [targetTabId, loadMemberships],
-  );
-
-  // After adding the user to a group their memberships have changed — drop the
-  // cached analysis so the reload reflects the new group.
-  const handleUserAddedToGroup = useCallback(
-    async (user: OktaUser) => {
-      invalidate(['userMemberships', user.id]);
-      await handleSelectUser(user);
-    },
-    [handleSelectUser],
-  );
-
-  // Compare-modal refresh: after a group is copied onto the selected user, drop the
-  // cached analysis and reload their memberships in place. Crucially this does NOT
-  // touch `selectedUser` or the modal's open state, so adding a group never closes
-  // the comparison or resets the tab — you can keep adding.
-  const refreshSelectedUserMemberships = useCallback(() => {
-    if (!selectedUser) return;
-    invalidate(['userMemberships', selectedUser.id]);
-    void loadMemberships(selectedUser, { force: true });
-  }, [selectedUser, loadMemberships]);
-
-  // Load the user detected on the page — only when the banner's Load button is
-  // clicked. The raw `getUserDetails` read path (a §8-preserved scheduler bypass)
-  // lives in the hook; orchestrator writes go through these callbacks.
-  const onResetSearch = useCallback(() => {
-    setSearchResults([]);
-    setSearchQuery('');
-  }, [setSearchResults, setSearchQuery]);
-
-  const { loadDetectedUser, loadUserById } = useDetectedUser({
-    targetTabId,
-    detectedUserId: userInfo?.userId,
-    loadMemberships,
-    onSelectUser: setSelectedUser,
-    onError: setError,
-    onLoadingChange: setIsLoadingMemberships,
-    onResetSearch,
-  });
-
-  // Fulfil a one-shot `selectedUserId` request (e.g. Overview's "View all groups")
-  // exactly once — load that user + memberships, then clear the request so it can
-  // fire again for a repeat navigation.
-  const requestedUserRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!selectedUserId) {
-      requestedUserRef.current = null;
-      return;
-    }
-    if (selectedUserId === requestedUserRef.current) return;
-    requestedUserRef.current = selectedUserId;
-    loadUserById(selectedUserId);
-    onUserSelected?.();
-  }, [selectedUserId, loadUserById, onUserSelected]);
-
-  // Show the detected-user banner only when the page's user differs from the one
-  // explicitly selected and hasn't been dismissed — never while searching.
-  const detectedUserId = userInfo?.userId;
-  const showDetectedBanner =
-    Boolean(userInfo) &&
-    detectedUserId !== selectedUser?.id &&
-    detectedUserId !== dismissedDetectedId &&
-    !searchQuery;
-
-  // Clear search and reset to initial state
-  const handleClearSearch = () => {
-    setSearchQuery('');
-    setSearchResults([]);
-    setSelectedUser(null);
-    clearMemberships();
-    setError(null);
-    setResultMessage(null);
-  };
-
-  // Lifecycle actions (suspend / unsuspend / reset password) behind the confirm
-  // modal. The hook owns its own scheduler slice; the orchestrator keeps the result
-  // banner and patches the selected user's status in place after a refresh.
-  const onUserStatusRefresh = useCallback((status: OktaUser['status']) => {
-    setSelectedUser((prev) => (prev ? { ...prev, status } : prev));
-  }, []);
-
-  const {
-    pendingLifecycleAction,
-    setPendingLifecycleAction,
-    isLifecycleLoading,
-    confirmLifecycleAction,
-  } = useUserLifecycleActions({
-    targetTabId,
-    selectedUser,
-    onResult: setResultMessage,
-    onUserStatusRefresh,
-  });
-
-  // Add-to-Group modal: debounced group type-ahead + the add itself. The hook owns
-  // its own scheduler slice; on success it refreshes memberships via handleSelectUser
-  // and reports failures through the tab's result banner.
-  const {
-    isOpen: isAddToGroupModalOpen,
-    groupSearchQuery,
-    setGroupSearchQuery,
-    groupSearchResults,
-    isSearchingGroups,
-    showGroupDropdown,
-    selectedGroup,
-    selectGroup,
-    clearSelectedGroup,
-    isAddingToGroup,
-    openModal: handleOpenAddToGroupModal,
-    closeModal: handleCloseAddToGroupModal,
-    confirmAddToGroup: handleConfirmAddToGroup,
-  } = useAddToGroup({
-    targetTabId,
-    selectedUser,
-    onResult: setResultMessage,
-    onAdded: handleUserAddedToGroup,
-    enabled: isActive,
-  });
+  // Re-resolve the pushed entry against the live selection: the entry is a snapshot
+  // taken at push time, while `selectedUser` is patched in place (a lifecycle action
+  // rewrites its status) and its memberships reload after a group is copied.
+  const compareEntry = nav.currentEntry;
+  const compareName =
+    compareEntry && selectedUser?.id === compareEntry.userId
+      ? userDisplayName(selectedUser)
+      : compareEntry?.userName;
 
   return (
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
+      {/* One header for the whole tab; its contents swap as views push/pop (ADR-0008). */}
       <PageHeader
-        title="User Search"
-        subtitle="Search users and analyze their group memberships"
+        title={isCompareOpen ? 'Compare users' : 'User Search'}
+        subtitle={
+          isCompareOpen
+            ? `${compareName} vs. another user`
+            : 'Search users and analyze their group memberships'
+        }
+        onBack={isCompareOpen ? nav.pop : undefined}
+        backLabel="Back to user"
+        breadcrumbs={isCompareOpen ? <Breadcrumbs items={nav.trail} /> : undefined}
         badge={
           selectedUser ? { text: `${memberships.length} Groups`, variant: 'primary' } : undefined
         }
       />
 
-      <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
-        {/* Search Section */}
-        <div className="space-y-3">
-          <UserSearchBar
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            onClear={handleClearSearch}
-            isSearching={isSearching}
-            showClearButton={Boolean(searchQuery || selectedUser)}
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        {/*
+          Hidden, never unmounted: the search box, the selected user's profile card
+          and its per-section expansion all live in this subtree, as does the Compare
+          button focus is restored to on pop. The class is swapped wholesale (rather
+          than adding `hidden` alongside the layout classes) because those would
+          otherwise out-specify the `hidden` display rule.
+        */}
+        <div className={isCompareOpen ? 'hidden' : 'space-y-6'}>
+          <UserSearchPanel
+            searchQuery={state.searchQuery}
+            onSearchQueryChange={state.setSearchQuery}
+            onClearSearch={state.clearSearch}
+            isSearching={state.isSearching}
+            searchResults={state.searchResults}
+            onSelectUser={state.selectUser}
+            detectedUser={state.detectedUser}
+            isDetectedUserLoading={state.isLoadingMemberships}
+            onLoadDetectedUser={state.loadDetectedUser}
+            onDismissDetectedUser={state.dismissDetectedUser}
+            hasSelectedUser={Boolean(selectedUser)}
+            hasError={Boolean(state.error)}
+            alerts={
+              <>
+                {/* Error Display */}
+                {state.error && (
+                  <AlertMessage
+                    message={{ text: state.error, type: 'danger' }}
+                    onDismiss={state.dismissError}
+                    className="animate-in slide-in-from-top-2 duration-300"
+                  />
+                )}
+
+                {/* Lifecycle operation result */}
+                {state.resultMessage && (
+                  <AlertMessage
+                    message={state.resultMessage}
+                    onDismiss={state.dismissResultMessage}
+                    className="animate-in slide-in-from-top-2 duration-300"
+                  />
+                )}
+              </>
+            }
           />
 
-          {/* Detected-user banner: manual load only, so the tab is never hijacked. */}
-          {showDetectedBanner && userInfo && (
-            <DetectedUserBanner
-              userInfo={userInfo}
-              isLoading={isLoadingMemberships}
-              onLoad={loadDetectedUser}
-              onDismiss={() => setDismissedDetectedId(userInfo.userId)}
+          {/* Selected User Details - Positioned directly under search */}
+          {selectedUser && (
+            <UserDetailPanel
+              user={selectedUser}
+              oktaOrigin={state.oktaOrigin}
+              memberships={memberships}
+              isLoadingMemberships={state.isLoadingMemberships}
+              currentGroupId={currentGroupId}
+              onNavigateToRule={onNavigateToRule}
+              isLifecycleLoading={lifecycle.isLifecycleLoading}
+              pendingLifecycleAction={lifecycle.pendingLifecycleAction}
+              onRequestLifecycleAction={lifecycle.setPendingLifecycleAction}
+              onCancelLifecycleAction={() => lifecycle.setPendingLifecycleAction(null)}
+              onConfirmLifecycleAction={lifecycle.confirmLifecycleAction}
+              onCompare={state.openCompare}
+              onAddToGroup={addToGroup.openModal}
             />
           )}
         </div>
 
-        {/* Error Display */}
-        {error && (
-          <AlertMessage
-            message={{ text: error, type: 'danger' }}
-            onDismiss={() => setError(null)}
-            className="animate-in slide-in-from-top-2 duration-300"
-          />
-        )}
-
-        {/* Lifecycle operation result */}
-        {resultMessage && (
-          <AlertMessage
-            message={resultMessage}
-            onDismiss={() => setResultMessage(null)}
-            className="animate-in slide-in-from-top-2 duration-300"
-          />
-        )}
-
-        {/* Search Results (the component self-hides when empty; caller gates on selection) */}
-        {!selectedUser && (
-          <UserSearchResults results={searchResults} onSelectUser={handleSelectUser} />
-        )}
-
-        {/* Selected User Details - Positioned directly under search */}
-        {selectedUser && (
-          <div className="space-y-6 animate-in slide-in-from-top-4 duration-500">
-            <UserProfileCard
-              user={selectedUser}
-              oktaOrigin={oktaOrigin}
-              afterCard={
-                <UserLifecycleActions
-                  user={selectedUser}
-                  isLifecycleLoading={isLifecycleLoading}
-                  pendingLifecycleAction={pendingLifecycleAction}
-                  onRequestAction={setPendingLifecycleAction}
-                  onCancel={() => setPendingLifecycleAction(null)}
-                  onConfirm={confirmLifecycleAction}
-                />
-              }
-            />
-
-            {/* Group Memberships */}
-            <GroupMembershipsList
-              memberships={memberships}
-              isLoading={isLoadingMemberships}
-              currentGroupId={currentGroupId}
-              oktaOrigin={oktaOrigin}
-              onNavigateToRule={onNavigateToRule}
-              actions={
-                <>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon="users"
-                    onClick={() => setIsCompareOpen(true)}
-                    disabled={isLoadingMemberships}
-                    title="Compare group & app access with another user"
-                  >
-                    Compare
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleOpenAddToGroupModal}
-                    disabled={isLoadingMemberships}
-                  >
-                    Add to Group
-                  </Button>
-                </>
-              }
+        {/* Pushed comparison view — a sibling of the body, never a replacement for
+            it. Mounted on the same condition the comparison dialog used to be, so
+            the reset that clears a finished comparison is the hook's, not an
+            unmount's. The `data-testid` is a scoping handle for the navigation
+            tests: unlike the Groups tab's detail view this one is always mounted,
+            so its presence tracks nothing — tests scope queries with it because the
+            hidden browse body still answers `getByRole` under jsdom. */}
+        {selectedUser && targetTabId != null && (
+          <div
+            ref={compareViewRef}
+            tabIndex={-1}
+            data-testid="user-comparison-view"
+            className={isCompareOpen ? 'space-y-6 focus:outline-none' : 'hidden'}
+          >
+            <UserComparisonPanel
+              oktaOrigin={state.oktaOrigin}
+              isActive={isCompareOpen}
+              searchEnabled={isCompareOpen && isActive}
+              contextUser={selectedUser}
+              contextGroups={memberships}
+              targetTabId={targetTabId}
+              onGroupsChanged={state.refreshSelectedUserMemberships}
             />
           </div>
         )}
-
-        {/* Empty State - Show only when no search and no user selected */}
-        {!isSearching && searchResults.length === 0 && !error && !selectedUser && !searchQuery && (
-          <EmptyState
-            icon="user"
-            title="User Membership Tracing"
-            description="Search for users to analyze their group memberships and understand why they're in specific groups"
-          />
-        )}
       </div>
-
-      {/* User comparison modal — same feature as the Overview's Compare, now
-          reachable from the Users tab. Mounted only with a live tab + selection. */}
-      {selectedUser && targetTabId != null && (
-        <UserComparisonModal
-          isOpen={isCompareOpen}
-          onClose={() => setIsCompareOpen(false)}
-          contextUser={selectedUser}
-          contextGroups={memberships}
-          targetTabId={targetTabId}
-          onGroupsChanged={refreshSelectedUserMemberships}
-        />
-      )}
 
       {/* Add to Group Modal */}
       <AddToGroupModal
-        isOpen={isAddToGroupModalOpen}
+        isOpen={addToGroup.isOpen}
         userFirstName={selectedUser?.profile?.firstName}
-        groupSearchQuery={groupSearchQuery}
-        onGroupSearchQueryChange={setGroupSearchQuery}
-        groupSearchResults={groupSearchResults}
-        isSearchingGroups={isSearchingGroups}
-        showGroupDropdown={showGroupDropdown}
-        selectedGroup={selectedGroup}
-        onSelectGroup={selectGroup}
-        onClearSelectedGroup={clearSelectedGroup}
-        isAddingToGroup={isAddingToGroup}
-        onClose={handleCloseAddToGroupModal}
-        onConfirm={handleConfirmAddToGroup}
+        groupSearchQuery={addToGroup.groupSearchQuery}
+        onGroupSearchQueryChange={addToGroup.setGroupSearchQuery}
+        groupSearchResults={addToGroup.groupSearchResults}
+        isSearchingGroups={addToGroup.isSearchingGroups}
+        showGroupDropdown={addToGroup.showGroupDropdown}
+        selectedGroup={addToGroup.selectedGroup}
+        onSelectGroup={addToGroup.selectGroup}
+        onClearSelectedGroup={addToGroup.clearSelectedGroup}
+        isAddingToGroup={addToGroup.isAddingToGroup}
+        onClose={addToGroup.closeModal}
+        onConfirm={addToGroup.confirmAddToGroup}
       />
     </div>
   );

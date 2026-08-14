@@ -7,7 +7,12 @@ import type { CoreApi } from './core';
 import type { OktaFactor, MemberMfaResult, OktaUser } from '../../../shared/types';
 import { summarizeFactors } from '../../../shared/utils/mfaUtils';
 import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
-import { oktaAppListItemSchema, type OktaAppListItem } from '@/shared/schemas/okta';
+import {
+  oktaAppListItemSchema,
+  extractAppAssignmentScope,
+  type OktaAppListItem,
+  type AppAssignmentScope,
+} from '@/shared/schemas/okta';
 import { createLogger } from '../../../shared/utils/logger';
 
 const log = createLogger('useOktaApi');
@@ -73,29 +78,55 @@ export function createUserOperations(coreApi: CoreApi) {
   };
 
   /**
-   * List all apps assigned to a user (id + display label).
+   * List all apps assigned to a user (id + display label + assignment scope).
    *
    * @param userId - User whose apps to list.
-   * @returns Every assigned app across all pages; `[]` on error.
+   * @returns Every assigned app across all pages; `[]` on error. Each entry carries
+   * an optional {@link AppAssignmentScope}: `'USER'` when the user **has a direct
+   * assignment** to the app, `'GROUP'` when the assignment comes from a group, and
+   * `undefined` when Okta did not report one. Okta reports a single scope per
+   * app-user and prefers `'USER'` when both paths exist, so `'USER'` must never be
+   * rendered as "direct only".
    * @remarks Reflects effective assignments (direct + via group) from the apps
    * filter endpoint, following `Link` pagination (200 per page).
+   *
+   * The scope costs **no extra requests**: `expand=user/{userId}` asks this same
+   * list endpoint (not `appLinks`, which does not support `expand`) to embed the
+   * app-user object under `_embedded.user` on each row, so the walk is byte-for-byte
+   * the same number of calls it was without it. A missing or malformed embed leaves
+   * `scope` undefined and never drops the app (ADR-0006).
+   *
+   * Pages 2+ are re-issued from Okta's own `rel="next"` cursor, so they carry the
+   * embed only if Okta echoes `expand` back on that link (it does for `expand=stats`
+   * on `/api/v1/groups` — see `groupDiscovery.test.ts`). If it ever stops, the only
+   * consequence is `scope: undefined` past page 1 — apps are never lost — so this
+   * deliberately does not rewrite the cursor URL.
    */
-  const getUserApps = async (userId: string): Promise<Array<{ id: string; label: string }>> => {
-    const apps: Array<{ id: string; label: string }> = [];
+  const getUserApps = async (
+    userId: string,
+  ): Promise<Array<{ id: string; label: string; scope?: AppAssignmentScope }>> => {
+    const apps: Array<{ id: string; label: string; scope?: AppAssignmentScope }> = [];
 
     try {
       // Accumulate via onPage so a mid-walk failure still returns the pages
       // collected so far (fetchAllPages throws on a failed page).
       await fetchAllPages<OktaAppListItem>(
         (url) => coreApi.makeApiRequest(url),
-        `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=${OKTA_PAGE_SIZE}`,
+        `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=${OKTA_PAGE_SIZE}&expand=user/${userId}`,
         {
           // Validated at the response boundary (ADR-0006): malformed rows are
           // dropped leniently by parseOktaList, never thrown on.
           schema: oktaAppListItemSchema,
           onPage: (page) => {
             for (const app of page) {
-              apps.push({ id: app.id, label: app.label || app.name || app.id });
+              apps.push({
+                id: app.id,
+                label: app.label || app.name || app.id,
+                // Read defensively off the untyped `_embedded`: any shape that is
+                // not a recognizable app-user yields undefined, so the app is still
+                // listed with its scope simply unknown.
+                scope: extractAppAssignmentScope(app._embedded),
+              });
             }
           },
         },

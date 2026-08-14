@@ -134,16 +134,22 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
    * Resolve the group rules that assign users to a given group.
    *
    * @param groupId - Group whose inbound assignment rules to find.
-   * @returns Matching rules, or `[]` on failure/none.
+   * @returns Matching rules in the {@link FormattedRule} display shape, or `[]`
+   * on failure/none.
    * @remarks Serves from {@link RulesCache} when populated or fresh; otherwise
    * fetches the full rules list via {@link fetchAndCacheAllGroupRules} (following
    * `Link` pagination, 200 per page), writing it back to the cache so subsequent
    * lookups — for any group — are served without refetching, and returns the
    * rules targeting `groupId`.
+   *
+   * **Both paths return the same shape.** The cache-miss path must return the
+   * *formatted* rules, not the raw Okta ones: `userAttributes` is not an Okta
+   * field, it is synthesised by {@link formatRuleForDisplay}. Returning raw
+   * rules here handed every consumer `userAttributes === undefined`, which
+   * silently degraded `membershipAnalysis.inferBestMatchRule` to a positional
+   * guess on the cold-cache path.
    */
-  const getGroupRulesForGroup = async (
-    groupId: string,
-  ): Promise<FormattedRule[] | OktaGroupRule[]> => {
+  const getGroupRulesForGroup = async (groupId: string): Promise<FormattedRule[]> => {
     try {
       // Check cache first
       const cachedRules = await RulesCache.getRulesForGroup(groupId);
@@ -155,15 +161,13 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
       // Cache miss - fetch ALL group rules, following pagination so orgs with
       // more than one page (>200 rules) are not silently truncated.
       log.debug(`Cache miss - fetching all rules for group ${groupId}`);
-      const { rawRules } = await fetchAndCacheAllGroupRules();
+      const { rules } = await fetchAndCacheAllGroupRules();
 
-      // Filter rules that target this group
-      const groupRules = rawRules.filter((rule) => {
-        const targetGroupIds = rule.actions?.assignUserToGroups?.groupIds || [];
-        return targetGroupIds.includes(groupId);
-      });
-
-      return groupRules;
+      // Filter rules that target this group. On the formatted shape the target
+      // ids have already been lifted out of `actions.assignUserToGroups` onto
+      // `groupIds` — the same field `RulesCache.getRulesForGroup` filters on, so
+      // both paths select identically.
+      return rules.filter((rule) => rule.groupIds.includes(groupId));
     } catch (error) {
       log.error(`Failed to get rules for group ${groupId}:`, error);
       return [];

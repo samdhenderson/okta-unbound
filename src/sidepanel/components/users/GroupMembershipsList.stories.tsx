@@ -3,11 +3,27 @@ import { fn } from 'storybook/test';
 import GroupMembershipsList from './GroupMembershipsList';
 import Button from '../shared/Button';
 import { mockGroup } from '../../../test/mocks/handlers';
-import type { GroupMembership } from '../../../shared/types';
+import type { GroupMembership, OktaUser } from '../../../shared/types';
+
+/** An obviously fake user — no real org data ever ships in a story. */
+const user: OktaUser = {
+  id: '00uFAKE1',
+  status: 'ACTIVE',
+  profile: {
+    login: 'ada@example.com',
+    email: 'ada@example.com',
+    firstName: 'Ada',
+    lastName: 'Lovelace',
+    department: 'Engineering',
+    title: 'Intern',
+  },
+};
 
 const directMembership: GroupMembership = {
   group: mockGroup,
   membershipType: 'DIRECT',
+  rules: [],
+  attribution: 'exact',
 };
 
 const ruleMembership: GroupMembership = {
@@ -20,17 +36,69 @@ const ruleMembership: GroupMembership = {
     },
   },
   membershipType: 'RULE_BASED',
-  rule: {
-    id: 'rule1',
-    name: 'Auto-add Engineers',
-    status: 'ACTIVE',
-    conditions: {
-      expression: {
-        value: 'String.stringContains(user.department, "Engineering")',
-        type: 'urn:okta:expression:1.0',
+  attribution: 'exact',
+  rules: [
+    {
+      id: 'rule1',
+      name: 'Auto-add Engineers',
+      status: 'ACTIVE',
+      conditions: {
+        expression: {
+          value: 'String.stringContains(user.department, "Engineering")',
+          type: 'urn:okta:expression:1.0',
+        },
       },
     },
+  ],
+};
+
+/**
+ * The shape the Users tab actually supplies — a `FormattedRule`, which carries
+ * `conditionExpression` and no `conditions` object — with a clause the evaluator
+ * cannot resolve beside two it can.
+ */
+const formattedRuleMembership: GroupMembership = {
+  group: {
+    id: 'group789',
+    type: 'OKTA_GROUP',
+    profile: { name: 'Platform On-call' },
   },
+  membershipType: 'RULE_BASED',
+  attribution: 'exact',
+  rules: [
+    {
+      id: 'rule2',
+      name: 'On-call rotation',
+      status: 'ACTIVE',
+      conditionExpression:
+        'user.department == "Engineering" && user.title != "Intern" && isMemberOfGroup("00gFAKE1")',
+    },
+  ],
+};
+
+/** Two candidate rules and nothing to separate them: captioned as candidates, not answers. */
+const ambiguousMembership: GroupMembership = {
+  group: {
+    id: 'group321',
+    type: 'OKTA_GROUP',
+    profile: { name: 'Security Reviewers' },
+  },
+  membershipType: 'RULE_BASED',
+  attribution: 'ambiguous',
+  rules: [
+    {
+      id: 'rule3',
+      name: 'Reviewers — by title',
+      status: 'ACTIVE',
+      conditionExpression: 'user.title == "Intern"',
+    },
+    {
+      id: 'rule4',
+      name: 'Reviewers — by group',
+      status: 'ACTIVE',
+      conditionExpression: 'isMemberOfGroup("00gFAKE1")',
+    },
+  ],
 };
 
 const unknownMembership: GroupMembership = {
@@ -42,6 +110,8 @@ const unknownMembership: GroupMembership = {
     },
   },
   membershipType: 'UNKNOWN',
+  rules: [],
+  attribution: 'ambiguous',
 };
 
 /** Card listing a user's group memberships, split into direct vs rule-based badges. */
@@ -55,18 +125,24 @@ const meta = {
       description: {
         component:
           "Card listing a user's group memberships, distinguishing direct vs rule-based membership.\n\n" +
-          'Direct/rule-based classification is heuristic — the Okta API does not expose which rule (if any) added a user. Rule-based rows surface the matched rule name plus its condition expression and an optional deep link to the Rules tab. Renders a spinner while loading and an empty state when the user belongs to no groups; the header exposes an `actions` slot for caller-supplied controls (e.g. UsersTab\'s "Add to Group" button).',
+          "Direct/rule-based classification is heuristic — the Okta API does not expose which rule (if any) added a user. A rule-based row surfaces the matched rule name, a deep link to the Rules tab, and — when `user` is supplied — that rule's condition explained clause by clause (`ClauseChecklist`): pass, fail, or a neutral **not evaluated** for anything the client-side evaluator cannot resolve. Without a `user` the row falls back to the raw condition text.\n\n" +
+          'Renders a spinner while loading and an empty state when the user belongs to no groups; the header exposes an `actions` slot for caller-supplied controls (e.g. UsersTab\'s "Add to Group" button).',
       },
     },
   },
   args: {
     memberships: [directMembership, ruleMembership],
+    user,
     isLoading: false,
     onNavigateToRule: fn(),
   },
   argTypes: {
     memberships: {
       description: "The user's group memberships, each already classified as direct or rule-based.",
+    },
+    user: {
+      description:
+        'The user the memberships belong to; enables the per-clause explanation of each rule condition.',
     },
     isLoading: { description: 'When true, shows a spinner instead of the list.' },
     currentGroupId: {
@@ -125,4 +201,22 @@ export const WithHeaderActions: Story = {
 /** Includes a membership whose type could not be classified. */
 export const WithUnknownMembershipType: Story = {
   args: { memberships: [directMembership, ruleMembership, unknownMembership] },
+};
+
+/**
+ * A rule the Users tab supplies as a `FormattedRule`: pass, fail and a neutral
+ * "not evaluated" clause together. The unevaluable clause never reads as a failure.
+ */
+export const RuleWithMixedClauses: Story = {
+  args: { memberships: [formattedRuleMembership] },
+};
+
+/** Two candidate rules, each explained, and neither captioned as the answer. */
+export const AmbiguousAttribution: Story = {
+  args: { memberships: [ambiguousMembership] },
+};
+
+/** No user to explain against, so the row falls back to the raw condition text. */
+export const WithoutUser: Story = {
+  args: { memberships: [formattedRuleMembership], user: undefined },
 };

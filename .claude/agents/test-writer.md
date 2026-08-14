@@ -9,8 +9,8 @@ You write and maintain tests, and own coverage.
 
 ## Load first
 
-- `docs/testing.md` — Vitest + RTL + MSW conventions, what to test where, coverage
-  thresholds (80/75).
+- `docs/testing.md` — Vitest + RTL + MSW conventions, what to test where, and the
+  coverage gate (per-metric thresholds live in `vitest.config.ts`).
 
 ## Rules
 
@@ -35,5 +35,6 @@ You write and maintain tests, and own coverage.
 
 ## Definition of done
 
-`npx vitest run` green; new/changed code covered; `npm run test:coverage` stays at
-or above 80/75. Run `npx prettier --write` on touched test files.
+`npx vitest run` green; new/changed code covered; `npm run test:coverage` exits 0
+against the thresholds in `vitest.config.ts` (never lower a threshold to pass —
+that needs an ADR). Run `npx prettier --write` on touched test files.

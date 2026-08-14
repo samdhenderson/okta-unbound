@@ -80,7 +80,11 @@ levels:
   (`onBack` / `breadcrumbs` slots) and the shared `Breadcrumbs`. The pushed view is a
   **sibling** of the hidden-but-mounted list, not a replacement, so list state
   survives the round trip; `useScrollPreservation` carries the scroll offset that
-  `display: none` destroys. First consumer: `GroupsTab` → `GroupDetailView`.
+  `display: none` destroys. Consumers: `GroupsTab` → `GroupDetailView` (the first),
+  and `UsersTab` → `UserComparisonPanel`. The Users tab adds the case where the
+  pushed view **stays mounted while popped** (its host is, so its state is cleared
+  by a reset effect rather than by an unmount) — which makes the ADR-0018 gate apply
+  one level down: `searchEnabled` is "pushed **and** the tab is shown".
 
 ## Persistence
 

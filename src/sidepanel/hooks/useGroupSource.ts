@@ -11,16 +11,23 @@
  * is banked in {@link module:sidepanel/cache/memberSourceCache} so cheap,
  * fetch-less consumers — every row's compact meter in the groups list — can show
  * the split without paying for it again.
+ *
+ * Both halves of the analysis read through a cache, so re-opening the same group
+ * costs nothing: the rules half is served by `RulesCache` inside
+ * {@link module:hooks/useOktaApi/groupDiscovery}, and the member half by the
+ * shared entity cache under `['groupMembers', groupId]` — the same key
+ * `GroupOverview` and {@link module:sidepanel/hooks/useGroupMembersCache} use.
  */
 
 import { useCallback, useRef, useState } from 'react';
-import type { GroupSummary, MembershipRule } from '../../shared/types';
+import type { GroupSummary } from '../../shared/types';
 import { useOktaApi } from './useOktaApi';
 import {
   summarizeMemberSources,
   type MemberSourceBreakdown,
 } from '../../shared/membership/groupSource';
 import { writeMemberSource } from '../cache/memberSourceCache';
+import { getOrFetch } from '../cache/entityCache';
 import { createLogger } from '../../shared/utils/logger';
 
 const log = createLogger('useGroupSource');
@@ -51,7 +58,11 @@ export interface UseGroupSourceReturn {
   error: string | null;
   /** Open the insight for a group and load its feeding rules. */
   open: (group: GroupSummary) => void;
-  /** Run the gated member-source analysis for the open group. */
+  /**
+   * Run the gated member-source analysis for the open group. Both reads are
+   * cache-backed, so a repeat analysis of a group analyzed earlier this session
+   * costs no scheduler requests.
+   */
   analyzeMembers: () => void;
   /** Close and reset. */
   close: () => void;
@@ -90,9 +101,7 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
       getGroupRulesForGroup(nextGroup.id)
         .then((rules) => {
           if (runId !== runIdRef.current) return;
-          setFeedingRules(
-            (rules as MembershipRule[]).map((r) => ({ id: r.id, name: r.name, status: r.status })),
-          );
+          setFeedingRules(rules.map((r) => ({ id: r.id, name: r.name, status: r.status })));
           setRulesStatus('done');
         })
         .catch((err) => {
@@ -111,13 +120,32 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
     setMemberStatus('loading');
     setError(null);
 
-    Promise.all([getAllGroupMembers(group.id), getGroupRulesForGroup(group.id)])
+    // The member walk is the expensive half (`ceil(N/200)` scheduled requests),
+    // so it goes through the shared entity cache exactly like every other
+    // expensive entity read: a fresh entry is served with no network call, and
+    // two analyses started concurrently for the same group coalesce onto one
+    // walk. The key and value shape are deliberately identical to
+    // `useGroupMembersCache.fetchMembers` and `GroupOverview` — one `OktaUser[]`
+    // per group, default 5-minute TTL — so members loaded anywhere in the panel
+    // serve this analysis too. Do not give this key a bespoke TTL or shape.
+    //
+    // KNOWN GAP: membership mutations only partially invalidate this key.
+    // `useGroupMembersCache.removeUserFromGroups` invalidates
+    // `['groupMembers', groupId]` per removed group, but the single-membership
+    // `addUserToGroup` / `removeUserFromGroup` paths do not, and nothing
+    // invalidates the derived `['memberSource', groupId]` breakdown at all. So
+    // after such a mutation the meter can show a pre-mutation count until the
+    // TTL lapses. Building that invalidation is deliberately out of scope here.
+    Promise.all([
+      getOrFetch(['groupMembers', group.id], () => getAllGroupMembers(group.id)),
+      getGroupRulesForGroup(group.id),
+    ])
       .then(([members, rules]) => {
         if (runId !== runIdRef.current) return;
         const summary = summarizeMemberSources(
           { id: group.id, name: group.name, type: group.type },
           members,
-          rules as MembershipRule[],
+          rules,
         );
         setBreakdown(summary);
         // Bank it for the session: the groups list renders this split in each

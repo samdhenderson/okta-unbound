@@ -171,6 +171,16 @@ Enforced at the single fetch choke point,
   (`isMemberOfGroup*`) and `app.*` context are always `unevaluable` — they need data this
   module is not given — and callers render that as indeterminate rather than resolving it
   either way.
+- **A failed load is never reported as an attribution.** The same property one level up:
+  classifying a user's groups against a rule list that could not be fetched makes every
+  group look untargeted, which the heuristic reads as an _exactly known manual add_. The
+  user path (`hooks/useUserMemberships`) therefore distinguishes "the org has no rules"
+  from "we could not obtain the rules" and reports the latter as unclassified. The two
+  attribution paths — the group view's Okta-asserted `_embedded['group-rules']` and the
+  user view's client-side heuristic — are reconciled by stating provenance rather than by
+  silently differing; the contract, and where they are permitted to differ, is
+  [ADR-0020](./adr/0020-attribution-provenance-not-a-fourth-level.md), pinned by
+  `shared/membership/attributionParity.test.ts`.
 - **Okta-origin validation.** [`shared/utils/oktaUrl.ts`](../src/shared/utils/oktaUrl.ts)
   `isOktaUrl()` **parses the hostname** (`new URL`), requires `https:`, and matches against
   a hardcoded domain list by exact or dot-suffix equality — never substring matching.
@@ -246,8 +256,8 @@ A reviewer can reproduce the core claims without trusting this document:
 - **No dynamic execution / HTML injection:** `grep -rn "eval(\|new Function\|dangerouslySetInnerHTML\|innerHTML\|document.write" src` → production hits are zero (matches are tests/JSDoc).
 - **No secrets:** `grep -rn "SSWS \|Bearer \|Authorization" src` → prohibition text only.
 - **XSRF never stored/logged:** read `getXsrfToken` in [`content/apiRequest.ts`](../src/content/apiRequest.ts); run the regression test in [`content/index.test.ts`](../src/content/index.test.ts).
-- **Quality gates:** every PR runs lint (0 errors), strict type-check, the 80/75 coverage
-  gate, and the Storybook build/story tests
+- **Quality gates:** every PR runs lint (0 errors), strict type-check, the coverage
+  gate (thresholds in [`vitest.config.ts`](../vitest.config.ts)), and the Storybook build/story tests
   ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)).
 
 The security-hardening rules these controls enforce are codified in

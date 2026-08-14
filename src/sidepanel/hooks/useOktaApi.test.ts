@@ -302,7 +302,7 @@ describe('useOktaApi', () => {
       expect(members).toHaveLength(200);
       expect(mockRuntimeSendMessage).toHaveBeenCalledWith({
         action: 'scheduleApiRequest',
-        endpoint: '/api/v1/groups/group1/users?limit=200',
+        endpoint: '/api/v1/groups/group1/users?limit=200&expand=group-rules',
         method: 'GET',
         body: undefined,
         tabId: targetTabId,
