@@ -44,7 +44,7 @@ async function fetchAllMembers(
       errorMessage: 'Failed to fetch group members',
       onBeforePage: (pageNumber) => {
         pageCount = pageNumber;
-        coreApi.callbacks.onResult?.(`Fetching page ${pageNumber}...`, 'info');
+        coreApi.callbacks.onResult?.({ message: `Fetching page ${pageNumber}...`, type: 'info' });
       },
       onPage: () => {
         const apiCalls = onApiCall();
@@ -101,7 +101,10 @@ export function createGroupCleanupOperations(
     const trackApiCall = () => ++apiCallsMade;
 
     try {
-      coreApi.callbacks.onResult?.('Starting: Remove deprovisioned users', 'info');
+      coreApi.callbacks.onResult?.({
+        message: 'Starting: Remove deprovisioned users',
+        type: 'info',
+      });
       coreApi.callbacks.onProgress?.(0, 100, 'Fetching user info...', 0);
 
       currentUser = await coreApi.getCurrentUser();
@@ -114,7 +117,7 @@ export function createGroupCleanupOperations(
       trackApiCall();
 
       if (groupDetails.success && groupDetails.data?.type === 'APP_GROUP') {
-        coreApi.callbacks.onResult?.('ERROR: Cannot modify APP_GROUP', 'error');
+        coreApi.callbacks.onResult?.({ message: 'ERROR: Cannot modify APP_GROUP', type: 'error' });
         return;
       }
 
@@ -126,13 +129,16 @@ export function createGroupCleanupOperations(
       const allMembers = await fetchAllMembers(coreApi, groupId, trackApiCall);
 
       const deprovisionedUsers = allMembers.filter((u) => u.status === 'DEPROVISIONED');
-      coreApi.callbacks.onResult?.(
-        `Found ${deprovisionedUsers.length} deprovisioned users`,
-        'warning',
-      );
+      coreApi.callbacks.onResult?.({
+        message: `Found ${deprovisionedUsers.length} deprovisioned users`,
+        type: 'warning',
+      });
 
       if (deprovisionedUsers.length === 0) {
-        coreApi.callbacks.onResult?.('No deprovisioned users to remove', 'success');
+        coreApi.callbacks.onResult?.({
+          message: 'No deprovisioned users to remove',
+          type: 'success',
+        });
         return;
       }
 
@@ -172,48 +178,55 @@ export function createGroupCleanupOperations(
             userEmail: user.profile.email,
             userName: `${user.profile.firstName} ${user.profile.lastName}`,
           });
-          coreApi.callbacks.onResult?.(
-            `Removed: ${user.profile.login} (${user.profile.firstName} ${user.profile.lastName})`,
-            'success',
-          );
+          coreApi.callbacks.onResult?.({
+            message: `Removed: ${user.profile.login} (${user.profile.firstName} ${user.profile.lastName})`,
+            type: 'success',
+          });
         } else {
           failed++;
           const status = (r.error as { status?: number })?.status;
           const errText = r.error instanceof Error ? r.error.message : 'Unknown error';
           errorMessages.push(`Failed: ${user.profile.login} - ${errText}`);
-          coreApi.callbacks.onResult?.(
-            status === 403
-              ? `403 Forbidden: ${user.profile.login} - ${errText}`
-              : `Failed: ${user.profile.login} - ${errText}`,
-            'error',
-          );
+          coreApi.callbacks.onResult?.({
+            message:
+              status === 403
+                ? `403 Forbidden: ${user.profile.login} - ${errText}`
+                : `Failed: ${user.profile.login} - ${errText}`,
+            type: 'error',
+          });
         }
       }
 
       apiCallsMade += outcome.completed + outcome.failed;
 
       if (outcome.stoppedByError) {
-        coreApi.callbacks.onResult?.('Stopping after first 403 error', 'warning');
+        coreApi.callbacks.onResult?.({
+          message: 'Stopping after first 403 error',
+          type: 'warning',
+        });
       }
       if (outcome.cancelled) {
-        coreApi.callbacks.onResult?.('Cancelled — stopped removing users', 'warning');
+        coreApi.callbacks.onResult?.({
+          message: 'Cancelled — stopped removing users',
+          type: 'warning',
+        });
       }
 
       if (removedUsers.length > 0) {
         await logBulkRemoveAction(groupId, groupName, removedUsers, 'deprovisioned');
       }
 
-      coreApi.callbacks.onResult?.(
-        `Complete: ${removed} removed, ${failed} failed`,
-        removed > 0 ? 'success' : 'warning',
-      );
+      coreApi.callbacks.onResult?.({
+        message: `Complete: ${removed} removed, ${failed} failed`,
+        type: removed > 0 ? 'success' : 'warning',
+      });
     } catch (error) {
       const errorMsg = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
       errorMessages.push(errorMsg);
-      coreApi.callbacks.onResult?.(
-        errorMsg,
-        error instanceof OperationCancelledError ? 'warning' : 'error',
-      );
+      coreApi.callbacks.onResult?.({
+        message: errorMsg,
+        type: error instanceof OperationCancelledError ? 'warning' : 'error',
+      });
     } finally {
       coreApi.callbacks.onProgress?.(apiCallsMade, apiCallsMade, 'Complete', apiCallsMade);
 

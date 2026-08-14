@@ -26,6 +26,7 @@ import { filterRules } from '../../shared/ruleUtils';
 import { findMergeableRuleGroups, type MergeableRuleGroup } from '../../shared/rules/consolidation';
 import { sortRules, type RuleSortMode } from '../../shared/rules/similarity';
 import { useOktaApi } from '../hooks/useOktaApi';
+import type { OperationResult } from '../hooks/useOktaApi/types';
 import { useRuleImpact } from '../hooks/useRuleImpact';
 import { useRulesData } from '../hooks/useRulesData';
 import { useRuleLifecycle } from '../hooks/useRuleLifecycle';
@@ -118,19 +119,17 @@ const RulesTab: React.FC<RulesTabProps> = ({
   // memoized identities (useOktaApi in particular memoizes on this callback).
   const handleError = useCallback((message: string) => setError(message || null), []);
 
-  // `onResult` is `(message, type)`, not `(message)`. Passing a one-arg callback
-  // here type-checks — TypeScript accepts a function that ignores trailing
-  // parameters — and then silently drops `type`, so an 'info' message renders as a
-  // danger banner. That was live: `captureRuleImpact` reuses `getAllGroupMembers`,
-  // which emits 'info' pagination lines for any multi-page group.
+  // `onResult` takes one `OperationResult` object, not `(message, type)`. It used to
+  // be positional, and TypeScript accepts a function that ignores trailing
+  // parameters — so a one-arg `(message) => …` type-checked here and then silently
+  // dropped `type`, rendering an 'info' message as a danger banner. That was live:
+  // `captureRuleImpact` reuses `getAllGroupMembers`, which emits 'info' pagination
+  // lines for any multi-page group. The object parameter makes that a compile error.
   //
   // Must be stable: useOktaApi memoizes its operations on this callback's identity.
-  const handleResult = useCallback(
-    (message: string, type: 'info' | 'success' | 'warning' | 'error') => {
-      if (type === 'error') setError(message || null);
-    },
-    [],
-  );
+  const handleResult = useCallback(({ message, type }: OperationResult) => {
+    if (type === 'error') setError(message || null);
+  }, []);
 
   const api = useOktaApi({ targetTabId: targetTabId ?? null, onResult: handleResult });
   const impact = useRuleImpact(api.captureRuleImpact);

@@ -63,6 +63,18 @@ export interface PeekedEntry<T> {
   data: T;
   /** `true` while the entry is within its TTL. */
   isFresh: boolean;
+  /**
+   * Epoch millis when this value was written — i.e. when it was actually fetched
+   * from Okta, by whichever consumer fetched it.
+   *
+   * Surfaced because consumers were hand-rolling a parallel
+   * `useState<string | null>` set to `new Date().toISOString()` on their own
+   * successful loads. That answers a subtly different and worse question: "when
+   * did *I* last fetch", not "when was this data fetched". On a cache hit the
+   * hand-rolled value stays `null` while real data is on screen, so the UI reports
+   * data it is displaying as never fetched.
+   */
+  fetchedAt: number;
 }
 
 interface StoredEntry<T> {
@@ -122,7 +134,23 @@ export function peekEntry<T>(key: EntityKey): PeekedEntry<T> | null {
   // Reads feed the LRU ordering used by eviction. A stale read still counts as
   // interest: stale-while-revalidate renders that value, so it is in use.
   entry.lastRead = now;
-  return { data: entry.data, isFresh: now <= entry.expiresAt };
+  return { data: entry.data, isFresh: now <= entry.expiresAt, fetchedAt: entry.timestamp };
+}
+
+/**
+ * When a key's value was last written, or `null` if nothing is cached.
+ *
+ * Deliberately does **not** stamp `lastRead`: asking "how old is this?" is not
+ * the same as using the value, and letting a metadata read defend an entry
+ * against eviction would make a status line keep dead data alive.
+ *
+ * Returns the raw epoch so the cache holds no opinion on formatting.
+ *
+ * @param key - The entity key to inspect.
+ * @returns Epoch millis of the write, or `null` on a miss.
+ */
+export function peekFetchedAt(key: EntityKey): number | null {
+  return store.get(serializeKey(key))?.timestamp ?? null;
 }
 
 /**

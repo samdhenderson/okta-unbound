@@ -21,8 +21,8 @@ const api = vi.hoisted(() => ({
 
 vi.mock('./useOktaApi', () => ({ useOktaApi: () => api }));
 
-import { usePoliciesData, AUTH_POLICY_TYPE } from './usePoliciesData';
-import { resetEntityCache } from '../cache/entityCache';
+import { usePoliciesData, AUTH_POLICY_TYPE, POLICIES_CACHE_KEY } from './usePoliciesData';
+import { resetEntityCache, setEntry } from '../cache/entityCache';
 
 const onError = vi.fn();
 
@@ -33,6 +33,20 @@ beforeEach(() => {
 });
 
 describe('usePoliciesData', () => {
+  it('reports the cached entry fetch time when it paints from a cache hit', () => {
+    // The hook seeds `policies` from the cache so a revisit paints instantly. It
+    // used to leave `lastFetchTime` null while doing so, i.e. real policies shown
+    // under "never fetched". The time belongs to the entry, not to this hook's
+    // own load history.
+    setEntry(POLICIES_CACHE_KEY, policies);
+
+    const { result } = renderHook(() => usePoliciesData({ targetTabId: 1, onError }));
+
+    expect(result.current.policies).toEqual(policies);
+    expect(result.current.lastFetchTime).not.toBeNull();
+    expect(api.listPolicies).not.toHaveBeenCalled();
+  });
+
   it('loads ACCESS_POLICY policies and records the fetch time', async () => {
     const { result } = renderHook(() => usePoliciesData({ targetTabId: 1, onError }));
 

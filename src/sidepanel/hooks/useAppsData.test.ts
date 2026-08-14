@@ -108,6 +108,34 @@ describe('useAppsData', () => {
     expect(getAllApps).toHaveBeenCalledTimes(1);
   });
 
+  it('carries the fetch time back when returning to an already-cached org', async () => {
+    // Returning to an org whose inventory is still cached re-seeds `apps` from the
+    // cache. `lastFetchTime` used to be blanked to null on every org change, so the
+    // re-seeded inventory appeared beside "never fetched" — data on screen that the
+    // UI claimed it had never loaded.
+    const { result, rerender } = renderHook(
+      ({ origin }: { origin: string }) =>
+        useAppsData({ api, onError, targetTabId: 1, oktaOrigin: origin, enabled: false }),
+      { initialProps: { origin: ORIGIN } },
+    );
+
+    await act(async () => {
+      await result.current.loadApps();
+    });
+    const firstFetch = result.current.lastFetchTime;
+    expect(firstFetch).not.toBeNull();
+
+    rerender({ origin: 'https://other.okta.com' });
+    // Genuinely uncached: no inventory, and no fetch time to claim.
+    expect(result.current.apps).toEqual([]);
+    expect(result.current.lastFetchTime).toBeNull();
+
+    rerender({ origin: ORIGIN });
+    expect(result.current.apps).toEqual(appsA);
+    expect(result.current.lastFetchTime).toBe(firstFetch);
+    expect(getAllApps).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps each org in its own cache entry', async () => {
     const { result, rerender } = renderHook(
       ({ origin }: { origin: string }) =>
