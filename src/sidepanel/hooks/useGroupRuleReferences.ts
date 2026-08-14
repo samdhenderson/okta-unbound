@@ -15,7 +15,8 @@
  * Read-only.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
+import { useOwedLoad } from './useOwedLoad';
 import { useOktaApi } from './useOktaApi';
 import { extractReferencedGroupIds } from '../../shared/rules/groupRuleIndex';
 import { createLogger } from '../../shared/utils/logger';
@@ -90,17 +91,10 @@ export function useGroupRuleReferences(
     setError(null);
   }
 
-  // A load becomes owed whenever the group or the API target changes, and is paid
-  // the next time the view is actually visible. Split in two so re-showing the tab
-  // does not by itself re-request: the flag is only raised by a real input change.
-  const owedRef = useRef(true);
-  useEffect(() => {
-    owedRef.current = true;
-  }, [groupId, ensureGroupRulesLoaded]);
-
-  useEffect(() => {
-    if (!enabled || !owedRef.current) return;
-    owedRef.current = false;
+  // A load is owed whenever the group or the API target changes, and is paid the
+  // next time the view is visible. `ensureGroupRulesLoaded` is memoized on
+  // `targetTabId`, so the pair below is the whole input.
+  useOwedLoad(targetTabId == null ? groupId : `${targetTabId}:${groupId}`, enabled, () => {
     const runId = ++runIdRef.current;
 
     ensureGroupRulesLoaded()
@@ -129,7 +123,7 @@ export function useGroupRuleReferences(
         setError(err instanceof Error ? err.message : 'Failed to load referencing rules');
         setStatus('error');
       });
-  }, [enabled, groupId, ensureGroupRulesLoaded]);
+  });
 
   return { rules, status, error };
 }

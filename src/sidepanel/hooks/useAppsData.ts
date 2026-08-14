@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getOrFetch, peek, peekFetchedAt, type EntityKey } from '../cache/entityCache';
 import { cacheKeys } from '../cache/keys';
+import { useOwedLoad } from './useOwedLoad';
 import type { OktaAppListItem } from '../../shared/schemas/okta';
 import { createLogger } from '../../shared/utils/logger';
 import type { useOktaApi } from './useOktaApi';
@@ -185,17 +186,21 @@ export function useAppsData({
   // put, and a tab-id-only guard would never re-arm — leaving the panel showing the
   // previous org's inventory indefinitely. Re-arming is cheap now: a same-org
   // re-target is served from the cache without touching the network.
-  const autoLoadedFor = useRef<string | null>(null);
-  useEffect(() => {
-    if (!enabled || targetTabId == null) return;
-    // `\u0000` as an escape, never a literal NUL: a raw control byte in source
-    // makes this file binary to grep(1) and every tool built on it, and is
-    // invisible in editors and diffs. Same runtime string either way.
-    const target = `${targetTabId}\u0000${oktaOrigin ?? ''}`;
-    if (autoLoadedFor.current === target) return;
-    autoLoadedFor.current = target;
-    void loadApps();
-  }, [enabled, targetTabId, oktaOrigin, loadApps]);
+  // The latch identity is the (tab, origin) pair, NOT the cache key — which is
+  // `origin` alone, deliberately, so two Chrome tabs on one org share an inventory.
+  // That mismatch is why this is a standalone latch rather than a `useEntityQuery`
+  // option (ADR-0026).
+  //
+  // `\u0000` as an escape, never a literal NUL: a raw control byte in source makes
+  // this file binary to grep(1) and every tool built on it, and is invisible in
+  // editors and diffs. Same runtime string either way.
+  useOwedLoad(
+    targetTabId == null ? null : `${targetTabId}\u0000${oktaOrigin ?? ''}`,
+    enabled,
+    () => {
+      void loadApps();
+    },
+  );
 
   return { apps, isLoading, lastFetchTime, loadApps };
 }
