@@ -24,7 +24,7 @@ convention; the specs in [`../`](../README.md) describe the _what_.
 | [0015](./0015-scripting-permission-content-script-reinjection.md) | Add the `scripting` permission to re-inject content scripts after install/update  | Accepted | Injection bounded by existing Okta host permissions; `onInstalled` only.                    |
 | [0016](./0016-in-tab-view-stack-navigation.md)                    | In-tab sub-navigation via a per-tab view stack                                    | Accepted | `useViewStack` + `Breadcrumbs`; no focus trap (not an overlay).                             |
 | [0017](./0017-jsep-expression-evaluation.md)                      | Parse Okta rule expressions with jsep plus an allow-list evaluator                | Accepted | AST-only parser + allow-list evaluator; `unevaluable` is never `no-match`. Amended by 0025. |
-| [0018](./0018-tabs-stay-mounted.md)                               | Keep every tab mounted; gate background work on `isActive`                        | Accepted | Every tab gates its mount effects on `isActive` — see the obligation.                       |
+| [0018](./0018-tabs-stay-mounted.md)                               | Keep every tab mounted; gate background work on `isActive`                        | Accepted | Core decision stands; its two-pattern table is corrected by 0026.                           |
 | [0019](./0019-coverage-threshold-recalibration.md)                | Recalibrate the coverage gate and stop restating its numbers                      | Accepted | Amends 0005's thresholds; `vitest.config.ts` is the single source.                          |
 | [0020](./0020-attribution-provenance-not-a-fourth-level.md)       | Reconcile the two attribution paths by provenance, not a fourth attribution level | Accepted | Parity test pins where the group and user views may differ.                                 |
 | [0021](./0021-group-context-rule-evaluation.md)                   | Answer `isMemberOf*` rule clauses from the user's own group list                  | Accepted | Optional, complete group list; the regex variant is still never run.                        |
@@ -32,6 +32,7 @@ convention; the specs in [`../`](../README.md) describe the _what_.
 | [0023](./0023-test-value-policy.md)                               | Test value policy — what we don't test                                            | Accepted | Bans class/identity/mocked-child assertions; one runner per pure render.                    |
 | [0024](./0024-risk-based-plan-gate.md)                            | Trigger the plan gate on risk, not on a file count                                | Accepted | Supersedes 0013's ">~2 files" trigger; mechanical mass changes exempt.                      |
 | [0025](./0025-retire-boolean-rule-evaluation-apis.md)             | Retire the boolean rule-evaluation APIs                                           | Accepted | Amends 0017; no boolean entry point survives. Corrects 0022's parity-suite claim.           |
+| [0026](./0026-visibility-gating-patterns.md)                      | Visibility gating — five patterns, not two                                        | Accepted | Amends 0018's taxonomy; `visible`/`revalidateOnShow` on `useEntityQuery` rejected.          |
 
 ## Adding an ADR
 
