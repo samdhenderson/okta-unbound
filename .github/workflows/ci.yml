@@ -59,6 +59,13 @@ jobs:
       - name: Circular dependencies
         run: npm run knip:circular
 
+      # A literal control byte in a source file makes it *binary* to grep(1), so
+      # every grep-based scan — CI greps, knip, and any human or agent searching
+      # the tree — silently skips it. One had been sitting in useAppsData.ts.
+      # The escape sequence is fine; a raw byte is not.
+      - name: No control bytes in source
+        run: npm run lint:control-chars
+
   # Component explorer build gate (ADR-0010). Runs in parallel with `verify` (no
   # `needs:`), so it never delays the fast lint/type/test feedback. A broken or
   # mis-imported story fails the PR.

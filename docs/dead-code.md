@@ -9,7 +9,25 @@ import cycles.
 npm run knip              # unused files, exports, and dependencies
 npm run knip:production   # reachability from the manifest entry points only
 npm run knip:circular     # import cycles (madge)
+npm run lint:control-chars   # no raw control bytes (see below)
 ```
+
+## Why `lint:control-chars` sits with the dead-code tools
+
+`src/sidepanel/hooks/useAppsData.ts` contained a **literal NUL byte** inside a
+template string, used as a separator in a `(tabId, origin)` guard key. It ran
+correctly, and it was invisible in every editor and diff. But a raw control byte
+makes a file **binary** as far as `grep(1)` is concerned, and grep skips binary
+files _silently_ — no warning, no non-zero exit, just no matches.
+
+Every grep-based scan therefore had a blind spot on that file: `git grep`,
+ripgrep, and any human or agent searching the tree would report "no matches" for
+symbols plainly present. It is exactly the failure mode this doc exists to
+prevent, one layer down — a tool reporting "nothing here" when it never looked.
+
+The escape sequence compiles to the same runtime string and keeps the file text.
+`scripts/check-control-chars.mjs` fails CI on any tracked text file carrying a raw
+control byte other than tab, newline, or carriage return.
 
 ## Two configs, two different questions
 
