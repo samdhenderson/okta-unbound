@@ -8,7 +8,7 @@ do not read all docs (that's context bloat).
 
 **Okta Unbound** — a Chrome MV3 side-panel extension for Okta group/user admin.
 Stack: React 19, TypeScript 5.9 (`strict`), Tailwind v4, Vite + `@crxjs/vite-plugin`,
-Vitest + Testing Library + MSW, `idb`. ~22k LOC.
+Vitest + Testing Library, `idb`. ~47k LOC of source.
 
 ## Commands
 
@@ -112,7 +112,7 @@ should be reviewed with `security-logging-reviewer`.
   `rel="noopener noreferrer"`.
 - **Store no more than needed.** `chrome.storage` and IndexedDB are plaintext:
   never put credentials or session material there; keep cached PII minimal and
-  TTL'd (`shared/cache.ts`), and respect audit retention settings.
+  TTL'd (`sidepanel/cache/entityCache.ts`), and respect audit retention settings.
 
 ## Routing table — read ONLY the matching row(s)
 
