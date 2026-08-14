@@ -196,6 +196,27 @@ Carried forward from the A/B build (surfaced while working, none blocking):
 
 ---
 
+## Detail-page layout contract adoption — pending ADR-0030 migration
+
+Four detail-page surfaces still need to adopt the `DetailSection` / `ActionBar` /
+`EntityLink` / `Badge` contract from [ADR-0030](./adr/0030-detail-page-layout-contract.md):
+
+- [ ] **Rules** (`src/sidepanel/components/RuleCard.tsx`) — hand-rolls an `<a>` with
+      an inline `<svg>` instead of `OpenInOktaLink`; "THEN ADD TO GROUPS" chips are
+      inert text that should be `EntityLink`s; uses `px-2.5 py-1` padding, which
+      `docs/design-system.md` does not sanction; eyebrow uses `tracking-wider` where
+      the contract settles on `tracking-wide`.
+- [ ] **Apps** (`src/sidepanel/components/apps/AppListItem.tsx`) — expanded body is
+      a bespoke 2-column grid of grey field tiles rather than `DetailSection`.
+- [ ] **Policies** (`src/sidepanel/components/policies/PolicyCard.tsx`) — eyebrow
+      uses `tracking-wider` where the contract settles on `tracking-wide`; bespoke body
+      rather than `DetailSection`.
+- [ ] **History** (`src/sidepanel/components/AuditLogViewer.tsx`) — **accessibility
+      bug, highest priority**: row is a bare `<div onClick>` with no `role`, `tabIndex`,
+      or `aria-expanded`, cannot be reached or operated by keyboard.
+
+---
+
 ## Parked / rejected (rationale recorded so we don't re-litigate)
 
 - **D. Bulk Lifecycle Console** _(fast follow)_ — paste users → suspend/unsuspend/
