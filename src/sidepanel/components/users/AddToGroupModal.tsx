@@ -3,13 +3,13 @@
  * @description Presentational Add-to-Group modal for the Users tab.
  *
  * A pure view over the {@link useAddToGroup} state machine: a debounced group
- * type-ahead (raw input + results dropdown), the chosen-group chip, and the
+ * type-ahead (shared `Input` + results dropdown), the chosen-group chip, and the
  * confirm/cancel footer built from the shared `Button` and `Modal` primitives. All
  * state (the query, the debounced search, the add-in-flight flag) lives in the hook;
  * this component only renders it and forwards user intent through callbacks.
  */
 import React from 'react';
-import { Button, Modal, LoadingSpinner } from '../shared';
+import { Button, Modal, Input, LoadingSpinner } from '../shared';
 import type { GroupSearchResult } from '../../hooks/useAddToGroup';
 
 /** Props for {@link AddToGroupModal}. */
@@ -86,30 +86,20 @@ const AddToGroupModal: React.FC<AddToGroupModalProps> = ({
     >
       <div className="space-y-4">
         {/*
-          CHARACTERIZED: raw <input> + raw dropdown <button>s kept intentionally.
-          This is a type-ahead composite (like the §3-exempt SearchDropdown /
-          UserSearchBar): the spinner and results dropdown are absolutely positioned
-          against this `.relative` wrapper. The shared <Input> renders a different DOM
-          shape (nested wrapper, `mb-2` label, outline-not-ring focus) and the dropdown
-          items are left-aligned two-line rows (not centered CTAs like <Button>), so
-          migrating would shift pixels. Do not migrate without a pixel review.
+          Type-ahead composite: the results dropdown is absolutely positioned
+          against this `.relative` wrapper, below the shared <Input> (label +
+          field). The dropdown rows are left-aligned two-line rows, not
+          centered CTAs, so they stay raw <button>s rather than <Button>.
         */}
         <div className="relative">
-          <label className="block text-sm font-medium text-neutral-700 mb-1">
-            Search for a group
-          </label>
-          <input
+          <Input
+            label="Search for a group"
             type="text"
             value={groupSearchQuery}
-            onChange={(e) => onGroupSearchQueryChange(e.target.value)}
+            onChange={onGroupSearchQueryChange}
             placeholder="Type to search by group name..."
-            className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+            trailing={isSearchingGroups ? <LoadingSpinner size="sm" /> : undefined}
           />
-          {isSearchingGroups && (
-            <div className="absolute right-3 top-8">
-              <LoadingSpinner size="sm" />
-            </div>
-          )}
 
           {/* Search results dropdown */}
           {showGroupDropdown && groupSearchResults.length > 0 && !selectedGroup && (

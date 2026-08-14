@@ -24,6 +24,14 @@ interface GroupSearchBarProps {
  * search glyph (`Icon`) and a trailing spinner (`LoadingSpinner`) while a live
  * search is in flight. A thin controlled wrapper over the shared `Input`,
  * following the `MemberSearchBar` pattern.
+ *
+ * `size="lg"` reproduces the original hand-rolled field exactly: `lg`'s
+ * `pl-11`/`py-3` match the pre-migration `pl-11 py-3`. The spinner stays a
+ * manually-positioned sibling (not `Input`'s `trailing` slot) because the
+ * original field's right padding was a constant `pr-4` — the same value as
+ * `lg`'s own base horizontal padding — with no extra room reserved for the
+ * spinner; routing it through `trailing` would add a `pr-12` reservation the
+ * original never had.
  */
 const GroupSearchBar: React.FC<GroupSearchBarProps> = ({
   searchMode,
@@ -40,7 +48,8 @@ const GroupSearchBar: React.FC<GroupSearchBarProps> = ({
         placeholder="Search groups by name..."
         value={liveSearchQuery}
         onChange={onLiveSearchQueryChange}
-        icon={<Icon type="search" size="sm" />}
+        size="lg"
+        icon={<Icon type="search" size="md" />}
       />
     ) : (
       <Input
@@ -48,12 +57,13 @@ const GroupSearchBar: React.FC<GroupSearchBarProps> = ({
         placeholder="Search by name, description, ID — or /regex/"
         value={searchQuery}
         onChange={onSearchQueryChange}
-        icon={<Icon type="search" size="sm" />}
+        size="lg"
+        icon={<Icon type="search" size="md" />}
       />
     )}
     {isLiveSearching && (
       <div className="absolute inset-y-0 right-0 pr-4 flex items-center">
-        <LoadingSpinner size="sm" />
+        <LoadingSpinner size="md" />
       </div>
     )}
   </div>

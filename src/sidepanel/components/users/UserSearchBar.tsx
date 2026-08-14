@@ -29,6 +29,13 @@ interface UserSearchBarProps {
 /**
  * Search bar for user search with an inline loading indicator and a clear button
  * that refocuses the input.
+ *
+ * `size="lg"` reproduces the original hand-rolled field exactly: `lg`'s
+ * `pl-11`/`pr-12`/`py-3` match the pre-migration `pl-11 pr-12 py-3`. The spinner
+ * and clear button share `Input`'s single `trailing` slot (the original could
+ * show both at once — the clear button flush against the edge, the spinner
+ * offset further in) laid out as a row so both can appear together without
+ * overlapping.
  */
 const UserSearchBar: React.FC<UserSearchBarProps> = ({
   searchQuery,
@@ -54,24 +61,20 @@ const UserSearchBar: React.FC<UserSearchBarProps> = ({
         value={searchQuery}
         onChange={onSearchChange}
         placeholder={placeholder}
-        icon={<Icon type="search" size="sm" />}
+        size="lg"
+        icon={<Icon type="search" size="md" />}
+        trailing={
+          <div className="flex items-center gap-1">
+            {isSearching && <LoadingSpinner size="sm" />}
+            {showClearButton && (
+              <IconButton label="Clear search" onClick={handleClear} variant="ghost" size="sm">
+                <Icon type="close" size="md" />
+              </IconButton>
+            )}
+          </div>
+        }
+        trailingInteractive={showClearButton}
       />
-      {showClearButton && (
-        <IconButton
-          label="Clear search"
-          className="absolute right-2 top-1/2 -translate-y-1/2"
-          onClick={handleClear}
-          variant="ghost"
-          size="sm"
-        >
-          <Icon type="close" size="md" />
-        </IconButton>
-      )}
-      {isSearching && (
-        <div className="absolute inset-y-0 right-12 flex items-center pr-3">
-          <LoadingSpinner size="sm" />
-        </div>
-      )}
     </div>
   );
 };

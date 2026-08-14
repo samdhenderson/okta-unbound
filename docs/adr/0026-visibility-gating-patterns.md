@@ -30,7 +30,7 @@ if (!isActive || targetTabId == null || autoLoadedRef.current === targetTabId) r
 
 // useAppsData.ts
 const autoLoadedFor = useRef<string | null>(null);
-const target = `${targetTabId}�${oktaOrigin ?? ''}`;
+const target = `${targetTabId}\u0000${oktaOrigin ?? ''}`;
 if (autoLoadedFor.current === target) return;
 ```
 

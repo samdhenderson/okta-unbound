@@ -119,7 +119,16 @@ function SearchDropdown<T>({
     <div className="space-y-1">
       {label && <label className="block text-sm font-medium text-neutral-700">{label}</label>}
       <div className="relative">
-        {/* Input, with the search glyph as its leading icon */}
+        {/*
+         * `size="md"` is a deliberate tie-break: the pre-migration field was
+         * `py-2.5` (10px), exactly 2px from both `md` (`py-2`, 8px) and `lg`
+         * (`py-3`, 12px). `md` wins because its `pl-10` leading reservation is an
+         * exact match for the original `pl-10`, whereas `lg`'s `pl-11` is not.
+         * The trailing slot below carries the spinner/clear button so the field's
+         * right padding is reserved again (`pr-11` vs. the original `pr-10` — one
+         * step wider, since `size="md"`'s scale is shared with a leading glyph
+         * that doesn't have this field's alternate `sm` bucket to itself).
+         */}
         <Input
           inputRef={inputRef}
           type="text"
@@ -127,28 +136,20 @@ function SearchDropdown<T>({
           onChange={onQueryChange}
           placeholder={placeholder}
           disabled={disabled}
-          icon={<Icon type="search" size="sm" className="text-neutral-400" />}
+          size="md"
+          icon={<Icon type="search" size="md" className="text-neutral-400" />}
+          trailing={
+            <>
+              {isSearching && <LoadingSpinner size="sm" />}
+              {!isSearching && query && onClear && (
+                <IconButton label="Clear search" onClick={onClear} variant="ghost" size="sm">
+                  <Icon type="close" size="md" />
+                </IconButton>
+              )}
+            </>
+          }
+          trailingInteractive={!isSearching && !!query && !!onClear}
         />
-
-        {/* Loading spinner */}
-        {isSearching && (
-          <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-            <LoadingSpinner size="sm" />
-          </div>
-        )}
-
-        {/* Clear button when there's text */}
-        {!isSearching && query && onClear && (
-          <IconButton
-            label="Clear search"
-            onClick={onClear}
-            variant="ghost"
-            size="sm"
-            className="absolute right-2 top-1/2 -translate-y-1/2"
-          >
-            <Icon type="close" size="sm" />
-          </IconButton>
-        )}
 
         {/* Dropdown results */}
         {showDropdown && results.length > 0 && (

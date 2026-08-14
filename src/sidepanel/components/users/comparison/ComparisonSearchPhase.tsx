@@ -4,6 +4,7 @@
  */
 import React from 'react';
 import Icon from '../../overview/shared/Icon';
+import Input from '../../shared/Input';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import UserSearchResults from '../UserSearchResults';
 import type { OktaUser } from '../../../../shared/types';
@@ -28,10 +29,6 @@ interface ComparisonSearchPhaseProps {
 
 /**
  * Phase 1 of the comparison surface: pick a second user to compare against.
- * The raw `<input>` is kept verbatim (`§3 exception`, documented in
- * `docs/components.md`): its `py-3`/`pr-4` sizing is not pixel-neutral against the
- * shared `Input` base and swapping it would shrink the field — a design call, not
- * a mechanical swap.
  */
 const ComparisonSearchPhase: React.FC<ComparisonSearchPhaseProps> = ({
   contextUser,
@@ -67,25 +64,21 @@ const ComparisonSearchPhase: React.FC<ComparisonSearchPhaseProps> = ({
         </div>
       </div>
 
-      <div className="relative">
-        <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">
-          <Icon type="search" size="md" />
-        </div>
-        {/*
-          No `autoFocus`: neither host has ever produced focus here (Modal's own
-          effect focuses its close button after the child commit — characterized in
-          UserComparisonModal.test.tsx), and the pushed host mounts this input while
-          the view is popped, where autofocusing would steal focus from the tab.
-          Focus into a pushed view is `useViewStack`'s job, and it lands here.
-        */}
-        <input
-          type="text"
-          className="w-full rounded-md border border-neutral-200 bg-white pl-10 pr-4 py-3 text-sm placeholder-neutral-400 transition-all duration-100 focus:border-primary focus:outline-2 focus:outline-offset-2 focus:outline-primary"
-          placeholder="Search by email, name, or login…"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-      </div>
+      {/*
+        No `autoFocus`: neither host has ever produced focus here (Modal's own
+        effect focuses its close button after the child commit — characterized in
+        UserComparisonModal.test.tsx), and the pushed host mounts this input while
+        the view is popped, where autofocusing would steal focus from the tab.
+        Focus into a pushed view is `useViewStack`'s job, and it lands here.
+      */}
+      <Input
+        size="lg"
+        type="text"
+        value={searchQuery}
+        onChange={setSearchQuery}
+        placeholder="Search by email, name, or login…"
+        icon={<Icon type="search" size="sm" />}
+      />
 
       {isSearching && (
         <div className="flex items-center justify-center gap-2 py-4 text-sm text-neutral-500">

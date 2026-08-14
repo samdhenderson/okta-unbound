@@ -182,8 +182,15 @@ const Input: React.FC<InputProps> = ({
       {label && <label className="block text-sm font-medium text-neutral-700 mb-2">{label}</label>}
       <div className="relative">
         {icon && (
+          // `pointer-events-none` and `aria-hidden` are not optional here: the icon
+          // overlays the field, so without them a click on the glyph misses the
+          // input, and a screen reader announces a decorative shape between the
+          // label and the control. Every hand-rolled search field this primitive
+          // replaced carried both; they were lost in the migration and are restored
+          // here rather than at each call site.
           <div
-            className={`absolute ${leadingInsetClasses[size]} top-1/2 -translate-y-1/2 text-neutral-400`}
+            aria-hidden="true"
+            className={`pointer-events-none absolute ${leadingInsetClasses[size]} top-1/2 -translate-y-1/2 text-neutral-400`}
           >
             {icon}
           </div>
