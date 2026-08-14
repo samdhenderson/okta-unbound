@@ -15,6 +15,7 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
 import { useOktaApi } from './useOktaApi';
 import { getOrFetch, invalidate } from '../cache/entityCache';
+import { cacheKeys } from '../cache/keys';
 import type { GroupSummary, OktaUser } from '../../shared/types';
 import { createLogger } from '../../shared/utils/logger';
 
@@ -49,7 +50,7 @@ export function useGroupMembersCache(api: OktaApi, groups: GroupSummary[]) {
     // Shared entity-cache key with GroupOverview (`['groupMembers', groupId]`):
     // a fresh entry is served with no network call, and concurrent fetches for
     // the same group coalesce onto one request.
-    const members = await getOrFetch<OktaUser[]>(['groupMembers', groupId], () =>
+    const members = await getOrFetch<OktaUser[]>(cacheKeys.groupMembers(groupId), () =>
       apiRef.current.getAllGroupMembers(groupId),
     );
     // Populate the local Map state (what compare/cross-search render from).
@@ -70,7 +71,7 @@ export function useGroupMembersCache(api: OktaApi, groups: GroupSummary[]) {
     const outcome = await apiRef.current.removeUserFromGroups(userId, groupIds);
     for (const r of outcome.results) {
       if (r.status !== 'fulfilled') continue;
-      invalidate(['groupMembers', r.item]);
+      invalidate(cacheKeys.groupMembers(r.item));
       log.debug(`Removed user ${userId} from group ${r.item}`);
     }
     const rejected = outcome.results.find((r) => r.status === 'rejected');

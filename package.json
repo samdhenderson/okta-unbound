@@ -16,6 +16,7 @@
     "type-check": "tsc --noEmit",
     "knip": "knip",
     "knip:production": "knip --config knip.production.json",
+    "lint:control-chars": "node scripts/check-control-chars.mjs",
     "knip:circular": "madge --circular --extensions ts,tsx --ts-config tsconfig.json src",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives",
     "lint:fix": "eslint src --ext ts,tsx --fix",
