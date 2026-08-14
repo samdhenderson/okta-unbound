@@ -12,7 +12,7 @@
  * how tall each is) isn't known ahead of a load, so there is no honest placeholder
  * to draw.
  */
-import React, { useRef } from 'react';
+import React from 'react';
 import { useStaggerReveal } from '../../hooks/useStaggerReveal';
 import RuleCard from '../RuleCard';
 import EmptyState from '../shared/EmptyState';
@@ -55,8 +55,7 @@ const RulesListPanel: React.FC<RulesListPanelProps> = ({
   oktaOrigin,
   selectedRuleId,
 }) => {
-  const staggerRef = useRef<HTMLDivElement>(null);
-  useStaggerReveal(staggerRef);
+  const setStaggerRef = useStaggerReveal();
 
   return (
     <div className="min-h-[400px]">
@@ -83,7 +82,7 @@ const RulesListPanel: React.FC<RulesListPanelProps> = ({
         }
       >
         {filteredRules.length > 0 && (
-          <div ref={staggerRef} className="space-y-3 rise-in-stagger">
+          <div ref={setStaggerRef} className="space-y-3 rise-in-stagger">
             {filteredRules.map((rule) => (
               <div key={rule.id} data-rule-id={rule.id}>
                 <RuleCard

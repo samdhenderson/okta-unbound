@@ -2,9 +2,10 @@
  * Tests for MemberList — the windowed, auto-paging member list.
  *
  * Covers the three states its container can be in (rows, reloading, empty) plus the
- * entrance wiring: rows live under a single `.rise-in-stagger` wrapper so the CSS
- * `:nth-child` cap does the staggering and `MemberRow` needs no index prop, and the
- * paging sentinel stays outside that wrapper so its intersection is never delayed.
+ * entrance wiring: rows live under a single `.rise-in-stagger` wrapper so the
+ * wrapper (not a per-row index prop) drives the staggering and `MemberRow` needs no
+ * index, and the paging sentinel stays outside that wrapper so its intersection is
+ * never delayed.
  */
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { render, screen } from '@testing-library/react';

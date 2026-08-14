@@ -9,10 +9,11 @@
  * "Load more" footer and an IntersectionObserver sentinel so a 5000-group org
  * does not mount 5000 rich rows at once.
  *
- * The rows render inside a `.rise-in-stagger` wrapper (24ms/child, capped at the
- * first 8). Rows are keyed by `group.id`, so paging in the next 50 only appends
- * fresh nodes at the bottom — the rows already on screen keep their DOM nodes and
- * do not replay their entrance.
+ * The rows render inside a `.rise-in-stagger` wrapper driven by
+ * `useStaggerReveal`: each row holds until it scrolls into view, then cascades
+ * with the batch it arrived in. Rows are keyed by `group.id`, so paging in the
+ * next 50 only appends fresh nodes at the bottom — the rows already on screen
+ * keep their DOM nodes and do not replay their entrance.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useStaggerReveal } from '../../hooks/useStaggerReveal';
@@ -97,8 +98,7 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
   highlightedGroupId,
   scrollRef,
 }) => {
-  const staggerRef = useRef<HTMLDivElement>(null);
-  useStaggerReveal(staggerRef);
+  const setStaggerRef = useStaggerReveal();
 
   const [visibleCount, setVisibleCount] = useState(PAGE);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -177,15 +177,15 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
         }
       >
         {/*
-          `.rise-in-stagger` steps the first 8 direct children in at 24ms; the rest
-          animate together with no added delay. Rows are keyed by `group.id`, so a
-          "Load more" page only *appends* fresh DOM nodes at the end — the already
-          -mounted rows above them keep their nodes and never replay. A filter/search
-          change resets `visibleCount` to `PAGE` (above) and typically swaps most
-          keys, so that case intentionally re-enters as a fresh rise-in.
+          `useStaggerReveal` holds each row until it scrolls into view, then cascades
+          the arriving batch within one `--dur-travel` budget. Rows are keyed by
+          `group.id`, so a "Load more" page only *appends* fresh DOM nodes at the end
+          — the already-mounted rows above them keep their nodes and never replay. A
+          filter/search change resets `visibleCount` to `PAGE` (above) and typically
+          swaps most keys, so that case intentionally re-enters as a fresh rise-in.
         */}
         {visibleGroups.length > 0 && (
-          <div ref={staggerRef} className="rise-in-stagger space-y-3">
+          <div ref={setStaggerRef} className="rise-in-stagger space-y-3">
             {visibleGroups.map((group) => (
               <GroupListItem
                 key={group.id}
