@@ -5,6 +5,7 @@ import {
   invalidate,
   peek,
   peekEntry,
+  peekFetchedAt,
   registerDerived,
   resetEntityCache,
   serializeKey,
@@ -36,7 +37,28 @@ describe('entityCache', () => {
       setEntry('k', 'v', { ttl: 1000 });
       vi.advanceTimersByTime(1500);
       expect(peek('k')).toBeNull();
-      expect(peekEntry('k')).toEqual({ data: 'v', isFresh: false });
+      expect(peekEntry('k')).toEqual({
+        data: 'v',
+        isFresh: false,
+        // Present since `PeekedEntry` gained a write timestamp; the exact epoch is
+        // not what this case is about. `fetchedAt`'s own behaviour is covered below.
+        fetchedAt: expect.any(Number),
+      });
+    });
+
+    it('reports when the entry was written, without counting as a read', () => {
+      vi.useFakeTimers();
+      setEntry('k', 'v');
+      const writtenAt = peekFetchedAt('k');
+      expect(writtenAt).toEqual(expect.any(Number));
+      expect(peekEntry('k')?.fetchedAt).toBe(writtenAt);
+
+      // Staleness must not change the answer: "how old is this" is still
+      // answerable once the TTL has lapsed.
+      vi.advanceTimersByTime(10 * 60 * 1000);
+      expect(peekFetchedAt('k')).toBe(writtenAt);
+
+      expect(peekFetchedAt('never-written')).toBeNull();
     });
   });
 

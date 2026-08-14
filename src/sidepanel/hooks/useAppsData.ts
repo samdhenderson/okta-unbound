@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getOrFetch, peek, type EntityKey } from '../cache/entityCache';
+import { getOrFetch, peek, peekFetchedAt, type EntityKey } from '../cache/entityCache';
 import { cacheKeys } from '../cache/keys';
 import type { OktaAppListItem } from '../../shared/schemas/okta';
 import { createLogger } from '../../shared/utils/logger';
@@ -40,6 +40,19 @@ type OktaApi = ReturnType<typeof useOktaApi>;
  */
 export function appsCacheKey(oktaOrigin?: string | null): EntityKey {
   return cacheKeys.apps(oktaOrigin);
+}
+
+/**
+ * The cache's own write time for a key, as an ISO string.
+ *
+ * Reads through {@link peekFetchedAt} rather than stamping `new Date()` at the
+ * call site: a "last updated" line should report when the data was fetched, which
+ * for an origin-scoped key may have been by a different Chrome tab's panel session
+ * sharing the same entry.
+ */
+function isoFetchedAt(key: EntityKey): string | null {
+  const at = peekFetchedAt(key);
+  return at === null ? null : new Date(at).toISOString();
 }
 
 /** Options for {@link useAppsData}. */
@@ -109,7 +122,9 @@ export function useAppsData({
     () => peek<OktaAppListItem[]>(cacheKey) ?? [],
   );
   const [isLoading, setIsLoading] = useState(false);
-  const [lastFetchTime, setLastFetchTime] = useState<string | null>(null);
+  // Seeded from the cache, like `apps` above. It used to start `null` regardless,
+  // so a cache hit painted a real inventory under "never fetched".
+  const [lastFetchTime, setLastFetchTime] = useState<string | null>(() => isoFetchedAt(cacheKey));
 
   // Read `getAllApps` through a ref so `loadApps` keeps a stable identity even if
   // the API facade's memoization is defeated by an unstable caller callback.
@@ -133,7 +148,7 @@ export function useAppsData({
           { force },
         );
         setApps(loaded);
-        setLastFetchTime(new Date().toISOString());
+        setLastFetchTime(isoFetchedAt(cacheKey));
         // Identifiers and outcomes only — never app labels or response bodies.
         log.debug('Loaded applications', { count: loaded.length });
       } catch (err) {
@@ -155,7 +170,10 @@ export function useAppsData({
     if (seededFor.current === cacheKey) return;
     seededFor.current = cacheKey;
     setApps(peek<OktaAppListItem[]>(cacheKey) ?? []);
-    setLastFetchTime(null);
+    // Re-seed from the NEW key rather than blanking. Blanking was wrong whenever
+    // the new org was already cached: the re-seeded inventory appeared with no
+    // fetch time beside it.
+    setLastFetchTime(isoFetchedAt(cacheKey));
   }, [cacheKey]);
 
   // Auto-load once per connected *target*, and only while the Applications tab is the
