@@ -7,16 +7,24 @@
  * "no rules loaded" vs. "nothing matches the search/filter". The populated list is
  * staggered in via `.rise-in-stagger`, the same reveal `AppsListPanel` uses.
  *
- * Loading stays the `ScrollableList` spinner (`loadingMessage`) rather than a
- * `Skeleton`: rule cards are variable-height and the list's shape (how many rows,
- * how tall each is) isn't known ahead of a load, so there is no honest placeholder
- * to draw.
+ * Loading draws a row `Skeleton`, not a spinner. This reverses an earlier call
+ * here that a rule card is "variable-height, so there is no honest placeholder to
+ * draw" — that was wrong about its own component. Cards always load **collapsed**,
+ * and a collapsed {@link RuleCard} is a fixed `p-4` header (status dot, title,
+ * subtitle, chevron); the variable height only appears once a user expands one,
+ * which cannot happen before the list exists. `variant="row" size="lg"` is that
+ * header's shape.
+ *
+ * `Skeleton`'s `label` carries the announcement `loadingMessage` used to, as
+ * visually-hidden text in a `role="status"` node, so the deep-link variant
+ * ("Loading requested rule…") is still announced and still findable by `getByText`.
  */
 import React, { useRef } from 'react';
 import { useStaggerReveal } from '../../hooks/useStaggerReveal';
 import RuleCard from '../RuleCard';
 import EmptyState from '../shared/EmptyState';
 import ScrollableList from '../shared/ScrollableList';
+import Skeleton from '../shared/Skeleton';
 import type { FormattedRule } from '../../../shared/types';
 
 interface RulesListPanelProps {
@@ -58,11 +66,14 @@ const RulesListPanel: React.FC<RulesListPanelProps> = ({
   const staggerRef = useRef<HTMLDivElement>(null);
   useStaggerReveal(staggerRef);
 
+  const loadingMessage = selectedRuleId ? 'Loading requested rule…' : 'Loading rules...';
+
   return (
     <div className="min-h-[400px]">
       <ScrollableList
         loading={isLoading}
-        loadingMessage={selectedRuleId ? 'Loading requested rule…' : 'Loading rules...'}
+        loadingMessage={loadingMessage}
+        skeleton={<Skeleton variant="row" size="lg" count={6} label={loadingMessage} />}
         fillAvailable={false}
         testId="rules-list"
         emptyState={

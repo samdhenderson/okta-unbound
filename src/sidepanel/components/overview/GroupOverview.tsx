@@ -43,8 +43,10 @@ const STAT_SKELETON_LABELS = [
 const GroupOverviewSkeleton: React.FC = () => (
   <div className="space-y-6">
     <div className="grid grid-cols-2 gap-3">
+      {/* `size="lg"` (p-4) matches `StatCard`'s own padding — the default `md`
+          (p-3) drew a tile 8px shorter than the one that replaces it. */}
       {STAT_SKELETON_LABELS.map((label) => (
-        <Skeleton key={label} variant="card" label={label} />
+        <Skeleton key={label} variant="card" size="lg" label={label} />
       ))}
     </div>
     <Skeleton variant="row" size="md" count={6} label="Loading group members" />
