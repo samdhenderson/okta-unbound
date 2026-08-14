@@ -18,8 +18,10 @@
  * that changed rather than only in a banner above the fold.
  */
 import React from 'react';
-import { Button, IconButton, Skeleton } from '../shared';
+import { Badge, Button, IconButton, Skeleton, type BadgeVariant } from '../shared';
+import Icon from '../overview/shared/Icon';
 import ClauseChecklist from '../groups/detail/ClauseChecklist';
+import { membershipSourceLine, sourceLineLabel } from '../../../shared/membership/sourceLine';
 import type {
   GroupMembership,
   MembershipAttribution,
@@ -149,16 +151,61 @@ const RuleAttributionBlock: React.FC<RuleAttributionBlockProps> = ({
   </div>
 );
 
-/** Maps a membership type to its Tailwind badge class (rule-based, direct, or fallback). */
-const getMembershipTypeBadge = (type: string) => {
+/**
+ * Maps a membership type to its {@link Badge} variant.
+ *
+ * This used to return `badge badge-info` / `badge-success` / `badge-muted` —
+ * class names whose CSS was dropped in the Tailwind v4 migration and never
+ * replaced, so the badge rendered as unstyled inline text. The shared primitive
+ * is what stops that being expressible.
+ */
+const membershipTypeVariant = (type: string): BadgeVariant => {
   switch (type) {
     case 'RULE_BASED':
-      return 'badge badge-info';
+      return 'primary';
     case 'DIRECT':
-      return 'badge badge-success';
+      return 'success';
     default:
-      return 'badge badge-muted';
+      return 'neutral';
   }
+};
+
+/**
+ * The explanation for a membership with no per-rule block and no bespoke copy: an
+ * app-managed group, a rule-managed membership with no rule attributed, or one
+ * that was never classified at all.
+ *
+ * All three used to render **nothing** — every branch fell through, so a reader
+ * saw blank space where the comparison view showed a full explanation for the
+ * identical membership. The wording is
+ * {@link shared/membership/sourceLine.membershipSourceLine}'s, so both surfaces
+ * say the same thing about the same evidence.
+ *
+ * `DIRECT` deliberately keeps its own longer sentence rather than routing through
+ * here. Rewording it is a copy decision this change is not making, and
+ * `UsersTab.test.tsx` pins the existing phrasing. Worth a separate look though:
+ * that sentence is unconditional, so a `DIRECT` the classifier only *inferred*
+ * still reads as a flat statement of fact — which `membershipSourceLine` would
+ * soften to "Likely added directly".
+ */
+const MembershipSourceNote: React.FC<{ membership: GroupMembership }> = ({ membership }) => {
+  const line = membershipSourceLine(membership);
+  return (
+    <div
+      className="mt-3 rounded-md border border-neutral-200 bg-neutral-50 p-3"
+      title={`${sourceLineLabel(line)} — ${line.description}`}
+    >
+      <p className="flex items-center gap-2 text-xs text-neutral-600">
+        <Icon type="link" size="xs" className="shrink-0 text-neutral-500" />
+        {/* Its own node, and never italicised into a whisper: this sentence is
+            the whole answer for these memberships. `proven` still decides the
+            weight, matching the comparison's chip-vs-muted split. */}
+        <span className={line.proven ? 'font-medium text-neutral-700' : 'italic text-neutral-500'}>
+          {sourceLineLabel(line)}
+        </span>
+      </p>
+    </div>
+  );
 };
 
 /**
@@ -258,17 +305,26 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
                   )}
                 </div>
                 <div className="flex gap-2 shrink-0">
-                  <span className={getMembershipTypeBadge(membership.membershipType)}>
+                  <Badge variant={membershipTypeVariant(membership.membershipType)}>
                     {membership.membershipType.replace('_', ' ')}
-                  </span>
-                  <span className="px-2 py-0.5 rounded-md bg-neutral-100 text-neutral-700 text-xs font-medium border border-neutral-200">
-                    {membership.group.type}
-                  </span>
+                  </Badge>
+                  <Badge variant="neutral">{membership.group.type}</Badge>
                 </div>
               </div>
 
-              {/* Show rule details if rule-based */}
-              {membership.membershipType === 'RULE_BASED' && membership.rules.length > 0 && (
+              {/*
+                A rule-attributed membership explains itself rule by rule — one
+                captioned block each, so two rules are never collapsed into one
+                answer and each carries its own condition and deep link.
+
+                Everything else gets the shared one-line explanation. That branch
+                is the fix for this surface's oldest hole: `UNKNOWN`, an
+                app-managed group, and a rule-managed membership with no rule
+                attributed all used to fall past every condition here and render
+                blank space, while the comparison view showed a full sentence for
+                the identical membership.
+              */}
+              {membership.membershipType === 'RULE_BASED' && membership.rules.length > 0 ? (
                 <div className="mt-3 space-y-3">
                   {membership.rules.map((rule) => (
                     <RuleAttributionBlock
@@ -280,25 +336,15 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
                     />
                   ))}
                 </div>
-              )}
-
-              {membership.membershipType === 'DIRECT' && (
+              ) : membership.membershipType === 'DIRECT' ? (
                 <div className="mt-3 p-3 bg-neutral-50 rounded-md border border-neutral-200">
                   <p className="text-xs text-neutral-600 flex items-center gap-2">
-                    <svg
-                      className="w-3.5 h-3.5 text-neutral-500"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
+                    <Icon type="link" size="xs" className="shrink-0 text-neutral-500" />
                     This user was added directly to the group (not through a rule)
                   </p>
                 </div>
+              ) : (
+                <MembershipSourceNote membership={membership} />
               )}
             </div>
           ))}

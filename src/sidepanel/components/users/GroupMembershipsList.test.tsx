@@ -168,3 +168,64 @@ describe('GroupMembershipsList', () => {
     expect(screen.queryByText('Fail')).not.toBeInTheDocument();
   });
 });
+
+/**
+ * The hole this surface carried for a long time: only `RULE_BASED`-with-rules and
+ * `DIRECT` drew an explanation, so three real membership shapes fell past every
+ * branch and rendered blank space — while the comparison view, given the identical
+ * membership, showed a full sentence. These pin that a reader is never shown
+ * nothing, and that the wording is the shared one rather than a second opinion.
+ */
+describe('GroupMembershipsList — memberships with no rule to name', () => {
+  const withSource = (over: Partial<GroupMembership>) =>
+    render(
+      <GroupMembershipsList
+        {...base}
+        user={user}
+        memberships={[{ ...formattedRuleMembership, ...over }]}
+      />,
+    );
+
+  it('says the source was never determined rather than showing nothing', () => {
+    withSource({ membershipType: 'UNKNOWN', rules: [], attribution: 'ambiguous' });
+
+    expect(screen.getByText('Source not determined')).toBeInTheDocument();
+  });
+
+  it('never calls an unclassified membership a manual add', () => {
+    withSource({ membershipType: 'UNKNOWN', rules: [], attribution: 'ambiguous' });
+
+    expect(screen.queryByText(/added directly/i)).not.toBeInTheDocument();
+  });
+
+  it('names an app-mastered group as application-managed', () => {
+    withSource({
+      group: { id: '00gFAKE9', type: 'APP_GROUP', profile: { name: 'Salesforce Users' } },
+      rules: [],
+    });
+
+    expect(screen.getByText('Managed by app')).toBeInTheDocument();
+  });
+
+  it('admits when a rule-managed membership has no rule attributed to it', () => {
+    withSource({ rules: [] });
+
+    expect(screen.getByText('Rule-managed, rule not identified')).toBeInTheDocument();
+  });
+
+  /**
+   * `DIRECT` is deliberately absent from this describe: it already had its own
+   * sentence and still uses it (pinned by `UsersTab.test.tsx`). This change only
+   * fills the branches that rendered nothing.
+   */
+
+  /**
+   * The caveat a reader needs before acting on any of these is longer than the
+   * line itself, so it rides on `title` rather than being dropped.
+   */
+  it('carries the full caveat on hover', () => {
+    withSource({ membershipType: 'UNKNOWN', rules: [], attribution: 'ambiguous' });
+
+    expect(screen.getByTitle(/the answer is missing/i)).toBeInTheDocument();
+  });
+});

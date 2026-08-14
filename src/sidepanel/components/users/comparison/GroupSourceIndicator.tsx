@@ -39,25 +39,8 @@
  * is logged.
  */
 import React from 'react';
-import {
-  attributionNamesRules,
-  isDeducedAttribution,
-} from '../../../../shared/utils/membershipAnalysis';
-import type { GroupMembership, MembershipAttribution } from '../../../../shared/types';
-
-/**
- * How a rule is introduced, by the evidence behind the attribution.
- *
- * Kept identical to `GroupMembershipsList`'s `attributionLabel` — the phrase a
- * reader learns on the user-detail screen must mean the same thing in the
- * comparison. `GroupSourceIndicator.test.tsx` renders both surfaces and pins
- * that they agree.
- */
-const attributionCaption: Record<MembershipAttribution, string> = {
-  exact: 'Added by Rule:',
-  inferred: 'Likely added by rule:',
-  ambiguous: 'Possible rule:',
-};
+import { membershipSourceLine, sourceLineLabel } from '../../../../shared/membership/sourceLine';
+import type { GroupMembership } from '../../../../shared/types';
 
 /**
  * Which visual register a line belongs in.
@@ -65,106 +48,12 @@ const attributionCaption: Record<MembershipAttribution, string> = {
  * - `answer` — proven from the data; rendered as a chip.
  * - `nonAnswer` — a deduction, or an absence of classification; rendered muted
  *   and italic so it never carries the weight of an answer.
+ *
+ * The *decision* of which one a membership earns is not made here: it is
+ * `membershipSourceLine`'s `proven`, shared with the user-detail surface. Only
+ * the rendering of that decision is local.
  */
 type SourceTone = 'answer' | 'nonAnswer';
-
-/** One rendered line: the visible words, the fuller caveat, and its register. */
-interface GroupSourceLine {
-  /** The visible text — also the accessible name, so no meaning rides on styling. */
-  label: string;
-  /** The hover caveat, spelling out what the label does and does not claim. */
-  description: string;
-  /** Chip (`answer`) or muted italic (`nonAnswer`). */
-  tone: SourceTone;
-}
-
-/** The candidate/attributed rules, as a single escaped, comma-separated string. */
-const ruleNames = (membership: GroupMembership): string =>
-  membership.rules.map((rule) => rule.name).join(', ');
-
-/**
- * What one membership can honestly say about how it was granted.
- *
- * Branch order matters: `UNKNOWN` is checked before anything else so a
- * membership that was never classified can never fall through into a
- * confident-sounding branch.
- */
-function sourceLine(membership: GroupMembership): GroupSourceLine {
-  const { membershipType, rules, attribution, group } = membership;
-  // A guess and a fact get different registers, from the shared table rather
-  // than from a second opinion formed here.
-  const deduced = isDeducedAttribution(attribution);
-  const tone: SourceTone = deduced ? 'nonAnswer' : 'answer';
-
-  if (membershipType === 'UNKNOWN') {
-    return {
-      label: 'Source not determined',
-      description:
-        'This membership was never classified — the group rules it would be checked against could not be loaded. It is not a manual add and not a rule grant; the answer is missing.',
-      tone: 'nonAnswer',
-    };
-  }
-
-  if (membershipType === 'DIRECT') {
-    return {
-      label: deduced ? 'Likely added directly' : 'Added directly',
-      description: deduced
-        ? 'No rule was matched, but not every rule condition could be evaluated, so a manual add is the likely explanation rather than a confirmed one.'
-        : 'No active group rule explains this membership, so the user was added to the group by hand.',
-      tone,
-    };
-  }
-
-  // RULE_BASED from here down.
-  if (rules.length === 0) {
-    if (group.type === 'APP_GROUP') {
-      return {
-        label: 'Managed by app',
-        description:
-          'This group is mastered by an application, which manages its own members. No group rule explains the membership.',
-        tone,
-      };
-    }
-    return {
-      label: 'Rule-managed, rule not identified',
-      description:
-        'The membership is rule-managed, but no rule is attributed to it, so the granting rule cannot be named here.',
-      tone: 'nonAnswer',
-    };
-  }
-
-  // `attributionNamesRules` decides whether the listed rules may be credited as
-  // the source at all. When it is false the same rules are still shown — hiding
-  // the candidate set would answer even less — but as candidates, never as one
-  // rule that did it.
-  const namesRules = attributionNamesRules(attribution);
-  const several =
-    rules.length > 1 ? ` (${rules.length} ${namesRules ? 'rules' : 'candidates, unresolved'})` : '';
-
-  return {
-    label: `${attributionCaption[attribution]} ${ruleNames(membership)}${several}`,
-    description: ruleDescription(namesRules, deduced),
-    tone,
-  };
-}
-
-/**
- * The hover caveat for a rule-attributed row, kept out of {@link sourceLine} so
- * the three cases read as three sentences rather than a nested ternary.
- *
- * @param namesRules - Whether the attribution licenses crediting the rules as the source.
- * @param deduced - Whether the classification was a deduction rather than a fact.
- * @returns The sentence explaining what the row's caption does and does not claim.
- */
-function ruleDescription(namesRules: boolean, deduced: boolean): string {
-  if (!namesRules) {
-    return 'The classifier could not resolve which rule granted this membership, so everything listed is a candidate rather than the answer, and none of them is credited.';
-  }
-  if (deduced) {
-    return 'Not every rule condition could be evaluated against this user, so the rules listed are the plausible source rather than a confirmed one. Okta does not record which rule added a member.';
-  }
-  return 'Every rule listed provably matches this user. Okta does not record which rule added a member, so this is the classifier evaluating rule conditions, not an Okta assertion.';
-}
 
 /** Classes shared by both registers; the rule text truncates instead of overflowing the row. */
 const baseClasses = 'min-w-0 truncate text-xs';
@@ -215,9 +104,14 @@ interface GroupSourceIndicatorProps {
 const GroupSourceIndicator: React.FC<GroupSourceIndicatorProps> = ({ membership }) => {
   if (!membership) return null;
 
-  const { label, description, tone } = sourceLine(membership);
+  const line = membershipSourceLine(membership);
+  const label = sourceLineLabel(line);
+  const tone: SourceTone = line.proven ? 'answer' : 'nonAnswer';
   return (
-    <span className={`${baseClasses} ${toneClasses[tone]}`} title={`${label} — ${description}`}>
+    <span
+      className={`${baseClasses} ${toneClasses[tone]}`}
+      title={`${label} — ${line.description}`}
+    >
       {label}
     </span>
   );
