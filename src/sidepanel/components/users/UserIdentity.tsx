@@ -26,6 +26,15 @@ interface UserIdentityProps {
    * passes `false` because the masthead already shows the context entity's id.
    */
   showId?: boolean;
+  /**
+   * Whether to render the user's name as this card's heading. Defaults to `true`.
+   *
+   * A detail page whose `PageHeader` already names the user passes `false`: two
+   * headings carrying the identical string is a redundant heading outline, and in
+   * a 360px panel the repeat costs a line of vertical space directly under the
+   * title it repeats.
+   */
+  showName?: boolean;
 }
 
 /** Per-variant badge palette (this component's rich palette, keyed by shared variant). */
@@ -52,6 +61,7 @@ const UserIdentity: React.FC<UserIdentityProps> = ({
   oktaOrigin,
   showOktaLink = true,
   showId = true,
+  showName = true,
 }) => {
   const { copied: idCopied, copy: copyId } = useCopyToClipboard();
 
@@ -73,9 +83,11 @@ const UserIdentity: React.FC<UserIdentityProps> = ({
         {/* Identity */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-base font-bold text-neutral-900 truncate">
-              {user.profile.firstName} {user.profile.lastName}
-            </h2>
+            {showName && (
+              <h2 className="text-base font-bold text-neutral-900 truncate">
+                {user.profile.firstName} {user.profile.lastName}
+              </h2>
+            )}
             <span className={getStatusBadgeClass(user.status)}>{user.status}</span>
           </div>
 

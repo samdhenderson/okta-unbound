@@ -551,8 +551,9 @@ describe('compare entry point', () => {
   it('pushes the comparison view from the Compare action', async () => {
     await renderWithSelectedUser();
 
-    // At the root of the view stack: the tab's own header, and no comparison.
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('User Search');
+    // On the detail rung, one below the root: the header names the user being
+    // read (it used to say "User Search" even here), and there is no comparison.
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Ada Lovelace');
     expect(screen.queryByRole('button', { name: 'Back to user' })).not.toBeInTheDocument();
 
     await act(async () => {

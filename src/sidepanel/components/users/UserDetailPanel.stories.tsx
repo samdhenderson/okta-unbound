@@ -54,7 +54,8 @@ const meta = {
       description: {
         component:
           "The Users tab's selected-user surface: the profile card (with the lifecycle actions in its `afterCard` slot) and the analysed group-membership list (with the Compare / Add to Group controls in its `actions` slot).\n\n" +
-          "Purely presentational — the selected user, their analysed memberships and every action's state live in `useUsersTabState`, so this panel renders without touching Okta. While memberships load, the list shows a spinner and both header actions are disabled. The user-comparison modal is deliberately mounted by the tab, not here, so its mount timing is unchanged.\n\n" +
+          "Purely presentational — the selected user, their analysed memberships and every action's state live in `useUsersTabState`, so this panel renders without touching Okta. While memberships load, the list shows a spinner.\n\n" +
+          'Page-level verbs (Compare, Add to group) are deliberately **not** here: they act on the whole user, so they live in the tab’s sticky `ActionBar` above this panel (ADR-0030). They used to sit in `GroupMembershipsList`’s header slot, alongside controls acting on that one card.\n\n' +
           '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs)',
       },
     },
@@ -70,8 +71,6 @@ const meta = {
     onRequestLifecycleAction: fn(),
     onCancelLifecycleAction: fn(),
     onConfirmLifecycleAction: fn(),
-    onCompare: fn(),
-    onAddToGroup: fn(),
   },
   argTypes: {
     user: { description: 'The selected user to render.' },
@@ -101,8 +100,6 @@ const meta = {
     onRequestLifecycleAction: { description: 'Arm the confirm modal for a lifecycle action.' },
     onCancelLifecycleAction: { description: 'Dismiss the lifecycle confirm modal.' },
     onConfirmLifecycleAction: { description: 'Run the armed lifecycle action.' },
-    onCompare: { description: 'Pushes the user-comparison view (ADR-0016).' },
-    onAddToGroup: { description: 'Opens the Add-to-Group modal.' },
   },
 } satisfies Meta<typeof UserDetailPanel>;
 
@@ -112,7 +109,7 @@ type Story = StoryObj<typeof meta>;
 /** An active user with one direct and one rule-based membership. */
 export const Default: Story = {};
 
-/** Memberships are still loading — the list spins and both header actions are disabled. */
+/** Memberships are still loading — the list shows its row skeleton. */
 export const LoadingMemberships: Story = {
   args: { memberships: [], isLoadingMemberships: true },
 };
