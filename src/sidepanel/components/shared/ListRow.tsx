@@ -31,13 +31,35 @@
 import React from 'react';
 
 /**
- * Row padding. Two values, not the ten found in the wild.
+ * Which kind of row this is.
+ *
+ * - `card` — a row that IS a card: it sits directly on the canvas or in a plain
+ *   list, and carries the border that separates it from its neighbours.
+ * - `nested` — a row *inside* something that is already a card: an overview
+ *   preview list, a clause list. It carries no border, because a border here
+ *   would draw a box inside a box; separation comes from a hover background
+ *   instead.
+ *
+ * The distinction is not cosmetic. Four rows were hand-rolling the `nested`
+ * recipe with three different paddings, and giving them a `card` border would
+ * have been a visible regression rather than a consolidation.
+ */
+export type ListRowVariant = 'card' | 'nested';
+
+/**
+ * Row padding.
  *
  * `compact` is a dense scanning list (`GroupListItem`, `MemberRow`); `comfortable`
  * is a rich card with badges and a meta line (`AppListItem`, `RuleCard`,
  * `PolicyCard`). Rows that previously sat between the two round to the nearer one.
+ *
+ * `tight` exists for `nested` rows, which sit inside a card that already pays for
+ * its own padding — `compact` there indents the content twice. It was added only
+ * once four real call sites needed it (`UserOverview`, `AuthPolicyOverview`,
+ * `BreakdownReport`, `ClauseGroupList`), per the ADR-0029 rule that a new density
+ * is a signal rather than a request.
  */
-export type ListRowDensity = 'compact' | 'comfortable';
+export type ListRowDensity = 'tight' | 'compact' | 'comfortable';
 
 /**
  * Resting appearance.
@@ -52,14 +74,38 @@ export type ListRowState = 'default' | 'selected' | 'highlighted';
 export type ListRowAs = 'div' | 'li' | 'a' | 'button';
 
 const densityClasses: Record<ListRowDensity, string> = {
+  tight: 'px-2 py-1.5',
   compact: 'px-3 py-2',
   comfortable: 'p-4',
 };
 
-const stateClasses: Record<ListRowState, string> = {
-  default: 'border-neutral-200 bg-white',
-  selected: 'border-primary bg-primary-light',
-  highlighted: 'border-primary bg-primary-light ring-2 ring-primary ring-offset-2',
+/**
+ * Chrome per variant. A `nested` row draws no border, because it already sits
+ * inside something bordered and a second box would only add noise.
+ */
+const variantClasses: Record<ListRowVariant, string> = {
+  card: 'border',
+  nested: '',
+};
+
+/**
+ * Resting appearance, per variant.
+ *
+ * A `card` says "selected" with its border; a `nested` row has no border to say
+ * it with, so it leans on the fill and a thinner ring. Both keep the same
+ * `primary-light` background, so the two idioms read as the same state.
+ */
+const stateClasses: Record<ListRowVariant, Record<ListRowState, string>> = {
+  card: {
+    default: 'border-neutral-200 bg-white',
+    selected: 'border-primary bg-primary-light',
+    highlighted: 'border-primary bg-primary-light ring-2 ring-primary ring-offset-2',
+  },
+  nested: {
+    default: '',
+    selected: 'bg-primary-light',
+    highlighted: 'bg-primary-light ring-1 ring-primary',
+  },
 };
 
 /**
@@ -67,22 +113,31 @@ const stateClasses: Record<ListRowState, string> = {
  * row's hover animates its border and nothing else — several rows previously used
  * `transition-all` and animated layout properties by accident.
  */
-const baseClasses = 'rounded-md border transition-colors duration-(--dur-instant)';
+const baseClasses = 'rounded-md transition-colors duration-(--dur-instant)';
 
 /**
- * The one hover treatment, and the reason `state` gates it.
+ * The one hover treatment per variant, and the two things that gate it.
  *
- * A `selected` or `highlighted` row already carries `border-primary` to say so.
- * Letting hover repaint that border `neutral-500` would make the row look *less*
- * selected the moment you pointed at it — hover would be overriding state rather
- * than responding to it. So the hover border applies to `default` rows only; the
- * cursor and focus ring still apply everywhere, since those describe what the row
- * does rather than what it is.
+ * **Only interactive rows hover.** Hover is feedback for an affordance; on a row
+ * you cannot activate it promises something that is not there. `ListRow` used to
+ * apply it to every row, which handed a hover border to static lists that never
+ * had one.
+ *
+ * **Only `default` rows hover.** A `selected` or `highlighted` row already carries
+ * `border-primary` (or, when nested, a `primary-light` fill) to say so. Letting
+ * hover repaint that would make the row look *less* selected the moment you
+ * pointed at it — hover overriding state rather than responding to it.
  */
-const hoverBorderClass = 'hover:border-neutral-500';
+const hoverClasses: Record<ListRowVariant, string> = {
+  card: 'hover:border-neutral-500',
+  nested: 'hover:bg-neutral-50',
+};
 
-/** Applied only when the row is itself the click target. */
-const interactiveClasses =
+/**
+ * Applied only when the row **element itself** is the control — not when a
+ * `StretchedButton` covers it, which carries its own cursor and focus ring.
+ */
+const controlClasses =
   'w-full text-left cursor-pointer ' +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
 
@@ -98,6 +153,12 @@ const elementClasses: Partial<Record<ListRowAs, string>> = {
 export interface ListRowProps {
   /** The row's content — owned by the feature, not by this component. */
   children: React.ReactNode;
+  /**
+   * Whether the row IS a card (`card`, the default) or sits inside one
+   * (`nested`). A nested row drops the border, because a box inside a box is
+   * noise, and separates on hover instead.
+   */
+  variant?: ListRowVariant;
   /** Padding scale. Defaults to `comfortable`. */
   density?: ListRowDensity;
   /** Resting appearance. Defaults to `default`. */
@@ -154,12 +215,42 @@ export interface ListRowProps {
    * pointer cursor and a focus ring — so pass an interactive `as` with it.
    */
   onClick?: () => void;
+  /**
+   * Whether the row responds to being pointed at.
+   *
+   * Normally inferred: a row is interactive when `as` is `button`/`a`, or when
+   * `onClick` or `onHeaderClick` is set. Pass it explicitly for a row whose
+   * control `ListRow` cannot see — `GroupListItem` is activated by a
+   * `StretchedButton` overlay and `AppListItem` by an `onClick` on a child, so
+   * neither has a handler on the row element, yet both are clickable.
+   *
+   * It governs the hover treatment only. The cursor and focus ring still come
+   * from the row element actually being a control, because a
+   * `StretchedButton` row already has both from the button on top of it.
+   */
+  interactive?: boolean;
   /** `href` for `as="a"`. Ignored otherwise. */
   href?: string;
   /** Link target for `as="a"`. `_blank` also sets `rel="noopener noreferrer"`. */
   target?: string;
   /** Accessible name, when the visible content does not provide a sufficient one. */
   ariaLabel?: string;
+  /**
+   * ARIA role, when the row is a member of a composite widget — a `radio` inside
+   * a `radiogroup`, an `option` inside a `listbox`.
+   *
+   * `ListRow` owns chrome, not semantics, so this is deliberately a thin
+   * pass-through rather than a set of behaviours. It exists because two pickers
+   * (`GroupMergeModal`'s survivor radio, `CopyMembersModal`'s format toggle) were
+   * otherwise smuggling roles through `dataAttributes`, which is documented for
+   * row *identity* attributes and would have hidden a real a11y contract in an
+   * escape hatch.
+   */
+  role?: string;
+  /** `aria-checked`, for `role="radio"` / `role="checkbox"` rows. */
+  ariaChecked?: boolean;
+  /** `aria-pressed`, for a toggle-button row. */
+  ariaPressed?: boolean;
   /** Tooltip text. */
   title?: string;
   /** `id` of the element describing this row, for an interactive row in a list. */
@@ -200,6 +291,7 @@ export interface ListRowProps {
  */
 const ListRow: React.FC<ListRowProps> = ({
   children,
+  variant = 'card',
   density = 'comfortable',
   state = 'default',
   flash = false,
@@ -208,9 +300,13 @@ const ListRow: React.FC<ListRowProps> = ({
   headerClassName = '',
   onHeaderClick,
   onClick,
+  interactive,
   href,
   target,
   ariaLabel,
+  role,
+  ariaChecked,
+  ariaPressed,
   title,
   describedBy,
   className = '',
@@ -220,18 +316,39 @@ const ListRow: React.FC<ListRowProps> = ({
 }) => {
   // A row is interactive when it can be activated by the user directly — not when
   // a `StretchedButton` sits on top of it, which carries its own focus ring.
-  const interactive = as === 'button' || as === 'a' || onClick !== undefined;
+  //
+  // There is deliberately no `disabled` prop. One was added while migrating
+  // `BreakdownReport`, whose inert "Other" row needs it — and then that row was
+  // ruled out of the migration entirely (it is a data-viz bar, ADR-0029 §4),
+  // leaving the prop with no consumer. Add it back when a row that actually
+  // migrates needs it, not before.
+  const isControl = as === 'button' || as === 'a' || onClick !== undefined;
 
-  // With a body, the padding belongs to the header rather than the card, and the
-  // card clips so a `0fr` disclose body cannot escape the rounded corners.
+  // Hover is feedback for an affordance, so it tracks whether the row can be
+  // activated at all — which is broader than whether the row element is itself
+  // the control. An expandable row's header toggles it; a `StretchedButton` row
+  // is clickable through an overlay `ListRow` cannot see, hence the override.
+  const respondsToPointer = interactive ?? (isControl || onHeaderClick !== undefined);
+
+  // Only a real body makes the card clip — a `0fr` disclose body must not escape
+  // the rounded corners, but nothing else needs clipping.
   const hasBody = body !== undefined && body !== null;
+
+  // The header wrapper exists whenever the header is addressed at all, not only
+  // when there is a body. A row whose body is *conditionally rendered* (collapsed
+  // = no body) would otherwise lose `onHeaderClick` and `headerClassName` in the
+  // collapsed state — i.e. the control that expands it — which is exactly the
+  // state it spends most of its time in.
+  const hasHeader = hasBody || headerClassName !== '' || onHeaderClick !== undefined;
 
   const classes = [
     baseClasses,
-    hasBody ? 'overflow-hidden' : densityClasses[density],
-    stateClasses[state],
-    state === 'default' ? hoverBorderClass : '',
-    interactive ? interactiveClasses : '',
+    variantClasses[variant],
+    hasBody ? 'overflow-hidden' : '',
+    hasHeader ? '' : densityClasses[density],
+    stateClasses[variant][state],
+    respondsToPointer && state === 'default' ? hoverClasses[variant] : '',
+    isControl ? controlClasses : '',
     elementClasses[as] ?? '',
     flash ? 'animate-affirm-flash' : '',
     className,
@@ -239,7 +356,7 @@ const ListRow: React.FC<ListRowProps> = ({
     .filter(Boolean)
     .join(' ');
 
-  const content = hasBody ? (
+  const content = hasHeader ? (
     <>
       <div
         className={[densityClasses[density], headerClassName].filter(Boolean).join(' ')}
@@ -257,8 +374,11 @@ const ListRow: React.FC<ListRowProps> = ({
     className: classes,
     onClick,
     title,
+    role,
     'aria-label': ariaLabel,
     'aria-describedby': describedBy,
+    'aria-checked': ariaChecked,
+    'aria-pressed': ariaPressed,
     'data-testid': testId,
     ...dataAttributes,
   };

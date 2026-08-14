@@ -198,6 +198,67 @@ export const Expandable: Story = {
   ),
 };
 
+/**
+ * `card` versus `nested` — the two idioms, side by side.
+ *
+ * A `nested` row sits inside something that is already a card, so it draws no
+ * border (a box inside a box is noise) and separates on hover background instead.
+ * It also runs `tight`, because the containing card already pays for one level of
+ * padding. Four rows were hand-rolling this recipe with three different paddings.
+ */
+export const Variants: Story = {
+  args: {
+    children: null,
+  },
+  render: () => (
+    <div className="space-y-4">
+      <ListRow density="compact">
+        <RowBody title="card" meta="Carries its own border" />
+      </ListRow>
+
+      {/* The container a nested row lives in — this is the card. */}
+      <div className="rounded-md border border-neutral-200 bg-white p-3">
+        <div className="mb-1 text-xs font-semibold tracking-wide text-neutral-500 uppercase">
+          Recent groups
+        </div>
+        {['Engineering', 'Design', 'Support'].map((name) => (
+          <ListRow key={name} variant="nested" density="tight">
+            <RowBody title={name} meta="No border — hover separates it" />
+          </ListRow>
+        ))}
+      </div>
+    </div>
+  ),
+};
+
+/**
+ * Only interactive rows hover.
+ *
+ * Hover is feedback for an affordance — a static row that highlights promises
+ * something that is not there. Point at each of these: the first two respond, the
+ * third does not. Interactivity is inferred from `as` / `onClick` /
+ * `onHeaderClick`; the `interactive` override exists for a row whose control
+ * `ListRow` cannot see, such as a `StretchedButton` overlay.
+ */
+export const HoverIsGatedOnInteractivity: Story = {
+  args: {
+    children: null,
+  },
+  render: () => (
+    <div className="space-y-3">
+      <ListRow as="button" onClick={() => {}} density="compact">
+        <RowBody title="Interactive" meta="A real control — hovers, and takes focus" />
+      </ListRow>
+      <ListRow interactive density="compact">
+        <RowBody title="interactive override" meta="Clicked through an overlay — hovers" />
+      </ListRow>
+      <ListRow density="compact">
+        <RowBody title="Static" meta="Nothing to activate — no hover" />
+      </ListRow>
+    </div>
+  ),
+};
+
 /** A one-shot success confirmation on a row that was just added or changed. */
 export const Flash: Story = {
   args: {

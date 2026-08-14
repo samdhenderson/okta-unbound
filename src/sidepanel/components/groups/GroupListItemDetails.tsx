@@ -11,9 +11,15 @@
  * lives.
  *
  * Nothing here fetches. Every field is already on the loaded {@link GroupSummary}.
+ *
+ * The push-mapping rows are {@link sidepanel/components/shared/ListRow} at `tight`
+ * density (ADR-0029), which matches their previous `px-2 py-1.5` exactly. They lose
+ * their `bg-neutral-50` tint to the shared `card` fill: `ListRow`'s `className` is
+ * layout-only by contract, so a per-row colour override is the drift the primitive
+ * exists to stop, and the row's border already separates it from the panel.
  */
 import React from 'react';
-import { CopyButton } from '../shared';
+import { CopyButton, ListRow } from '../shared';
 import MemberSourceMeter from './detail/MemberSourceMeter';
 import type { GroupSummary } from '../../../shared/types';
 import type { MemberSourceBreakdown } from '../../../shared/membership/groupSource';
@@ -74,12 +80,14 @@ const GroupListItemDetails: React.FC<GroupListItemDetailsProps> = ({ group, brea
         <div className="mb-1.5 text-xs font-medium text-neutral-600">Push mappings</div>
         <ul className="space-y-1.5">
           {group.pushMappings.map((mapping) => (
-            <li
+            <ListRow
               key={mapping.mappingId}
-              className="flex items-center justify-between gap-3 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1.5"
+              as="li"
+              density="tight"
+              className="flex items-center justify-between gap-3"
             >
               <div className="min-w-0">
-                <div className="truncate text-xs font-medium text-neutral-900">
+                <div className="truncate text-sm font-semibold text-neutral-900">
                   {mapping.appName || mapping.appId}
                 </div>
                 {mapping.targetGroupName && (
@@ -95,13 +103,13 @@ const GroupListItemDetails: React.FC<GroupListItemDetailsProps> = ({ group, brea
               */}
               {mapping.priority !== undefined && (
                 <span
-                  className="shrink-0 rounded-md bg-neutral-200 px-1.5 py-0.5 text-xs font-medium text-neutral-600"
+                  className="shrink-0 rounded-md bg-neutral-200 px-2 py-0.5 text-xs font-medium text-neutral-600"
                   title="Okta assignment priority — not an activation status"
                 >
                   Priority {mapping.priority}
                 </span>
               )}
-            </li>
+            </ListRow>
           ))}
         </ul>
       </div>

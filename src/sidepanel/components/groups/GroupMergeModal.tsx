@@ -7,11 +7,16 @@
  * empty the sources. Emptying is blocked when a source is fed by an active rule.
  * Every run is audited and recorded for undo; group deletion is intentionally not
  * performed (the emptied husks are left for the admin to delete in Okta).
+ *
+ * The survivor picker and the "will be emptied" preview are both
+ * {@link sidepanel/components/shared/ListRow}s (ADR-0029): the picker is an
+ * interactive `button` row carrying `state="selected"`, the preview a static `li`.
  */
 import React, { useMemo, useState } from 'react';
 import Modal from '../shared/Modal';
 import Button from '../shared/Button';
 import LoadingSpinner from '../shared/LoadingSpinner';
+import { ListRow } from '../shared';
 import StatCard from '../overview/shared/StatCard';
 import type { GroupSummary } from '../../../shared/types';
 import type { MergePhase, MergeResults } from '../../hooks/useGroupMerge';
@@ -102,23 +107,21 @@ const GroupMergeModal: React.FC<GroupMergeModalProps> = ({
           </div>
           <div className="space-y-2" role="radiogroup" aria-label="Choose the survivor group">
             {selectedGroups.map((g) => (
-              <button
+              <ListRow
                 key={g.id}
-                type="button"
-                role="radio"
-                aria-checked={survivorId === g.id}
+                as="button"
+                density="compact"
+                state={survivorId === g.id ? 'selected' : 'default'}
                 onClick={() => setPicked(g.id)}
-                className={`w-full flex items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
-                  survivorId === g.id
-                    ? 'border-primary bg-primary-light'
-                    : 'border-neutral-200 bg-white hover:border-neutral-400'
-                }`}
+                className="flex items-center justify-between gap-3"
+                role="radio"
+                ariaChecked={survivorId === g.id}
               >
-                <span className="text-sm font-medium text-neutral-900 truncate">{g.name}</span>
-                <span className="text-xs text-neutral-500 shrink-0">
+                <span className="text-sm font-semibold text-neutral-900 truncate">{g.name}</span>
+                <span className="text-xs text-neutral-600 shrink-0">
                   {g.memberCount.toLocaleString()} members
                 </span>
-              </button>
+              </ListRow>
             ))}
           </div>
         </div>
@@ -150,17 +153,20 @@ const GroupMergeModal: React.FC<GroupMergeModalProps> = ({
 
           <ul className="space-y-2">
             {plan.sources.map((s) => (
-              <li
+              /*
+                A blocked source keeps its danger fill through `className`, but not
+                its danger border: the border, and its hover, belong to `ListRow`,
+                and overriding one without the other would repaint the row on hover.
+              */
+              <ListRow
                 key={s.id}
-                className={`rounded-md border px-3 py-2 ${
-                  s.hasActiveFeedingRule
-                    ? 'border-danger-light bg-danger-light'
-                    : 'border-neutral-200'
-                }`}
+                as="li"
+                density="compact"
+                className={s.hasActiveFeedingRule ? 'bg-danger-light' : ''}
               >
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium text-neutral-900 truncate">{s.name}</span>
-                  <span className="text-xs text-neutral-500 shrink-0">
+                  <span className="text-sm font-semibold text-neutral-900 truncate">{s.name}</span>
+                  <span className="text-xs text-neutral-600 shrink-0">
                     {s.membersToRemove.length.toLocaleString()} members
                   </span>
                 </div>
@@ -171,7 +177,7 @@ const GroupMergeModal: React.FC<GroupMergeModalProps> = ({
                     or deactivate it first.
                   </p>
                 )}
-              </li>
+              </ListRow>
             ))}
           </ul>
 

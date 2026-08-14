@@ -40,7 +40,13 @@ export type { IconButtonVariant, IconButtonSize } from './IconButton';
 export type { InputSize } from './Input';
 export type { SpinnerSize } from './LoadingSpinner';
 export type { SkeletonVariant, SkeletonSize } from './Skeleton';
-export type { ListRowDensity, ListRowState, ListRowAs, ListRowProps } from './ListRow';
+export type {
+  ListRowVariant,
+  ListRowDensity,
+  ListRowState,
+  ListRowAs,
+  ListRowProps,
+} from './ListRow';
 export type { AlertMessageData, AlertAction } from './AlertMessage';
 export type { StatusType, UserStatusVariant } from './status';
 export { userStatusVariant } from './status';

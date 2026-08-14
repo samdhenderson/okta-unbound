@@ -6,12 +6,17 @@
  * flow: opens straight to the diff for a cluster of identical-expression rules.
  * The confirm step creates the union rule, activates it if needed, then retires
  * the source rule(s). All writes are audited and captured for undo.
+ *
+ * The group-search hits and the "will retire" list are both
+ * {@link sidepanel/components/shared/ListRow}s (ADR-0029) — the hits as
+ * interactive `button` rows, the retire list as static `li`s.
  */
 import React, { useCallback, useRef, useState } from 'react';
 import Modal from './shared/Modal';
 import Button from './shared/Button';
 import Input from './shared/Input';
 import LoadingSpinner from './shared/LoadingSpinner';
+import { ListRow } from './shared';
 import type {
   ConsolidationPhase,
   ConsolidationPreview,
@@ -112,13 +117,13 @@ const RuleConsolidationModal: React.FC<RuleConsolidationModalProps> = ({
           <ul className="space-y-1.5 max-h-64 overflow-y-auto scrollable-list">
             {hits.map((hit) => (
               <li key={hit.id}>
-                <button
-                  type="button"
+                <ListRow
+                  as="button"
+                  density="compact"
                   onClick={() => onChooseGroup(hit.id, hit.name)}
-                  className="w-full text-left rounded-md border border-neutral-200 px-3 py-2 text-sm text-neutral-900 hover:border-primary hover:bg-primary-light transition-colors"
                 >
-                  {hit.name}
-                </button>
+                  <span className="text-sm font-semibold text-neutral-900">{hit.name}</span>
+                </ListRow>
               </li>
             ))}
             {query.trim().length >= 2 && !searching && hits.length === 0 && (
@@ -172,13 +177,15 @@ const RuleConsolidationModal: React.FC<RuleConsolidationModalProps> = ({
             </div>
             <ul className="space-y-1.5">
               {preview.retireRules.map((r) => (
-                <li
+                <ListRow
                   key={r.id}
-                  className="flex items-center justify-between gap-3 rounded-md border border-neutral-200 px-3 py-2"
+                  as="li"
+                  density="compact"
+                  className="flex items-center justify-between gap-3"
                 >
-                  <span className="text-sm text-neutral-900 truncate">{r.name}</span>
-                  <span className="text-xs text-neutral-500">{r.status}</span>
-                </li>
+                  <span className="text-sm font-semibold text-neutral-900 truncate">{r.name}</span>
+                  <span className="text-xs text-neutral-600">{r.status}</span>
+                </ListRow>
               ))}
             </ul>
           </div>

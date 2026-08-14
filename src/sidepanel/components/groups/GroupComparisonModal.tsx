@@ -5,11 +5,16 @@
  * Runs the comparison automatically on open, then renders summary stats, a per-group
  * unique/shared/overlap breakdown, and (for 3+ groups) a pairwise-overlap matrix
  * computed from the member cache. Results are exportable to CSV.
+ *
+ * The per-group breakdown rows are {@link sidepanel/components/shared/ListRow}s
+ * (ADR-0029); they keep only their per-group tint, which is the legend tying each
+ * row to its colour in the pairwise matrix.
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import Modal from '../shared/Modal';
 import Button from '../shared/Button';
 import LoadingSpinner from '../shared/LoadingSpinner';
+import { ListRow } from '../shared';
 import { generateCSV, downloadCSV, getDateForFilename } from '../../../shared/utils/csvUtils';
 import type { GroupSummary, GroupComparisonResult, OktaUser } from '../../../shared/types';
 
@@ -162,9 +167,17 @@ const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
                 group.memberCount > 0 ? Math.round((sharedCount / group.memberCount) * 100) : 0;
 
               return (
-                <div
+                /*
+                  The per-index tint stays: it is the legend that matches this row
+                  to the group's colour in the matrix below, and the overlap bar's
+                  `bg-white/50` track is only legible against it. It overrides
+                  `ListRow`'s `bg-white` and nothing else — border, radius, hover
+                  and padding stay the primitive's.
+                */
+                <ListRow
                   key={group.id}
-                  className={`p-3 rounded-md border border-neutral-200 ${BG_COLORS[i] || 'bg-neutral-50'}`}
+                  density="compact"
+                  className={BG_COLORS[i] || 'bg-neutral-50'}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className={`text-sm font-semibold ${COLORS[i] || 'text-neutral-900'}`}>
@@ -193,7 +206,7 @@ const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
                       style={{ width: `${overlapPct}%` }}
                     />
                   </div>
-                </div>
+                </ListRow>
               );
             })}
           </div>

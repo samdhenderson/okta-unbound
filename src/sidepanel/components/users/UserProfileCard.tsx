@@ -137,7 +137,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
                   placeholder="Filter all attributes…"
                   icon={<Icon type="search" size="sm" />}
                 />
-                <div className="border border-neutral-200 rounded-md overflow-hidden divide-y divide-neutral-200 max-h-80 overflow-y-auto">
+                <div className="border border-neutral-200 rounded-md overflow-hidden divide-y divide-neutral-100 max-h-80 overflow-y-auto">
                   {filteredAll.map((field) => (
                     <div
                       key={field.key}

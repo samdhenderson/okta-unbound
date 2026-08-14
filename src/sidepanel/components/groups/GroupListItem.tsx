@@ -144,6 +144,11 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
     return (
       <ListRow
         density="compact"
+        // Activated by the `StretchedButton` overlay below, which `ListRow` cannot
+        // see — without this the row would read as static and lose its hover.
+        // Deliberately not `as="button"`: the row holds a checkbox and an
+        // IconButton, so a real button here is an axe `nested-interactive`.
+        interactive
         // The two states *compose* in this row rather than one winning: `selected`
         // paints the border and background, and a deep link adds a ring on top of
         // whatever is underneath. `highlighted` is a superset of `selected`, so

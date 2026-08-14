@@ -7,6 +7,10 @@
  * vs. rule-based), then renders the profile card, stat cards, an alphabetical
  * groups preview (with Compare / View all), and the {@link UserComparisonModal}
  * launcher.
+ *
+ * The groups preview sits inside a bordered card, so each of its rows is a
+ * {@link sidepanel/components/shared/ListRow} `variant="nested"` at
+ * `density="tight"` — no border of its own, separation on hover (ADR-0029).
  */
 import React, { useState, useEffect, useMemo } from 'react';
 import StatCard from './shared/StatCard';
@@ -18,6 +22,7 @@ import { useEntityQuery } from '../../cache/useEntityQuery';
 import AlertMessage from '../shared/AlertMessage';
 import Button from '../shared/Button';
 import LoadingSpinner from '../shared/LoadingSpinner';
+import { ListRow } from '../shared';
 import type { OktaUser } from '../../../shared/types';
 
 /** Props for {@link UserOverview}. */
@@ -206,15 +211,17 @@ const UserOverview: React.FC<UserOverviewProps> = ({
           <>
             <div className="space-y-2">
               {sortedGroups.slice(0, PREVIEW_LIMIT).map((membership, index) => (
-                <div
+                <ListRow
                   key={membership.group?.id || index}
-                  className="flex items-center justify-between p-2 hover:bg-neutral-50 rounded-md"
+                  variant="nested"
+                  density="tight"
+                  className="flex items-center justify-between"
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-neutral-900 text-sm truncate">
+                    <div className="truncate text-sm font-semibold text-neutral-900">
                       {membership.group?.profile?.name || 'Unknown Group'}
                     </div>
-                    <div className="text-xs text-neutral-500">
+                    <div className="text-xs text-neutral-600">
                       {membership.membershipType === 'DIRECT'
                         ? 'Direct assignment'
                         : membership.membershipType === 'RULE_BASED'
@@ -223,7 +230,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
                     </div>
                   </div>
                   <span
-                    className={`shrink-0 px-2 py-1 rounded-md text-xs font-medium ${
+                    className={`shrink-0 px-2 py-0.5 rounded-md text-xs font-medium ${
                       membership.membershipType === 'DIRECT'
                         ? 'bg-primary-light text-primary-text'
                         : membership.membershipType === 'RULE_BASED'
@@ -237,7 +244,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
                         ? 'Auto'
                         : 'Member'}
                   </span>
-                </div>
+                </ListRow>
               ))}
             </div>
             {totalGroups > PREVIEW_LIMIT && (

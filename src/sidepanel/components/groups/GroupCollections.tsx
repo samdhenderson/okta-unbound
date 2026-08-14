@@ -240,7 +240,7 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
       )}
 
       {/* Collections List */}
-      <div className="max-h-[300px] overflow-y-auto">
+      <div className="max-h-[300px] divide-y divide-neutral-100 overflow-y-auto">
         {collections.length === 0 && !showCreate && (
           <div className="p-6 text-center text-sm text-neutral-500">
             No collections saved yet. Select groups and click Save to create one.
@@ -250,7 +250,7 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
         {collections.map((col) => (
           <div
             key={col.id}
-            className={`p-3 border-b border-neutral-100 last:border-b-0 ${
+            className={`px-3 py-2 ${
               col.id === exitingId ? 'pointer-events-none animate-collapse-out' : ''
             }`}
             onAnimationEnd={() => {
