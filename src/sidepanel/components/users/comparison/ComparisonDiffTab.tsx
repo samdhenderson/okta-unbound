@@ -35,6 +35,28 @@
  * nothing left to disambiguate. The three cells are the same shape, so symmetry
  * is structural rather than something spacing has to maintain.
  *
+ * ## Why the strip is a grid and every row is one height
+ *
+ * The three cells were `flex-1` around a fixed marker, which looks like equal
+ * thirds and is not. `flex-1` is `flex: 1 1 0%`, and under `box-sizing:
+ * border-box` a cell's own padding and border are floor space it keeps *before*
+ * the free space is split: the named pill (`px-2` + a 1px border = 18px of
+ * chrome) came out 18px wider than the bare wrapper around an Add button, so the
+ * marker sat 9px off-centre — and it moved to the *other* side of centre on a row
+ * whose button was on the right. Down a list, the `=` column visibly staggered.
+ * `grid-cols-[minmax(0,1fr)_2rem_minmax(0,1fr)]` sizes the tracks instead of the
+ * boxes, so the two sides are equal whatever each one is made of. (`minmax(0,…)`
+ * rather than plain `1fr`, whose `auto` minimum would let a long name push its
+ * track wider again.)
+ *
+ * Height was the same failure in the other axis: a cell was as tall as whatever
+ * it held, so a row with an Add button stood 36px and a row of two pills stood
+ * 26px — which made every shared row shorter than every difference row. The
+ * cells therefore carry the button's own `min-h-9`, and the meta line is a
+ * reserved slot rather than an optional one (see {@link ParityListRow}), so a
+ * shared row and a difference row are the same height and the list scans as
+ * columns.
+ *
  * ## The middle cell is not a control
  *
  * It keeps the button silhouette so the three cells read as one set, but it is
@@ -162,6 +184,13 @@ const ComparisonDiffTab: React.FC<ComparisonDiffTabProps> = ({
                 renderContextAction={renderContextAction}
                 renderComparedAction={renderComparedAction}
                 renderMeta={renderMeta}
+                // Decided for the LIST, not per row: a list that annotates any
+                // row reserves the line on every row, so one row saying nothing
+                // (a shared group has no single provenance to state) does not
+                // make it shorter than its neighbours. A list that annotates
+                // nothing at all — the Apps tab before scopes load, the
+                // read-only story — reserves nothing and stays dense.
+                reserveMeta={renderMeta !== undefined}
               />
             ))}
           </ul>
@@ -179,6 +208,7 @@ const ParityListRow: React.FC<{
   renderContextAction?: (row: ParityRow, recipientName: string) => React.ReactNode;
   renderComparedAction?: (row: ParityRow, recipientName: string) => React.ReactNode;
   renderMeta?: (row: ParityRow) => React.ReactNode;
+  reserveMeta?: boolean;
 }> = ({
   row,
   contextName,
@@ -186,6 +216,7 @@ const ParityListRow: React.FC<{
   renderContextAction,
   renderComparedAction,
   renderMeta,
+  reserveMeta = false,
 }) => {
   const meta = renderMeta?.(row);
   const matched = row.inContext && row.inCompared;
@@ -199,12 +230,17 @@ const ParityListRow: React.FC<{
         <span className="w-full truncate text-sm text-neutral-800" title={row.label}>
           {row.label}
         </span>
-        {meta}
+        {/* A fixed-height slot, occupied or not. The two indicators that live
+            here are different heights themselves (a chip with a border is 22px,
+            bare italic text is 16px), so even two annotated rows would otherwise
+            differ; `h-6` clears the tallest and every row lands on one rhythm. */}
+        {reserveMeta && <span className="flex h-6 min-w-0 max-w-full items-center">{meta}</span>}
       </span>
 
-      {/* Equal thirds around a fixed marker, so the strip spans the row and an
-          action can never overflow the cell it lives in. */}
-      <span className="flex items-stretch gap-2">
+      {/* Real equal thirds: grid TRACKS, not `flex-1` boxes — under flex a padded
+          cell and a bare one differ by their own chrome, which is what knocked
+          the marker off the centre line. See the module header. */}
+      <span className="grid grid-cols-[minmax(0,1fr)_2rem_minmax(0,1fr)] items-stretch gap-2">
         <SideCell
           held={row.inContext}
           userName={contextName}
@@ -214,7 +250,7 @@ const ParityListRow: React.FC<{
         <span
           role="img"
           aria-label={matched ? 'Both users have this' : 'Only one user has this'}
-          className={`flex w-8 shrink-0 items-center justify-center rounded-md border font-mono text-sm font-bold ${
+          className={`flex min-h-9 items-center justify-center rounded-md border font-mono text-sm font-bold ${
             matched
               ? 'border-success-light bg-success-light text-success-text'
               : 'border-warning-light bg-warning-light text-warning-text'
@@ -251,6 +287,17 @@ const ParityListRow: React.FC<{
  * group) still gets a stated non-answer, never a button that would fail — but it
  * names its user too, so all three states are the same shape.
  */
+/**
+ * The stated (non-button) cell, in both of its tones.
+ *
+ * `min-h-9` is `Button`'s own `sm` height, quoted rather than coincidental: it is
+ * what stops a row of two stated cells from standing 10px shorter than a row
+ * carrying an Add button. Width comes from the grid track, so the cell no longer
+ * carries a flex basis of its own.
+ */
+const cellClasses =
+  'flex min-h-9 min-w-0 items-center justify-center gap-1 rounded-md border px-2 py-1 text-xs';
+
 const SideCell: React.FC<{
   held: boolean;
   userName: string;
@@ -259,7 +306,7 @@ const SideCell: React.FC<{
   if (held) {
     return (
       <span
-        className="flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs text-neutral-600"
+        className={`${cellClasses} border-neutral-200 bg-neutral-50 text-neutral-600`}
         title={`${userName} has this`}
       >
         <Icon type="check" size="sm" className="shrink-0 text-success-text" />
@@ -271,7 +318,7 @@ const SideCell: React.FC<{
   if (!action) {
     return (
       <span
-        className="flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md border border-dashed border-neutral-200 px-2 py-1 text-xs text-neutral-400"
+        className={`${cellClasses} border-dashed border-neutral-200 text-neutral-400`}
         title={`${userName} does not have this`}
       >
         <span aria-hidden="true" className="shrink-0">
@@ -284,7 +331,7 @@ const SideCell: React.FC<{
 
   // The action fills the cell — the caller passes `fullWidth`, so the button is
   // the same width as the named cell opposite it and the strip reads as thirds.
-  return <span className="flex min-w-0 flex-1">{action}</span>;
+  return <span className="flex min-w-0">{action}</span>;
 };
 
 export default ComparisonDiffTab;

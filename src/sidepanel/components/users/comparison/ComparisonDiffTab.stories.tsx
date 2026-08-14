@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import ComparisonDiffTab from './ComparisonDiffTab';
 import GroupSourceIndicator from './GroupSourceIndicator';
 import AppScopeIndicator from './AppScopeIndicator';
@@ -136,6 +136,8 @@ export const CopyInFlight: Story = {
         <Button
           size="sm"
           variant="primary"
+          icon="plus"
+          fullWidth
           loading={row.id === '00gFAKEgroup0001'}
           disabled
           onClick={fn()}
@@ -166,6 +168,47 @@ export const Apps: Story = {
       ) : (
         <AppScopeIndicator state={row.inCompared ? 'USER' : 'GROUP'} />
       ),
+  },
+};
+
+/**
+ * Every row shape at once — an Add on the left, an Add on the right, a stated
+ * non-answer, and two shared rows — which is the only view where the strip's
+ * alignment can be judged.
+ *
+ * Both failures it guards were invisible one row at a time. `flex-1` cells split
+ * the free space *after* each cell kept its own padding and border, so the padded
+ * pill came out 18px wider than the bare wrapper around a button and the marker
+ * sat 9px off-centre — to the left on a row with an Add on the left, to the right
+ * on a row with an Add on the right, so the `=` column staggered down the list.
+ * And a cell was as tall as its contents, so every shared row (two pills, 26px)
+ * was shorter than every difference row (a button, 36px).
+ *
+ * The strip is now a three-track grid with `min-h-9` cells and a reserved meta
+ * line, so the markers form one column and every row is one height.
+ */
+export const AllRowShapes: Story = {
+  args: {
+    renderContextAction: (row, recipientName) =>
+      row.membership?.group.type === 'APP_GROUP' ? null : (
+        <Button size="sm" variant="primary" icon="plus" fullWidth onClick={fn()}>
+          Add {recipientName}
+        </Button>
+      ),
+    renderComparedAction: (_row, recipientName) => (
+      <Button size="sm" variant="primary" icon="plus" fullWidth onClick={fn()}>
+        Add {recipientName}
+      </Button>
+    ),
+    renderMeta: (row) =>
+      row.inContext && row.inCompared ? null : <GroupSourceIndicator membership={row.membership} />,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // The list opens on the differences; the shared rows are half of what this
+    // story is for, so it has to switch itself to "All".
+    await userEvent.click(canvas.getByRole('button', { name: /^All/ }));
+    await waitFor(() => expect(canvas.getByText('all.employees')).toBeInTheDocument());
   },
 };
 

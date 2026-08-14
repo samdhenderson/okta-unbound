@@ -214,8 +214,11 @@ describe('carried forward from the bucket suite', () => {
 
     // The detail shares the label's column — that column is what truncates — and
     // the action lives outside it, so no length of rule name can push it away.
-    const column = detail.parentElement;
-    expect(column).toContainElement(within(li).getByTitle('VPN Access'));
+    // Found from the label rather than from the detail's own parent: the detail
+    // now sits in a fixed-height slot inside the column, so its parent is one
+    // level below the column this is about.
+    const column = within(li).getByTitle('VPN Access').parentElement;
+    expect(column).toContainElement(detail);
     expect(column).not.toContainElement(action);
   });
 
@@ -228,7 +231,9 @@ describe('carried forward from the bucket suite', () => {
       />,
     );
 
-    const column = within(rowFor('VPN Access')).getByText('Managed by app').parentElement;
+    const li = rowFor('VPN Access');
+    const column = within(li).getByTitle('VPN Access').parentElement;
+    expect(column).toContainElement(within(li).getByText('Managed by app'));
     // Flex children stretch by default, which turned every source chip into a
     // full-width grey bar spanning the row.
     expect(column?.className).toContain('items-start');
