@@ -21,8 +21,8 @@ now runs over ~300 lines; hold that line for new work.
 The decomposition ran **tests-first and incrementally** (never a big-bang rewrite) —
 the same playbook for any future large component:
 
-1. **Pin behavior** — write RTL/MSW tests around the component so refactors are
-   verifiable (see [testing.md](./testing.md)).
+1. **Pin behavior** — write RTL tests around the component so refactors are
+   verifiable, mocking at the `useOktaApi` facade (see [testing.md](./testing.md)).
 2. **Extract logic into hooks** — move data fetching, business logic, and derived
    state into `use*` hooks. Mirror the `useOktaApi/` module split.
 3. **Extract helpers** — move formatting/pure functions to `shared/utils` (dedupe

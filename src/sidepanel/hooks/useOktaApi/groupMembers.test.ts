@@ -51,7 +51,9 @@ describe('getAllGroupMembers boundary validation', () => {
 
     const members = await getAllGroupMembers('00gFAKE1');
 
-    expect(makeApiRequest).toHaveBeenCalledWith('/api/v1/groups/00gFAKE1/users?limit=200&expand=group-rules');
+    expect(makeApiRequest).toHaveBeenCalledWith(
+      '/api/v1/groups/00gFAKE1/users?limit=200&expand=group-rules',
+    );
     expect(members.map((m) => m.id)).toEqual(['00uFAKE1']);
   });
 });

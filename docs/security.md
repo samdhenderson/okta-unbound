@@ -210,8 +210,15 @@ notifications, sidePanel, alarms`, each mapped to a real consumer (`activeTab` b
   storage API (grep-verified across every `chrome.storage.*.set` / IndexedDB write). Only
   cache payloads, group/rule/tab UI state, audit entries, and non-sensitive prefs are
   stored.
-- **TTL'd / bounded storage.** [`shared/cache.ts`](../src/shared/cache.ts) evicts entries
-  on read past a 5-minute default TTL; undo history is capped at 50 entries
+- **TTL'd / bounded storage.** Cached entity data carries a TTL —
+  [`sidepanel/cache/entityCache.ts`](../src/sidepanel/cache/entityCache.ts) (in-memory,
+  5-minute default), [`shared/rulesCache.ts`](../src/shared/rulesCache.ts)
+  (`chrome.storage.local`, 5 minutes) and
+  [`components/groups/groupsCache.ts`](../src/sidepanel/components/groups/groupsCache.ts)
+  (`chrome.storage.local`, 24 hours). **Known gap:** `entityCache` treats TTL as a
+  freshness verdict only — it has no eviction, so its in-memory store grows for the life
+  of a panel session. Bounding it is tracked with the data-layer consolidation. Undo
+  history is capped at 50 entries
   ([`shared/undoManager.ts`](../src/shared/undoManager.ts)); the audit trail
   ([`shared/storage/auditStore.ts`](../src/shared/storage/auditStore.ts)) has a
   user-configurable retention (default 90 days), can be disabled, and supports a full

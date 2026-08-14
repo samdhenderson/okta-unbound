@@ -10,7 +10,7 @@ changes, regardless of which tool you are.**
 
 **Okta Unbound** — a Chrome MV3 side-panel extension for Okta group/user admin.
 Stack: React 19, TypeScript 5.9 (`strict`), Tailwind v4, Vite + `@crxjs/vite-plugin`,
-Vitest + Testing Library + MSW, `idb`. ~22k LOC.
+Vitest + Testing Library, `idb`. ~47k LOC of source.
 
 ## Commands
 
