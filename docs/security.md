@@ -151,9 +151,12 @@ Enforced at the single fetch choke point,
   explicit **allow-list** of operators, fixed-arity Okta EL functions
   (`SUPPORTED_FUNCTIONS`), and single-level `user.<attribute>` reads; anything else —
   unknown function, unmodelled node, computed access, wrong argument count — is reported
-  _unevaluable_, never approximated. `canEvaluateClientSide()` applies that same
-  allow-list as an **AST walk**, not a substring scan, so nothing can pass the gate and
-  then fail inside the evaluator. Parsing is capped at 4096 characters to bound the work
+  _unevaluable_, never approximated. The grammar gate is an **AST walk**, not a substring
+  scan, so nothing can pass it and then fail inside the evaluator. To verify it directly,
+  call `checkRuleNodeSupport()` on a node from `parseRuleExpression()` — that is the same
+  walk `tryEvaluateRuleExpression` applies internally. (It replaced the boolean
+  `canEvaluateClientSide()`, retired by ADR-0025 along with the whole two-valued surface,
+  because a bare `false` could not say _why_ a gate rejected an expression.) Parsing is capped at 4096 characters to bound the work
   an adversarial tenant value can force, and expression text is **never logged**
   (literals can carry tenant PII) — only a reason code. Grep confirms **zero**
   `eval`/`new Function`/string-`setTimeout`/`innerHTML`/`document.write`/
@@ -215,9 +218,12 @@ notifications, sidePanel, alarms`, each mapped to a real consumer (`activeTab` b
   5-minute default), [`shared/rulesCache.ts`](../src/shared/rulesCache.ts)
   (`chrome.storage.local`, 5 minutes) and
   [`components/groups/groupsCache.ts`](../src/sidepanel/components/groups/groupsCache.ts)
-  (`chrome.storage.local`, 24 hours). **Known gap:** `entityCache` treats TTL as a
-  freshness verdict only — it has no eviction, so its in-memory store grows for the life
-  of a panel session. Bounding it is tracked with the data-layer consolidation. Undo
+  (`chrome.storage.local`, 24 hours). `entityCache` treats TTL as a freshness verdict
+  rather than a deletion, so it is **separately bounded** at `MAX_ENTRIES` (500) with
+  eviction on write — expired entries first, then least-recently-read, and never a key
+  with a live subscriber or an in-flight fetch, since dropping those would force the
+  refetch the cache exists to avoid. Before that bound existed the in-memory store grew
+  for the life of a panel session. Undo
   history is capped at 50 entries
   ([`shared/undoManager.ts`](../src/shared/undoManager.ts)); the audit trail
   ([`shared/storage/auditStore.ts`](../src/shared/storage/auditStore.ts)) has a

@@ -1,9 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import Icon from '../overview/shared/Icon';
+import IconButton from './IconButton';
 import Input from './Input';
+import LoadingSpinner from './LoadingSpinner';
 
-/** Controlled single-line text field with label, hint, error, and optional icon. */
+/** Controlled single-line text field with label, hint, error, size scale, and in-field adornments. */
 const meta = {
   title: 'Shared/Input',
   component: Input,
@@ -13,8 +15,9 @@ const meta = {
     docs: {
       description: {
         component:
-          'Controlled single-line text field with optional label, hint, leading icon, and error state.\n\n' +
-          '`onChange` receives the string value (not the event). When `error` is set the field turns red and the error message replaces the hint. Supports labeled, hinted, error, disabled, and icon-adorned states. For multi-line use `Textarea`; for choices use `Select`.',
+          'Controlled single-line text field with optional label, hint, size scale, leading/trailing adornments, and error state.\n\n' +
+          '`onChange` receives the string value (not the event). When `error` is set the field turns red and the error message replaces the hint. Supports labeled, hinted, error, disabled, and adorned states. For multi-line use `Textarea`; for choices use `Select`.\n\n' +
+          'Three sizes (`sm ≈ 30px | md ≈ 38px | lg ≈ 46px`) and two in-field slots — `icon` (leading glyph) and `trailing` (clear button, spinner). Both reserve their padding automatically and scale with `size`, so a search composite composes this primitive instead of re-declaring the field class string. A `trailing` node is inert by default; set `trailingInteractive` when it holds a control.',
       },
     },
   },
@@ -32,7 +35,22 @@ const meta = {
     },
     hint: { description: 'Helper text below the input, shown only when there is no `error`.' },
     fullWidth: { description: 'Stretch to fill the container width. Defaults to `true`.' },
-    icon: { description: 'Optional leading icon rendered inside the field.' },
+    size: {
+      description:
+        'Field height/type scale (`sm` ≈ 30px, `md` ≈ 38px, `lg` ≈ 46px). Defaults to `md`.',
+    },
+    icon: {
+      description:
+        'Optional leading icon rendered inside the field; left padding is reserved automatically.',
+    },
+    trailing: {
+      description:
+        'Optional node rendered inside the field at its trailing edge (clear button, spinner). Right padding is reserved automatically and scales with `size`.',
+    },
+    trailingInteractive: {
+      description:
+        'Set when `trailing` holds something the user clicks. By default the slot is `pointer-events-none` so a decorative adornment cannot swallow clicks aimed at the field.',
+    },
     className: { description: 'Extra classes merged onto the outer container.' },
     autoFocus: { description: 'Focus the input on mount.' },
     onKeyDown: {
@@ -129,5 +147,88 @@ export const NotFullWidth: Story = {
     label: 'City',
     placeholder: 'Type…',
     fullWidth: false,
+  },
+};
+
+/** The three size steps stacked, each with the leading icon so the reserved padding is visible. */
+export const Sizes: Story = {
+  render: (args) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: 320 }}>
+      <Input {...args} size="sm" ariaLabel="Small field" placeholder="sm — 30px" />
+      <Input {...args} size="md" ariaLabel="Medium field" placeholder="md — 38px (default)" />
+      <Input {...args} size="lg" ariaLabel="Large field" placeholder="lg — 46px" />
+    </div>
+  ),
+  args: { icon: <Icon type="search" size="sm" /> },
+};
+
+/** The taller field a search bar uses as the primary control of a view. */
+export const Large: Story = {
+  args: {
+    size: 'lg',
+    label: 'Search users',
+    placeholder: 'Search by email, name, or login…',
+    icon: <Icon type="search" size="sm" />,
+  },
+};
+
+/** Compact field for a dense toolbar row; lines up with `Button size="sm"`. */
+export const Small: Story = {
+  args: {
+    size: 'sm',
+    label: 'Filter',
+    placeholder: 'Filter rows…',
+  },
+};
+
+/** Trailing slot holding a clear button — needs `trailingInteractive` to be clickable. */
+export const WithTrailing: Story = {
+  args: {
+    label: 'Search groups',
+    value: 'engineering',
+    trailingInteractive: true,
+    trailing: (
+      <IconButton label="Clear search" variant="ghost" size="sm" onClick={fn()}>
+        <Icon type="close" size="sm" />
+      </IconButton>
+    ),
+  },
+};
+
+/** Both slots at once: leading glyph plus a trailing clear button. */
+export const WithIconAndTrailing: Story = {
+  args: {
+    size: 'lg',
+    label: 'Search users',
+    value: 'a-very-long-query-that-would-otherwise-run-under-the-clear-button@example.com',
+    icon: <Icon type="search" size="sm" />,
+    trailingInteractive: true,
+    trailing: (
+      <IconButton label="Clear search" variant="ghost" size="sm" onClick={fn()}>
+        <Icon type="close" size="sm" />
+      </IconButton>
+    ),
+  },
+};
+
+/** Search in flight: a decorative trailing spinner, left inert so clicks reach the field. */
+export const Searching: Story = {
+  args: {
+    size: 'lg',
+    label: 'Search users',
+    value: 'ada',
+    icon: <Icon type="search" size="sm" />,
+    trailing: <LoadingSpinner size="sm" />,
+  },
+};
+
+/** Error state at a non-default size. */
+export const ErrorStateLarge: Story = {
+  args: {
+    size: 'lg',
+    label: 'Email address',
+    value: 'invalid',
+    error: 'Invalid email format',
+    icon: <Icon type="search" size="sm" />,
   },
 };

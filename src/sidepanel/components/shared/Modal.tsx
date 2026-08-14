@@ -7,6 +7,7 @@
  * Always use this rather than a bespoke overlay. See docs/ux-guidelines.md.
  */
 import React, { useCallback, useEffect, useId, useRef } from 'react';
+import Icon from '../overview/shared/Icon';
 
 interface ModalProps {
   /** When false the modal renders nothing (unmounted). */
@@ -128,14 +129,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer,
             className="text-neutral-400 hover:text-neutral-700 transition-colors duration-100 p-1 rounded-md hover:bg-neutral-50"
             aria-label="Close modal"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+            <Icon type="close" size="md" />
           </button>
         </div>
 

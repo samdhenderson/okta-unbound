@@ -17,15 +17,17 @@ const meta = {
           'A single stateless component that maps an icon name to a Tailwind-sized, ' +
           '`currentColor`-stroked SVG, so stat cards, quick actions, and facets can ' +
           'reference glyphs by name without an external icon library. Size is one of ' +
-          '`sm` (16px), `md` (20px), `lg` (24px), `xl` (32px); pass a color token through ' +
-          '`className`. See `AllIcons` for the full catalog.',
+          '`xs` (12px), `sm` (16px), `md` (20px), `lg` (24px), `xl` (32px); pass a color ' +
+          'token through `className`. See `AllIcons` for the full catalog.',
       },
     },
   },
   argTypes: {
     type: { description: 'Which glyph to render (see the `AllIcons` catalog).' },
     className: { description: 'Extra classes merged after the size class (e.g. a color token).' },
-    size: { description: 'Preset square dimensions: sm=16px, md=20px, lg=24px, xl=32px.' },
+    size: {
+      description: 'Preset square dimensions: xs=12px, sm=16px, md=20px, lg=24px, xl=32px.',
+    },
   },
   args: {
     type: 'check',
@@ -37,6 +39,13 @@ type Story = StoryObj<typeof meta>;
 
 /** Default icon (check, medium size). */
 export const Default: Story = {};
+
+/** Extra-small size. */
+export const ExtraSmall: Story = {
+  args: {
+    size: 'xs',
+  },
+};
 
 /** Small size. */
 export const Small: Story = {

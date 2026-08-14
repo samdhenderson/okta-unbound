@@ -123,7 +123,7 @@ const AuthPolicyOverview: React.FC<AuthPolicyOverviewProps> = ({
         <h3 className="mb-4 text-lg font-semibold text-neutral-900">Rules</h3>
 
         {isLoading && rules.length === 0 ? (
-          <LoadingSpinner size="md" message="Loading policy rules..." centered />
+          <LoadingSpinner size="xl" message="Loading policy rules..." centered />
         ) : error ? (
           <AlertMessage
             message={{ text: error, type: 'danger' }}

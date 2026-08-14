@@ -132,7 +132,8 @@ be reviewed with `security-logging-reviewer`.
   description + commands only. Keep in sync via `docs/development.md`.
 - Shared UI: `src/sidepanel/components/shared/`. Icons: `overview/shared/Icon.tsx`.
 - API client: `src/sidepanel/hooks/useOktaApi/` (module-per-concern pattern).
-- Caching: `src/sidepanel/cache/` (`entityCache` + `useEntityQuery`).
+- Caching: `src/sidepanel/cache/` (`entityCache` + `useEntityQuery`; every cache key
+  literal lives in `keys.ts`).
 - Shared utils: `src/shared/utils/` (`logger`, `oktaUrl`, `dateFormat`, …).
 
 ## Plan-and-approval gate for risky changes

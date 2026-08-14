@@ -189,7 +189,7 @@ const GroupMergeModal: React.FC<GroupMergeModalProps> = ({
 
       {/* Step 3 — running */}
       {phase === 'running' && (
-        <LoadingSpinner size="md" centered message="Merging… see the progress bar below." />
+        <LoadingSpinner size="xl" centered message="Merging… see the progress bar below." />
       )}
 
       {/* Step 4 — done / error */}

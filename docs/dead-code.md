@@ -10,7 +10,26 @@ npm run knip              # unused files, exports, and dependencies
 npm run knip:production   # reachability from the manifest entry points only
 npm run knip:circular     # import cycles (madge)
 npm run lint:control-chars   # no raw control bytes (see below)
+npm run lint:cited-paths     # every cited src/ path still exists (see below)
 ```
+
+## Why `lint:cited-paths` sits with the dead-code tools
+
+Docs, ADRs, and `.claude/` skills/agents cite `src/…` paths as evidence — "see
+`shared/utils/oktaUrl.ts`" — so a reader, human or agent, can go check. Deleting or
+renaming the file doesn't delete the citation; nothing forced the two to stay in
+sync. A one-week audit found 5 of 44 cited paths pointing at files that no longer
+existed — 4 from the dead-code deletions above, 1 from a plain rename
+(`src/test/mocks/fixtures.ts`, formerly `handlers.ts`). That is worse than a missing doc: it
+sends the next reader looking for something that was deliberately removed.
+
+`scripts/check-cited-paths.mjs` fails CI on any backticked or markdown-linked
+`src/…` citation, in a tracked `.md` file under `docs/` or `.claude/` (plus root
+`CLAUDE.md`/`AGENTS.md`), that doesn't resolve on disk. Glob citations (`*.ts`),
+directory citations (no `.ext`), and paths inside fenced code blocks are not
+checked — they aren't pointers to one real file. A citation to a deleted or
+renamed file should say so in the prose (or drop the path if it no longer earns its
+place) rather than keep naming a location that no longer exists.
 
 ## Why `lint:control-chars` sits with the dead-code tools
 
@@ -43,9 +62,9 @@ from the project entirely.
 The second config exists because the first one **structurally cannot** find the most
 expensive class of dead code in this repo: a module with no production callers that
 stays "referenced" purely because its own test file imports it.
-`src/shared/utils/statusNormalizer.ts` — 396 LOC, 6 exports, zero production callers,
-524 LOC of tests — is invisible to `npm run knip` and lands at the top of
-`npm run knip:production`.
+`statusNormalizer.ts` was exactly that — 396 LOC, 6 exports, zero production callers,
+524 LOC of tests — invisible to `npm run knip` and sitting at the top of
+`npm run knip:production` until it was deleted (see the baseline below).
 
 Dependency and duplicate-export checks are switched off in the production config;
 they are the default config's job and would otherwise report every test-only
@@ -118,19 +137,20 @@ remaining backlog.
 
 The four unreachable files (1,450 LOC including their tests):
 
-| File                                    | LOC | Note                                                                                                      |
-| --------------------------------------- | --- | --------------------------------------------------------------------------------------------------------- |
-| `src/shared/utils/statusNormalizer.ts`  | 396 | 6 exports, no production callers; only importer is its own 524-LOC test. Invisible to the default config. |
-| `src/shared/utils/validation.ts`        | 303 | 11 validators, no references, no test file                                                                |
-| `src/sidepanel/hooks/useValidation.tsx` | 130 | no references anywhere; sole importer of `validation.ts`                                                  |
-| `src/shared/cache.ts`                   | 97  | no mentions in `src/`                                                                                     |
+| File (deleted)                        | LOC | Note                                                                                                      |
+| ------------------------------------- | --- | --------------------------------------------------------------------------------------------------------- |
+| src/shared/utils/statusNormalizer.ts  | 396 | 6 exports, no production callers; only importer is its own 524-LOC test. Invisible to the default config. |
+| src/shared/utils/validation.ts        | 303 | 11 validators, no references, no test file                                                                |
+| src/sidepanel/hooks/useValidation.tsx | 130 | no references anywhere; sole importer of `validation.ts`                                                  |
+| src/shared/cache.ts                   | 97  | no mentions in `src/`                                                                                     |
 
 Also worth noting from the baseline run:
 
 - `esbuild` is an unused devDependency — vite provides it transitively.
-- `msw` did not appear as unused only because `src/test/mocks/handlers.ts` imported
-  it. **Resolved:** the `handlers` export had no consumer and no test used MSW, so
-  both it and the `msw` dependency are gone; the file is now `mocks/fixtures.ts`.
+- `msw` did not appear as unused only because `src/test/mocks/fixtures.ts` (then
+  named `handlers.ts`) imported it. **Resolved:** the `handlers` export had no
+  consumer and no test used MSW, so both it and the `msw` dependency are gone; the
+  file was renamed to `fixtures.ts` in the process.
 - Three `ruleEvaluator.ts` exports — `evaluateRuleExpression`,
   `canEvaluateClientSide`, `tryEvaluateRuleExpressionDetailed` — were reachable only
   from tests. **Resolved by [adr/0025](./adr/0025-retire-boolean-rule-evaluation-apis.md):**
