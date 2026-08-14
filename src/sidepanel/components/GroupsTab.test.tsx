@@ -1366,7 +1366,10 @@ describe('prop brokering', () => {
     });
 
     expect(runtimeSendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ endpoint: '/api/v1/groups/g1/users?limit=200&expand=group-rules', tabId: 5 }),
+      expect.objectContaining({
+        endpoint: '/api/v1/groups/g1/users?limit=200&expand=group-rules',
+        tabId: 5,
+      }),
     );
   });
 
