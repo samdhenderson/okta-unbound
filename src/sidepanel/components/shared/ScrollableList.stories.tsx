@@ -109,6 +109,45 @@ export const WithMaxHeight: Story = {
   },
 };
 
+/**
+ * The loading placeholder occupies the same box as the loaded list.
+ *
+ * Both stories below pass the identical `className="mt-4"` and
+ * `maxHeight="300px"`; the only difference is `loading`. The top edge of the
+ * first row must not move between them. Before box parity the loading branch
+ * dropped both props, so a real skeleton rendered 16px high and unclipped —
+ * which is what put `AppsListPanel`'s placeholder flush against its toolbar.
+ * ADR-0023 bans asserting a class string, so this pair *is* the coverage.
+ */
+export const BoxParityLoading: Story = {
+  args: {
+    loading: true,
+    className: 'mt-4',
+    maxHeight: '300px',
+    fillAvailable: false,
+    skeleton: <Skeleton variant="row" count={4} label="Loading groups" />,
+    children: null,
+  },
+};
+
+/** The loaded counterpart of {@link BoxParityLoading} — same box, real rows. */
+export const BoxParityLoaded: Story = {
+  args: {
+    className: 'mt-4',
+    maxHeight: '300px',
+    fillAvailable: false,
+    children: (
+      <>
+        {Array.from({ length: 4 }, (_, i) => (
+          <div key={i} className="p-3 bg-white border border-neutral-200 rounded-md">
+            Item {i + 1}
+          </div>
+        ))}
+      </>
+    ),
+  },
+};
+
 /** Multiple items filling available space. */
 export const FillAvailable: Story = {
   args: {

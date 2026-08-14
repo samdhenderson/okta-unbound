@@ -8,6 +8,11 @@
  * whose loading state has a known shape (a list of rows, a stat grid) can pass a
  * `Skeleton` (`shared/Skeleton`) via the optional `skeleton` prop instead of the
  * default spinner.
+ *
+ * **All three states occupy the same box.** The caller's `className`, `maxHeight`
+ * and flex behaviour apply to the loading and empty branches exactly as they do to
+ * the populated one, so a placeholder stands where the rows will and nothing shifts
+ * when content resolves. Only the overflow rule differs — see `boxClasses` below.
  */
 import React from 'react';
 import LoadingSpinner from './LoadingSpinner';
@@ -84,22 +89,38 @@ const ScrollableList: React.FC<ScrollableListProps> = ({
   const childArray = React.Children.toArray(children);
   const isEmpty = childArray.length === 0;
 
-  // Loading state
-  if (loading) {
-    if (skeleton) {
-      return (
-        <div className={fillAvailable ? 'flex-1' : ''} data-testid={testId}>
-          {skeleton}
-        </div>
-      );
-    }
+  /**
+   * The box every state shares — the caller's `className`, its flex behaviour, and
+   * its `maxHeight`. Only the leading overflow rule and the contents differ.
+   *
+   * This is built once and used by all three rendered branches on purpose. Each
+   * branch used to compose its own container and dropped a different subset: the
+   * loading and empty branches took neither `className` nor `maxHeight`, so a
+   * caller passing `className="mt-4"` (`AppsListPanel`, `GroupsListPanel`) got a
+   * skeleton sitting 16px higher than the rows it stood in for — flush against the
+   * toolbar above it — and a caller passing `maxHeight` (`MemberList`) got a
+   * placeholder that could overflow the box it was standing in for. Height parity
+   * is not achievable (six placeholders are not N rows) and is not the goal; *box*
+   * parity is, so nothing shifts sideways or vertically when content resolves.
+   */
+  const boxClasses = (leading: string) =>
+    [leading, fillAvailable ? 'flex-1 min-h-0' : '', className].filter(Boolean).join(' ');
 
+  // Container style for explicit max-height
+  const containerStyle: React.CSSProperties | undefined = maxHeight ? { maxHeight } : undefined;
+
+  // Loading state. `overflow-hidden` rather than `overflow-y-auto`: a placeholder
+  // must not offer a scrollbar that leads nowhere, and without it a `maxHeight`
+  // would not actually clip a tall skeleton — it would spill out of its own box
+  // and over whatever sits below.
+  if (loading) {
     return (
-      <div
-        className={`flex items-center justify-center py-12 ${fillAvailable ? 'flex-1' : ''}`}
-        data-testid={testId}
-      >
-        <LoadingSpinner size="2xl" message={loadingMessage} centered />
+      <div className={boxClasses('overflow-hidden')} style={containerStyle} data-testid={testId}>
+        {skeleton ?? (
+          <div className="flex items-center justify-center py-12">
+            <LoadingSpinner size="2xl" message={loadingMessage} centered />
+          </div>
+        )}
       </div>
     );
   }
@@ -107,7 +128,7 @@ const ScrollableList: React.FC<ScrollableListProps> = ({
   // Empty state
   if (isEmpty && emptyState) {
     return (
-      <div className={fillAvailable ? 'flex-1' : ''} data-testid={testId}>
+      <div className={boxClasses('overflow-hidden')} style={containerStyle} data-testid={testId}>
         {emptyState}
       </div>
     );
@@ -118,25 +139,16 @@ const ScrollableList: React.FC<ScrollableListProps> = ({
     return null;
   }
 
-  // Container classes
-  const containerClasses = [
-    // Scrolling behavior
-    'overflow-y-auto',
-    // Flex behavior for fill available
-    fillAvailable ? 'flex-1 min-h-0' : '',
-    // Custom scrollbar styling (defined in tailwind.css)
-    'scrollable-list',
-    // User-provided classes
-    className,
-  ]
-    .filter(Boolean)
-    .join(' ');
-
-  // Container style for explicit max-height
-  const containerStyle: React.CSSProperties | undefined = maxHeight ? { maxHeight } : undefined;
-
   return (
-    <div ref={scrollRef} className={containerClasses} style={containerStyle} data-testid={testId}>
+    <div
+      ref={scrollRef}
+      // `scrollable-list` styles the custom scrollbar, so it belongs only on the
+      // branch that actually has one — `GroupsTab`'s scroll-preservation test
+      // queries for it to find the real scroll container.
+      className={boxClasses('overflow-y-auto scrollable-list')}
+      style={containerStyle}
+      data-testid={testId}
+    >
       <div className="space-y-3">{children}</div>
     </div>
   );
