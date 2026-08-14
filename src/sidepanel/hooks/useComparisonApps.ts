@@ -3,7 +3,7 @@
  * @description Loads and holds the app-assignment side of the user-comparison view.
  *
  * Extracted from `UserComparisonModal`; owns fetching both users' app lists whenever
- * the compared user changes and exposing them plus load/error state to the modal.
+ * the compared user changes and exposing them plus a loading flag to the modal.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -29,9 +29,7 @@ interface UseComparisonAppsReturn {
   comparedApps: AppEntry[];
   /** True while both users' app lists are being (re)fetched. */
   isLoadingApps: boolean;
-  /** Error message from the load, or `null`. See the note below about this being effectively dead. */
-  appsError: string | null;
-  /** Clears both app lists and the error (but not the loading flag). */
+  /** Clears both app lists (but not the loading flag). */
   resetApps: () => void;
 }
 
@@ -41,10 +39,12 @@ interface UseComparisonAppsReturn {
  * context user). The load is guarded by a `cancelled` flag so a stale run cannot
  * write state.
  *
- * NOTE (characterized, not endorsed): `appsError` is effectively dead — getUserApps
- * swallows failures internally and returns a partial/empty list, so the `.catch`
- * never fires and an app-API failure renders as "0 apps", never as an error. Making
- * it reachable is a UX change for §8, not this refactor.
+ * There is deliberately no error state here: `getUserApps`
+ * (`useOktaApi/userOperations.ts`) wraps its whole pagination walk in try/catch and
+ * always resolves with whatever it accumulated, so this hook's promise can never
+ * reject. An app-API failure renders as "0 apps", never as an error — characterized
+ * in `UserComparisonModal.test.tsx`'s "app-fetch resilience" suite. Surfacing it
+ * would be a UX change for §8, not this hook's job.
  */
 export function useComparisonApps({
   targetTabId,
@@ -56,23 +56,19 @@ export function useComparisonApps({
   const [contextApps, setContextApps] = useState<AppEntry[]>([]);
   const [comparedApps, setComparedApps] = useState<AppEntry[]>([]);
   const [isLoadingApps, setIsLoadingApps] = useState(false);
-  const [appsError, setAppsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!comparedUser) return;
 
     let cancelled = false;
     setIsLoadingApps(true);
-    setAppsError(null);
+    // No .catch: getUserApps never rejects (see the class doc above), so there is
+    // nothing here for one to catch.
     Promise.all([getUserApps(contextUserId), getUserApps(comparedUser.id)])
       .then(([ctxApps, cmpApps]) => {
         if (cancelled) return;
         setContextApps(ctxApps);
         setComparedApps(cmpApps);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setAppsError(err instanceof Error ? err.message : 'Failed to load app assignments');
       })
       .finally(() => {
         if (!cancelled) setIsLoadingApps(false);
@@ -86,13 +82,12 @@ export function useComparisonApps({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comparedUser]);
 
-  // Clears the app lists + error, but deliberately NOT isLoadingApps — matching the
+  // Clears the app lists, but deliberately NOT isLoadingApps — matching the
   // original, where neither reset path touched the loading flag.
   const resetApps = useCallback(() => {
     setContextApps([]);
     setComparedApps([]);
-    setAppsError(null);
   }, []);
 
-  return { contextApps, comparedApps, isLoadingApps, appsError, resetApps };
+  return { contextApps, comparedApps, isLoadingApps, resetApps };
 }
