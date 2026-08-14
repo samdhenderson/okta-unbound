@@ -19,6 +19,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useStaggerReveal } from '../../hooks/useStaggerReveal';
 import EmptyState from '../shared/EmptyState';
 import ScrollableList from '../shared/ScrollableList';
+import Skeleton from '../shared/Skeleton';
 import Button from '../shared/Button';
 import GroupListItem from './GroupListItem';
 import type { GroupSummary } from '../../../shared/types';
@@ -152,6 +153,12 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
       <ScrollableList
         loading={loading}
         loadingMessage="Loading groups from Okta..."
+        // `size="sm"` (p-2) is the compact `GroupListItem` header (`px-3 py-2`);
+        // the richer `lg` used by Apps and Rules would draw a taller row than the
+        // one that replaces it.
+        skeleton={
+          <Skeleton variant="row" size="sm" count={6} label="Loading groups from Okta..." />
+        }
         className="mt-4"
         scrollRef={scrollRef}
         emptyState={

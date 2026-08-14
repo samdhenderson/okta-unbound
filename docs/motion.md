@@ -209,6 +209,26 @@ is an **added option**, not a replacement for `LoadingSpinner`:
   "content is arriving" state at all). Spinners are the correct choice in both
   cases — this is a deliberate, explicit rule, not legacy debt to migrate away.
 
+**"Variable-height" is usually a claim about the expanded row, not the loading
+one.** The Rules tab spun for a while on the reasoning that a rule card has no
+fixed height. It does at the only moment that matters: cards load **collapsed**,
+and a collapsed row is a fixed-height header. The variable height arrives when a
+user expands one, which cannot happen before the list exists. Before reaching for
+a spinner on this basis, check which state the row is actually in while loading.
+
+**Match `size` to the row's own padding**, or the placeholder is the wrong height
+and the layout still jumps — the thing the skeleton exists to prevent. `lg` (p-4)
+for `AppListItem` / `RuleCard` / `PolicyCard` / `StatCard`, `md` (p-3) for
+`MemberRow`, `sm` (p-2) for the compact `GroupListItem`.
+
+**Match the element count, not just the size.** `row` draws four elements — a
+title, a two-badge strip, a meta line and a trailing block — so it is the wrong
+shape for a list of **single-line** rows however small you set `size`. It is
+several times too tall, and the list lurches upward when the real rows arrive; a
+skeleton that mispredicts the layout has spent the spinner's honesty and bought a
+jump. Single-line lists (`PolicyRulesList`, `GroupRulesSection`'s
+`RuleRelationList`) want a single-line placeholder, never a shrunken `row`.
+
 Both are accessible the same way: one hidden `role="status"` node carries the
 announced label, and the visual placeholder(s)/spin glyph are `aria-hidden`.
 
