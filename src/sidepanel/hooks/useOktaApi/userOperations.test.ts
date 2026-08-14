@@ -131,7 +131,7 @@ describe('getUserApps', () => {
     const core = makeCore({ makeApiRequest });
     const { getUserApps } = createUserOperations(core);
 
-    const apps = await getUserApps('00uFAKE1');
+    const { apps, complete } = await getUserApps('00uFAKE1');
 
     expect(makeApiRequest).toHaveBeenCalledTimes(2);
     expect(apps).toEqual([
@@ -139,18 +139,42 @@ describe('getUserApps', () => {
       { id: 'a2', label: 'App Two' },
       { id: 'a3', label: 'a3' },
     ]);
+    expect(complete).toBe(true);
   });
 
-  it('breaks (returns collected so far) when a page is unsuccessful', async () => {
+  it('reports the walk as incomplete when a page is unsuccessful', async () => {
     const core = makeCore({ makeApiRequest: vi.fn().mockResolvedValue({ success: false }) });
     const { getUserApps } = createUserOperations(core);
-    expect(await getUserApps('00uFAKE1')).toEqual([]);
+
+    // Previously characterized as "returns []", which made a transport failure
+    // indistinguishable from a user with no apps. The rows collected so far still
+    // come back; `complete: false` is what says they are not the whole answer.
+    expect(await getUserApps('00uFAKE1')).toEqual({ apps: [], complete: false });
   });
 
-  it('returns [] on a thrown error', async () => {
+  it('keeps the pages it collected before a mid-walk failure, and flags them as partial', async () => {
+    const makeApiRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        success: true,
+        data: [{ id: 'a1', label: 'App One' }],
+        headers: { link: '<https://example.okta.com/api/v1/apps?after=cur>; rel="next"' },
+      })
+      .mockResolvedValueOnce({ success: false, error: '500 from Okta' });
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    // The distinction the flag exists for: one real app in hand, and an unknown
+    // number missing. Neither "1 app" nor "0 apps" is the truth.
+    expect(await getUserApps('00uFAKE1')).toEqual({
+      apps: [{ id: 'a1', label: 'App One', scope: undefined }],
+      complete: false,
+    });
+  });
+
+  it('reports the walk as incomplete on a thrown error', async () => {
     const core = makeCore({ makeApiRequest: vi.fn().mockRejectedValue(new Error('offline')) });
     const { getUserApps } = createUserOperations(core);
-    expect(await getUserApps('00uFAKE1')).toEqual([]);
+    expect(await getUserApps('00uFAKE1')).toEqual({ apps: [], complete: false });
   });
 });
 
@@ -440,7 +464,12 @@ describe('getUserApps boundary validation', () => {
     });
     const { getUserApps } = createUserOperations(core);
 
-    expect(await getUserApps('00uFAKE1')).toEqual([{ id: '0oaFAKE1', label: 'App One' }]);
+    // A dropped row is not an incomplete walk: every page was fetched, so the
+    // answer is complete even though one malformed row did not survive validation.
+    expect(await getUserApps('00uFAKE1')).toEqual({
+      apps: [{ id: '0oaFAKE1', label: 'App One' }],
+      complete: true,
+    });
   });
 });
 
@@ -488,7 +517,7 @@ describe('getUserApps assignment scope', () => {
       );
     const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
 
-    const apps = await getUserApps('00uFAKE1');
+    const { apps } = await getUserApps('00uFAKE1');
 
     // Two pages → exactly two calls, identical to the un-expanded walk asserted by
     // the "walks Link pagination and flattens id + label/name/id fallback" case
@@ -511,7 +540,7 @@ describe('getUserApps assignment scope', () => {
       );
     const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
 
-    expect((await getUserApps('00uFAKE1'))[0].scope).toBe('USER');
+    expect((await getUserApps('00uFAKE1')).apps[0].scope).toBe('USER');
   });
 
   it('maps _embedded.user.scope GROUP → group-granted scope', async () => {
@@ -524,14 +553,14 @@ describe('getUserApps assignment scope', () => {
       );
     const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
 
-    expect((await getUserApps('00uFAKE1'))[0].scope).toBe('GROUP');
+    expect((await getUserApps('00uFAKE1')).apps[0].scope).toBe('GROUP');
   });
 
   it('keeps the app (scope undefined) when _embedded is absent entirely', async () => {
     const makeApiRequest = vi.fn().mockResolvedValue(onePage([{ id: '0oaFAKE1', label: 'One' }]));
     const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
 
-    const apps = await getUserApps('00uFAKE1');
+    const { apps } = await getUserApps('00uFAKE1');
 
     // The app must NOT be dropped: under-reporting a user's access is far worse
     // than a missing scope (ADR-0006 degrades, it does not fail closed).
@@ -554,7 +583,7 @@ describe('getUserApps assignment scope', () => {
     const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
 
     // Never throws, never guesses, never drops.
-    const apps = await getUserApps('00uFAKE1');
+    const { apps } = await getUserApps('00uFAKE1');
 
     expect(apps).toHaveLength(1);
     expect(apps[0].scope).toBeUndefined();
@@ -571,7 +600,7 @@ describe('getUserApps assignment scope', () => {
     );
     const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
 
-    expect(await getUserApps('00uFAKE1')).toEqual([
+    expect((await getUserApps('00uFAKE1')).apps).toEqual([
       { id: '0oaFAKE1', label: 'One', scope: 'USER' },
       { id: '0oaFAKE2', label: 'Two', scope: undefined },
       { id: '0oaFAKE3', label: 'Three', scope: undefined },

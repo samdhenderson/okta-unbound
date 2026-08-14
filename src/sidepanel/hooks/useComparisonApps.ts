@@ -29,6 +29,12 @@ interface UseComparisonAppsReturn {
   comparedApps: AppEntry[];
   /** True while both users' app lists are being (re)fetched. */
   isLoadingApps: boolean;
+  /**
+   * True when **either** user's app walk did not finish, so the lists above are
+   * short by an unknown amount. Consumers must not present a count, an overlap
+   * percentage, or an "only X has this" conclusion drawn from them as fact.
+   */
+  appsIncomplete: boolean;
   /** Clears both app lists (but not the loading flag). */
   resetApps: () => void;
 }
@@ -39,12 +45,18 @@ interface UseComparisonAppsReturn {
  * context user). The load is guarded by a `cancelled` flag so a stale run cannot
  * write state.
  *
- * There is deliberately no error state here: `getUserApps`
- * (`useOktaApi/userOperations.ts`) wraps its whole pagination walk in try/catch and
- * always resolves with whatever it accumulated, so this hook's promise can never
- * reject. An app-API failure renders as "0 apps", never as an error — characterized
- * in `UserComparisonModal.test.tsx`'s "app-fetch resilience" suite. Surfacing it
- * would be a UX change for §8, not this hook's job.
+ * `getUserApps` never rejects — it resolves with whatever pages it collected plus
+ * a `complete` flag — so there is no `.catch` here and no error *message* to
+ * render. What there is instead is {@link UseComparisonAppsReturn.appsIncomplete}:
+ * a failed or part-way-failed walk used to arrive as an empty array and render as
+ * "0 apps", which reads as a finding about someone's access rather than as a
+ * failure to look. The flag is what stops the rest of the comparison stating a
+ * number it cannot stand behind.
+ *
+ * It is a boolean rather than a message because the failure is not actionable in
+ * this surface — the useful thing to say is "this half of the comparison is
+ * unreliable", not which HTTP status the third page returned. The status is
+ * logged at the boundary.
  */
 export function useComparisonApps({
   targetTabId,
@@ -56,6 +68,9 @@ export function useComparisonApps({
   const [contextApps, setContextApps] = useState<AppEntry[]>([]);
   const [comparedApps, setComparedApps] = useState<AppEntry[]>([]);
   const [isLoadingApps, setIsLoadingApps] = useState(false);
+  // Starts false and is only ever set from a completed load: "nothing has failed"
+  // is the honest reading before anything has been attempted.
+  const [appsIncomplete, setAppsIncomplete] = useState(false);
 
   useEffect(() => {
     if (!comparedUser) return;
@@ -63,12 +78,16 @@ export function useComparisonApps({
     let cancelled = false;
     setIsLoadingApps(true);
     // No .catch: getUserApps never rejects (see the class doc above), so there is
-    // nothing here for one to catch.
+    // nothing here for one to catch. A failure arrives as `complete: false`.
     Promise.all([getUserApps(contextUserId), getUserApps(comparedUser.id)])
-      .then(([ctxApps, cmpApps]) => {
+      .then(([context, compared]) => {
         if (cancelled) return;
-        setContextApps(ctxApps);
-        setComparedApps(cmpApps);
+        setContextApps(context.apps);
+        setComparedApps(compared.apps);
+        // Either side being short is enough to make the *comparison* unreliable:
+        // the buckets are a set difference, so a missing row on one side becomes a
+        // spurious "only the other user has this".
+        setAppsIncomplete(!context.complete || !compared.complete);
       })
       .finally(() => {
         if (!cancelled) setIsLoadingApps(false);
@@ -83,11 +102,14 @@ export function useComparisonApps({
   }, [comparedUser]);
 
   // Clears the app lists, but deliberately NOT isLoadingApps — matching the
-  // original, where neither reset path touched the loading flag.
+  // original, where neither reset path touched the loading flag. The incomplete
+  // flag does clear: it describes the lists being cleared, so leaving it set would
+  // caveat a comparison that has not been made yet.
   const resetApps = useCallback(() => {
     setContextApps([]);
     setComparedApps([]);
+    setAppsIncomplete(false);
   }, []);
 
-  return { contextApps, comparedApps, isLoadingApps, resetApps };
+  return { contextApps, comparedApps, isLoadingApps, appsIncomplete, resetApps };
 }

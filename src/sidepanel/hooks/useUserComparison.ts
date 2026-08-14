@@ -79,6 +79,13 @@ export interface UseUserComparisonOptions {
  *   the bidirectional `addToContext` / `addToCompared` actions, display names, and
  *   the `selectUser` / `changeUser` actions.
  *
+ *   The two failure channels are deliberately different shapes. `loadError` is the
+ *   group side and is **blocking** — the view replaces the tabs with it, because
+ *   without memberships there is no comparison. `appsIncomplete` is the app side
+ *   and is **advisory**: the group half still loaded, so the view caveats instead
+ *   of blanking, `appSimilarity` becomes `null`, and `similarityScope` reports
+ *   `'groups-only'` to say what the surviving headline actually covers.
+ *
  *   `causes` classifies the `onlyCompared` bucket by remedy
  *   ({@link classifyAccessCauses}), and is **`undefined` until the org rule
  *   inventory has been resolved** — "not computed", which consumers must not render
@@ -115,11 +122,13 @@ export function useUserComparison({
   const [comparedUser, setComparedUser] = useState<OktaUser | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
 
-  const { contextApps, comparedApps, isLoadingApps, resetApps } = useComparisonApps({
-    targetTabId,
-    contextUserId: contextUser.id,
-    comparedUser,
-  });
+  const { contextApps, comparedApps, isLoadingApps, appsIncomplete, resetApps } = useComparisonApps(
+    {
+      targetTabId,
+      contextUserId: contextUser.id,
+      comparedUser,
+    },
+  );
 
   // Refresh the compared user's memberships after a group is copied onto them,
   // so the row re-buckets on the next load (mirrors the context-side refresh the
@@ -274,16 +283,34 @@ export function useUserComparison({
     groupBuckets.shared.length,
     groupBuckets.shared.length + groupBuckets.onlyCompared.length + groupBuckets.onlyContext.length,
   );
-  const appSimilarity = jaccard(
-    appBuckets.shared.length,
-    appBuckets.shared.length + appBuckets.onlyCompared.length + appBuckets.onlyContext.length,
-  );
-  const overallSimilarity = comparedUser ? Math.round((groupSimilarity + appSimilarity) / 2) : 0;
+  // `null` when the app walk did not finish. An overlap ratio over a list that is
+  // short by an unknown amount is not a low percentage — it is not a percentage.
+  // The type change is the enforcement: every consumer has to say what it renders
+  // instead, rather than inheriting a plausible-looking 0%.
+  const appSimilarity = appsIncomplete
+    ? null
+    : jaccard(
+        appBuckets.shared.length,
+        appBuckets.shared.length + appBuckets.onlyCompared.length + appBuckets.onlyContext.length,
+      );
+
+  // With the app term unavailable the headline falls back to the group figure
+  // alone, rather than averaging in a zero. Dropping the headline entirely would
+  // throw away the half of the comparison that did load; averaging in a fabricated
+  // zero silently halves it. `similarityScope` is what keeps the surviving number
+  // honest about what it covers.
+  const overallSimilarity = !comparedUser
+    ? 0
+    : appSimilarity === null
+      ? groupSimilarity
+      : Math.round((groupSimilarity + appSimilarity) / 2);
+  const similarityScope: 'both' | 'groups-only' = appSimilarity === null ? 'groups-only' : 'both';
 
   const isLoading = isLoadingGroups || isLoadingApps;
-  // No app-side term here: getUserApps (useOktaApi/userOperations.ts) never
-  // rejects, so useComparisonApps carries no error state to OR in — see its
-  // module doc. An app-fetch failure still degrades silently to "0 apps".
+  // Only the group side can produce a blocking error: `loadError` replaces the
+  // whole comparison body, and a failed app read must not do that — the group half
+  // is still worth showing. An incomplete app read travels as `appsIncomplete`
+  // instead, which caveats rather than blanks.
   const loadError = groupsError;
 
   const contextName = userDisplayName(contextUser);
@@ -305,6 +332,8 @@ export function useUserComparison({
     groupSimilarity,
     appSimilarity,
     overallSimilarity,
+    similarityScope,
+    appsIncomplete,
     isLoading,
     loadError,
     addingGroupId,

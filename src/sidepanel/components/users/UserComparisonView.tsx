@@ -123,6 +123,8 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
     groupSimilarity,
     appSimilarity,
     overallSimilarity,
+    similarityScope,
+    appsIncomplete,
     isLoading,
     loadError,
     addingGroupId,
@@ -165,6 +167,10 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
             contextName={contextName}
             comparedName={comparedName}
             similarity={overallSimilarity}
+            // Says what the surviving number covers when the app half could not be
+            // read. Without it the headline is a group-overlap figure wearing the
+            // label of an overall match.
+            scopeNote={similarityScope === 'groups-only' ? 'groups only' : undefined}
             isLoading={isLoading}
           />
 
@@ -191,6 +197,21 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
                 <AlertMessage
                   message={{ text: addError, type: 'danger' }}
                   onDismiss={() => setAddError(null)}
+                />
+              )}
+
+              {/* Advisory, not blocking — the group half of the comparison loaded
+                  and is worth showing. Rendered above the tab content rather than
+                  inside the Apps tab so the caveat is visible from the Overview,
+                  which is where the app counts and the match score are read.
+                  Deliberately not dismissible: the numbers it qualifies stay on
+                  screen, so the caveat has to as well. */}
+              {appsIncomplete && (
+                <AlertMessage
+                  message={{
+                    text: 'Some app assignments could not be loaded. The app comparison is incomplete, and the match score covers groups only.',
+                    type: 'warning',
+                  }}
                 />
               )}
 
@@ -337,7 +358,14 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
                   comparedName={comparedName}
                   rows={appParityRows(appBuckets)}
                   noun="app"
-                  emptyText="Neither user is assigned any apps."
+                  // An empty list means two different things. "Neither user is
+                  // assigned any apps" is a finding; when the walk failed, the
+                  // only true statement is that we do not know.
+                  emptyText={
+                    appsIncomplete
+                      ? 'App assignments could not be loaded for this comparison.'
+                      : 'Neither user is assigned any apps.'
+                  }
                   // No actions: an app assignment is not copyable from this
                   // surface, so both sides are read-only and the row is a pure
                   // parity statement.

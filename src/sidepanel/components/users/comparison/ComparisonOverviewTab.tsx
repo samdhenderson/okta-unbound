@@ -32,8 +32,13 @@ interface ComparisonOverviewTabProps {
   appBuckets: { onlyCompared: AppEntry[]; shared: AppEntry[]; onlyContext: AppEntry[] };
   /** Group overlap as a whole percent (0–100). */
   groupSimilarity: number;
-  /** App overlap as a whole percent (0–100). */
-  appSimilarity: number;
+  /**
+   * App overlap as a whole percent (0–100), or `null` when the app assignments
+   * could not be fully read — an overlap ratio over a list of unknown length is
+   * not a low percentage, it is not a percentage. The card says so instead of
+   * rendering one.
+   */
+  appSimilarity: number | null;
   /** Jumps to the Groups detail tab. */
   onJumpToGroups: () => void;
   /** Jumps to the Apps detail tab. */
@@ -123,8 +128,13 @@ interface OverviewCardProps {
   icon: 'users' | 'app';
   /** Card heading (e.g. "Group memberships"). */
   heading: string;
-  /** Overlap as a whole percent (0–100). */
-  similarity: number;
+  /**
+   * Overlap as a whole percent (0–100), or `null` when the underlying lists are
+   * known to be short. `null` also downgrades the total to a floor: the three
+   * bucket counts below it are still whatever arrived, which is a real lower
+   * bound and worth showing, but it is not the total.
+   */
+  similarity: number | null;
   /** Display name for the context user. */
   contextName: string;
   /** Display name for the compared user. */
@@ -187,7 +197,9 @@ const OverviewCard: React.FC<OverviewCardProps> = ({
 
       <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3 text-xs">
         <span className="text-neutral-500">
-          {total} total · {similarity}% overlap
+          {similarity === null
+            ? `at least ${total} · overlap unavailable`
+            : `${total} total · ${similarity}% overlap`}
         </span>
         {onlyCompared > 0 && icon === 'users' && (
           <span className="flex items-center gap-1 font-semibold text-primary-text">
