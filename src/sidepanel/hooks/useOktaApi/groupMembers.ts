@@ -18,9 +18,22 @@ import {
  * Build add/remove/list operations for individual group memberships.
  *
  * @param coreApi - Shared transport surface (see {@link CoreApi}).
+ * @param onMembershipChanged - Called with a group id after **every** successful
+ * membership write here. This module deliberately knows nothing about the entity
+ * cache — it reports that a group's membership moved and lets the assembly point
+ * (`useOktaApi`) decide what that invalidates.
+ *
+ * The seam lives here rather than at the call sites because there are six of
+ * them, and two (`groupBulkOps`, `groupCleanup`) are inside this same API layer,
+ * receiving `removeUserFromGroup` as an injected primitive. Firing from the
+ * primitive is the only place that covers all six without teaching the API layer
+ * about caching.
  * @returns `{ removeUserFromGroup, removeUserFromGroups, getAllGroupMembers, addUserToGroup }`.
  */
-export function createGroupMemberOperations(coreApi: CoreApi) {
+export function createGroupMemberOperations(
+  coreApi: CoreApi,
+  onMembershipChanged?: (groupId: string) => void,
+) {
   /**
    * Remove a single user from a group (DELETE membership).
    *
@@ -41,6 +54,10 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
       `/api/v1/groups/${groupId}/users/${user.id}`,
       'DELETE',
     );
+
+    // Fires regardless of `skipUndoLog`: that flag controls the *audit* entry a
+    // bulk caller aggregates, not whether this group's membership actually moved.
+    if (result.success) onMembershipChanged?.(groupId);
 
     // Log undo action if successful (skip for bulk operations which log at the end)
     if (result.success && !skipUndoLog) {
@@ -91,6 +108,7 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
       groupIds,
       async (groupId) => {
         await coreApi.makeApiRequest(`/api/v1/groups/${groupId}/users/${userId}`, 'DELETE');
+        onMembershipChanged?.(groupId);
         completedCount += 1;
         onProgress?.(completedCount, groupIds.length);
       },
@@ -175,6 +193,7 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
     );
 
     if (result.success) {
+      onMembershipChanged?.(groupId);
       await logAction(`Added ${user.profile.firstName} ${user.profile.lastName} to ${groupName}`, {
         type: 'ADD_USER_TO_GROUP',
         userId: user.id,

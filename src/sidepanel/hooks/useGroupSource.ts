@@ -130,13 +130,13 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
     // per group, default 5-minute TTL — so members loaded anywhere in the panel
     // serve this analysis too. Do not give this key a bespoke TTL or shape.
     //
-    // KNOWN GAP: membership mutations only partially invalidate this key.
-    // `useGroupMembersCache.removeUserFromGroups` invalidates
-    // `['groupMembers', groupId]` per removed group, but the single-membership
-    // `addUserToGroup` / `removeUserFromGroup` paths do not, and nothing
-    // invalidates the derived `['memberSource', groupId]` breakdown at all. So
-    // after such a mutation the meter can show a pre-mutation count until the
-    // TTL lapses. Building that invalidation is deliberately out of scope here.
+    // Membership mutations now invalidate this key on every write path:
+    // `createGroupMemberOperations` reports each successful add/remove to
+    // `useOktaApi`, which drops `['groupMembers', groupId]`. The derived
+    // `['memberSource', groupId]` breakdown goes with it, because
+    // `memberSourceCache` registers it as derived from this key and `invalidate`
+    // cascades. The meter above a mutation therefore reflects it immediately
+    // rather than holding a pre-mutation count until the TTL lapses.
     Promise.all([
       getOrFetch(cacheKeys.groupMembers(group.id), () => getAllGroupMembers(group.id)),
       getGroupRulesForGroup(group.id),

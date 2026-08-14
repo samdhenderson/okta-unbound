@@ -29,11 +29,13 @@ import type { MemberSourceBreakdown } from '../../shared/membership/groupSource'
  * it. Declared here, beside the derived cache, so the relationship is stated where
  * the derivation is — not in whichever call site happens to invalidate first.
  *
- * Closes the half of `useGroupSource`'s `KNOWN GAP` that this module owns: any
- * path invalidating `groupMembers` for a group now drops that group's breakdown
- * too, instead of letting a pre-mutation split stay on screen for its 30-minute
- * TTL. The other half — the single-membership write paths that never invalidate
- * `groupMembers` at all — is the mutation map's job.
+ * Closes the half of `useGroupSource`'s former `KNOWN GAP` that this module owns:
+ * any path invalidating `groupMembers` for a group also drops that group's
+ * breakdown, instead of letting a pre-mutation split stay on screen for its
+ * 30-minute TTL. The other half — the single-membership write paths that never
+ * invalidated `groupMembers` at all — is now closed too: every write in
+ * `useOktaApi/groupMembers` reports its group id, and `useOktaApi` invalidates
+ * this key's source. Nothing here needs to name `memberSource` to benefit.
  */
 registerDerived('memberSource', 'groupMembers');
 
