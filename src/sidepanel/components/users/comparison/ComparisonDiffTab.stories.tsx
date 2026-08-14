@@ -1,10 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import ComparisonDiffTab from './ComparisonDiffTab';
 import GroupSourceIndicator from './GroupSourceIndicator';
 import AppScopeIndicator from './AppScopeIndicator';
 import Button from '../../shared/Button';
-import type { CellDirection } from './ComparisonDiffTab';
 import type { ParityRow } from './comparisonAnalytics';
 import type { GroupMembership, MembershipRule } from '../../../../shared/types';
 
@@ -64,23 +63,6 @@ const APP_ROWS: ParityRow[] = [
   { id: 'app3', label: 'Slack', inContext: true, inCompared: true },
 ];
 
-/** An Add button's label: the arrow sits on the edge nearest the marker and points at it. */
-const AddLabel = ({ direction }: { direction: CellDirection }) => (
-  <span className="inline-flex items-center gap-1">
-    {direction === 'left' && (
-      <span aria-hidden="true" className="text-base leading-none">
-        ←
-      </span>
-    )}
-    Add
-    {direction === 'right' && (
-      <span aria-hidden="true" className="text-base leading-none">
-        →
-      </span>
-    )}
-  </span>
-);
-
 /** One list where every row states the comparison: two sides, a marker, and the action that closes the gap. */
 const meta = {
   title: 'Users/Comparison/ComparisonDiffTab',
@@ -98,12 +80,18 @@ const meta = {
           '*spatially*, so reading a row meant knowing which card you were in, and it gave most of the screen ' +
           'to `shared` — the one group nobody acts on. A 65-group comparison handed 53 shared rows ~80% of the ' +
           'panel and left the 12 actionable ones scrolling in a sliver.\n\n' +
-          'The arrow on an Add button sits on the edge nearest the marker and points **inward**, so the gesture ' +
-          'and the goal are the same thing: close the `≠`. The middle cell borrows the button silhouette so the ' +
-          'three cells read as one set, but it is inert — no `<button>`, not focusable, `role="img"` with a ' +
-          'label. `=` and `≠` are different glyphs, so the state never depends on colour.\n\n' +
+          '**Every cell names its user, in every state**, and an Add button says `Add <recipient>`. An earlier ' +
+          'cut named only the holding side and put a **inward-pointing arrow** on the Add button, aimed at the ' +
+          '`≠` it would close. That failed twice: only the named side filled its third, so the strip was visibly ' +
+          'lopsided; and the arrow pointed *away* from the user who actually receives the item — the recipient ' +
+          'is whichever side the button sits on — so the row read as the reverse of what clicking it did. With ' +
+          'the recipient named there is nothing left for an arrow to disambiguate, so there is no arrow.\n\n' +
+          'The middle cell borrows the button silhouette so the three cells read as one set, but it is inert — ' +
+          'no `<button>`, not focusable, `role="img"` with a label. `=` and `≠` are different glyphs, so the ' +
+          'state never depends on colour.\n\n' +
           'A side that lacks the item and *cannot* be given it (an app row, an app-mastered group) renders a ' +
-          'stated non-answer rather than a button that would fail.\n\n' +
+          'stated non-answer rather than a button that would fail — still named, so all three states are the ' +
+          'same shape.\n\n' +
           'It also fixes a subtler wrong: under buckets a successful copy made the Add button *vanish*, because ' +
           'the row moved to another card. Here the row flips `≠` → `=` where you are already looking.',
       },
@@ -124,15 +112,15 @@ type Story = StoryObj<typeof meta>;
 /** The groups tab: both copy directions, provenance under each differing row. */
 export const Groups: Story = {
   args: {
-    renderContextAction: (row, direction) =>
+    renderContextAction: (row, recipientName) =>
       row.membership?.group.type === 'APP_GROUP' ? null : (
-        <Button size="sm" variant="primary" onClick={fn()}>
-          <AddLabel direction={direction} />
+        <Button size="sm" variant="primary" icon="plus" fullWidth onClick={fn()}>
+          Add {recipientName}
         </Button>
       ),
-    renderComparedAction: (_row, direction) => (
-      <Button size="sm" variant="primary" onClick={fn()}>
-        <AddLabel direction={direction} />
+    renderComparedAction: (_row, recipientName) => (
+      <Button size="sm" variant="primary" icon="plus" fullWidth onClick={fn()}>
+        Add {recipientName}
       </Button>
     ),
     renderMeta: (row) =>
@@ -143,21 +131,23 @@ export const Groups: Story = {
 /** A copy in flight: the global single-flight lock disables every other Add. */
 export const CopyInFlight: Story = {
   args: {
-    renderContextAction: (row, direction) =>
+    renderContextAction: (row, recipientName) =>
       row.membership?.group.type === 'APP_GROUP' ? null : (
         <Button
           size="sm"
           variant="primary"
+          icon="plus"
+          fullWidth
           loading={row.id === '00gFAKEgroup0001'}
           disabled
           onClick={fn()}
         >
-          <AddLabel direction={direction} />
+          Add {recipientName}
         </Button>
       ),
-    renderComparedAction: (_row, direction) => (
-      <Button size="sm" variant="primary" disabled onClick={fn()}>
-        <AddLabel direction={direction} />
+    renderComparedAction: (_row, recipientName) => (
+      <Button size="sm" variant="primary" icon="plus" fullWidth disabled onClick={fn()}>
+        Add {recipientName}
       </Button>
     ),
   },
@@ -181,6 +171,47 @@ export const Apps: Story = {
   },
 };
 
+/**
+ * Every row shape at once — an Add on the left, an Add on the right, a stated
+ * non-answer, and two shared rows — which is the only view where the strip's
+ * alignment can be judged.
+ *
+ * Both failures it guards were invisible one row at a time. `flex-1` cells split
+ * the free space *after* each cell kept its own padding and border, so the padded
+ * pill came out 18px wider than the bare wrapper around a button and the marker
+ * sat 9px off-centre — to the left on a row with an Add on the left, to the right
+ * on a row with an Add on the right, so the `=` column staggered down the list.
+ * And a cell was as tall as its contents, so every shared row (two pills, 26px)
+ * was shorter than every difference row (a button, 36px).
+ *
+ * The strip is now a three-track grid with `min-h-9` cells and a reserved meta
+ * line, so the markers form one column and every row is one height.
+ */
+export const AllRowShapes: Story = {
+  args: {
+    renderContextAction: (row, recipientName) =>
+      row.membership?.group.type === 'APP_GROUP' ? null : (
+        <Button size="sm" variant="primary" icon="plus" fullWidth onClick={fn()}>
+          Add {recipientName}
+        </Button>
+      ),
+    renderComparedAction: (_row, recipientName) => (
+      <Button size="sm" variant="primary" icon="plus" fullWidth onClick={fn()}>
+        Add {recipientName}
+      </Button>
+    ),
+    renderMeta: (row) =>
+      row.inContext && row.inCompared ? null : <GroupSourceIndicator membership={row.membership} />,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // The list opens on the differences; the shared rows are half of what this
+    // story is for, so it has to switch itself to "All".
+    await userEvent.click(canvas.getByRole('button', { name: /^All/ }));
+    await waitFor(() => expect(canvas.getByText('all.employees')).toBeInTheDocument());
+  },
+};
+
 /** Nothing to compare at all — distinct from "nothing matches the filter". */
 export const Empty: Story = {
   args: { rows: [] },
@@ -195,9 +226,9 @@ export const LongList: Story = {
         groupRow(`00gFAKEbulk${i}`, `bulk.group.${String(i).padStart(2, '0')}`, true, true),
       ),
     ],
-    renderContextAction: (_row, direction) => (
-      <Button size="sm" variant="primary" onClick={fn()}>
-        <AddLabel direction={direction} />
+    renderContextAction: (_row, recipientName) => (
+      <Button size="sm" variant="primary" icon="plus" fullWidth onClick={fn()}>
+        Add {recipientName}
       </Button>
     ),
   },

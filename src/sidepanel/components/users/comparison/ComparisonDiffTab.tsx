@@ -20,6 +20,43 @@
  * the row moved to another card. Here the row flips `≠` → `=` where you are
  * already looking.
  *
+ * ## Both sides are always named
+ *
+ * An earlier cut named only the side that held the item and let the other side be
+ * identified by elimination, with an arrow on the Add button pointing at the `≠`
+ * it would close. That failed twice over. The named side filled its third while
+ * the button did not, so the strip was visibly lopsided. Worse, the arrow pointed
+ * *away* from the user who would actually receive the item — the recipient is
+ * whichever side the button sits on — so the row appeared to say the opposite of
+ * what clicking it did.
+ *
+ * Now every cell names its user in every state, and the action says
+ * `Add <recipient>`. There is no arrow, because with the recipient named there is
+ * nothing left to disambiguate. The three cells are the same shape, so symmetry
+ * is structural rather than something spacing has to maintain.
+ *
+ * ## Why the strip is a grid and every row is one height
+ *
+ * The three cells were `flex-1` around a fixed marker, which looks like equal
+ * thirds and is not. `flex-1` is `flex: 1 1 0%`, and under `box-sizing:
+ * border-box` a cell's own padding and border are floor space it keeps *before*
+ * the free space is split: the named pill (`px-2` + a 1px border = 18px of
+ * chrome) came out 18px wider than the bare wrapper around an Add button, so the
+ * marker sat 9px off-centre — and it moved to the *other* side of centre on a row
+ * whose button was on the right. Down a list, the `=` column visibly staggered.
+ * `grid-cols-[minmax(0,1fr)_2rem_minmax(0,1fr)]` sizes the tracks instead of the
+ * boxes, so the two sides are equal whatever each one is made of. (`minmax(0,…)`
+ * rather than plain `1fr`, whose `auto` minimum would let a long name push its
+ * track wider again.)
+ *
+ * Height was the same failure in the other axis: a cell was as tall as whatever
+ * it held, so a row with an Add button stood 36px and a row of two pills stood
+ * 26px — which made every shared row shorter than every difference row. The
+ * cells therefore carry the button's own `min-h-9`, and the meta line is a
+ * reserved slot rather than an optional one (see {@link ParityListRow}), so a
+ * shared row and a difference row are the same height and the list scans as
+ * columns.
+ *
  * ## The middle cell is not a control
  *
  * It keeps the button silhouette so the three cells read as one set, but it is
@@ -42,12 +79,6 @@ import type { ParityRow } from './comparisonAnalytics';
 /** Which rows the list is showing. */
 export type ParityFilter = 'differences' | 'shared' | 'all';
 
-/**
- * Which way the equality marker lies from a side cell — so an action can point
- * **inward**, at the `≠` it would close.
- */
-export type CellDirection = 'left' | 'right';
-
 /** Props for {@link ComparisonDiffTab}. */
 interface ComparisonDiffTabProps {
   /** Display name of the context user (baseline) — the LEFT side of every row. */
@@ -65,13 +96,14 @@ interface ComparisonDiffTabProps {
    * to them". Returning `null` renders a plain unmet marker instead, which is
    * what an app row (nothing to copy) and an app-mastered group both do.
    *
-   * `direction` is which way the marker lies from this cell, so the caller can
-   * put the arrow **inside** the control it belongs to (`Add →` on the left,
-   * `← Add` on the right) rather than beside it.
+   * `recipientName` is **this cell's own user** — the one who would receive the
+   * item. The caller puts it in the control's label so the row states who
+   * receives rather than leaving it to be inferred from which side the button
+   * sits on. See {@link SideCell} for why that inference used to go wrong.
    */
-  renderContextAction?: (row: ParityRow, direction: CellDirection) => React.ReactNode;
+  renderContextAction?: (row: ParityRow, recipientName: string) => React.ReactNode;
   /** Optional action for the RIGHT cell of a row the compared user lacks. */
-  renderComparedAction?: (row: ParityRow, direction: CellDirection) => React.ReactNode;
+  renderComparedAction?: (row: ParityRow, recipientName: string) => React.ReactNode;
   /**
    * Optional per-row detail under the label — today, how the membership was
    * granted. Kept a render prop because only the caller knows what its facet
@@ -136,7 +168,7 @@ const ComparisonDiffTab: React.FC<ComparisonDiffTabProps> = ({
         ariaLabel={`Filter ${noun}s by name`}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-neutral-200 bg-white">
         {visible.length === 0 ? (
           <p className="px-3 py-3 text-xs text-neutral-500 italic">
             {rows.length === 0 ? emptyText : `No ${noun}s match this filter.`}
@@ -152,6 +184,13 @@ const ComparisonDiffTab: React.FC<ComparisonDiffTabProps> = ({
                 renderContextAction={renderContextAction}
                 renderComparedAction={renderComparedAction}
                 renderMeta={renderMeta}
+                // Decided for the LIST, not per row: a list that annotates any
+                // row reserves the line on every row, so one row saying nothing
+                // (a shared group has no single provenance to state) does not
+                // make it shorter than its neighbours. A list that annotates
+                // nothing at all — the Apps tab before scopes load, the
+                // read-only story — reserves nothing and stays dense.
+                reserveMeta={renderMeta !== undefined}
               />
             ))}
           </ul>
@@ -166,9 +205,10 @@ const ParityListRow: React.FC<{
   row: ParityRow;
   contextName: string;
   comparedName: string;
-  renderContextAction?: (row: ParityRow, direction: CellDirection) => React.ReactNode;
-  renderComparedAction?: (row: ParityRow, direction: CellDirection) => React.ReactNode;
+  renderContextAction?: (row: ParityRow, recipientName: string) => React.ReactNode;
+  renderComparedAction?: (row: ParityRow, recipientName: string) => React.ReactNode;
   renderMeta?: (row: ParityRow) => React.ReactNode;
+  reserveMeta?: boolean;
 }> = ({
   row,
   contextName,
@@ -176,6 +216,7 @@ const ParityListRow: React.FC<{
   renderContextAction,
   renderComparedAction,
   renderMeta,
+  reserveMeta = false,
 }) => {
   const meta = renderMeta?.(row);
   const matched = row.inContext && row.inCompared;
@@ -189,22 +230,27 @@ const ParityListRow: React.FC<{
         <span className="w-full truncate text-sm text-neutral-800" title={row.label}>
           {row.label}
         </span>
-        {meta}
+        {/* A fixed-height slot, occupied or not. The two indicators that live
+            here are different heights themselves (a chip with a border is 22px,
+            bare italic text is 16px), so even two annotated rows would otherwise
+            differ; `h-6` clears the tallest and every row lands on one rhythm. */}
+        {reserveMeta && <span className="flex h-6 min-w-0 max-w-full items-center">{meta}</span>}
       </span>
 
-      {/* Equal thirds around a fixed marker, so the strip spans the row and an
-          action can never overflow the cell it lives in. */}
-      <span className="flex items-stretch gap-2">
+      {/* Real equal thirds: grid TRACKS, not `flex-1` boxes — under flex a padded
+          cell and a bare one differ by their own chrome, which is what knocked
+          the marker off the centre line. See the module header. */}
+      <span className="grid grid-cols-[minmax(0,1fr)_2rem_minmax(0,1fr)] items-stretch gap-2">
         <SideCell
           held={row.inContext}
           userName={contextName}
-          action={renderContextAction?.(row, 'right')}
+          action={renderContextAction?.(row, contextName)}
         />
         {/* Not a button, not focusable: a status that borrows the silhouette. */}
         <span
           role="img"
           aria-label={matched ? 'Both users have this' : 'Only one user has this'}
-          className={`flex w-8 shrink-0 items-center justify-center rounded-md border font-mono text-sm font-bold ${
+          className={`flex min-h-9 items-center justify-center rounded-md border font-mono text-sm font-bold ${
             matched
               ? 'border-success-light bg-success-light text-success-text'
               : 'border-warning-light bg-warning-light text-warning-text'
@@ -215,7 +261,7 @@ const ParityListRow: React.FC<{
         <SideCell
           held={row.inCompared}
           userName={comparedName}
-          action={renderComparedAction?.(row, 'left')}
+          action={renderComparedAction?.(row, comparedName)}
         />
       </span>
     </li>
@@ -225,19 +271,33 @@ const ParityListRow: React.FC<{
 /**
  * One side of a row: a third of the strip, whatever it holds.
  *
- * The side that HAS the item is **named**. That is what makes the row readable
- * without a column header — with two users, naming the holder identifies the
- * other side by elimination, which is how the design was drawn
- * (`[Add →] ≠ [Jordan]`). An earlier cut showed a bare check here and put the
- * names in a header above the list; the header's columns could not line up with a
- * strip that sits on its own line, so the check identified nobody.
+ * **Every side names its user, in every state.** That is the fix for two problems
+ * the earlier cut had. Visually, only the holding side was named and only the
+ * holding side filled its third, so a row read as a full-width grey pill facing a
+ * small button floating in empty space — the asymmetry was structural, not a
+ * spacing bug. Semantically, the unnamed side was the one you were about to act
+ * on: the button added the item to *its own* user, but carried an arrow pointing
+ * away from them at the only name on the row, so the row appeared to say the
+ * opposite of what the click did.
  *
- * A side that lacks the item and *can* be given it renders the caller's action —
- * which carries the inward-pointing arrow in its own label, so button and arrow
- * are one target rather than a glyph floating beside it. A side that lacks it and
- * cannot be given it (an app row, an app-mastered group) gets a stated
- * non-answer, never a button that would fail.
+ * Naming the recipient inside the control removes the inference entirely. There
+ * is no arrow, because there is nothing left for one to disambiguate.
+ *
+ * A side that lacks the item and cannot be given it (an app row, an app-mastered
+ * group) still gets a stated non-answer, never a button that would fail — but it
+ * names its user too, so all three states are the same shape.
  */
+/**
+ * The stated (non-button) cell, in both of its tones.
+ *
+ * `min-h-9` is `Button`'s own `sm` height, quoted rather than coincidental: it is
+ * what stops a row of two stated cells from standing 10px shorter than a row
+ * carrying an Add button. Width comes from the grid track, so the cell no longer
+ * carries a flex basis of its own.
+ */
+const cellClasses =
+  'flex min-h-9 min-w-0 items-center justify-center gap-1 rounded-md border px-2 py-1 text-xs';
+
 const SideCell: React.FC<{
   held: boolean;
   userName: string;
@@ -246,7 +306,7 @@ const SideCell: React.FC<{
   if (held) {
     return (
       <span
-        className="flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs text-neutral-600"
+        className={`${cellClasses} border-neutral-200 bg-neutral-50 text-neutral-600`}
         title={`${userName} has this`}
       >
         <Icon type="check" size="sm" className="shrink-0 text-success-text" />
@@ -258,15 +318,20 @@ const SideCell: React.FC<{
   if (!action) {
     return (
       <span
-        className="flex min-w-0 flex-1 items-center justify-center rounded-md border border-dashed border-neutral-200 px-2 py-1 text-xs text-neutral-400"
+        className={`${cellClasses} border-dashed border-neutral-200 text-neutral-400`}
         title={`${userName} does not have this`}
       >
-        —
+        <span aria-hidden="true" className="shrink-0">
+          —
+        </span>
+        <span className="truncate">{userName}</span>
       </span>
     );
   }
 
-  return <span className="flex min-w-0 flex-1 items-center justify-center">{action}</span>;
+  // The action fills the cell — the caller passes `fullWidth`, so the button is
+  // the same width as the named cell opposite it and the strip reads as thirds.
+  return <span className="flex min-w-0">{action}</span>;
 };
 
 export default ComparisonDiffTab;
