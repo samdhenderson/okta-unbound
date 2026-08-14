@@ -34,6 +34,31 @@ jobs:
         # `test:run`.
         run: npm run test:coverage
 
+      # Dead-code detection. Reports unused files, exports and dependencies that
+      # `noUnusedLocals` and eslint's no-unused-vars structurally cannot see (both
+      # are file-local; neither ever flags an unused *export*).
+      #
+      # NON-BLOCKING for now: the repo has a known backlog at the time this landed
+      # (see docs/dead-code.md). Promote to a hard gate — drop the
+      # `continue-on-error` — once that backlog reaches zero.
+      - name: Dead code (knip)
+        continue-on-error: true
+        run: npm run knip
+
+      # Reachability from the three manifest entry points only, with tests and
+      # stories excluded from the project. This is what surfaces code that is alive
+      # *only* because a test imports it — `npm run knip` cannot see that class of
+      # dead code, because it treats test files as entry points.
+      #
+      # Advisory by design, never a gate: some exports legitimately exist as testing
+      # seams. Human review decides.
+      - name: Dead code — production reachability (advisory)
+        continue-on-error: true
+        run: npm run knip:production
+
+      - name: Circular dependencies
+        run: npm run knip:circular
+
   # Component explorer build gate (ADR-0010). Runs in parallel with `verify` (no
   # `needs:`), so it never delays the fast lint/type/test feedback. A broken or
   # mis-imported story fails the PR.
