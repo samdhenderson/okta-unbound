@@ -48,7 +48,21 @@ const AuthPoliciesTab: React.FC<AuthPoliciesTabProps> = ({ targetTabId, isActive
   // identities (an unstable callback would defeat the facade's memoization).
   const handleError = useCallback((message: string) => setError(message || null), []);
 
-  const api = useOktaApi({ targetTabId: targetTabId ?? null, onResult: handleError });
+  // `onResult` is `(message, type)`, not `(message)`. Passing a one-arg callback
+  // here type-checks — TypeScript accepts a function that ignores trailing
+  // parameters — and then silently drops `type`, so an 'info' message renders as a
+  // danger banner. Latent here rather than live — `getPolicyRules` emits no results
+  // today — but it is the same shape and would surface the moment one did.
+  //
+  // Must be stable: useOktaApi memoizes its operations on this callback's identity.
+  const handleResult = useCallback(
+    (message: string, type: 'info' | 'success' | 'warning' | 'error') => {
+      if (type === 'error') setError(message || null);
+    },
+    [],
+  );
+
+  const api = useOktaApi({ targetTabId: targetTabId ?? null, onResult: handleResult });
   const { policies, isLoading, lastFetchTime, loadPolicies } = usePoliciesData({
     targetTabId,
     onError: handleError,
