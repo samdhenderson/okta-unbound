@@ -13,7 +13,7 @@
  * {@link sidepanel/hooks/useGroupRuleReferences.useGroupRuleReferences}.
  */
 import React from 'react';
-import { AlertMessage, LoadingSpinner } from '../../shared';
+import { AlertMessage, Skeleton } from '../../shared';
 import DetailSection from './DetailSection';
 import RuleLinkRow from './RuleLinkRow';
 import type { FeedingRule, SourceStatus } from '../../../hooks/useGroupSource';
@@ -32,43 +32,90 @@ const RuleStatusPill: React.FC<{ status: string }> = ({ status }) => (
   </span>
 );
 
-/** One headed rule list with its own async triad. */
-const RuleRelationList: React.FC<{
-  heading: string;
-  hint: string;
+/** The rules one relation lists, plus the states that stand in for them. */
+interface RuleRelationBodyProps {
+  /** Async status of this axis' load. */
   status: SourceStatus;
+  /** Error message when the load failed. */
   error: string | null;
+  /** What to say when the load succeeded and found nothing. */
   emptyMessage: string;
+  /** The loaded rules for this axis. */
   rules: Array<{ id: string; name: string; status: string; detail?: string }>;
+  /** Deep-links a rule in the Rules tab. */
   onNavigateToRule?: (ruleId: string) => void;
-}> = ({ heading, hint, status, error, emptyMessage, rules, onNavigateToRule }) => (
+}
+
+/**
+ * One relation's async body: placeholder, error, empty message or the rows.
+ *
+ * Split out of {@link RuleRelationList} so each state is an early return rather
+ * than a rung on a four-deep ternary.
+ */
+const RuleRelationBody: React.FC<RuleRelationBodyProps> = ({
+  status,
+  error,
+  emptyMessage,
+  rules,
+  onNavigateToRule,
+}) => {
+  if (status === 'loading') {
+    // `RuleLinkRow` is a `ListRow` at `compact` density, so the placeholder is the
+    // matching one-line row at the default `md`, in the list's own `space-y-1.5`.
+    return <Skeleton variant="lineRow" count={2} gap="space-y-1.5" label="Loading rules…" />;
+  }
+
+  if (status === 'error') {
+    return <AlertMessage message={{ text: error || 'Failed to load rules.', type: 'danger' }} />;
+  }
+
+  // `idle` deliberately does not share the skeleton. A skeleton says "content is
+  // on its way and will look like this"; `idle` means the load has not been
+  // started, so it would claim work that is not in flight — the same overclaim
+  // the spinner made. Falling through to `emptyMessage` would be worse still,
+  // asserting a result ("no rule assigns users to this group") this axis has not
+  // produced. Nothing is the honest render, and it is momentary in practice: both
+  // hooks backing this section are `loading` from mount and only return to `idle`
+  // when the detail view closes.
+  if (status === 'idle') return null;
+
+  if (rules.length === 0) {
+    return <p className="text-sm text-neutral-500">{emptyMessage}</p>;
+  }
+
+  return (
+    <ul className="space-y-1.5">
+      {rules.map((rule) => (
+        <li key={rule.id}>
+          <RuleLinkRow
+            name={rule.name}
+            detail={rule.detail}
+            trailing={<RuleStatusPill status={rule.status} />}
+            onSelect={onNavigateToRule ? () => onNavigateToRule(rule.id) : undefined}
+          />
+        </li>
+      ))}
+    </ul>
+  );
+};
+
+/** One headed rule list with its own async triad. */
+const RuleRelationList: React.FC<
+  RuleRelationBodyProps & {
+    /** The relation this list states, as its sub-heading. */
+    heading: string;
+    /** One line explaining what the relation means. */
+    hint: string;
+  }
+> = ({ heading, hint, ...body }) => (
   <div>
     <h3 className="text-xs font-medium text-neutral-600">
       {heading}
-      {status === 'done' && ` (${rules.length})`}
+      {body.status === 'done' && ` (${body.rules.length})`}
     </h3>
     <p className="mt-0.5 text-xs text-neutral-500">{hint}</p>
     <div className="mt-2">
-      {status === 'loading' || status === 'idle' ? (
-        <LoadingSpinner size="sm" message="Loading rules…" centered />
-      ) : status === 'error' ? (
-        <AlertMessage message={{ text: error || 'Failed to load rules.', type: 'danger' }} />
-      ) : rules.length === 0 ? (
-        <p className="text-sm text-neutral-500">{emptyMessage}</p>
-      ) : (
-        <ul className="space-y-1.5">
-          {rules.map((rule) => (
-            <li key={rule.id}>
-              <RuleLinkRow
-                name={rule.name}
-                detail={rule.detail}
-                trailing={<RuleStatusPill status={rule.status} />}
-                onSelect={onNavigateToRule ? () => onNavigateToRule(rule.id) : undefined}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
+      <RuleRelationBody {...body} />
     </div>
   </div>
 );

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import AppListItem from './AppListItem';
 import type { AppAssignmentCounts } from '../../hooks/useOktaApi/appOperations';
 import type { OktaAppListItem } from '../../../shared/schemas/okta';
@@ -80,6 +80,31 @@ export const MinimalFields: Story = {
 /** No org origin known yet — the "Open in Okta" link hides itself. */
 export const NoOktaOrigin: Story = {
   args: { oktaOrigin: undefined },
+};
+
+/**
+ * The row body reached by keyboard alone: one Tab lands on the `StretchedButton`
+ * covering the header, and Enter expands the row. This is the ADR-0029 gap the
+ * old `<div onClick>` left open — nothing here needs a pointer.
+ */
+export const KeyboardExpanded: Story = {
+  args: { app: { ...salesforce, id: '0oaFAKE0021' } as OktaAppListItem },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: 'Expand app' })).toHaveFocus();
+
+    await userEvent.keyboard('{Enter}');
+
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: 'Collapse' })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      ),
+    );
+    await expect(canvas.getByRole('link', { name: /Open in Okta/i })).toBeVisible();
+  },
 };
 
 /** Assignment counts are unavailable (the count walk failed). */

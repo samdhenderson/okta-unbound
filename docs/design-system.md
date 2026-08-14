@@ -88,7 +88,7 @@ component exists to stop.
 | ------------- | -------------------------------------------------------------------------- |
 | `variant`     | `card` (bordered) · `nested` (inside a card — no border, hover background) |
 | `density`     | `tight` (`px-2 py-1.5`) · `compact` (`px-3 py-2`) · `comfortable` (`p-4`)  |
-| `state`       | `default` · `selected` · `highlighted`                                     |
+| `state`       | `default` · `selected` · `highlighted` · `danger`                          |
 | `as`          | `div` · `li` · `a` · `button`                                              |
 | `body`        | expandable region below the header                                         |
 | `interactive` | override for a row whose control `ListRow` cannot see — governs hover      |

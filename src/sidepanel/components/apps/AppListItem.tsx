@@ -10,9 +10,19 @@
  * The card itself is a {@link sidepanel/components/shared/ListRow} at
  * `comfortable` density — this row owns its interior only, never its chrome
  * (ADR-0029).
+ *
+ * **The row body is keyboard-activatable.** It used to be a `<div onClick>` with
+ * no role, no `tabIndex` and no focus ring — one of the five a11y gaps ADR-0029
+ * catalogued. It is now a {@link sidepanel/components/shared/StretchedButton}
+ * overlay: a real button, so Enter/Space and the focus ring come for free, and
+ * the row's own controls (the chevron `IconButton`, the expanded "Open in Okta"
+ * link) stay legal rather than becoming axe `nested-interactive` violations the
+ * way `as="button"` would. The overlay is scoped to the **header** — `relative`
+ * sits on `ListRow`'s header wrapper, not on the card — so clicking inside the
+ * expanded panel does not collapse the row out from under the user.
  */
 import React, { memo, useCallback, useId, useState } from 'react';
-import { IconButton, ListRow, LoadingSpinner, OpenInOktaLink } from '../shared';
+import { IconButton, ListRow, LoadingSpinner, OpenInOktaLink, StretchedButton } from '../shared';
 import Icon from '../overview/shared/Icon';
 import { useEntityQuery } from '../../cache/useEntityQuery';
 import { cacheKeys } from '../../cache/keys';
@@ -88,6 +98,9 @@ const AppListItem: React.FC<AppListItemProps> = memo(
   ({ app, oktaOrigin, fetchAssignmentCounts }) => {
     const [expanded, setExpanded] = useState(false);
     const detailsId = useId();
+    // Every card in the list shares the overlay's label, so it points at this
+    // card's own title: screen readers read "Expand app, Salesforce".
+    const titleId = useId();
     const toggleExpanded = useCallback(() => setExpanded((prev) => !prev), []);
 
     const label = appDisplayLabel(app);
@@ -102,16 +115,24 @@ const AppListItem: React.FC<AppListItemProps> = memo(
         panel keeps its own `px-4 pb-4 pt-2` and its separator still runs edge to
         edge. `ListRow` also supplies `overflow-hidden` in that mode, so a body
         animating from `0fr` clips against the rounded corners. Only `group/item`
-        and `relative` stay in `className` — layout and behaviour, not chrome.
+        stays in `className` — layout and behaviour, not chrome.
       */
       <ListRow
         density="comfortable"
-        // The click target is an `onClick` on a child (the row body toggles the
-        // disclosure), so `ListRow` cannot infer that this row is activatable and
-        // would otherwise drop its hover border.
+        // Activated by the `StretchedButton` overlay below, which `ListRow`
+        // cannot see — without this the row would read as static and lose its
+        // hover border. Deliberately not `as="button"`: the row holds an
+        // `IconButton` and an "Open in Okta" link, so a real button here is an
+        // axe `nested-interactive`.
         interactive
         dataAttributes={{ 'data-app-id': app.id }}
-        className="group/item relative"
+        className="group/item"
+        // `relative` belongs to the *header wrapper*, not the card: the overlay
+        // is `absolute inset-0` against its nearest positioned ancestor, and on
+        // the card it would stretch over the expanded panel too — so clicking a
+        // detail, or the "Open in Okta" link, would collapse the row. Scoped
+        // here it covers exactly the header, padding included.
+        headerClassName="relative flex items-start gap-3"
         body={
           /*
             `.disclose` animates `grid-template-rows` between 0fr and 1fr, so the
@@ -180,66 +201,77 @@ const AppListItem: React.FC<AppListItemProps> = memo(
           </div>
         }
       >
-        <div className="flex items-start gap-3">
-          {/*
-            No keyboard affordance on this body — activation is available on the
-            adjacent Expand/Collapse `IconButton`, and giving the row itself one
-            means a `StretchedButton` overlay. Deliberately out of scope here.
-          */}
-          <div className="flex-1 min-w-0 cursor-pointer" onClick={toggleExpanded}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-semibold text-neutral-900 truncate group-hover/item:text-primary-text transition-colors duration-(--dur-instant)">
-                  {label}
-                </h3>
+        {/*
+          The row body's activation: an invisible button covering the header, so
+          the whole header is clickable *and* reachable by keyboard without the
+          content itself becoming button content (see the module header).
+        */}
+        <StretchedButton
+          label={expanded ? 'Collapse app' : 'Expand app'}
+          describedBy={titleId}
+          title={`${expanded ? 'Collapse' : 'Expand'} ${label}`}
+          onClick={toggleExpanded}
+        />
 
-                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                  <span
-                    className={`px-2 py-0.5 rounded-md text-xs font-medium border ${STATUS_BADGE[appStatusVariant(app.status)]}`}
-                  >
-                    {status}
-                  </span>
-                  {app.signOnMode && (
-                    <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-neutral-50 text-neutral-700 border border-neutral-200">
-                      {app.signOnMode}
-                    </span>
-                  )}
-                </div>
-              </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <h3
+                id={titleId}
+                className="text-sm font-semibold text-neutral-900 truncate group-hover/item:text-primary-text transition-colors duration-(--dur-instant)"
+              >
+                {label}
+              </h3>
 
-              <div className="flex items-center gap-1 shrink-0">
-                <IconButton
-                  label={expanded ? 'Collapse' : 'Expand'}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleExpanded();
-                  }}
-                  variant="ghost"
-                  size="md"
-                  expanded={expanded}
-                  controls={detailsId}
+              <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                <span
+                  className={`px-2 py-0.5 rounded-md text-xs font-medium border ${STATUS_BADGE[appStatusVariant(app.status)]}`}
                 >
-                  {/*
-                    The registry glyph, rotated rather than swapped for a
-                    `chevron-down`: the rotation is what animates the open/close.
-                  */}
-                  <Icon
-                    type="chevron-right"
-                    size="sm"
-                    className={`transition-transform duration-(--dur-instant) ${expanded ? 'rotate-90' : ''}`}
-                  />
-                </IconButton>
+                  {status}
+                </span>
+                {app.signOnMode && (
+                  <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-neutral-50 text-neutral-700 border border-neutral-200">
+                    {app.signOnMode}
+                  </span>
+                )}
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 mt-2 text-xs">
-              {app.name && <span className="truncate font-mono text-neutral-500">{app.name}</span>}
-              {app.created && (
-                <span className="text-neutral-600" title="Created">
-                  Created {formatDateShort(app.created)}
-                </span>
-              )}
+            {/*
+              `relative z-10` lifts the chevron above the overlay — without it
+              the `StretchedButton` sits on top and swallows its clicks. It no
+              longer needs to `stopPropagation`: the overlay is a sibling now,
+              not an ancestor, so a chevron click cannot also reach it.
+            */}
+            <div className="relative z-10 flex items-center gap-1 shrink-0">
+              <IconButton
+                label={expanded ? 'Collapse' : 'Expand'}
+                onClick={toggleExpanded}
+                variant="ghost"
+                size="md"
+                expanded={expanded}
+                controls={detailsId}
+              >
+                {/*
+                  The registry glyph, rotated rather than swapped for a
+                  `chevron-down`: the rotation is what animates the open/close.
+                */}
+                <Icon
+                  type="chevron-right"
+                  size="sm"
+                  className={`transition-transform duration-(--dur-instant) ${expanded ? 'rotate-90' : ''}`}
+                />
+              </IconButton>
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 mt-2 text-xs">
+            {app.name && <span className="truncate font-mono text-neutral-500">{app.name}</span>}
+            {app.created && (
+              <span className="text-neutral-600" title="Created">
+                Created {formatDateShort(app.created)}
+              </span>
+            )}
           </div>
         </div>
       </ListRow>

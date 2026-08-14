@@ -153,16 +153,14 @@ const GroupMergeModal: React.FC<GroupMergeModalProps> = ({
 
           <ul className="space-y-2">
             {plan.sources.map((s) => (
-              /*
-                A blocked source keeps its danger fill through `className`, but not
-                its danger border: the border, and its hover, belong to `ListRow`,
-                and overriding one without the other would repaint the row on hover.
-              */
               <ListRow
                 key={s.id}
                 as="li"
                 density="compact"
-                className={s.hasActiveFeedingRule ? 'bg-danger-light' : ''}
+                // A source fed by an active rule cannot be emptied — the row is the
+                // problem, not a selection. `state` rather than a `className` fill,
+                // so the danger border comes back with it.
+                state={s.hasActiveFeedingRule ? 'danger' : 'default'}
               >
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm font-semibold text-neutral-900 truncate">{s.name}</span>

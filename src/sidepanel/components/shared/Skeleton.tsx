@@ -11,9 +11,20 @@
  */
 import React from 'react';
 
-/** Placeholder shape: `text` a single line, `row` a list-row block, `card` a stat/summary card block. */
-export type SkeletonVariant = 'text' | 'row' | 'card';
-/** Size scale — controls line thickness (`text`) or block padding (`row`/`card`). */
+/**
+ * Placeholder shape: `text` a bare single line, `lineRow` one line inside a
+ * bordered row, `row` a rich four-element list-row block, `card` a stat/summary
+ * card block.
+ *
+ * `lineRow` is named for what it *contains*, not for how much padding it has.
+ * The distinction from `row` is the number of elements drawn — one bar versus a
+ * title, a badge strip, a meta line and a trailing block — because that is what
+ * makes the two wrong for each other's call sites: `row` under a one-line list
+ * is four times too tall and lurches on resolve. Padding stays the `size` axis
+ * on both.
+ */
+export type SkeletonVariant = 'text' | 'lineRow' | 'row' | 'card';
+/** Size scale — controls line thickness (`text`) or block padding (`lineRow`/`row`/`card`). */
 export type SkeletonSize = 'sm' | 'md' | 'lg';
 
 interface SkeletonProps {
@@ -27,8 +38,18 @@ interface SkeletonProps {
    * rather than each entering independently. Defaults to `1`.
    */
   count?: number;
-  /** Tailwind width class for the `text` variant's line (e.g. `w-1/2`). Ignored for `row`/`card`. Defaults to `w-full`. */
+  /** Tailwind width class for the `text` variant's line (e.g. `w-1/2`). Ignored for `lineRow`/`row`/`card`. Defaults to `w-full`. */
   width?: string;
+  /**
+   * Tailwind vertical-gap class between repeated blocks (e.g. `space-y-1.5`).
+   * Ignored when `count` is 1.
+   *
+   * Each variant already defaults to the rhythm its real list uses, so this is
+   * only for a list that spaces its rows differently — `GroupRulesSection`'s
+   * `space-y-1.5` against `lineRow`'s `space-y-2` default. Getting the gap wrong
+   * is the one way a correctly-shaped placeholder can still make the list jump.
+   */
+  gap?: string;
   /**
    * Announcement for the single `role="status"` node, applied both as the node's
    * `aria-label` and as its visually-hidden text content.
@@ -58,10 +79,40 @@ const lineHeightClasses: Record<SkeletonSize, string> = {
   lg: 'h-5',
 };
 
+/**
+ * `lineRow` pads horizontally and vertically by different amounts, because the
+ * real rows it stands in for do (`ListRow`'s `tight` / `compact` densities are
+ * `px-2 py-1.5` / `px-3 py-2`), so it cannot reuse the square `paddingClasses`.
+ *
+ * The vertical values are deliberately a step larger than the row's own: a
+ * placeholder bar is shorter than the rendered text line it replaces (16px
+ * against a `text-sm` line box's 20px), so the padding absorbs the difference
+ * and the placeholder's total height lands on the loaded row's — which is the
+ * whole point of preferring a skeleton to a spinner here.
+ */
+const lineRowPaddingClasses: Record<SkeletonSize, string> = {
+  sm: 'px-2 py-2.5',
+  md: 'px-3 py-2.5',
+  lg: 'px-4 py-4',
+};
+
 const containerClasses: Record<SkeletonVariant, string> = {
   text: '',
+  lineRow: 'rounded-md border border-neutral-200 bg-white',
   row: 'rounded-md border border-neutral-200 bg-white',
   card: 'rounded-md border border-neutral-200 bg-white',
+};
+
+/**
+ * The gap each variant's real list uses, so the placeholder rhythm is the loaded
+ * rhythm and nothing shifts on resolve. `lineRow` lists are denser than the card
+ * lists `row` stands in for, hence the tighter default.
+ */
+const gapClasses: Record<SkeletonVariant, string> = {
+  text: 'space-y-3',
+  lineRow: 'space-y-2',
+  row: 'space-y-3',
+  card: 'space-y-3',
 };
 
 /** Renders one placeholder block for the given variant; always `aria-hidden`. */
@@ -74,6 +125,22 @@ function SkeletonBone({
   size: SkeletonSize;
   width: string;
 }) {
+  if (variant === 'lineRow') {
+    // One bar in a bordered box — the shape of a row that holds a name and, at
+    // most, a trailing pill (`PolicyRulesList`'s rule rows, `RuleLinkRow`). The
+    // trailing pill is deliberately not drawn: it is optional on both real rows
+    // and sits on the same line, so omitting it costs no height and avoids
+    // promising a badge that may not arrive.
+    return (
+      <div
+        aria-hidden="true"
+        className={`${containerClasses.lineRow} ${lineRowPaddingClasses[size]}`}
+      >
+        <div className={`skeleton w-2/5 rounded ${lineHeightClasses[size]}`} />
+      </div>
+    );
+  }
+
   if (variant === 'row') {
     // Mirrors the real list-row anatomy — title, a badge strip, a meta line and a
     // trailing control — so the placeholder occupies roughly the height the loaded
@@ -126,6 +193,10 @@ function SkeletonBone({
  * ```tsx
  * // Three member-row placeholders while the list loads
  * <Skeleton variant="row" count={3} label="Loading members" />
+ *
+ * // Three one-line rule rows, in a list that spaces its rows tighter than the
+ * // variant's default
+ * <Skeleton variant="lineRow" count={3} gap="space-y-1.5" label="Loading rules…" />
  * ```
  */
 const Skeleton: React.FC<SkeletonProps> = ({
@@ -133,6 +204,7 @@ const Skeleton: React.FC<SkeletonProps> = ({
   size = 'md',
   count = 1,
   width = 'w-full',
+  gap,
   label = 'Loading',
   className = '',
 }) => {
@@ -146,9 +218,7 @@ const Skeleton: React.FC<SkeletonProps> = ({
       <div role="status" aria-label={label} className="sr-only">
         {label}
       </div>
-      {/* `space-y-3` matches the gap every real list uses, so the placeholder
-          rhythm is the loaded rhythm and nothing shifts on resolve. */}
-      <div className={n > 1 ? 'space-y-3 rise-in-stagger' : ''}>{bones}</div>
+      <div className={n > 1 ? `${gap ?? gapClasses[variant]} rise-in-stagger` : ''}>{bones}</div>
     </div>
   );
 };

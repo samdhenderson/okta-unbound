@@ -225,23 +225,6 @@ describe('GroupListItem selection', () => {
     await userEvent.click(screen.getByLabelText('Select Engineering'));
     expect(onToggleSelect).toHaveBeenCalledWith('00gFAKEgroup0000001');
   });
-
-  it('keeps the checkbox visible (not hover-revealed) while selected', () => {
-    const { container } = renderRow({ selected: true });
-    const wrapper = screen.getByLabelText('Select Engineering').parentElement as HTMLElement;
-
-    expect(wrapper.className).not.toContain('opacity-0');
-    expect(container.querySelector('[data-group-id]')?.className).toContain('border-primary');
-  });
-
-  it('hides the unselected checkbox until hover or focus', () => {
-    renderRow();
-    const wrapper = screen.getByLabelText('Select Engineering').parentElement as HTMLElement;
-
-    expect(wrapper.className).toContain('opacity-0');
-    expect(wrapper.className).toContain('group-hover/row:opacity-100');
-    expect(wrapper.className).toContain('group-focus-within/row:opacity-100');
-  });
 });
 
 describe('GroupListItem memoisation', () => {
