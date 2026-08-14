@@ -165,7 +165,7 @@ const CauseWorklist: React.FC<CauseWorklistProps> = ({
 }) => (
   <section
     aria-labelledby="cause-worklist-heading"
-    className="rounded-lg border border-neutral-200 bg-white p-3"
+    className="rounded-md border border-neutral-200 bg-white p-3"
   >
     <div className="flex items-center gap-2">
       <span className="rounded-md bg-neutral-100 p-1.5 text-neutral-700">

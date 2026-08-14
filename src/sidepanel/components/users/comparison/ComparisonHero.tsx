@@ -66,7 +66,7 @@ const ComparisonHero: React.FC<ComparisonHeroProps> = ({
   scopeNote,
   isLoading,
 }) => (
-  <div className="overflow-hidden rounded-lg border border-neutral-200 bg-gradient-to-br from-white via-white to-primary-light/40 p-3">
+  <div className="overflow-hidden rounded-md border border-neutral-200 bg-gradient-to-br from-white via-white to-primary-light/40 p-3">
     <div className="flex items-center gap-2">
       <UserSide user={contextUser} name={contextName} label="Context" />
       <span className="shrink-0 text-sm text-neutral-400" aria-hidden>
@@ -76,7 +76,7 @@ const ComparisonHero: React.FC<ComparisonHeroProps> = ({
     </div>
 
     <div className="mt-3 flex items-baseline justify-between gap-2">
-      <span className="min-w-0 truncate text-[10px] font-bold tracking-[0.12em] text-neutral-500 uppercase">
+      <span className="min-w-0 truncate text-xs font-semibold text-neutral-500 uppercase tracking-wide">
         {isLoading ? '— —' : scopeNote ? `Match · ${scopeNote}` : 'Match'}
       </span>
       <span
@@ -138,7 +138,7 @@ const UserSide: React.FC<{
         {initials}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="text-[9px] font-bold tracking-[0.12em] text-neutral-500 uppercase">
+        <div className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">
           {label}
         </div>
         <div
