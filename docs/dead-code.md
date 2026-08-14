@@ -85,6 +85,10 @@ Recorded when the tooling landed, so later runs have something to diff against.
 | Duplicate exports      | 14             | n/a                       |
 | Circular dependencies  | 0              | 0                         |
 
+**Update — the four unused files are gone** (1,450 LOC removed). Both configs now
+report zero unused files; the export and type counts are unchanged and are the
+remaining backlog.
+
 The four unreachable files (1,450 LOC including their tests):
 
 | File                                    | LOC | Note                                                                                                      |

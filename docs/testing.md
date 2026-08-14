@@ -95,7 +95,16 @@ Keep new code covered so the gate stays green; the `test-writer` agent owns this
 Malformed-Okta-payload rejection is covered by the zod schema tests (see
 [adr/0006](./adr/0006-zod-boundary-validation.md)).
 
-Note that coverage says nothing about whether code is _reachable_: a fully-tested
-module with no production callers scores 100% and pulls the average **up**. Deleting
-dead code therefore tends to raise the number, not lower it. `npm run knip:production`
-is what finds it — see [dead-code.md](./dead-code.md).
+Coverage says nothing about whether code is _reachable_. Two things follow, and they
+pull in opposite directions:
+
+- A **fully-tested dead module** scores 100% and inflates the average. Deleting it
+  makes the percentage go **down** even though the codebase got healthier — removing
+  `statusNormalizer.ts` cost ~0.1 points.
+- An **untested dead module** never appears at all. `coverage.all` is not enabled, so
+  v8 only instruments files a test actually loads; a file no test imports is absent
+  from the denominator entirely.
+
+So the gate cannot see dead code in either direction, and a small coverage drop from a
+deletion PR is expected rather than a regression. `npm run knip:production` is what
+finds it — see [dead-code.md](./dead-code.md).
