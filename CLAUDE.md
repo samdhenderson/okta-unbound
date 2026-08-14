@@ -44,6 +44,13 @@ Details: `docs/architecture.md`.
   Editing a test's setup/mocks/fixtures is fine when the underlying behavior
   legitimately changed; editing its assertions or deleting a case to silence a
   failure is not. (ADR-0012, `docs/testing.md`)
+- **Removing a test is different from silencing one.** Four cases are allowed, each
+  needing a PR note saying what stays covered: the subject was deleted; a story
+  already asserts the same render; the unit was replaced and the suite is retargeted
+  assertion-by-assertion; or the assertion pins something ADR-0023 bans. (ADR-0022)
+- **Don't test CSS classes, referential identity, or props brokered to mocked
+  children**, and don't ship both a test and a story for a pure-render component.
+  (ADR-0023)
 - **No raw hex.** Use Odyssey tokens; add a token before inlining a color.
   (`docs/design-system.md`)
 - **Never hand-roll a `<button>/<input>/<select>/<textarea>`** — use the shared
@@ -147,19 +154,25 @@ promotion is **done** ([adr/0014](docs/adr/0014-storybook-hardening.md)).
 - API client: `src/sidepanel/hooks/useOktaApi/` (module-per-concern pattern).
 - Shared utils: `src/shared/utils/` (`logger`, `oktaUrl`, `dateFormat`, …).
 
-## Plan-and-approval gate for bigger changes
+## Plan-and-approval gate for risky changes
 
-Before writing implementation code for a **bigger change**, produce a short plan and
-stop for explicit go-ahead. A change is "bigger" if it touches **more than ~2 files**,
-or if it is scoped from `docs/features-plan.md` or `docs/rockstar-parity-plan.md`. The
-plan states: the **affected files**, the **approach**, **which existing tests it
-should be checked against**, and **any new tests needed**. Wait for approval before
-implementing. (ADR-0013)
+Before writing implementation code, produce a short plan and stop for explicit
+go-ahead when the change **commits to an approach** (a new abstraction, data path,
+storage schema, cache-key grammar, or message action), is **architecturally
+significant** (it will need an ADR), is **cross-cutting** (one pattern across many
+call sites), is **scoped from** `docs/features-plan.md` / `docs/rockstar-parity-plan.md`,
+touches the **security surface**, or **changes an existing contract**. The plan states:
+the **affected files**, the **approach**, **which existing tests it should be checked
+against**, and **any new tests needed**. (ADR-0024, amending ADR-0013)
 
-Use **Claude Code's plan mode** as the mechanism where relevant — it presents the
-plan and blocks edits until you approve it. **Small, single-file fixes are exempt** —
-don't gate a typo or a one-liner. This gate is the plan _before_ the work; ADRs still
-record the decision _after_ (ADR-0001).
+**Exempt at any file count:** mechanical mass changes (dead-code deletion, renames,
+de-exporting, formatting, dependency bumps), migration slices already approved as part
+of a program plan, and single-file fixes with no design content.
+
+The test: _would a reviewer disagree with the approach after the code exists?_ If yes,
+plan first. If the only possible disagreement is "you missed one," don't. Use **Claude
+Code's plan mode** as the mechanism. This gate is the plan _before_ the work; ADRs
+still record the decision _after_ (ADR-0001).
 
 ## Working agreement
 

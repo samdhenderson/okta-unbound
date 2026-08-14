@@ -36,6 +36,16 @@ which is authoritative ([adr/0019](./adr/0019-coverage-threshold-recalibration.m
   legitimately changed — update only the test's setup/mocks/fixtures. Rewriting an
   assertion or deleting/skipping a case to silence a failure is banned; if the
   assertion itself looks wrong, flag it in the PR and stop.
+- **Removing a test is not the same as silencing one** ([adr/0022](./adr/0022-test-lifecycle.md)).
+  Four cases are allowed — the subject was deleted, a story already asserts the same
+  render, the unit was replaced and the suite is retargeted assertion-by-assertion,
+  or the assertion pins something [adr/0023](./adr/0023-test-value-policy.md) bans.
+  Each needs a PR note naming what stays covered.
+- **What we don't test** ([adr/0023](./adr/0023-test-value-policy.md)): CSS class or
+  inline-style assertions, referential identity (`Object.is` on props/callbacks),
+  props brokered to mocked children, static literal tables, and a second runner for a
+  pure-render component that already has a story. Fixtures used by 3+ files live in
+  `src/test/`.
 - **Always put a hard external timeout around any local `vitest run`** —
   `perl -e 'alarm 180; exec @ARGV' npx vitest run <file>` and `pkill -9 -f vitest`
   after. `--testTimeout` does **not** stop a render loop (an infinite loop starves
