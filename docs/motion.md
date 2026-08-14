@@ -195,12 +195,13 @@ and the layout still jumps — the thing the skeleton exists to prevent. `lg` (p
 for `AppListItem` / `RuleCard` / `PolicyCard` / `StatCard`, `md` (p-3) for
 `MemberRow`, `sm` (p-2) for the compact `GroupListItem`.
 
-**What is still a spinner, and why it is not yet a skeleton.** `PolicyRulesList`
-and `GroupRulesSection`'s `RuleRelationList` render **single-line** rows. The
-`row` variant draws a title, a two-badge strip, a meta line and a trailing block —
-four elements for a one-line row, which would jump on resolve worse than the
-spinner does. The honest fix is a compact single-line variant on `Skeleton`, not
-a misapplied `row`; until that exists these stay spinners.
+**Match the element count, not just the size.** `row` draws four elements — a
+title, a two-badge strip, a meta line and a trailing block — so it is the wrong
+shape for a list of **single-line** rows however small you set `size`. It is
+several times too tall, and the list lurches upward when the real rows arrive; a
+skeleton that mispredicts the layout has spent the spinner's honesty and bought a
+jump. Single-line lists (`PolicyRulesList`, `GroupRulesSection`'s
+`RuleRelationList`) want a single-line placeholder, never a shrunken `row`.
 
 Both are accessible the same way: one hidden `role="status"` node carries the
 announced label, and the visual placeholder(s)/spin glyph are `aria-hidden`.
