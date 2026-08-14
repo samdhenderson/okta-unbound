@@ -102,6 +102,27 @@ Two related, non-`animate-*` primitives in `@layer components`:
   together. The hook holds each row until it scrolls into view, then cascades the
   arriving batch.
 
+  **Attach the hook's returned ref callback — it does not take a `RefObject`.**
+
+  ```tsx
+  const staggerRef = useStaggerReveal();
+  return (
+    <div ref={staggerRef} className="space-y-3 rise-in-stagger">
+      {rows}
+    </div>
+  );
+  ```
+
+  This is load-bearing, not a style preference. Every list here renders its
+  stagger container conditionally — behind `rows.length > 0`, or inside a
+  `ScrollableList` whose loading and empty branches render no children at all —
+  so the container is absent from the commit on which the consumer mounts. An
+  effect keyed on a `RefObject` runs once, reads `null`, and returns; the ref's
+  identity never changes, so the container arriving three commits later
+  re-triggers nothing. Keying on the _element_ makes its arrival the trigger, and
+  its departure one too, so a list that swaps to a skeleton and back re-arms on
+  the replacement instead of silently degrading for the rest of the session.
+
   **Budget the total, never the row count.** The cascade's step is
   `min(24ms, 320ms / gaps)` — the preferred step when a batch can afford it,
   compressed when it can't, so the whole cascade lands within `--dur-travel`
@@ -113,6 +134,11 @@ Two related, non-`animate-*` primitives in `@layer components`:
   `data-stagger-reveal="on"` — the attribute the CSS hold keys on — only _after_
   its `IntersectionObserver` exists, so a missing API, a disabled hook, or reduced
   motion falls back to the plain on-mount stagger. No path leaves a row invisible.
+
+  The `:nth-child` ladder stays as the fallback, and is the _correct_ behaviour
+  for the two consumers that use `.rise-in-stagger` with no hook — `Skeleton`'s
+  repeats and `TabJumpPalette`'s results — both of which are comfortably inside
+  the eight-child cap.
 
 A tenth keyframe, `skeleton-sweep` (`.skeleton`, 1.4s linear infinite), drives the
 shimmer surface behind loading placeholders — categorically different from the

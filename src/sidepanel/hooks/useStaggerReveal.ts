@@ -13,7 +13,7 @@
  * cascade in the order they appear. It only engages once the observer is actually
  * constructed — see {@link useStaggerReveal} for why that ordering matters.
  */
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useReducedMotion } from './useReducedMotion';
 
 /** Preferred step between rows, mirroring the CSS stagger, when the batch affords it. */
@@ -39,8 +39,24 @@ const CASCADE_BUDGET_MS = 320;
 /**
  * Hold `.rise-in-stagger` children until they scroll into view, then cascade them.
  *
- * Attach the returned ref's element as the stagger container. Children are revealed
- * once and never re-animated, so scrolling back up doesn't replay the list.
+ * Attach the returned **callback ref** to the element carrying `.rise-in-stagger`.
+ * Children are revealed once and never re-animated, so scrolling back up doesn't
+ * replay the list.
+ *
+ * ## Why a callback ref and not a `RefObject`
+ *
+ * This hook used to take a `useRef` object and read `.current` inside its effect.
+ * That silently did nothing in every list in this app. A list's stagger container
+ * is rendered conditionally — `{rows.length > 0 && …}`, inside a `ScrollableList`
+ * that returns early while loading or empty — so on the commit where the consumer
+ * mounts, `.current` is still `null` and the effect bails. Nothing ever brings it
+ * back: a `useRef` object has stable identity, so the dependency array never
+ * changes and the effect never re-runs. Every list fell back to the eight-child
+ * CSS stagger, which is exactly the symptom this hook was written to cure.
+ *
+ * A callback ref fixes it structurally rather than by convention: the element
+ * lands in state, state is a real dependency, and the effect runs on the commit
+ * that mounts the container — whenever that happens to be.
  *
  * **Failure is safe by construction.** The container is only marked
  * `data-stagger-reveal="on"` — the attribute the CSS keys its hold on — *after* the
@@ -48,24 +64,26 @@ const CASCADE_BUDGET_MS = 320;
  * the user prefers reduced motion, the attribute is absent and rows fall back to
  * the plain on-mount CSS stagger. There is no path where a row is left invisible.
  *
- * @param containerRef - Ref to the element carrying `.rise-in-stagger`.
  * @param enabled - Set false to leave the CSS stagger in charge. Defaults to true.
+ * @returns A ref callback to place on the `.rise-in-stagger` element.
  *
  * @example
  * ```tsx
- * const listRef = useRef<HTMLDivElement>(null);
- * useStaggerReveal(listRef);
- * return <div ref={listRef} className="space-y-3 rise-in-stagger">{rows}</div>;
+ * const setStaggerRef = useStaggerReveal();
+ * return <div ref={setStaggerRef} className="space-y-3 rise-in-stagger">{rows}</div>;
  * ```
  */
-export function useStaggerReveal(
-  containerRef: React.RefObject<HTMLElement | null>,
-  enabled = true,
-): void {
+export function useStaggerReveal(enabled = true): (node: HTMLElement | null) => void {
   const reduced = useReducedMotion();
+  const [container, setContainer] = useState<HTMLElement | null>(null);
+
+  // Stable across renders so placing it on an element never detaches and
+  // re-attaches the ref, which would churn `container` on every render.
+  const setStaggerRef = useCallback((node: HTMLElement | null) => {
+    setContainer(node);
+  }, []);
 
   useEffect(() => {
-    const container = containerRef.current;
     if (!container || !enabled || reduced) return;
     if (typeof IntersectionObserver !== 'function') return;
 
@@ -118,5 +136,7 @@ export function useStaggerReveal(
       mutations?.disconnect();
       container.removeAttribute('data-stagger-reveal');
     };
-  }, [containerRef, enabled, reduced]);
+  }, [container, enabled, reduced]);
+
+  return setStaggerRef;
 }

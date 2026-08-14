@@ -13,7 +13,7 @@
  * text in a `role="status"` node, so the message is still announced and still
  * findable by `getByText`.
  */
-import React, { memo, useRef } from 'react';
+import React, { memo } from 'react';
 import { useStaggerReveal } from '../../hooks/useStaggerReveal';
 import { EmptyState, ScrollableList, Skeleton } from '../shared';
 import AppListItem from './AppListItem';
@@ -64,8 +64,7 @@ const AppsListPanel: React.FC<AppsListPanelProps> = memo(function AppsListPanel(
   oktaOrigin,
   fetchAssignmentCounts,
 }) {
-  const staggerRef = useRef<HTMLDivElement>(null);
-  useStaggerReveal(staggerRef);
+  const setStaggerRef = useStaggerReveal();
 
   return (
     <ScrollableList
@@ -99,7 +98,7 @@ const AppsListPanel: React.FC<AppsListPanelProps> = memo(function AppsListPanel(
       }
     >
       {apps.length > 0 && (
-        <div ref={staggerRef} className="space-y-3 rise-in-stagger">
+        <div ref={setStaggerRef} className="space-y-3 rise-in-stagger">
           {apps.map((app) => (
             <AppListItem
               key={app.id}

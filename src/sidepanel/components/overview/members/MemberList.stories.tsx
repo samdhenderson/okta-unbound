@@ -34,9 +34,10 @@ const meta = {
           '(up to ~64k members). Each row optionally renders MFA factor tags once a scan ' +
           'completes and deep-links to the Admin Console when an org origin is known; an ' +
           'empty list shows the "no members match" message.\n\n' +
-          'Rows enter through the shared `.rise-in-stagger` wrapper — the first eight step ' +
-          'in 24ms apart and the rest follow together, with the cap living in CSS so ' +
-          '`MemberRow` needs no index prop. While `loading`, the rows are replaced by ' +
+          'Rows enter through the shared `.rise-in-stagger` wrapper driven by ' +
+          '`useStaggerReveal` — each row holds until it scrolls into view, then cascades ' +
+          'with its batch, wired through the wrapper so `MemberRow` needs no index prop. ' +
+          'While `loading`, the rows are replaced by ' +
           '`Skeleton variant="row"` placeholders rather than a spinner: the shape of what ' +
           'is coming is already known.\n\n' +
           '**Related internals:** [Types](?path=/docs/internals-types--docs)',

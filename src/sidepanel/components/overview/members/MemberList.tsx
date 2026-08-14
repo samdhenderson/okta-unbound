@@ -6,11 +6,13 @@
  * an IntersectionObserver sentinel, capping DOM size for very large groups.
  *
  * Rows enter through the shared `.rise-in-stagger` wrapper, driven by
- * `useStaggerReveal`: rows hold until they scroll into view, then cascade in
- * 24ms apart and the rest follow together. The cap is pure CSS (`:nth-child`), so
- * {@link MemberRow} needs no index prop and its memo comparator is untouched. A
- * reload swaps the rows for `Skeleton variant="row"` placeholders — the shape is
- * known, so there is nothing for a spinner to explain.
+ * `useStaggerReveal`: rows hold until they scroll into view, then cascade with the
+ * batch they arrived in, stepping `min(24ms, 320ms / gaps)` so the whole cascade
+ * fits one `--dur-travel` however tall the viewport. The entrance is wired through
+ * the wrapper rather than a per-row index prop, so {@link MemberRow} needs no index
+ * and its memo comparator is untouched. A reload swaps the rows for
+ * `Skeleton variant="row"` placeholders — the shape is known, so there is nothing
+ * for a spinner to explain — and the hook re-arms on the container that comes back.
  */
 import React, { useEffect, useRef } from 'react';
 import { useStaggerReveal } from '../../../hooks/useStaggerReveal';
@@ -57,8 +59,7 @@ const MemberList: React.FC<MemberListProps> = ({
   onLoadMore,
   oktaOrigin,
 }) => {
-  const staggerRef = useRef<HTMLDivElement>(null);
-  useStaggerReveal(staggerRef);
+  const setStaggerRef = useStaggerReveal();
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const hasMore = visibleCount < members.length;
@@ -98,7 +99,7 @@ const MemberList: React.FC<MemberListProps> = ({
         {/* One stagger wrapper around the rows: `.rise-in-stagger > *` drives the
             entrance, so newly paged-in rows animate and already-mounted ones stay
             put. The sentinel stays outside it — it must never be delayed. */}
-        <div ref={staggerRef} className="space-y-3 rise-in-stagger">
+        <div ref={setStaggerRef} className="space-y-3 rise-in-stagger">
           {visible.map((user) => (
             <MemberRow
               key={user.id}
