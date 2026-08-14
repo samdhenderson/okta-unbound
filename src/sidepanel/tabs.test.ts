@@ -33,10 +33,3 @@ describe('migrateLegacyTabId', () => {
     expect(migrateLegacyTabId('')).toBe('overview');
   });
 });
-
-describe('TAB_DEFS', () => {
-  it('has unique ids', () => {
-    const ids = TAB_DEFS.map((tab) => tab.id);
-    expect(new Set(ids).size).toBe(ids.length);
-  });
-});

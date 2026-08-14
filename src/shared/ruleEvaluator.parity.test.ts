@@ -2,28 +2,45 @@
  * Outcome-parity table for `ruleEvaluator`.
  *
  * This file is a *characterization* suite: it pins the observable outcome of
- * `tryEvaluateRuleExpression` and `canEvaluateClientSide` for a broad matrix of
+ * `tryEvaluateRuleExpression` and of the grammar gate for a broad matrix of
  * expressions, without asserting anything about how those outcomes are reached.
  *
- * Why it exists: a planned refactor wants to parse each expression ONCE and share
- * the resulting AST between the `canEvaluateClientSide` gate and the evaluation
- * walk (plus a bounded parse memo). Today those two entry points parse
- * independently, so the refactor has to prove it changes no outcome. Every case
- * below is the current, unmodified behaviour — if one of these ever goes red, the
- * refactor changed semantics.
+ * Why it exists: the shared-AST refactor — parse each expression ONCE and share
+ * the tree between the grammar gate and the evaluation walk, behind a bounded
+ * parse memo — had to prove it changed no outcome. It has since landed, and the
+ * table now guards the result: `tryEvaluateRuleExpression` is the API membership
+ * attribution depends on, so a red row here is a semantic regression in the one
+ * place a wrong answer becomes a wrong access decision.
+ *
+ * Table 2 reached the gate through `canEvaluateClientSide` until ADR-0025 retired
+ * that wrapper; it now goes through `parseRuleExpression` + `checkRuleNodeSupport`,
+ * which is the same walk over the same memoised parse.
  *
  * It deliberately overlaps `ruleEvaluator.test.ts` in places: that file documents
  * intent case-by-case, this one is an exhaustive table.
  */
 import { describe, it, expect } from 'vitest';
 import {
-  canEvaluateClientSide,
+  checkRuleNodeSupport,
+  parseRuleExpression,
   tryEvaluateRuleExpression,
   GROUP_MEMBERSHIP_FUNCTIONS,
   SUPPORTED_FUNCTIONS,
   type RuleMatchOutcome,
 } from './ruleEvaluator';
 import type { OktaUser } from './types';
+
+/**
+ * The whole-expression grammar gate, rebuilt from the two live entry points that
+ * replaced the retired `canEvaluateClientSide` wrapper (ADR-0025).
+ *
+ * `checkRuleNodeSupport(ast, {})` runs the identical allow-list walk on the
+ * identical memoised parse, so every row of table 2 keeps its meaning.
+ */
+const gateAccepts = (expression: string): boolean => {
+  const parsed = parseRuleExpression(expression);
+  return parsed.ok && checkRuleNodeSupport(parsed.ast).supported;
+};
 
 // ---------------------------------------------------------------------------
 // Fixture — obviously fake placeholders only.
@@ -552,7 +569,7 @@ describe('ruleEvaluator parity — tryEvaluateRuleExpression outcome table', () 
   });
 
   it('never answers no-match for an expression the gate rejects', () => {
-    const gateRejected = OUTCOME_CASES.filter((c) => !canEvaluateClientSide(c.expression));
+    const gateRejected = OUTCOME_CASES.filter((c) => !gateAccepts(c.expression));
     expect(gateRejected.length).toBeGreaterThan(0);
     for (const { name, expression } of gateRejected) {
       expect(tryEvaluateRuleExpression(expression, user), name).toBe('unevaluable');
@@ -562,7 +579,7 @@ describe('ruleEvaluator parity — tryEvaluateRuleExpression outcome table', () 
   it('only ever answers match/no-match for expressions the gate accepts', () => {
     for (const { name, expression, expected } of OUTCOME_CASES) {
       if (expected === 'unevaluable') continue;
-      expect(canEvaluateClientSide(expression), name).toBe(true);
+      expect(gateAccepts(expression), name).toBe(true);
     }
   });
 
@@ -591,7 +608,7 @@ describe('ruleEvaluator parity — tryEvaluateRuleExpression outcome table', () 
 });
 
 // ---------------------------------------------------------------------------
-// Table 2 — canEvaluateClientSide(expression)
+// Table 2 — gateAccepts(expression)
 // ---------------------------------------------------------------------------
 
 const GATE_CASES: readonly GateCase[] = [
@@ -833,15 +850,15 @@ const GATE_CASES: readonly GateCase[] = [
   },
 ];
 
-describe('ruleEvaluator parity — canEvaluateClientSide gate table', () => {
+describe('ruleEvaluator parity — grammar gate table', () => {
   it.each(GATE_CASES)('$name', ({ expression, expected }) => {
-    expect(canEvaluateClientSide(expression)).toBe(expected);
+    expect(gateAccepts(expression)).toBe(expected);
   });
 
   it('is a pure predicate: repeated calls agree (parse memoisation must not drift)', () => {
     for (const { name, expression, expected } of GATE_CASES) {
-      expect(canEvaluateClientSide(expression), name).toBe(expected);
-      expect(canEvaluateClientSide(expression), name).toBe(expected);
+      expect(gateAccepts(expression), name).toBe(expected);
+      expect(gateAccepts(expression), name).toBe(expected);
     }
   });
 

@@ -16,21 +16,15 @@ import {
   OKTA_POLICY_TYPES,
 } from './policyOperations';
 import type { CoreApi } from './core';
+import { makeFakeCore } from '@/test/factories/coreApi';
 
 /** Build a fake CoreApi whose transport is fully mocked. */
-function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
-  return {
-    targetTabId: 1,
-    sendMessage: vi.fn(),
+const makeCore = (overrides: Partial<CoreApi> = {}): CoreApi =>
+  makeFakeCore({
     makeApiRequest: vi.fn().mockResolvedValue({ success: true, data: [] }),
     getCurrentUser: vi.fn(),
-    checkCancelled: vi.fn(),
-    resetCancellation: vi.fn(),
-    runOperation: vi.fn(),
-    callbacks: {},
     ...overrides,
-  } as unknown as CoreApi;
-}
+  });
 
 const policy = (id: string, extra: Record<string, unknown> = {}) => ({
   id,

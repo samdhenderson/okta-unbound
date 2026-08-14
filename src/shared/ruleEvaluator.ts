@@ -38,11 +38,13 @@
  * — can reuse the one memoised parse and the one allow-list instead of adding a
  * second parser or a second grammar.
  *
+ * There is deliberately **no boolean entry point**. A two-valued API has to
+ * collapse "did not match" into "could not tell", and membership attribution
+ * reads the resulting `false` as a manual add — the exact defect the three-valued
+ * core exists to prevent (ADR-0025).
+ *
  * @see {@link tryEvaluateRuleExpression} — the three-outcome API new code should use.
  * @see {@link tryEvaluateRuleExpressionDetailed} — same outcomes, plus the reason code.
- * @see {@link evaluateRuleExpression} — legacy boolean API (cannot distinguish
- *   "false" from "could not tell").
- * @see {@link canEvaluateClientSide}
  */
 
 import jsep from 'jsep';
@@ -712,13 +714,6 @@ function evaluateAst(ast: jsep.Expression, options: EvaluationWalkOptions): Eval
   }
 }
 
-/** Parse + walk. Returns {@link UNRESOLVED} for anything outside the allow-list. */
-function evaluate(expression: string, user: OktaUser): EvalResult {
-  const ast = parseExpression(expression);
-  if (!ast) return UNRESOLVED;
-  return evaluateAst(ast, { user });
-}
-
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -776,27 +771,6 @@ export function tryEvaluateRuleExpression(
   const result = evaluateAst(ast, { user, groups });
   if (typeof result !== 'boolean') return 'unevaluable';
   return result ? 'match' : 'no-match';
-}
-
-/**
- * Legacy boolean evaluator: `true` when the user matches, `false` otherwise.
- *
- * Retained for existing callers and behaviour-pinning tests. It **cannot
- * distinguish "did not match" from "could not be evaluated"** — both are
- * `false` — so new code should use {@link tryEvaluateRuleExpression} instead.
- *
- * Supported subset: `user.<attribute>` reads, string/number/boolean/null
- * literals, `==`/`===`/`eq`, `!=`/`!==`/`ne`, `<`/`>`/`<=`/`>=` (numbers only),
- * `&&`/`and`/`AND`, `||`/`or`/`OR`, `!`, parentheses, and the calls in
- * {@link SUPPORTED_FUNCTIONS}.
- *
- * @param expression - The rule's condition expression (untrusted Okta data).
- * @param user - The user to evaluate the condition against.
- * @returns `true` only when the expression was understood **and** matched.
- */
-export function evaluateRuleExpression(expression: string, user: OktaUser): boolean {
-  const result = evaluate(expression, user);
-  return isUnresolved(result) ? false : Boolean(result);
 }
 
 /** Reject a node, attributing a reason code (never node text) to the observer. */
@@ -878,29 +852,6 @@ function canEvaluateAst(ast: jsep.Expression, options: GrammarWalkOptions = {}):
   }
 }
 
-/**
- * Pre-validate whether an expression can be resolved client-side at all.
- *
- * Call this before {@link evaluateRuleExpression} to avoid presenting a
- * "no match" that is really a "don't know" — the UI should say "Cannot
- * evaluate" instead. ({@link tryEvaluateRuleExpression} applies this gate
- * itself.)
- *
- * Implemented as an **AST walk**, not a substring scan: an expression that
- * parses but uses an unsupported operator or function is rejected here rather
- * than silently degrading to `false` at evaluation time. Group-membership calls
- * and `app.*` context — the historical rejections — are still rejected, because
- * neither is on the allow-list.
- *
- * @param expression - The rule's condition expression (untrusted Okta data).
- * @returns `true` only if every node of the expression is on the allow-list.
- */
-export function canEvaluateClientSide(expression: string): boolean {
-  const ast = parseExpression(expression);
-  if (!ast) return false;
-  return canEvaluateAst(ast);
-}
-
 // ---------------------------------------------------------------------------
 // AST seam — for callers that need to explain an expression rather than just
 // evaluate it. Everything below reuses the ONE memoised parse and the ONE
@@ -955,10 +906,11 @@ export type RuleNodeSupport =
  * Grammar-gate one already-parsed node, surfacing the reason code the walk would
  * otherwise only have written to a debug line.
  *
- * This is the same gate as {@link canEvaluateClientSide} — the identical
- * allow-list walk — applied to a sub-tree instead of a whole expression, so a
- * clause-level explainer cannot drift from what the evaluator will actually
- * answer.
+ * This is the same allow-list walk {@link tryEvaluateRuleExpression} applies as
+ * its grammar gate, exposed so it can be run against a sub-tree instead of a
+ * whole expression — a clause-level explainer therefore cannot drift from what
+ * the evaluator will actually answer. Pair it with {@link parseRuleExpression} to
+ * gate an expression from text.
  *
  * @param node - A node from {@link parseRuleExpression}. Treated as read-only.
  * @param options - Set `hasGroupContext` when a {@link RuleGroupContext} will be

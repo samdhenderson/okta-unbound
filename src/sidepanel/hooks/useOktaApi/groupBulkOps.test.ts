@@ -12,21 +12,23 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createGroupBulkOperations } from './groupBulkOps';
 import type { CoreApi } from './core';
+import { makeFakeCore } from '@/test/factories/coreApi';
 import type { OktaUser } from './types';
 import { OperationCancelledError } from '../../../shared/scheduler/cancellation';
 import type { BulkOperation } from '../../../shared/types';
 
 /** Build a fake CoreApi whose runOperation actually drives the per-item task. */
-function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
-  return {
-    targetTabId: 1,
-    sendMessage: vi.fn(),
+/**
+ * Keeps its own executor rather than `sequentialRunOperation`: this is the only
+ * suite that exercises `stopOnError`, so it needs the halt-and-skip semantics
+ * the shared helper deliberately leaves out.
+ */
+const makeCore = (overrides: Partial<CoreApi> = {}): CoreApi =>
+  makeFakeCore({
     makeApiRequest: vi
       .fn()
       .mockResolvedValue({ success: true, data: { profile: { name: 'Group' } } }),
     getCurrentUser: vi.fn().mockResolvedValue({ email: 'admin', id: 'admin' }),
-    checkCancelled: vi.fn(),
-    resetCancellation: vi.fn(),
     runOperation: vi.fn(
       async (
         _name: string,
@@ -70,10 +72,8 @@ function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
         };
       },
     ),
-    callbacks: {},
     ...overrides,
-  } as unknown as CoreApi;
-}
+  });
 
 /** A `remove_user` operation across the given groups. */
 function removeUserOp(targetGroups: string[]): BulkOperation {

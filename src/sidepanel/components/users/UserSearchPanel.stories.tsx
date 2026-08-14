@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import UserSearchPanel from './UserSearchPanel';
 import AlertMessage from '../shared/AlertMessage';
-import { mockUsers } from '../../../test/mocks/handlers';
+import { mockUsers } from '../../../test/mocks/fixtures';
 
 /** The Users tab's search surface: search box, detected-user banner, results, empty state. */
 const meta = {

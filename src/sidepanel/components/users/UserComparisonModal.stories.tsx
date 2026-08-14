@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import UserComparisonModal from './UserComparisonModal';
-import { mockUsers, mockGroup } from '../../../test/mocks/handlers';
+import { mockUsers, mockGroup } from '../../../test/mocks/fixtures';
 import type { GroupMembership } from '../../../shared/types';
 
 const contextGroups: GroupMembership[] = [

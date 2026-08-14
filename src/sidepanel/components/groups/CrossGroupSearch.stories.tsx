@@ -5,7 +5,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import CrossGroupSearch from './CrossGroupSearch';
-import { mockUsers } from '../../../test/mocks/handlers';
+import { mockUsers } from '../../../test/mocks/fixtures';
 import type { OktaUser } from '../../../shared/types';
 
 const groupMembersCache = new Map<string, OktaUser[]>([

@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import type { MemberMfaResult } from '../../../../shared/types';
 import MemberExplorer from './MemberExplorer';
-import { mockUsers } from '../../../../test/mocks/handlers';
+import { mockUsers } from '../../../../test/mocks/fixtures';
 
 const mfaResults = new Map<string, MemberMfaResult>(
   mockUsers.map((user, i) => [

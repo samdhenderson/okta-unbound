@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import ComparisonHero from './ComparisonHero';
-import { mockUsers } from '../../../../test/mocks/handlers';
+import { mockUsers } from '../../../../test/mocks/fixtures';
 
 const contextUser = mockUsers[0];
 const comparedUser = mockUsers[1];

@@ -3,7 +3,7 @@ import { fn } from 'storybook/test';
 import AttributeFacet from './AttributeFacet';
 import { discoverAttributeBreakdowns, NONE_VALUE, OTHER_VALUE } from './memberAnalytics';
 import type { AttributeSummary } from './memberAnalytics';
-import { mockUsers } from '../../../../test/mocks/handlers';
+import { mockUsers } from '../../../../test/mocks/fixtures';
 
 // Real distribution discovered from the fixture members (all share one department/title).
 const discovered = discoverAttributeBreakdowns(mockUsers);

@@ -14,6 +14,7 @@ the same routing `CLAUDE.md` enforces, to keep context lean.
 | [state-management.md](./state-management.md)         | Deciding hook vs context vs local state, or decomposing a component               |
 | [development.md](./development.md)                   | Dealing with logging, secrets, `any`, build, lint, CI, or versioning              |
 | [testing.md](./testing.md)                           | Writing or fixing tests                                                           |
+| [dead-code.md](./dead-code.md)                       | Hunting unused files/exports/deps, or interpreting a knip report                  |
 | [features-plan.md](./features-plan.md)               | Scoping or picking up new feature work — the ranked backlog + UX sketches         |
 | [rockstar-parity-plan.md](./rockstar-parity-plan.md) | Building toward full rockstar replacement — triage, export engine, phased roadmap |
 | [adr/](./adr/README.md)                              | Looking up _why_ a convention exists                                              |

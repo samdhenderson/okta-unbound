@@ -10,6 +10,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createGroupCleanupOperations } from './groupCleanup';
 import type { CoreApi } from './core';
+import { makeFakeCore } from '@/test/factories/coreApi';
 
 vi.mock('../../../shared/undoManager', () => ({
   logBulkRemoveAction: vi.fn().mockResolvedValue(undefined),
@@ -18,15 +19,15 @@ vi.mock('../../../shared/storage/auditStore', () => ({
   auditStore: { logOperation: vi.fn().mockResolvedValue(undefined) },
 }));
 
-/** Build a fake CoreApi whose runOperation actually drives the per-item task. */
-function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
-  return {
-    targetTabId: 1,
-    sendMessage: vi.fn(),
-    makeApiRequest: vi.fn().mockResolvedValue({ success: true, data: [], headers: {} }),
-    getCurrentUser: vi.fn().mockResolvedValue({ email: 'admin@example.com', id: 'admin' }),
-    checkCancelled: vi.fn(),
-    resetCancellation: vi.fn(),
+/**
+ * Build a fake CoreApi whose runOperation actually drives the per-item task.
+ *
+ * Keeps its own executor rather than `sequentialRunOperation`: this suite's
+ * assertions read `status`/`item` without `index` or `value`, so the shared
+ * richer shape is not interchangeable here.
+ */
+const makeCore = (overrides: Partial<CoreApi> = {}): CoreApi =>
+  makeFakeCore({
     runOperation: vi.fn(
       async (_name, items: unknown[], task: (item: unknown, index: number) => unknown) => {
         const results: Array<{ status: string; item: unknown; error?: unknown }> = [];
@@ -45,10 +46,8 @@ function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
         return { results, completed, failed, cancelled: false, stoppedByError: false };
       },
     ),
-    callbacks: {},
     ...overrides,
-  } as unknown as CoreApi;
-}
+  });
 
 /** A schema-valid deprovisioned member row. */
 const deprovisionedMember = {

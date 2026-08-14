@@ -13,6 +13,7 @@ import { createGroupDiscoveryOperations } from './groupDiscovery';
 import type { CoreApi } from './core';
 import { RulesCache } from '../../../shared/rulesCache';
 import { formatRuleForDisplay } from '../../../shared/ruleUtils';
+import { makeFakeCore } from '@/test/factories/coreApi';
 
 // Control the rules cache directly so we can exercise both the cache-hit and
 // cache-miss branches of getGroupRulesForGroup deterministically.
@@ -33,19 +34,11 @@ const isFreshMock = vi.mocked(RulesCache.isFresh);
 const setMock = vi.mocked(RulesCache.set);
 
 /** Build a fake CoreApi whose transport is fully mocked. */
-function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
-  return {
-    targetTabId: 1,
-    sendMessage: vi.fn(),
+const makeCore = (overrides: Partial<CoreApi> = {}): CoreApi =>
+  makeFakeCore({
     makeApiRequest: vi.fn().mockResolvedValue({ success: true, data: {} }),
-    getCurrentUser: vi.fn().mockResolvedValue({ email: 'admin@example.com', id: 'admin' }),
-    checkCancelled: vi.fn(),
-    resetCancellation: vi.fn(),
-    runOperation: vi.fn(),
-    callbacks: {},
     ...overrides,
-  } as CoreApi;
-}
+  });
 
 /** A `rel="next"` Link header pointing at a fake, origin-relative next page. */
 const NEXT_LINK =

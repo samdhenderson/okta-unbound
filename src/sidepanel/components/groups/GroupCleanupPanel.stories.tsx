@@ -5,7 +5,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import GroupCleanupPanel from './GroupCleanupPanel';
-import { mockGroup } from '../../../test/mocks/handlers';
+import { mockGroup } from '../../../test/mocks/fixtures';
 import type { GroupSummary } from '../../../shared/types';
 
 /** Build a {@link GroupSummary} fixture, reusing the mock group's type. */
