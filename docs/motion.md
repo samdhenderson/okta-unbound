@@ -195,12 +195,10 @@ two-badge strip, a meta line and a trailing block — for the rich cards
 (`AppListItem`, `PolicyCard`, `MemberRow`). **`lineRow` draws one bar** in the
 same box, for a row that is a name and at most a trailing pill.
 
-Putting `row` under a one-line list is worse than the spinner it replaced: it is
-roughly four times too tall, so the list collapses upward when the real rows
-arrive — a skeleton that mispredicts the layout has spent the spinner's honesty
-and bought a jump. `PolicyRulesList` and `GroupRulesSection`'s rule lists are the
-reference `lineRow` consumers; the variant was added for them, and they were
-spinners until it existed precisely because `row` was the wrong shape.
+`PolicyRulesList` and `GroupRulesSection`'s rule lists are the reference `lineRow`
+consumers — the variant was added for them, because `row` under a one-line list
+is roughly four times too tall and would have collapsed the list upward on
+resolve.
 
 Two things to get right at the call site:
 
