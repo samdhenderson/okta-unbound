@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import GroupMembershipsList from './GroupMembershipsList';
 import Button from '../shared/Button';
-import { mockGroup } from '../../../test/mocks/handlers';
+import { mockGroup } from '../../../test/mocks/fixtures';
 import type { GroupMembership, OktaUser } from '../../../shared/types';
 
 /** An obviously fake user — no real org data ever ships in a story. */

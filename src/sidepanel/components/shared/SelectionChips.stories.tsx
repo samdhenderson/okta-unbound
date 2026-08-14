@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import SelectionChips from './SelectionChips';
 import type { OktaUser } from '../../../shared/types';
-import { mockUsers } from '../../../test/mocks/handlers';
+import { mockUsers } from '../../../test/mocks/fixtures';
 
 // SelectionChips is generic over T; with `satisfies Meta<typeof SelectionChips>`
 // TypeScript widens T to `unknown`, so the accessors narrow to OktaUser.

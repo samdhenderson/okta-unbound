@@ -39,9 +39,13 @@ Mock at the layer under test instead:
   from `src/test/setup.ts`; set its resolved value per case.
 - **Stories** — mock at the facade via `.storybook/mocks/useOktaApi.mock.ts`.
 
-`src/test/mocks/handlers.ts` exports the `mockUsers` / `mockGroup` **fixtures** used
-by stories. Its `handlers` array is vestigial — no `setupServer` exists — and is
-slated for removal along with the `msw` dependency.
+`src/test/mocks/fixtures.ts` exports the `mockUsers` / `mockGroup` **fixtures** used
+by 32 stories and tests. It was `handlers.ts` until its vestigial MSW handler array —
+which no `setupServer` ever consumed — was removed along with the `msw` dependency.
+
+Shared fakes live in `src/test/factories/`. `makeFakeCore` there is the `CoreApi`
+fake every `useOktaApi/*` suite builds on; pass per-suite defaults through its
+`overrides` rather than changing the factory's.
 
 ## Conventions
 

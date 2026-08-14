@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { MemberMfaResult } from '../../../../shared/types';
 import MemberRow from './MemberRow';
-import { mockUsers } from '../../../../test/mocks/handlers';
+import { mockUsers } from '../../../../test/mocks/fixtures';
 
 const activeUser = mockUsers.find((u) => u.status === 'ACTIVE')!;
 const suspendedUser = mockUsers.find((u) => u.status === 'SUSPENDED')!;

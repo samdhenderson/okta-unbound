@@ -110,9 +110,9 @@ The four unreachable files (1,450 LOC including their tests):
 Also worth noting from the baseline run:
 
 - `esbuild` is an unused devDependency — vite provides it transitively.
-- `msw` does not appear as unused only because `src/test/mocks/handlers.ts` imports
-  it. That file's `handlers` export has no consumer and no test uses MSW, so `msw`
-  becomes removable once `handlers` goes.
+- `msw` did not appear as unused only because `src/test/mocks/handlers.ts` imported
+  it. **Resolved:** the `handlers` export had no consumer and no test used MSW, so
+  both it and the `msw` dependency are gone; the file is now `mocks/fixtures.ts`.
 - Three `ruleEvaluator.ts` exports — `evaluateRuleExpression`,
   `canEvaluateClientSide`, `tryEvaluateRuleExpressionDetailed` — were reachable only
   from tests. **Resolved by [adr/0025](./adr/0025-retire-boolean-rule-evaluation-apis.md):**

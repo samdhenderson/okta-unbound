@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import ComparisonOverviewTab from './ComparisonOverviewTab';
 import type { AccessCause } from './accessCause';
 import type { GroupBuckets } from './comparisonAnalytics';
-import { mockGroup } from '../../../../test/mocks/handlers';
+import { mockGroup } from '../../../../test/mocks/fixtures';
 import type { GroupMembership } from '../../../../shared/types';
 
 /**

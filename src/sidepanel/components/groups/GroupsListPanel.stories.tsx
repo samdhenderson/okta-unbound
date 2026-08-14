@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import GroupsListPanel from './GroupsListPanel';
-import { mockGroup } from '../../../test/mocks/handlers';
+import { mockGroup } from '../../../test/mocks/fixtures';
 import type { GroupSummary } from '../../../shared/types';
 
 const sampleGroups: GroupSummary[] = [

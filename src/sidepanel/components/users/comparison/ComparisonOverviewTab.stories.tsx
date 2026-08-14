@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import ComparisonOverviewTab from './ComparisonOverviewTab';
-import { mockGroup } from '../../../../test/mocks/handlers';
+import { mockGroup } from '../../../../test/mocks/fixtures';
 import type { GroupMembership } from '../../../../shared/types';
 import type { AppEntry, GroupBuckets } from './comparisonAnalytics';
 import type { AccessCause } from './accessCause';

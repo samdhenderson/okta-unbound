@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import CopyMembersModal from './CopyMembersModal';
-import { mockUsers } from '../../../../test/mocks/handlers';
+import { mockUsers } from '../../../../test/mocks/fixtures';
 
 /** Modal that copies the current member list as name / email / username, one per line. */
 const meta = {

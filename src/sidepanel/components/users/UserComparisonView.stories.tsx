@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import UserComparisonView from './UserComparisonView';
-import { mockUsers, mockGroup } from '../../../test/mocks/handlers';
+import { mockUsers, mockGroup } from '../../../test/mocks/fixtures';
 import { classifyAccessCauses } from './comparison/accessCause';
 import type { UserComparisonState } from '../../hooks/useUserComparison';
 import type { FormattedRule, GroupMembership } from '../../../shared/types';

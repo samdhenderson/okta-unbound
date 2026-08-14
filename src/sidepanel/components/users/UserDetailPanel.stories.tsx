@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import UserDetailPanel from './UserDetailPanel';
-import { mockGroup, mockUsers } from '../../../test/mocks/handlers';
+import { mockGroup, mockUsers } from '../../../test/mocks/fixtures';
 import type { GroupMembership, OktaUser } from '../../../shared/types';
 
 const activeUser: OktaUser = {

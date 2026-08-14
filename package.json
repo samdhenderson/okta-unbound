@@ -73,7 +73,6 @@
     "knip": "^6.32.2",
     "lint-staged": "^16.2.6",
     "madge": "^8.0.0",
-    "msw": "^2.12.2",
     "playwright": "^1.61.1",
     "prettier": "^3.4.2",
     "storybook": "^10.5.2",

@@ -12,21 +12,15 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createAppOperations } from './appOperations';
 import type { CoreApi } from './core';
+import { makeFakeCore } from '@/test/factories/coreApi';
 
 /** Build a fake CoreApi whose transport is fully mocked. */
-function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
-  return {
-    targetTabId: 1,
-    sendMessage: vi.fn(),
+const makeCore = (overrides: Partial<CoreApi> = {}): CoreApi =>
+  makeFakeCore({
     makeApiRequest: vi.fn().mockResolvedValue({ success: true, data: [] }),
     getCurrentUser: vi.fn(),
-    checkCancelled: vi.fn(),
-    resetCancellation: vi.fn(),
-    runOperation: vi.fn(),
-    callbacks: {},
     ...overrides,
-  } as unknown as CoreApi;
-}
+  });
 
 describe('searchApps', () => {
   it('returns [] for queries shorter than 2 chars without calling the API', async () => {

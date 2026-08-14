@@ -11,28 +11,22 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createUserOperations } from './userOperations';
 import type { CoreApi } from './core';
+import { makeFakeCore } from '@/test/factories/coreApi';
 
 /** Build a fake CoreApi whose transport is fully mocked. */
-function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
-  return {
-    targetTabId: 1,
-    sendMessage: vi.fn(),
+const makeCore = (overrides: Partial<CoreApi> = {}): CoreApi =>
+  makeFakeCore({
     makeApiRequest: vi.fn().mockResolvedValue({ success: true, data: {} }),
-    getCurrentUser: vi.fn().mockResolvedValue({ email: 'admin@example.com', id: 'admin' }),
-    checkCancelled: vi.fn(),
-    resetCancellation: vi.fn(),
-    // Default runOperation actually invokes the task for each item so operations
-    // built on it (scanGroupMfa) exercise their inner logic.
+    // This suite's default runOperation actually invokes the task for each item
+    // so operations built on it (scanGroupMfa) exercise their inner logic.
     runOperation: vi.fn(
       async (_name, items: unknown[], task: (i: unknown, n: number) => unknown) => {
         for (let i = 0; i < items.length; i++) await task(items[i], i);
         return { results: [], completed: items.length, failed: 0, cancelled: false };
       },
     ),
-    callbacks: {},
     ...overrides,
-  } as unknown as CoreApi;
-}
+  });
 
 describe('getUserLastLogin', () => {
   it('returns a Date when lastLogin is present', async () => {

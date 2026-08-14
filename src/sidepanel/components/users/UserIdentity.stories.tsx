@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import UserIdentity from './UserIdentity';
-import { mockUsers } from '../../../test/mocks/handlers';
+import { mockUsers } from '../../../test/mocks/fixtures';
 import type { OktaUser } from '../../../shared/types';
 
 const baseUser = mockUsers[10];

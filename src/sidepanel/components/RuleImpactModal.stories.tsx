@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import RuleImpactModal from './RuleImpactModal';
 import type { RuleImpactSummary, TargetGroupImpact } from '../../shared/membership/ruleImpact';
-import { mockUsers } from '../../test/mocks/handlers';
+import { mockUsers } from '../../test/mocks/fixtures';
 
 const losingUsers = mockUsers.slice(10, 22);
 const manyLosingUsers = mockUsers.slice(10, 90);
