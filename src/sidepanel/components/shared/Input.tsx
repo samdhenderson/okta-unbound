@@ -156,7 +156,7 @@ const Input: React.FC<InputProps> = ({
   const inputClasses = `
     ${sizeClasses[size]}
     border rounded-md bg-white
-    transition-all duration-100
+    transition-all duration-(--dur-instant)
     focus:outline-2 focus:outline-offset-2 focus:outline-primary
     disabled:bg-neutral-50 disabled:text-neutral-500 disabled:cursor-not-allowed
     ${error ? 'border-danger focus:border-danger' : 'border-neutral-300 focus:border-primary'}

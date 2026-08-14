@@ -11,6 +11,7 @@ the same routing `CLAUDE.md` enforces, to keep context lean.
 | [components.md](./components.md)                     | Building or using a shared/feature component                                      |
 | [component-explorer.md](./component-explorer.md)     | Running Storybook, writing a `.stories.tsx`, or checking story coverage           |
 | [ux-guidelines.md](./ux-guidelines.md)               | Working on modals, a11y, or loading/empty/error states                            |
+| [motion.md](./motion.md)                             | Touching animation, transitions, durations/easings, or reduced motion             |
 | [state-management.md](./state-management.md)         | Deciding hook vs context vs local state, or decomposing a component               |
 | [development.md](./development.md)                   | Dealing with logging, secrets, `any`, build, lint, CI, or versioning              |
 | [testing.md](./testing.md)                           | Writing or fixing tests                                                           |

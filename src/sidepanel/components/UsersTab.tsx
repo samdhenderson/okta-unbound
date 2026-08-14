@@ -11,6 +11,9 @@
  * The tab itself is composition only: all state and hook wiring live in
  * {@link sidepanel/hooks/useUsersTabState.useUsersTabState}, the search surface in
  * {@link UserSearchPanel} and the selected-user surface in {@link UserDetailPanel}.
+ * The Add-to-Group modal confirms through that hook's `confirmAddToGroup` wrapper
+ * rather than `addToGroup.confirmAddToGroup`, so the group being added is captured
+ * for the membership list's one-shot success flash before the modal resets itself.
  *
  * ## Sub-navigation
  *
@@ -151,7 +154,7 @@ const UsersTab: React.FC<UsersTabProps> = ({
                   <AlertMessage
                     message={{ text: state.error, type: 'danger' }}
                     onDismiss={state.dismissError}
-                    className="animate-in slide-in-from-top-2 duration-300"
+                    className="animate-rise-in"
                   />
                 )}
 
@@ -160,7 +163,7 @@ const UsersTab: React.FC<UsersTabProps> = ({
                   <AlertMessage
                     message={state.resultMessage}
                     onDismiss={state.dismissResultMessage}
-                    className="animate-in slide-in-from-top-2 duration-300"
+                    className="animate-rise-in"
                   />
                 )}
               </>
@@ -176,6 +179,7 @@ const UsersTab: React.FC<UsersTabProps> = ({
               isLoadingMemberships={state.isLoadingMemberships}
               currentGroupId={currentGroupId}
               onNavigateToRule={onNavigateToRule}
+              recentlyAddedGroupId={state.recentlyAddedGroupId}
               isLifecycleLoading={lifecycle.isLifecycleLoading}
               pendingLifecycleAction={lifecycle.pendingLifecycleAction}
               onRequestLifecycleAction={lifecycle.setPendingLifecycleAction}
@@ -228,7 +232,7 @@ const UsersTab: React.FC<UsersTabProps> = ({
         onClearSelectedGroup={addToGroup.clearSelectedGroup}
         isAddingToGroup={addToGroup.isAddingToGroup}
         onClose={addToGroup.closeModal}
-        onConfirm={addToGroup.confirmAddToGroup}
+        onConfirm={state.confirmAddToGroup}
       />
     </div>
   );

@@ -51,7 +51,7 @@ const EntityPicker: React.FC<EntityPickerProps> = ({ descriptors, onSelect }) =>
               onSelect(descriptor.id);
             }
           }}
-          className="group flex items-start gap-4 bg-white rounded-md border border-neutral-200 p-5 cursor-pointer transition-all duration-100 hover:border-neutral-500 focus:outline-2 focus:outline-offset-2 focus:outline-primary"
+          className="group flex items-start gap-4 bg-white rounded-md border border-neutral-200 p-5 cursor-pointer transition-all duration-(--dur-instant) hover:border-neutral-500 focus:outline-2 focus:outline-offset-2 focus:outline-primary"
         >
           <div className="inline-flex items-center justify-center w-10 h-10 rounded-md bg-primary-light text-primary-text shrink-0">
             <Icon type={descriptor.icon} size="md" />
@@ -59,7 +59,7 @@ const EntityPicker: React.FC<EntityPickerProps> = ({ descriptors, onSelect }) =>
           <div className="flex-1 min-w-0">
             {/* h2: one level below the Export tab's PageHeader <h1>, matching the
                 configure-phase section heading — avoids an h1→h4 heading-order skip. */}
-            <h2 className="font-semibold text-neutral-900 group-hover:text-primary-text transition-colors duration-100">
+            <h2 className="font-semibold text-neutral-900 group-hover:text-primary-text transition-colors duration-(--dur-instant)">
               {descriptor.displayName}
             </h2>
             <p className="mt-0.5 text-sm text-neutral-600">{descriptor.description}</p>

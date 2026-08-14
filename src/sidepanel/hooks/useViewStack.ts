@@ -33,11 +33,11 @@
  *       onBack={nav.isRoot ? undefined : nav.pop}
  *       breadcrumbs={nav.isRoot ? undefined : <Breadcrumbs items={nav.trail} />}
  *     />
- *     <div hidden={!nav.isRoot}>
+ *     <div hidden={!nav.isRoot} className={nav.transition === 'pop' ? 'animate-pop-in' : ''}>
  *       <GroupsListPanel onOpenDetail={nav.push} />
  *     </div>
  *     {nav.currentEntry && (
- *       <div ref={viewRef} tabIndex={-1}>
+ *       <div ref={viewRef} tabIndex={-1} className="animate-push-in">
  *         <GroupDetailView group={nav.currentEntry} />
  *       </div>
  *     )}
@@ -97,6 +97,23 @@
  * reason to keep the list mounted: if the list unmounted on push, the row that was
  * clicked no longer exists on pop and focus is left where it is rather than being
  * moved somewhere arbitrary.
+ *
+ * ## Motion
+ *
+ * {@link ViewStack.transition} reports the direction of the most recent navigation
+ * so a consumer can animate the arriving surface: `animate-push-in` (from the
+ * right) for a push, `animate-pop-in` (from the left) for a pop, both over
+ * `--dur-travel`. It is `null` until the first navigation, so nothing animates on
+ * the tab's initial render.
+ *
+ * The animation is **purely decorative CSS on the incoming element and gates
+ * nothing**. The focus effect below runs on the same commit that mounts the pushed
+ * view, before a single frame of the animation has played, so a keyboard or screen
+ * reader user is never made to wait out a transition — exactly as ADR-0016
+ * requires. And because the outgoing surface is hidden with `display: none` (the
+ * sibling-rendering contract above), it is out of the tab order and out of the
+ * accessibility tree for the whole flight: it cannot take focus back or be read
+ * while the incoming view animates in.
  */
 
 import type React from 'react';
@@ -157,6 +174,13 @@ export interface UseViewStackOptions<TEntry> {
   manageFocus?: boolean;
 }
 
+/**
+ * Direction of the most recent navigation, for picking an entrance animation.
+ * `null` before the first push — the tab's initial render is not a navigation and
+ * must not animate.
+ */
+export type ViewStackTransition = 'push' | 'pop' | null;
+
 /** Navigation state and mutators returned by {@link useViewStack}. */
 export interface ViewStack<TEntry> {
   /** The pushed entries, root-first. Empty at the root. */
@@ -169,6 +193,12 @@ export interface ViewStack<TEntry> {
   isRoot: boolean;
   /** Root crumb plus one crumb per pushed entry, in order. */
   trail: ViewStackCrumb[];
+  /**
+   * Direction of the most recent navigation — `'push'`, `'pop'`, or `null` before
+   * the first one. Apply `animate-push-in` / `animate-pop-in` to whichever surface
+   * is arriving; it is a hint for CSS only and never gates focus.
+   */
+  transition: ViewStackTransition;
   /** Pushes a new entry on top of the stack and moves focus into the pushed view. */
   push: (entry: TEntry) => void;
   /** Pops one level, restoring focus to whatever triggered that push. No-op at the root. */
@@ -217,7 +247,14 @@ export function useViewStack<TEntry>({
   viewRef,
   manageFocus = true,
 }: UseViewStackOptions<TEntry>): ViewStack<TEntry> {
-  const [entries, setEntries] = useState<readonly TEntry[]>([]);
+  // Entries and the navigation direction move together in one state object so a
+  // push commits the arriving view and its entrance animation in the *same* render.
+  // Deriving the direction in an effect instead would paint one un-animated frame
+  // before the class landed, which reads as a flicker.
+  const [{ entries, transition }, setState] = useState<{
+    entries: readonly TEntry[];
+    transition: ViewStackTransition;
+  }>({ entries: [], transition: null });
   const depth = entries.length;
 
   /** `focusOrigins[d]` is the element focused just before the push that created depth `d + 1`. */
@@ -229,20 +266,28 @@ export function useViewStack<TEntry>({
 
   const push = useCallback((entry: TEntry) => {
     pendingOrigin.current = document.activeElement as HTMLElement | null;
-    setEntries((prev) => [...prev, entry]);
+    setState((prev) => ({ entries: [...prev.entries, entry], transition: 'push' }));
   }, []);
 
   const popTo = useCallback((targetDepth: number) => {
     const next = Math.max(0, targetDepth);
-    setEntries((prev) => (next >= prev.length ? prev : prev.slice(0, next)));
+    setState((prev) =>
+      next >= prev.entries.length
+        ? prev
+        : { entries: prev.entries.slice(0, next), transition: 'pop' },
+    );
   }, []);
 
   const pop = useCallback(() => {
-    setEntries((prev) => (prev.length === 0 ? prev : prev.slice(0, prev.length - 1)));
+    setState((prev) =>
+      prev.entries.length === 0
+        ? prev
+        : { entries: prev.entries.slice(0, prev.entries.length - 1), transition: 'pop' },
+    );
   }, []);
 
   const reset = useCallback(() => {
-    setEntries((prev) => (prev.length === 0 ? prev : []));
+    setState((prev) => (prev.entries.length === 0 ? prev : { entries: [], transition: 'pop' }));
   }, []);
 
   // Move focus into a pushed view, and restore it to the trigger on the way back.
@@ -302,6 +347,7 @@ export function useViewStack<TEntry>({
     depth,
     isRoot: depth === 0,
     trail,
+    transition,
     push,
     pop,
     popTo,

@@ -16,6 +16,18 @@ The shared `Modal` provides all of these — `role="dialog"` + `aria-modal="true
 the Tab focus-trap, autofocus, focus restoration on close, and Escape-to-close — so
 every consumer inherits them without re-implementing the semantics.
 
+**Focus restores before the exit animation, not after it.** `Modal` holds the
+panel in the DOM for one exit animation after `isOpen` flips false (so the close
+reads as a transition rather than a cut), but focus returns to the trigger
+element **the instant `isOpen` goes false** — keyed on `isOpen`, deliberately not
+on the animation finishing. A keyboard user who presses Escape is never left in a
+dead zone for the length of a close animation waiting for focus to catch up; the
+animation is purely visual by that point; the panel itself goes `aria-hidden` +
+`inert` for the same window, so nothing on it can be queried, tabbed to, or
+clicked while it's on its way out. See `docs/motion.md` and ADR-0027 for the
+mount-hold mechanics and why the hold uses a `1ms` (not `0s`) reduced-motion
+duration to guarantee this still resolves for reduced-motion users.
+
 ### Tabs (e.g. UserComparisonModal)
 
 `role="tablist"`/`tab"`/`tabpanel"`, `aria-selected`, `aria-controls` wiring, roving
@@ -45,11 +57,36 @@ contract and deliberately drops the other half:
 
 Every async view handles all three explicitly — never a blank panel:
 
-- **Loading**: `LoadingSpinner`.
+- **Loading**: `LoadingSpinner` by default. Reach for `Skeleton` instead when the
+  loading content's shape is already known — a list row, a stat tile — so the
+  placeholder previews the layout that's about to fill in; it's an added option,
+  not a replacement. Keep `LoadingSpinner` for unknown-shape or unknown-duration
+  work (a `Suspense` fallback that hasn't resolved a chunk yet) — that rule and
+  the full spinner/skeleton split live in `docs/motion.md`.
 - **Empty**: `EmptyState` with a clear message and (where useful) an action.
 - **Error**: `AlertMessage` with `type="danger"` and an actionable message. Do not
   swallow errors silently or show raw sentinels (e.g. `unknown@unknown.com`, see
-  `useOktaApi/core.ts:63-77`).
+  `useOktaApi/core.ts:63-77`). An error state is never a candidate for `Skeleton`
+  — it isn't "content arriving," so `LoadingSpinner` (or, once it's resolved to an
+  error, `AlertMessage`) is always the right shape here.
+
+## Motion & reduced motion
+
+Full token scale, primitives, and rationale live in `docs/motion.md` (ADR-0027).
+The contract that matters for every new interactive surface:
+
+- Motion explains what just happened; it never decorates. If removing an
+  animation wouldn't cost the user any information, it shouldn't be there.
+- Respect `prefers-reduced-motion: reduce`. `tailwind.css` freezes animation and
+  transition durations to `1ms` for it automatically — most components need do
+  nothing. The exception is **imperative** motion a CSS override can't reach
+  (`scrollIntoView({ behavior: 'smooth' })`): read
+  `src/sidepanel/hooks/useReducedMotion.ts` and pass `'auto'` instead of
+  `'smooth'` yourself.
+- A small, explicit set of animations (a spinner's spin, a busy-indicator's
+  pulse, a progress bar's width) are exempt from the reduced-motion freeze via
+  `.motion-exempt` — they encode live state, not decoration. Don't add the class
+  to anything that isn't communicating "this is still happening right now."
 
 ## Status colors → meaning
 

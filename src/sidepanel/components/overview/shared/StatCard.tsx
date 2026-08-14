@@ -4,9 +4,15 @@
  *
  * Presentational only: a colored, optionally clickable card. Numeric values are
  * localized with `toLocaleString`; the `color` prop selects an icon/border token set.
+ *
+ * A card can opt into counting its number up when it resolves (`countUp`), which is
+ * what tells the user "this figure just arrived" rather than "this was always here".
+ * The value is always rendered with `tabular-nums` so its width cannot twitch as the
+ * digits change.
  */
 import React from 'react';
 import Icon, { type IconType } from './Icon';
+import { useCountUp } from '../../../hooks/useCountUp';
 
 /** Props for {@link StatCard}. */
 interface StatCardProps {
@@ -22,6 +28,13 @@ interface StatCardProps {
   subtitle?: string;
   /** When provided, makes the card a clickable button. */
   onClick?: () => void;
+  /**
+   * Count a numeric `value` up to its figure over `--dur-tell` when it first
+   * resolves and whenever it changes (an explicit refresh) — never on an incidental
+   * re-render. Ignored for string values, and instant under reduced motion.
+   * Defaults to `false`.
+   */
+  countUp?: boolean;
 }
 
 const colorConfigs = {
@@ -70,12 +83,21 @@ const StatCard: React.FC<StatCardProps> = ({
   icon,
   subtitle,
   onClick,
+  countUp = false,
 }) => {
   const config = colorConfigs[color];
 
+  // Only a resolved number can be counted; a string metric (a status, an em dash
+  // placeholder) renders verbatim and the interpolator is switched off entirely.
+  const numericValue = typeof value === 'number' ? value : null;
+  const countedValue = useCountUp(numericValue ?? 0, {
+    enabled: countUp && numericValue !== null,
+  });
+  const displayValue = numericValue === null ? value : countedValue.toLocaleString();
+
   const baseClasses = `
     relative overflow-hidden rounded-md border p-4
-    transition-all duration-100 ease-out
+    transition-colors duration-(--dur-instant) ease-standard
     ${config.cardBg} ${config.border}
     ${onClick ? 'cursor-pointer hover:border-neutral-300' : ''}
   `.trim();
@@ -91,10 +113,10 @@ const StatCard: React.FC<StatCardProps> = ({
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{title}</p>
           <p
-            className={`mt-2 text-3xl font-bold ${config.textColor} tracking-tight truncate`}
+            className={`mt-2 text-3xl font-bold ${config.textColor} tracking-tight truncate tabular-nums`}
             style={{ fontFamily: 'var(--font-primary)' }}
           >
-            {typeof value === 'number' ? value.toLocaleString() : value}
+            {displayValue}
           </p>
           {subtitle && (
             <p className="mt-1.5 text-xs font-medium text-neutral-500 truncate">{subtitle}</p>

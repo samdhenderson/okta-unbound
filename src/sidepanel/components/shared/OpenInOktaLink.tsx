@@ -59,7 +59,7 @@ const OpenInOktaLink: React.FC<OpenInOktaLinkProps> = ({
       target="_blank"
       rel="noopener noreferrer"
       title={`Open this ${entityType} in the Okta Admin Console`}
-      className={`inline-flex items-center ${sizeClasses[size]} font-medium bg-white text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 hover:border-neutral-500 transition-colors duration-100 ${className}`}
+      className={`inline-flex items-center ${sizeClasses[size]} font-medium bg-white text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 hover:border-neutral-500 transition-colors duration-(--dur-instant) ${className}`}
       style={{ fontFamily: 'var(--font-heading)' }}
     >
       <span>{label}</span>

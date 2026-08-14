@@ -115,7 +115,7 @@ const CopyMembersModal: React.FC<CopyMembersModalProps> = ({ isOpen, onClose, me
                   type="button"
                   onClick={() => setFormatId(f.id)}
                   aria-pressed={active}
-                  className={`flex items-start gap-2.5 rounded-md border p-2.5 text-left transition-colors duration-100 ${
+                  className={`flex items-start gap-2.5 rounded-md border p-2.5 text-left transition-colors duration-(--dur-instant) ${
                     active
                       ? 'border-primary bg-primary-light'
                       : 'border-neutral-200 bg-white hover:border-neutral-400'

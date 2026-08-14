@@ -8,21 +8,47 @@
  * top-level section (e.g. Applications, Authentication Policies) means adding
  * one entry here — the navigation bar and persistence-restore pick it up.
  */
+import type { IconType } from './components/overview/shared/Icon';
 
 /** Identifier for each top-level side-panel tab. */
 export type TabType =
   'overview' | 'rules' | 'users' | 'groups' | 'apps' | 'policies' | 'export' | 'history';
 
-/** The top-level tabs in display order, with their visible labels. */
-export const TAB_DEFS: ReadonlyArray<{ id: TabType; label: string }> = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'users', label: 'Users' },
-  { id: 'groups', label: 'Groups' },
-  { id: 'apps', label: 'Apps' },
-  { id: 'rules', label: 'Rules' },
-  { id: 'policies', label: 'Auth Policies' },
-  { id: 'export', label: 'Export' },
-  { id: 'history', label: 'History' },
+/** One top-level tab: its stable id, its visible label, and its rail glyph. */
+export interface TabDef {
+  /** Stable id, persisted in `chrome.storage.local` and matched on restore. */
+  id: TabType;
+  /**
+   * Visible label. Also the tab's accessible name in the icon rail, where it is
+   * the only text an inactive (icon-only) tab exposes — keep it short enough to
+   * unfurl inside a 360px panel.
+   */
+  label: string;
+  /**
+   * Glyph shown by the `rail` variant of the shared `Tabs` strip. Every name
+   * must already exist in the {@link IconType} registry; the rail is icon-first,
+   * so a tab without a distinct glyph is not addable here.
+   */
+  icon: IconType;
+}
+
+/**
+ * The top-level tabs in display order, with their visible labels and rail glyphs.
+ *
+ * @remarks The `policies` label is `'Policies'`, not `'Auth Policies'` — the rail
+ * unfurls exactly one label at a time and the shorter word survives a 360px panel.
+ * The export descriptor's `displayName: 'Auth Policies'` is a different concept
+ * and deliberately unchanged.
+ */
+export const TAB_DEFS: ReadonlyArray<TabDef> = [
+  { id: 'overview', label: 'Overview', icon: 'chart' },
+  { id: 'users', label: 'Users', icon: 'user' },
+  { id: 'groups', label: 'Groups', icon: 'users' },
+  { id: 'apps', label: 'Apps', icon: 'app' },
+  { id: 'rules', label: 'Rules', icon: 'bolt' },
+  { id: 'policies', label: 'Policies', icon: 'shield' },
+  { id: 'export', label: 'Export', icon: 'download' },
+  { id: 'history', label: 'History', icon: 'clipboard' },
 ];
 
 /**

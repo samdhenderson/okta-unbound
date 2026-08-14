@@ -59,7 +59,7 @@ const MergeClusterRow: React.FC<{
           className="flex min-w-0 flex-1 items-center gap-2 text-left"
         >
           <svg
-            className={`h-3.5 w-3.5 shrink-0 text-neutral-400 transition-transform duration-100 ${
+            className={`h-3.5 w-3.5 shrink-0 text-neutral-400 transition-transform duration-(--dur-instant) ${
               open ? 'rotate-90' : ''
             }`}
             fill="none"
@@ -144,7 +144,7 @@ const RulesMergeBanner: React.FC<RulesMergeBannerProps> = ({ clusters, onMerge, 
         className="flex w-full items-center gap-2 px-4 py-3 text-left"
       >
         <svg
-          className={`h-4 w-4 shrink-0 text-primary-text transition-transform duration-100 ${
+          className={`h-4 w-4 shrink-0 text-primary-text transition-transform duration-(--dur-instant) ${
             open ? 'rotate-90' : ''
           }`}
           fill="none"

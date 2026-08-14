@@ -133,7 +133,7 @@ const AlertMessage: React.FC<AlertMessageProps> = ({
           <button
             type="button"
             onClick={action.onClick}
-            className={`ml-3 px-3 py-1.5 text-sm font-medium rounded-md transition-colors duration-100 ${
+            className={`ml-3 px-3 py-1.5 text-sm font-medium rounded-md transition-colors duration-(--dur-instant) ${
               action.variant === 'danger' || status === 'danger'
                 ? 'bg-danger text-white hover:bg-danger-text'
                 : 'bg-primary text-white hover:bg-primary-dark'
@@ -148,7 +148,7 @@ const AlertMessage: React.FC<AlertMessageProps> = ({
       {onDismiss && (
         <button
           type="button"
-          className="text-neutral-400 hover:text-neutral-600 transition-colors duration-100 p-1 rounded-full hover:bg-white/50"
+          className="text-neutral-400 hover:text-neutral-600 transition-colors duration-(--dur-instant) p-1 rounded-full hover:bg-white/50"
           onClick={onDismiss}
           aria-label="Dismiss message"
         >

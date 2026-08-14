@@ -36,6 +36,12 @@ export interface UserDetailPanelProps {
   currentGroupId?: string;
   /** Invoked with a rule id to navigate to that rule in the Rules tab. */
   onNavigateToRule?: (ruleId: string) => void;
+  /**
+   * Id of the group just added via the Add-to-Group flow, forwarded so that row
+   * plays its one-shot success flash rather than the confirmation only landing in
+   * the banner above the fold.
+   */
+  recentlyAddedGroupId?: string | null;
   /** True while a confirmed lifecycle action is in flight. */
   isLifecycleLoading: boolean;
   /** The lifecycle action awaiting confirmation, or `null`. Drives the confirm modal. */
@@ -63,6 +69,7 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
   isLoadingMemberships,
   currentGroupId,
   onNavigateToRule,
+  recentlyAddedGroupId,
   isLifecycleLoading,
   pendingLifecycleAction,
   onRequestLifecycleAction,
@@ -72,7 +79,7 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
   onAddToGroup,
 }) => {
   return (
-    <div className="space-y-6 animate-in slide-in-from-top-4 duration-500">
+    <div className="space-y-6 animate-rise-in">
       <UserProfileCard
         user={user}
         oktaOrigin={oktaOrigin}
@@ -96,6 +103,7 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
         currentGroupId={currentGroupId}
         oktaOrigin={oktaOrigin}
         onNavigateToRule={onNavigateToRule}
+        recentlyAddedGroupId={recentlyAddedGroupId}
         actions={
           <>
             <Button

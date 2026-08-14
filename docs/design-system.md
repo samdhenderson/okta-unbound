@@ -79,3 +79,20 @@ with each other — see `docs/components.md`.
 No known token violations. Every color in `components/**` maps to an Odyssey token;
 the `ActivityBar` (ADR-0008) and `AttributeFacet` (palette in
 `theme/chartPalette.ts`) are token-based, and `ContextBar` carries no raw hex.
+
+## Motion
+
+Durations and easings live in their own `@theme static` block in the same
+`tailwind.css` file, under the identical hard rule: never write a raw `ms` or
+`cubic-bezier()` outside it. Full token table, the nine animation primitives, the
+reduced-motion contract, and the skeleton-vs-spinner rule are in
+[motion.md](./motion.md) (ADR-0027, ADR-0028) — this section is just the pointer.
+
+One cross-cutting gotcha worth flagging here rather than only in the motion doc:
+`Modal.tsx`'s `EXIT_MS` constant and `useCountUp`'s `COUNT_UP_MS` constant are
+hand-kept mirrors of `--dur-quick` and `--dur-tell` respectively, not runtime
+reads of the CSS custom property — `getComputedStyle().getPropertyValue('--dur-*')`
+returns `''` in jsdom, so the duration cannot be sourced from CSS at the point
+these components need it in every environment this code runs in. If either token
+in `tailwind.css` moves, its hand-kept mirror must move with it; there is no lint
+gate for this today.

@@ -45,6 +45,7 @@ import { useGroupMembersCache } from '../hooks/useGroupMembersCache';
 import { useGroupMerge } from '../hooks/useGroupMerge';
 import { useViewStack } from '../hooks/useViewStack';
 import { useScrollPreservation } from '../hooks/useScrollPreservation';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { GroupSummary } from '../../shared/types';
 import GroupExportModal from './groups/GroupExportModal';
 import GroupComparisonModal from './groups/GroupComparisonModal';
@@ -120,6 +121,11 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [searchMode, setSearchMode] = useState<'live' | 'cached'>('live');
   const [showFilters, setShowFilters] = useState(false);
+
+  // Read once here (not inside the deep-link effect below) so the effect's own
+  // dependency list — deliberately pruned to avoid unstable-filters-identity churn
+  // — doesn't need to grow just to consume it.
+  const reducedMotion = useReducedMotion();
 
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportGroups, setExportGroups] = useState<GroupSummary[]>([]);
@@ -241,9 +247,11 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
     filters.setSearchQuery('');
 
     const scrollT = setTimeout(() => {
+      // `scroll-behavior: auto !important` (the CSS reduced-motion override)
+      // cannot suppress this JS `behavior` option, so it is gated explicitly.
       document
         .querySelector(`[data-group-id="${selectedGroupId}"]`)
-        ?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        ?.scrollIntoView?.({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' });
     }, 150);
     const clearT = setTimeout(() => onGroupSelected?.(), 2500);
     return () => {
@@ -325,7 +333,17 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
           Tailwind's `flex` would otherwise out-specify the `hidden` display rule.
         */}
         <div
-          className={nav.isRoot ? 'flex flex-col h-[calc(100vh-280px)] min-h-[400px]' : 'hidden'}
+          className={
+            nav.isRoot
+              ? // `animate-pop-in` (arrive from the left) only after a real pop — the
+                // tab's first render is not a navigation. Restarting on each pop is
+                // free: the element is coming back from `display: none`, which is
+                // when CSS (re)starts an animation.
+                `flex flex-col h-[calc(100vh-280px)] min-h-[400px] ${
+                  nav.transition === 'pop' ? 'animate-pop-in' : ''
+                }`
+              : 'hidden'
+          }
         >
           {/* Fixed Header Section */}
           <div className="shrink-0 space-y-3">
@@ -453,9 +471,21 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
           />
         </div>
 
-        {/* Pushed detail view — a sibling of the list, never a replacement for it. */}
+        {/*
+          Pushed detail view — a sibling of the list, never a replacement for it.
+          It arrives from the right on a push and from the left when a deeper view
+          is popped back to it. Decoration only: `useViewStack`'s focus effect runs
+          on this same commit, so focus lands here before the first animated frame
+          (ADR-0016 — a pushed view is not a dialog and must not be gated).
+        */}
         {detailGroup && (
-          <div ref={detailViewRef} tabIndex={-1} className="focus:outline-none">
+          <div
+            ref={detailViewRef}
+            tabIndex={-1}
+            className={`focus:outline-none ${
+              nav.transition === 'pop' ? 'animate-pop-in' : 'animate-push-in'
+            }`}
+          >
             <GroupDetailView
               group={detailGroup}
               targetTabId={targetTabId}

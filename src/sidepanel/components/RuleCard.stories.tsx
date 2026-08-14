@@ -35,7 +35,7 @@ const meta = {
       description: {
         component:
           'Expandable card summarising a single Okta group rule.\n\n' +
-          'The collapsed view shows the rule name, a status dot, current-group/conflict badges, and the condition. Expanding reveals the condition expression (with inline group-name badges), referenced user attributes, target groups, conflict details, metadata, and the activate/deactivate plus "View in Okta" actions. A deep-linked rule auto-expands with a highlight ring. Memoised for list rendering.',
+          'The collapsed view shows the rule name, a status dot, current-group/conflict badges, and the condition. Expanding reveals the condition expression (with inline group-name badges), referenced user attributes, target groups, conflict details, metadata, and the activate/deactivate plus "View in Okta" actions. A deep-linked rule auto-expands and flashes on arrival. Memoised for list rendering.',
       },
     },
   },
@@ -57,8 +57,7 @@ const meta = {
       description: 'Okta org origin used to build the "View in Okta" rules-page link.',
     },
     isHighlighted: {
-      description:
-        'When true, the card auto-expands and shows a highlight ring (deep-link target).',
+      description: 'When true, the card auto-expands and flashes on arrival (deep-link target).',
     },
   },
   args: {
@@ -78,7 +77,7 @@ type Story = StoryObj<typeof meta>;
 /** Collapsed, active rule with no conflicts. */
 export const Default: Story = {};
 
-/** Highlighted deep-link target — auto-expands with a ring and shows all detail sections. */
+/** Highlighted deep-link target — auto-expands, flashes on arrival, and shows all detail sections. */
 export const Expanded: Story = {
   args: { isHighlighted: true },
 };

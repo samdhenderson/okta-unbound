@@ -33,6 +33,8 @@ convention; the specs in [`../`](../README.md) describe the _what_.
 | [0024](./0024-risk-based-plan-gate.md)                            | Trigger the plan gate on risk, not on a file count                                | Accepted | Supersedes 0013's ">~2 files" trigger; mechanical mass changes exempt.                      |
 | [0025](./0025-retire-boolean-rule-evaluation-apis.md)             | Retire the boolean rule-evaluation APIs                                           | Accepted | Amends 0017; no boolean entry point survives. Corrects 0022's parity-suite claim.           |
 | [0026](./0026-visibility-gating-patterns.md)                      | Visibility gating — five patterns, not two                                        | Accepted | Amends 0018's taxonomy; `visible`/`revalidateOnShow` on `useEntityQuery` rejected.          |
+| [0027](./0027-motion-tokens-and-reduced-motion.md)                | Motion tokens and reduced motion                                                  | Accepted | Finite duration/easing scale + nine primitives; `prefers-reduced-motion` contract.          |
+| [0028](./0028-icon-rail-navigation.md)                            | Icon-rail navigation                                                              | Accepted | Third `Tabs` variant for the 8-tab strip; drawer considered and rejected.                   |
 
 ## Adding an ADR
 

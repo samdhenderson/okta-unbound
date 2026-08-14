@@ -31,6 +31,7 @@ import { useRuleImpact } from '../hooks/useRuleImpact';
 import { useRulesData } from '../hooks/useRulesData';
 import { useRuleLifecycle } from '../hooks/useRuleLifecycle';
 import { useRuleConsolidation } from '../hooks/useRuleConsolidation';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { RuleImpactInput } from '../hooks/useOktaApi/ruleImpact';
 import { TabStateManager, saveRulesTabState } from '../../shared/tabState/tabStateManager';
 import type { RulesTabState } from '../../shared/tabState/types';
@@ -118,6 +119,8 @@ const RulesTab: React.FC<RulesTabProps> = ({
   // Single error channel; '' clears it. Stable so the hooks below keep their
   // memoized identities (useOktaApi in particular memoizes on this callback).
   const handleError = useCallback((message: string) => setError(message || null), []);
+
+  const reducedMotion = useReducedMotion();
 
   // `onResult` takes one `OperationResult` object, not `(message, type)`. It used to
   // be positional, and TypeScript accepts a function that ignores trailing
@@ -334,7 +337,10 @@ const RulesTab: React.FC<RulesTabProps> = ({
     log.debug('Navigating to rule:', activeRuleId);
     const ruleElement = document.querySelector(`[data-rule-id="${activeRuleId}"]`);
     if (ruleElement) {
-      ruleElement.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      ruleElement.scrollIntoView?.({
+        behavior: reducedMotion ? 'auto' : 'smooth',
+        block: 'center',
+      });
       const t = setTimeout(() => {
         onRuleSelected?.();
         setFocusRuleId(null);
@@ -343,7 +349,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
     } else {
       log.warn('Rule not found in DOM:', activeRuleId);
     }
-  }, [activeRuleId, rules, filteredRules, onRuleSelected]);
+  }, [activeRuleId, rules, filteredRules, onRuleSelected, reducedMotion]);
 
   return (
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>

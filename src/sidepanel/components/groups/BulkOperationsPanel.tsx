@@ -230,7 +230,7 @@ const BulkOperationsPanel: React.FC<BulkOperationsPanelProps> = ({
           </div>
           <div className="h-1.5 bg-neutral-100 rounded-full overflow-hidden">
             <div
-              className="h-full bg-primary rounded-full transition-all duration-300"
+              className="h-full bg-primary rounded-full transition-all duration-(--dur-move)"
               style={{
                 width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%`,
               }}

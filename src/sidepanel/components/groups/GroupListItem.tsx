@@ -51,7 +51,7 @@ import { oktaAdminEntityUrl } from '../../../shared/utils/oktaUrl';
  * would otherwise never reveal them — hence the explicit `hover: none` branch.
  */
 const REVEAL_ON_HOVER =
-  'opacity-0 transition-opacity duration-100 ' +
+  'opacity-0 transition-opacity duration-(--dur-instant) ' +
   'group-hover/row:opacity-100 group-focus-within/row:opacity-100 ' +
   'focus-within:opacity-100 [@media(hover:none)]:opacity-100';
 
@@ -92,6 +92,15 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
     isHighlighted = false,
   }) => {
     const [expanded, setExpanded] = useState(false);
+    // Lazily mounts `GroupListItemDetails` on first expand, then leaves it mounted
+    // (hidden by `.disclose`'s zero-height row) for the rest of the row's life, so
+    // the *close* transition has real content to shrink instead of vanishing
+    // instantly. Rows never expanded at all — the overwhelming majority in a long
+    // list — never pay to render the preview at all. Derived during render, not an
+    // effect, mirroring the codebase's other derived-state resets (e.g.
+    // GroupsListPanel's visible-window reset).
+    const [everExpanded, setEverExpanded] = useState(false);
+    if (expanded && !everExpanded) setEverExpanded(true);
     const breakdown = useCachedMemberSource(group.id);
     const model = useMemo(() => summarizeGroupRow(group, breakdown), [group, breakdown]);
 
@@ -129,11 +138,16 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
     return (
       <div
         data-group-id={group.id}
-        className={`group/row rounded-md border transition-colors duration-100 ${
+        className={`group/row rounded-md border transition-colors duration-(--dur-instant) ${
           selected
             ? 'border-primary bg-primary-light'
             : 'border-neutral-200 bg-white hover:border-neutral-500'
-        } ${isHighlighted ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+        } ${
+          // Deep-link arrival: a ring that stays, plus a background/border flash
+          // (`--dur-tell`, the "deliberately noticeable" duration) that decays to
+          // transparent on its own — a one-shot confirmation, not a steady state.
+          isHighlighted ? 'ring-2 ring-primary ring-offset-2 animate-affirm-flash' : ''
+        }`}
       >
         {/*
           `relative` scopes the row-body overlay button to the header, so the
@@ -216,7 +230,7 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
                   <Icon
                     type="chevron-right"
                     size="sm"
-                    className={`transition-transform duration-100 ${expanded ? 'rotate-90' : ''}`}
+                    className={`transition-transform duration-(--dur-instant) ${expanded ? 'rotate-90' : ''}`}
                   />
                 </IconButton>
               </div>
@@ -236,11 +250,20 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
         </div>
 
         {/*
-          Always mounted (empty while collapsed) so the chevron's `aria-controls`
-          always resolves to a real element.
+          `.disclose` animates `grid-template-rows` (0fr closed → 1fr open) instead
+          of toggling `display`, so the outer wrapper is always mounted (the
+          chevron's `aria-controls` always resolves to a real element) and `inert`
+          keeps a closed row out of the tab order/accessible tree without unmounting
+          it. The preview itself is lazily mounted on first expand — see
+          `everExpanded` above.
         */}
-        <div id={detailsId} hidden={!expanded}>
-          {expanded && <GroupListItemDetails group={group} breakdown={breakdown} />}
+        <div
+          id={detailsId}
+          className="disclose"
+          data-open={expanded}
+          inert={!expanded || undefined}
+        >
+          <div>{everExpanded && <GroupListItemDetails group={group} breakdown={breakdown} />}</div>
         </div>
       </div>
     );

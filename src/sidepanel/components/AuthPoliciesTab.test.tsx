@@ -134,7 +134,14 @@ describe('AuthPoliciesTab', () => {
 
     // Collapse and re-expand — served from the entity cache, no second request.
     await user.click(screen.getByRole('button', { name: 'Hide rules for Any two factors' }));
-    expect(screen.queryByTestId('policy-rules-list')).not.toBeInTheDocument();
+    // The disclosure animates its height (`.disclose`), so the body stays mounted
+    // while closed and is held out of the accessible tree with `inert` rather than
+    // unmounting. Assert the closed state, not the absence of the node.
+    const disclosure = within(screen.getByTestId('policy-rstFAKE000000000001')).getByTestId(
+      'policy-rules-disclosure',
+    );
+    expect(disclosure).toHaveAttribute('data-open', 'false');
+    expect(disclosure).toHaveAttribute('inert');
 
     await user.click(screen.getByRole('button', { name: 'Show rules for Any two factors' }));
     expect(await screen.findByTestId('policy-rules-list')).toBeInTheDocument();

@@ -11,6 +11,10 @@
  * ({@link useUserLifecycleActions}) and the Add-to-Group modal
  * ({@link useAddToGroup}).
  *
+ * It also owns the post-add success flash: `recentlyAddedGroupId` names the group the
+ * membership list should flash once, and {@link UseUsersTabStateReturn.confirmAddToGroup}
+ * wraps the modal's confirm so that group is captured before the modal resets itself.
+ *
  * {@link App} hides the Users tab rather than unmounting it, so the tab must be
  * inert while hidden: `isActive` is threaded into the three things here that can
  * reach Okta without a click — live user-page detection, the user-search debounce
@@ -131,6 +135,18 @@ export interface UseUsersTabStateReturn {
   lifecycle: ReturnType<typeof useUserLifecycleActions>;
   /** The Add-to-Group modal's state machine (type-ahead, selection, add). */
   addToGroup: ReturnType<typeof useAddToGroup>;
+  /**
+   * The Add-to-Group modal's confirm handler — use this in place of
+   * {@link UseUsersTabStateReturn.addToGroup}'s own `confirmAddToGroup`. It snapshots
+   * the group being confirmed before delegating, so the row for that group can flash
+   * once the add resolves; every other `addToGroup` member is passed through unchanged.
+   */
+  confirmAddToGroup: () => Promise<void>;
+  /**
+   * Id of the group most recently added via the Add-to-Group modal, so its row in the
+   * membership list can play a one-shot success flash; `null` once the flash is over.
+   */
+  recentlyAddedGroupId: string | null;
 }
 
 /** Breadcrumb label for the comparison view. The stack holds at most this one entry. */
@@ -160,6 +176,13 @@ export function useUsersTabState({
   // Detected-user banner is hidden per id once dismissed (the tab stays pinned to
   // the user you explicitly selected; admin navigation never swaps it).
   const [dismissedDetectedId, setDismissedDetectedId] = useState<string | null>(null);
+  // Id of the group most recently added via the Add-to-Group modal, so its row in
+  // GroupMembershipsList can play a one-shot success flash (`animate-affirm-flash`)
+  // instead of the confirmation only showing in the banner above the fold.
+  // `pendingAddGroupIdRef` is set synchronously at confirm-click time (before the
+  // modal's own state resets), and read once the add resolves successfully.
+  const [recentlyAddedGroupId, setRecentlyAddedGroupId] = useState<string | null>(null);
+  const pendingAddGroupIdRef = useRef<string | null>(null);
 
   // Sub-navigation (ADR-0016): the search + profile body stays mounted (hidden) and
   // the comparison renders as its sibling, so the selected user, their analysed
@@ -198,6 +221,7 @@ export function useUsersTabState({
     async (user: OktaUser) => {
       if (!targetTabId) return;
 
+      setRecentlyAddedGroupId(null);
       setSelectedUser(user);
       await loadMemberships(user);
     },
@@ -205,14 +229,30 @@ export function useUsersTabState({
   );
 
   // After adding the user to a group their memberships have changed — drop the
-  // cached analysis so the reload reflects the new group.
+  // cached analysis so the reload reflects the new group, then flash the row for
+  // the group that was just added (captured in `pendingAddGroupIdRef` at
+  // confirm-click time, before the Add-to-Group modal resets its own state).
   const handleUserAddedToGroup = useCallback(
     async (user: OktaUser) => {
       invalidate(cacheKeys.userMemberships(user.id));
       await handleSelectUser(user);
+      setRecentlyAddedGroupId(pendingAddGroupIdRef.current);
     },
     [handleSelectUser],
   );
+
+  // `animate-affirm-flash`'s final keyframe holds `border-color: transparent`
+  // (fill-mode `both`), which would permanently override the row's normal border
+  // once applied — clear the flash after its one-shot duration so the class comes
+  // back off and the row's ordinary border takes over again.
+  useEffect(() => {
+    if (!recentlyAddedGroupId) return;
+    // Mirrors `--dur-tell` (500ms), the `animate-affirm-flash` duration in
+    // tailwind.css — keep the two in step if that token moves.
+    const AFFIRM_FLASH_MS = 500;
+    const timer = window.setTimeout(() => setRecentlyAddedGroupId(null), AFFIRM_FLASH_MS);
+    return () => window.clearTimeout(timer);
+  }, [recentlyAddedGroupId]);
 
   // Compare-modal refresh: after a group is copied onto the selected user, drop the
   // cached analysis and reload their memberships in place. Crucially this does NOT
@@ -282,6 +322,7 @@ export function useUsersTabState({
     setSearchQuery('');
     setSearchResults([]);
     setSelectedUser(null);
+    setRecentlyAddedGroupId(null);
     clearMemberships();
     setError(null);
     setResultMessage(null);
@@ -312,6 +353,15 @@ export function useUsersTabState({
     onAdded: handleUserAddedToGroup,
     enabled: isActive,
   });
+
+  // Captures the group being confirmed BEFORE the modal resets its own
+  // `selectedGroup` state, so `handleUserAddedToGroup` (fired only on success)
+  // knows which row to flash even after the modal has already closed.
+  const { selectedGroup, confirmAddToGroup: confirmAddToGroupInner } = addToGroup;
+  const confirmAddToGroup = useCallback(() => {
+    pendingAddGroupIdRef.current = selectedGroup?.id ?? null;
+    return confirmAddToGroupInner();
+  }, [selectedGroup, confirmAddToGroupInner]);
 
   const dismissError = useCallback(() => setError(null), []);
   const dismissResultMessage = useCallback(() => setResultMessage(null), []);
@@ -348,5 +398,7 @@ export function useUsersTabState({
     refreshSelectedUserMemberships,
     lifecycle,
     addToGroup,
+    confirmAddToGroup,
+    recentlyAddedGroupId,
   };
 }

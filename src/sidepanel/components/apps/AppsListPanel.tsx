@@ -3,11 +3,19 @@
  * @description The scrollable Applications list plus its empty states.
  *
  * Renders one {@link AppListItem} per filtered app inside a shared
- * {@link ScrollableList}, and picks between the "nothing loaded" and "nothing
- * matches" empty states — the same split `GroupsListPanel` makes.
+ * {@link ScrollableList}, staggered in via `.rise-in-stagger`, and picks between
+ * the "nothing loaded" and "nothing matches" empty states — the same split
+ * `GroupsListPanel` makes.
+ *
+ * The app row shape is known before the inventory resolves, so loading shows a
+ * row `Skeleton` rather than a spinner. `Skeleton`'s `label` carries the same
+ * announcement the spinner's `loadingMessage` did — it renders as visually-hidden
+ * text in a `role="status"` node, so the message is still announced and still
+ * findable by `getByText`.
  */
-import React, { memo } from 'react';
-import { EmptyState, ScrollableList } from '../shared';
+import React, { memo, useRef } from 'react';
+import { useStaggerReveal } from '../../hooks/useStaggerReveal';
+import { EmptyState, ScrollableList, Skeleton } from '../shared';
 import AppListItem from './AppListItem';
 import type { AppAssignmentCounts } from '../../hooks/useOktaApi/appOperations';
 import type { OktaAppListItem } from '../../../shared/schemas/okta';
@@ -56,10 +64,16 @@ const AppsListPanel: React.FC<AppsListPanelProps> = memo(function AppsListPanel(
   oktaOrigin,
   fetchAssignmentCounts,
 }) {
+  const staggerRef = useRef<HTMLDivElement>(null);
+  useStaggerReveal(staggerRef);
+
   return (
     <ScrollableList
       loading={loading}
       loadingMessage="Loading applications from Okta..."
+      skeleton={
+        <Skeleton variant="row" size="lg" count={6} label="Loading applications from Okta..." />
+      }
       className="mt-4"
       testId="apps-list"
       emptyState={
@@ -84,14 +98,18 @@ const AppsListPanel: React.FC<AppsListPanelProps> = memo(function AppsListPanel(
         )
       }
     >
-      {apps.map((app) => (
-        <AppListItem
-          key={app.id}
-          app={app}
-          oktaOrigin={oktaOrigin}
-          fetchAssignmentCounts={fetchAssignmentCounts}
-        />
-      ))}
+      {apps.length > 0 && (
+        <div ref={staggerRef} className="space-y-3 rise-in-stagger">
+          {apps.map((app) => (
+            <AppListItem
+              key={app.id}
+              app={app}
+              oktaOrigin={oktaOrigin}
+              fetchAssignmentCounts={fetchAssignmentCounts}
+            />
+          ))}
+        </div>
+      )}
     </ScrollableList>
   );
 });

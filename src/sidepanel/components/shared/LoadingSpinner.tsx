@@ -73,7 +73,9 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
 }) => {
   const spinner = (
     <div
-      className={`inline-block animate-spin rounded-full border-neutral-200 border-t-primary ${sizeClasses[size]} ${className}`}
+      // motion-exempt: the spin encodes live loading state, not a decorative
+      // entrance/exit — it must keep animating under prefers-reduced-motion.
+      className={`motion-exempt inline-block animate-spin rounded-full border-neutral-200 border-t-primary ${sizeClasses[size]} ${className}`}
       role="status"
       aria-label="Loading"
     />

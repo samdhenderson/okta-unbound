@@ -92,7 +92,7 @@ const IconButton: React.FC<IconButtonProps> = ({
     aria-expanded={expanded}
     aria-controls={controls}
     title={title ?? label}
-    className={`inline-flex items-center justify-center rounded-md transition-colors duration-100 focus:outline-2 focus:outline-offset-2 focus:outline-primary disabled:opacity-50 disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+    className={`inline-flex items-center justify-center rounded-md transition-colors duration-(--dur-instant) focus:outline-2 focus:outline-offset-2 focus:outline-primary disabled:opacity-50 disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
   >
     {children}
   </button>

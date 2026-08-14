@@ -44,7 +44,7 @@ const ComparisonTabBar: React.FC<ComparisonTabBarProps> = ({
             role="tab"
             aria-selected={active}
             onClick={() => onChange(t.key)}
-            className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-100 ${
+            className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-(--dur-instant) ${
               active
                 ? 'bg-white text-neutral-900 shadow-sm'
                 : 'text-neutral-600 hover:text-neutral-900'

@@ -41,6 +41,10 @@ const meta = {
   },
   argTypes: {
     members: { description: "The group's full member set (the explorer filters/sorts locally)." },
+    isReloading: {
+      description:
+        'True while the member set is being re-fetched behind the explorer; the list swaps to skeleton rows.',
+    },
     mfaResults: { description: 'Per-member MFA scan results, or null before a scan has run.' },
     scanStatus: { description: 'Current MFA scan lifecycle status.' },
     onRunScan: { description: 'Start the MFA scan.' },
@@ -52,6 +56,7 @@ const meta = {
   },
   args: {
     members: mockUsers,
+    isReloading: false,
     mfaResults: null,
     scanStatus: 'idle',
     onRunScan: fn(),

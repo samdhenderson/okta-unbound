@@ -31,8 +31,33 @@ const withProviders: Decorator = (Story) => (
   </ErrorBoundary>
 );
 
+/**
+ * Global decorator that suppresses motion by default.
+ *
+ * Every story runs as a render test in headless Chromium, and the suite already
+ * carries `retry: 2` for a Vite dep-optimizer race — in-flight animations would add
+ * a second, timing-shaped flake source, and would make `npm run shoot` screenshots
+ * non-deterministic. The `data-motion="off"` attribute is matched by the same
+ * declaration block as `@media (prefers-reduced-motion: reduce)` in `tailwind.css`,
+ * so this also exercises the reduced-motion code path on every CI run.
+ *
+ * A motion showcase story opts back in with `parameters: { motion: 'on' }`. Such a
+ * story should have no `play` function.
+ *
+ * `display: contents` keeps the wrapper out of the layout entirely, so existing
+ * story screenshots are unaffected.
+ */
+const withMotion: Decorator = (Story, context) => (
+  <div
+    data-motion={context.parameters.motion === 'on' ? 'on' : 'off'}
+    style={{ display: 'contents' }}
+  >
+    <Story />
+  </div>
+);
+
 const preview: Preview = {
-  decorators: [withProviders],
+  decorators: [withMotion, withProviders],
   parameters: {
     controls: {
       matchers: {
