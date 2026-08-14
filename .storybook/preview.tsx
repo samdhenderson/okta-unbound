@@ -25,7 +25,19 @@ const withProviders: Decorator = (Story) => (
   <ErrorBoundary>
     <ProgressProvider>
       <SchedulerProvider>
-        <Story />
+        {/*
+          The app sets `--font-primary` once per tab container, so every component
+          inherits Inter in the real panel. Storybook has no tab container, so a
+          story used to render in the browser default unless the component happened
+          to force the font on itself — which two cards did and the rest did not.
+          Setting it once here makes the explorer show what the panel shows, and
+          removes any reason for a component to carry its own font declaration.
+          `display: contents` keeps the wrapper out of layout; inherited properties
+          still reach the children.
+        */}
+        <div style={{ fontFamily: 'var(--font-primary)', display: 'contents' }}>
+          <Story />
+        </div>
       </SchedulerProvider>
     </ProgressProvider>
   </ErrorBoundary>

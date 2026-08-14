@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import UserSearchResults from './UserSearchResults';
 import { mockUsers } from '../../../test/mocks/fixtures';
 
@@ -15,6 +15,7 @@ const meta = {
         component:
           'Clickable list of user search results with per-user status badges.\n\n' +
           "Presentational: each row shows a user's name, email, login, and a status-colored badge, and clicking a row selects that user. Renders nothing when there are no results; the parent (UsersTab) owns the search itself. Results come from live Okta search via the scheduler path.\n\n" +
+          'Each row is a `ListRow` rendered `as="button"` (ADR-0029). It was previously a `<div onClick>` with no role, no `tabIndex` and no focus ring, so results were unreachable by keyboard; the row is now tab-reachable, has a `focus-visible` ring and activates on Enter/Space.\n\n' +
           '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs), [Scheduler & messaging](?path=/docs/internals-scheduler-messaging--docs)',
       },
     },
@@ -48,6 +49,28 @@ export const MixedStatuses: Story = {
 /** No matching results — the component renders nothing. */
 export const Empty: Story = {
   args: { results: [] },
+};
+
+/**
+ * Keyboard reach — the defect ADR-0029 closes here.
+ *
+ * Tab moves onto the first result and Enter selects it. As a `<div onClick>` this
+ * row took no focus at all, so a keyboard user could search but never open a
+ * result. The focus ring is `focus-visible`, so it shows for the keyboard and not
+ * for the mouse.
+ */
+export const KeyboardActivation: Story = {
+  args: { results: mockUsers.slice(10, 12) },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const [firstRow] = canvas.getAllByRole('button');
+
+    await userEvent.tab();
+    await expect(firstRow).toHaveFocus();
+
+    await userEvent.keyboard('{Enter}');
+    await expect(args.onSelectUser).toHaveBeenCalledWith(mockUsers[10]);
+  },
 };
 
 /** A large result set to see the list scroll. */

@@ -46,8 +46,16 @@ info`) — never `error`.
 `shared/`: `Button`, `IconButton`, `StretchedButton`, `FilterPill`, `SortPill`,
 `CopyButton`, `OpenInOktaLink`, `Modal`, `Input`, `Checkbox`, `Select`, `Textarea`,
 `PageHeader`, `Breadcrumbs`, `Tabs`, `CollapsibleSection`, `AlertMessage`,
-`EmptyState`, `LoadingSpinner`, `ScrollableList`, `SearchDropdown`,
-`SelectionChips`.
+`EmptyState`, `LoadingSpinner`, `Skeleton`, `ListRow`, `ScrollableList`,
+`SearchDropdown`, `SelectionChips`.
+
+`ListRow` is the **row chrome** primitive (ADR-0029): border, radius, hover,
+`density` (`compact` | `comfortable`), `state` (`default` | `selected` |
+`highlighted`) and `as` (`div` | `li` | `a` | `button`). It owns the box and
+never the interior — the interior follows the typography contract in
+`docs/design-system.md`. Never hand-roll a row container. Prefer
+`StretchedButton` over `as="button"` when the row holds its own controls, since
+a button cannot legally contain a checkbox or another button.
 
 `IconButton` is also the **disclosure** primitive: pass `expanded` + `controls`
 and it emits `aria-expanded` / `aria-controls` (as `active` does `aria-pressed`).
@@ -121,8 +129,10 @@ comment at the call site:
   `role="tab"` bar that predates and has not been migrated to the shared `Tabs`
   primitive), the dynamic-color banner, radio-cards, the `AttributeFacet`
   data-viz spread bars, and the Export tab's `EntityPicker` selectable entity
-  cards (`role="button"` icon+title+description rows — no shared card primitive
-  fits, and `Button` is a centered CTA; kept keyboard-accessible).
+  cards (`role="button"` icon+title+description rows; `Button` is a centered
+  CTA, so it does not fit — but `ListRow as="button"` now does, and
+  `EntityPicker` is on the ADR-0029 migration list rather than a permanent
+  exception).
 - **Awaiting a new shared primitive (accepted future work):**
   - Chromeless **text-links** ("Clear all", "View details") have no shared
     `TextLink` primitive — adding one would discharge these across `GroupFilterPanel`,

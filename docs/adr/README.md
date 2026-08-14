@@ -35,6 +35,7 @@ convention; the specs in [`../`](../README.md) describe the _what_.
 | [0026](./0026-visibility-gating-patterns.md)                      | Visibility gating — five patterns, not two                                        | Accepted | Amends 0018's taxonomy; `visible`/`revalidateOnShow` on `useEntityQuery` rejected.          |
 | [0027](./0027-motion-tokens-and-reduced-motion.md)                | Motion tokens and reduced motion                                                  | Accepted | Finite duration/easing scale + nine primitives; `prefers-reduced-motion` contract.          |
 | [0028](./0028-icon-rail-navigation.md)                            | Icon-rail navigation                                                              | Accepted | Third `Tabs` variant for the 8-tab strip; drawer considered and rejected.                   |
+| [0029](./0029-list-row-primitive.md)                              | `ListRow` primitive owning row chrome                                             | Accepted | One row card replacing ten paddings/five hovers; two sanctioned separator patterns.         |
 
 ## Adding an ADR
 

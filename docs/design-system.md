@@ -74,6 +74,48 @@ props, not ad-hoc padding. The scale is `sm|md|lg` for most primitives; `Icon`
 (`xs`…`xl`) and `LoadingSpinner` (`sm`…`2xl`) carry extra steps and share size names
 with each other — see `docs/components.md`.
 
+## List rows
+
+A row is the most repeated element in the panel, so its chrome lives in one
+component and its interior follows one contract (ADR-0029).
+
+**The chrome is `ListRow`** (`components/shared/ListRow.tsx`). Never hand-roll a
+row container — the radius, resting border, hover border and transition are fixed
+there on purpose, and a row wanting a different hover colour is the drift the
+component exists to stop.
+
+| Prop      | Values                                          |
+| --------- | ----------------------------------------------- |
+| `density` | `compact` (`px-3 py-2`) · `comfortable` (`p-4`) |
+| `state`   | `default` · `selected` · `highlighted`          |
+| `as`      | `div` · `li` · `a` · `button`                   |
+| `body`    | expandable region below the header              |
+
+**Expandable rows use the `body` slot**, not a hand-built wrapper. The border
+belongs to the card, the padding belongs to the header, and a `.disclose` body
+sets its own — so passing `body` moves the density padding onto an inner header
+wrapper and clips the card, and the row still owns exactly one border.
+
+**The interior is a contract, not a component** — `ListRow` deliberately does not
+own it, because interiors genuinely differ. Follow these:
+
+| Line              | Classes                                      |
+| ----------------- | -------------------------------------------- |
+| Primary           | `text-sm font-semibold text-neutral-900`     |
+| Secondary         | `text-xs text-neutral-600`                   |
+| Identifier / meta | `font-mono text-xs text-neutral-500`         |
+| Badge / pill      | `px-2 py-0.5 rounded-md text-xs font-medium` |
+
+No arbitrary type values in a row (`text-[11px]`, `text-[10px]`) and no unsized
+primary line — an unsized `font-semibold` renders at 16px next to a peer's 14px,
+which is how two rows ended up a size apart.
+
+**Two separator patterns, not four.** `space-y-3` with a bordered row is the
+default. `divide-y divide-neutral-100` inside one bordered container is for a
+dense, table-like surface (`ComparisonDiffTab`, `RuleImpactModal`), whose rows
+opt out of the per-row border. `divide-neutral-200` and
+`border-b last:border-b-0` are not sanctioned.
+
 ## Token violations
 
 No known token violations. Every color in `components/**` maps to an Odyssey token;
