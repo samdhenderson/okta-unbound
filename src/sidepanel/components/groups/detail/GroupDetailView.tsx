@@ -12,22 +12,26 @@
  * expansion all survive the round trip — see
  * {@link sidepanel/hooks/useViewStack.useViewStack}.
  *
- * This is the container half: it owns the two read-only loads
- * ({@link sidepanel/hooks/useGroupSource.useGroupSource} for the rules that assign
- * into the group plus the gated member split, and
+ * This is the container half: it owns the read-only loads —
+ * {@link sidepanel/hooks/useGroupSource.useGroupSource} for the rules that assign
+ * into the group plus the gated member split,
  * {@link sidepanel/hooks/useGroupRuleReferences.useGroupRuleReferences} for the
- * rules that merely reference it) and hands their state to pure sections. It never
- * mutates anything.
+ * rules that merely reference it, and
+ * {@link sidepanel/hooks/useGroupAccessGrants.useGroupAccessGrants} for what
+ * membership actually grants (assigned apps, admin roles) — and hands their state
+ * to pure sections. It never mutates anything.
  */
 import React from 'react';
 import GroupIdentitySection from './GroupIdentitySection';
 import GroupMembershipSourceSection from './GroupMembershipSourceSection';
+import GroupAccessSection from './GroupAccessSection';
 import GroupRulesSection from './GroupRulesSection';
 import GroupPushSection from './GroupPushSection';
 import GroupMetadataSection from './GroupMetadataSection';
 import { useGroupSource } from '../../../hooks/useGroupSource';
 import { useOwedLoad } from '../../../hooks/useOwedLoad';
 import { useGroupRuleReferences } from '../../../hooks/useGroupRuleReferences';
+import { useGroupAccessGrants } from '../../../hooks/useGroupAccessGrants';
 import type { GroupSummary } from '../../../../shared/types';
 
 /** Props for {@link GroupDetailView}. */
@@ -69,6 +73,7 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
 }) => {
   const source = useGroupSource(targetTabId ?? undefined);
   const references = useGroupRuleReferences(group.id, targetTabId ?? undefined, isActive);
+  const accessGrants = useGroupAccessGrants(group.id, targetTabId ?? undefined, isActive);
 
   // `open` is memoized on the (stable) API operation, so this runs once per group.
   // While the Groups tab is hidden the open is *owed* rather than run: it reaches
@@ -101,6 +106,14 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
         onAnalyze={source.analyzeMembers}
         canAnalyze={targetTabId !== null}
         onNavigateToRule={onNavigateToRule}
+      />
+
+      <GroupAccessSection
+        apps={accessGrants.apps}
+        appsStatus={accessGrants.appsStatus}
+        appsError={accessGrants.appsError}
+        roles={accessGrants.roles}
+        rolesStatus={accessGrants.rolesStatus}
       />
 
       <GroupRulesSection
