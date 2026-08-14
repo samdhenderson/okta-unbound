@@ -43,7 +43,7 @@ const ComparisonSearchPhase: React.FC<ComparisonSearchPhaseProps> = ({
 
   return (
     <div className="space-y-5">
-      <div className="relative overflow-hidden rounded-lg border border-primary-highlight bg-primary-light/60 p-4">
+      <div className="relative overflow-hidden rounded-md border border-primary-highlight bg-primary-light/60 p-4">
         <div
           className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary/10 blur-2xl"
           aria-hidden

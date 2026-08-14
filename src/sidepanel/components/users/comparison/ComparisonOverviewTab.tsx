@@ -167,7 +167,7 @@ const OverviewCard: React.FC<OverviewCardProps> = ({
   const total = onlyContext + shared + onlyCompared;
 
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-3">
+    <div className="rounded-md border border-neutral-200 bg-white p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="rounded-md bg-neutral-100 p-1.5 text-neutral-700">
@@ -227,7 +227,7 @@ const Stat: React.FC<{
     >
       {value}
     </div>
-    <div className="mt-1.5 flex items-center justify-center gap-1.5 text-[10px] font-medium text-neutral-600">
+    <div className="mt-1.5 flex items-center justify-center gap-1.5 text-xs font-medium text-neutral-600">
       <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} />
       <span className="truncate" title={label}>
         {label}

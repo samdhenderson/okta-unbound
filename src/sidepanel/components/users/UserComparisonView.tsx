@@ -47,39 +47,12 @@ import ComparisonSearchPhase from './comparison/ComparisonSearchPhase';
 import ComparisonHero from './comparison/ComparisonHero';
 import ComparisonTabBar from './comparison/ComparisonTabBar';
 import ComparisonOverviewTab from './comparison/ComparisonOverviewTab';
-import ComparisonDiffTab, { type CellDirection } from './comparison/ComparisonDiffTab';
+import ComparisonDiffTab from './comparison/ComparisonDiffTab';
 import AppScopeIndicator from './comparison/AppScopeIndicator';
 import GroupSourceIndicator from './comparison/GroupSourceIndicator';
 import { groupParityRows, appParityRows } from './comparison/comparisonAnalytics';
 import type { UserComparisonState } from '../../hooks/useUserComparison';
 import type { OktaUser } from '../../../shared/types';
-
-/**
- * An Add button's label, with the arrow on the edge nearest the equality marker
- * and pointing at it — the gesture and the goal are the same thing, close the
- * `≠`. Deliberately part of the button rather than a glyph beside it: as a
- * sibling it read as a stray mark between the marker and the control, and it was
- * not part of the click target.
- *
- * The arrow is set a step larger than the label so it carries at a glance; it is
- * `aria-hidden` because "Add" is the whole accessible name — a screen reader
- * announcing a direction it cannot see would be noise.
- */
-const AddLabel: React.FC<{ direction: CellDirection }> = ({ direction }) => (
-  <span className="inline-flex items-center gap-1">
-    {direction === 'left' && (
-      <span aria-hidden="true" className="text-base leading-none">
-        ←
-      </span>
-    )}
-    Add
-    {direction === 'right' && (
-      <span aria-hidden="true" className="text-base leading-none">
-        →
-      </span>
-    )}
-  </span>
-);
 
 /** Props for {@link UserComparisonView}. */
 export interface UserComparisonViewProps {
@@ -298,7 +271,7 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
                   rows={groupParityRows(groupBuckets)}
                   noun="group"
                   emptyText="Neither user is in any groups."
-                  renderContextAction={(row, direction) => {
+                  renderContextAction={(row, recipientName) => {
                     // Re-find in the LIVE bucket rather than trusting the row:
                     // after a successful add the group moves to `shared`, the
                     // find returns undefined, and the cell flips to a check —
@@ -312,30 +285,38 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
                       <Button
                         size="sm"
                         variant="primary"
+                        icon="plus"
+                        // Fills its third, so the cell matches the named cell
+                        // opposite it instead of floating in the middle of it.
+                        fullWidth
                         loading={addingGroupId === m.group.id}
                         // GLOBAL single-flight lock, not a per-row one: a copy
                         // started anywhere disables every other Add. Keep verbatim.
                         disabled={addingGroupId !== null}
                         onClick={() => addToContext(m.group)}
                       >
-                        <AddLabel direction={direction} />
+                        {/* Names the recipient — this cell's own user, who is
+                            exactly who `addToContext` adds the group to. */}
+                        Add {recipientName}
                       </Button>
                     );
                   }}
-                  renderComparedAction={(row, direction) => {
-                    // Mirror image, in the other direction. Same lock, same
-                    // in-place success.
+                  renderComparedAction={(row, recipientName) => {
+                    // Mirror image, on the other side. Same lock, same in-place
+                    // success, and the same "the button names who receives" rule.
                     const m = groupBuckets.onlyContext.find((b) => b.group.id === row.id);
                     if (!m || m.group.type === 'APP_GROUP') return null;
                     return (
                       <Button
                         size="sm"
                         variant="primary"
+                        icon="plus"
+                        fullWidth
                         loading={addingGroupId === m.group.id}
                         disabled={addingGroupId !== null}
                         onClick={() => addToCompared(m.group)}
                       >
-                        <AddLabel direction={direction} />
+                        Add {recipientName}
                       </Button>
                     );
                   }}
