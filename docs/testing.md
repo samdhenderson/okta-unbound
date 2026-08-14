@@ -22,6 +22,28 @@ Two projects: `unit` (jsdom, browser-free — `npm run test:run`) and `storybook
   the user sees. A component whose whole contract is "renders these props" gets a
   story instead ([adr/0023](./adr/0023-test-value-policy.md)).
 
+### What a story actually asserts
+
+A story without a `play` function asserts exactly two things: **it renders without
+throwing, and it is axe-clean** ([adr/0011](./adr/0011-storybook-single-docs-site.md),
+[adr/0014](./adr/0014-storybook-hardening.md)). It does **not** check that the right
+text appeared, that a callback fired, or that a derived value is correct. Only a
+`play` function does that, and at the time of writing **6 of 115 story files have
+one**.
+
+This matters when applying ADR-0023's "one runner per pure-render component". A
+2026-08-13 audit found 45 components carrying both a `.test.tsx` and a
+`.stories.tsx` and checked whether the story could stand in for the test. **None
+could.** Even the three whose stories have `play` functions cover different ground
+than their tests — `AuthPoliciesTab`'s play expands a policy, while its test also
+pins re-expansion caching and the ADR-0018 visibility deferral.
+
+So "there's already a story" is **not** on its own a reason to delete a test. Removal
+under [adr/0022](./adr/0022-test-lifecycle.md)(2) requires the story to actually
+assert the same behavior — read its `play` function and say so in the PR note. Going
+forward, the rule bites at authoring time: don't write a render-only test for a
+component that already has a story.
+
 ## Mocking the network — at the facade, not MSW
 
 The side panel **never calls `fetch`**. Every Okta request goes side panel →
