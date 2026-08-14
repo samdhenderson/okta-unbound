@@ -12,8 +12,7 @@
  * the one that used to be rendered here was always `undefined` outside fixtures.
  */
 import React from 'react';
-import { CopyButton } from '../../shared';
-import DetailSection from './DetailSection';
+import { CopyButton, DetailSection } from '../../shared';
 import { formatDate } from '../../../../shared/utils/dateFormat';
 
 /** Props for {@link GroupMetadataSection}. */
