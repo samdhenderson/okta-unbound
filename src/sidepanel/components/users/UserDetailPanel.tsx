@@ -23,6 +23,7 @@ import GroupMembershipsList from './GroupMembershipsList';
 import UserLifecycleActions from './UserLifecycleActions';
 import UserProfileCard from './UserProfileCard';
 import type { GroupMembership, OktaUser } from '../../../shared/types';
+import type { MemberRuleAttribution } from '../../../shared/membership/memberRuleAttribution';
 import type { LifecycleAction } from '../../hooks/useUserLifecycleActions';
 
 /** Props for {@link UserDetailPanel}. */
@@ -55,6 +56,11 @@ export interface UserDetailPanelProps {
   onCancelLifecycleAction: () => void;
   /** Run the armed lifecycle action (the confirm button). */
   onConfirmLifecycleAction: () => void;
+  /**
+   * Asks Okta which rules manage one membership, replacing that row's deduction
+   * with Okta's own answer (ADR-0031). Omitted, no row offers the action.
+   */
+  onProveMembershipSource?: (groupId: string) => Promise<MemberRuleAttribution>;
 }
 
 /**
@@ -74,6 +80,7 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
   onRequestLifecycleAction,
   onCancelLifecycleAction,
   onConfirmLifecycleAction,
+  onProveMembershipSource,
 }) => {
   return (
     <div className="space-y-6 animate-rise-in">
@@ -104,6 +111,7 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
         oktaOrigin={oktaOrigin}
         onNavigateToRule={onNavigateToRule}
         recentlyAddedGroupId={recentlyAddedGroupId}
+        onProveMembershipSource={onProveMembershipSource}
       />
     </div>
   );

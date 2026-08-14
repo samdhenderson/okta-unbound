@@ -31,7 +31,8 @@
 
 import { describe, it, expect } from 'vitest';
 import { summarizeMemberSources, type GroupIdentity } from './groupSource';
-import { readEmbeddedGroupRules } from './memberRuleAttribution';
+import { interpretGroupRules, readEmbeddedGroupRules } from './memberRuleAttribution';
+import { withMembershipProvenance } from './provenance';
 import {
   analyzeMemberships,
   attributionNamesRules,
@@ -296,6 +297,112 @@ describe('attribution parity between the group view and the user view', () => {
       const identity = scenario.identity ?? GROUP;
       expect(groupViewVerdict(identity, scenario.rules, scenario.user).deduced).toBe(
         userViewVerdict(identity, scenario.rules, scenario.user).deduced,
+      );
+    }
+  });
+});
+
+/**
+ * **The amendment (ADR-0031).** ADR-0020's contract keyed the permitted
+ * divergence on `readEmbeddedGroupRules` returning `unknown`, because that was
+ * the only state the user path could ever see. The per-row "Prove it" action
+ * changes that predicate: the user path can now obtain Okta's own answer for one
+ * membership, on demand, from
+ * `GET /api/v1/groups/{groupId}/users/{userId}/group-rules`.
+ *
+ * The contract that replaces it is stricter, not looser:
+ *
+ * > Where Okta asserted nothing, the two paths still agree exactly. Where Okta
+ * > asserted something, they diverge **until the user path is proven**, and a
+ * > proven user path reproduces the group path's verdict.
+ *
+ * The two halves are pinned below. The proof is fed through the same
+ * `interpretGroupRules` the endpoint response goes through in production, so a
+ * scenario cannot claim an answer Okta's own three-state reading would not give.
+ */
+describe('attribution parity after an explicit per-row proof (ADR-0031)', () => {
+  /**
+   * The user view's verdict once a reader has proven one row: the heuristic still
+   * ran, but Okta's answer is attached as provenance and that is what the surface
+   * then states.
+   *
+   * @param proof - The `…/group-rules` response body, exactly as Okta would send it.
+   */
+  function provenUserViewVerdict(
+    identity: GroupIdentity,
+    rules: MembershipRule[],
+    user: OktaUser,
+    proof: unknown,
+  ): Verdict {
+    const [membership] = analyzeMemberships([asOktaGroup(identity)], rules, user);
+    const { provenance } = withMembershipProvenance(membership, interpretGroupRules(proof));
+    if (!provenance) throw new Error('Okta did not answer: there is no proof to read');
+
+    return {
+      // Okta's own books: rules named → rule-managed; none named → a manual add.
+      managed: provenance.rules.length > 0 ? 'rule' : 'manual',
+      namedRuleIds: provenance.rules.map((r) => r.id).sort(),
+      // An assertion is never a deduction, whatever the heuristic thought.
+      deduced: false,
+    };
+  }
+
+  /** The scenarios where the two paths are permitted to differ, and their proofs. */
+  const divergent = scenarios.filter((scenario) => scenario.oktaAsserts);
+
+  it('has divergent scenarios to close, or this suite proves nothing', () => {
+    expect(divergent.length).toBeGreaterThan(0);
+  });
+
+  it.each(divergent)('proving "$name" makes the user path match the group path', (scenario) => {
+    const identity = scenario.identity ?? GROUP;
+
+    // The endpoint answers with the same rule list the group listing embedded —
+    // one Okta, one set of books — so the proof is read off the fixture rather
+    // than restated.
+    const embedded = readEmbeddedGroupRules(scenario.user);
+    const proof = embedded.state === 'rules' ? embedded.rules : [];
+
+    const proven = provenUserViewVerdict(identity, scenario.rules, scenario.user, proof);
+
+    expect(proven).toEqual(scenario.groupView);
+    // And the divergence really was there to close.
+    expect(proven).not.toEqual(scenario.userView);
+  });
+
+  it('reproduces the group path for a member Okta says no rule feeds', () => {
+    // Okta answering with an empty list is an authoritative manual add; the
+    // heuristic, alone, was guessing an unevaluable rule.
+    const user = member();
+    const rules = [unevaluableRule('0prFAKEone', 'Contractors')];
+
+    expect(userViewVerdict(GROUP, rules, user)).toEqual(rule('rule', ['0prFAKEone'], true));
+    expect(provenUserViewVerdict(GROUP, rules, user, [])).toEqual(rule('manual', [], false));
+  });
+
+  it('leaves the heuristic standing when the proof yields no answer', () => {
+    const user = member();
+    const rules = [unevaluableRule('0prFAKEone', 'Contractors')];
+
+    // A failed or unparseable response is `unknown`, so nothing is attached and
+    // the user path is exactly what it was — never a fabricated manual add.
+    for (const noAnswer of [undefined, null, 'nope', {}, [{ nope: true }]]) {
+      const [membership] = analyzeMemberships([asOktaGroup(GROUP)], rules, user);
+      const result = withMembershipProvenance(membership, interpretGroupRules(noAnswer));
+
+      expect(result.provenance).toBeUndefined();
+      expect(userViewVerdict(GROUP, rules, user)).toEqual(rule('rule', ['0prFAKEone'], true));
+    }
+  });
+
+  it('still requires the two paths to agree where Okta asserted nothing', () => {
+    // The amendment narrows the divergence set; it does not license a new one.
+    // Proving a row Okta says nothing about is impossible by construction, so the
+    // original invariant is untouched for every silent scenario.
+    for (const scenario of scenarios.filter((s) => !s.oktaAsserts)) {
+      const identity = scenario.identity ?? GROUP;
+      expect(userViewVerdict(identity, scenario.rules, scenario.user)).toEqual(
+        groupViewVerdict(identity, scenario.rules, scenario.user),
       );
     }
   });

@@ -33,11 +33,20 @@
  *    comes from `isDeducedAttribution`, whose own contract is that a deduction must
  *    never render as an answer.
  *
+ * ## The one line that is not a deduction
+ *
+ * Every case above explains what the *classifier* concluded, and every one of them
+ * is hedged accordingly. A membership that carries `provenance` (ADR-0031 — the
+ * reader explicitly asked Okta about this one row) is different in kind: it is
+ * Okta's own record, so it is stated as a fact and says whose fact it is. That
+ * branch is checked first, and it is the only place `proven` is true without the
+ * classifier having proved anything.
+ *
  * Rule and group names are end-user-controllable Okta data. Nothing here is logged,
  * and both consumers render the result as escaped React text.
  */
 import { attributionNamesRules, isDeducedAttribution } from '../utils/membershipAnalysis';
-import type { GroupMembership, MembershipAttribution } from '../types';
+import type { GroupMembership, MembershipAttribution, MembershipProvenance } from '../types';
 
 /**
  * How a rule is introduced, by the evidence behind the attribution.
@@ -100,17 +109,56 @@ function ruleDescription(namesRules: boolean, deduced: boolean): string {
 }
 
 /**
+ * Okta's own answer about one membership, stated as the fact it is.
+ *
+ * The wording deliberately names the source — a reader who has both this line and
+ * a hedged classifier line in front of them must be able to tell which is which,
+ * and which one wins. An **empty** rule list is Okta positively asserting a manual
+ * add, never "no answer": {@link module:shared/membership/provenance} is where
+ * that distinction is kept, and this function may assume it.
+ *
+ * @param provenance - Okta's answer, as attached to the membership.
+ * @returns The line, always `proven` — it is not the classifier's deduction.
+ */
+function oktaSourceLine(provenance: MembershipProvenance): MembershipSourceLine {
+  if (provenance.rules.length === 0) {
+    return {
+      caption: 'Okta confirms: added directly',
+      detail: '',
+      description:
+        "Okta's own record for this user and group names no rule managing the membership, so it was added by hand. This is Okta answering rather than the classifier evaluating rule conditions, and it is the answer where the two differ.",
+      proven: true,
+    };
+  }
+
+  const several = provenance.rules.length > 1 ? ` (${provenance.rules.length} rules)` : '';
+  return {
+    caption: 'Okta confirms: added by rule:',
+    detail: `${provenance.rules.map((r) => r.name).join(', ')}${several}`,
+    description:
+      "Okta's own record for this user and group names the rule(s) managing the membership. This is Okta answering rather than the classifier evaluating rule conditions, and it is the answer where the two differ.",
+    proven: true,
+  };
+}
+
+/**
  * Explain one membership.
  *
- * Branch order matters: `UNKNOWN` is checked before anything else so a membership
- * that was never classified can never fall through into a confident-sounding
- * branch.
+ * Branch order matters twice over: `provenance` is checked first, because Okta's
+ * own answer outranks anything the classifier concluded; then `UNKNOWN`, so a
+ * membership that was never classified can never fall through into a
+ * confident-sounding branch.
  *
  * @param membership - The membership to explain.
  * @returns Its caption, detail, caveat and evidence weight.
  */
 export function membershipSourceLine(membership: GroupMembership): MembershipSourceLine {
-  const { membershipType, rules, attribution, group } = membership;
+  const { membershipType, rules, attribution, group, provenance } = membership;
+
+  // Okta was asked about this exact membership and answered (ADR-0031). Nothing
+  // the classifier deduced can outrank that, so no other branch is consulted.
+  if (provenance) return oktaSourceLine(provenance);
+
   // A guess and a fact get different weights, from the shared table rather than
   // from a second opinion formed here.
   const deduced = isDeducedAttribution(attribution);

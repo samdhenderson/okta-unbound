@@ -264,6 +264,7 @@ const UsersTab: React.FC<UsersTabProps> = ({
                 onRequestLifecycleAction={lifecycle.setPendingLifecycleAction}
                 onCancelLifecycleAction={() => lifecycle.setPendingLifecycleAction(null)}
                 onConfirmLifecycleAction={lifecycle.confirmLifecycleAction}
+                onProveMembershipSource={state.proveMembershipSource}
               />
             </div>
 

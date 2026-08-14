@@ -210,6 +210,9 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
       // Group operations
       getAllGroupMembers: groupMemberOps.getAllGroupMembers,
+      // One call, one membership, asked only when a reader presses "Prove it"
+      // (ADR-0031). Never run for a list: it is linear in group count.
+      getMembershipRuleProof: groupMemberOps.getMembershipRuleProof,
       removeUserFromGroup: groupMemberOps.removeUserFromGroup,
       removeUserFromGroups: groupMemberOps.removeUserFromGroups,
       addUserToGroup: groupMemberOps.addUserToGroup,

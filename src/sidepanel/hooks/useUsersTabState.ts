@@ -29,11 +29,13 @@
  * user — a pushed view would otherwise hide the profile that deep link is for.
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import type React from 'react';
 import type { GroupMembership, OktaUser, UserInfo } from '../../shared/types';
 import type { AlertMessageData } from '../components/shared/AlertMessage';
 import { invalidate } from '../cache/entityCache';
+import { useOktaApi } from './useOktaApi';
+import type { MemberRuleAttribution } from '../../shared/membership/memberRuleAttribution';
 import { cacheKeys } from '../cache/keys';
 import { userDisplayName } from '../../shared/utils/userDisplay';
 import { useUserContext } from './useUserContext';
@@ -141,6 +143,15 @@ export interface UseUsersTabStateReturn {
   isDetailOpen: boolean;
   /** Whether a comparison is the view on screen (the stack's second rung). */
   isCompareOpen: boolean;
+  /**
+   * Asks Okta which rules manage one of the selected user's memberships
+   * (ADR-0031). `undefined` when there is no selected user or no connected tab,
+   * which is what hides the per-row "Prove it" action rather than offering one
+   * that cannot work.
+   *
+   * One request per call, so it is only ever invoked from that press.
+   */
+  proveMembershipSource?: (groupId: string) => Promise<MemberRuleAttribution>;
   /** Pushes the comparison view for the selected user. No-op without one. */
   openCompare: () => void;
   /** Pops the comparison view, returning to the search + profile body. */
@@ -433,6 +444,17 @@ export function useUsersTabState({
   const dismissError = useCallback(() => setError(null), []);
   const dismissResultMessage = useCallback(() => setResultMessage(null), []);
 
+  // §8: this orchestrator owns one scheduler-routed read of its own — the
+  // per-membership proof, which needs both the selected user and a live tab.
+  const { getMembershipRuleProof } = useOktaApi({ targetTabId: targetTabId ?? null });
+  const proveMembershipSource = useMemo(
+    () =>
+      selectedUser && targetTabId
+        ? (groupId: string) => getMembershipRuleProof(groupId, selectedUser.id)
+        : undefined,
+    [selectedUser, targetTabId, getMembershipRuleProof],
+  );
+
   const { pop: popCompare } = nav;
   const openCompare = useCallback(() => {
     if (!selectedUser) return;
@@ -461,6 +483,7 @@ export function useUsersTabState({
     nav,
     isDetailOpen,
     isCompareOpen,
+    proveMembershipSource,
     openCompare,
     closeCompare,
     refreshSelectedUserMemberships,

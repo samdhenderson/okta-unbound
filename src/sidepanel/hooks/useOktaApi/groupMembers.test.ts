@@ -203,3 +203,74 @@ describe('membership-change reporting', () => {
     });
   });
 });
+
+/**
+ * The per-membership proof read (ADR-0031): one documented call that answers
+ * "which rules manage *this* user's membership of *this* group", for a surface
+ * whose only other option is a heuristic.
+ *
+ * What matters here is the same thing that matters in the embed reader: **three**
+ * states. A `200` with an empty list is Okta asserting a manual add; a failure,
+ * or a body that is not a rule list, is Okta saying nothing. A test that let the
+ * second become the first would be signing off on a manufactured fact.
+ */
+describe('getMembershipRuleProof', () => {
+  const proofOf = (result: unknown, transport = vi.fn().mockResolvedValue(result)) => ({
+    transport,
+    proof: createGroupMemberOperations(makeCore({ makeApiRequest: transport }))
+      .getMembershipRuleProof,
+  });
+
+  it('asks the documented per-membership endpoint, once, with no pagination', async () => {
+    const { transport, proof } = proofOf({ success: true, data: [] });
+
+    await proof('00gFAKE1', '00uFAKE1');
+
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(transport).toHaveBeenCalledWith('/api/v1/groups/00gFAKE1/users/00uFAKE1/group-rules');
+  });
+
+  it('reports the rules Okta names', async () => {
+    const { proof } = proofOf({
+      success: true,
+      data: [{ id: '0prFAKE1', name: 'Eng feeder' }],
+    });
+
+    await expect(proof('00gFAKE1', '00uFAKE1')).resolves.toEqual({
+      state: 'rules',
+      rules: [{ id: '0prFAKE1', name: 'Eng feeder' }],
+    });
+  });
+
+  it('reports an empty list as an authoritative manual add, not as no answer', async () => {
+    const { proof } = proofOf({ success: true, data: [] });
+
+    await expect(proof('00gFAKE1', '00uFAKE1')).resolves.toEqual({ state: 'no-rules' });
+  });
+
+  it('unwraps the list when Okta nests it under the key it uses elsewhere', async () => {
+    const { proof } = proofOf({
+      success: true,
+      data: { 'group-rules': [{ id: '0prFAKE1', name: 'Eng feeder' }] },
+    });
+
+    await expect(proof('00gFAKE1', '00uFAKE1')).resolves.toMatchObject({ state: 'rules' });
+  });
+
+  it('reports a failed request as unknown rather than as a manual add', async () => {
+    const { proof } = proofOf({ success: false, status: 403, error: 'denied' });
+
+    await expect(proof('00gFAKE1', '00uFAKE1')).resolves.toEqual({ state: 'unknown' });
+  });
+
+  it.each([
+    ['a null body', null],
+    ['a string body', 'nope'],
+    ['an object that is not the rule list', { total: 2 }],
+    ['a list of unusable entries', [null, { id: 42 }]],
+  ])('degrades %s to unknown, never to "no rule"', async (_label, data) => {
+    const { proof } = proofOf({ success: true, data });
+
+    await expect(proof('00gFAKE1', '00uFAKE1')).resolves.toEqual({ state: 'unknown' });
+  });
+});

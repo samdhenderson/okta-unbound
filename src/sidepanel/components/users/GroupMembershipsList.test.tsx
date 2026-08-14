@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import GroupMembershipsList from './GroupMembershipsList';
+import type { MemberRuleAttribution } from '../../../shared/membership/memberRuleAttribution';
 import type { GroupMembership, OktaUser } from '../../../shared/types';
 
 const user: OktaUser = {
@@ -227,5 +228,119 @@ describe('GroupMembershipsList — memberships with no rule to name', () => {
     withSource({ membershipType: 'UNKNOWN', rules: [], attribution: 'ambiguous' });
 
     expect(screen.getByTitle(/the answer is missing/i)).toBeInTheDocument();
+  });
+});
+
+/**
+ * The per-row "Prove it" action (ADR-0031). Every other line on this surface is a
+ * deduction — this is the one call that replaces one of them with Okta's own
+ * answer, and the assertions below are about what the row is then allowed to
+ * claim.
+ *
+ * The most important one is the negative: Okta *saying nothing* must not read
+ * like Okta saying "no rule". They are one API failure apart.
+ */
+describe('GroupMembershipsList — proving one membership against Okta', () => {
+  const guessed: GroupMembership = {
+    ...formattedRuleMembership,
+    attribution: 'ambiguous',
+  };
+
+  const withProof = (
+    onProveMembershipSource: (groupId: string) => Promise<MemberRuleAttribution>,
+    memberships: GroupMembership[] = [guessed],
+  ) =>
+    render(
+      <GroupMembershipsList
+        {...base}
+        user={user}
+        memberships={memberships}
+        onProveMembershipSource={onProveMembershipSource}
+      />,
+    );
+
+  const proveIt = () => screen.getAllByRole('button', { name: /Prove it/ });
+
+  it('offers no action at all unless a resolver is supplied — it is never free', () => {
+    render(<GroupMembershipsList {...base} user={user} />);
+
+    expect(screen.queryByRole('button', { name: /Prove it/ })).not.toBeInTheDocument();
+  });
+
+  it('asks about one group only when clicked, and only that group', async () => {
+    const onProve = vi.fn().mockResolvedValue({ state: 'no-rules' as const });
+    withProof(onProve, [guessed, { ...guessed, group: { ...guessed.group, id: '00gFAKE2' } }]);
+
+    // Two rows, two buttons, and nothing asked until one is pressed.
+    expect(proveIt()).toHaveLength(2);
+    expect(onProve).not.toHaveBeenCalled();
+
+    await userEvent.click(proveIt()[0]);
+
+    expect(onProve).toHaveBeenCalledTimes(1);
+    expect(onProve).toHaveBeenCalledWith(guessed.group.id);
+  });
+
+  it('states Okta’s named rule as a fact once proven', async () => {
+    withProof(() =>
+      Promise.resolve({ state: 'rules', rules: [{ id: '0prFAKEhr', name: 'HR sync' }] }),
+    );
+
+    await userEvent.click(proveIt()[0]);
+
+    expect(await screen.findByText(/Okta confirms: added by rule: HR sync/)).toBeInTheDocument();
+  });
+
+  it('states an Okta "no rule" answer as an authoritative manual add', async () => {
+    withProof(() => Promise.resolve({ state: 'no-rules' }));
+
+    await userEvent.click(proveIt()[0]);
+
+    expect(await screen.findByText('Okta confirms: added directly')).toBeInTheDocument();
+  });
+
+  // The distinction the whole feature turns on.
+  it('never turns "Okta said nothing" into "Okta says no rule"', async () => {
+    withProof(() => Promise.resolve({ state: 'unknown' }));
+
+    await userEvent.click(proveIt()[0]);
+
+    expect(await screen.findByText(/Okta did not answer/)).toBeInTheDocument();
+    expect(screen.queryByText(/Okta confirms/)).not.toBeInTheDocument();
+  });
+
+  it('treats a failed request the same way — no answer, not an answer', async () => {
+    withProof(() => Promise.reject(new Error('rate limited')));
+
+    await userEvent.click(proveIt()[0]);
+
+    expect(await screen.findByText(/Okta did not answer/)).toBeInTheDocument();
+    expect(screen.queryByText(/Okta confirms/)).not.toBeInTheDocument();
+    // The row's own hedged classification is untouched by the failure.
+    expect(screen.getAllByText('Possible rule:')).toHaveLength(1);
+  });
+
+  it('leaves the per-rule explanation standing beside Okta’s answer', async () => {
+    withProof(() =>
+      Promise.resolve({ state: 'rules', rules: [{ id: '0prFAKEhr', name: 'HR sync' }] }),
+    );
+
+    await userEvent.click(proveIt()[0]);
+    await screen.findByText(/Okta confirms/);
+
+    // The clause-by-clause explanation of the candidate rule is still there: the
+    // proof adds Okta's answer, it does not delete the evidence behind the guess.
+    expect(screen.getByText('user.department == "Engineering"')).toBeInTheDocument();
+    expect(screen.getByText('Possible rule:')).toBeInTheDocument();
+  });
+
+  it('carries the full caveat about whose answer it is on hover', async () => {
+    withProof(() => Promise.resolve({ state: 'no-rules' }));
+
+    await userEvent.click(proveIt()[0]);
+
+    expect(
+      await screen.findByTitle(/Okta answering rather than the classifier/),
+    ).toBeInTheDocument();
   });
 });

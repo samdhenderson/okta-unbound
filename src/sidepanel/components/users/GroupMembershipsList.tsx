@@ -16,12 +16,21 @@
  * UsersTab's "Add to Group" flow succeeds) via `recentlyAddedGroupId`; that row
  * plays a one-shot `animate-affirm-flash` so the confirmation lands on the group
  * that changed rather than only in a banner above the fold.
+ *
+ * Every classification here is a **deduction** — this endpoint carries no
+ * attribution embed (ADR-0020). Supply `onProveMembershipSource` and each row
+ * gains a "Prove it" action that replaces its guess with Okta's own answer for
+ * that one membership (ADR-0031); see
+ * {@link sidepanel/components/users/GroupMembershipsListProof}. It is one API
+ * call per row and is never run automatically.
  */
 import React from 'react';
 import { Badge, Button, IconButton, Skeleton, type BadgeVariant } from '../shared';
 import Icon from '../overview/shared/Icon';
 import ClauseChecklist from '../groups/detail/ClauseChecklist';
+import MembershipProofAction, { useMembershipProofs } from './GroupMembershipsListProof';
 import { membershipSourceLine, sourceLineLabel } from '../../../shared/membership/sourceLine';
+import type { MemberRuleAttribution } from '../../../shared/membership/memberRuleAttribution';
 import type {
   GroupMembership,
   MembershipAttribution,
@@ -72,6 +81,16 @@ interface GroupMembershipsListProps {
    * non-matching ids render no flash.
    */
   recentlyAddedGroupId?: string | null;
+  /**
+   * Asks Okta which rules manage one membership
+   * (`GET /api/v1/groups/{groupId}/users/{userId}/group-rules`), resolving to its
+   * three-state answer. Supplied, every row gains a "Prove it" action; omitted,
+   * the surface stays exactly as it was.
+   *
+   * **One API call per row**, so it is invoked only from that click — never for
+   * the list, and never on mount.
+   */
+  onProveMembershipSource?: (groupId: string) => Promise<MemberRuleAttribution>;
 }
 
 /** Props for {@link RuleAttributionBlock}. */
@@ -221,7 +240,10 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
   onNavigateToRule,
   actions,
   recentlyAddedGroupId,
+  onProveMembershipSource,
 }) => {
+  const proofs = useMembershipProofs(onProveMembershipSource);
+
   const highlightCurrentGroup = (groupId: string) => {
     return currentGroupId && groupId === currentGroupId;
   };
@@ -345,6 +367,21 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
                 </div>
               ) : (
                 <MembershipSourceNote membership={membership} />
+              )}
+
+              {/*
+                The deduction above stays exactly as it was; this is the way out
+                of it. One explicit call asks Okta about this one membership and
+                states the answer as a fact (ADR-0031). It is deliberately last:
+                the row reads as "here is what we worked out — and here is what
+                Okta says", not the other way round.
+              */}
+              {proofs.enabled && (
+                <MembershipProofAction
+                  membership={membership}
+                  outcome={proofs.outcomeFor(membership.group.id)}
+                  onProve={proofs.prove}
+                />
               )}
             </div>
           ))}

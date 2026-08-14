@@ -279,6 +279,50 @@ export interface MembershipRule {
  */
 export type MembershipAttribution = 'exact' | 'inferred' | 'ambiguous';
 
+/**
+ * One rule exactly as Okta named it when asked which rules manage a membership.
+ *
+ * Structurally the `EmbeddedGroupRule` of
+ * `shared/membership/memberRuleAttribution` — declared here rather than imported
+ * so this module stays free of an import cycle back through `shared/membership`,
+ * which already depends on these types. Deliberately just the reference: Okta's
+ * answer names rules, it does not describe them, and nothing may pass one of
+ * these off as a classified {@link MembershipRule} carrying a condition.
+ */
+export interface OktaAttributedRule {
+  /** Rule id (`0pr…`). */
+  id: string;
+  /** Rule name, exactly as Okta returned it (end-user-controllable text). */
+  name: string;
+}
+
+/**
+ * **Who produced a membership's answer**, carried beside the attribution rather
+ * than folded into it.
+ *
+ * Attribution answers _how strong is the evidence_; provenance answers _who
+ * produced it_, and the two compose — which is precisely why provenance is not a
+ * fourth {@link MembershipAttribution} value (ADR-0020 §3). This is that ADR's
+ * prescribed shape: an **additive** field on {@link GroupMembership}, so every
+ * exhaustive table keyed by `MembershipAttribution` is untouched.
+ */
+export interface MembershipProvenance {
+  /**
+   * Who asserted it. Only `okta` exists today — a client-evaluated answer is
+   * described by `attribution` alone and never fabricates a provenance.
+   */
+  source: 'okta';
+  /**
+   * The rules Okta names as managing this membership.
+   *
+   * **Empty is an answer, not an absence**: Okta positively asserting that no
+   * rule feeds the membership, i.e. an authoritative manual add. "Okta said
+   * nothing" is the absence of the whole provenance object and must never be
+   * encoded as an empty array.
+   */
+  rules: OktaAttributedRule[];
+}
+
 /** A single group membership, annotated with how it was granted. */
 export interface GroupMembership {
   group: OktaGroup;
@@ -302,6 +346,17 @@ export interface GroupMembership {
    * than omit the field and have consumers default it to confidence.
    */
   attribution: MembershipAttribution;
+  /**
+   * Okta's own answer about this membership, when someone explicitly asked for
+   * it (ADR-0031). **Absent by default**, and absent is not "no rule": it means
+   * nobody asked, or Okta did not answer.
+   *
+   * Purely additive — it never rewrites `membershipType`, `rules` or
+   * `attribution`, which keep describing what the *classifier* concluded. A
+   * surface that carries both states which is which; see
+   * `shared/membership/sourceLine`.
+   */
+  provenance?: MembershipProvenance;
 }
 
 /**

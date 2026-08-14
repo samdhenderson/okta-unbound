@@ -24,12 +24,22 @@
  *
  * **This module is the seam where the two views may legitimately diverge.** The
  * user view has no equivalent embed to read, so `unknown` is the only state it
- * ever sees. That makes {@link readEmbeddedGroupRules}'s answer the exact
- * predicate for "are the group and user views allowed to disagree about this
- * member?" — `unknown` means no, anything else means yes-and-for-a-stated-reason
- * (ADR-0020, pinned by `attributionParity.test.ts`).
+ * ever sees *by default*. That makes {@link readEmbeddedGroupRules}'s answer the
+ * exact predicate for "are the group and user views allowed to disagree about
+ * this member?" — `unknown` means no, anything else means
+ * yes-and-for-a-stated-reason (ADR-0020, pinned by `attributionParity.test.ts`).
+ *
+ * **The user view can now leave `unknown`, but only when asked to.** ADR-0031
+ * adds an explicit, per-membership read
+ * (`GET /api/v1/groups/{groupId}/users/{userId}/group-rules`) behind a click, so
+ * a reader can convert one hedged guess into Okta's own answer. That endpoint
+ * returns the rule references directly rather than nested under `_embedded`, so
+ * it shares this module's *interpretation* ({@link interpretGroupRules}) rather
+ * than its unwrapping — the three states, and the refusal to collapse them, are
+ * defined once for both callers.
  *
  * @see {@link readEmbeddedGroupRules}
+ * @see {@link interpretGroupRules}
  */
 
 import { z } from 'zod';
@@ -120,7 +130,30 @@ export function readEmbeddedGroupRules(member: unknown): MemberRuleAttribution {
   // positive "no rule feeds this member".
   if (!(GROUP_RULES_EXPAND in embedded)) return UNKNOWN;
 
-  const raw = (embedded as Record<string, unknown>)[GROUP_RULES_EXPAND];
+  return interpretGroupRules((embedded as Record<string, unknown>)[GROUP_RULES_EXPAND]);
+}
+
+/**
+ * Interpret a bare list of rule references — the three-state reading, without the
+ * `_embedded` unwrapping.
+ *
+ * Shared by the two ways Okta will answer "which rules manage this membership":
+ * the `expand=group-rules` embed on the group-member listing
+ * ({@link readEmbeddedGroupRules}) and the per-membership endpoint
+ * `GET /api/v1/groups/{groupId}/users/{userId}/group-rules`, whose body **is**
+ * this array (ADR-0031). Keeping the interpretation in one place is what stops
+ * the second caller from quietly reading an empty answer as no answer.
+ *
+ * Pure and total: anything that is not an array of usable rule references
+ * degrades to `unknown`, never to `no-rules`.
+ *
+ * @param raw - The rule-reference array, exactly as Okta sent it.
+ * @returns The corresponding {@link MemberRuleAttribution}. An **empty array is
+ * `no-rules`** — Okta positively asserting a manual add — while a non-array, or
+ * an array whose every entry is unusable, is `unknown`. Duplicate rule ids are
+ * collapsed.
+ */
+export function interpretGroupRules(raw: unknown): MemberRuleAttribution {
   if (!Array.isArray(raw)) return UNKNOWN;
   if (raw.length === 0) return { state: 'no-rules' };
 
