@@ -56,6 +56,9 @@ Details: `docs/architecture.md`.
   (`docs/motion.md`, ADR-0027)
 - **Never hand-roll a `<button>/<input>/<select>/<textarea>`** — import from the
   `components/shared` barrel. (`docs/components.md`)
+- **Never hand-roll a list-row container** — use shared `ListRow` (`density`,
+  `state`, `as`). Row interiors follow the typography contract in
+  `docs/design-system.md`. (ADR-0029)
 - **No raw `console.*`.** Use `src/shared/utils/logger.ts`. **Never log XSRF tokens,
   request/response bodies, or PII** — identifiers and outcomes only.
 - **No new `any`.** Validate Okta responses at the boundary with zod. (ADR-0006)

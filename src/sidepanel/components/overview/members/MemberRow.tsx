@@ -5,10 +5,16 @@
  * Memoized (large lists). When an org origin is provided the whole row becomes a
  * deep link to the member's Okta Admin Console profile. Factor tags (or a "No MFA"
  * badge) render only once a scan has completed.
+ *
+ * The card is {@link sidepanel/components/shared/ListRow} at `compact` density
+ * (ADR-0029) — the row used to carry its own hand-written chrome string. The
+ * interior follows the typography contract in `docs/design-system.md`, which
+ * retired three arbitrary sizes here (`text-[11px]` on the login, `text-[10px]`
+ * on the factor tags and the status badge).
  */
 import React from 'react';
 import type { OktaUser, MemberMfaResult } from '../../../../shared/types';
-import { userStatusVariant, type UserStatusVariant } from '../../shared';
+import { ListRow, userStatusVariant, type UserStatusVariant } from '../../shared';
 import { oktaAdminEntityUrl } from '../../../../shared/utils/oktaUrl';
 
 /** Props for {@link MemberRow}. */
@@ -38,56 +44,49 @@ const MemberRow: React.FC<MemberRowProps> = ({ user, mfa, mfaScanned, oktaOrigin
   const fullName =
     `${user.profile.firstName || ''} ${user.profile.lastName || ''}`.trim() || user.profile.login;
 
-  const content = (
-    <div className="flex items-start justify-between gap-3">
-      <div className="flex-1 min-w-0">
-        <div className="font-medium text-sm text-neutral-900 truncate">{fullName}</div>
-        <div className="text-xs text-neutral-600 truncate">{user.profile.email}</div>
-        <div className="text-[11px] text-neutral-500 font-mono truncate">{user.profile.login}</div>
-        {mfaScanned && (
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {mfa && mfa.factorLabels.length > 0 ? (
-              mfa.factorLabels.map((label) => (
-                <span
-                  key={label}
-                  className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary-light text-primary-text"
-                >
-                  {label}
-                </span>
-              ))
-            ) : (
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-danger-light text-danger-text">
-                No MFA
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-      <span className={`flex-shrink-0 px-2 py-0.5 rounded text-[10px] font-semibold ${badgeClass}`}>
-        {user.status}
-      </span>
-    </div>
-  );
-
-  const baseClass =
-    'block bg-white rounded-md border border-neutral-200 p-3 transition-colors duration-(--dur-instant) hover:border-neutral-500';
-
   const adminUrl = oktaAdminEntityUrl(oktaOrigin, 'user', user.id);
-  if (adminUrl) {
-    return (
-      <a
-        href={adminUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={baseClass}
-        title="Open user in Okta Admin Console"
-      >
-        {content}
-      </a>
-    );
-  }
 
-  return <div className={baseClass}>{content}</div>;
+  return (
+    // `as` follows the deep link: an anchor when there is somewhere to go, a plain
+    // container when there is not. `ListRow` sets `rel="noopener noreferrer"` for
+    // the `_blank` target itself, so the call site cannot forget it.
+    <ListRow
+      as={adminUrl ? 'a' : 'div'}
+      href={adminUrl ?? undefined}
+      target={adminUrl ? '_blank' : undefined}
+      density="compact"
+      title={adminUrl ? 'Open user in Okta Admin Console' : undefined}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="truncate text-sm font-semibold text-neutral-900">{fullName}</div>
+          <div className="truncate text-xs text-neutral-600">{user.profile.email}</div>
+          <div className="truncate font-mono text-xs text-neutral-500">{user.profile.login}</div>
+          {mfaScanned && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {mfa && mfa.factorLabels.length > 0 ? (
+                mfa.factorLabels.map((label) => (
+                  <span
+                    key={label}
+                    className="rounded-md bg-primary-light px-2 py-0.5 text-xs font-medium text-primary-text"
+                  >
+                    {label}
+                  </span>
+                ))
+              ) : (
+                <span className="rounded-md bg-danger-light px-2 py-0.5 text-xs font-medium text-danger-text">
+                  No MFA
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
+          {user.status}
+        </span>
+      </div>
+    </ListRow>
+  );
 };
 
 export default React.memo(MemberRow);
