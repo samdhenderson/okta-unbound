@@ -106,7 +106,7 @@ export function createExportEngineOperations(coreApi: CoreApi) {
       dropped += rawLength - page.length;
       rows.push(...page);
       onPage?.(rows.length);
-      coreApi.callbacks.onResult?.(`Loaded ${rows.length} rows…`, 'info');
+      coreApi.callbacks.onResult?.({ message: `Loaded ${rows.length} rows…`, type: 'info' });
 
       if (rows.length >= cap) {
         capped = true;

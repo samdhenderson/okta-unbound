@@ -135,18 +135,21 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
         errorMessage: 'Failed to fetch group members',
         onBeforePage: (pageNumber) => {
           pageCount = pageNumber;
-          coreApi.callbacks.onResult?.(`Fetching page ${pageNumber}...`, 'info');
+          coreApi.callbacks.onResult?.({ message: `Fetching page ${pageNumber}...`, type: 'info' });
         },
         onPage: (pageMembers, totalSoFar) => {
-          coreApi.callbacks.onResult?.(
-            `Page ${pageCount}: Loaded ${pageMembers.length} members (Total: ${totalSoFar})`,
-            'info',
-          );
+          coreApi.callbacks.onResult?.({
+            message: `Page ${pageCount}: Loaded ${pageMembers.length} members (Total: ${totalSoFar})`,
+            type: 'info',
+          });
         },
       },
     );
 
-    coreApi.callbacks.onResult?.(`Loaded ${allMembers.length} total members`, 'success');
+    coreApi.callbacks.onResult?.({
+      message: `Loaded ${allMembers.length} total members`,
+      type: 'success',
+    });
     return allMembers;
   };
 
@@ -180,7 +183,10 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
         groupId,
         groupName,
       });
-      coreApi.callbacks.onResult?.(`Added ${user.profile.login} to ${groupName}`, 'success');
+      coreApi.callbacks.onResult?.({
+        message: `Added ${user.profile.login} to ${groupName}`,
+        type: 'success',
+      });
     }
 
     return { success: result.success, error: result.error };

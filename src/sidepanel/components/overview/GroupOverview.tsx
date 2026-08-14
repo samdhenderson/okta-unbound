@@ -9,6 +9,7 @@
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useOktaApi } from '../../hooks/useOktaApi';
+import type { OperationResult } from '../../hooks/useOktaApi/types';
 import { useEntityQuery } from '../../cache/useEntityQuery';
 import { peek, setEntry, invalidate } from '../../cache/entityCache';
 import { cacheKeys } from '../../cache/keys';
@@ -68,15 +69,12 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
   //
   // Must be stable: useOktaApi memoizes its operations on this callback's identity.
   const [operationResult, setOperationResult] = useState<AlertMessageData | null>(null);
-  const handleResult = useCallback(
-    (message: string, type: 'info' | 'success' | 'warning' | 'error') => {
-      log.debug(`${type}:`, message);
-      if (type === 'error' || type === 'warning') {
-        setOperationResult({ text: message, type: type === 'error' ? 'danger' : 'warning' });
-      }
-    },
-    [],
-  );
+  const handleResult = useCallback(({ message, type }: OperationResult) => {
+    log.debug(`${type}:`, message);
+    if (type === 'error' || type === 'warning') {
+      setOperationResult({ text: message, type: type === 'error' ? 'danger' : 'warning' });
+    }
+  }, []);
 
   const handleProgress = useCallback(
     (current: number, total: number, message: string, apiCalls?: number) => {

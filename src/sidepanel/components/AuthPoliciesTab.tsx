@@ -19,6 +19,7 @@ import AlertMessage from './shared/AlertMessage';
 import PoliciesListPanel from './policies/PoliciesListPanel';
 import Icon from './overview/shared/Icon';
 import { useOktaApi } from '../hooks/useOktaApi';
+import type { OperationResult } from '../hooks/useOktaApi/types';
 import { usePoliciesData } from '../hooks/usePoliciesData';
 import { filterPolicies } from './policies/policyFilters';
 import { getRelativeTime } from '../../shared/utils/dateFormat';
@@ -48,19 +49,17 @@ const AuthPoliciesTab: React.FC<AuthPoliciesTabProps> = ({ targetTabId, isActive
   // identities (an unstable callback would defeat the facade's memoization).
   const handleError = useCallback((message: string) => setError(message || null), []);
 
-  // `onResult` is `(message, type)`, not `(message)`. Passing a one-arg callback
-  // here type-checks — TypeScript accepts a function that ignores trailing
-  // parameters — and then silently drops `type`, so an 'info' message renders as a
-  // danger banner. Latent here rather than live — `getPolicyRules` emits no results
-  // today — but it is the same shape and would surface the moment one did.
+  // `onResult` takes one `OperationResult` object, not `(message, type)`. It used to
+  // be positional, and TypeScript accepts a function that ignores trailing
+  // parameters — so a one-arg `(message) => …` type-checked here and then silently
+  // dropped `type`, rendering an 'info' message as a danger banner. Latent here
+  // rather than live — `getPolicyRules` emits no results today — but it was the same
+  // shape. The object parameter makes that a compile error.
   //
   // Must be stable: useOktaApi memoizes its operations on this callback's identity.
-  const handleResult = useCallback(
-    (message: string, type: 'info' | 'success' | 'warning' | 'error') => {
-      if (type === 'error') setError(message || null);
-    },
-    [],
-  );
+  const handleResult = useCallback(({ message, type }: OperationResult) => {
+    if (type === 'error') setError(message || null);
+  }, []);
 
   const api = useOktaApi({ targetTabId: targetTabId ?? null, onResult: handleResult });
   const { policies, isLoading, lastFetchTime, loadPolicies } = usePoliciesData({
