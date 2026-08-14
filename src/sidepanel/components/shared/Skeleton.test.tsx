@@ -38,6 +38,17 @@ describe('Skeleton', () => {
     expect(container.querySelector('.rise-in-stagger')).not.toBeNull();
   });
 
+  it('draws a single bar per lineRow block, where a row block draws a full anatomy', () => {
+    // The variants' whole difference: `lineRow` stands in for a one-line row, so
+    // drawing `row`'s title / two badges / meta line / trailing block there would
+    // be several times too tall and would lurch when the real rows arrive.
+    const { container: lineContainer } = render(<Skeleton variant="lineRow" count={2} />);
+    expect(lineContainer.querySelectorAll('.skeleton')).toHaveLength(2);
+
+    const { container: rowContainer } = render(<Skeleton variant="row" count={2} />);
+    expect(rowContainer.querySelectorAll('.skeleton')).toHaveLength(10);
+  });
+
   it('renders the row and card variants as bordered blocks', () => {
     const { container: rowContainer } = render(<Skeleton variant="row" />);
     expect(rowContainer.querySelector('.border-neutral-200')).not.toBeNull();

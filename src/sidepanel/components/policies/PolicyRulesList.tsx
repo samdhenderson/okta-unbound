@@ -12,7 +12,7 @@
  * are rendered as text through React's escaping — no HTML is ever constructed.
  */
 import React from 'react';
-import LoadingSpinner from '../shared/LoadingSpinner';
+import Skeleton from '../shared/Skeleton';
 import AlertMessage from '../shared/AlertMessage';
 import type { OktaPolicyRule } from '../../../shared/schemas/okta';
 import { policyStatusClasses, policyStatusLabel } from './policyStatus';
@@ -31,7 +31,11 @@ interface PolicyRulesListProps {
  */
 const PolicyRulesList: React.FC<PolicyRulesListProps> = ({ rules, isLoading, error }) => {
   if (isLoading) {
-    return <LoadingSpinner size="sm" message="Loading rules…" centered />;
+    // The shape is known before it arrives — a `space-y-2` list of one-line
+    // bordered rows — so it is previewed rather than spun over. Three rows is the
+    // usual size of an auth policy's rule list; `lineRow`'s default gap is the
+    // list's own `space-y-2`, so nothing shifts when the real rows replace these.
+    return <Skeleton variant="lineRow" count={3} label="Loading rules…" />;
   }
 
   if (error) {

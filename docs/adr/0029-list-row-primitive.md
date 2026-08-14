@@ -74,7 +74,7 @@ Props follow the house `Record<Variant, string>` convention
 | --------- | ----------------------------------------------------------------------- | --------------------------- |
 | `variant` | `card`, `nested`                                                        | two conflated idioms        |
 | `density` | `tight` (`px-2 py-1.5`), `compact` (`px-3 py-2`), `comfortable` (`p-4`) | the ten padding values      |
-| `state`   | `default`, `selected`, `highlighted`                                    | four selected-state recipes |
+| `state`   | `default`, `selected`, `highlighted`, `danger`                          | four selected-state recipes |
 | `flash`   | boolean → `animate-affirm-flash`                                        | three hand-rolled copies    |
 | `as`      | `div`, `li`, `a`, `button`                                              | the `<div onClick>` rows    |
 
@@ -111,6 +111,15 @@ not have.
 `highlighted`. The two compose in the source they replaced (a selected row could
 also be a deep-link target and gain a ring on top), and collapsing them the other
 way would silently drop the ring.
+
+**`danger` is a state, not a variant**, because it is mutually exclusive with the
+other three: a row cannot be both "you picked this" and "this is broken". It has
+to live here rather than in a caller's `className`, because a `className` colour
+loses to `hover:bg-neutral-50` — a variant utility, ordered after it — so a
+danger row would turn grey exactly when you pointed at it. That is not
+hypothetical: `GroupMergeModal`'s blocked source had to drop its
+`border-danger-light` during migration for precisely this reason, and `danger`
+gives it back.
 
 **Two densities, not ten.** `compact` and `comfortable` are the two that carry
 real information — a dense scanning list versus a rich card with badges and a
@@ -183,13 +192,20 @@ skipped for convenience.
   bars resolve against. `ListRow` would supply padding and radius and threaten
   everything else. `docs/components.md` already lists the `AttributeFacet` spread
   bars as a custom control; `BreakdownReport` joins them.
-- **A resting fill that is not a hover** — `ClauseGroupList`. Its non-interactive
-  `<li>`s use `bg-neutral-50` as a _resting_ separator, and `nested` paints that
-  colour only on hover, so migrating would flatten the list. Its `blocking`
-  branch is worse: `nested`'s `hover:bg-neutral-50` is a variant utility and
-  therefore ordered after anything passed through `className`, so a danger row
-  would turn grey exactly when you pointed at it. This file wants a `danger` row
-  state before it is worth migrating.
+- **A resting fill that is not a hover** — `ClauseGroupList`. Its rows sit inside
+  `CauseWorklistRow`'s bordered card, so they are `nested`; but their
+  `bg-neutral-50` is a _resting_ separator, and `nested`'s default state is
+  transparent. These rows are also non-interactive, so under the hover gate they
+  get no hover either — migrating would leave them with no fill at all and
+  flatten the list.
+
+  Half the original objection is now gone. The `blocking` branch used to be
+  unmigratable because a `className` danger fill loses to `hover:bg-neutral-50`
+  (a variant utility, ordered after it), so a danger row turned grey exactly when
+  you pointed at it — `state="danger"` fixes that. What remains is the resting
+  fill, which would need a third variant with exactly one consumer: below the bar
+  this ADR sets. Revisit if a second filled list appears.
+
 - **Table rows** — `ExportPreviewTable`'s `<tr>`. A table row is not a card, and
   `border-b` on `<tr>` is the correct idiom there.
 

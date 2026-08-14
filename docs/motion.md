@@ -175,8 +175,9 @@ is an **added option**, not a replacement for `LoadingSpinner`:
 
 - **Use `Skeleton`** for content whose shape is already known before it
   arrives — a list row, a stat tile. It renders a shimmering placeholder in that
-  shape (`row` / `card` / `text` variants), so the loading state previews the
-  layout that's about to fill in, staggered in via `.rise-in-stagger`.
+  shape (`text` / `lineRow` / `row` / `card` variants), so the loading state
+  previews the layout that's about to fill in, staggered in via
+  `.rise-in-stagger`.
 - **Keep `LoadingSpinner`** everywhere the shape or duration of the work is
   unknown: `TabPanel.tsx`'s per-tab `Suspense` fallback (an unmounted lazy chunk
   has no shape to preview), and **every error path** (an error state is not a
@@ -185,6 +186,42 @@ is an **added option**, not a replacement for `LoadingSpinner`:
 
 Both are accessible the same way: one hidden `role="status"` node carries the
 announced label, and the visual placeholder(s)/spin glyph are `aria-hidden`.
+
+### Picking a variant: match the element count, then the padding
+
+`lineRow` and `row` are both bordered list-row placeholders, and choosing between
+them is not a question of size. **`row` draws four elements** — a title, a
+two-badge strip, a meta line and a trailing block — for the rich cards
+(`AppListItem`, `PolicyCard`, `MemberRow`). **`lineRow` draws one bar** in the
+same box, for a row that is a name and at most a trailing pill.
+
+Putting `row` under a one-line list is worse than the spinner it replaced: it is
+roughly four times too tall, so the list collapses upward when the real rows
+arrive — a skeleton that mispredicts the layout has spent the spinner's honesty
+and bought a jump. `PolicyRulesList` and `GroupRulesSection`'s rule lists are the
+reference `lineRow` consumers; the variant was added for them, and they were
+spinners until it existed precisely because `row` was the wrong shape.
+
+Two things to get right at the call site:
+
+- **The gap.** Each variant defaults to the rhythm its real list uses (`lineRow`
+  is `space-y-2`); pass `gap` when the list differs, as `GroupRulesSection` does
+  for its `space-y-1.5`.
+- **The size.** `sm` / `md` / `lg` track `ListRow`'s `tight` / `compact` /
+  `comfortable` densities. The vertical padding is a step larger than the real
+  row's on purpose — a placeholder bar is shorter than the text line it stands
+  in for, and the padding makes up the difference so total heights match.
+
+### A skeleton is for `loading`, never for `idle`
+
+Where a status union carries both (`SourceStatus` is
+`idle | loading | done | error`), only `loading` gets a placeholder. `idle` means
+the work has **not been started**, so a skeleton there tells the user content is
+on its way when nothing is in flight — the same overclaim a spinner makes, in a
+more convincing costume. Falling through to the empty message is worse again: it
+states a result the load never produced. Render nothing, or an explicit
+"start this" affordance where one exists (`GroupMembershipSourceSection` offers a
+button, because its analysis is expensive and deliberately gated).
 
 ## Related
 

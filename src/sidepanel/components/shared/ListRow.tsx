@@ -67,8 +67,17 @@ export type ListRowDensity = 'tight' | 'compact' | 'comfortable';
  * `selected` is a user choice (a checked row, a picked merge survivor);
  * `highlighted` is a transient deep-link target the app scrolled to. They are
  * distinct because a highlight fades and a selection does not.
+ *
+ * `danger` says the row itself is a problem — a group whose emptying is blocked
+ * by an active rule, a clause the user fails. It is a *state*, not a variant,
+ * because it is mutually exclusive with the other three: a row cannot be both
+ * "you picked this" and "this is broken". Adding it here rather than letting call
+ * sites pass `border-danger-light bg-danger-light` through `className` is what
+ * makes it survive hover — a `className` colour loses to `hover:bg-neutral-50`,
+ * which is a variant utility and therefore ordered after it, so a danger row
+ * would turn grey exactly when you pointed at it.
  */
-export type ListRowState = 'default' | 'selected' | 'highlighted';
+export type ListRowState = 'default' | 'selected' | 'highlighted' | 'danger';
 
 /** Element the row renders as. */
 export type ListRowAs = 'div' | 'li' | 'a' | 'button';
@@ -100,11 +109,13 @@ const stateClasses: Record<ListRowVariant, Record<ListRowState, string>> = {
     default: 'border-neutral-200 bg-white',
     selected: 'border-primary bg-primary-light',
     highlighted: 'border-primary bg-primary-light ring-2 ring-primary ring-offset-2',
+    danger: 'border-danger-light bg-danger-light',
   },
   nested: {
     default: '',
     selected: 'bg-primary-light',
     highlighted: 'bg-primary-light ring-1 ring-primary',
+    danger: 'bg-danger-light',
   },
 };
 
@@ -220,9 +231,9 @@ export interface ListRowProps {
    *
    * Normally inferred: a row is interactive when `as` is `button`/`a`, or when
    * `onClick` or `onHeaderClick` is set. Pass it explicitly for a row whose
-   * control `ListRow` cannot see — `GroupListItem` is activated by a
-   * `StretchedButton` overlay and `AppListItem` by an `onClick` on a child, so
-   * neither has a handler on the row element, yet both are clickable.
+   * control `ListRow` cannot see — `GroupListItem` and `AppListItem` are both
+   * activated by a `StretchedButton` overlay, so neither has a handler on the
+   * row element, yet both are clickable.
    *
    * It governs the hover treatment only. The cursor and focus ring still come
    * from the row element actually being a control, because a

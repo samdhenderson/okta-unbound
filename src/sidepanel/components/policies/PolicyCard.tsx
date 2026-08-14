@@ -60,6 +60,20 @@ const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
       density="comfortable"
       testId={`policy-${policy.id}`}
       /*
+        The whole header expands the card, not just the chevron. It previously
+        carried a hover border while only the chevron was clickable — a hint at an
+        affordance the card did not have — and ADR-0029's hover gate would have
+        removed the hover rather than the mismatch. Making the header the control
+        keeps the hover and makes it true, and matches `RuleCard` and
+        `AuditLogViewer`, the other two expandable rows.
+
+        The `IconButton` stays: it is the row's accessible disclosure control,
+        carrying `aria-expanded`/`aria-controls`, and a keyboard user tabs to it
+        rather than to the div. The header click is a pointer convenience on top.
+      */
+      headerClassName="cursor-pointer"
+      onHeaderClick={toggleExpanded}
+      /*
         The disclosure goes in `body` rather than alongside the header because the
         card's padding is not uniform: the header is inset by the row's `p-4` while
         the rules panel runs edge to edge, carrying its own `px-4 pb-4 pt-3` and a
@@ -129,7 +143,9 @@ const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
           expanded={isExpanded}
           controls={rulesId}
           className="shrink-0"
-          onClick={toggleExpanded}
+          // No handler on purpose: the header owns the toggle, and a button's
+          // click — including a keyboard Enter/Space — bubbles up to it. Wiring
+          // both would fire twice and cancel out. Same arrangement as `RuleCard`.
         >
           <Icon
             type="chevron-right"

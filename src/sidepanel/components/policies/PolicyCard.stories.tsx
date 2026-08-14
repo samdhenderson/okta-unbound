@@ -102,6 +102,31 @@ export const Expanded: Story = {
   },
 };
 
+/**
+ * The whole header expands the card, not just the chevron.
+ *
+ * Worth pinning because the two controls are nested: the `IconButton` sits inside
+ * the header region that carries the toggle, and a button's click — keyboard
+ * activation included — bubbles. Wiring a handler to both would fire twice and
+ * cancel out, leaving a chevron that looks broken. This asserts one click opens
+ * it and the next closes it, from the header itself.
+ */
+export const HeaderClickToggles: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.click(canvas.getByText('Any two factors'));
+    await waitFor(() => expect(canvas.getByText('Trusted device, no prompt')).toBeInTheDocument());
+
+    await userEvent.click(canvas.getByText('Any two factors'));
+    await waitFor(() =>
+      expect(
+        canvasElement.querySelector('[data-testid="policy-rules-disclosure"]'),
+      ).toHaveAttribute('data-open', 'false'),
+    );
+  },
+};
+
 /** Expanded when the rules fetch fails — the inline `danger` state. */
 export const RulesLoadFailure: Story = {
   args: {

@@ -19,7 +19,7 @@
  * never `dangerouslySetInnerHTML` — and **never logged**; this module logs nothing.
  */
 import React from 'react';
-import { Button } from '../../shared';
+import { Button, ListRow } from '../../shared';
 import ClauseGroupList from './ClauseGroupList';
 import type { AccessCause, UndeterminedReason } from './accessCause';
 import type {
@@ -116,7 +116,10 @@ const CauseWorklistRow: React.FC<CauseWorklistRowProps> = ({
   renderBlockingGroupAction,
   resolveGroupName,
 }) => (
-  <li className="rounded-md border border-neutral-200 bg-white p-3">
+  // `compact` rather than `comfortable`: `p-3` sits between the two, and
+  // `compact`'s `px-3` matches the old horizontal padding exactly while
+  // `comfortable` would move both axes (ADR-0029).
+  <ListRow as="li" density="compact">
     <p className="text-sm font-semibold break-words text-neutral-900" title={cause.groupName}>
       {cause.groupName}
     </p>
@@ -167,7 +170,7 @@ const CauseWorklistRow: React.FC<CauseWorklistRowProps> = ({
         Open clause checklist
       </Button>
     )}
-  </li>
+  </ListRow>
 );
 
 /**
