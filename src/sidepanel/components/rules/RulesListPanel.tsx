@@ -2,14 +2,14 @@
  * @module sidepanel/components/rules/RulesListPanel
  * @description The Rules tab's list region: loading, empty, and populated states.
  *
- * Renders a spinner while loading, an EmptyState when no rules are loaded or none
- * match the filters, otherwise the filtered {@link RuleCard} list (each wrapped in
- * a `data-rule-id` anchor for deep-link scrolling).
+ * Wraps a {@link ScrollableList} of {@link RuleCard}s (each wrapped in a
+ * `data-rule-id` anchor for deep-link scrolling) and picks the right empty state:
+ * "no rules loaded" vs. "nothing matches the search/filter".
  */
 import React from 'react';
 import RuleCard from '../RuleCard';
-import LoadingSpinner from '../shared/LoadingSpinner';
 import EmptyState from '../shared/EmptyState';
+import ScrollableList from '../shared/ScrollableList';
 import type { FormattedRule } from '../../../shared/types';
 
 interface RulesListPanelProps {
@@ -49,42 +49,42 @@ const RulesListPanel: React.FC<RulesListPanelProps> = ({
   selectedRuleId,
 }) => (
   <div className="min-h-[400px]">
-    {isLoading ? (
-      <LoadingSpinner
-        size="lg"
-        message={selectedRuleId ? 'Loading requested rule…' : 'Loading rules...'}
-        centered
-      />
-    ) : !hasRules ? (
-      <EmptyState
-        icon="list"
-        title="No Rules Loaded"
-        description='Click "Load Rules" to analyze your Okta group rules'
-        actions={[{ label: 'Load Rules', onClick: onLoad, variant: 'primary' }]}
-      />
-    ) : filteredRules.length === 0 ? (
-      <EmptyState
-        icon="search"
-        title="No Matching Rules"
-        description="No rules match your search or filter criteria"
-      />
-    ) : (
-      <div className="space-y-3">
-        {filteredRules.map((rule) => (
-          <div key={rule.id} data-rule-id={rule.id}>
-            <RuleCard
-              rule={rule}
-              onActivate={onActivate}
-              onDeactivate={onDeactivate}
-              onPreviewImpact={onPreviewImpact}
-              onAddTargetGroup={onAddTargetGroup}
-              oktaOrigin={oktaOrigin}
-              isHighlighted={selectedRuleId === rule.id}
-            />
-          </div>
-        ))}
-      </div>
-    )}
+    <ScrollableList
+      loading={isLoading}
+      loadingMessage={selectedRuleId ? 'Loading requested rule…' : 'Loading rules...'}
+      fillAvailable={false}
+      testId="rules-list"
+      emptyState={
+        !hasRules ? (
+          <EmptyState
+            icon="list"
+            title="No Rules Loaded"
+            description='Click "Load Rules" to analyze your Okta group rules'
+            actions={[{ label: 'Load Rules', onClick: onLoad, variant: 'primary' }]}
+          />
+        ) : (
+          <EmptyState
+            icon="search"
+            title="No Matching Rules"
+            description="No rules match your search or filter criteria"
+          />
+        )
+      }
+    >
+      {filteredRules.map((rule) => (
+        <div key={rule.id} data-rule-id={rule.id}>
+          <RuleCard
+            rule={rule}
+            onActivate={onActivate}
+            onDeactivate={onDeactivate}
+            onPreviewImpact={onPreviewImpact}
+            onAddTargetGroup={onAddTargetGroup}
+            oktaOrigin={oktaOrigin}
+            isHighlighted={selectedRuleId === rule.id}
+          />
+        </div>
+      ))}
+    </ScrollableList>
   </div>
 );
 

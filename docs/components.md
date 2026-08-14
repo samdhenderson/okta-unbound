@@ -15,7 +15,7 @@ Feature components live under `components/{groups,users,overview}/`.
 2. **Import from the barrel** `components/shared` — not deep paths. The barrel
    exports every shared component (see below).
 3. **No raw hex / no ad-hoc spacing** — see [design-system.md](./design-system.md).
-4. **Icons come from the `Icon` registry** (`overview/shared/Icon.tsx`, 29 typed
+4. **Icons come from the `Icon` registry** (`overview/shared/Icon.tsx`, 30 typed
    icons, `currentColor`). Don't inline `<svg>` in feature code.
 
 ## The variant/size convention
@@ -75,10 +75,20 @@ The button/input migration is complete; these are the raw controls that stay raw
 **by decision**, each carrying an inline `§3 exception` (or `CHARACTERIZED:`)
 comment at the call site:
 
-- **Composites** where a shared primitive is not pixel-neutral: `SearchDropdown`,
-  `UserSearchBar`, `GroupSearchBar`, and the Add-to-Group type-ahead (leading-glyph
-  search inputs with an absolutely-positioned spinner/dropdown), plus
-  `GroupFilterToggle`.
+- **Composites** where a shared primitive is not pixel-neutral: the Add-to-Group
+  type-ahead (`AddToGroupModal`) and `UserComparisonModal`'s search field in
+  `ComparisonSearchPhase` — leading-glyph search inputs with an absolutely
+  positioned spinner/dropdown — plus `GroupFilterToggle`.
+
+  `SearchDropdown`, `UserSearchBar` and `GroupSearchBar` **left this list**: they
+  now compose `Input` + `Icon` + `LoadingSpinner` like `MemberSearchBar`. The
+  exception was real — converging on the primitives cost a few pixels of field
+  height (`py-3`/`py-2.5` → `py-2`), leading-icon size (20px → 16px), and the
+  reserved trailing padding the shared `Input` has no slot for. That was accepted
+  as the price of not maintaining a byte-identical copy of the input class string
+  in two files. The two entries that remain are the ones where the delta is larger
+  than that, and they still need a design call rather than a mechanical swap.
+
 - **Genuinely custom controls:** `ComparisonTabBar` (a documented one-off
   `role="tab"` bar that predates and has not been migrated to the shared `Tabs`
   primitive), the dynamic-color banner, radio-cards, the `AttributeFacet`
@@ -93,8 +103,6 @@ comment at the call site:
     `className` escape hatch to match without inline classes.
   - The active-filter chip's `rounded-full` close button (`IconButton` is
     `rounded-md`).
-  - `UserComparisonModal`'s search `Input` (`py-3`/`shadow-sm`) is not pixel-neutral
-    against the shared `Input` base — needs a design call, not a mechanical swap.
 
 **Barrel:** `shared/index.ts` now exports the full catalog above — import from the
 barrel (`../shared`), not deep paths.

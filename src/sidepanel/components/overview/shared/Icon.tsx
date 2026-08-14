@@ -42,7 +42,8 @@ export type IconType =
   | 'clipboard'
   | 'clipboard-check'
   | 'chevron-left'
-  | 'chevron-right';
+  | 'chevron-right'
+  | 'close';
 
 /** Props for {@link Icon}. */
 interface IconProps {
@@ -339,6 +340,18 @@ const Icon: React.FC<IconProps> = ({ type, className = '', size = 'md' }) => {
     'chevron-right': (
       <svg className={baseClasses} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+      </svg>
+    ),
+    // The dismiss glyph. This exact path was inlined in eleven components before
+    // it had a name here; prefer `<Icon type="close" />` over re-inlining it.
+    close: (
+      <svg className={baseClasses} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M6 18L18 6M6 6l12 12"
+        />
       </svg>
     ),
   };

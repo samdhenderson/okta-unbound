@@ -7,6 +7,10 @@
  * the result type `T`; `renderResult` / `renderSelected` project each item to UI.
  */
 import React, { useRef } from 'react';
+import Input from './Input';
+import IconButton from './IconButton';
+import LoadingSpinner from './LoadingSpinner';
+import Icon from '../overview/shared/Icon';
 
 interface SearchDropdownProps<T> {
   placeholder?: string;
@@ -95,22 +99,15 @@ function SearchDropdown<T>({
         <div className="flex items-center justify-between p-3 bg-neutral-50 border border-neutral-200 rounded-md">
           <div className="flex-1 min-w-0">{renderSelected(selectedItem)}</div>
           {onClear && (
-            <button
-              type="button"
+            <IconButton
+              label="Clear selection"
               onClick={onClear}
-              className="ml-2 p-1 text-neutral-400 hover:text-neutral-600 transition-colors rounded-full hover:bg-neutral-200"
-              title="Clear selection"
-              aria-label="Clear selection"
+              variant="ghost"
+              size="sm"
+              className="ml-2 rounded-full hover:bg-neutral-200"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
+              <Icon type="close" size="md" />
+            </IconButton>
           )}
         </div>
         {hint && <p className="text-xs text-neutral-500">{hint}</p>}
@@ -122,59 +119,35 @@ function SearchDropdown<T>({
     <div className="space-y-1">
       {label && <label className="block text-sm font-medium text-neutral-700">{label}</label>}
       <div className="relative">
-        {/* Search icon */}
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <svg
-            className="h-5 w-5 text-neutral-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-        </div>
-
-        {/* Input */}
-        <input
-          ref={inputRef}
+        {/* Input, with the search glyph as its leading icon */}
+        <Input
+          inputRef={inputRef}
           type="text"
-          className="w-full pl-10 pr-10 py-2.5 bg-white border border-neutral-200 rounded-md text-sm placeholder-neutral-400 focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary transition-all duration-100 disabled:bg-neutral-100 disabled:cursor-not-allowed"
-          placeholder={placeholder}
           value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
+          onChange={onQueryChange}
+          placeholder={placeholder}
           disabled={disabled}
+          icon={<Icon type="search" size="sm" className="text-neutral-400" />}
         />
 
         {/* Loading spinner */}
         {isSearching && (
           <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-            <div className="w-4 h-4 border-2 border-neutral-200 border-t-primary rounded-full animate-spin" />
+            <LoadingSpinner size="sm" />
           </div>
         )}
 
         {/* Clear button when there's text */}
         {!isSearching && query && onClear && (
-          <button
-            type="button"
-            className="absolute inset-y-0 right-0 pr-3 flex items-center text-neutral-400 hover:text-neutral-600 transition-colors"
+          <IconButton
+            label="Clear search"
             onClick={onClear}
-            title="Clear search"
-            aria-label="Clear search"
+            variant="ghost"
+            size="sm"
+            className="absolute right-2 top-1/2 -translate-y-1/2"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+            <Icon type="close" size="sm" />
+          </IconButton>
         )}
 
         {/* Dropdown results */}
