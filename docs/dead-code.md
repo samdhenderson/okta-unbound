@@ -50,6 +50,15 @@ never a CI gate. Three legitimate reasons an export appears there:
    own test. Delete both. Deleting a test whose subject is deleted is not test
    tampering: no failure is being silenced, and ADR-0012 does not apply.
 
+### Accepted findings — do not "clean these up"
+
+- **`tryEvaluateRuleExpressionDetailed`** (`shared/ruleEvaluator.ts`) has no
+  production caller and is expected to keep appearing in `knip:production`. It is
+  category 2 above: a four-line wrapper that is the reason-carrying twin of
+  `tryEvaluateRuleExpression`, kept deliberately so the next caller does not
+  hand-roll `parseRuleExpression` + `evaluateParsedRule`. Removing it needs
+  [adr/0025](./adr/0025-retire-boolean-rule-evaluation-apis.md) revisited.
+
 ### Known false positives
 
 - **Export descriptors** (`src/sidepanel/export/descriptors/*.ts`) are loaded at build
@@ -105,8 +114,9 @@ Also worth noting from the baseline run:
   it. That file's `handlers` export has no consumer and no test uses MSW, so `msw`
   becomes removable once `handlers` goes.
 - Three `ruleEvaluator.ts` exports — `evaluateRuleExpression`,
-  `canEvaluateClientSide`, `tryEvaluateRuleExpressionDetailed` — are reachable only
-  from tests. ADR-0017 retained them deliberately; removing them needs that decision
-  revisited, not a silent delete.
+  `canEvaluateClientSide`, `tryEvaluateRuleExpressionDetailed` — were reachable only
+  from tests. **Resolved by [adr/0025](./adr/0025-retire-boolean-rule-evaluation-apis.md):**
+  the first two are deleted; the third is kept and is now a permanent accepted
+  finding (see below).
 - `package.json`'s `"main": "index.js"` points at a file that does not exist (this is
   an extension, not a library) — knip reports it as a configuration hint.
