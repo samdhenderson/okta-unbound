@@ -1,11 +1,27 @@
 /**
  * @module sidepanel/hooks/useUserComparison
- * @description Orchestrator for the two-user comparison modal.
+ * @description Orchestrator for the two-user comparison surface.
  *
  * Composes the search, memberships, apps and group-copy hooks, owns the phase
- * switch (`comparedUser`) and `activeTab`, drives the two reset paths (modal
- * close and change-user), and derives the shared/only buckets plus Jaccard
- * similarity for groups and apps.
+ * switch (`comparedUser`) and `activeTab`, drives the two reset paths (the
+ * surface going away and change-user), and derives the shared/only buckets plus
+ * Jaccard similarity for groups and apps.
+ *
+ * ## Two hosts, one hook
+ *
+ * The comparison has two mount sites and they hide it differently:
+ * {@link UserComparisonModal} (the Overview's dialog, which has no view stack) and
+ * {@link UserComparisonPanel} (the Users tab's pushed view, ADR-0016). So the hook
+ * takes an abstract {@link UseUserComparisonOptions.isActive} — "the surface is on
+ * screen" — rather than the dialog's `isOpen`: the dialog passes `isOpen`, the
+ * pushed view passes `!nav.isRoot`. Both hosts keep the hook mounted while the
+ * surface is away, so that flag going false is the **only** thing preventing a
+ * stale comparison from coming back on the next open/push.
+ *
+ * A mounted-but-hidden surface must also stay inert (ADR-0018): the debounced user
+ * search is the one thing here that reaches Okta without a click, so it is gated on
+ * {@link UseUserComparisonOptions.searchEnabled}, which the Users tab additionally
+ * folds its own tab-level `isActive` into.
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -20,12 +36,25 @@ import {
   bucketApps,
   type TabKey,
 } from '../components/users/comparison/comparisonAnalytics';
+import { classifyAccessCauses } from '../components/users/comparison/accessCause';
+import { loadCachedGroupNames } from './fetchGroupRulesRequest';
 import type { OktaUser, GroupMembership } from '../../shared/types';
 
 /** Options for {@link useUserComparison}. */
-interface UseUserComparisonOptions {
-  /** Whether the comparison modal is open; going false triggers a full reset. */
-  isOpen: boolean;
+export interface UseUserComparisonOptions {
+  /**
+   * Whether the comparison surface is on screen — `isOpen` for the dialog host,
+   * "a comparison view is pushed" for the Users tab's view-stack host. Going false
+   * triggers a full reset, so the next open/push starts pristine.
+   */
+  isActive: boolean;
+  /**
+   * Whether the surface may issue background user-search requests. Defaults to
+   * {@link UseUserComparisonOptions.isActive}; the Users tab narrows it further with
+   * its own tab-level `isActive`, because a hidden tab stays mounted (ADR-0018) and
+   * must not spend scheduler budget on a screen nobody is looking at.
+   */
+  searchEnabled?: boolean;
   /** The anchor user being compared against (left-hand side). */
   contextUser: OktaUser;
   /** The context user's memberships, used to build the group buckets. */
@@ -45,13 +74,26 @@ interface UseUserComparisonOptions {
  * @param options - See `UseUserComparisonOptions`.
  * @returns The comparison view model: `comparedUser` and search state, `activeTab`
  *   control, `groupBuckets` / `appBuckets` with their diff counts and per-facet
- *   plus `overallSimilarity`, aggregated `isLoading` / `loadError`, group-copy
- *   state (`addingGroupId`, `addError`) and the bidirectional `addToContext` /
- *   `addToCompared` actions, display names, and the `selectUser` / `changeUser`
- *   actions.
+ *   plus `overallSimilarity`, the classified `causes` worklist, aggregated
+ *   `isLoading` / `loadError`, group-copy state (`addingGroupId`, `addError`) and
+ *   the bidirectional `addToContext` / `addToCompared` actions, display names, and
+ *   the `selectUser` / `changeUser` actions.
+ *
+ *   The two failure channels are deliberately different shapes. `loadError` is the
+ *   group side and is **blocking** — the view replaces the tabs with it, because
+ *   without memberships there is no comparison. `appsIncomplete` is the app side
+ *   and is **advisory**: the group half still loaded, so the view caveats instead
+ *   of blanking, `appSimilarity` becomes `null`, and `similarityScope` reports
+ *   `'groups-only'` to say what the surviving headline actually covers.
+ *
+ *   `causes` classifies the `onlyCompared` bucket by remedy
+ *   ({@link classifyAccessCauses}), and is **`undefined` until the org rule
+ *   inventory has been resolved** — "not computed", which consumers must not render
+ *   as a finding. Once resolved it is always an array, one entry per difference.
  */
 export function useUserComparison({
-  isOpen,
+  isActive,
+  searchEnabled,
   contextUser,
   contextGroups,
   targetTabId,
@@ -59,12 +101,20 @@ export function useUserComparison({
 }: UseUserComparisonOptions) {
   const { searchQuery, setSearchQuery, searchResults, isSearching, clearSearch } = useUserSearch({
     targetTabId,
+    // ADR-0018: both hosts keep this hook mounted while the surface is hidden, and
+    // the debounce effect re-fires on `targetTabId` changes — so without this gate a
+    // hidden comparison would re-run whatever query was last in its box.
+    enabled: searchEnabled ?? isActive,
   });
 
   const {
     memberships: comparedGroups,
     isLoading: isLoadingGroups,
     error: groupsError,
+    // The org rule inventory that load already had in hand — re-exported, never
+    // re-fetched. `null` ("we could not obtain it") is threaded through as
+    // `null`; see `classifyAccessCauses` below.
+    rules: ruleInventory,
     loadMemberships,
     clearMemberships,
   } = useUserMemberships({ targetTabId });
@@ -72,11 +122,13 @@ export function useUserComparison({
   const [comparedUser, setComparedUser] = useState<OktaUser | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
 
-  const { contextApps, comparedApps, isLoadingApps, appsError, resetApps } = useComparisonApps({
-    targetTabId,
-    contextUserId: contextUser.id,
-    comparedUser,
-  });
+  const { contextApps, comparedApps, isLoadingApps, appsIncomplete, resetApps } = useComparisonApps(
+    {
+      targetTabId,
+      contextUserId: contextUser.id,
+      comparedUser,
+    },
+  );
 
   // Refresh the compared user's memberships after a group is copied onto them,
   // so the row re-buckets on the next load (mirrors the context-side refresh the
@@ -103,12 +155,13 @@ export function useUserComparison({
     onComparedGroupsChanged,
   });
 
-  // Reset everything when the modal closes. The parent keeps this component mounted
-  // across close (only Modal's children unmount), so this effect is the sole thing
-  // preventing a reopened modal from showing the previous comparison. It also runs
-  // harmlessly on first mount (isOpen=false).
+  // Reset everything when the surface goes away — the dialog closing, or the pushed
+  // view being popped. Both hosts keep this hook mounted across that (the dialog
+  // unmounts only Modal's children; the pushed view is hidden, not unmounted), so
+  // this effect is the sole thing preventing the next open/push from showing the
+  // previous comparison. It also runs harmlessly on first mount (isActive=false).
   useEffect(() => {
-    if (!isOpen) {
+    if (!isActive) {
       setComparedUser(null);
       resetApps();
       resetCopyState();
@@ -116,7 +169,7 @@ export function useUserComparison({
       clearSearch();
       clearMemberships();
     }
-  }, [isOpen, resetApps, resetCopyState, clearSearch, clearMemberships]);
+  }, [isActive, resetApps, resetCopyState, clearSearch, clearMemberships]);
 
   // Load the compared user's memberships whenever the selection changes.
   // Fire-and-forget and intentionally NOT cancellable (only the apps half is
@@ -151,6 +204,78 @@ export function useUserComparison({
     [contextApps, comparedApps],
   );
 
+  // Why the compared user has group access the context user lacks, grouped by the
+  // remedy that would close it. Memoized because classification parses every
+  // targeting rule's condition: the comparison is a pushed view that re-renders on
+  // every nav change (ADR-0016), and re-parsing on each of those would be pure
+  // waste. The deps are the same references `groupBuckets` is keyed on, so a
+  // re-render that changes nothing reuses the previous array.
+  //
+  // Each inventory state maps to a DIFFERENT answer, and the three must not merge:
+  //
+  // - `unresolved` → `undefined`, which the worklist renders as "not computed".
+  //   Classifying here would report `no-rule-inventory` ("the rules could not be
+  //   loaded") for every row during the ordinary gap before they arrive — naming a
+  //   failure that has not happened.
+  // - `unavailable` → classify against `null`, which really does mean every row is
+  //   `cannot-determine`. That is a true finding, not a placeholder.
+  // - `available` → classify against the rules, empty array included. Substituting
+  //   `[]` for either state above would read as "the org has no rules" and yield a
+  //   confident `manual-add` — an instruction to add a user by hand, derived from
+  //   rules nobody ever saw.
+  const causes = useMemo(() => {
+    if (ruleInventory.status === 'unresolved') return undefined;
+    return classifyAccessCauses({
+      onlyCompared: groupBuckets.onlyCompared,
+      contextUser,
+      rules: ruleInventory.status === 'available' ? ruleInventory.rules : null,
+      // The context user's whole membership list, which is what lets an
+      // `isMemberOfGroup` / `isMemberOfAnyGroup` clause resolve instead of
+      // reporting "needs investigation". It is the same list the buckets were
+      // built from — Okta's own answer for this user, not a filtered view — so
+      // a clause finding no match really is a miss.
+      contextGroups,
+    });
+  }, [groupBuckets.onlyCompared, contextUser, contextGroups, ruleInventory]);
+
+  // Group ids embedded in a rule condition — `isMemberOfGroup("00g…")` — are
+  // unreadable on their own, and the comparison's rules are fetched with
+  // `resolveGroupNames: false`, so nothing upstream labels them. Build the labels
+  // here from what is already in hand, cheapest source first and no API traffic:
+  //
+  // 1. Both users' membership lists, which carry id AND name and cover the common
+  //    case (a prerequisite group the compared user qualified through).
+  // 2. The Groups tab's `chrome.storage.local` cache — one read, the same source
+  //    the Rules tab labels its rule targets from.
+  //
+  // An id in neither falls back to the id itself at the point of use, exactly as
+  // `RuleCard` does. Deliberately NOT solved by flipping `resolveGroupNames` in
+  // `useUserMemberships`: that path keeps ids-as-names out of the shared
+  // `RulesCache`, and this map also works when the Groups tab was never opened.
+  const [cachedGroupNames, setCachedGroupNames] = useState<ReadonlyMap<string, string>>(
+    () => new Map(),
+  );
+
+  useEffect(() => {
+    if (!isActive) return;
+    let cancelled = false;
+    void loadCachedGroupNames().then((names) => {
+      if (!cancelled) setCachedGroupNames(names);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isActive]);
+
+  const resolveGroupName = useMemo(() => {
+    const byId = new Map(cachedGroupNames);
+    // Live memberships last so they win over a possibly stale cache entry.
+    for (const membership of [...contextGroups, ...comparedGroups]) {
+      byId.set(membership.group.id, membership.group.profile.name);
+    }
+    return (groupId: string): string | undefined => byId.get(groupId);
+  }, [cachedGroupNames, contextGroups, comparedGroups]);
+
   const groupDiffCount = groupBuckets.onlyCompared.length + groupBuckets.onlyContext.length;
   const appDiffCount = appBuckets.onlyCompared.length + appBuckets.onlyContext.length;
 
@@ -158,14 +283,35 @@ export function useUserComparison({
     groupBuckets.shared.length,
     groupBuckets.shared.length + groupBuckets.onlyCompared.length + groupBuckets.onlyContext.length,
   );
-  const appSimilarity = jaccard(
-    appBuckets.shared.length,
-    appBuckets.shared.length + appBuckets.onlyCompared.length + appBuckets.onlyContext.length,
-  );
-  const overallSimilarity = comparedUser ? Math.round((groupSimilarity + appSimilarity) / 2) : 0;
+  // `null` when the app walk did not finish. An overlap ratio over a list that is
+  // short by an unknown amount is not a low percentage — it is not a percentage.
+  // The type change is the enforcement: every consumer has to say what it renders
+  // instead, rather than inheriting a plausible-looking 0%.
+  const appSimilarity = appsIncomplete
+    ? null
+    : jaccard(
+        appBuckets.shared.length,
+        appBuckets.shared.length + appBuckets.onlyCompared.length + appBuckets.onlyContext.length,
+      );
+
+  // With the app term unavailable the headline falls back to the group figure
+  // alone, rather than averaging in a zero. Dropping the headline entirely would
+  // throw away the half of the comparison that did load; averaging in a fabricated
+  // zero silently halves it. `similarityScope` is what keeps the surviving number
+  // honest about what it covers.
+  const overallSimilarity = !comparedUser
+    ? 0
+    : appSimilarity === null
+      ? groupSimilarity
+      : Math.round((groupSimilarity + appSimilarity) / 2);
+  const similarityScope: 'both' | 'groups-only' = appSimilarity === null ? 'groups-only' : 'both';
 
   const isLoading = isLoadingGroups || isLoadingApps;
-  const loadError = groupsError || appsError;
+  // Only the group side can produce a blocking error: `loadError` replaces the
+  // whole comparison body, and a failed app read must not do that — the group half
+  // is still worth showing. An incomplete app read travels as `appsIncomplete`
+  // instead, which caveats rather than blanks.
+  const loadError = groupsError;
 
   const contextName = userDisplayName(contextUser);
   const comparedName = comparedUser ? userDisplayName(comparedUser) : '';
@@ -180,11 +326,14 @@ export function useUserComparison({
     setActiveTab,
     groupBuckets,
     appBuckets,
+    causes,
     groupDiffCount,
     appDiffCount,
     groupSimilarity,
     appSimilarity,
     overallSimilarity,
+    similarityScope,
+    appsIncomplete,
     isLoading,
     loadError,
     addingGroupId,
@@ -194,7 +343,17 @@ export function useUserComparison({
     addToCompared,
     contextName,
     comparedName,
+    resolveGroupName,
     selectUser,
     changeUser,
   };
 }
+
+/**
+ * The comparison view model produced by {@link useUserComparison}.
+ *
+ * Passed whole into {@link UserComparisonView}, which is presentational: the hook
+ * is instantiated by the *host* (dialog or pushed view) rather than by the view, so
+ * that the hook's mount lifetime is the host's, not the visible surface's.
+ */
+export type UserComparisonState = ReturnType<typeof useUserComparison>;

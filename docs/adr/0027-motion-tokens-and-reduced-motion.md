@@ -1,4 +1,4 @@
-# ADR-0019: Motion tokens and reduced motion
+# ADR-0027: Motion tokens and reduced motion
 
 - Status: Accepted
 - Date: 2026-08-04

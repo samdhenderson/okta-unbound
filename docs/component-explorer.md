@@ -134,8 +134,12 @@ follows these four rules. `Button.stories.tsx` is the Template-A reference;
 
 4. **Per-story a11y.** Add `parameters.a11y` only where it clarifies intent, and
    ship an accessible-name story for icon-only components (see
-   `IconButton.stories.tsx`). The global mode stays `a11y.test: 'todo'`
-   (report-only) — do **not** flip it to `'error'` (that's ADR-0011 future work).
+   `IconButton.stories.tsx`). The global mode is `a11y.test: 'error'`
+   (`.storybook/preview.tsx`), so an axe violation **fails the story** in the
+   browser suite — it is not advisory. Suppress a rule per-story only with a
+   comment saying why. (This paragraph previously said the mode was report-only
+   `'todo'` and warned against flipping it; that flip has since happened, closing
+   the ADR-0011 follow-up. See "Coverage expectation" below.)
 
 ### Sidebar taxonomy
 

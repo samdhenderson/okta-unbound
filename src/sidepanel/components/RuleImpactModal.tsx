@@ -228,7 +228,7 @@ const RuleImpactModal: React.FC<RuleImpactModalProps> = ({
         {status === 'loading' && (
           <div className="py-6">
             <LoadingSpinner
-              size="md"
+              size="xl"
               centered
               message={progress ? progress.message : 'Analyzing rule impact…'}
             />

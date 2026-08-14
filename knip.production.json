@@ -1,0 +1,32 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "src/background/index.ts",
+    "src/content/index.ts",
+    "src/sidepanel/main.tsx",
+    "src/sidepanel/export/descriptors/*.ts"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "!src/**/*.{test,spec}.{ts,tsx}",
+    "!src/**/*.stories.tsx",
+    "!src/test/**"
+  ],
+  "paths": {
+    "@/*": ["src/*"]
+  },
+  "ignoreExportsUsedInFile": true,
+  "exclude": [
+    "dependencies",
+    "devDependencies",
+    "optionalPeerDependencies",
+    "unlisted",
+    "binaries",
+    "duplicates"
+  ],
+  "vite": {
+    "config": ["vite.config.ts"]
+  },
+  "vitest": false,
+  "storybook": false
+}

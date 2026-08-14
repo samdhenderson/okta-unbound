@@ -96,7 +96,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
   }, [userDetails, loadMemberships]);
 
   if (isLoading) {
-    return <LoadingSpinner size="lg" message="Loading user data..." centered />;
+    return <LoadingSpinner size="2xl" message="Loading user data..." centered />;
   }
 
   const displayError = userError || membershipError;
@@ -256,6 +256,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
       {/* User comparison modal */}
       {userDetails && (
         <UserComparisonModal
+          oktaOrigin={oktaOrigin}
           isOpen={isCompareOpen}
           onClose={() => setIsCompareOpen(false)}
           contextUser={userDetails}

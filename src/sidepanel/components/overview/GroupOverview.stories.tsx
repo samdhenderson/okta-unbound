@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import GroupOverview from './GroupOverview';
 import { useOktaApi, makeUseOktaApiValue } from '../../../../.storybook/mocks/useOktaApi.mock';
-import { mockUsers } from '../../../test/mocks/handlers';
+import { mockUsers } from '../../../test/mocks/fixtures';
 
 /**
  * Overview tab for a single Okta group: quick stats, bulk actions, and the

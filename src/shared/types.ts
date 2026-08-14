@@ -247,28 +247,61 @@ export interface MembershipRule {
 }
 
 /**
- * How confident the membership classification is.
+ * What kind of evidence produced a membership classification — so a guess can be
+ * rendered as a guess rather than as one of Okta's own facts.
  *
- * - `exact` — decided from facts: an application-managed group, no rule targets
- *   the group, the user is excluded from every targeting rule, or every
- *   targeting rule's condition was fully evaluated client-side.
- * - `inferred` — at least one targeting rule's condition could not be evaluated
- *   client-side, so the classification falls back to a heuristic and may be
- *   wrong (a manual add into a rule-fed group can still read as `RULE_BASED`).
+ * Widening this union is deliberately expensive: every consumer that maps an
+ * attribution onto behaviour does so through an exhaustive `Record` keyed by
+ * this type (`shared/utils/membershipAnalysis.ATTRIBUTION_SEMANTICS`,
+ * `sidepanel/components/groups/memberSourceBuckets.ATTRIBUTION_BUCKET`), so a
+ * new member is a compile error at every decision point rather than a silent
+ * fall-through into the confident branch.
+ *
+ * - `exact` — **proven.** Decided from facts: an application-managed group, no
+ *   rule targets the group, the user is excluded from every targeting rule,
+ *   every targeting rule's condition was fully evaluated client-side and none
+ *   matched, or the carried rules' conditions were evaluated and *did* match
+ *   this user. Every rule in {@link GroupMembership.rules} provably matches.
+ * - `inferred` — **a deduction that still rests on evidence.** At least one
+ *   targeting rule's condition is outside the client-side evaluable subset, so
+ *   the classifier fell back to the coarse heuristic, and that heuristic had
+ *   something to go on: either exactly one candidate rule survived exclusion and
+ *   `no-match` elimination (nothing else could have granted the membership), or
+ *   the user's own attribute values appear in a candidate's condition text.
+ *   Plausible, not proven — a manual add into a rule-fed group can still read as
+ *   `RULE_BASED` here.
+ * - `ambiguous` — **a guess with no evidence behind it.** Two or more candidate
+ *   rules survived and nothing separates them, so no rule can be named as *the*
+ *   source; {@link GroupMembership.rules} carries the whole candidate set and any
+ *   or none of them may be responsible. Also the honest value for a membership
+ *   that was never classified at all (`membershipType: 'UNKNOWN'`). Never render
+ *   this with the weight of an answer.
  */
-export type MembershipAttribution = 'exact' | 'inferred';
+export type MembershipAttribution = 'exact' | 'inferred' | 'ambiguous';
 
 /** A single group membership, annotated with how it was granted. */
 export interface GroupMembership {
   group: OktaGroup;
   membershipType: 'DIRECT' | 'RULE_BASED' | 'UNKNOWN';
-  rule?: MembershipRule;
   /**
-   * Confidence in `membershipType`/`rule`. Optional: producers that do not
-   * classify (e.g. the raw `UNKNOWN` membership envelope) leave it unset.
-   * `shared/utils/membershipAnalysis.analyzeMemberships` always sets it.
+   * The rules this membership is attributed to — **plural, because more than one
+   * rule can genuinely match the same user**, and because an unevidenced guess
+   * has a candidate *set* rather than an answer.
+   *
+   * How to read the list is entirely determined by `attribution`:
+   * `exact` — every entry provably matches (the list may still be incomplete
+   * when a sibling rule was unevaluable); `inferred` — every entry is plausible;
+   * `ambiguous` — the entries are candidates, not answers. Empty whenever no
+   * rule is attributable (a manual add, or an `APP_GROUP` fed by its
+   * application rather than by a group rule).
    */
-  attribution?: MembershipAttribution;
+  rules: MembershipRule[];
+  /**
+   * What kind of evidence produced `membershipType`/`rules`. **Required**: a
+   * producer that cannot classify must say so explicitly (`'ambiguous'`) rather
+   * than omit the field and have consumers default it to confidence.
+   */
+  attribution: MembershipAttribution;
 }
 
 /**

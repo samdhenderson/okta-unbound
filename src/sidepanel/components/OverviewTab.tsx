@@ -86,7 +86,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
   if (isLoading) {
     return (
       <div className="tab-content active">
-        <LoadingSpinner size="lg" message="Detecting page context..." centered />
+        <LoadingSpinner size="2xl" message="Detecting page context..." centered />
       </div>
     );
   }

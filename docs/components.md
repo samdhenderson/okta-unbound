@@ -15,7 +15,7 @@ Feature components live under `components/{groups,users,overview}/`.
 2. **Import from the barrel** `components/shared` — not deep paths. The barrel
    exports every shared component (see below).
 3. **No raw hex / no ad-hoc spacing** — see [design-system.md](./design-system.md).
-4. **Icons come from the `Icon` registry** (`overview/shared/Icon.tsx`, 29 typed
+4. **Icons come from the `Icon` registry** (`overview/shared/Icon.tsx`, 30 typed
    icons, `currentColor`). Don't inline `<svg>` in feature code.
 
 ## The variant/size convention
@@ -30,9 +30,14 @@ const variantClasses: Record<FooVariant, string> = {/* … */};
 const sizeClasses: Record<FooSize, string> = { sm: '…', md: '…', lg: '…' };
 ```
 
-- Size scale is `sm | md | lg`. Express sizing in Tailwind classes only — do **not**
-  add parallel inline pixel `style` maps (`Button.tsx` is the model: its sizing is
-  class-based).
+- Size scale is `sm | md | lg` by default. Two primitives extend it where call sites
+  needed steps the three-name scale could not express: `Icon` is
+  `xs | sm | md | lg | xl` (12/16/20/24/32px) and `LoadingSpinner` is
+  `sm | md | lg | xl | 2xl` (16/20/24/32/48px) — deliberately **name-for-name aligned**
+  over the sizes they share, so a spinner standing in for a glyph is requested by the
+  glyph's own size name. Extend a scale only when a real call site needs the step.
+  Express sizing in Tailwind classes only — do **not** add parallel inline pixel `style`
+  maps (`Button.tsx` is the model: its sizing is class-based).
 - Variant/status names use the shared `StatusType` (`success | warning | danger |
 info`) — never `error`.
 
@@ -88,10 +93,20 @@ The button/input migration is complete; these are the raw controls that stay raw
 **by decision**, each carrying an inline `§3 exception` (or `CHARACTERIZED:`)
 comment at the call site:
 
-- **Composites** where a shared primitive is not pixel-neutral: `SearchDropdown`,
-  `UserSearchBar`, `GroupSearchBar`, and the Add-to-Group type-ahead (leading-glyph
-  search inputs with an absolutely-positioned spinner/dropdown), plus
-  `GroupFilterToggle`.
+- **Composites** where a shared primitive is not pixel-neutral: the Add-to-Group
+  type-ahead (`AddToGroupModal`) and `UserComparisonModal`'s search field in
+  `ComparisonSearchPhase` — leading-glyph search inputs with an absolutely
+  positioned spinner/dropdown — plus `GroupFilterToggle`.
+
+  `SearchDropdown`, `UserSearchBar` and `GroupSearchBar` **left this list**: they
+  now compose `Input` + `Icon` + `LoadingSpinner` like `MemberSearchBar`. The
+  exception was real — converging on the primitives cost a few pixels of field
+  height (`py-3`/`py-2.5` → `py-2`), leading-icon size (20px → 16px), and the
+  reserved trailing padding the shared `Input` has no slot for. That was accepted
+  as the price of not maintaining a byte-identical copy of the input class string
+  in two files. The two entries that remain are the ones where the delta is larger
+  than that, and they still need a design call rather than a mechanical swap.
+
 - **Roving-focus rows:** `TabJumpPalette`'s result rows. A palette row is a
   left-aligned icon + label + status row carrying a roving `tabIndex` and a ref
   for programmatic focus; `Button` is a centred CTA and exposes neither
@@ -116,8 +131,6 @@ comment at the call site:
     `className` escape hatch to match without inline classes.
   - The active-filter chip's `rounded-full` close button (`IconButton` is
     `rounded-md`).
-  - `UserComparisonModal`'s search `Input` (`py-3`/`shadow-sm`) is not pixel-neutral
-    against the shared `Input` base — needs a design call, not a mechanical swap.
 
 **Barrel:** `shared/index.ts` now exports the full catalog above — import from the
 barrel (`../shared`), not deep paths.

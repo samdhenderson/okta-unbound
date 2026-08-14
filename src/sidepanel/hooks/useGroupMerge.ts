@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useState } from 'react';
-import type { GroupSummary, AuditLogEntry, MembershipRule, OktaUser } from '../../shared/types';
+import type { GroupSummary, AuditLogEntry, OktaUser } from '../../shared/types';
 import { useOktaApi } from './useOktaApi';
 import { useProgress } from '../contexts/ProgressContext';
 import { logAction } from '../../shared/undoManager';
@@ -91,7 +91,7 @@ export function useGroupMerge(targetTabId?: number): UseGroupMergeReturn {
           membersByGroup.set(g.id, await getAllGroupMembers(g.id));
         }
         for (const s of sources) {
-          const rules = (await getGroupRulesForGroup(s.id)) as MembershipRule[];
+          const rules = await getGroupRulesForGroup(s.id);
           feedingRulesByGroup.set(
             s.id,
             rules.map((r) => ({ name: r.name, status: r.status })),

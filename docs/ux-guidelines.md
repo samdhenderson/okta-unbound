@@ -24,7 +24,7 @@ on the animation finishing. A keyboard user who presses Escape is never left in 
 dead zone for the length of a close animation waiting for focus to catch up; the
 animation is purely visual by that point; the panel itself goes `aria-hidden` +
 `inert` for the same window, so nothing on it can be queried, tabbed to, or
-clicked while it's on its way out. See `docs/motion.md` and ADR-0019 for the
+clicked while it's on its way out. See `docs/motion.md` and ADR-0027 for the
 mount-hold mechanics and why the hold uses a `1ms` (not `0s`) reduced-motion
 duration to guarantee this still resolves for reduced-motion users.
 
@@ -72,7 +72,7 @@ Every async view handles all three explicitly — never a blank panel:
 
 ## Motion & reduced motion
 
-Full token scale, primitives, and rationale live in `docs/motion.md` (ADR-0019).
+Full token scale, primitives, and rationale live in `docs/motion.md` (ADR-0027).
 The contract that matters for every new interactive surface:
 
 - Motion explains what just happened; it never decorates. If removing an

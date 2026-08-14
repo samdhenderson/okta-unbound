@@ -4,7 +4,7 @@ import CompositionReports from './CompositionReports';
 import { discoverAttributeBreakdowns, NONE_VALUE, OTHER_VALUE } from './memberAnalytics';
 import type { AttributeSummary, BreakdownRow, MemberFilter } from './memberAnalytics';
 import type { MemberMfaResult } from '../../../../shared/types';
-import { mockUsers } from '../../../../test/mocks/handlers';
+import { mockUsers } from '../../../../test/mocks/fixtures';
 
 // Real distribution discovered from the fixture members.
 const discoveredAttributes = discoverAttributeBreakdowns(mockUsers);

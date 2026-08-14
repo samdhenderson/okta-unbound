@@ -69,8 +69,10 @@ Type scale via Tailwind: `text-xs` (chips/meta), `text-sm` (body), `text-base`
 
 Use the Tailwind scale. Dominant, preferred values: padding `p-3`/`px-4 py-2`,
 gaps `gap-2`/`gap-3`, radius `rounded-md`. Avoid one-off values (`px-2.5`,
-`py-0.5`, `px-5`) — snap to the scale. Component sizing goes through the `sm|md|lg`
-size props, not ad-hoc padding.
+`py-0.5`, `px-5`) — snap to the scale. Component sizing goes through the size
+props, not ad-hoc padding. The scale is `sm|md|lg` for most primitives; `Icon`
+(`xs`…`xl`) and `LoadingSpinner` (`sm`…`2xl`) carry extra steps and share size names
+with each other — see `docs/components.md`.
 
 ## Token violations
 
@@ -84,7 +86,7 @@ Durations and easings live in their own `@theme static` block in the same
 `tailwind.css` file, under the identical hard rule: never write a raw `ms` or
 `cubic-bezier()` outside it. Full token table, the nine animation primitives, the
 reduced-motion contract, and the skeleton-vs-spinner rule are in
-[motion.md](./motion.md) (ADR-0019, ADR-0020) — this section is just the pointer.
+[motion.md](./motion.md) (ADR-0027, ADR-0028) — this section is just the pointer.
 
 One cross-cutting gotcha worth flagging here rather than only in the motion doc:
 `Modal.tsx`'s `EXIT_MS` constant and `useCountUp`'s `COUNT_UP_MS` constant are

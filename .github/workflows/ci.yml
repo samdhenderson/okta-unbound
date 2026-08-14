@@ -29,10 +29,48 @@ jobs:
         run: npm run type-check
 
       - name: Test + coverage gate
-        # Runs the jsdom unit project with the 80/75 coverage thresholds enforced
-        # (vitest.config.ts). Replaces the old bare `test:run`; §8 raised coverage
-        # above threshold so the gate is now enforced in CI.
+        # Runs the jsdom unit project with the coverage thresholds enforced
+        # (thresholds live in vitest.config.ts — ADR-0019). Replaces the old bare
+        # `test:run`.
         run: npm run test:coverage
+
+      # Dead-code detection. Reports unused files, exports and dependencies that
+      # `noUnusedLocals` and eslint's no-unused-vars structurally cannot see (both
+      # are file-local; neither ever flags an unused *export*).
+      #
+      # NON-BLOCKING for now: the repo has a known backlog at the time this landed
+      # (see docs/dead-code.md). Promote to a hard gate — drop the
+      # `continue-on-error` — once that backlog reaches zero.
+      - name: Dead code (knip)
+        continue-on-error: true
+        run: npm run knip
+
+      # Reachability from the three manifest entry points only, with tests and
+      # stories excluded from the project. This is what surfaces code that is alive
+      # *only* because a test imports it — `npm run knip` cannot see that class of
+      # dead code, because it treats test files as entry points.
+      #
+      # Advisory by design, never a gate: some exports legitimately exist as testing
+      # seams. Human review decides.
+      - name: Dead code — production reachability (advisory)
+        continue-on-error: true
+        run: npm run knip:production
+
+      - name: Circular dependencies
+        run: npm run knip:circular
+
+      # A literal control byte in a source file makes it *binary* to grep(1), so
+      # every grep-based scan — CI greps, knip, and any human or agent searching
+      # the tree — silently skips it. One had been sitting in useAppsData.ts.
+      # The escape sequence is fine; a raw byte is not.
+      - name: No control bytes in source
+        run: npm run lint:control-chars
+
+      # Docs, ADRs, and .claude/ skills/agents cite src/ paths as evidence a
+      # reader can go check. Nothing else verifies those paths survive the
+      # next refactor or rename — this does.
+      - name: Cited paths resolve
+        run: npm run lint:cited-paths
 
   # Component explorer build gate (ADR-0010). Runs in parallel with `verify` (no
   # `needs:`), so it never delays the fast lint/type/test feedback. A broken or

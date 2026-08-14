@@ -151,9 +151,12 @@ Enforced at the single fetch choke point,
   explicit **allow-list** of operators, fixed-arity Okta EL functions
   (`SUPPORTED_FUNCTIONS`), and single-level `user.<attribute>` reads; anything else —
   unknown function, unmodelled node, computed access, wrong argument count — is reported
-  _unevaluable_, never approximated. `canEvaluateClientSide()` applies that same
-  allow-list as an **AST walk**, not a substring scan, so nothing can pass the gate and
-  then fail inside the evaluator. Parsing is capped at 4096 characters to bound the work
+  _unevaluable_, never approximated. The grammar gate is an **AST walk**, not a substring
+  scan, so nothing can pass it and then fail inside the evaluator. To verify it directly,
+  call `checkRuleNodeSupport()` on a node from `parseRuleExpression()` — that is the same
+  walk `tryEvaluateRuleExpression` applies internally. (It replaced the boolean
+  `canEvaluateClientSide()`, retired by ADR-0025 along with the whole two-valued surface,
+  because a bare `false` could not say _why_ a gate rejected an expression.) Parsing is capped at 4096 characters to bound the work
   an adversarial tenant value can force, and expression text is **never logged**
   (literals can carry tenant PII) — only a reason code. Grep confirms **zero**
   `eval`/`new Function`/string-`setTimeout`/`innerHTML`/`document.write`/
@@ -171,6 +174,16 @@ Enforced at the single fetch choke point,
   (`isMemberOfGroup*`) and `app.*` context are always `unevaluable` — they need data this
   module is not given — and callers render that as indeterminate rather than resolving it
   either way.
+- **A failed load is never reported as an attribution.** The same property one level up:
+  classifying a user's groups against a rule list that could not be fetched makes every
+  group look untargeted, which the heuristic reads as an _exactly known manual add_. The
+  user path (`hooks/useUserMemberships`) therefore distinguishes "the org has no rules"
+  from "we could not obtain the rules" and reports the latter as unclassified. The two
+  attribution paths — the group view's Okta-asserted `_embedded['group-rules']` and the
+  user view's client-side heuristic — are reconciled by stating provenance rather than by
+  silently differing; the contract, and where they are permitted to differ, is
+  [ADR-0020](./adr/0020-attribution-provenance-not-a-fourth-level.md), pinned by
+  `shared/membership/attributionParity.test.ts`.
 - **Okta-origin validation.** [`shared/utils/oktaUrl.ts`](../src/shared/utils/oktaUrl.ts)
   `isOktaUrl()` **parses the hostname** (`new URL`), requires `https:`, and matches against
   a hardcoded domain list by exact or dot-suffix equality — never substring matching.
@@ -200,8 +213,18 @@ notifications, sidePanel, alarms`, each mapped to a real consumer (`activeTab` b
   storage API (grep-verified across every `chrome.storage.*.set` / IndexedDB write). Only
   cache payloads, group/rule/tab UI state, audit entries, and non-sensitive prefs are
   stored.
-- **TTL'd / bounded storage.** [`shared/cache.ts`](../src/shared/cache.ts) evicts entries
-  on read past a 5-minute default TTL; undo history is capped at 50 entries
+- **TTL'd / bounded storage.** Cached entity data carries a TTL —
+  [`sidepanel/cache/entityCache.ts`](../src/sidepanel/cache/entityCache.ts) (in-memory,
+  5-minute default), [`shared/rulesCache.ts`](../src/shared/rulesCache.ts)
+  (`chrome.storage.local`, 5 minutes) and
+  [`components/groups/groupsCache.ts`](../src/sidepanel/components/groups/groupsCache.ts)
+  (`chrome.storage.local`, 24 hours). `entityCache` treats TTL as a freshness verdict
+  rather than a deletion, so it is **separately bounded** at `MAX_ENTRIES` (500) with
+  eviction on write — expired entries first, then least-recently-read, and never a key
+  with a live subscriber or an in-flight fetch, since dropping those would force the
+  refetch the cache exists to avoid. Before that bound existed the in-memory store grew
+  for the life of a panel session. Undo
+  history is capped at 50 entries
   ([`shared/undoManager.ts`](../src/shared/undoManager.ts)); the audit trail
   ([`shared/storage/auditStore.ts`](../src/shared/storage/auditStore.ts)) has a
   user-configurable retention (default 90 days), can be disabled, and supports a full
@@ -246,8 +269,8 @@ A reviewer can reproduce the core claims without trusting this document:
 - **No dynamic execution / HTML injection:** `grep -rn "eval(\|new Function\|dangerouslySetInnerHTML\|innerHTML\|document.write" src` → production hits are zero (matches are tests/JSDoc).
 - **No secrets:** `grep -rn "SSWS \|Bearer \|Authorization" src` → prohibition text only.
 - **XSRF never stored/logged:** read `getXsrfToken` in [`content/apiRequest.ts`](../src/content/apiRequest.ts); run the regression test in [`content/index.test.ts`](../src/content/index.test.ts).
-- **Quality gates:** every PR runs lint (0 errors), strict type-check, the 80/75 coverage
-  gate, and the Storybook build/story tests
+- **Quality gates:** every PR runs lint (0 errors), strict type-check, the coverage
+  gate (thresholds in [`vitest.config.ts`](../vitest.config.ts)), and the Storybook build/story tests
   ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)).
 
 The security-hardening rules these controls enforce are codified in

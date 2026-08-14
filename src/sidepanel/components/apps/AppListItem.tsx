@@ -10,6 +10,7 @@
 import React, { memo, useCallback, useId, useState } from 'react';
 import { IconButton, LoadingSpinner, OpenInOktaLink } from '../shared';
 import { useEntityQuery } from '../../cache/useEntityQuery';
+import { cacheKeys } from '../../cache/keys';
 import type { AppAssignmentCounts } from '../../hooks/useOktaApi/appOperations';
 import type { OktaAppListItem } from '../../../shared/schemas/okta';
 import { formatDate, formatDateShort } from '../../../shared/utils/dateFormat';
@@ -47,7 +48,7 @@ const AssignmentCounts: React.FC<{
   // one entry means whichever the user reaches first warms the other — and, unlike
   // the two-shapes-one-key arrangement this replaced, neither can corrupt the other.
   const { data, isLoading, error } = useEntityQuery<AppAssignmentCounts | null>(
-    ['appAssignmentCounts', appId],
+    cacheKeys.appAssignmentCounts(appId),
     () => fetchAssignmentCounts(appId),
     { enabled },
   );

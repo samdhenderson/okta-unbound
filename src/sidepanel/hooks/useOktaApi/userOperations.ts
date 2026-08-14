@@ -7,10 +7,47 @@ import type { CoreApi } from './core';
 import type { OktaFactor, MemberMfaResult, OktaUser } from '../../../shared/types';
 import { summarizeFactors } from '../../../shared/utils/mfaUtils';
 import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
-import { oktaAppListItemSchema, type OktaAppListItem } from '@/shared/schemas/okta';
+import {
+  oktaAppListItemSchema,
+  extractAppAssignmentScope,
+  type OktaAppListItem,
+  type AppAssignmentScope,
+} from '@/shared/schemas/okta';
 import { createLogger } from '../../../shared/utils/logger';
 
 const log = createLogger('useOktaApi');
+
+/** One app assignment as {@link createUserOperations.getUserApps} reports it. */
+export interface UserAppAssignment {
+  /** Okta app id. */
+  id: string;
+  /** Display label, falling back to the app name and then the id. */
+  label: string;
+  /** How the assignment was granted, when Okta reported it. */
+  scope?: AppAssignmentScope;
+}
+
+/**
+ * The outcome of listing a user's apps: the assignments **and** whether the walk
+ * that produced them finished.
+ *
+ * This is an object rather than a bare array on purpose. The walk accumulates
+ * page-by-page and a failure part-way through still leaves real rows in hand, so
+ * returning just the array makes "Okta returned nothing" and "we never got an
+ * answer" the same value — and the caller renders a transport failure as *zero
+ * apps*, which is a confident, wrong statement about someone's access. Carrying
+ * `complete` alongside the rows makes the difference impossible to drop silently.
+ */
+export interface UserAppsResult {
+  /** Every assignment collected — all of them when `complete`, otherwise a prefix. */
+  apps: UserAppAssignment[];
+  /**
+   * `true` when the pagination walk ran to the end. `false` means the list is
+   * short by an unknown amount: treat any count, percentage or "missing app"
+   * conclusion drawn from it as unavailable, not as zero.
+   */
+  complete: boolean;
+}
 
 /**
  * Build per-user read and lifecycle operations.
@@ -73,38 +110,66 @@ export function createUserOperations(coreApi: CoreApi) {
   };
 
   /**
-   * List all apps assigned to a user (id + display label).
+   * List all apps assigned to a user (id + display label + assignment scope).
    *
    * @param userId - User whose apps to list.
-   * @returns Every assigned app across all pages; `[]` on error.
+   * @returns A {@link UserAppsResult}: the assignments collected across all pages,
+   * plus `complete` saying whether the walk finished. A failed or part-way-failed
+   * walk resolves with `complete: false` and whatever was collected — it never
+   * rejects, and it never reports a failure as an empty list. Each entry carries
+   * an optional {@link AppAssignmentScope}: `'USER'` when the user **has a direct
+   * assignment** to the app, `'GROUP'` when the assignment comes from a group, and
+   * `undefined` when Okta did not report one. Okta reports a single scope per
+   * app-user and prefers `'USER'` when both paths exist, so `'USER'` must never be
+   * rendered as "direct only".
    * @remarks Reflects effective assignments (direct + via group) from the apps
    * filter endpoint, following `Link` pagination (200 per page).
+   *
+   * The scope costs **no extra requests**: `expand=user/{userId}` asks this same
+   * list endpoint (not `appLinks`, which does not support `expand`) to embed the
+   * app-user object under `_embedded.user` on each row, so the walk is byte-for-byte
+   * the same number of calls it was without it. A missing or malformed embed leaves
+   * `scope` undefined and never drops the app (ADR-0006).
+   *
+   * Pages 2+ are re-issued from Okta's own `rel="next"` cursor, so they carry the
+   * embed only if Okta echoes `expand` back on that link (it does for `expand=stats`
+   * on `/api/v1/groups` — see `groupDiscovery.test.ts`). If it ever stops, the only
+   * consequence is `scope: undefined` past page 1 — apps are never lost — so this
+   * deliberately does not rewrite the cursor URL.
    */
-  const getUserApps = async (userId: string): Promise<Array<{ id: string; label: string }>> => {
-    const apps: Array<{ id: string; label: string }> = [];
+  const getUserApps = async (userId: string): Promise<UserAppsResult> => {
+    const apps: UserAppAssignment[] = [];
 
     try {
       // Accumulate via onPage so a mid-walk failure still returns the pages
       // collected so far (fetchAllPages throws on a failed page).
       await fetchAllPages<OktaAppListItem>(
         (url) => coreApi.makeApiRequest(url),
-        `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=${OKTA_PAGE_SIZE}`,
+        `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=${OKTA_PAGE_SIZE}&expand=user/${userId}`,
         {
           // Validated at the response boundary (ADR-0006): malformed rows are
           // dropped leniently by parseOktaList, never thrown on.
           schema: oktaAppListItemSchema,
           onPage: (page) => {
             for (const app of page) {
-              apps.push({ id: app.id, label: app.label || app.name || app.id });
+              apps.push({
+                id: app.id,
+                label: app.label || app.name || app.id,
+                // Read defensively off the untyped `_embedded`: any shape that is
+                // not a recognizable app-user yields undefined, so the app is still
+                // listed with its scope simply unknown.
+                scope: extractAppAssignmentScope(app._embedded),
+              });
             }
           },
         },
       );
     } catch (error) {
       log.error(`Failed to list apps for user ${userId}:`, error);
+      return { apps, complete: false };
     }
 
-    return apps;
+    return { apps, complete: true };
   };
 
   /**

@@ -19,6 +19,7 @@ import {
   type AppStatusFilter,
 } from './apps/appFilters';
 import { useOktaApi } from '../hooks/useOktaApi';
+import type { OperationResult } from '../hooks/useOktaApi/types';
 import { useAppsData } from '../hooks/useAppsData';
 
 /** Props for {@link AppsTab}. */
@@ -48,12 +49,9 @@ const AppsTab: React.FC<AppsTabProps> = ({ targetTabId, oktaOrigin, isActive = t
   const [sortDesc, setSortDesc] = useState(false);
 
   // Must be stable: useOktaApi memoizes its operations on this callback's identity.
-  const handleResult = useCallback(
-    (message: string, type: 'info' | 'success' | 'warning' | 'error') => {
-      if (type === 'error') setError(message);
-    },
-    [],
-  );
+  const handleResult = useCallback(({ message, type }: OperationResult) => {
+    if (type === 'error') setError(message);
+  }, []);
 
   const api = useOktaApi({ targetTabId, onResult: handleResult });
 

@@ -99,7 +99,7 @@ const ScrollableList: React.FC<ScrollableListProps> = ({
         className={`flex items-center justify-center py-12 ${fillAvailable ? 'flex-1' : ''}`}
         data-testid={testId}
       >
-        <LoadingSpinner size="lg" message={loadingMessage} centered />
+        <LoadingSpinner size="2xl" message={loadingMessage} centered />
       </div>
     );
   }

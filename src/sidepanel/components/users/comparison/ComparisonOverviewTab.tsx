@@ -1,11 +1,19 @@
 /**
  * @module sidepanel/components/users/comparison/ComparisonOverviewTab
- * @description Summary tab with two proportion cards (groups + apps) and jump-to-detail links.
+ * @description Summary tab: two proportion cards (groups + apps), plus the cause
+ * worklist that says what to DO about the differences.
+ *
+ * The cards answer *how much* differs; {@link CauseWorklist} answers *why*, grouped
+ * by remedy. The worklist's `causes` prop is deliberately **optional**: absent means
+ * "not computed", which the worklist renders differently from "computed, and there
+ * are none".
  */
 import React from 'react';
 import Icon from '../../overview/shared/Icon';
-import type { OktaGroup } from '../../../../shared/types';
-import type { AppEntry } from './comparisonAnalytics';
+import CauseWorklist from './CauseWorklist';
+import type { AccessCause } from './accessCause';
+import type { ClauseGroupReference } from '../../../../shared/rules/explainExpression';
+import type { AppEntry, GroupBuckets } from './comparisonAnalytics';
 
 /** Props for {@link ComparisonOverviewTab}. */
 interface ComparisonOverviewTabProps {
@@ -13,21 +21,57 @@ interface ComparisonOverviewTabProps {
   contextName: string;
   /** Display name for the compared user. */
   comparedName: string;
-  /** Bucketed group memberships (only-compared / shared / only-context). */
-  groupBuckets: { onlyCompared: OktaGroup[]; shared: OktaGroup[]; onlyContext: OktaGroup[] };
+  /**
+   * Bucketed group memberships (only-compared / shared / only-context). Only the
+   * three lengths are read here — the memberships' provenance is the Groups
+   * tab's business — but the prop takes the real {@link GroupBuckets} so this
+   * card cannot drift from what `bucketGroups` produces.
+   */
+  groupBuckets: GroupBuckets;
   /** Bucketed app assignments (only-compared / shared / only-context). */
   appBuckets: { onlyCompared: AppEntry[]; shared: AppEntry[]; onlyContext: AppEntry[] };
   /** Group overlap as a whole percent (0–100). */
   groupSimilarity: number;
-  /** App overlap as a whole percent (0–100). */
-  appSimilarity: number;
+  /**
+   * App overlap as a whole percent (0–100), or `null` when the app assignments
+   * could not be fully read — an overlap ratio over a list of unknown length is
+   * not a low percentage, it is not a percentage. The card says so instead of
+   * rendering one.
+   */
+  appSimilarity: number | null;
   /** Jumps to the Groups detail tab. */
   onJumpToGroups: () => void;
   /** Jumps to the Apps detail tab. */
   onJumpToApps: () => void;
+  /**
+   * Access differences classified by remedy. **Absent when not computed** — the
+   * worklist says so rather than claiming there is nothing to fix.
+   */
+  causes?: readonly AccessCause[];
+  /**
+   * Opens the full clause checklist for one cause. Forwarded to
+   * {@link CauseWorklist}; omitted, each row still previews its failing clauses
+   * inline but offers no jump.
+   */
+  onViewClauses?: (cause: AccessCause) => void;
+  /**
+   * Optional per-prerequisite-group action, forwarded to {@link CauseWorklist} —
+   * the "Add" that grants a group a failing `isMemberOf*` clause asks for.
+   */
+  renderGroupAction?: (reference: ClauseGroupReference) => React.ReactNode;
+  /**
+   * Optional per-blocking-group action, forwarded to {@link CauseWorklist} — for
+   * a group the user must *leave* to qualify.
+   */
+  renderBlockingGroupAction?: (reference: ClauseGroupReference) => React.ReactNode;
+  /** Turns a group id embedded in a rule condition into its name. */
+  resolveGroupName?: (groupId: string) => string | undefined;
 }
 
-/** Overview tab: two proportion cards (groups + apps) with jump-to-detail links. */
+/**
+ * Overview tab: two proportion cards (groups + apps) with jump-to-detail links,
+ * followed by the cause worklist grouped by remedy.
+ */
 const ComparisonOverviewTab: React.FC<ComparisonOverviewTabProps> = ({
   contextName,
   comparedName,
@@ -37,6 +81,11 @@ const ComparisonOverviewTab: React.FC<ComparisonOverviewTabProps> = ({
   appSimilarity,
   onJumpToGroups,
   onJumpToApps,
+  causes,
+  onViewClauses,
+  renderGroupAction,
+  renderBlockingGroupAction,
+  resolveGroupName,
 }) => (
   <div className="space-y-4">
     <OverviewCard
@@ -61,6 +110,15 @@ const ComparisonOverviewTab: React.FC<ComparisonOverviewTabProps> = ({
       onlyCompared={appBuckets.onlyCompared.length}
       onJump={onJumpToApps}
     />
+    <CauseWorklist
+      causes={causes}
+      contextName={contextName}
+      comparedName={comparedName}
+      onViewClauses={onViewClauses}
+      renderGroupAction={renderGroupAction}
+      renderBlockingGroupAction={renderBlockingGroupAction}
+      resolveGroupName={resolveGroupName}
+    />
   </div>
 );
 
@@ -70,8 +128,13 @@ interface OverviewCardProps {
   icon: 'users' | 'app';
   /** Card heading (e.g. "Group memberships"). */
   heading: string;
-  /** Overlap as a whole percent (0–100). */
-  similarity: number;
+  /**
+   * Overlap as a whole percent (0–100), or `null` when the underlying lists are
+   * known to be short. `null` also downgrades the total to a floor: the three
+   * bucket counts below it are still whatever arrived, which is a real lower
+   * bound and worth showing, but it is not the total.
+   */
+  similarity: number | null;
   /** Display name for the context user. */
   contextName: string;
   /** Display name for the compared user. */
@@ -134,7 +197,9 @@ const OverviewCard: React.FC<OverviewCardProps> = ({
 
       <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3 text-xs">
         <span className="text-neutral-500">
-          {total} total · {similarity}% overlap
+          {similarity === null
+            ? `at least ${total} · overlap unavailable`
+            : `${total} total · ${similarity}% overlap`}
         </span>
         {onlyCompared > 0 && icon === 'users' && (
           <span className="flex items-center gap-1 font-semibold text-primary-text">

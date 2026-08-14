@@ -127,12 +127,7 @@ const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
       }
     >
       {loading && (
-        <div className="text-center py-8 space-y-3">
-          <div className="flex justify-center">
-            <LoadingSpinner size="md" />
-          </div>
-          <p className="text-sm text-neutral-600">{progress || 'Loading group members...'}</p>
-        </div>
+        <LoadingSpinner size="xl" message={progress || 'Loading group members...'} centered />
       )}
 
       {error && (

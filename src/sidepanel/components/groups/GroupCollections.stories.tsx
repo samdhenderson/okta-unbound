@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import GroupCollections from './GroupCollections';
 import type { GroupSummary } from '../../../shared/types';
-import { mockGroup } from '../../../test/mocks/handlers';
+import { mockGroup } from '../../../test/mocks/fixtures';
 
 const sampleGroups: GroupSummary[] = [
   {

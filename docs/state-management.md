@@ -14,15 +14,28 @@ If a component has more than ~8 `useState`s, that's a smell — extract a hook.
 ## God-component decomposition (how we decomposed)
 
 The overhaul broke up four files that concentrated risk and blocked testing:
-`UsersTab.tsx` (1364 → 335 lines), `GroupsTab.tsx` (935 → 405),
-`UserComparisonModal.tsx` (967 → 233), `content/index.ts` (1344 → 255). No component
-now runs over ~300 lines; hold that line for new work.
+`UsersTab.tsx` (1364 → 237 lines), `GroupsTab.tsx` (935 → 509),
+`UserComparisonModal.tsx` (967 → 91), `content/index.ts` (1344 → 328).
+
+**~300 lines is the target, not a description of the current tree.** Nine components
+are still over it, `GroupsTab.tsx` (509) and `RulesTab.tsx` (451) furthest. Two are
+benign by construction — `Icon.tsx` (363) is a flat glyph registry and
+`ActivityBarView.tsx` (316) is a presentational shell — but the rest are decomposition
+candidates. Find them rather than trusting this list, which goes stale:
+
+```
+find src/sidepanel/components -name "*.tsx" \
+  -not -name "*.test.tsx" -not -name "*.stories.tsx" \
+  | xargs wc -l | sort -rn | head -20
+```
+
+Hold the line for new work, and prefer extracting a hook to letting one of these grow.
 
 The decomposition ran **tests-first and incrementally** (never a big-bang rewrite) —
 the same playbook for any future large component:
 
-1. **Pin behavior** — write RTL/MSW tests around the component so refactors are
-   verifiable (see [testing.md](./testing.md)).
+1. **Pin behavior** — write RTL tests around the component so refactors are
+   verifiable, mocking at the `useOktaApi` facade (see [testing.md](./testing.md)).
 2. **Extract logic into hooks** — move data fetching, business logic, and derived
    state into `use*` hooks. Mirror the `useOktaApi/` module split.
 3. **Extract helpers** — move formatting/pure functions to `shared/utils` (dedupe

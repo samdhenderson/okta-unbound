@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import SearchDropdown from './SearchDropdown';
 import type { OktaUser } from '../../../shared/types';
-import { mockUsers } from '../../../test/mocks/handlers';
+import { mockUsers } from '../../../test/mocks/fixtures';
 
 // SearchDropdown is generic over T; with `satisfies Meta<typeof SearchDropdown>`
 // TypeScript widens T to `unknown`, so render/select callbacks receive `unknown`

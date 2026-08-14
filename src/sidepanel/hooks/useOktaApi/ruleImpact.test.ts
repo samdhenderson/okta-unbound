@@ -13,56 +13,11 @@ import { createRuleImpactOperations } from './ruleImpact';
 import type { CoreApi } from './core';
 import type { OktaGroupRule, OktaUser } from '../../../shared/types';
 import { OperationCancelledError } from '../../../shared/scheduler/cancellation';
+import { makeFakeCore, sequentialRunOperation } from '@/test/factories/coreApi';
 
 /** Build a fake CoreApi whose runOperation actually drives the per-item task. */
-function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
-  return {
-    targetTabId: 1,
-    sendMessage: vi.fn(),
-    makeApiRequest: vi.fn().mockResolvedValue({ success: true, data: [], headers: {} }),
-    getCurrentUser: vi.fn().mockResolvedValue({ email: 'admin@example.com', id: 'admin' }),
-    checkCancelled: vi.fn(),
-    resetCancellation: vi.fn(),
-    runOperation: vi.fn(
-      async (
-        _name: string,
-        items: unknown[],
-        task: (item: unknown, index: number) => Promise<unknown>,
-      ) => {
-        const results: Array<{
-          item: unknown;
-          index: number;
-          status: string;
-          value?: unknown;
-          error?: unknown;
-        }> = [];
-        let completed = 0;
-        let failed = 0;
-        for (let i = 0; i < items.length; i++) {
-          try {
-            const value = await task(items[i], i);
-            results.push({ item: items[i], index: i, status: 'fulfilled', value });
-            completed++;
-          } catch (error) {
-            results.push({ item: items[i], index: i, status: 'rejected', error });
-            failed++;
-          }
-        }
-        return {
-          results,
-          total: items.length,
-          completed,
-          failed,
-          skipped: 0,
-          stoppedByError: false,
-          cancelled: false,
-        };
-      },
-    ),
-    callbacks: {},
-    ...overrides,
-  } as unknown as CoreApi;
-}
+const makeCore = (overrides: Partial<CoreApi> = {}): CoreApi =>
+  makeFakeCore({ runOperation: sequentialRunOperation(), ...overrides });
 
 /** A member of the analyzed target group. */
 const member: OktaUser = {

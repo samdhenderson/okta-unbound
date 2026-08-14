@@ -168,6 +168,21 @@ export const oktaAppListItemSchema = z
     // second `GET /api/v1/apps/{id}`. Readers must validate what they pull out of it
     // — see `extractAccessPolicyId`.
     _links: z.unknown().optional(),
+    // Declared as `z.unknown()` for the same reason as `_links` above: what Okta
+    // embeds here depends entirely on the request's `expand` parameter (this list
+    // endpoint is also read with no `expand` at all), so no shape here is
+    // contractually stable. It survived `.passthrough()` already; naming it only
+    // makes it reachable from TypeScript, so `getUserApps` can read the app-user
+    // `scope` Okta embeds under `expand=user/{userId}` off a row it already holds
+    // instead of issuing a second request per app.
+    //
+    // `z.unknown()` — never a `z.object` — is load-bearing here: `parseOktaList`
+    // DROPS a row that fails validation (ADR-0006, "degrade, never crash"), so a
+    // stricter `_embedded` would make a malformed embed silently remove an app
+    // from a user's list, under-reporting access. A missing badge is cheap; a
+    // missing app is not. Readers must validate what they pull out of it — see
+    // {@link extractAppAssignmentScope}.
+    _embedded: z.unknown().optional(),
   })
   .passthrough();
 
@@ -231,6 +246,52 @@ export const oktaAppUserSchema = z
 
 /** Inferred type of a validated {@link oktaAppUserSchema} row. */
 export type OktaAppUser = z.infer<typeof oktaAppUserSchema>;
+
+/**
+ * How Okta reports the origin of an app assignment on an app-user object.
+ *
+ * - `'USER'` — the user **has a direct assignment** to the app.
+ * - `'GROUP'` — the assignment reaching this user comes from a group.
+ *
+ * IMPORTANT — this is not an exclusive classification. Okta reports a **single**
+ * `scope` per app-user: a user who is both directly assigned *and* a member of an
+ * assigned group is reported as `'USER'`. So `'USER'` means "has a direct
+ * assignment", **not** "direct only / no group path also exists" — never present
+ * it as the latter (that is why there is no `isDirectOnly` anywhere). `'GROUP'`
+ * is the only one of the two that is exclusive: it does imply no direct assignment.
+ */
+export type AppAssignmentScope = 'USER' | 'GROUP';
+
+/**
+ * Read the app-assignment {@link AppAssignmentScope} out of an app list row's
+ * `_embedded` value (populated by `GET /api/v1/apps?…&expand=user/{userId}`).
+ *
+ * Pure, total, and side-effect free: the argument is typed `unknown` because
+ * {@link oktaAppListItemSchema} deliberately does not constrain `_embedded` (see
+ * the comment there), and every failure mode — absent, `null`, a string, an array,
+ * a `user` that is not an app-user object, an unrecognized `scope` string — maps to
+ * `undefined` rather than an exception. The caller keeps the app either way; only
+ * the scope is unknown.
+ *
+ * @param embedded - The row's raw `_embedded` value (shape not guaranteed).
+ * @returns `'USER'` or `'GROUP'`, or `undefined` when the embed is missing,
+ * malformed, or carries a scope value this app does not recognize. Never throws,
+ * never guesses.
+ * @example
+ * const scope = extractAppAssignmentScope(app._embedded); // 'USER' | 'GROUP' | undefined
+ */
+export function extractAppAssignmentScope(embedded: unknown): AppAssignmentScope | undefined {
+  if (typeof embedded !== 'object' || embedded === null) return undefined;
+
+  // The embedded object is the app-user for this app/user pair — the same shape
+  // `GET /api/v1/apps/{appId}/users` returns, so it reuses `oktaAppUserSchema`
+  // rather than declaring a second schema for it.
+  const parsed = oktaAppUserSchema.safeParse((embedded as Record<string, unknown>).user);
+  if (!parsed.success) return undefined;
+
+  const { scope } = parsed.data;
+  return scope === 'USER' || scope === 'GROUP' ? scope : undefined;
+}
 
 /**
  * An app-group assignment row as consumed by the App Groups export descriptor

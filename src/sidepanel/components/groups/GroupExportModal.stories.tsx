@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn, userEvent, within } from 'storybook/test';
 import GroupExportModal from './GroupExportModal';
 import type { GroupSummary } from '../../../shared/types';
-import { mockUsers } from '../../../test/mocks/handlers';
+import { mockUsers } from '../../../test/mocks/fixtures';
 
 const sampleGroups: GroupSummary[] = [
   {

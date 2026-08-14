@@ -41,8 +41,10 @@ import { createRuleWriteOperations } from './useOktaApi/ruleWrites';
  * @remarks
  * The options (see `UseOktaApiOptions`) scope every operation to
  * `targetTabId`'s content script and wire the result/progress callbacks.
- * `onResult` reports user-facing messages (status is `success` / `warning` /
- * `danger`, never `error`). Both `onResult` and `onProgress` must be stable
+ * `onResult` reports user-facing messages as a single `{ message, type }` object
+ * (see `OperationResult`) — the object shape is deliberate: a positional
+ * `(message, type)` signature accepts a one-argument handler, which silently drops
+ * `type`. Both `onResult` and `onProgress` must be stable
  * (`useCallback`) — they are memo dependencies, so an unstable value defeats the
  * memoization and gives every returned function a new identity each render.
  *
@@ -84,7 +86,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
   const cancelOperation = useCallback(() => {
     cancelFns.current.cancel();
-    onResult?.('Operation cancelled by user', 'warning');
+    onResult?.({ message: 'Operation cancelled by user', type: 'warning' });
   }, [onResult]);
 
   const checkCancelled = useCallback(() => {

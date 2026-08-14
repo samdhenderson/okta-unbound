@@ -20,8 +20,22 @@
  * @see {@link module:sidepanel/hooks/useCachedMemberSource}
  */
 
-import { peek, setEntry, subscribe, type EntityKey } from './entityCache';
+import { peek, registerDerived, setEntry, subscribe, type EntityKey } from './entityCache';
+import { cacheKeys, TTL_LONG } from './keys';
 import type { MemberSourceBreakdown } from '../../shared/membership/groupSource';
+
+/**
+ * A breakdown is summarised from the group's member list, so it must not outlive
+ * it. Declared here, beside the derived cache, so the relationship is stated where
+ * the derivation is — not in whichever call site happens to invalidate first.
+ *
+ * Closes the half of `useGroupSource`'s `KNOWN GAP` that this module owns: any
+ * path invalidating `groupMembers` for a group now drops that group's breakdown
+ * too, instead of letting a pre-mutation split stay on screen for its 30-minute
+ * TTL. The other half — the single-membership write paths that never invalidate
+ * `groupMembers` at all — is the mutation map's job.
+ */
+registerDerived('memberSource', 'groupMembers');
 
 /**
  * How long a computed breakdown stays presentable, in milliseconds.
@@ -30,7 +44,7 @@ import type { MemberSourceBreakdown } from '../../shared/membership/groupSource'
  * a membership split does not churn minute to minute; short enough that a row
  * stops asserting a split that predates a bulk membership change.
  */
-export const MEMBER_SOURCE_TTL = 30 * 60 * 1000;
+export const MEMBER_SOURCE_TTL = TTL_LONG;
 
 /**
  * The entity-cache key a group's breakdown is stored under.
@@ -39,7 +53,7 @@ export const MEMBER_SOURCE_TTL = 30 * 60 * 1000;
  * @returns A composite key, so `invalidate(['memberSource'])` drops them all.
  */
 export function memberSourceKey(groupId: string): EntityKey {
-  return ['memberSource', groupId];
+  return cacheKeys.memberSource(groupId);
 }
 
 /**

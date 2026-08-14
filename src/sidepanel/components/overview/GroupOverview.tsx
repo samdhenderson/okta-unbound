@@ -9,10 +9,12 @@
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useOktaApi } from '../../hooks/useOktaApi';
+import type { OperationResult } from '../../hooks/useOktaApi/types';
 import { useEntityQuery } from '../../cache/useEntityQuery';
 import { peek, setEntry, invalidate } from '../../cache/entityCache';
+import { cacheKeys } from '../../cache/keys';
 import { useProgress } from '../../contexts/ProgressContext';
-import AlertMessage from '../shared/AlertMessage';
+import AlertMessage, { type AlertMessageData } from '../shared/AlertMessage';
 import { Button, Modal, Skeleton } from '../shared';
 import StatCard from './shared/StatCard';
 import MemberExplorer from './members/MemberExplorer';
@@ -82,12 +84,24 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
   const [mfaResults, setMfaResults] = useState<Map<string, MemberMfaResult> | null>(null);
   const [scanStatus, setScanStatus] = useState<MfaScanStatus>('idle');
 
-  const handleResult = useCallback(
-    (message: string, type: 'info' | 'success' | 'warning' | 'error') => {
-      log.debug(`${type}:`, message);
-    },
-    [],
-  );
+  // Surfaces results from the long-running operations this view owns —
+  // `removeDeprovisioned` above all, which is called from nowhere else in the app.
+  // It reports real failures through this channel ('ERROR: Cannot modify APP_GROUP',
+  // 'Stopping after first 403 error'); until this state existed they went to
+  // `log.debug` and the user saw nothing at all.
+  //
+  // Deliberately NOT the `error` branch below: that one replaces the whole view and
+  // is for "the member list could not load". An operation failing part-way must not
+  // discard the members already on screen.
+  //
+  // Must be stable: useOktaApi memoizes its operations on this callback's identity.
+  const [operationResult, setOperationResult] = useState<AlertMessageData | null>(null);
+  const handleResult = useCallback(({ message, type }: OperationResult) => {
+    log.debug(`${type}:`, message);
+    if (type === 'error' || type === 'warning') {
+      setOperationResult({ text: message, type: type === 'error' ? 'danger' : 'warning' });
+    }
+  }, []);
 
   const handleProgress = useCallback(
     (current: number, total: number, message: string, apiCalls?: number) => {
@@ -115,7 +129,7 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
     error,
     refetch: refetchMembers,
   } = useEntityQuery<OktaUser[]>(
-    ['groupMembers', groupId],
+    cacheKeys.groupMembers(groupId),
     async () => (await getAllGroupMembers(groupId)) ?? [],
     { enabled: Boolean(targetTabId && groupId) },
   );
@@ -194,6 +208,10 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
 
   return (
     <div className="space-y-6">
+      {operationResult && (
+        <AlertMessage message={operationResult} onDismiss={() => setOperationResult(null)} />
+      )}
+
       {/* Quick Stats Grid */}
       <div className="grid grid-cols-2 gap-3">
         <StatCard

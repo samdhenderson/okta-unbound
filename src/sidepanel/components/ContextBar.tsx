@@ -155,7 +155,7 @@ const ContextBar: React.FC<ContextBarProps> = ({
               <span className="text-sm font-semibold text-neutral-900 truncate">{displayName}</span>
               {isPinned && (
                 <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wide bg-primary-light text-primary-text">
-                  <Icon type="pin" size="sm" className="w-3 h-3" />
+                  <Icon type="pin" size="xs" />
                   Pinned
                 </span>
               )}
@@ -167,7 +167,7 @@ const ContextBar: React.FC<ContextBarProps> = ({
                 className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold text-primary-text hover:underline"
                 title="Reload the Okta tab to re-establish the connection"
               >
-                <Icon type="refresh" size="sm" className="w-3 h-3" />
+                <Icon type="refresh" size="xs" />
                 Reload tab to reconnect
               </button>
             )}

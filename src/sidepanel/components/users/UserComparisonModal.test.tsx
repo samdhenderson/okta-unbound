@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import UserComparisonModal from './UserComparisonModal';
 import type { OktaUser, OktaGroup, GroupMembership } from '../../../shared/types';
@@ -81,6 +81,8 @@ const gComparedOnly2 = group('g4', 'Compared Only Group 2');
 const membership = (g: OktaGroup): GroupMembership => ({
   group: g,
   membershipType: 'DIRECT',
+  rules: [],
+  attribution: 'exact',
 });
 
 /** Context user's groups, as the parent (UserOverview) passes them in. */
@@ -270,8 +272,23 @@ const tab = (name: 'Overview' | 'Groups' | 'Apps') =>
 
 const gotoTab = async (name: 'Overview' | 'Groups' | 'Apps') => userEvent.click(tab(name));
 
+/**
+ * Show every row regardless of the diff tab's filter.
+ *
+ * The tab now renders ONE list of parity rows and opens on `Differences`, so a
+ * shared row is simply not mounted until the filter is widened. Synchronous
+ * (`fireEvent`) and idempotent, so it is safe to call from inside `waitFor`.
+ *
+ * A locator concern only — every assertion below is unchanged.
+ */
+function showAllRows(): void {
+  const all = screen.queryByRole('button', { name: /^All / });
+  if (all && all.getAttribute('aria-pressed') !== 'true') fireEvent.click(all);
+}
+
 /** The <li> row for a diff item, found via the `title` attr on its label span. */
 function rowFor(label: string): HTMLElement {
+  showAllRows();
   const span = screen.getByTitle(label);
   const li = span.closest('li');
   if (!li) throw new Error(`No row found for "${label}"`);
@@ -280,27 +297,29 @@ function rowFor(label: string): HTMLElement {
 
 const addButtonFor = (label: string) => within(rowFor(label)).getByRole('button', { name: 'Add' });
 
-/** Which bucket card a given diff item currently lives in, by the card's heading. */
+/**
+ * Which bucket a given item WOULD be in, read off the row itself.
+ *
+ * The three bucket cards are gone; a parity row states both facts in place, so
+ * the bucket is derived from which side shows a "has this" cell. The returned
+ * strings are the old card headings, so the assertions keep their vocabulary.
+ */
 function bucketTitleOf(label: string): string {
-  const card = rowFor(label).closest('div.overflow-hidden');
-  if (!card) throw new Error(`No bucket card for "${label}"`);
-  // The bucket heading is the first element carrying a title attr inside the card.
-  return (
-    card.querySelector('[title]')?.getAttribute('title') ??
-    (() => {
-      throw new Error('no bucket title');
-    })()
-  );
+  const li = rowFor(label);
+  const inContext = li.querySelector('[title="Alice Context has this"]') !== null;
+  const inCompared = li.querySelector('[title="Bob Compared has this"]') !== null;
+  if (!inContext && !inCompared) throw new Error(`No side holds "${label}"`);
+  if (inContext && inCompared) return 'Shared';
+  return inCompared ? 'Only Bob Compared' : 'Only Alice Context';
 }
 
-/** Item labels currently listed in the bucket whose heading is `title`. */
+/** Item labels that currently fall in the bucket named `title`. */
 function bucketItems(title: string): string[] {
-  const heading = screen.getByTitle(title);
-  const card = heading.closest('div.overflow-hidden');
-  if (!card) throw new Error(`No bucket card titled "${title}"`);
-  return Array.from(card.querySelectorAll('li')).map((li) =>
-    (li.querySelector('span[title]')?.textContent ?? '').trim(),
-  );
+  showAllRows();
+  return Array.from(document.querySelectorAll('li'))
+    .filter((li) => li.querySelector('span[title]'))
+    .map((li) => (li.querySelector('span[title]')?.textContent ?? '').trim())
+    .filter((label) => label !== '' && bucketTitleOf(label) === title);
 }
 
 const getUserAppsCalls = () =>
@@ -438,7 +457,7 @@ describe('UserComparisonModal', () => {
       expect(mockRuntimeSendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           action: 'scheduleApiRequest',
-          endpoint: '/api/v1/apps?filter=user.id+eq+"cmp-1"&limit=200',
+          endpoint: '/api/v1/apps?filter=user.id+eq+"cmp-1"&limit=200&expand=user/cmp-1',
           method: 'GET',
           tabId: TAB_ID,
           priority: 'normal',
@@ -480,7 +499,10 @@ describe('UserComparisonModal', () => {
       await waitFor(() => expect(bucketItems('Shared')).toContain('Compared Only Group 1'));
 
       // The parent's contextGroups has NOT refreshed yet — assert no double-count.
-      expect(bucketItems('Shared')).toEqual(['Shared Group A', 'Compared Only Group 1']);
+      // Order follows the parity list's sort (differences first, then A–Z) rather than
+      // the append order the bucket cards happened to produce; the claim this case
+      // pins is that the copied group appears in `shared` exactly ONCE.
+      expect(bucketItems('Shared')).toEqual(['Compared Only Group 1', 'Shared Group A']);
       expect(bucketItems('Only Bob Compared')).toEqual(['Compared Only Group 2']);
       expect(bucketItems('Only Alice Context')).toEqual(['Context Only Group']);
     });
@@ -516,7 +538,7 @@ describe('UserComparisonModal', () => {
       });
 
       // The disappearing Add button IS the success affordance — there is no other one.
-      // It vanishes because renderAction re-finds the group in the live onlyCompared
+      // It vanishes because renderContextAction re-finds the group in the live onlyCompared
       // bucket by id, and addedGroupIds has already moved it to `shared`.
       expect(bucketTitleOf('Compared Only Group 1')).toBe('Shared');
       expect(
@@ -781,29 +803,48 @@ describe('UserComparisonModal', () => {
     });
   });
 
-  describe('app-fetch resilience (riskyBit: appsError is unreachable dead state)', () => {
-    it('CHARACTERIZED: a failing scheduled /api/v1/apps request renders as "0 apps", never as an error', async () => {
-      // getUserApps (userOperations.ts:70-86) wraps its pagination loop in try/catch and
-      // returns the accumulated array, so the modal's .catch at L117 can never fire and
-      // appsError can never be non-null. Wiring it up "properly" would start blanking the
-      // whole tab body behind an alert.
+  /**
+   * These two cases previously ran under `CHARACTERIZED:` and pinned the opposite
+   * outcome — a failed app read rendering as "0 apps" with no indication anything
+   * had gone wrong. That was recorded as characterized behaviour, not endorsed;
+   * `getUserApps` now returns `{ apps, complete }` and the failure is surfaced.
+   * Inverted rather than deleted, per ADR-0022: the scenarios are exactly the ones
+   * worth keeping, only the expected answer changed.
+   */
+  describe('app-fetch resilience', () => {
+    it('a failing scheduled /api/v1/apps request is caveated, not reported as "0 apps"', async () => {
       scenario.appsResponse = async () => ({ success: false, error: '500 from Okta' });
 
       render(<Harness />);
       await openComparison();
 
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-      // The Match % is still a number — a total app failure is indistinguishable from
-      // "no apps", and silently halves the headline score.
-      expect(screen.getByText('13%')).toBeInTheDocument(); // Math.round((25 + 0) / 2) = 13
+      // Advisory, not blocking: the group half loaded, so the tabs are still here.
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        /Some app assignments could not be loaded/,
+      );
+      expect(screen.getByRole('tab', { name: /Apps/ })).toBeInTheDocument();
+
+      // The headline is the group figure alone (25%), labelled as covering groups
+      // only — not the 13% that averaging in a fabricated app score of 0 produced.
+      expect(screen.getByText('25%')).toBeInTheDocument();
+      expect(screen.getByText('Match · groups only')).toBeInTheDocument();
+      expect(screen.queryByText('13%')).not.toBeInTheDocument();
+
+      // The app card states that it cannot state an overlap, rather than 0%.
+      expect(screen.getByText('at least 0 · overlap unavailable')).toBeInTheDocument();
 
       await gotoTab('Apps');
       expect(bucketItems('Only Bob Compared')).toEqual([]);
       expect(bucketItems('Shared')).toEqual([]);
       expect(bucketItems('Only Alice Context')).toEqual([]);
+      // …and the empty list says why it is empty. "Neither user is assigned any
+      // apps" would be a finding about their access; this is a failure to look.
+      expect(
+        screen.getByText('App assignments could not be loaded for this comparison.'),
+      ).toBeInTheDocument();
     });
 
-    it('CHARACTERIZED: a thrown app request is also swallowed into an empty list', async () => {
+    it('a thrown app request is caveated the same way as a failed response', async () => {
       scenario.appsResponse = async () => {
         throw new Error('port closed');
       };
@@ -811,8 +852,22 @@ describe('UserComparisonModal', () => {
       render(<Harness />);
       await openComparison();
 
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-      expect(screen.getByText('0 total · 0% overlap')).toBeInTheDocument();
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        /Some app assignments could not be loaded/,
+      );
+      expect(screen.getByText('at least 0 · overlap unavailable')).toBeInTheDocument();
+      expect(screen.queryByText('0 total · 0% overlap')).not.toBeInTheDocument();
+    });
+
+    it('leaves the groups card alone — only the app half is caveated', async () => {
+      // The two failure channels must stay separate. A failed app read that also
+      // suppressed the group overlap would have thrown away the half that loaded.
+      scenario.appsResponse = async () => ({ success: false, error: '500 from Okta' });
+
+      render(<Harness />);
+      await openComparison();
+
+      expect(screen.getByText('4 total · 25% overlap')).toBeInTheDocument();
     });
   });
 

@@ -5,7 +5,7 @@ built from them — lives once in
 [`src/sidepanel/tailwind.css`](../src/sidepanel/tailwind.css), inside a dedicated
 `@theme static { … }` block. `static` is required: `--dur-*` sits in no Tailwind
 theme namespace and generates no utilities on its own, so it would otherwise be
-tree-shaken out of a production build (see ADR-0019).
+tree-shaken out of a production build (see ADR-0027).
 
 ## Hard rule: no raw `ms` or `cubic-bezier()`
 
@@ -194,7 +194,7 @@ announced label, and the visual placeholder(s)/spin glyph are `aria-hidden`.
   `Modal`'s focus-restore-before-exit rule from a UX/a11y angle.
 - [component-explorer.md](./component-explorer.md#motion-is-off-by-default-in-stories) —
   why Storybook runs motion off by default and how to opt a showcase story back in.
-- ADR-0019 — why a finite token scale, `@theme static`, and the reduced-motion
+- ADR-0027 — why a finite token scale, `@theme static`, and the reduced-motion
   design.
-- ADR-0020 — the icon-rail `Tabs` variant that uses `--dur-move` for its label
+- ADR-0028 — the icon-rail `Tabs` variant that uses `--dur-move` for its label
   unfurl and sliding indicator.

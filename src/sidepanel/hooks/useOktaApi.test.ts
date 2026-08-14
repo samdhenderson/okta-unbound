@@ -155,8 +155,8 @@ describe('useOktaApi', () => {
 
       expect(members).toHaveLength(200);
       expect(mockRuntimeSendMessage).toHaveBeenCalledTimes(2);
-      expect(mockOnResult).toHaveBeenCalledWith('Fetching page 1...', 'info');
-      expect(mockOnResult).toHaveBeenCalledWith('Fetching page 2...', 'info');
+      expect(mockOnResult).toHaveBeenCalledWith({ message: 'Fetching page 1...', type: 'info' });
+      expect(mockOnResult).toHaveBeenCalledWith({ message: 'Fetching page 2...', type: 'info' });
     });
 
     it('should fetch all pages with 201 members (2 pages)', async () => {
@@ -208,8 +208,14 @@ describe('useOktaApi', () => {
 
       expect(members).toHaveLength(201);
       expect(mockRuntimeSendMessage).toHaveBeenCalledTimes(2);
-      expect(mockOnResult).toHaveBeenCalledWith('Page 1: Loaded 200 members (Total: 200)', 'info');
-      expect(mockOnResult).toHaveBeenCalledWith('Page 2: Loaded 1 members (Total: 201)', 'info');
+      expect(mockOnResult).toHaveBeenCalledWith({
+        message: 'Page 1: Loaded 200 members (Total: 200)',
+        type: 'info',
+      });
+      expect(mockOnResult).toHaveBeenCalledWith({
+        message: 'Page 2: Loaded 1 members (Total: 201)',
+        type: 'info',
+      });
     });
 
     it('should fetch all pages with 1000+ members (6 pages)', async () => {
@@ -302,7 +308,7 @@ describe('useOktaApi', () => {
       expect(members).toHaveLength(200);
       expect(mockRuntimeSendMessage).toHaveBeenCalledWith({
         action: 'scheduleApiRequest',
-        endpoint: '/api/v1/groups/group1/users?limit=200',
+        endpoint: '/api/v1/groups/group1/users?limit=200&expand=group-rules',
         method: 'GET',
         body: undefined,
         tabId: targetTabId,
@@ -475,11 +481,20 @@ describe('useOktaApi', () => {
       });
 
       await waitFor(() => {
-        expect(mockOnResult).toHaveBeenCalledWith('Found 1 deprovisioned users', 'warning');
+        expect(mockOnResult).toHaveBeenCalledWith({
+          message: 'Found 1 deprovisioned users',
+          type: 'warning',
+        });
         // The removal now runs through the shared operation runner; assert the
         // user-facing outcome rather than the (now context-routed) progress ticks.
-        expect(mockOnResult).toHaveBeenCalledWith(expect.stringContaining('Removed:'), 'success');
-        expect(mockOnResult).toHaveBeenCalledWith('Complete: 1 removed, 0 failed', 'success');
+        expect(mockOnResult).toHaveBeenCalledWith({
+          message: expect.stringContaining('Removed:'),
+          type: 'success',
+        });
+        expect(mockOnResult).toHaveBeenCalledWith({
+          message: 'Complete: 1 removed, 0 failed',
+          type: 'success',
+        });
       });
     });
 
@@ -541,13 +556,19 @@ describe('useOktaApi', () => {
       });
 
       await waitFor(() => {
-        expect(mockOnResult).toHaveBeenCalledWith(
-          expect.stringContaining('403 Forbidden'),
-          'error',
-        );
-        expect(mockOnResult).toHaveBeenCalledWith('Stopping after first 403 error', 'warning');
+        expect(mockOnResult).toHaveBeenCalledWith({
+          message: expect.stringContaining('403 Forbidden'),
+          type: 'error',
+        });
+        expect(mockOnResult).toHaveBeenCalledWith({
+          message: 'Stopping after first 403 error',
+          type: 'warning',
+        });
         // Nothing was removed; the halt is reported in the completion tally.
-        expect(mockOnResult).toHaveBeenCalledWith('Complete: 0 removed, 2 failed', 'warning');
+        expect(mockOnResult).toHaveBeenCalledWith({
+          message: 'Complete: 0 removed, 2 failed',
+          type: 'warning',
+        });
       });
     });
 
@@ -573,7 +594,10 @@ describe('useOktaApi', () => {
       });
 
       await waitFor(() => {
-        expect(mockOnResult).toHaveBeenCalledWith('ERROR: Cannot modify APP_GROUP', 'error');
+        expect(mockOnResult).toHaveBeenCalledWith({
+          message: 'ERROR: Cannot modify APP_GROUP',
+          type: 'error',
+        });
       });
     });
 

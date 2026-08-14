@@ -19,12 +19,14 @@ import RulesStatsGrid from './rules/RulesStatsGrid';
 import RulesToolbar, { type RulesFilterType } from './rules/RulesToolbar';
 import RulesListPanel from './rules/RulesListPanel';
 import RulesMergeBanner from './rules/RulesMergeBanner';
+import CurrentGroupRuleRelations from './rules/CurrentGroupRuleRelations';
 import RuleConsolidationModal from './RuleConsolidationModal';
 import type { FormattedRule, OktaGroupRule } from '../../shared/types';
 import { filterRules } from '../../shared/ruleUtils';
 import { findMergeableRuleGroups, type MergeableRuleGroup } from '../../shared/rules/consolidation';
 import { sortRules, type RuleSortMode } from '../../shared/rules/similarity';
 import { useOktaApi } from '../hooks/useOktaApi';
+import type { OperationResult } from '../hooks/useOktaApi/types';
 import { useRuleImpact } from '../hooks/useRuleImpact';
 import { useRulesData } from '../hooks/useRulesData';
 import { useRuleLifecycle } from '../hooks/useRuleLifecycle';
@@ -36,6 +38,24 @@ import type { RulesTabState } from '../../shared/tabState/types';
 import { createLogger } from '../../shared/utils/logger';
 
 const log = createLogger('RulesTab');
+
+/**
+ * Does this rule assign users into the given group?
+ *
+ * Derived from the rule's own target `groupIds` rather than read off its
+ * `affectsCurrentGroup` flag. That flag is only meaningful on a fresh,
+ * group-scoped fetch: the org-wide `RulesCache` is deliberately formatted
+ * *without* a current group (baking one group's flag into a shared entry would
+ * be wrong — see `useOktaApi/groupDiscovery.ts`), and persisted TabState freezes
+ * whatever flag was current when it was written. Deriving here is correct on
+ * every path.
+ *
+ * @param rule - The rule to test.
+ * @param groupId - The current group id, if one is detected.
+ * @returns `true` when a group is detected and the rule targets it.
+ */
+const targetsGroup = (rule: FormattedRule, groupId?: string): boolean =>
+  groupId ? rule.groupIds.includes(groupId) : false;
 
 interface RulesTabProps {
   /** Chrome tab id of the connected Okta tab; required to fetch or mutate rules. */
@@ -101,7 +121,20 @@ const RulesTab: React.FC<RulesTabProps> = ({
   const handleError = useCallback((message: string) => setError(message || null), []);
 
   const reducedMotion = useReducedMotion();
-  const api = useOktaApi({ targetTabId: targetTabId ?? null, onResult: handleError });
+
+  // `onResult` takes one `OperationResult` object, not `(message, type)`. It used to
+  // be positional, and TypeScript accepts a function that ignores trailing
+  // parameters — so a one-arg `(message) => …` type-checked here and then silently
+  // dropped `type`, rendering an 'info' message as a danger banner. That was live:
+  // `captureRuleImpact` reuses `getAllGroupMembers`, which emits 'info' pagination
+  // lines for any multi-page group. The object parameter makes that a compile error.
+  //
+  // Must be stable: useOktaApi memoizes its operations on this callback's identity.
+  const handleResult = useCallback(({ message, type }: OperationResult) => {
+    if (type === 'error') setError(message || null);
+  }, []);
+
+  const api = useOktaApi({ targetTabId: targetTabId ?? null, onResult: handleResult });
   const impact = useRuleImpact(api.captureRuleImpact);
   const data = useRulesData({ targetTabId, onError: handleError, currentGroupId });
   const { rules, stats, loadRules } = data;
@@ -255,10 +288,25 @@ const RulesTab: React.FC<RulesTabProps> = ({
     if (ruleId) void lifecycle.deactivateRule(ruleId);
   };
 
+  // Re-derive each rule's current-group relation before anything reads it. This
+  // tab is the only place that knows the detected group, so it stamps the truth
+  // onto the rules it hands down (RuleCard's "Current Group" badge and border
+  // read the same field) instead of trusting a flag baked at cache-write time.
+  const scopedRules = React.useMemo(
+    () =>
+      rules.map((r) => {
+        const affectsCurrentGroup = targetsGroup(r, currentGroupId);
+        return Boolean(r.affectsCurrentGroup) === affectsCurrentGroup
+          ? r
+          : { ...r, affectsCurrentGroup };
+      }),
+    [rules, currentGroupId],
+  );
+
   // Apply search, the active filter chip, then the chosen sort order (which can
   // pair up similar rules so near-duplicates sit next to each other for review).
   const filteredRules = React.useMemo(() => {
-    let result = filterRules(rules, searchQuery);
+    let result = filterRules(scopedRules, searchQuery);
     switch (activeFilter) {
       case 'active':
         result = result.filter((r) => r.status === 'ACTIVE');
@@ -267,11 +315,11 @@ const RulesTab: React.FC<RulesTabProps> = ({
         result = result.filter((r) => r.conflicts && r.conflicts.length > 0);
         break;
       case 'current-group':
-        result = result.filter((r) => r.affectsCurrentGroup);
+        result = result.filter((r) => targetsGroup(r, currentGroupId));
         break;
     }
     return sortRules(result, sortMode);
-  }, [rules, searchQuery, activeFilter, sortMode]);
+  }, [scopedRules, searchQuery, activeFilter, sortMode, currentGroupId]);
 
   // Scroll to and highlight the active rule (cross-tab deep-link or a local focus)
   // once it is in the DOM. If it is loaded but hidden by the current search/filter,
@@ -346,6 +394,14 @@ const RulesTab: React.FC<RulesTabProps> = ({
           <RulesMergeBanner
             clusters={mergeableClusters}
             onMerge={handleMergeCluster}
+            onFocusRule={setFocusRuleId}
+          />
+        )}
+
+        {rules.length > 0 && (
+          <CurrentGroupRuleRelations
+            rules={rules}
+            currentGroupId={currentGroupId}
             onFocusRule={setFocusRuleId}
           />
         )}

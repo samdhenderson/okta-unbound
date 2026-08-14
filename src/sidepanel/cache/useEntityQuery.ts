@@ -12,6 +12,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { OperationCancelledError } from '../../shared/scheduler/cancellation';
 import {
   getOrFetch,
   peek,
@@ -25,7 +26,12 @@ import {
 export interface UseEntityQueryOptions {
   /** Entry lifetime in milliseconds (default: cache default of 5 minutes). */
   ttl?: number;
-  /** When `false`, no fetch is issued; cached data is still served. Defaults to `true`. */
+  /**
+   * When `false`, no fetch is issued. Cached data for the **current** key is
+   * still served, and `data` still tracks the key — a key change while disabled
+   * re-reads the cache rather than leaving the previous key's value in place.
+   * Defaults to `true`.
+   */
   enabled?: boolean;
 }
 
@@ -85,12 +91,21 @@ export function useEntityQuery<T>(
   }, [serialized]);
 
   useEffect(() => {
-    if (!enabled) return;
     let cancelled = false;
 
+    // Resync to the CURRENT key before considering whether to fetch. This
+    // ordering is the fix for a real defect: the effect used to return on
+    // `!enabled` before touching state, and `data` is only ever seeded in the
+    // `useState` initializer above. So a key change while disabled left the
+    // PREVIOUS key's data in state — group A's members rendering under group B's
+    // heading. Today's consumers gate on key validity rather than visibility, so
+    // it was latent; it stops being latent the moment `enabled` is used as a
+    // visibility gate.
     const entry = peekEntry<T>(keyRef.current);
+
     if (entry?.isFresh) {
-      // Fresh cache hit — serve synchronously, no fetch.
+      // Fresh cache hit — serve synchronously, no fetch. Correct whether or not
+      // this query is enabled.
       setData(entry.data);
       setIsStale(false);
       setIsLoading(false);
@@ -99,11 +114,20 @@ export function useEntityQuery<T>(
     }
 
     // Stale-while-revalidate: show stale data (if any) and refetch; only show the
-    // loading state when there is nothing cached to display.
+    // loading state when there is nothing cached to display. `error` clears here
+    // because it described a fetch of a key we may no longer be asking about.
     setData(entry ? entry.data : null);
     setIsStale(Boolean(entry));
-    setIsLoading(!entry);
     setError(null);
+
+    if (!enabled) {
+      // No fetch — but state above is now consistent with the current key rather
+      // than describing whatever key was last enabled.
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(!entry);
 
     getOrFetch<T>(keyRef.current, () => fetcherRef.current(), { ttl })
       .then((fetched) => {
@@ -113,6 +137,10 @@ export function useEntityQuery<T>(
       })
       .catch((err: unknown) => {
         if (cancelled) return;
+        // Cancelling is a user decision, not a failure (ADR-0008). Surfacing it
+        // as an error puts a red banner in front of someone who just pressed
+        // Cancel. Whatever is already on screen stays.
+        if (err instanceof OperationCancelledError) return;
         setError(err instanceof Error ? err.message : 'Failed to load');
       })
       .finally(() => {
@@ -135,7 +163,10 @@ export function useEntityQuery<T>(
       setData(fetched);
       setIsStale(false);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to load');
+      // Same carve-out as the load effect: a cancelled refresh is not an error.
+      if (!(err instanceof OperationCancelledError)) {
+        setError(err instanceof Error ? err.message : 'Failed to load');
+      }
     } finally {
       setIsLoading(false);
     }

@@ -6,6 +6,7 @@
  * (`success | warning | danger | info` — ADR-0002). Renders with `role="alert"`.
  */
 import React from 'react';
+import Icon from '../overview/shared/Icon';
 import { type StatusType } from './status';
 
 /** The content of an alert: display text plus its severity. */
@@ -151,14 +152,7 @@ const AlertMessage: React.FC<AlertMessageProps> = ({
           onClick={onDismiss}
           aria-label="Dismiss message"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
+          <Icon type="close" size="md" />
         </button>
       )}
     </div>

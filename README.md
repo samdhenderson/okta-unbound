@@ -1,7 +1,7 @@
 # Okta Unbound
 
 [![CI](https://github.com/samdhenderson/okta-unbound/actions/workflows/ci.yml/badge.svg)](https://github.com/samdhenderson/okta-unbound/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-%E2%89%A580%25-brightgreen)](vitest.config.ts)
+[![Coverage](https://img.shields.io/badge/coverage-gated-brightgreen)](vitest.config.ts)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.4.0--beta.1-blue)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9%20strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
@@ -263,8 +263,8 @@ Every pull request and every push to `main` runs [`.github/workflows/ci.yml`](.g
 - **Format check** — `prettier --check`
 - **Lint** — `eslint`, 0 errors required
 - **Type-check** — `tsc --noEmit` under TypeScript `strict`
-- **Test + coverage gate** — Vitest unit project with enforced thresholds
-  (`vitest.config.ts`): **lines 80% · functions 80% · branches 75% · statements 80%**
+- **Test + coverage gate** — Vitest unit project with enforced per-metric thresholds
+  (defined in [`vitest.config.ts`](vitest.config.ts))
 - **Storybook** (parallel job) — builds the component explorer and runs every story as a
   headless-browser render test
 

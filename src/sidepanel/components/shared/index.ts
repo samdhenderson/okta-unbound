@@ -36,6 +36,8 @@ export { default as SelectionChips } from './SelectionChips';
 // Re-export commonly used types
 export type { ButtonVariant, ButtonSize } from './Button';
 export type { IconButtonVariant, IconButtonSize } from './IconButton';
+export type { InputSize } from './Input';
+export type { SpinnerSize } from './LoadingSpinner';
 export type { SkeletonVariant, SkeletonSize } from './Skeleton';
 export type { AlertMessageData, AlertAction } from './AlertMessage';
 export type { StatusType, UserStatusVariant } from './status';

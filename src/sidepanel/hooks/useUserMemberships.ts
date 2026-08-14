@@ -3,22 +3,88 @@
  * @description Loads a user's groups and classifies each membership as DIRECT or RULE_BASED.
  *
  * Okta's API does not report how a user landed in a group, so this module infers
- * it heuristically (APP_GROUP → rule, rule-exclusion → direct, matching active
- * rules → rule with confidence, otherwise direct). See OKTA_API_LIMITATIONS.md §2.
+ * it heuristically via `shared/utils/membershipAnalysis` (APP_GROUP → rule,
+ * rule-exclusion → direct, matching active rules → rule, otherwise direct).
  * Group rules are read from the shared `RulesCache` and refetched on a miss.
+ *
+ * ## This is the *heuristic-only* attribution path (ADR-0020)
+ *
+ * The group view resolves the same question authoritatively — it reads Okta's
+ * own `_embedded['group-rules']` off the member listing
+ * (`shared/membership/memberRuleAttribution`). **This path has no equivalent**:
+ * `GET /api/v1/users/{id}/groups` carries no attribution embed (see
+ * `getUserGroupsRequest`), so every answer here is client-evaluated and is
+ * labelled as such by the `attribution` each membership carries. Where Okta
+ * asserted nothing the two views agree exactly; where it asserted something they
+ * may differ, and the difference is provenance, not a bug —
+ * `shared/membership/attributionParity.test.ts` pins both halves of that.
+ *
+ * ## The rule inventory is load-bearing
+ *
+ * Classifying against an empty or partial rule list makes every group look
+ * untargeted, which the heuristic reports as `DIRECT` / `attribution: 'exact'` —
+ * a confident "added by hand" invented out of a failed fetch. So a failure to
+ * obtain the rules is **not** degraded gracefully into an analysis: the load
+ * reports `unclassifiedMemberships` (`UNKNOWN` / `ambiguous`) and the degraded
+ * result is dropped from the cache so the next visit retries.
+ *
+ * The same inventory is handed back to callers as {@link UseUserMembershipsReturn.rules},
+ * as a {@link RuleInventoryState} that keeps three separate answers apart —
+ * obtained, could-not-obtain, and not-resolved-yet (see the type's own doc comment).
  */
 
 import { useState, useCallback, useRef } from 'react';
 import type { OktaUser, GroupMembership, OktaGroup, FormattedRule } from '../../shared/types';
 import { RulesCache } from '../../shared/rulesCache';
-import { getOrFetch, peek } from '../cache/entityCache';
-import { analyzeMemberships } from '../../shared/utils/membershipAnalysis';
+import { getOrFetch, peek, invalidate } from '../cache/entityCache';
+import { cacheKeys } from '../cache/keys';
+import { analyzeMemberships, unclassifiedMemberships } from '../../shared/utils/membershipAnalysis';
 import { createLogger } from '../../shared/utils/logger';
 import { useOktaApi } from './useOktaApi';
 import { getUserGroupsRequest } from './getUserGroupsRequest';
 import { fetchGroupRulesRequest } from './fetchGroupRulesRequest';
 
 const log = createLogger('useUserMemberships');
+
+/**
+ * Entity-cache key for the org-wide rule inventory.
+ *
+ * Its own key rather than a field of one user's cached analysis: the inventory is
+ * org-wide, so every user's load asks the same question and should share one
+ * answer. Caching it here is what lets a *memberships* cache hit — which skips the
+ * fetcher entirely — still end up holding the rules without paying a second fetch
+ * per user.
+ *
+ * Deliberately not `RulesCache`: the rules fetched here are requested with
+ * `resolveGroupNames: false`, so they carry ids where the Rules tab expects real
+ * group names. Writing them into the shared cache would corrupt that surface.
+ */
+const RULE_INVENTORY_KEY = 'groupRuleInventory';
+
+/**
+ * What is known about the org's group-rule inventory.
+ *
+ * Three answers that must never collapse into two. The classifier already treats
+ * `[]` ("the org has no rules") and `null` ("we could not obtain them") as
+ * different facts; this type adds the third the UI kept mistaking for the second:
+ *
+ * - `unresolved` — **no attempt has completed yet.** Nothing may be concluded, and
+ *   nothing may be *reported* either. A consumer must render this as "not computed",
+ *   never as a finding.
+ * - `available` — the inventory was obtained. `rules` may legitimately be empty,
+ *   which means the org genuinely has no rules.
+ * - `unavailable` — an attempt completed and failed. This is a real, reportable
+ *   answer: nothing can be concluded from a group looking untargeted.
+ *
+ * Folding `unresolved` into `unavailable` is what made the comparison's worklist
+ * announce "the rules targeting this group could not be loaded" for every row
+ * during the ordinary gap before they arrive — a confident wrong answer about a
+ * failure that never happened.
+ */
+export type RuleInventoryState =
+  | { readonly status: 'unresolved' }
+  | { readonly status: 'available'; readonly rules: FormattedRule[] }
+  | { readonly status: 'unavailable' };
 
 /** Options for {@link useUserMemberships}. */
 interface UseUserMembershipsOptions {
@@ -41,6 +107,36 @@ interface UseUserMembershipsReturn {
   isLoading: boolean;
   error: string | null;
   /**
+   * The org-wide group-rule inventory this hook classifies against, re-exported
+   * so callers that must answer "why does this user *not* have that group" can
+   * ask the same question of the same rules.
+   *
+   * Resolved on **every** load path and shared through
+   * {@link RULE_INVENTORY_KEY}, so it costs at most one fetch per cache TTL
+   * across all users rather than one per user. The two paths differ in what they
+   * are allowed to do about a miss:
+   *
+   * - A load that fetches resolves it fully, fetching the rules if no cache holds
+   *   them, and publishes `unavailable` if that attempt fails.
+   * - A **memberships cache hit** may only adopt an inventory already in hand: it
+   *   must issue no request. With nothing cached this stays `unresolved`.
+   *
+   * Either way it resolves *after* the memberships land, so this can legitimately
+   * read `unresolved` on the render that first shows them; consumers must render
+   * that state as "not computed" rather than as a finding. See
+   * {@link RuleInventoryState} for why the three states never merge.
+   *
+   * Consumers must also keep the `available`-with-`[]` case distinct from
+   * `unavailable`: reading an empty inventory as "we could not tell" (or the
+   * reverse, `?? []`) is exactly the confident-wrong-answer this hook exists to
+   * avoid.
+   *
+   * Survives `clearMemberships` and a change of user on purpose: the inventory
+   * is org-wide, not user-scoped, so discarding it would manufacture a "we do
+   * not know" out of knowledge already in hand.
+   */
+  rules: RuleInventoryState;
+  /**
    * (Re)load a user's analyzed memberships. A fresh cached analysis is served
    * instantly; pass `{ force: true }` after a mutation (e.g. add-to-group) to
    * bypass the cache and refetch.
@@ -59,8 +155,10 @@ interface UseUserMembershipsReturn {
  *
  * @param options - See `UseUserMembershipsOptions`.
  * @returns `memberships` (each annotated with its inferred type), `isLoading`,
- *   `error`, `loadMemberships(user)` to (re)load for a user, and
- *   `clearMemberships` to reset.
+ *   `error`, `rules` (the org rule inventory as a three-state
+ *   {@link RuleInventoryState} — not yet resolved, obtained, or could-not-obtain),
+ *   `loadMemberships(user)` to (re)load for a user, and `clearMemberships` to
+ *   reset.
  */
 export function useUserMemberships({
   targetTabId,
@@ -70,6 +168,10 @@ export function useUserMemberships({
   const [memberships, setMemberships] = useState<GroupMembership[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Starts `unresolved` — "nobody has tried yet" — which is a different claim
+  // from the `unavailable` an attempt writes when it fails. Only ever written
+  // with what an attempt actually saw. See `UseUserMembershipsReturn.rules`.
+  const [ruleInventory, setRuleInventory] = useState<RuleInventoryState>({ status: 'unresolved' });
 
   // §8: own a useOktaApi slice so the group fetch routes through the background
   // scheduler. `makeApiRequest` is stable per `targetTabId`, so it does not widen
@@ -91,6 +193,71 @@ export function useUserMemberships({
     callbacksRef.current.onLoadingChange?.(loading);
   }, []);
 
+  /**
+   * Adopt the rule inventory **only if it is already in hand**, issuing no request.
+   *
+   * Both reads are local: the entity cache is in memory, and `RulesCache` is a
+   * `chrome.storage.local` slot. Neither touches the content script.
+   *
+   * Finding nothing deliberately leaves the state alone rather than writing
+   * `unavailable` — "nobody has fetched these yet" is not "the fetch failed", and
+   * only a real attempt may claim the latter.
+   */
+  const adoptCachedRuleInventory = useCallback(async (): Promise<void> => {
+    const cached = peek<FormattedRule[] | null>(RULE_INVENTORY_KEY);
+    if (cached) {
+      setRuleInventory({ status: 'available', rules: cached });
+      return;
+    }
+    const cachedRules = await RulesCache.get();
+    if (cachedRules) setRuleInventory({ status: 'available', rules: cachedRules.rules });
+  }, []);
+
+  /**
+   * Obtain the org rule inventory and publish it, returning what was obtained.
+   *
+   * Shared through the entity cache under {@link RULE_INVENTORY_KEY} so the
+   * memberships-cache-hit path and the fetcher path coalesce onto one request,
+   * and so a second user's comparison reuses the first's answer.
+   *
+   * `null` is returned — and published as `unavailable` — only when an attempt
+   * genuinely failed. It is never cached: banking a failure would keep every
+   * later load reporting "could not be obtained" for the whole TTL, long after
+   * the rules became reachable again.
+   */
+  const loadRuleInventory = useCallback(async (): Promise<FormattedRule[] | null> => {
+    const rules = await getOrFetch<FormattedRule[] | null>(RULE_INVENTORY_KEY, async () => {
+      // Membership analysis matches only on group ids, condition expressions,
+      // and user attributes — never a resolved group name — so skip the
+      // per-referenced-group name fan-out (otherwise hundreds of wasted
+      // GET /groups/{id} calls just to load one user's memberships).
+      const cachedRules = await RulesCache.get();
+      if (cachedRules) {
+        log.debug('Using cached rules from global cache');
+        return cachedRules.rules;
+      }
+
+      log.debug('Cache miss - fetching rules (names not needed for analysis)');
+      const rulesResponse = await fetchGroupRulesRequest(makeApiRequest, undefined, {
+        resolveGroupNames: false,
+      });
+
+      if (!rulesResponse.success) {
+        log.warn('Could not fetch rules for analysis:', rulesResponse.error);
+        return null;
+      }
+      // Intentionally NOT populating RulesCache here: these rules carry
+      // ids-as-names (name resolution was skipped), and the Rules tab relies on
+      // the shared cache holding real group names.
+      return rulesResponse.rules || [];
+    });
+
+    if (rules === null) invalidate(RULE_INVENTORY_KEY);
+
+    setRuleInventory(rules === null ? { status: 'unavailable' } : { status: 'available', rules });
+    return rules;
+  }, [makeApiRequest]);
+
   const loadMemberships = useCallback(
     async (user: OktaUser, options?: { force?: boolean }) => {
       if (!targetTabId) {
@@ -103,24 +270,37 @@ export function useUserMemberships({
       // Serve a fresh cached analysis instantly (no loading flash) unless forcing.
       // Re-navigating back to a user, or re-selecting one, then costs nothing.
       if (!options?.force) {
-        const cached = peek<GroupMembership[]>(['userMemberships', user.id]);
+        const cached = peek<GroupMembership[]>(cacheKeys.userMemberships(user.id));
         if (cached) {
           setMemberships(cached);
           // Own the loading lifecycle fully: a caller (e.g. the Users tab's detected-
           // user "Load") may have flipped loading on before calling us, so clear it
           // here too — otherwise a cache hit leaves the spinner stuck on forever.
           reportLoading(false);
+          // The analysis is cached; the inventory is per-instance state, so
+          // without this a cache hit left it `unresolved` forever and every
+          // downstream "why not" answer degraded to "the rules could not be
+          // loaded". Adopt-only, never fetch: this path must issue no request
+          // (pinned by `useUserMemberships.test.tsx`) and must not reintroduce
+          // the loading flash it exists to avoid, so it is not awaited either.
+          // Nothing cached leaves the state `unresolved`, which reports as "not
+          // computed" rather than as a failure that never happened.
+          void adoptCachedRuleInventory();
           return;
         }
       }
 
       reportLoading(true);
 
+      // Set by the fetcher when it had to fall back to an unclassified result.
+      // Read after the await so a coalesced caller sees it too.
+      let degraded = false;
+
       try {
         // Fetch + analyze through the entity cache so concurrent callers de-dup and
         // the result is reused on remount. `force` bypasses cache + in-flight.
         const analyzedMemberships = await getOrFetch<GroupMembership[]>(
-          ['userMemberships', user.id],
+          cacheKeys.userMemberships(user.id),
           async () => {
             log.debug('Loading memberships for user:', user.id);
 
@@ -131,33 +311,11 @@ export function useUserMemberships({
               throw new Error(groupsResponse.error || 'Failed to fetch user groups');
             }
 
-            // Check cache for rules first
-            let rules: FormattedRule[] = [];
-            const cachedRules = await RulesCache.get();
-
-            if (cachedRules) {
-              log.debug('Using cached rules from global cache');
-              rules = cachedRules.rules;
-            } else {
-              // Cache miss - fetch rules (§8: scheduler-routed, was a fetchGroupRules message).
-              // Membership analysis matches only on group ids, condition expressions,
-              // and user attributes — never a resolved group name — so skip the
-              // per-referenced-group name fan-out (otherwise hundreds of wasted
-              // GET /groups/{id} calls just to load one user's memberships).
-              log.debug('Cache miss - fetching rules (names not needed for analysis)');
-              const rulesResponse = await fetchGroupRulesRequest(makeApiRequest, undefined, {
-                resolveGroupNames: false,
-              });
-
-              if (!rulesResponse.success) {
-                log.warn('Could not fetch rules for analysis:', rulesResponse.error);
-              } else {
-                rules = rulesResponse.rules || [];
-                // Intentionally NOT populating RulesCache here: these rules carry
-                // ids-as-names (name resolution was skipped), and the Rules tab
-                // relies on the shared cache holding real group names.
-              }
-            }
+            // Obtain and publish the inventory this load will classify against.
+            // `null` is "we do not have the org's rules", which is NOT the same
+            // as "the org has none" — conflating them is what turns a failed
+            // fetch into a confident "added by hand" for every group.
+            const rules = await loadRuleInventory();
 
             // Extract raw groups from membership wrapper objects
             // groupsResponse.data is an array of { group, membershipType, addedDate }
@@ -165,13 +323,29 @@ export function useUserMemberships({
             const rawGroups: OktaGroup[] = membershipData.map(
               (m) => m.group || (m as unknown as OktaGroup),
             );
+
+            // No rule inventory → say "unknown", never "added by hand".
+            if (rules === null) {
+              degraded = true;
+              log.warn('Rules unavailable; reporting memberships as unclassified', {
+                userId: user.id,
+                groups: rawGroups.length,
+              });
+              return unclassifiedMemberships(rawGroups);
+            }
+
             return analyzeMemberships(rawGroups, rules, user);
           },
           { force: options?.force },
         );
 
+        // An unclassified result describes the load that failed, not the org —
+        // banking it would keep the user staring at "UNKNOWN" for the whole TTL
+        // even after the rules became available. Show it, then forget it.
+        if (degraded) invalidate(cacheKeys.userMemberships(user.id));
+
         setMemberships(analyzedMemberships);
-        log.debug('Loaded memberships:', { count: analyzedMemberships.length });
+        log.debug('Loaded memberships:', { count: analyzedMemberships.length, degraded });
       } catch (err) {
         reportError(err instanceof Error ? err.message : 'Failed to load user memberships');
         setMemberships([]);
@@ -180,7 +354,17 @@ export function useUserMemberships({
         reportLoading(false);
       }
     },
-    [targetTabId, reportError, reportLoading, makeApiRequest],
+    // Both inventory callbacks are keyed on stable values (`makeApiRequest`, and
+    // nothing at all), so this keeps the stable identity the auto-load guard
+    // depends on.
+    [
+      targetTabId,
+      reportError,
+      reportLoading,
+      makeApiRequest,
+      loadRuleInventory,
+      adoptCachedRuleInventory,
+    ],
   );
 
   const clearMemberships = useCallback(() => {
@@ -192,6 +376,7 @@ export function useUserMemberships({
     memberships,
     isLoading,
     error,
+    rules: ruleInventory,
     loadMemberships,
     clearMemberships,
   };

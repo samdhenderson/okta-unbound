@@ -4,7 +4,7 @@ import GroupMergeModal from './GroupMergeModal';
 import type { GroupSummary } from '../../../shared/types';
 import type { MergePlan } from '../../../shared/membership/mergePlan';
 import type { MergeResults } from '../../hooks/useGroupMerge';
-import { mockUsers } from '../../../test/mocks/handlers';
+import { mockUsers } from '../../../test/mocks/fixtures';
 
 const selectedGroups: GroupSummary[] = [
   {

@@ -70,6 +70,62 @@ export function nextPageUrl(
 }
 
 /**
+ * Read a query parameter off an origin-relative URL **without decoding it**.
+ *
+ * Deliberately a hand-rolled scan rather than `URLSearchParams`: the value is
+ * returned as the exact bytes it appears as, so re-appending it elsewhere can
+ * never re-encode an opaque Okta cursor (a `+` in a base64-ish `after` token
+ * would decode to a space and round-trip wrong).
+ *
+ * @param url - Origin-relative URL (`/path?a=1&b=2`).
+ * @param name - Parameter name to look for.
+ * @returns The raw (still percent-encoded) value, `''` for a valueless param,
+ * or `null` when the parameter is absent.
+ */
+function rawQueryParam(url: string, name: string): string | null {
+  const queryStart = url.indexOf('?');
+  if (queryStart === -1) return null;
+
+  for (const pair of url.slice(queryStart + 1).split('&')) {
+    if (!pair) continue;
+    const eq = pair.indexOf('=');
+    const key = eq === -1 ? pair : pair.slice(0, eq);
+    if (key === name) return eq === -1 ? '' : pair.slice(eq + 1);
+  }
+  return null;
+}
+
+/**
+ * Re-apply named query parameters that the first page carried but Okta dropped
+ * from its `rel="next"` link.
+ *
+ * Okta echoes *public* expand parameters into the next link (`expand=stats` on
+ * `/api/v1/groups` does survive), but not every one of them: the admin console's
+ * private `expand=group-rules` on the group-members listing is silently dropped,
+ * so page 2+ would come back without the embed — a silently split answer.
+ *
+ * Purely additive: a parameter already present on `nextUrl` is left exactly as
+ * Okta wrote it (no duplicate, no re-encode), and a parameter absent from
+ * `firstUrl` is not invented. When nothing needs re-applying the input string is
+ * returned unchanged, byte for byte.
+ *
+ * @param nextUrl - The next-page URL parsed out of the `Link` header.
+ * @param firstUrl - The URL of the first page, the source of truth for the params.
+ * @param names - Parameter names to preserve.
+ * @returns `nextUrl`, with any missing named parameter appended.
+ */
+function preserveQueryParams(nextUrl: string, firstUrl: string, names: string[]): string {
+  let result = nextUrl;
+  for (const name of names) {
+    if (rawQueryParam(result, name) !== null) continue;
+    const value = rawQueryParam(firstUrl, name);
+    if (value === null) continue;
+    result += `${result.includes('?') ? '&' : '?'}${name}=${value}`;
+  }
+  return result;
+}
+
+/**
  * The per-page transport result {@link fetchAllPages} consumes — a structural
  * subset of the scheduler's `RequestResult` (`shared/scheduler/types`) and the
  * content script's `ApiResponse`, so both transports plug in unchanged.
@@ -97,6 +153,20 @@ export interface FetchAllPagesOptions<T> {
    * never thrown on (ADR-0006).
    */
   schema?: z.ZodType<T, z.ZodTypeDef, unknown>;
+  /**
+   * Query parameter names that must survive onto every page.
+   *
+   * Okta does not always echo a first-page parameter into its `rel="next"` link
+   * — notably the admin console's private `expand=group-rules` on the
+   * group-members listing — which would leave the walk's later pages missing
+   * data the first page had. Each named parameter present on `firstUrl` and
+   * absent from the next link is re-appended; one already present is left
+   * untouched (never duplicated, never re-encoded).
+   *
+   * **Opt-in.** Omit it (every caller but `getAllGroupMembers`) and the walk's
+   * URLs are byte-for-byte the ones Okta handed back, exactly as before.
+   */
+  preserveParams?: string[];
   /** Hard cap on the number of pages fetched; unlimited when omitted. */
   maxPages?: number;
   /** Label for validation/log messages; defaults to the first URL's path (query stripped). */
@@ -127,7 +197,7 @@ export async function fetchAllPages<T = unknown>(
   firstUrl: string,
   options: FetchAllPagesOptions<T> = {},
 ): Promise<T[]> {
-  const { onPage, onBeforePage, schema, maxPages, errorMessage } = options;
+  const { onPage, onBeforePage, schema, maxPages, errorMessage, preserveParams } = options;
   const context = options.context ?? firstUrl.split('?')[0];
   const all: T[] = [];
   let url: string | null = firstUrl;
@@ -150,7 +220,18 @@ export async function fetchAllPages<T = unknown>(
     onPage?.(items, all.length);
 
     if (maxPages !== undefined && pageCount >= maxPages) break;
-    url = nextPageUrl(url, response.headers?.link, rawPageSize);
+
+    const rawNext = nextPageUrl(url, response.headers?.link, rawPageSize);
+    const next =
+      rawNext !== null && preserveParams?.length
+        ? preserveQueryParams(rawNext, firstUrl, preserveParams)
+        : rawNext;
+    // Re-run the non-advancing-cursor guard against the *preserved* URL. Once a
+    // parameter is re-appended, a self-referential next link no longer equals
+    // `url` inside nextPageUrl, so that check has to happen again out here or an
+    // opt-in caller could page forever. A no-op when preserveParams is omitted:
+    // nextPageUrl already proved `next !== url`.
+    url = next === url ? null : next;
   }
 
   return all;

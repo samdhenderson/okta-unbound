@@ -1,4 +1,4 @@
-# ADR-0020: Icon-rail navigation
+# ADR-0028: Icon-rail navigation
 
 - Status: Accepted
 - Date: 2026-08-04

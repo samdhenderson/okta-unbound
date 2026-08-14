@@ -11,28 +11,22 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createUserOperations } from './userOperations';
 import type { CoreApi } from './core';
+import { makeFakeCore } from '@/test/factories/coreApi';
 
 /** Build a fake CoreApi whose transport is fully mocked. */
-function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
-  return {
-    targetTabId: 1,
-    sendMessage: vi.fn(),
+const makeCore = (overrides: Partial<CoreApi> = {}): CoreApi =>
+  makeFakeCore({
     makeApiRequest: vi.fn().mockResolvedValue({ success: true, data: {} }),
-    getCurrentUser: vi.fn().mockResolvedValue({ email: 'admin@example.com', id: 'admin' }),
-    checkCancelled: vi.fn(),
-    resetCancellation: vi.fn(),
-    // Default runOperation actually invokes the task for each item so operations
-    // built on it (scanGroupMfa) exercise their inner logic.
+    // This suite's default runOperation actually invokes the task for each item
+    // so operations built on it (scanGroupMfa) exercise their inner logic.
     runOperation: vi.fn(
       async (_name, items: unknown[], task: (i: unknown, n: number) => unknown) => {
         for (let i = 0; i < items.length; i++) await task(items[i], i);
         return { results: [], completed: items.length, failed: 0, cancelled: false };
       },
     ),
-    callbacks: {},
     ...overrides,
-  } as unknown as CoreApi;
-}
+  });
 
 describe('getUserLastLogin', () => {
   it('returns a Date when lastLogin is present', async () => {
@@ -137,7 +131,7 @@ describe('getUserApps', () => {
     const core = makeCore({ makeApiRequest });
     const { getUserApps } = createUserOperations(core);
 
-    const apps = await getUserApps('00uFAKE1');
+    const { apps, complete } = await getUserApps('00uFAKE1');
 
     expect(makeApiRequest).toHaveBeenCalledTimes(2);
     expect(apps).toEqual([
@@ -145,18 +139,42 @@ describe('getUserApps', () => {
       { id: 'a2', label: 'App Two' },
       { id: 'a3', label: 'a3' },
     ]);
+    expect(complete).toBe(true);
   });
 
-  it('breaks (returns collected so far) when a page is unsuccessful', async () => {
+  it('reports the walk as incomplete when a page is unsuccessful', async () => {
     const core = makeCore({ makeApiRequest: vi.fn().mockResolvedValue({ success: false }) });
     const { getUserApps } = createUserOperations(core);
-    expect(await getUserApps('00uFAKE1')).toEqual([]);
+
+    // Previously characterized as "returns []", which made a transport failure
+    // indistinguishable from a user with no apps. The rows collected so far still
+    // come back; `complete: false` is what says they are not the whole answer.
+    expect(await getUserApps('00uFAKE1')).toEqual({ apps: [], complete: false });
   });
 
-  it('returns [] on a thrown error', async () => {
+  it('keeps the pages it collected before a mid-walk failure, and flags them as partial', async () => {
+    const makeApiRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        success: true,
+        data: [{ id: 'a1', label: 'App One' }],
+        headers: { link: '<https://example.okta.com/api/v1/apps?after=cur>; rel="next"' },
+      })
+      .mockResolvedValueOnce({ success: false, error: '500 from Okta' });
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    // The distinction the flag exists for: one real app in hand, and an unknown
+    // number missing. Neither "1 app" nor "0 apps" is the truth.
+    expect(await getUserApps('00uFAKE1')).toEqual({
+      apps: [{ id: 'a1', label: 'App One', scope: undefined }],
+      complete: false,
+    });
+  });
+
+  it('reports the walk as incomplete on a thrown error', async () => {
     const core = makeCore({ makeApiRequest: vi.fn().mockRejectedValue(new Error('offline')) });
     const { getUserApps } = createUserOperations(core);
-    expect(await getUserApps('00uFAKE1')).toEqual([]);
+    expect(await getUserApps('00uFAKE1')).toEqual({ apps: [], complete: false });
   });
 });
 
@@ -446,6 +464,147 @@ describe('getUserApps boundary validation', () => {
     });
     const { getUserApps } = createUserOperations(core);
 
-    expect(await getUserApps('00uFAKE1')).toEqual([{ id: '0oaFAKE1', label: 'App One' }]);
+    // A dropped row is not an incomplete walk: every page was fetched, so the
+    // answer is complete even though one malformed row did not survive validation.
+    expect(await getUserApps('00uFAKE1')).toEqual({
+      apps: [{ id: '0oaFAKE1', label: 'App One' }],
+      complete: true,
+    });
+  });
+});
+
+/**
+ * Phase 4.1: the app-assignment `scope` (direct vs group-granted) rides along on
+ * the app list Okta already returns, via `expand=user/{userId}` on the SAME
+ * `/api/v1/apps?filter=user.id eq …` endpoint — so it must cost zero extra
+ * requests, and a missing or malformed embed must never cost us an app.
+ */
+describe('getUserApps assignment scope', () => {
+  /** A single successful page with no next link. */
+  const onePage = (data: unknown[]) => ({ success: true, data, headers: {} });
+
+  it('expands the app-user on the same endpoint, for the same id it filters on', async () => {
+    const makeApiRequest = vi.fn().mockResolvedValue(onePage([{ id: '0oaFAKE1', label: 'One' }]));
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    await getUserApps('00uFAKE1');
+
+    const url = String(makeApiRequest.mock.calls[0][0]);
+    expect(url).toBe('/api/v1/apps?filter=user.id+eq+"00uFAKE1"&limit=200&expand=user/00uFAKE1');
+    // The expanded user must be the filtered user — expanding a different id would
+    // silently report someone else's assignment scope.
+    expect(url.match(/user\.id\+eq\+"([^"]+)"/)?.[1]).toBe(url.match(/expand=user\/([^&]+)/)?.[1]);
+  });
+
+  it('costs no extra requests: the paginated walk issues one call per page, as before', async () => {
+    const makeApiRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        success: true,
+        data: [
+          { id: '0oaFAKE1', label: 'One', _embedded: { user: { id: '00uFAKE1', scope: 'USER' } } },
+        ],
+        // Okta echoing the expand back on the cursor link (as it does for
+        // `expand=stats` — see groupDiscovery.test.ts).
+        headers: {
+          link: '<https://example.okta.com/api/v1/apps?after=cur&limit=200&expand=user%2F00uFAKE1>; rel="next"',
+        },
+      })
+      .mockResolvedValueOnce(
+        onePage([
+          { id: '0oaFAKE2', label: 'Two', _embedded: { user: { id: '00uFAKE1', scope: 'GROUP' } } },
+        ]),
+      );
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    const { apps } = await getUserApps('00uFAKE1');
+
+    // Two pages → exactly two calls, identical to the un-expanded walk asserted by
+    // the "walks Link pagination and flattens id + label/name/id fallback" case
+    // above (same endpoint, same page size, same cursor follow). `expand` adds
+    // fields to each page, never a request.
+    expect(makeApiRequest).toHaveBeenCalledTimes(2);
+    expect(apps).toEqual([
+      { id: '0oaFAKE1', label: 'One', scope: 'USER' },
+      { id: '0oaFAKE2', label: 'Two', scope: 'GROUP' },
+    ]);
+  });
+
+  it('maps _embedded.user.scope USER → direct-assignment scope', async () => {
+    const makeApiRequest = vi
+      .fn()
+      .mockResolvedValue(
+        onePage([
+          { id: '0oaFAKE1', label: 'One', _embedded: { user: { id: '00uFAKE1', scope: 'USER' } } },
+        ]),
+      );
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    expect((await getUserApps('00uFAKE1')).apps[0].scope).toBe('USER');
+  });
+
+  it('maps _embedded.user.scope GROUP → group-granted scope', async () => {
+    const makeApiRequest = vi
+      .fn()
+      .mockResolvedValue(
+        onePage([
+          { id: '0oaFAKE1', label: 'One', _embedded: { user: { id: '00uFAKE1', scope: 'GROUP' } } },
+        ]),
+      );
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    expect((await getUserApps('00uFAKE1')).apps[0].scope).toBe('GROUP');
+  });
+
+  it('keeps the app (scope undefined) when _embedded is absent entirely', async () => {
+    const makeApiRequest = vi.fn().mockResolvedValue(onePage([{ id: '0oaFAKE1', label: 'One' }]));
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    const { apps } = await getUserApps('00uFAKE1');
+
+    // The app must NOT be dropped: under-reporting a user's access is far worse
+    // than a missing scope (ADR-0006 degrades, it does not fail closed).
+    expect(apps).toHaveLength(1);
+    expect(apps[0]).toEqual({ id: '0oaFAKE1', label: 'One', scope: undefined });
+  });
+
+  it.each([
+    ['a string', 'nonsense'],
+    ['null', null],
+    ['an array', [{ scope: 'USER' }]],
+    ['a user that is a string', { user: 'nonsense' }],
+    ['a user with no id', { user: { scope: 'USER' } }],
+    ['an unrecognized scope value', { user: { id: '00uFAKE1', scope: 'SOMETHING_NEW' } }],
+    ['a non-string scope', { user: { id: '00uFAKE1', scope: 7 } }],
+  ])('keeps the app (scope undefined) when _embedded is %s', async (_label, embedded) => {
+    const makeApiRequest = vi
+      .fn()
+      .mockResolvedValue(onePage([{ id: '0oaFAKE1', label: 'One', _embedded: embedded }]));
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    // Never throws, never guesses, never drops.
+    const { apps } = await getUserApps('00uFAKE1');
+
+    expect(apps).toHaveLength(1);
+    expect(apps[0].scope).toBeUndefined();
+  });
+
+  it('returns every app on a page where only some rows carry the embed', async () => {
+    const makeApiRequest = vi.fn().mockResolvedValue(
+      onePage([
+        { id: '0oaFAKE1', label: 'One', _embedded: { user: { id: '00uFAKE1', scope: 'USER' } } },
+        { id: '0oaFAKE2', label: 'Two' },
+        { id: '0oaFAKE3', label: 'Three', _embedded: 'nonsense' },
+        { id: '0oaFAKE4', label: 'Four', _embedded: { user: { id: '00uFAKE1', scope: 'GROUP' } } },
+      ]),
+    );
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    expect((await getUserApps('00uFAKE1')).apps).toEqual([
+      { id: '0oaFAKE1', label: 'One', scope: 'USER' },
+      { id: '0oaFAKE2', label: 'Two', scope: undefined },
+      { id: '0oaFAKE3', label: 'Three', scope: undefined },
+      { id: '0oaFAKE4', label: 'Four', scope: 'GROUP' },
+    ]);
   });
 });

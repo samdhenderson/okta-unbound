@@ -8,6 +8,7 @@
  */
 import React, { useState, useCallback } from 'react';
 import { Button, IconButton, Input, LoadingSpinner } from '../shared';
+import Icon from '../overview/shared/Icon';
 import type { GroupSummary, BulkOperation, BulkOperationResult } from '../../../shared/types';
 
 /** The bulk operations this panel can launch. */
@@ -133,14 +134,7 @@ const BulkOperationsPanel: React.FC<BulkOperationsPanelProps> = ({
           </p>
         </div>
         <IconButton label="Close" onClick={onClose} variant="ghost" size="sm">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
+          <Icon type="close" size="sm" />
         </IconButton>
       </div>
 

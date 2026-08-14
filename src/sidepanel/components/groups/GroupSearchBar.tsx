@@ -3,7 +3,8 @@
  * @description The groups search input row; swaps its bound query by search mode.
  */
 import React from 'react';
-import LoadingSpinner from '../shared/LoadingSpinner';
+import { Input, LoadingSpinner } from '../shared';
+import Icon from '../overview/shared/Icon';
 
 interface GroupSearchBarProps {
   /** `live` queries Okta directly; `cached` filters the loaded list. */
@@ -20,11 +21,17 @@ interface GroupSearchBarProps {
 
 /**
  * The search input row. Swaps placeholder/value/onChange by mode, with a leading
- * search glyph and a trailing spinner while a live search is in flight.
+ * search glyph (`Icon`) and a trailing spinner (`LoadingSpinner`) while a live
+ * search is in flight. A thin controlled wrapper over the shared `Input`,
+ * following the `MemberSearchBar` pattern.
  *
- * The two raw <input>s use `py-3` + a custom icon slot; routing them through the
- * shared Input would shrink the bar (§3 records this — migrate only once Input gains
- * a size prop).
+ * `size="lg"` reproduces the original hand-rolled field exactly: `lg`'s
+ * `pl-11`/`py-3` match the pre-migration `pl-11 py-3`. The spinner stays a
+ * manually-positioned sibling (not `Input`'s `trailing` slot) because the
+ * original field's right padding was a constant `pr-4` — the same value as
+ * `lg`'s own base horizontal padding — with no extra room reserved for the
+ * spinner; routing it through `trailing` would add a `pr-12` reservation the
+ * original never had.
  */
 const GroupSearchBar: React.FC<GroupSearchBarProps> = ({
   searchMode,
@@ -35,41 +42,28 @@ const GroupSearchBar: React.FC<GroupSearchBarProps> = ({
   isLiveSearching,
 }) => (
   <div className="relative flex-1">
-    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-      <svg
-        className="h-5 w-5 text-neutral-400"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-        />
-      </svg>
-    </div>
     {searchMode === 'live' ? (
-      <input
+      <Input
         type="text"
         placeholder="Search groups by name..."
         value={liveSearchQuery}
-        onChange={(e) => onLiveSearchQueryChange(e.target.value)}
-        className="w-full pl-11 pr-4 py-3 bg-white border border-neutral-200 rounded-md text-sm placeholder-neutral-400 focus:outline-none focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary transition-all duration-(--dur-instant)"
+        onChange={onLiveSearchQueryChange}
+        size="lg"
+        icon={<Icon type="search" size="md" />}
       />
     ) : (
-      <input
+      <Input
         type="text"
         placeholder="Search by name, description, ID — or /regex/"
         value={searchQuery}
-        onChange={(e) => onSearchQueryChange(e.target.value)}
-        className="w-full pl-11 pr-4 py-3 bg-white border border-neutral-200 rounded-md text-sm placeholder-neutral-400 focus:outline-none focus:outline-2 focus:outline-offset-2 focus:outline-primary focus:border-primary transition-all duration-(--dur-instant)"
+        onChange={onSearchQueryChange}
+        size="lg"
+        icon={<Icon type="search" size="md" />}
       />
     )}
     {isLiveSearching && (
       <div className="absolute inset-y-0 right-0 pr-4 flex items-center">
-        <LoadingSpinner size="sm" />
+        <LoadingSpinner size="md" />
       </div>
     )}
   </div>

@@ -24,7 +24,23 @@
 
 import type { GroupSummary, GroupType } from '../../../shared/types';
 import type { MemberSourceBreakdown } from '../../../shared/membership/groupSource';
-import { toMemberSourceBuckets, type MemberSourceBucket } from './memberSourceBuckets';
+import {
+  toMemberSourceBuckets,
+  toMemberSourceSegments,
+  type MemberSourceBucket,
+} from './memberSourceBuckets';
+
+/**
+ * How many rules the compact row meter names before the tail aggregates into
+ * `Other rules`.
+ *
+ * The detail view's meter is the full-width one and gets the chart ramp's six
+ * stops; the row's bar is 56px, where a seventh sliver would be indistinguishable
+ * from a rendering artifact. Three named rules plus an aggregated tail is the
+ * most it can encode legibly — and the row's *text* is coarser still (see
+ * {@link describeMemberSource}).
+ */
+export const COMPACT_RULE_SEGMENTS = 3;
 
 /** A short badge with its Odyssey token classes. */
 export interface GroupTypeBadge {
@@ -83,7 +99,12 @@ export type MemberSourceState =
    * paginated member requests per group.
    */
   | { kind: 'unknown'; summary: string; title: string }
-  /** A breakdown is available; `segments` are the non-empty display buckets. */
+  /**
+   * A breakdown is available. `segments` are the non-empty, mutually exclusive
+   * display buckets for the bar — up to {@link COMPACT_RULE_SEGMENTS} per-rule
+   * segments, then the aggregated tail and the coarse buckets — while `summary`
+   * is the coarser text that fits on the row's one line.
+   */
   | { kind: 'computed'; segments: MemberSourceBucket[]; summary: string; title: string };
 
 /** Everything {@link GroupListItem} renders, derived once per group/breakdown pair. */
@@ -182,6 +203,14 @@ export function groupRowFacts(group: GroupSummary): GroupRowFact[] {
 /**
  * What the row may claim about the group's member sources.
  *
+ * The bar and the text deliberately carry **different resolutions**. The bar
+ * draws up to {@link COMPACT_RULE_SEGMENTS} per-rule segments, because colour is
+ * free in a 56px strip. The one-line summary beside it collapses back to the
+ * coarse `Rule-managed / Manual / Indeterminate` triple, because rule names are
+ * unbounded in length and a list row is not: naming rules there would push the
+ * member count and the rule facts off the line. The full per-segment detail —
+ * every rule, its count and what put a member there — is in the row's tooltip.
+ *
  * @param memberCount - The group's exact member count.
  * @param breakdown - An already-computed split, or `null` when none is cached.
  *   Callers must never fetch one to satisfy this argument from a list row.
@@ -209,8 +238,12 @@ export function describeMemberSource(
     };
   }
 
-  const segments = toMemberSourceBuckets(breakdown).filter((bucket) => bucket.count > 0);
-  const summary = segments
+  const segments = toMemberSourceSegments(breakdown, {
+    maxRules: COMPACT_RULE_SEGMENTS,
+  }).filter((bucket) => bucket.count > 0);
+
+  const summary = toMemberSourceBuckets(breakdown)
+    .filter((bucket) => bucket.count > 0)
     .map((bucket) => `${bucket.label} ${bucket.count.toLocaleString()}`)
     .join(' · ');
 

@@ -28,10 +28,7 @@ const SUBSYSTEMS = [
   {
     slug: 'storage-cache',
     title: 'Storage & cache',
-    match: (p) =>
-      p.startsWith('shared/storage') ||
-      p.startsWith('shared/cache') ||
-      p.startsWith('sidepanel/cache'),
+    match: (p) => p.startsWith('shared/storage') || p.startsWith('sidepanel/cache'),
   },
   { slug: 'utils', title: 'Shared utilities', match: (p) => p.startsWith('shared/utils') },
   { slug: 'types', title: 'Types', match: (p) => p.startsWith('shared/types') },

@@ -18,7 +18,8 @@
  */
 
 import { useCallback, useState } from 'react';
-import { getOrFetch, peek, type EntityKey } from '../cache/entityCache';
+import { getOrFetch, peek, peekFetchedAt, type EntityKey } from '../cache/entityCache';
+import { cacheKeys } from '../cache/keys';
 import { useOktaApi } from './useOktaApi';
 import type { OktaPolicyType } from './useOktaApi/index';
 import { createLogger } from '../../shared/utils/logger';
@@ -33,7 +34,7 @@ const log = createLogger('usePoliciesData');
 export const AUTH_POLICY_TYPE: OktaPolicyType = 'ACCESS_POLICY';
 
 /** Entity-cache key holding the fetched {@link AUTH_POLICY_TYPE} list. */
-export const POLICIES_CACHE_KEY: EntityKey = ['policies', AUTH_POLICY_TYPE];
+export const POLICIES_CACHE_KEY: EntityKey = cacheKeys.policies(AUTH_POLICY_TYPE);
 
 /** Options for {@link usePoliciesData}. */
 export interface UsePoliciesDataOptions {
@@ -66,6 +67,18 @@ export interface UsePoliciesDataReturn {
  * admin role without policy read access is indistinguishable from an empty org.
  * The caller's empty state must say so; this hook does not invent an error.
  */
+/**
+ * The cache's own write time for a key, as an ISO string.
+ *
+ * Reads through {@link peekFetchedAt} rather than stamping `new Date()` at the
+ * call site: the question a "last updated" line answers is when the data was
+ * fetched, which may have been by a different consumer sharing the same key.
+ */
+function isoFetchedAt(key: EntityKey): string | null {
+  const at = peekFetchedAt(key);
+  return at === null ? null : new Date(at).toISOString();
+}
+
 export function usePoliciesData({
   targetTabId,
   onError,
@@ -75,7 +88,11 @@ export function usePoliciesData({
     () => peek<OktaPolicyListItem[]>(POLICIES_CACHE_KEY) ?? [],
   );
   const [isLoading, setIsLoading] = useState(false);
-  const [lastFetchTime, setLastFetchTime] = useState<string | null>(null);
+  // Seeded from the cache, like `policies` above. Previously this started `null`
+  // regardless, so a cache hit painted real policies under "never fetched".
+  const [lastFetchTime, setLastFetchTime] = useState<string | null>(() =>
+    isoFetchedAt(POLICIES_CACHE_KEY),
+  );
 
   // Own a useOktaApi slice so the read routes through the scheduler, mirroring
   // useRulesData. No `onResult` — errors are surfaced through `onError` below.
@@ -98,7 +115,7 @@ export function usePoliciesData({
           { force },
         );
         setPolicies(loaded);
-        setLastFetchTime(new Date().toISOString());
+        setLastFetchTime(isoFetchedAt(POLICIES_CACHE_KEY));
         // Outcome + count only — never policy names or descriptions.
         log.debug('Loaded auth policies', { type: AUTH_POLICY_TYPE, count: loaded.length });
       } catch (err) {

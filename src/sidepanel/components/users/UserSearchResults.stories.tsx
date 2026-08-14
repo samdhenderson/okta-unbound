@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import UserSearchResults from './UserSearchResults';
-import { mockUsers } from '../../../test/mocks/handlers';
+import { mockUsers } from '../../../test/mocks/fixtures';
 
 /** Clickable list of user search results with per-user status badges. */
 const meta = {

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import UserLifecycleActions from './UserLifecycleActions';
-import { mockUsers } from '../../../test/mocks/handlers';
+import { mockUsers } from '../../../test/mocks/fixtures';
 import type { OktaUser } from '../../../shared/types';
 
 const user = (over: Partial<OktaUser> = {}): OktaUser => ({

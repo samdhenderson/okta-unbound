@@ -6,10 +6,14 @@
 // User-related components
 export { default as UserSearchBar } from './UserSearchBar';
 export { default as UserSearchResults } from './UserSearchResults';
+export { default as UserSearchPanel } from './UserSearchPanel';
+export { default as UserDetailPanel } from './UserDetailPanel';
 export { default as GroupMembershipsList } from './GroupMembershipsList';
 export { default as UserProfileCard } from './UserProfileCard';
 export { default as UserIdentity } from './UserIdentity';
 export { default as UserComparisonModal } from './UserComparisonModal';
+export { default as UserComparisonPanel } from './UserComparisonPanel';
+export { default as UserComparisonView } from './UserComparisonView';
 export { default as AddToGroupModal } from './AddToGroupModal';
 export { default as UserLifecycleActions } from './UserLifecycleActions';
 export { default as DetectedUserBanner } from './DetectedUserBanner';

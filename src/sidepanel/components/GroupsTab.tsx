@@ -36,6 +36,7 @@ import Breadcrumbs from './shared/Breadcrumbs';
 import AlertMessage from './shared/AlertMessage';
 import Button from './shared/Button';
 import { useOktaApi } from '../hooks/useOktaApi';
+import type { OperationResult } from '../hooks/useOktaApi/types';
 import { useGroupsLoader } from '../hooks/useGroupsLoader';
 import { useGroupLiveSearch } from '../hooks/useGroupLiveSearch';
 import { useGroupFilters } from '../hooks/useGroupFilters';
@@ -133,12 +134,9 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   const [activePanel, setActivePanel] = useState<ActivePanel>('none');
 
   // Must be stable: useOktaApi memoizes its operations on this callback's identity.
-  const handleResult = useCallback(
-    (message: string, type: 'info' | 'success' | 'warning' | 'error') => {
-      if (type === 'error') setError(message);
-    },
-    [],
-  );
+  const handleResult = useCallback(({ message, type }: OperationResult) => {
+    if (type === 'error') setError(message);
+  }, []);
 
   const api = useOktaApi({ targetTabId, onResult: handleResult });
 

@@ -63,8 +63,12 @@ function groupIdsReferencedBy(rule: OktaGroupRule): string[] {
  * issuing a `GET /api/v1/groups/{id}` per referenced group. Returns an empty map
  * when the cache is absent, aged out, or unparseable; callers then fall back to
  * showing the group id.
+ *
+ * Exported because it is the cheapest id→name source in the extension — one
+ * storage read, no API traffic — and the user comparison needs the same labels
+ * the Rules tab shows for group ids embedded in a rule condition.
  */
-async function loadCachedGroupNames(): Promise<Map<string, string>> {
+export async function loadCachedGroupNames(): Promise<Map<string, string>> {
   const nameById = new Map<string, string>();
   try {
     const stored = await chrome.storage.local.get(GROUPS_CACHE_KEY);
