@@ -89,6 +89,12 @@ component exists to stop.
 | `density` | `compact` (`px-3 py-2`) · `comfortable` (`p-4`) |
 | `state`   | `default` · `selected` · `highlighted`          |
 | `as`      | `div` · `li` · `a` · `button`                   |
+| `body`    | expandable region below the header              |
+
+**Expandable rows use the `body` slot**, not a hand-built wrapper. The border
+belongs to the card, the padding belongs to the header, and a `.disclose` body
+sets its own — so passing `body` moves the density padding onto an inner header
+wrapper and clips the card, and the row still owns exactly one border.
 
 **The interior is a contract, not a component** — `ListRow` deliberately does not
 own it, because interiors genuinely differ. Follow these:

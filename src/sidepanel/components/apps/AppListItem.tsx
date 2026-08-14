@@ -6,9 +6,14 @@
  * sign-on mode, and the created date. Expanded, it reveals the ids/dates and —
  * lazily, only once opened — the app's user/group assignment counts, plus an
  * "Open in Okta" deep link. Memoised so unaffected rows skip re-render.
+ *
+ * The card itself is a {@link sidepanel/components/shared/ListRow} at
+ * `comfortable` density — this row owns its interior only, never its chrome
+ * (ADR-0029).
  */
 import React, { memo, useCallback, useId, useState } from 'react';
-import { IconButton, LoadingSpinner, OpenInOktaLink } from '../shared';
+import { IconButton, ListRow, LoadingSpinner, OpenInOktaLink } from '../shared';
+import Icon from '../overview/shared/Icon';
 import { useEntityQuery } from '../../cache/useEntityQuery';
 import { cacheKeys } from '../../cache/keys';
 import type { AppAssignmentCounts } from '../../hooks/useOktaApi/appOperations';
@@ -89,130 +94,151 @@ const AppListItem: React.FC<AppListItemProps> = memo(
     const status = app.status ?? 'UNKNOWN';
 
     return (
-      <div
-        data-app-id={app.id}
-        className="group/item relative overflow-hidden rounded-md border border-neutral-200 bg-white hover:border-neutral-500 transition-all duration-(--dur-instant)"
+      /*
+        `ListRow` owns the card's border, radius, hover and padding (ADR-0029).
+        The padding boundary is the reason this row passes `body` rather than
+        putting the disclose panel in `children`: with `body` the density padding
+        moves off the card and onto a wrapper around the header only, so the
+        panel keeps its own `px-4 pb-4 pt-2` and its separator still runs edge to
+        edge. `ListRow` also supplies `overflow-hidden` in that mode, so a body
+        animating from `0fr` clips against the rounded corners. Only `group/item`
+        and `relative` stay in `className` — layout and behaviour, not chrome.
+      */
+      <ListRow
+        density="comfortable"
+        dataAttributes={{ 'data-app-id': app.id }}
+        className="group/item relative"
+        body={
+          /*
+            `.disclose` animates `grid-template-rows` between 0fr and 1fr, so the
+            body collapses to zero height with no JS measurement and stays mounted
+            while closed (held out of the tab order and accessible tree via
+            `inert`) rather than unmounting — `AssignmentCounts`' own
+            `enabled={expanded}` gate is what keeps its fetch from firing until
+            the row is actually opened.
+          */
+          <div
+            id={detailsId}
+            className="disclose"
+            data-open={expanded}
+            inert={!expanded || undefined}
+          >
+            <div>
+              <div className="px-4 pb-4 pt-2 border-t border-neutral-100 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                  <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
+                    <div className="text-xs font-medium text-neutral-600 mb-0.5">
+                      Application ID
+                    </div>
+                    <code className="text-xs font-mono text-neutral-900 break-all">{app.id}</code>
+                  </div>
+
+                  {app.signOnMode && (
+                    <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
+                      <div className="text-xs font-medium text-neutral-600 mb-0.5">
+                        Sign-on mode
+                      </div>
+                      <div className="text-xs text-neutral-900">{app.signOnMode}</div>
+                    </div>
+                  )}
+
+                  {app.created && (
+                    <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
+                      <div className="text-xs font-medium text-neutral-600 mb-0.5">Created</div>
+                      <div className="text-xs text-neutral-900">{formatDate(app.created)}</div>
+                    </div>
+                  )}
+
+                  {app.lastUpdated && (
+                    <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
+                      <div className="text-xs font-medium text-neutral-600 mb-0.5">
+                        Last updated
+                      </div>
+                      <div className="text-xs text-neutral-900">{formatDate(app.lastUpdated)}</div>
+                    </div>
+                  )}
+                </div>
+
+                {fetchAssignmentCounts && (
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-neutral-600">Assignments</div>
+                    <AssignmentCounts
+                      appId={app.id}
+                      enabled={expanded}
+                      fetchAssignmentCounts={fetchAssignmentCounts}
+                    />
+                  </div>
+                )}
+
+                <OpenInOktaLink oktaOrigin={oktaOrigin} entityType="app" entityId={app.id} />
+              </div>
+            </div>
+          </div>
+        }
       >
-        <div className="p-4">
-          <div className="flex items-start gap-3">
-            <div className="flex-1 min-w-0 cursor-pointer" onClick={toggleExpanded}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold text-neutral-900 truncate group-hover/item:text-primary-text transition-colors duration-(--dur-instant)">
-                    {label}
-                  </h3>
+        <div className="flex items-start gap-3">
+          {/*
+            No keyboard affordance on this body — activation is available on the
+            adjacent Expand/Collapse `IconButton`, and giving the row itself one
+            means a `StretchedButton` overlay. Deliberately out of scope here.
+          */}
+          <div className="flex-1 min-w-0 cursor-pointer" onClick={toggleExpanded}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold text-neutral-900 truncate group-hover/item:text-primary-text transition-colors duration-(--dur-instant)">
+                  {label}
+                </h3>
 
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                    <span
-                      className={`px-2 py-0.5 rounded-md text-xs font-medium border ${STATUS_BADGE[appStatusVariant(app.status)]}`}
-                    >
-                      {status}
-                    </span>
-                    {app.signOnMode && (
-                      <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-neutral-50 text-neutral-700 border border-neutral-200">
-                        {app.signOnMode}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1 shrink-0">
-                  <IconButton
-                    label={expanded ? 'Collapse' : 'Expand'}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleExpanded();
-                    }}
-                    variant="ghost"
-                    size="md"
-                    expanded={expanded}
-                    controls={detailsId}
+                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                  <span
+                    className={`px-2 py-0.5 rounded-md text-xs font-medium border ${STATUS_BADGE[appStatusVariant(app.status)]}`}
                   >
-                    <svg
-                      className={`w-4 h-4 transition-transform duration-(--dur-instant) ${expanded ? 'rotate-90' : ''}`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                  </IconButton>
+                    {status}
+                  </span>
+                  {app.signOnMode && (
+                    <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-neutral-50 text-neutral-700 border border-neutral-200">
+                      {app.signOnMode}
+                    </span>
+                  )}
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-neutral-500">
-                {app.name && <span className="truncate">{app.name}</span>}
-                {app.created && <span title="Created">Created {formatDateShort(app.created)}</span>}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/*
-          `.disclose` animates `grid-template-rows` between 0fr and 1fr, so the body
-          collapses to zero height with no JS measurement and stays mounted while
-          closed (held out of the tab order and accessible tree via `inert`) rather
-          than unmounting — `AssignmentCounts`' own `enabled={expanded}` gate is what
-          keeps its fetch from firing until the row is actually opened.
-        */}
-        <div
-          id={detailsId}
-          className="disclose"
-          data-open={expanded}
-          inert={!expanded || undefined}
-        >
-          <div>
-            <div className="px-4 pb-4 pt-2 border-t border-neutral-100 space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
-                  <div className="text-xs font-medium text-neutral-600 mb-0.5">Application ID</div>
-                  <code className="text-xs font-mono text-neutral-900 break-all">{app.id}</code>
-                </div>
-
-                {app.signOnMode && (
-                  <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
-                    <div className="text-xs font-medium text-neutral-600 mb-0.5">Sign-on mode</div>
-                    <div className="text-xs text-neutral-900">{app.signOnMode}</div>
-                  </div>
-                )}
-
-                {app.created && (
-                  <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
-                    <div className="text-xs font-medium text-neutral-600 mb-0.5">Created</div>
-                    <div className="text-xs text-neutral-900">{formatDate(app.created)}</div>
-                  </div>
-                )}
-
-                {app.lastUpdated && (
-                  <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
-                    <div className="text-xs font-medium text-neutral-600 mb-0.5">Last updated</div>
-                    <div className="text-xs text-neutral-900">{formatDate(app.lastUpdated)}</div>
-                  </div>
-                )}
-              </div>
-
-              {fetchAssignmentCounts && (
-                <div className="space-y-1">
-                  <div className="text-xs font-medium text-neutral-600">Assignments</div>
-                  <AssignmentCounts
-                    appId={app.id}
-                    enabled={expanded}
-                    fetchAssignmentCounts={fetchAssignmentCounts}
+              <div className="flex items-center gap-1 shrink-0">
+                <IconButton
+                  label={expanded ? 'Collapse' : 'Expand'}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleExpanded();
+                  }}
+                  variant="ghost"
+                  size="md"
+                  expanded={expanded}
+                  controls={detailsId}
+                >
+                  {/*
+                    The registry glyph, rotated rather than swapped for a
+                    `chevron-down`: the rotation is what animates the open/close.
+                  */}
+                  <Icon
+                    type="chevron-right"
+                    size="sm"
+                    className={`transition-transform duration-(--dur-instant) ${expanded ? 'rotate-90' : ''}`}
                   />
-                </div>
-              )}
+                </IconButton>
+              </div>
+            </div>
 
-              <OpenInOktaLink oktaOrigin={oktaOrigin} entityType="app" entityId={app.id} />
+            <div className="flex flex-wrap items-center gap-3 mt-2 text-xs">
+              {app.name && <span className="truncate font-mono text-neutral-500">{app.name}</span>}
+              {app.created && (
+                <span className="text-neutral-600" title="Created">
+                  Created {formatDateShort(app.created)}
+                </span>
+              )}
             </div>
           </div>
         </div>
-      </div>
+      </ListRow>
     );
   },
   (prev, next) =>

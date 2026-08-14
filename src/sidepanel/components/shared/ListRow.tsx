@@ -69,13 +69,22 @@ const stateClasses: Record<ListRowState, string> = {
  */
 const baseClasses = 'rounded-md border transition-colors duration-(--dur-instant)';
 
+/**
+ * The one hover treatment, and the reason `state` gates it.
+ *
+ * A `selected` or `highlighted` row already carries `border-primary` to say so.
+ * Letting hover repaint that border `neutral-500` would make the row look *less*
+ * selected the moment you pointed at it — hover would be overriding state rather
+ * than responding to it. So the hover border applies to `default` rows only; the
+ * cursor and focus ring still apply everywhere, since those describe what the row
+ * does rather than what it is.
+ */
+const hoverBorderClass = 'hover:border-neutral-500';
+
 /** Applied only when the row is itself the click target. */
 const interactiveClasses =
-  'w-full text-left cursor-pointer hover:border-neutral-500 ' +
+  'w-full text-left cursor-pointer ' +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
-
-/** Applied when the row is static content, or when a `StretchedButton` covers it. */
-const hoverOnlyClasses = 'hover:border-neutral-500';
 
 /**
  * `block` on the anchor: an `<a>` is inline by default, so without it the row's
@@ -110,6 +119,37 @@ export interface ListRowProps {
    */
   as?: ListRowAs;
   /**
+   * A region below the header — inside the row's border, outside its padding.
+   *
+   * This is what an expandable row needs. Four of the six primary list rows carry
+   * a `.disclose` body whose own padding differs from the header's, so the row
+   * cannot simply be "a padded box": the border belongs to the card, the padding
+   * belongs to the header, and the body sets its own.
+   *
+   * Passing it moves the density padding off the container and onto an inner
+   * wrapper around `children`, and adds `overflow-hidden` so a body animating
+   * from `0fr` clips against the rounded corners. Omitting it leaves the simple
+   * case as a single padded element with no extra wrapper.
+   */
+  body?: React.ReactNode;
+  /**
+   * Extra classes on the header wrapper `body` creates. Layout and interaction
+   * only — the padding is already supplied by `density`.
+   *
+   * Ignored without `body`, since there is no separate header to style.
+   */
+  headerClassName?: string;
+  /**
+   * Click handler on the header region alone, for an expandable row whose header
+   * toggles it.
+   *
+   * Deliberately separate from {@link ListRowProps.onClick}, which covers the
+   * whole card: a toggle on the card would also fire on clicks inside the
+   * expanded body, collapsing the row the moment a user interacted with what they
+   * had just opened.
+   */
+  onHeaderClick?: () => void;
+  /**
    * Activation handler. Supplying it makes the row interactive — it gains a
    * pointer cursor and a focus ring — so pass an interactive `as` with it.
    */
@@ -128,6 +168,14 @@ export interface ListRowProps {
   className?: string;
   /** Escape hatch for row-identity attributes (`data-group-id`, `data-rule-id`). */
   dataAttributes?: Record<string, string>;
+  /**
+   * Ref to the row element itself.
+   *
+   * Exists for rows that must listen on their own card — `RuleCard` clears its
+   * `flash` on the card's `animationend` rather than on a timer alone, which needs
+   * the element the animation actually runs on.
+   */
+  elementRef?: React.Ref<HTMLElement>;
   /** Test id applied to the row element. */
   testId?: string;
 }
@@ -156,6 +204,9 @@ const ListRow: React.FC<ListRowProps> = ({
   state = 'default',
   flash = false,
   as = 'div',
+  body,
+  headerClassName = '',
+  onHeaderClick,
   onClick,
   href,
   target,
@@ -164,23 +215,43 @@ const ListRow: React.FC<ListRowProps> = ({
   describedBy,
   className = '',
   dataAttributes,
+  elementRef,
   testId,
 }) => {
   // A row is interactive when it can be activated by the user directly — not when
   // a `StretchedButton` sits on top of it, which carries its own focus ring.
   const interactive = as === 'button' || as === 'a' || onClick !== undefined;
 
+  // With a body, the padding belongs to the header rather than the card, and the
+  // card clips so a `0fr` disclose body cannot escape the rounded corners.
+  const hasBody = body !== undefined && body !== null;
+
   const classes = [
     baseClasses,
-    densityClasses[density],
+    hasBody ? 'overflow-hidden' : densityClasses[density],
     stateClasses[state],
-    interactive ? interactiveClasses : hoverOnlyClasses,
+    state === 'default' ? hoverBorderClass : '',
+    interactive ? interactiveClasses : '',
     elementClasses[as] ?? '',
     flash ? 'animate-affirm-flash' : '',
     className,
   ]
     .filter(Boolean)
     .join(' ');
+
+  const content = hasBody ? (
+    <>
+      <div
+        className={[densityClasses[density], headerClassName].filter(Boolean).join(' ')}
+        onClick={onHeaderClick}
+      >
+        {children}
+      </div>
+      {body}
+    </>
+  ) : (
+    children
+  );
 
   const shared = {
     className: classes,
@@ -192,11 +263,13 @@ const ListRow: React.FC<ListRowProps> = ({
     ...dataAttributes,
   };
 
+  // One `React.Ref<HTMLElement>` serves every branch; each element type wants its
+  // own narrower ref, so the cast is per-branch rather than the prop being loose.
   if (as === 'button') {
     // Explicit `type`: a bare <button> inside a form defaults to submit.
     return (
-      <button type="button" {...shared}>
-        {children}
+      <button type="button" ref={elementRef as React.Ref<HTMLButtonElement>} {...shared}>
+        {content}
       </button>
     );
   }
@@ -208,18 +281,27 @@ const ListRow: React.FC<ListRowProps> = ({
         target={target}
         // Tabnabbing guard, applied here rather than left to each call site.
         rel={target === '_blank' ? 'noopener noreferrer' : undefined}
+        ref={elementRef as React.Ref<HTMLAnchorElement>}
         {...shared}
       >
-        {children}
+        {content}
       </a>
     );
   }
 
   if (as === 'li') {
-    return <li {...shared}>{children}</li>;
+    return (
+      <li ref={elementRef as React.Ref<HTMLLIElement>} {...shared}>
+        {content}
+      </li>
+    );
   }
 
-  return <div {...shared}>{children}</div>;
+  return (
+    <div ref={elementRef as React.Ref<HTMLDivElement>} {...shared}>
+      {content}
+    </div>
+  );
 };
 
 export default ListRow;

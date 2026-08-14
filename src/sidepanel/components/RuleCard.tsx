@@ -6,11 +6,17 @@
  * and condition; the expanded view adds the condition expression (with group-name
  * badges), referenced user attributes, target groups, conflict details, metadata,
  * and activate/deactivate plus "View in Okta" actions. Memoised for list rendering.
+ *
+ * The card is {@link sidepanel/components/shared/ListRow} (ADR-0029): the header
+ * is `children`, the expandable detail is the `body` slot, and the arrival flash
+ * is the shared `flash` prop rather than a hand-applied `animate-affirm-flash`.
+ * `affectsCurrentGroup` maps onto the shared `selected` state — it had its own
+ * `border-primary` before, which was the same idea spelled differently.
  */
 import React, { useState, useCallback, useEffect, useId, useRef, memo } from 'react';
 import type { FormattedRule } from '../../shared/types';
 import { timeAgo } from '../../shared/ruleUtils';
-import { Button, IconButton } from './shared';
+import { Button, IconButton, ListRow } from './shared';
 
 /**
  * Upper bound on the arrival-flash hold, in milliseconds. Mirrors `--dur-tell`
@@ -174,245 +180,244 @@ const RuleCard: React.FC<RuleCardProps> = memo(
 
     const hasConflicts = rule.conflicts && rule.conflicts.length > 0;
 
-    return (
+    /*
+      Expanded content, handed to `ListRow`'s `body` slot so it sits inside the
+      card's border but outside the header's padding. `.disclose` animates
+      `grid-template-rows` between 0fr and 1fr, so the body collapses to zero
+      height with no JS measurement and stays mounted while closed (held out of
+      the tab order and accessible tree via `inert`) rather than unmounting —
+      nothing here fetches on demand, so staying mounted while collapsed has no
+      behavioural cost.
+    */
+    const expandedBody = (
       <div
-        ref={cardRef}
-        className={`
-        bg-white rounded-md border transition-all duration-(--dur-instant) overflow-hidden
-        ${rule.affectsCurrentGroup ? 'border-primary' : 'border-neutral-200'}
-        ${isFlashing ? 'animate-affirm-flash' : ''}
-        hover:border-neutral-300
-      `}
-        style={{ fontFamily: 'var(--font-primary)' }}
+        id={detailsId}
+        className="disclose"
+        data-open={isExpanded}
+        inert={!isExpanded || undefined}
       >
-        {/* Header */}
-        <div
-          className="p-4 cursor-pointer hover:bg-neutral-50 transition-colors duration-(--dur-instant) flex items-center justify-between gap-4"
-          onClick={toggleExpanded}
-        >
-          <div className="flex items-start gap-3 flex-1 min-w-0">
-            <div
-              className={`
-            mt-1 w-2.5 h-2.5 rounded-full shrink-0
-            ${rule.status === 'ACTIVE' ? 'bg-success ring-4 ring-success/20' : 'bg-neutral-400 ring-4 ring-neutral-400/20'}
-          `}
-            />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap mb-1">
-                <h3 className="font-semibold text-neutral-900 text-sm">{rule.name}</h3>
-                {rule.affectsCurrentGroup && (
-                  <span className="px-2 py-0.5 rounded-md bg-primary text-white text-xs font-bold">
-                    Current Group
-                  </span>
-                )}
-                {hasConflicts && (
-                  <span className="px-2 py-0.5 rounded-md bg-warning-light text-warning-text text-xs font-bold border border-warning-light">
-                    {rule.conflicts!.length} Conflict{rule.conflicts!.length > 1 ? 's' : ''}
-                  </span>
-                )}
+        <div>
+          <div className="px-4 pb-4 pt-2 space-y-4 bg-neutral-50 border-t border-neutral-100">
+            {/* Condition */}
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-neutral-600 mb-2">
+                WHEN
               </div>
-              <p className="text-sm text-neutral-600 truncate">{rule.condition}</p>
+              <div className="p-3 bg-white rounded-md border border-neutral-200">
+                <code className="text-sm text-neutral-900 font-mono block overflow-x-auto">
+                  {renderConditionWithGroupBadges(
+                    rule.conditionExpression || rule.condition,
+                    rule.allGroupNamesMap,
+                  )}
+                </code>
+              </div>
             </div>
-          </div>
-          <IconButton
-            label={isExpanded ? 'Collapse' : 'Expand'}
-            variant="ghost"
-            size="md"
-            expanded={isExpanded}
-            controls={detailsId}
-            className="shrink-0"
-          >
-            <svg
-              className={`w-4 h-4 transition-transform duration-(--dur-instant) ${isExpanded ? 'rotate-90' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </IconButton>
-        </div>
 
-        {/*
-          Expanded content. `.disclose` animates `grid-template-rows` between 0fr
-          and 1fr, so the body collapses to zero height with no JS measurement and
-          stays mounted while closed (held out of the tab order and accessible tree
-          via `inert`) rather than unmounting — nothing here fetches on demand, so
-          staying mounted while collapsed has no behavioural cost.
-        */}
-        <div
-          id={detailsId}
-          className="disclose"
-          data-open={isExpanded}
-          inert={!isExpanded || undefined}
-        >
-          <div>
-            <div className="px-4 pb-4 pt-2 space-y-4 bg-neutral-50 border-t border-neutral-100">
-              {/* Condition */}
+            {/* User Attributes */}
+            {rule.userAttributes.length > 0 && (
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wider text-neutral-600 mb-2">
-                  WHEN
+                  USES ATTRIBUTES
                 </div>
-                <div className="p-3 bg-white rounded-md border border-neutral-200">
-                  <code className="text-sm text-neutral-900 font-mono block overflow-x-auto">
-                    {renderConditionWithGroupBadges(
-                      rule.conditionExpression || rule.condition,
-                      rule.allGroupNamesMap,
-                    )}
-                  </code>
+                <div className="flex flex-wrap gap-2">
+                  {rule.userAttributes.map((attr) => (
+                    <span
+                      key={attr}
+                      className="px-2.5 py-1 rounded-md bg-primary-light text-primary-text text-sm font-medium border border-primary-highlight"
+                    >
+                      {attr}
+                    </span>
+                  ))}
                 </div>
               </div>
+            )}
 
-              {/* User Attributes */}
-              {rule.userAttributes.length > 0 && (
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-wider text-neutral-600 mb-2">
-                    USES ATTRIBUTES
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {rule.userAttributes.map((attr) => (
+            {/* Groups */}
+            {rule.groupIds.length > 0 && (
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wider text-neutral-600 mb-2">
+                  THEN ADD TO GROUPS
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {rule.groupIds.map((groupId, index) => {
+                    const groupName = rule.groupNames?.[index];
+                    const isNameDifferent = groupName && groupName !== groupId;
+
+                    return (
                       <span
-                        key={attr}
-                        className="px-2.5 py-1 rounded-md bg-primary-light text-primary-text text-sm font-medium border border-primary-highlight"
+                        key={groupId}
+                        className="px-2.5 py-1 rounded-md bg-success-light text-success-text text-sm font-medium border border-success-light"
                       >
-                        {attr}
+                        {isNameDifferent ? (
+                          <>
+                            <span className="font-semibold">{groupName}</span>
+                            <span className="ml-1.5 text-xs font-mono opacity-75">
+                              ({groupId.substring(0, 8)}...)
+                            </span>
+                          </>
+                        ) : (
+                          <span className="font-mono">{groupId}</span>
+                        )}
                       </span>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* Groups */}
-              {rule.groupIds.length > 0 && (
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-wider text-neutral-600 mb-2">
-                    THEN ADD TO GROUPS
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {rule.groupIds.map((groupId, index) => {
-                      const groupName = rule.groupNames?.[index];
-                      const isNameDifferent = groupName && groupName !== groupId;
-
-                      return (
+            {/* Conflicts */}
+            {hasConflicts && (
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-warning-text mb-2">
+                  CONFLICTS DETECTED
+                </div>
+                <div className="space-y-2">
+                  {rule.conflicts!.map((conflict, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 bg-warning-light rounded-md border border-warning-light"
+                    >
+                      <div className="flex items-start gap-3">
                         <span
-                          key={groupId}
-                          className="px-2.5 py-1 rounded-md bg-success-light text-success-text text-sm font-medium border border-success-light"
-                        >
-                          {isNameDifferent ? (
-                            <>
-                              <span className="font-semibold">{groupName}</span>
-                              <span className="ml-1.5 text-xs font-mono opacity-75">
-                                ({groupId.substring(0, 8)}...)
-                              </span>
-                            </>
-                          ) : (
-                            <span className="font-mono">{groupId}</span>
-                          )}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Conflicts */}
-              {hasConflicts && (
-                <div>
-                  <div className="text-xs font-bold uppercase tracking-wider text-warning-text mb-2">
-                    CONFLICTS DETECTED
-                  </div>
-                  <div className="space-y-2">
-                    {rule.conflicts!.map((conflict, idx) => (
-                      <div
-                        key={idx}
-                        className="p-3 bg-warning-light rounded-md border border-warning-light"
-                      >
-                        <div className="flex items-start gap-3">
-                          <span
-                            className={`
+                          className={`
                         px-2 py-0.5 rounded-md text-xs font-bold uppercase
                         ${conflict.severity === 'high' ? 'bg-danger-light text-danger-text border border-danger-light' : 'bg-warning-light text-warning-text border border-warning-light'}
                       `}
-                          >
-                            {conflict.severity}
-                          </span>
-                          <div className="flex-1">
-                            <div className="text-sm text-neutral-900 mb-1">
-                              Conflicts with:{' '}
-                              <span className="font-semibold">{conflict.rule2.name}</span>
-                            </div>
-                            <div className="text-xs text-neutral-600">{conflict.reason}</div>
+                        >
+                          {conflict.severity}
+                        </span>
+                        <div className="flex-1">
+                          <div className="text-sm text-neutral-900 mb-1">
+                            Conflicts with:{' '}
+                            <span className="font-semibold">{conflict.rule2.name}</span>
                           </div>
+                          <div className="text-xs text-neutral-600">{conflict.reason}</div>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
+              </div>
+            )}
+
+            {/* Metadata */}
+            <div className="pt-3 border-t border-neutral-200 flex flex-wrap gap-4 text-xs text-neutral-600">
+              <div>
+                <span className="font-semibold">Last updated:</span>{' '}
+                <span>{timeAgo(rule.lastUpdated)}</span>
+              </div>
+              <div>
+                <span className="font-semibold">Rule ID:</span>{' '}
+                <span className="font-mono text-neutral-500">{rule.id}</span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-wrap gap-2 pt-2">
+              {rule.status === 'ACTIVE' ? (
+                <Button variant="secondary" size="sm" onClick={handleDeactivate}>
+                  Deactivate Rule
+                </Button>
+              ) : (
+                <Button variant="primary" size="sm" onClick={handleActivate}>
+                  Activate Rule
+                </Button>
               )}
-
-              {/* Metadata */}
-              <div className="pt-3 border-t border-neutral-200 flex flex-wrap gap-4 text-xs text-neutral-600">
-                <div>
-                  <span className="font-semibold">Last updated:</span>{' '}
-                  <span>{timeAgo(rule.lastUpdated)}</span>
-                </div>
-                <div>
-                  <span className="font-semibold">Rule ID:</span>{' '}
-                  <span className="font-mono text-neutral-500">{rule.id}</span>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex flex-wrap gap-2 pt-2">
-                {rule.status === 'ACTIVE' ? (
-                  <Button variant="secondary" size="sm" onClick={handleDeactivate}>
-                    Deactivate Rule
-                  </Button>
-                ) : (
-                  <Button variant="primary" size="sm" onClick={handleActivate}>
-                    Activate Rule
-                  </Button>
-                )}
-                {onPreviewImpact && rule.groupIds.length > 0 && (
-                  <Button variant="secondary" size="sm" icon="users" onClick={handlePreviewImpact}>
-                    Preview Impact
-                  </Button>
-                )}
-                {onAddTargetGroup && (
-                  <Button variant="secondary" size="sm" icon="plus" onClick={handleAddTargetGroup}>
-                    Add Target Group
-                  </Button>
-                )}
-                {oktaOrigin && (
-                  <a
-                    href={`${oktaOrigin}/admin/groups#rules`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-white text-neutral-900 border border-neutral-200 rounded-md hover:bg-neutral-50 hover:border-neutral-500 transition-colors duration-(--dur-instant)"
-                    style={{ fontFamily: 'var(--font-heading)', minHeight: '36px' }}
-                    title="Open Rules page in Okta Admin Console (you can search for this rule by name)"
+              {onPreviewImpact && rule.groupIds.length > 0 && (
+                <Button variant="secondary" size="sm" icon="users" onClick={handlePreviewImpact}>
+                  Preview Impact
+                </Button>
+              )}
+              {onAddTargetGroup && (
+                <Button variant="secondary" size="sm" icon="plus" onClick={handleAddTargetGroup}>
+                  Add Target Group
+                </Button>
+              )}
+              {oktaOrigin && (
+                <a
+                  href={`${oktaOrigin}/admin/groups#rules`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-white text-neutral-900 border border-neutral-200 rounded-md hover:bg-neutral-50 hover:border-neutral-500 transition-colors duration-(--dur-instant)"
+                  style={{ fontFamily: 'var(--font-heading)', minHeight: '36px' }}
+                  title="Open Rules page in Okta Admin Console (you can search for this rule by name)"
+                >
+                  <span>View in Okta</span>
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
-                    <span>View in Okta</span>
-                    <svg
-                      className="w-3.5 h-3.5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                      />
-                    </svg>
-                  </a>
-                )}
-              </div>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                    />
+                  </svg>
+                </a>
+              )}
             </div>
           </div>
         </div>
       </div>
+    );
+
+    return (
+      <ListRow
+        elementRef={cardRef}
+        // A rule that touches the group you arrived from reads as the selected
+        // one, so it takes the shared `selected` state rather than keeping its
+        // own `border-primary`.
+        state={rule.affectsCurrentGroup ? 'selected' : 'default'}
+        flash={isFlashing}
+        body={expandedBody}
+        headerClassName="flex cursor-pointer items-center justify-between gap-4"
+        onHeaderClick={toggleExpanded}
+      >
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          <div
+            className={`
+            mt-1 w-2.5 h-2.5 rounded-full shrink-0
+            ${rule.status === 'ACTIVE' ? 'bg-success ring-4 ring-success/20' : 'bg-neutral-400 ring-4 ring-neutral-400/20'}
+          `}
+          />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <h3 className="font-semibold text-neutral-900 text-sm">{rule.name}</h3>
+              {rule.affectsCurrentGroup && (
+                <span className="px-2 py-0.5 rounded-md bg-primary text-white text-xs font-medium">
+                  Current Group
+                </span>
+              )}
+              {hasConflicts && (
+                <span className="px-2 py-0.5 rounded-md bg-warning-light text-warning-text text-xs font-medium border border-warning-light">
+                  {rule.conflicts!.length} Conflict{rule.conflicts!.length > 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-neutral-600 truncate">{rule.condition}</p>
+          </div>
+        </div>
+        <IconButton
+          label={isExpanded ? 'Collapse' : 'Expand'}
+          variant="ghost"
+          size="md"
+          expanded={isExpanded}
+          controls={detailsId}
+          className="shrink-0"
+        >
+          <svg
+            className={`w-4 h-4 transition-transform duration-(--dur-instant) ${isExpanded ? 'rotate-90' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </IconButton>
+      </ListRow>
     );
   },
   (prevProps, nextProps) => {

@@ -2,6 +2,18 @@
  * @module sidepanel/components/users/UserSearchResults
  * @description Clickable list of user search results with status badges.
  *
+ * Each row is {@link sidepanel/components/shared/ListRow} at `comfortable` density
+ * rendered `as="button"` (ADR-0029). It used to be a `<div onClick>` with no role,
+ * no `tabIndex` and no focus ring, so a keyboard user could not reach a search
+ * result at all; `ListRow` supplies the button semantics, the pointer cursor and
+ * the focus ring, and the row is now tab-reachable and Enter/Space-activatable.
+ * A plain `as="button"` is safe here because the interior is text and a status
+ * pill — no nested control, so no `nested-interactive` violation.
+ *
+ * The interior follows the row typography contract in `docs/design-system.md`,
+ * which fixed a title that carried no size class (rendering at 16px beside every
+ * peer row's 14px) and a secondary line a step too large.
+ *
  * The row list uses `.rise-in-stagger` (a wrapper class, not a per-row index prop)
  * so results feel like they land one after another rather than appearing as one
  * block — see `hooks/useStaggerReveal` for the scroll-triggered cascade.
@@ -9,7 +21,7 @@
 import React, { useRef } from 'react';
 import { useStaggerReveal } from '../../hooks/useStaggerReveal';
 import type { OktaUser } from '../../../shared/types';
-import { userStatusVariant, type UserStatusVariant } from '../shared';
+import { ListRow, userStatusVariant, type UserStatusVariant } from '../shared';
 
 /** Props for {@link UserSearchResults}. */
 interface UserSearchResultsProps {
@@ -54,22 +66,28 @@ const UserSearchResults: React.FC<UserSearchResultsProps> = ({ results, onSelect
       </div>
       <div ref={staggerRef} className="space-y-3 rise-in-stagger">
         {results.map((user) => (
-          <div
+          // `className="group"` only names the hover group — `ListRow` owns the
+          // chrome, and the title's hover colour is the one interior effect kept.
+          <ListRow
             key={user.id}
-            className="group bg-white rounded-md border border-neutral-200 p-5 cursor-pointer transition-all duration-(--dur-instant) hover:border-neutral-500"
+            as="button"
+            density="comfortable"
             onClick={() => onSelectUser(user)}
+            className="group"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
-                <h4 className="font-semibold text-neutral-900 mb-1 group-hover:text-primary-text transition-colors duration-(--dur-instant)">
+                <h4 className="mb-1 text-sm font-semibold text-neutral-900 group-hover:text-primary-text transition-colors duration-(--dur-instant)">
                   {user.profile.firstName} {user.profile.lastName}
                 </h4>
-                <p className="text-sm text-neutral-600 mb-1">{user.profile.email}</p>
-                <p className="text-xs text-neutral-500 font-mono">Login: {user.profile.login}</p>
+                <div className="mb-1 text-xs text-neutral-600">{user.profile.email}</div>
+                <div className="font-mono text-xs text-neutral-500">
+                  Login: {user.profile.login}
+                </div>
               </div>
               <span className={getStatusBadgeClass(user.status)}>{user.status}</span>
             </div>
-          </div>
+          </ListRow>
         ))}
       </div>
     </div>

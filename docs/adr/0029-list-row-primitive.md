@@ -82,6 +82,18 @@ Fixed and **not** configurable: `rounded-md border border-neutral-200 bg-white`,
 focus ring when interactive. A row that wants a different hover colour is the
 problem this ADR exists to solve; it does not get a prop.
 
+**Hover applies to `default` rows only.** A `selected` or `highlighted` row
+already carries `border-primary` to say so, and repainting that border on hover
+would make the row look _less_ selected the moment you pointed at it — hover
+overriding state rather than responding to it. The cursor and focus ring still
+apply in every state, because those describe what the row _does_ rather than what
+it _is_.
+
+**`highlighted` is a strict superset of `selected`**, so a row that is both takes
+`highlighted`. The two compose in the source they replaced (a selected row could
+also be a deep-link target and gain a ring on top), and collapsing them the other
+way would silently drop the ring.
+
 **Two densities, not ten.** `compact` and `comfortable` are the two that carry
 real information — a dense scanning list versus a rich card with badges and a
 meta line. Every other value in the inventory is drift, not intent. Rows landing

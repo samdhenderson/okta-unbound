@@ -167,6 +167,37 @@ export const InAList: Story = {
   ),
 };
 
+/**
+ * An expandable row, via the `body` slot.
+ *
+ * The border belongs to the card, the padding belongs to the header, and the body
+ * sets its own — which is why `body` exists rather than the row being simply "a
+ * padded box". Passing it moves the density padding onto an inner wrapper and
+ * clips the card, so a `.disclose` body animating from `0fr` cannot escape the
+ * rounded corners. Four of the six primary list rows need this.
+ */
+export const Expandable: Story = {
+  args: {
+    children: null,
+  },
+  render: () => (
+    <ListRow
+      body={
+        <div className="disclose" data-open="true">
+          <div className="border-t border-neutral-200 bg-neutral-50 px-4 py-3">
+            <p className="text-xs text-neutral-600">
+              Body content sets its own padding and can carry its own background — the header above
+              keeps the density padding.
+            </p>
+          </div>
+        </div>
+      }
+    >
+      <RowBody title="Expandable row" meta="Header keeps p-4; body sets its own" />
+    </ListRow>
+  ),
+};
+
 /** A one-shot success confirmation on a row that was just added or changed. */
 export const Flash: Story = {
   args: {
