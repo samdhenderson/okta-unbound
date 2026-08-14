@@ -1,12 +1,23 @@
 /**
  * @module sidepanel/components/shared/Input
- * @description Controlled single-line text field with optional label, hint, leading icon, and error state.
+ * @description Controlled single-line text field with optional label, hint, size scale, leading/trailing adornments, and error state.
  *
  * `onChange` receives the string value (not the event). When `error` is set the
- * field turns red and the error message replaces the hint. Use over a raw
- * `<input>`; for multi-line use `Textarea`, for choices use `Select`.
+ * field turns red and the error message replaces the hint. Three sizes
+ * (`sm | md | lg`) and two in-field slots — `icon` (leading glyph) and `trailing`
+ * (clear button, spinner) — whose reserved padding scales with `size`, so a
+ * search composite never has to re-declare the field's class string. Use over a
+ * raw `<input>`; for multi-line use `Textarea`, for choices use `Select`.
  */
 import React from 'react';
+
+/**
+ * Field height/type scale — `sm` ≈ 30px, `md` ≈ 38px, `lg` ≈ 46px.
+ *
+ * `md` is the default and is the historical rendering of this component;
+ * `lg` is the taller field search bars use as the primary control of a view.
+ */
+export type InputSize = 'sm' | 'md' | 'lg';
 
 interface InputProps {
   /** Controlled value. */
@@ -27,8 +38,23 @@ interface InputProps {
   hint?: string;
   /** Stretch to fill the container width. Defaults to `true`. */
   fullWidth?: boolean;
-  /** Optional leading icon rendered inside the field. */
+  /** Field height/type scale. Defaults to `md`. */
+  size?: InputSize;
+  /** Optional leading icon rendered inside the field; left padding is reserved automatically. */
   icon?: React.ReactNode;
+  /**
+   * Optional node rendered inside the field at its trailing edge — a clear
+   * `IconButton`, a `LoadingSpinner`, a unit suffix. Right padding is reserved
+   * automatically (scaled to `size`) so long values never run underneath it.
+   * Combines with `icon`.
+   */
+  trailing?: React.ReactNode;
+  /**
+   * Set when `trailing` holds something the user clicks (a clear button). By
+   * default the slot is `pointer-events-none` so a decorative adornment (a
+   * spinner) can't swallow clicks aimed at the field.
+   */
+  trailingInteractive?: boolean;
   className?: string;
   /** Focus the input on mount. */
   autoFocus?: boolean;
@@ -39,11 +65,72 @@ interface InputProps {
 }
 
 /**
+ * Padding and type scale per size. `sm` mirrors `Button`'s `sm`
+ * (`px-3 py-1.5 text-xs`) so a compact field and a compact button line up in the
+ * same toolbar row; `md` is the historical rendering and must not change.
+ */
+const sizeClasses: Record<InputSize, string> = {
+  sm: 'px-3 py-1.5 text-xs', // 30px
+  md: 'px-3 py-2 text-sm', // 38px
+  lg: 'px-4 py-3 text-sm', // 46px
+};
+
+/** Horizontal inset of the adornment wrappers; tracks each size's own padding. */
+const leadingInsetClasses: Record<InputSize, string> = {
+  sm: 'left-3',
+  md: 'left-3',
+  lg: 'left-4',
+};
+
+/** Mirror of {@link leadingInsetClasses} for the trailing slot. */
+const trailingInsetClasses: Record<InputSize, string> = {
+  sm: 'right-3',
+  md: 'right-3',
+  lg: 'right-4',
+};
+
+/** Left padding reserved for `icon`: inset + a 16px glyph + a 8–12px gap. */
+const leadingPaddingClasses: Record<InputSize, string> = {
+  sm: 'pl-9',
+  md: 'pl-10',
+  lg: 'pl-11',
+};
+
+/**
+ * Right padding reserved for `trailing`. One step wider than the leading
+ * reservation because the trailing slot carries a hit target rather than a bare
+ * glyph — this keeps ≥4px of clearance for the widest thing callers put there
+ * (`IconButton size="md"`, 28px) at every size.
+ */
+const trailingPaddingClasses: Record<InputSize, string> = {
+  sm: 'pr-10',
+  md: 'pr-11',
+  lg: 'pr-12',
+};
+
+/**
  * The shared controlled text input. Prefer this over a hand-rolled `<input>`.
  *
  * @example
  * ```tsx
  * <Input label="Search" type="search" value={query} onChange={setQuery} error={err} />
+ * ```
+ *
+ * @example A search field with both slots filled
+ * ```tsx
+ * <Input
+ *   size="lg"
+ *   value={query}
+ *   onChange={setQuery}
+ *   ariaLabel="Search users"
+ *   icon={<Icon type="search" size="sm" />}
+ *   trailingInteractive
+ *   trailing={
+ *     <IconButton label="Clear search" variant="ghost" size="sm" onClick={clear}>
+ *       <Icon type="close" size="sm" />
+ *     </IconButton>
+ *   }
+ * />
  * ```
  */
 const Input: React.FC<InputProps> = ({
@@ -57,21 +144,35 @@ const Input: React.FC<InputProps> = ({
   ariaLabel,
   hint,
   fullWidth = true,
+  size = 'md',
   icon,
+  trailing,
+  trailingInteractive = false,
   className = '',
   autoFocus = false,
   onKeyDown,
   inputRef,
 }) => {
   const inputClasses = `
-    px-3 py-2 text-sm
+    ${sizeClasses[size]}
     border rounded-md bg-white
     transition-all duration-100
     focus:outline-2 focus:outline-offset-2 focus:outline-primary
     disabled:bg-neutral-50 disabled:text-neutral-500 disabled:cursor-not-allowed
     ${error ? 'border-danger focus:border-danger' : 'border-neutral-300 focus:border-primary'}
-    ${icon ? 'pl-10' : ''}
+    ${icon ? leadingPaddingClasses[size] : ''}
+    ${trailing ? trailingPaddingClasses[size] : ''}
     ${fullWidth ? 'w-full' : ''}
+  `
+    .trim()
+    .replace(/\s+/g, ' ');
+
+  // The trailing node sits outside the <input>, so it never affects focus; only
+  // its pointer events can steal from the field, and those are opt-in.
+  const trailingClasses = `
+    absolute ${trailingInsetClasses[size]} top-1/2 -translate-y-1/2
+    flex items-center text-neutral-400
+    ${trailingInteractive ? '' : 'pointer-events-none'}
   `
     .trim()
     .replace(/\s+/g, ' ');
@@ -81,7 +182,11 @@ const Input: React.FC<InputProps> = ({
       {label && <label className="block text-sm font-medium text-neutral-700 mb-2">{label}</label>}
       <div className="relative">
         {icon && (
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">{icon}</div>
+          <div
+            className={`absolute ${leadingInsetClasses[size]} top-1/2 -translate-y-1/2 text-neutral-400`}
+          >
+            {icon}
+          </div>
         )}
         <input
           ref={inputRef}
@@ -96,6 +201,7 @@ const Input: React.FC<InputProps> = ({
           className={inputClasses}
           style={{ fontFamily: 'var(--font-primary)' }}
         />
+        {trailing && <div className={trailingClasses}>{trailing}</div>}
       </div>
       {hint && !error && <p className="mt-1 text-xs text-neutral-500">{hint}</p>}
       {error && (

@@ -176,7 +176,7 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
       </div>
 
       {isLoading ? (
-        <LoadingSpinner size="lg" message="Loading group memberships..." centered />
+        <LoadingSpinner size="2xl" message="Loading group memberships..." centered />
       ) : memberships.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12">
           <p className="text-neutral-500 text-sm">This user is not a member of any groups</p>

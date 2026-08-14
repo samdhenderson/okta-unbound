@@ -231,7 +231,7 @@ const FilterChip: React.FC<{ label: string; onRemove: () => void }> = ({ label, 
       aria-label={`Remove ${label}`}
       className="p-0.5 hover:bg-primary-highlight rounded-full transition-colors"
     >
-      <Icon type="close" size="sm" className="w-3 h-3" />
+      <Icon type="close" size="xs" />
     </button>
   </span>
 );

@@ -154,7 +154,7 @@ const GroupOverview: React.FC<GroupOverviewProps> = ({
   const cancelMfaConfirm = useCallback(() => setScanStatus('idle'), []);
 
   if (isLoading && members.length === 0) {
-    return <LoadingSpinner size="lg" message="Loading group members..." centered />;
+    return <LoadingSpinner size="2xl" message="Loading group members..." centered />;
   }
 
   if (error) {

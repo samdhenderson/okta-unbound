@@ -165,7 +165,7 @@ const CrossGroupSearch: React.FC<CrossGroupSearchProps> = ({
                       title={isSelected ? 'Click to keep in group' : 'Click to mark for removal'}
                     >
                       {groupName}
-                      {isSelected && <Icon type="close" size="sm" className="w-3 h-3" />}
+                      {isSelected && <Icon type="close" size="xs" />}
                     </button>
                   );
                 })}

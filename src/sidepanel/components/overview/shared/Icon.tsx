@@ -51,12 +51,13 @@ interface IconProps {
   type: IconType;
   /** Extra classes merged after the size class (e.g. a color token). */
   className?: string;
-  /** Preset square dimensions: sm=16px, md=20px, lg=24px, xl=32px. */
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  /** Preset square dimensions: xs=12px, sm=16px, md=20px, lg=24px, xl=32px. */
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 }
 
 /** Maps a {@link IconProps.size} to its Tailwind width/height classes. */
 const sizeClasses = {
+  xs: 'w-3 h-3',
   sm: 'w-4 h-4',
   md: 'w-5 h-5',
   lg: 'w-6 h-6',

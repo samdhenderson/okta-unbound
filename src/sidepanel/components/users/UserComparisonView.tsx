@@ -177,7 +177,7 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
 
           {isLoading && (
             <div className="py-8">
-              <LoadingSpinner size="md" message="Crunching memberships and assignments…" centered />
+              <LoadingSpinner size="xl" message="Crunching memberships and assignments…" centered />
             </div>
           )}
 

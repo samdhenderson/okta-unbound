@@ -40,7 +40,7 @@ const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({ filters, onRemove
             size="sm"
             className="rounded-full"
           >
-            <Icon type="close" size="sm" className="w-3 h-3" />
+            <Icon type="close" size="xs" />
           </IconButton>
         </span>
       ))}
