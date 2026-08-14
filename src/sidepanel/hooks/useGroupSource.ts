@@ -20,7 +20,7 @@
  */
 
 import { useCallback, useRef, useState } from 'react';
-import type { GroupSummary } from '../../shared/types';
+import type { GroupSummary, OktaUser } from '../../shared/types';
 import { useOktaApi } from './useOktaApi';
 import {
   summarizeMemberSources,
@@ -65,6 +65,15 @@ export interface UseGroupSourceReturn {
    * costs no scheduler requests.
    */
   analyzeMembers: () => void;
+  /**
+   * Recompute the split from a roster that just changed, without touching Okta.
+   *
+   * `breakdown` is React state, so invalidating the cache after a membership
+   * write is not enough on its own — the meter would keep showing pre-mutation
+   * counts for as long as the view stayed mounted. Pure recompute, no request.
+   * A no-op before any analysis has run.
+   */
+  resummarize: (members: OktaUser[]) => void;
   /** Close and reset. */
   close: () => void;
 }
@@ -88,6 +97,13 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
 
   // Guards a stale async load (reopened for a different group) from writing state.
   const runIdRef = useRef(0);
+
+  /**
+   * The rules the last completed analysis classified against, kept so a roster
+   * change can be re-summarised without re-fetching anything. `summarizeMemberSources`
+   * is pure, so recomputing costs nothing.
+   */
+  const lastRulesRef = useRef<Parameters<typeof summarizeMemberSources>[2] | null>(null);
 
   const open = useCallback(
     (nextGroup: GroupSummary) => {
@@ -143,6 +159,7 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
     ])
       .then(([members, rules]) => {
         if (runId !== runIdRef.current) return;
+        lastRulesRef.current = rules;
         const summary = summarizeMemberSources(
           { id: group.id, name: group.name, type: group.type },
           members,
@@ -162,6 +179,37 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
       });
   }, [group, getAllGroupMembers, getGroupRulesForGroup]);
 
+  /**
+   * Recompute the split from a roster that just changed, without touching Okta.
+   *
+   * `breakdown` is React state, so invalidating the *cache* after a membership
+   * write is not enough on its own: the meter rendered directly above the Members
+   * section would keep showing pre-mutation counts for as long as the view stayed
+   * mounted. Since `summarizeMemberSources` is pure and the rules from the last
+   * analysis are still in hand, the honest answer is free — no re-walk of the
+   * group's members, no extra request.
+   *
+   * A no-op before any analysis has run: there is no split on screen to correct.
+   *
+   * @param members - The group's roster after the write.
+   */
+  const resummarize = useCallback(
+    (members: OktaUser[]) => {
+      const rules = lastRulesRef.current;
+      if (!group || !rules) return;
+      const summary = summarizeMemberSources(
+        { id: group.id, name: group.name, type: group.type },
+        members,
+        rules,
+      );
+      setBreakdown(summary);
+      // Keep the banked copy in step, so the groups list's compact meter does not
+      // contradict the detail view it was opened from.
+      writeMemberSource(group.id, summary);
+    },
+    [group],
+  );
+
   const close = useCallback(() => {
     runIdRef.current++;
     setGroup(null);
@@ -170,6 +218,7 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
     setBreakdown(null);
     setMemberStatus('idle');
     setError(null);
+    lastRulesRef.current = null;
   }, []);
 
   return {
@@ -181,6 +230,7 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
     error,
     open,
     analyzeMembers,
+    resummarize,
     close,
   };
 }

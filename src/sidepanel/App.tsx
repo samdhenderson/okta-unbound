@@ -435,6 +435,10 @@ const App: React.FC = () => {
               onNavigateToRule={handleNavigateToRule}
               selectedGroupId={selectedGroupId}
               onGroupSelected={() => setSelectedGroupId(null)}
+              // The same descriptor-driven Export Engine route the group
+              // Overview's "Export Members" already takes. Without this the
+              // drilled-in group's action greys itself out.
+              onExportGroup={handleExportGroup}
             />
           ))}
           {renderTabPanel('apps', (isActive) => (
