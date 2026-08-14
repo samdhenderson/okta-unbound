@@ -4,7 +4,6 @@ import ComparisonDiffTab from './ComparisonDiffTab';
 import GroupSourceIndicator from './GroupSourceIndicator';
 import AppScopeIndicator from './AppScopeIndicator';
 import Button from '../../shared/Button';
-import type { CellDirection } from './ComparisonDiffTab';
 import type { ParityRow } from './comparisonAnalytics';
 import type { GroupMembership, MembershipRule } from '../../../../shared/types';
 
@@ -64,23 +63,6 @@ const APP_ROWS: ParityRow[] = [
   { id: 'app3', label: 'Slack', inContext: true, inCompared: true },
 ];
 
-/** An Add button's label: the arrow sits on the edge nearest the marker and points at it. */
-const AddLabel = ({ direction }: { direction: CellDirection }) => (
-  <span className="inline-flex items-center gap-1">
-    {direction === 'left' && (
-      <span aria-hidden="true" className="text-base leading-none">
-        ←
-      </span>
-    )}
-    Add
-    {direction === 'right' && (
-      <span aria-hidden="true" className="text-base leading-none">
-        →
-      </span>
-    )}
-  </span>
-);
-
 /** One list where every row states the comparison: two sides, a marker, and the action that closes the gap. */
 const meta = {
   title: 'Users/Comparison/ComparisonDiffTab',
@@ -98,12 +80,18 @@ const meta = {
           '*spatially*, so reading a row meant knowing which card you were in, and it gave most of the screen ' +
           'to `shared` — the one group nobody acts on. A 65-group comparison handed 53 shared rows ~80% of the ' +
           'panel and left the 12 actionable ones scrolling in a sliver.\n\n' +
-          'The arrow on an Add button sits on the edge nearest the marker and points **inward**, so the gesture ' +
-          'and the goal are the same thing: close the `≠`. The middle cell borrows the button silhouette so the ' +
-          'three cells read as one set, but it is inert — no `<button>`, not focusable, `role="img"` with a ' +
-          'label. `=` and `≠` are different glyphs, so the state never depends on colour.\n\n' +
+          '**Every cell names its user, in every state**, and an Add button says `Add <recipient>`. An earlier ' +
+          'cut named only the holding side and put a **inward-pointing arrow** on the Add button, aimed at the ' +
+          '`≠` it would close. That failed twice: only the named side filled its third, so the strip was visibly ' +
+          'lopsided; and the arrow pointed *away* from the user who actually receives the item — the recipient ' +
+          'is whichever side the button sits on — so the row read as the reverse of what clicking it did. With ' +
+          'the recipient named there is nothing left for an arrow to disambiguate, so there is no arrow.\n\n' +
+          'The middle cell borrows the button silhouette so the three cells read as one set, but it is inert — ' +
+          'no `<button>`, not focusable, `role="img"` with a label. `=` and `≠` are different glyphs, so the ' +
+          'state never depends on colour.\n\n' +
           'A side that lacks the item and *cannot* be given it (an app row, an app-mastered group) renders a ' +
-          'stated non-answer rather than a button that would fail.\n\n' +
+          'stated non-answer rather than a button that would fail — still named, so all three states are the ' +
+          'same shape.\n\n' +
           'It also fixes a subtler wrong: under buckets a successful copy made the Add button *vanish*, because ' +
           'the row moved to another card. Here the row flips `≠` → `=` where you are already looking.',
       },
@@ -124,15 +112,15 @@ type Story = StoryObj<typeof meta>;
 /** The groups tab: both copy directions, provenance under each differing row. */
 export const Groups: Story = {
   args: {
-    renderContextAction: (row, direction) =>
+    renderContextAction: (row, recipientName) =>
       row.membership?.group.type === 'APP_GROUP' ? null : (
-        <Button size="sm" variant="primary" onClick={fn()}>
-          <AddLabel direction={direction} />
+        <Button size="sm" variant="primary" icon="plus" fullWidth onClick={fn()}>
+          Add {recipientName}
         </Button>
       ),
-    renderComparedAction: (_row, direction) => (
-      <Button size="sm" variant="primary" onClick={fn()}>
-        <AddLabel direction={direction} />
+    renderComparedAction: (_row, recipientName) => (
+      <Button size="sm" variant="primary" icon="plus" fullWidth onClick={fn()}>
+        Add {recipientName}
       </Button>
     ),
     renderMeta: (row) =>
@@ -143,7 +131,7 @@ export const Groups: Story = {
 /** A copy in flight: the global single-flight lock disables every other Add. */
 export const CopyInFlight: Story = {
   args: {
-    renderContextAction: (row, direction) =>
+    renderContextAction: (row, recipientName) =>
       row.membership?.group.type === 'APP_GROUP' ? null : (
         <Button
           size="sm"
@@ -152,12 +140,12 @@ export const CopyInFlight: Story = {
           disabled
           onClick={fn()}
         >
-          <AddLabel direction={direction} />
+          Add {recipientName}
         </Button>
       ),
-    renderComparedAction: (_row, direction) => (
-      <Button size="sm" variant="primary" disabled onClick={fn()}>
-        <AddLabel direction={direction} />
+    renderComparedAction: (_row, recipientName) => (
+      <Button size="sm" variant="primary" icon="plus" fullWidth disabled onClick={fn()}>
+        Add {recipientName}
       </Button>
     ),
   },
@@ -195,9 +183,9 @@ export const LongList: Story = {
         groupRow(`00gFAKEbulk${i}`, `bulk.group.${String(i).padStart(2, '0')}`, true, true),
       ),
     ],
-    renderContextAction: (_row, direction) => (
-      <Button size="sm" variant="primary" onClick={fn()}>
-        <AddLabel direction={direction} />
+    renderContextAction: (_row, recipientName) => (
+      <Button size="sm" variant="primary" icon="plus" fullWidth onClick={fn()}>
+        Add {recipientName}
       </Button>
     ),
   },

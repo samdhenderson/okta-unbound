@@ -20,6 +20,21 @@
  * the row moved to another card. Here the row flips `≠` → `=` where you are
  * already looking.
  *
+ * ## Both sides are always named
+ *
+ * An earlier cut named only the side that held the item and let the other side be
+ * identified by elimination, with an arrow on the Add button pointing at the `≠`
+ * it would close. That failed twice over. The named side filled its third while
+ * the button did not, so the strip was visibly lopsided. Worse, the arrow pointed
+ * *away* from the user who would actually receive the item — the recipient is
+ * whichever side the button sits on — so the row appeared to say the opposite of
+ * what clicking it did.
+ *
+ * Now every cell names its user in every state, and the action says
+ * `Add <recipient>`. There is no arrow, because with the recipient named there is
+ * nothing left to disambiguate. The three cells are the same shape, so symmetry
+ * is structural rather than something spacing has to maintain.
+ *
  * ## The middle cell is not a control
  *
  * It keeps the button silhouette so the three cells read as one set, but it is
@@ -42,12 +57,6 @@ import type { ParityRow } from './comparisonAnalytics';
 /** Which rows the list is showing. */
 export type ParityFilter = 'differences' | 'shared' | 'all';
 
-/**
- * Which way the equality marker lies from a side cell — so an action can point
- * **inward**, at the `≠` it would close.
- */
-export type CellDirection = 'left' | 'right';
-
 /** Props for {@link ComparisonDiffTab}. */
 interface ComparisonDiffTabProps {
   /** Display name of the context user (baseline) — the LEFT side of every row. */
@@ -65,13 +74,14 @@ interface ComparisonDiffTabProps {
    * to them". Returning `null` renders a plain unmet marker instead, which is
    * what an app row (nothing to copy) and an app-mastered group both do.
    *
-   * `direction` is which way the marker lies from this cell, so the caller can
-   * put the arrow **inside** the control it belongs to (`Add →` on the left,
-   * `← Add` on the right) rather than beside it.
+   * `recipientName` is **this cell's own user** — the one who would receive the
+   * item. The caller puts it in the control's label so the row states who
+   * receives rather than leaving it to be inferred from which side the button
+   * sits on. See {@link SideCell} for why that inference used to go wrong.
    */
-  renderContextAction?: (row: ParityRow, direction: CellDirection) => React.ReactNode;
+  renderContextAction?: (row: ParityRow, recipientName: string) => React.ReactNode;
   /** Optional action for the RIGHT cell of a row the compared user lacks. */
-  renderComparedAction?: (row: ParityRow, direction: CellDirection) => React.ReactNode;
+  renderComparedAction?: (row: ParityRow, recipientName: string) => React.ReactNode;
   /**
    * Optional per-row detail under the label — today, how the membership was
    * granted. Kept a render prop because only the caller knows what its facet
@@ -166,8 +176,8 @@ const ParityListRow: React.FC<{
   row: ParityRow;
   contextName: string;
   comparedName: string;
-  renderContextAction?: (row: ParityRow, direction: CellDirection) => React.ReactNode;
-  renderComparedAction?: (row: ParityRow, direction: CellDirection) => React.ReactNode;
+  renderContextAction?: (row: ParityRow, recipientName: string) => React.ReactNode;
+  renderComparedAction?: (row: ParityRow, recipientName: string) => React.ReactNode;
   renderMeta?: (row: ParityRow) => React.ReactNode;
 }> = ({
   row,
@@ -198,7 +208,7 @@ const ParityListRow: React.FC<{
         <SideCell
           held={row.inContext}
           userName={contextName}
-          action={renderContextAction?.(row, 'right')}
+          action={renderContextAction?.(row, contextName)}
         />
         {/* Not a button, not focusable: a status that borrows the silhouette. */}
         <span
@@ -215,7 +225,7 @@ const ParityListRow: React.FC<{
         <SideCell
           held={row.inCompared}
           userName={comparedName}
-          action={renderComparedAction?.(row, 'left')}
+          action={renderComparedAction?.(row, comparedName)}
         />
       </span>
     </li>
@@ -225,18 +235,21 @@ const ParityListRow: React.FC<{
 /**
  * One side of a row: a third of the strip, whatever it holds.
  *
- * The side that HAS the item is **named**. That is what makes the row readable
- * without a column header — with two users, naming the holder identifies the
- * other side by elimination, which is how the design was drawn
- * (`[Add →] ≠ [Jordan]`). An earlier cut showed a bare check here and put the
- * names in a header above the list; the header's columns could not line up with a
- * strip that sits on its own line, so the check identified nobody.
+ * **Every side names its user, in every state.** That is the fix for two problems
+ * the earlier cut had. Visually, only the holding side was named and only the
+ * holding side filled its third, so a row read as a full-width grey pill facing a
+ * small button floating in empty space — the asymmetry was structural, not a
+ * spacing bug. Semantically, the unnamed side was the one you were about to act
+ * on: the button added the item to *its own* user, but carried an arrow pointing
+ * away from them at the only name on the row, so the row appeared to say the
+ * opposite of what the click did.
  *
- * A side that lacks the item and *can* be given it renders the caller's action —
- * which carries the inward-pointing arrow in its own label, so button and arrow
- * are one target rather than a glyph floating beside it. A side that lacks it and
- * cannot be given it (an app row, an app-mastered group) gets a stated
- * non-answer, never a button that would fail.
+ * Naming the recipient inside the control removes the inference entirely. There
+ * is no arrow, because there is nothing left for one to disambiguate.
+ *
+ * A side that lacks the item and cannot be given it (an app row, an app-mastered
+ * group) still gets a stated non-answer, never a button that would fail — but it
+ * names its user too, so all three states are the same shape.
  */
 const SideCell: React.FC<{
   held: boolean;
@@ -258,15 +271,20 @@ const SideCell: React.FC<{
   if (!action) {
     return (
       <span
-        className="flex min-w-0 flex-1 items-center justify-center rounded-md border border-dashed border-neutral-200 px-2 py-1 text-xs text-neutral-400"
+        className="flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md border border-dashed border-neutral-200 px-2 py-1 text-xs text-neutral-400"
         title={`${userName} does not have this`}
       >
-        —
+        <span aria-hidden="true" className="shrink-0">
+          —
+        </span>
+        <span className="truncate">{userName}</span>
       </span>
     );
   }
 
-  return <span className="flex min-w-0 flex-1 items-center justify-center">{action}</span>;
+  // The action fills the cell — the caller passes `fullWidth`, so the button is
+  // the same width as the named cell opposite it and the strip reads as thirds.
+  return <span className="flex min-w-0 flex-1">{action}</span>;
 };
 
 export default ComparisonDiffTab;

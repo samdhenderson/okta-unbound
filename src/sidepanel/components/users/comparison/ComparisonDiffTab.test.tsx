@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import ComparisonDiffTab, { type CellDirection } from './ComparisonDiffTab';
+import ComparisonDiffTab from './ComparisonDiffTab';
 import type { ParityRow } from './comparisonAnalytics';
 
 /**
@@ -103,21 +103,29 @@ describe('the row states the comparison', () => {
     expect(screen.getByTitle('Alice Context does not have this')).toBeInTheDocument();
   });
 
-  it('NAMES the side that holds the item, so the row reads without a header', () => {
-    // An earlier cut put the two names in a column header and left a bare check
-    // in the cell. The header's columns could not line up with a strip that sits
-    // on its own line, so the check identified nobody.
+  it('NAMES BOTH sides, so neither has to be inferred from position', () => {
+    // INVERTED (ADR-0022, "behavior that legitimately changes"). This case used to
+    // assert the opposite — that only the holder was named and the other side was
+    // identified by elimination. That was the defect: the unnamed side was the one
+    // you were about to act on, and the Add button's arrow pointed away from it,
+    // so the row read as the reverse of what clicking it did. The inverted case is
+    // the record of the fix.
     render(<ComparisonDiffTab {...baseProps} rows={[row()]} />);
 
     const li = rowFor('VPN Access');
-    // Bob has it, so Bob is named; Alice's side is the one to act on.
+    // Bob holds it, Alice does not — and both are stated.
     expect(within(li).getByText('Bob Compared')).toBeInTheDocument();
-    expect(within(li).queryByText('Alice Context')).not.toBeInTheDocument();
+    expect(within(li).getByText('Alice Context')).toBeInTheDocument();
   });
 
-  it('tells the caller which way the marker lies, so an arrow can point inward', () => {
-    const toContext = vi.fn((_row: ParityRow, _direction: CellDirection) => null);
-    const toCompared = vi.fn((_row: ParityRow, _direction: CellDirection) => null);
+  it('hands each cell the name of the user who would RECEIVE the item', () => {
+    // Retargeted from a case that pinned `CellDirection` ('right' for the left
+    // cell, 'left' for the right) so the caller could point an arrow inward at the
+    // `≠`. That type is gone: the arrow pointed away from the recipient, which is
+    // the bug. What the caller needs instead is who receives — always this cell's
+    // own user — so the control can say so.
+    const toContext = vi.fn((_row: ParityRow, _recipientName: string) => null);
+    const toCompared = vi.fn((_row: ParityRow, _recipientName: string) => null);
 
     render(
       <ComparisonDiffTab
@@ -131,30 +139,8 @@ describe('the row states the comparison', () => {
       />,
     );
 
-    // The left cell's marker is to its right, and vice versa.
-    expect(toContext.mock.calls[0][1]).toBe('right');
-    expect(toCompared.mock.calls[0][1]).toBe('left');
-  });
-
-  it('gives each side an equal share of the row, so no action overflows its cell', () => {
-    render(
-      <ComparisonDiffTab
-        {...baseProps}
-        rows={[row()]}
-        renderContextAction={() => <button type="button">Add</button>}
-      />,
-    );
-
-    const li = rowFor('VPN Access');
-    const held = within(li).getByTitle('Bob Compared has this');
-    const action = within(li).getByRole('button', { name: 'Add' }).parentElement;
-
-    // Fixed-width cells were what let a button burst its cell and pack the whole
-    // strip into the left third of the row.
-    for (const cell of [held, action]) {
-      expect(cell?.className).toContain('flex-1');
-      expect(cell?.className).not.toContain('w-20');
-    }
+    expect(toContext.mock.calls[0][1]).toBe('Alice Context');
+    expect(toCompared.mock.calls[0][1]).toBe('Bob Compared');
   });
 });
 
