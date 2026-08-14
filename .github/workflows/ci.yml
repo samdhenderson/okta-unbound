@@ -66,6 +66,12 @@ jobs:
       - name: No control bytes in source
         run: npm run lint:control-chars
 
+      # Docs, ADRs, and .claude/ skills/agents cite src/ paths as evidence a
+      # reader can go check. Nothing else verifies those paths survive the
+      # next refactor or rename — this does.
+      - name: Cited paths resolve
+        run: npm run lint:cited-paths
+
   # Component explorer build gate (ADR-0010). Runs in parallel with `verify` (no
   # `needs:`), so it never delays the fast lint/type/test feedback. A broken or
   # mis-imported story fails the PR.

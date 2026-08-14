@@ -30,9 +30,14 @@ const variantClasses: Record<FooVariant, string> = {/* … */};
 const sizeClasses: Record<FooSize, string> = { sm: '…', md: '…', lg: '…' };
 ```
 
-- Size scale is `sm | md | lg`. Express sizing in Tailwind classes only — do **not**
-  add parallel inline pixel `style` maps (`Button.tsx` is the model: its sizing is
-  class-based).
+- Size scale is `sm | md | lg` by default. Two primitives extend it where call sites
+  needed steps the three-name scale could not express: `Icon` is
+  `xs | sm | md | lg | xl` (12/16/20/24/32px) and `LoadingSpinner` is
+  `sm | md | lg | xl | 2xl` (16/20/24/32/48px) — deliberately **name-for-name aligned**
+  over the sizes they share, so a spinner standing in for a glyph is requested by the
+  glyph's own size name. Extend a scale only when a real call site needs the step.
+  Express sizing in Tailwind classes only — do **not** add parallel inline pixel `style`
+  maps (`Button.tsx` is the model: its sizing is class-based).
 - Variant/status names use the shared `StatusType` (`success | warning | danger |
 info`) — never `error`.
 

@@ -21,8 +21,11 @@ You build and edit React components for this Chrome MV3 side panel to spec.
 - New primitives go in `src/sidepanel/components/shared/`, follow the variant/size
   convention, are added to `components/shared/index.ts` (the barrel), and are
   documented in `docs/components.md`.
-- Sizing via Tailwind classes and the `sm|md|lg` scale — never parallel inline pixel
-  `style` maps. Colors via tokens. Icons via the `Icon` registry.
+- Sizing via Tailwind classes and the component's size prop — never parallel inline
+  pixel `style` maps. Most primitives are `sm|md|lg`; `Icon` is `xs|sm|md|lg|xl` and
+  `LoadingSpinner` is `sm|md|lg|xl|2xl`, and those two share size names so a spinner
+  matches the glyph it replaces. Check the actual scale before assuming three steps.
+  Colors via tokens. Icons via the `Icon` registry.
 - Status props use the shared `StatusType` (`success|warning|danger|info`).
 - Type props with a local `interface XProps`. Compose primitives; split large UIs
   into subcomponents.
