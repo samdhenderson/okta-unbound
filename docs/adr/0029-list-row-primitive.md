@@ -83,12 +83,29 @@ Fixed and **not** configurable: `rounded-md border border-neutral-200 bg-white`,
 focus ring when interactive. A row that wants a different hover colour is the
 problem this ADR exists to solve; it does not get a prop.
 
-**Hover applies to `default` rows only.** A `selected` or `highlighted` row
-already carries `border-primary` to say so, and repainting that border on hover
-would make the row look _less_ selected the moment you pointed at it — hover
-overriding state rather than responding to it. The cursor and focus ring still
-apply in every state, because those describe what the row _does_ rather than what
-it _is_.
+**Hover applies to interactive, `default` rows only.** Two gates, for two
+different reasons.
+
+_Interactive_, because hover is feedback for an affordance: on a row you cannot
+activate it promises something that is not there. The first cut applied hover to
+every row and handed a hover border to static lists that never had one —
+`GroupPushSection`, `GroupCleanupPanel`, `GroupComparisonModal`. Interactivity is
+inferred from `as`, `onClick` and `onHeaderClick`, with an `interactive` override
+for the two rows whose control `ListRow` cannot see: `GroupListItem` is activated
+by a `StretchedButton` overlay, `AppListItem` by an `onClick` on a child. The
+override governs hover only — the cursor and focus ring still come from the row
+element actually being a control, since a `StretchedButton` row already has both
+from the button on top of it.
+
+_`default`_, because a `selected` or `highlighted` row already carries
+`border-primary` (or, when nested, a `primary-light` fill) to say so. Repainting
+that on hover would make the row look _less_ selected the moment you pointed at
+it — hover overriding state rather than responding to it.
+
+One consequence worth naming: `PolicyCard` loses the hover border it had, because
+only its chevron is clickable and the card is not. That is the rule working, but
+it is a visible change from a card that previously hinted at an affordance it did
+not have.
 
 **`highlighted` is a strict superset of `selected`**, so a row that is both takes
 `highlighted`. The two compose in the source they replaced (a selected row could

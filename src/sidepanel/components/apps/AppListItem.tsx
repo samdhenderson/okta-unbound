@@ -106,6 +106,10 @@ const AppListItem: React.FC<AppListItemProps> = memo(
       */
       <ListRow
         density="comfortable"
+        // The click target is an `onClick` on a child (the row body toggles the
+        // disclosure), so `ListRow` cannot infer that this row is activatable and
+        // would otherwise drop its hover border.
+        interactive
         dataAttributes={{ 'data-app-id': app.id }}
         className="group/item relative"
         body={

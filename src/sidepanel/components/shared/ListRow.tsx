@@ -116,22 +116,28 @@ const stateClasses: Record<ListRowVariant, Record<ListRowState, string>> = {
 const baseClasses = 'rounded-md transition-colors duration-(--dur-instant)';
 
 /**
- * The one hover treatment per variant, and the reason `state` gates it.
+ * The one hover treatment per variant, and the two things that gate it.
  *
- * A `selected` or `highlighted` row already carries `border-primary` (or, when
- * nested, a `primary-light` fill) to say so. Letting hover repaint that would make
- * the row look *less* selected the moment you pointed at it — hover overriding
- * state rather than responding to it. So hover applies to `default` rows only; the
- * cursor and focus ring still apply everywhere, since those describe what the row
- * does rather than what it is.
+ * **Only interactive rows hover.** Hover is feedback for an affordance; on a row
+ * you cannot activate it promises something that is not there. `ListRow` used to
+ * apply it to every row, which handed a hover border to static lists that never
+ * had one.
+ *
+ * **Only `default` rows hover.** A `selected` or `highlighted` row already carries
+ * `border-primary` (or, when nested, a `primary-light` fill) to say so. Letting
+ * hover repaint that would make the row look *less* selected the moment you
+ * pointed at it — hover overriding state rather than responding to it.
  */
 const hoverClasses: Record<ListRowVariant, string> = {
   card: 'hover:border-neutral-500',
   nested: 'hover:bg-neutral-50',
 };
 
-/** Applied only when the row is itself the click target. */
-const interactiveClasses =
+/**
+ * Applied only when the row **element itself** is the control — not when a
+ * `StretchedButton` covers it, which carries its own cursor and focus ring.
+ */
+const controlClasses =
   'w-full text-left cursor-pointer ' +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
 
@@ -209,6 +215,20 @@ export interface ListRowProps {
    * pointer cursor and a focus ring — so pass an interactive `as` with it.
    */
   onClick?: () => void;
+  /**
+   * Whether the row responds to being pointed at.
+   *
+   * Normally inferred: a row is interactive when `as` is `button`/`a`, or when
+   * `onClick` or `onHeaderClick` is set. Pass it explicitly for a row whose
+   * control `ListRow` cannot see — `GroupListItem` is activated by a
+   * `StretchedButton` overlay and `AppListItem` by an `onClick` on a child, so
+   * neither has a handler on the row element, yet both are clickable.
+   *
+   * It governs the hover treatment only. The cursor and focus ring still come
+   * from the row element actually being a control, because a
+   * `StretchedButton` row already has both from the button on top of it.
+   */
+  interactive?: boolean;
   /** `href` for `as="a"`. Ignored otherwise. */
   href?: string;
   /** Link target for `as="a"`. `_blank` also sets `rel="noopener noreferrer"`. */
@@ -280,6 +300,7 @@ const ListRow: React.FC<ListRowProps> = ({
   headerClassName = '',
   onHeaderClick,
   onClick,
+  interactive,
   href,
   target,
   ariaLabel,
@@ -301,7 +322,13 @@ const ListRow: React.FC<ListRowProps> = ({
   // ruled out of the migration entirely (it is a data-viz bar, ADR-0029 §4),
   // leaving the prop with no consumer. Add it back when a row that actually
   // migrates needs it, not before.
-  const interactive = as === 'button' || as === 'a' || onClick !== undefined;
+  const isControl = as === 'button' || as === 'a' || onClick !== undefined;
+
+  // Hover is feedback for an affordance, so it tracks whether the row can be
+  // activated at all — which is broader than whether the row element is itself
+  // the control. An expandable row's header toggles it; a `StretchedButton` row
+  // is clickable through an overlay `ListRow` cannot see, hence the override.
+  const respondsToPointer = interactive ?? (isControl || onHeaderClick !== undefined);
 
   // Only a real body makes the card clip — a `0fr` disclose body must not escape
   // the rounded corners, but nothing else needs clipping.
@@ -320,8 +347,8 @@ const ListRow: React.FC<ListRowProps> = ({
     hasBody ? 'overflow-hidden' : '',
     hasHeader ? '' : densityClasses[density],
     stateClasses[variant][state],
-    state === 'default' ? hoverClasses[variant] : '',
-    interactive ? interactiveClasses : '',
+    respondsToPointer && state === 'default' ? hoverClasses[variant] : '',
+    isControl ? controlClasses : '',
     elementClasses[as] ?? '',
     flash ? 'animate-affirm-flash' : '',
     className,

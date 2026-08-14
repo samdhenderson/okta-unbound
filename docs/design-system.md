@@ -84,13 +84,14 @@ row container — the radius, resting border, hover border and transition are fi
 there on purpose, and a row wanting a different hover colour is the drift the
 component exists to stop.
 
-| Prop      | Values                                                                     |
-| --------- | -------------------------------------------------------------------------- |
-| `variant` | `card` (bordered) · `nested` (inside a card — no border, hover background) |
-| `density` | `tight` (`px-2 py-1.5`) · `compact` (`px-3 py-2`) · `comfortable` (`p-4`)  |
-| `state`   | `default` · `selected` · `highlighted`                                     |
-| `as`      | `div` · `li` · `a` · `button`                                              |
-| `body`    | expandable region below the header                                         |
+| Prop          | Values                                                                     |
+| ------------- | -------------------------------------------------------------------------- |
+| `variant`     | `card` (bordered) · `nested` (inside a card — no border, hover background) |
+| `density`     | `tight` (`px-2 py-1.5`) · `compact` (`px-3 py-2`) · `comfortable` (`p-4`)  |
+| `state`       | `default` · `selected` · `highlighted`                                     |
+| `as`          | `div` · `li` · `a` · `button`                                              |
+| `body`        | expandable region below the header                                         |
+| `interactive` | override for a row whose control `ListRow` cannot see — governs hover      |
 
 **`card` versus `nested`.** A `card` row carries the border that separates it from
 its neighbours. A `nested` row sits inside something already bordered — an
@@ -103,7 +104,11 @@ belongs to the card, the padding belongs to the header, and a `.disclose` body
 sets its own — so passing `body` moves the density padding onto an inner header
 wrapper and clips the card, and the row still owns exactly one border.
 
-**Hover applies to `default` rows only.** A selected row already says so with its
+**Hover applies to interactive, `default` rows only.** Hover is feedback for an
+affordance — a static row that highlights promises something that is not there.
+Interactivity is inferred from `as`, `onClick` and `onHeaderClick`; pass
+`interactive` for a row whose control `ListRow` cannot see (a `StretchedButton`
+overlay, or an `onClick` on a child). And a selected row already says so with its
 border (or, nested, its fill); repainting that on hover would make it look less
 selected the moment you point at it.
 
