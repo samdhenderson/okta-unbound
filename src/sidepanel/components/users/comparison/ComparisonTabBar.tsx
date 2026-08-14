@@ -55,7 +55,7 @@ const ComparisonTabBar: React.FC<ComparisonTabBarProps> = ({
             <span>{t.label}</span>
             {t.badge !== undefined && t.badge > 0 && (
               <span
-                className={`ml-0.5 inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold leading-none ${
+                className={`ml-0.5 inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 text-xs font-medium leading-none ${
                   active ? 'bg-primary text-white' : 'bg-neutral-200 text-neutral-700'
                 }`}
               >

@@ -199,7 +199,7 @@ const GroupEntry: React.FC<{
           )}
         </span>
         {showId && (
-          <span className="truncate font-mono text-[11px] text-neutral-500" title={reference.value}>
+          <span className="truncate font-mono text-xs text-neutral-500" title={reference.value}>
             {reference.value}
           </span>
         )}
