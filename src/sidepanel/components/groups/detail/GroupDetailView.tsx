@@ -19,13 +19,14 @@
  * rules that merely reference it) and hands their state to pure sections. It never
  * mutates anything.
  */
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import GroupIdentitySection from './GroupIdentitySection';
 import GroupMembershipSourceSection from './GroupMembershipSourceSection';
 import GroupRulesSection from './GroupRulesSection';
 import GroupPushSection from './GroupPushSection';
 import GroupMetadataSection from './GroupMetadataSection';
 import { useGroupSource } from '../../../hooks/useGroupSource';
+import { useOwedLoad } from '../../../hooks/useOwedLoad';
 import { useGroupRuleReferences } from '../../../hooks/useGroupRuleReferences';
 import type { GroupSummary } from '../../../../shared/types';
 
@@ -75,26 +76,18 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   // analysis the admin already paid for. The two effects are split so only a real
   // input change (`open`/`group`) arms it — re-showing the tab alone does not.
   const { open, analyzeMembers } = source;
-  const openOwedRef = useRef(true);
-  useEffect(() => {
-    openOwedRef.current = true;
-  }, [open, group]);
-  useEffect(() => {
-    if (!isActive || !openOwedRef.current) return;
-    openOwedRef.current = false;
+  useOwedLoad(group.id, isActive, () => {
     open(group);
-  }, [isActive, open, group]);
+  });
 
   // Wait for `open` to land before auto-analyzing (`analyzeMembers` no-ops until
   // the hook holds the group), and latch on the id so it fires exactly once.
-  const autoAnalyzedRef = useRef<string | null>(null);
+  // Same latch, a different readiness condition: not "is the tab visible" but "has
+  // `open` landed" — `analyzeMembers` no-ops until the hook holds the group.
   const openedGroupId = source.group?.id;
-  useEffect(() => {
-    if (!autoAnalyze || openedGroupId !== group.id) return;
-    if (autoAnalyzedRef.current === group.id) return;
-    autoAnalyzedRef.current = group.id;
+  useOwedLoad(group.id, autoAnalyze && openedGroupId === group.id, () => {
     analyzeMembers();
-  }, [autoAnalyze, openedGroupId, group.id, analyzeMembers]);
+  });
 
   return (
     <div className="space-y-3" data-testid="group-detail-view">

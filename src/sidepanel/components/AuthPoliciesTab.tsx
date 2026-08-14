@@ -11,7 +11,7 @@
  * only. Policy names and descriptions are end-user-controlled Okta data, rendered
  * as text through React's escaping.
  */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import PageHeader from './shared/PageHeader';
 import Button from './shared/Button';
 import Input from './shared/Input';
@@ -20,6 +20,7 @@ import PoliciesListPanel from './policies/PoliciesListPanel';
 import Icon from './overview/shared/Icon';
 import { useOktaApi } from '../hooks/useOktaApi';
 import type { OperationResult } from '../hooks/useOktaApi/types';
+import { useOwedLoad } from '../hooks/useOwedLoad';
 import { usePoliciesData } from '../hooks/usePoliciesData';
 import { filterPolicies } from './policies/policyFilters';
 import { getRelativeTime } from '../../shared/utils/dateFormat';
@@ -71,12 +72,9 @@ const AuthPoliciesTab: React.FC<AuthPoliciesTabProps> = ({ targetTabId, isActive
   // Gated on visibility: the tab stays mounted once visited, and the auto-load
   // re-arms on every new `targetTabId`, so without the gate switching Okta tabs
   // would re-list every policy from a tab the user is not looking at.
-  const autoLoadedRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (!isActive || targetTabId == null || autoLoadedRef.current === targetTabId) return;
-    autoLoadedRef.current = targetTabId;
+  useOwedLoad(targetTabId ?? null, isActive, () => {
     void loadPolicies(false);
-  }, [isActive, targetTabId, loadPolicies]);
+  });
 
   const filteredPolicies = useMemo(
     () => filterPolicies(policies, searchQuery),
