@@ -10,7 +10,7 @@ export { default as UserSearchPanel } from './UserSearchPanel';
 export { default as UserDetailPanel } from './UserDetailPanel';
 export { default as GroupMembershipsList } from './GroupMembershipsList';
 export { default as UserProfileCard } from './UserProfileCard';
-export { default as UserIdentity } from './UserIdentity';
+export { default as UserIdentityCard } from './UserIdentityCard';
 export { default as UserComparisonModal } from './UserComparisonModal';
 export { default as UserComparisonPanel } from './UserComparisonPanel';
 export { default as UserComparisonView } from './UserComparisonView';

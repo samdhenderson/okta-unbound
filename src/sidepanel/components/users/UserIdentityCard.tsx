@@ -1,5 +1,5 @@
 /**
- * @module sidepanel/components/users/UserIdentity
+ * @module sidepanel/components/users/UserIdentityCard
  * @description Compact identity header for a single Okta user.
  *
  * The slim replacement for the former tall "user ID card": avatar, name, status
@@ -13,8 +13,8 @@ import { IconButton, OpenInOktaLink, userStatusVariant, type UserStatusVariant }
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import Icon from '../overview/shared/Icon';
 
-/** Props for {@link UserIdentity}. */
-interface UserIdentityProps {
+/** Props for {@link UserIdentityCard}. */
+interface UserIdentityCardProps {
   /** The user whose identity to render. */
   user: OktaUser;
   /** Okta origin used to build the "Open in Okta" admin link; the link hides when absent. */
@@ -56,7 +56,7 @@ const getStatusBadgeClass = (status: string): string => {
  * Renders the compact user identity header (avatar, name, status, contact line,
  * optional id + Okta link). Presentational; copy-to-clipboard is self-contained.
  */
-const UserIdentity: React.FC<UserIdentityProps> = ({
+const UserIdentityCard: React.FC<UserIdentityCardProps> = ({
   user,
   oktaOrigin,
   showOktaLink = true,
@@ -139,4 +139,4 @@ const UserIdentity: React.FC<UserIdentityProps> = ({
   );
 };
 
-export default UserIdentity;
+export default UserIdentityCard;

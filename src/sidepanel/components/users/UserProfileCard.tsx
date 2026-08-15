@@ -2,7 +2,7 @@
  * @module sidepanel/components/users/UserProfileCard
  * @description Presentational card summarizing a single Okta user's profile.
  *
- * Renders the compact {@link UserIdentity} header followed by tabbed detail
+ * Renders the compact {@link UserIdentityCard} header followed by tabbed detail
  * sections (Account / Organization / Contact / Preferences / Custom) plus an
  * **All** tab — a flat, searchable list of every profile attribute. Sections with
  * no data self-hide. Used by the Users tab.
@@ -11,7 +11,7 @@ import React, { useMemo, useState } from 'react';
 import type { OktaUser } from '../../../shared/types';
 import { Tabs, Input, type TabItem } from '../shared';
 import Icon from '../overview/shared/Icon';
-import UserIdentity from './UserIdentity';
+import UserIdentityCard from './UserIdentityCard';
 import {
   getAccountFields,
   getOrgFields,
@@ -113,7 +113,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
 
   return (
     <div className="space-y-4">
-      <UserIdentity
+      <UserIdentityCard
         user={user}
         oktaOrigin={oktaOrigin}
         showOktaLink={showOktaLink}

@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import Breadcrumbs from './Breadcrumbs';
 import Button from './Button';
+import EntityIdentity from './EntityIdentity';
 import PageHeader from './PageHeader';
 
 /**
@@ -18,8 +19,9 @@ const meta = {
       description: {
         component:
           'Top-of-view header bar rendered at the top of a tab/view — title with optional subtitle, status badge, leading slot, breadcrumb trail, and trailing actions.\n\n' +
-          'The optional badge uses PageHeader’s own local palette (`primary | success | warning | error | neutral`), which still keys on `error`; this is distinct from the canonical `StatusType` vocabulary (which uses `danger`, ADR-0002). Actions are right-aligned.\n\n' +
+          'The optional badge renders through the shared `Badge` primitive, so it speaks the canonical vocabulary — `danger`, never `error` (ADR-0002). Actions are right-aligned.\n\n' +
           'The leading-slot props (`onBack`, `leading`, `breadcrumbs`) are additive and optional — omitting them renders the original layout unchanged. They exist so a tab driven by `useViewStack` keeps **one** header mounted whose contents swap in place as views are pushed and popped, rather than each view rendering its own header.\n\n' +
+          '`identity` extends that downward: an expanding region describing the entity you are browsing, so a detail view no longer opens with a card repeating the title. Changing `identityKey` crossfades it; the `<h1>` and its badge never do.\n\n' +
           '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs)',
       },
     },
@@ -42,6 +44,14 @@ const meta = {
     },
     breadcrumbs: {
       description: 'Optional breadcrumb trail rendered above the title (e.g. a `Breadcrumbs`).',
+    },
+    identity: {
+      description:
+        'Optional expanding region below the title describing the browsed entity — normally an `EntityIdentity`.',
+    },
+    identityKey: {
+      description:
+        'Stable key for the described entity. Changing it crossfades the region; leaving it alone swaps content silently.',
     },
   },
   args: {
@@ -87,11 +97,11 @@ export const WithBadgeWarning: Story = {
   },
 };
 
-/** With an error badge. */
-export const WithBadgeError: Story = {
+/** With a danger badge. */
+export const WithBadgeDanger: Story = {
   args: {
     title: 'Groups',
-    badge: { text: 'Error', variant: 'error' },
+    badge: { text: 'Locked out', variant: 'danger' },
   },
 };
 
@@ -137,6 +147,66 @@ export const WithBreadcrumbs: Story = {
       />
     ),
     actions: <Button icon="external-link">Open in Okta</Button>,
+  },
+};
+
+/**
+ * The drilled-in shape this region exists for: the header describes the group, so the
+ * detail body below it opens on real content instead of an identity card repeating the
+ * title.
+ */
+export const WithIdentity: Story = {
+  args: {
+    title: 'Engineering',
+    badge: { text: 'Okta group', variant: 'primary' },
+    onBack: fn(),
+    backLabel: 'Back to groups',
+    identityKey: '00gFAKE1a2b3c4d5e6',
+    identity: (
+      <EntityIdentity
+        lines={[{ kind: 'metric', icon: 'users', value: '1,284', label: 'members' }]}
+      />
+    ),
+    actions: <Button icon="external-link">Open in Okta</Button>,
+  },
+};
+
+/**
+ * The same header at the narrowest supported width, where the title, the badge and the
+ * action have to share one line before the region even starts (ADR-0014).
+ */
+export const WithIdentityNarrow: Story = {
+  args: WithIdentity.args,
+  parameters: { viewport: { value: 'sidepanelCompact' } },
+};
+
+/**
+ * A user rung, with the status badge on the title row and the membership count in the
+ * region. Two entity kinds, one component — the difference lives entirely in the
+ * descriptor each tab builds.
+ */
+export const WithIdentityUser: Story = {
+  args: {
+    title: 'Priya Raman',
+    badge: { text: 'ACTIVE', variant: 'success' },
+    onBack: fn(),
+    backLabel: 'Back to search',
+    identityKey: '00uFAKE9z8y7x6w5v',
+    identity: (
+      <EntityIdentity lines={[{ kind: 'metric', icon: 'users', value: '42', label: 'groups' }]} />
+    ),
+  },
+};
+
+/**
+ * The region closed. A list rung passes no identity, so the header renders exactly the
+ * markup it did before the region existed.
+ */
+export const WithoutIdentity: Story = {
+  args: {
+    title: 'Groups',
+    subtitle: 'Browse, search, and manage groups',
+    badge: { text: '1,284 Cached', variant: 'success' },
   },
 };
 

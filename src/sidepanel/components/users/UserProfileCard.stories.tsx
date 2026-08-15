@@ -63,7 +63,7 @@ const meta = {
       description: {
         component:
           "Presentational card summarizing a single Okta user's profile.\n\n" +
-          'Renders the compact UserIdentity header, an optional `afterCard` slot (e.g. lifecycle-action controls), and tabbed detail sections (Account / Org / Contact / Prefs / Custom) plus an **All** tab — a flat, searchable list of every profile attribute. Sections with no data self-hide, so a minimal user collapses to just Account + All. Used by the Users tab.',
+          'Renders the compact UserIdentityCard header, an optional `afterCard` slot (e.g. lifecycle-action controls), and tabbed detail sections (Account / Org / Contact / Prefs / Custom) plus an **All** tab — a flat, searchable list of every profile attribute. Sections with no data self-hide, so a minimal user collapses to just Account + All. Used by the Users tab.',
       },
     },
   },

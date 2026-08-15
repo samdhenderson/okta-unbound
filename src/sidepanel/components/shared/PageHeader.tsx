@@ -1,7 +1,7 @@
 /**
  * @module sidepanel/components/shared/PageHeader
- * @description Top-of-view header bar — title with optional subtitle, status badge, leading back
- * affordance, breadcrumb trail, and trailing actions.
+ * @description Top-of-view header bar — title with optional subtitle, status badge, leading
+ * back affordance, breadcrumb trail, trailing actions, and an expanding identity region.
  *
  * All leading-slot props (`onBack`, `leading`, `breadcrumbs`) are additive and
  * optional: a header rendered without them is byte-identical to the pre-existing
@@ -9,10 +9,44 @@
  * {@link sidepanel/hooks/useViewStack.useViewStack} can keep **one** header mounted
  * and swap its contents in place as views are pushed and popped, rather than each
  * view rendering its own header (ADR-0008's stable-region precedent).
+ *
+ * ## The identity region
+ *
+ * {@link PageHeaderProps.identity} extends that idea downward: the header is the single
+ * place the entity you are browsing is described, so a detail view no longer opens with a
+ * card repeating the name and type already in the title. The region grows and shrinks with
+ * its content and crossfades when {@link PageHeaderProps.identityKey} changes.
+ *
+ * This component owns **chrome only** (ADR-0029) — the expansion, the transition, the
+ * layout. It never learns what a group or a user is: tabs pass an opaque node, normally an
+ * {@link sidepanel/components/shared/EntityIdentity.EntityIdentity} built from a
+ * per-entity descriptor.
+ *
+ * ## What is deliberately outside the transition
+ *
+ * The `<h1>`, its badge and the breadcrumbs update **synchronously**; only the identity
+ * region crossfades. Two reasons, one visual and one structural: the title is the anchor
+ * the whole panel is read against, so it is the last thing that should flicker; and holding
+ * an outgoing headline on screen while the incoming one mounts would put two `<h1>`s in the
+ * tree mid-transition, which `GroupsTab`/`UsersTab` navigation tests assert can never
+ * happen.
  */
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Icon from '../overview/shared/Icon';
 import IconButton from './IconButton';
+import Badge, { type BadgeVariant } from './Badge';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+
+/**
+ * How long the outgoing identity is held before the incoming one replaces it.
+ *
+ * Hand-kept mirror of `--dur-move` (`docs/design-system.md` — same arrangement as
+ * `Modal`'s `EXIT_MS` and `useCountUp`'s `COUNT_UP_MS`; there is no lint gate). The region
+ * collapses to `0fr` over that duration while the old content fades over the shorter
+ * `--dur-quick`, so the swap lands exactly as the region reaches zero height and the new
+ * content expands from nothing rather than jumping.
+ */
+const SWAP_MS = 220;
 
 interface PageHeaderProps {
   /** Page/section heading. */
@@ -43,22 +77,26 @@ interface PageHeaderProps {
   /** Optional coloured badge next to the title. Defaults to `neutral`. */
   badge?: {
     text: string;
-    /**
-     * Badge colour. Note: this is PageHeader's own local badge palette and still
-     * uses `error` as a key; it is distinct from the canonical {@link StatusType}
-     * vocabulary (which uses `danger`, per ADR-0002).
-     */
-    variant?: 'primary' | 'success' | 'warning' | 'error' | 'neutral';
+    /** Treatment from the canonical shared {@link BadgeVariant} vocabulary. */
+    variant?: BadgeVariant;
   };
+  /**
+   * Optional identity region rendered below the title, expanding and collapsing with its
+   * own content. Pass `undefined` on a rung with no entity (a list, a search) and the
+   * region closes to nothing.
+   */
+  identity?: React.ReactNode;
+  /**
+   * Stable key for whatever {@link PageHeaderProps.identity} describes — normally the
+   * entity's Okta id.
+   *
+   * A **changed** key means a different entity and plays the crossfade. An **unchanged**
+   * key means the same entity's data refreshed (a member count arriving, a status
+   * changing) and swaps silently, because animating a background refresh would report
+   * navigation that did not happen.
+   */
+  identityKey?: string;
 }
-
-const badgeVariants = {
-  primary: 'bg-primary-light text-primary-text border-primary-highlight',
-  success: 'bg-success-light text-success-text border-success-light',
-  warning: 'bg-warning-light text-warning-text border-warning-light',
-  error: 'bg-danger-light text-danger-text border-danger-light',
-  neutral: 'bg-neutral-50 text-neutral-600 border-neutral-200',
-};
 
 /**
  * Standardized header bar rendered at the top of a tab/view.
@@ -75,8 +113,12 @@ const badgeVariants = {
  *
  * @example Drilled-in view of a {@link sidepanel/hooks/useViewStack.useViewStack} stack
  * ```tsx
+ * const identity = detailGroup ? groupIdentity(detailGroup) : undefined;
  * <PageHeader
- *   title={nav.currentEntry?.name ?? 'Groups'}
+ *   title={identity?.name ?? 'Groups'}
+ *   badge={identity?.badge}
+ *   identityKey={identity?.key}
+ *   identity={identity && <EntityIdentity lines={identity.lines} />}
  *   onBack={nav.isRoot ? undefined : nav.pop}
  *   breadcrumbs={nav.isRoot ? undefined : <Breadcrumbs items={nav.trail} />}
  * />
@@ -91,7 +133,52 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   backLabel = 'Back',
   leading,
   breadcrumbs,
+  identity,
+  identityKey,
 }) => {
+  const reduced = useReducedMotion();
+
+  // The outgoing identity has to survive its own fade, so it is held in state while the
+  // incoming one waits. `latest` keeps the current node reachable from the swap timer
+  // without making it an effect dependency — `identity` is a fresh element on every
+  // render, so depending on it would re-arm the timer continuously. Written from an
+  // effect rather than during render (refs are commit-phase state), which is early
+  // enough: the timer cannot fire before the commit that armed it.
+  const latest = useRef(identity);
+  useEffect(() => {
+    latest.current = identity;
+  });
+
+  const [held, setHeld] = useState<{ key: string | undefined; node: React.ReactNode }>({
+    key: identityKey,
+    node: identity,
+  });
+  const [fading, setFading] = useState(false);
+
+  // Adjusting state during render on a prop change, the same pattern `Modal` uses for its
+  // exit hold: React re-renders immediately without committing the intermediate frame.
+  if (held.key !== identityKey && !fading) {
+    setHeld({ key: identityKey, node: held.node });
+    setFading(true);
+  }
+
+  useEffect(() => {
+    if (!fading) return;
+    // `held.key` was already advanced to the incoming key when the fade started, so only
+    // the node needs catching up. If the key changed *again* mid-fade, the render-time
+    // guard sees the mismatch on the next pass and chains a second fade.
+    const finish = () => {
+      setHeld((prev) => ({ key: prev.key, node: latest.current }));
+      setFading(false);
+    };
+    if (reduced) {
+      finish();
+      return;
+    }
+    const timer = window.setTimeout(finish, SWAP_MS);
+    return () => window.clearTimeout(timer);
+  }, [fading, reduced]);
+
   const leadingNode =
     leading ??
     (onBack ? (
@@ -100,10 +187,20 @@ const PageHeader: React.FC<PageHeaderProps> = ({
       </IconButton>
     ) : null);
 
+  // While fading, the frozen outgoing node stays on screen; otherwise the live one does, so
+  // a same-entity data refresh is reflected without waiting on any timer.
+  const shownIdentity = fading ? held.node : identity;
+  const regionOpen = Boolean(shownIdentity) && !fading;
+
+  // A header that has never been given an identity renders exactly the markup it did
+  // before this region existed — the five call sites that do not use it are untouched.
+  const hasRegion = Boolean(identity) || fading;
+  const align = hasRegion ? 'items-start' : 'items-center';
+
   return (
     <div className="bg-white border-b border-neutral-200">
-      <div className="px-5 py-4 flex items-center justify-between gap-4">
-        <div className="flex-1 min-w-0 flex items-center gap-2">
+      <div className={`px-5 py-4 flex ${align} justify-between gap-4`}>
+        <div className={`flex-1 min-w-0 flex ${align} gap-2`}>
           {leadingNode && <div className="shrink-0">{leadingNode}</div>}
           <div className="flex-1 min-w-0">
             {breadcrumbs && <div className="mb-1">{breadcrumbs}</div>}
@@ -114,15 +211,29 @@ const PageHeader: React.FC<PageHeaderProps> = ({
               >
                 {title}
               </h1>
-              {badge && (
-                <span
-                  className={`px-2 py-0.5 rounded-md text-xs font-medium border ${badgeVariants[badge.variant || 'neutral']}`}
-                >
-                  {badge.text}
-                </span>
-              )}
+              {badge && <Badge variant={badge.variant}>{badge.text}</Badge>}
             </div>
             {subtitle && <p className="mt-0.5 text-sm text-neutral-600">{subtitle}</p>}
+
+            {/*
+              Inside the title column rather than below the whole row, so the lines align
+              with the title instead of with the back button. `.disclose` needs exactly one
+              child carrying the clipping; the padded content is that child's child, which
+              is also why its `mt-2` cannot add height while the region is closed.
+            */}
+            {hasRegion && (
+              <div className="disclose" data-open={regionOpen ? 'true' : 'false'}>
+                <div>
+                  <div
+                    className={`mt-2 transition-opacity duration-(--dur-quick) ${
+                      fading ? 'opacity-0 ease-exit' : 'opacity-100 ease-entrance'
+                    }`}
+                  >
+                    {shownIdentity}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
         {actions && <div className="shrink-0">{actions}</div>}
