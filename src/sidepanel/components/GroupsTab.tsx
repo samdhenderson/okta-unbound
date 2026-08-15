@@ -313,7 +313,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
         breadcrumbs={detailGroup ? <Breadcrumbs items={nav.trail} /> : undefined}
         sticky={isActive}
         identityKey={identity?.key}
-        identity={identity ? <EntityIdentity lines={identity.lines} /> : undefined}
+        identity={identity ? <EntityIdentity rows={identity.rows} /> : undefined}
         badge={
           identity
             ? identity.badge

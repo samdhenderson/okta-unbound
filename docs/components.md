@@ -15,7 +15,7 @@ Feature components live under `components/{groups,users,overview}/`.
 2. **Import from the barrel** `components/shared` — not deep paths. The barrel
    exports every shared component (see below).
 3. **No raw hex / no ad-hoc spacing** — see [design-system.md](./design-system.md).
-4. **Icons come from the `Icon` registry** (`overview/shared/Icon.tsx`, 30 typed
+4. **Icons come from the `Icon` registry** (`overview/shared/Icon.tsx`, 31 typed
    icons, `currentColor`). Don't inline `<svg>` in feature code.
 
 ## The variant/size convention
@@ -44,10 +44,15 @@ info`) — never `error`.
 ## Catalog
 
 `shared/`: `Button`, `IconButton`, `StretchedButton`, `FilterPill`, `SortPill`,
-`CopyButton`, `OpenInOktaLink`, `Modal`, `Input`, `Checkbox`, `Select`, `Textarea`,
-`PageHeader`, `EntityIdentity`, `Breadcrumbs`, `Tabs`, `CollapsibleSection`,
+`CopyButton`, `CopyableId`, `OpenInOktaLink`, `Modal`, `Input`, `Checkbox`, `Select`,
+`Textarea`, `PageHeader`, `EntityIdentity`, `Breadcrumbs`, `Tabs`, `CollapsibleSection`,
 `AlertMessage`, `EmptyState`, `LoadingSpinner`, `Skeleton`, `ListRow`,
 `ScrollableList`, `SearchDropdown`, `SelectionChips`.
+
+There are **two** copy primitives and they are not interchangeable. `CopyButton` is a
+labelled `Button` for copying a _body_ of text (a list of emails, a CSV). `CopyableId` is
+a truncating `<code>` plus a ghost icon button, for a single identifier sitting in a line
+of metadata — never hand-roll that pair again.
 
 `ListRow` is the **row chrome** primitive (ADR-0029): border, radius, hover,
 `density` (`compact` | `comfortable`), `state` (`default` | `selected` |
@@ -109,15 +114,25 @@ const identity = detailGroup ? groupIdentity(detailGroup) : undefined;
   title={identity?.name ?? 'Groups'}
   badge={identity?.badge ?? listBadge}
   identityKey={identity?.key}
-  identity={identity && <EntityIdentity lines={identity.lines} />}
+  identity={identity && <EntityIdentity rows={identity.rows} />}
   sticky={isActive}
 />;
 ```
 
+`badge` renders in the trailing cluster, immediately left of `actions` — at 360px a
+badge beside the `<h1>` costs the title two lines of wrapping.
+
+A descriptor's `rows` group facts by category (identity, counts, timestamps); facts
+inside a row wrap together and an empty row is dropped. **A builder omits a fact it
+cannot answer rather than emitting a zero** — a group's rule counts are absent until
+the rules payload loads, and "0 references" would state as fact something the panel
+never asked. `memberCount` is the exception, because zero and unknown are
+distinguishable at its source.
+
 Adding an entity kind is one new builder beside that entity (`groupIdentity.ts`,
 `userIdentity.ts`) plus a unit test, with no edit to anything shared. `PageHeader`
 still describes the _browsed_ entity and `ContextBar` still describes the _live Okta
-tab_ — the two must not converge.
+tab_ — the two must not converge, and on a drilled-in view their ids routinely differ.
 
 `overview/shared/`: `Icon`, `StatCard`.
 

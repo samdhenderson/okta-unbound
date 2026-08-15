@@ -3,17 +3,23 @@
  * @description Turns a group into the header's identity descriptor.
  *
  * The one place a group's header vocabulary is decided — its type label, its badge colour,
- * and how its member count reads. Replaces two divergent copies of that decision: the
- * `typeBadges` map in the former `GroupIdentitySection` and the `groupTypeBadgeVariant` /
- * `groupTypeBadgeText` pair in `GroupsTab`, which coloured the same three types through two
- * separate palettes.
+ * how its member count reads, and which of Okta's facts are known well enough to show.
+ * Replaces two divergent copies of that decision: the `typeBadges` map in the former
+ * `GroupIdentitySection` and the `groupTypeBadgeVariant` / `groupTypeBadgeText` pair in
+ * `GroupsTab`, which coloured the same three types through two separate palettes.
  *
  * Pure by design: a `GroupSummary` in, plain data out, no JSX and no `oktaOrigin`. That is
- * what lets the badge choice and the pluralisation be unit-tested without rendering.
+ * what lets the badge choice, the pluralisation and the omission rules be unit-tested
+ * without rendering.
  */
 import type { GroupSummary, GroupType } from '../../../shared/types';
-import type { EntityIdentityDescriptor } from '../shared/identityDescriptor';
+import type {
+  EntityIdentityDescriptor,
+  IdentityFact,
+  IdentityRow,
+} from '../shared/identityDescriptor';
 import type { BadgeVariant } from '../shared/Badge';
+import { formatDateShort, getRelativeTime } from '../../../shared/utils/dateFormat';
 
 /**
  * Badge label and treatment per Okta group type.
@@ -28,8 +34,28 @@ const TYPE_BADGES: Record<GroupType, { text: string; variant: BadgeVariant }> = 
   BUILT_IN: { text: 'Built-in', variant: 'neutral' },
 };
 
+/** A counted fact, with its label pluralised to match. */
+const metric = (
+  icon: Extract<IdentityFact, { kind: 'metric' }>['icon'],
+  n: number,
+  singular: string,
+  title?: string,
+): Extract<IdentityFact, { kind: 'metric' }> => ({
+  kind: 'metric',
+  icon,
+  value: n.toLocaleString(),
+  label: n === 1 ? singular : `${singular}s`,
+  title,
+});
+
 /**
  * Build the header identity descriptor for a group.
+ *
+ * Rows are identity, then counts, then timestamps. A count Okta has not reported yet is
+ * **omitted rather than shown as zero** — `usedInRuleCount` is `undefined` until the rules
+ * payload loads, and `ruleCount` reads `0` in that same window, so neither is rendered
+ * until it is positive. That is deliberately asymmetric with `memberCount`, which the list
+ * payload always carries and where `0 members` is a real answer.
  *
  * @param group - The group being browsed.
  * @returns The descriptor the Groups tab spreads onto `PageHeader`.
@@ -37,10 +63,7 @@ const TYPE_BADGES: Record<GroupType, { text: string; variant: BadgeVariant }> = 
  * @example
  * ```ts
  * const identity = groupIdentity(group);
- * // → { key: '00gFAKE…', name: 'Engineering',
- * //     badge: { text: 'Okta group', variant: 'primary' },
- * //     lines: [{ kind: 'metric', icon: 'users', value: '1,284', label: 'members' }],
- * //     link: { entityType: 'group', entityId: '00gFAKE…' } }
+ * // rows → [[id], [1,284 members · 2 rules], [Created 12 Mar 2021 · Updated 4 days ago]]
  * ```
  */
 export function groupIdentity(group: GroupSummary): EntityIdentityDescriptor {
@@ -49,18 +72,44 @@ export function groupIdentity(group: GroupSummary): EntityIdentityDescriptor {
   // before this map knows about it.
   const badge = TYPE_BADGES[group.type] ?? TYPE_BADGES.BUILT_IN;
 
+  const counts: IdentityRow = [metric('users', group.memberCount, 'member')];
+  if (group.ruleCount > 0) {
+    counts.push(metric('bolt', group.ruleCount, 'rule', 'Rules that assign members here'));
+  }
+  if (group.usedInRuleCount !== undefined && group.usedInRuleCount > 0) {
+    counts.push(
+      metric(
+        'link',
+        group.usedInRuleCount,
+        'reference',
+        'Rules whose condition mentions this group',
+      ),
+    );
+  }
+
+  const timestamps: IdentityRow = [];
+  if (group.created) {
+    timestamps.push({
+      kind: 'text',
+      icon: 'clock',
+      text: `Created ${formatDateShort(group.created)}`,
+    });
+  }
+  if (group.lastUpdated) {
+    // Recency answers "has anyone touched this lately?", which is the question an admin
+    // actually asks here; the exact timestamp lives in the About section below.
+    const relative = getRelativeTime(group.lastUpdated.toISOString());
+    timestamps.push({
+      kind: 'text',
+      text: `Updated ${relative ?? formatDateShort(group.lastUpdated)}`,
+    });
+  }
+
   return {
     key: group.id,
     name: group.name,
     badge,
-    lines: [
-      {
-        kind: 'metric',
-        icon: 'users',
-        value: group.memberCount.toLocaleString(),
-        label: group.memberCount === 1 ? 'member' : 'members',
-      },
-    ],
+    rows: [[{ kind: 'id', value: group.id, copyLabel: 'Copy group id' }], counts, timestamps],
     link: { entityType: 'group', entityId: group.id },
   };
 }

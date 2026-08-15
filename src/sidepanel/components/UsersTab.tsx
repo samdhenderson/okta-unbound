@@ -168,7 +168,7 @@ const UsersTab: React.FC<UsersTabProps> = ({
         breadcrumbs={nav.isRoot ? undefined : <Breadcrumbs items={nav.trail} />}
         sticky={isActive}
         identityKey={identity?.key}
-        identity={identity ? <EntityIdentity lines={identity.lines} /> : undefined}
+        identity={identity ? <EntityIdentity rows={identity.rows} /> : undefined}
         badge={
           // On the detail rung the badge becomes the user's Okta status and the group
           // count moves into the region below it; elsewhere the count stays the badge.

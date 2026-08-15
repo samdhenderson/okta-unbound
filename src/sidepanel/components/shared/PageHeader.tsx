@@ -55,7 +55,11 @@ interface PageHeaderProps {
   title: string;
   /** Optional secondary line under the title. */
   subtitle?: string;
-  /** Optional trailing action node(s), right-aligned (e.g. a {@link Button}). */
+  /**
+   * Optional trailing action node(s), right-aligned (e.g. a {@link Button} or an
+   * {@link OpenInOktaLink}). Shares the trailing cluster with
+   * {@link PageHeaderProps.badge}, which sits to their left.
+   */
   actions?: React.ReactNode;
   /**
    * Optional back handler. When set, a leading chevron-left {@link IconButton} is
@@ -76,7 +80,10 @@ interface PageHeaderProps {
    * {@link Breadcrumbs} fed from a view stack's `trail`.
    */
   breadcrumbs?: React.ReactNode;
-  /** Optional coloured badge next to the title. Defaults to `neutral`. */
+  /**
+   * Optional coloured mark rendered in the trailing cluster, immediately before
+   * {@link PageHeaderProps.actions}. Defaults to `neutral`.
+   */
   badge?: {
     text: string;
     /** Treatment from the canonical shared {@link BadgeVariant} vocabulary. */
@@ -240,15 +247,12 @@ const PageHeader: React.FC<PageHeaderProps> = ({
             {leadingNode && <div className="shrink-0">{leadingNode}</div>}
             <div className="flex-1 min-w-0">
               {breadcrumbs && <div className="mb-1">{breadcrumbs}</div>}
-              <div className="flex items-center gap-2">
-                <h1
-                  className="text-lg font-semibold text-neutral-900"
-                  style={{ fontFamily: 'var(--font-heading)' }}
-                >
-                  {title}
-                </h1>
-                {badge && <Badge variant={badge.variant}>{badge.text}</Badge>}
-              </div>
+              <h1
+                className="text-lg font-semibold text-neutral-900"
+                style={{ fontFamily: 'var(--font-heading)' }}
+              >
+                {title}
+              </h1>
               {subtitle && <p className="mt-0.5 text-sm text-neutral-600">{subtitle}</p>}
 
               {/*
@@ -272,7 +276,18 @@ const PageHeader: React.FC<PageHeaderProps> = ({
               )}
             </div>
           </div>
-          {actions && <div className="shrink-0">{actions}</div>}
+          {/*
+            The badge is a trailing mark, not part of the title: at 360px a badge beside
+            the `<h1>` pushes a long entity name into a second and third line before the
+            region below it has said anything. Here it sits with the actions, immediately
+            left of the Okta link, and the title gets the width.
+          */}
+          {(badge || actions) && (
+            <div className="shrink-0 flex items-center gap-2">
+              {badge && <Badge variant={badge.variant}>{badge.text}</Badge>}
+              {actions}
+            </div>
+          )}
         </div>
       </div>
     </>

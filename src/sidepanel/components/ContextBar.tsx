@@ -11,9 +11,8 @@
  * switch. The heavy per-entity identity (avatar, status) lives in the content below.
  */
 import React from 'react';
-import { IconButton } from './shared';
+import { CopyableId, IconButton } from './shared';
 import Icon from './overview/shared/Icon';
-import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import type { ConnectionStatus } from '../hooks/useOktaTabContext';
 import type { PageType } from '../hooks/useOktaPageContext';
 
@@ -101,13 +100,6 @@ const ContextBar: React.FC<ContextBarProps> = ({
   onRefresh,
   onReconnect,
 }) => {
-  const { copied: idCopied, copy: copyId } = useCopyToClipboard();
-
-  const handleCopyId = () => {
-    if (!entityId) return;
-    copyId(entityId);
-  };
-
   const displayName = error
     ? 'Not connected'
     : isLoading
@@ -172,21 +164,11 @@ const ContextBar: React.FC<ContextBarProps> = ({
               </button>
             )}
             {entityId && !error && (
-              <div className="flex items-center gap-1 mt-0.5">
-                <code className="text-[11px] font-mono text-neutral-500 truncate">{entityId}</code>
-                <IconButton
-                  label={idCopied ? 'Copied!' : 'Copy id'}
-                  onClick={handleCopyId}
-                  variant="ghost"
-                  size="sm"
-                >
-                  <Icon
-                    type={idCopied ? 'clipboard-check' : 'clipboard'}
-                    size="sm"
-                    className={`w-3.5 h-3.5 ${idCopied ? 'text-success-text' : ''}`}
-                  />
-                </IconButton>
-              </div>
+              <CopyableId
+                value={entityId}
+                label={`Copy ${PAGE_LABEL[pageType].toLowerCase() || 'entity'} id`}
+                className="mt-0.5"
+              />
             )}
           </div>
         </div>

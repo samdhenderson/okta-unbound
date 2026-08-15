@@ -164,7 +164,17 @@ export const WithIdentity: Story = {
     identityKey: '00gFAKE1a2b3c4d5e6',
     identity: (
       <EntityIdentity
-        lines={[{ kind: 'metric', icon: 'users', value: '1,284', label: 'members' }]}
+        rows={[
+          [{ kind: 'id', value: '00gFAKE1a2b3c4d5e6', copyLabel: 'Copy group id' }],
+          [
+            { kind: 'metric', icon: 'users', value: '1,284', label: 'members' },
+            { kind: 'metric', icon: 'bolt', value: '2', label: 'rules' },
+          ],
+          [
+            { kind: 'text', icon: 'clock', text: 'Created 12 Mar 2021' },
+            { kind: 'text', text: 'Updated 4 days ago' },
+          ],
+        ]}
       />
     ),
     actions: <Button icon="external-link">Open in Okta</Button>,
@@ -172,8 +182,8 @@ export const WithIdentity: Story = {
 };
 
 /**
- * The same header at the narrowest supported width, where the title, the badge and the
- * action have to share one line before the region even starts (ADR-0014).
+ * The same header at the narrowest supported width, where the badge and the action share
+ * the trailing cluster and the facts wrap within their rows (ADR-0014).
  */
 export const WithIdentityNarrow: Story = {
   args: WithIdentity.args,
@@ -181,8 +191,7 @@ export const WithIdentityNarrow: Story = {
 };
 
 /**
- * A user rung, with the status badge on the title row and the membership count in the
- * region. Two entity kinds, one component — the difference lives entirely in the
+ * A user rung. Two entity kinds, one component — the difference lives entirely in the
  * descriptor each tab builds.
  */
 export const WithIdentityUser: Story = {
@@ -193,8 +202,15 @@ export const WithIdentityUser: Story = {
     backLabel: 'Back to search',
     identityKey: '00uFAKE9z8y7x6w5v',
     identity: (
-      <EntityIdentity lines={[{ kind: 'metric', icon: 'users', value: '42', label: 'groups' }]} />
+      <EntityIdentity
+        rows={[
+          [{ kind: 'id', value: '00uFAKE9z8y7x6w5v', copyLabel: 'Copy user id' }],
+          [{ kind: 'metric', icon: 'users', value: '42', label: 'groups' }],
+          [{ kind: 'text', icon: 'clock', text: 'Last login 2 days ago' }],
+        ]}
+      />
     ),
+    actions: <Button icon="external-link">Open in Okta</Button>,
   },
 };
 

@@ -77,6 +77,27 @@ unchanged for the five call sites not migrating, while still leaving the builder
 single place those decisions are made — and it is what keeps the name, the badge and the
 Okta link on screen when the region is collapsed.
 
+The badge renders in the **trailing cluster**, immediately left of `actions`, not beside
+the `<h1>`. At 360px a badge next to the title pushes a long entity name onto a second and
+third line before the region below it has said anything; moved right, the title gets the
+width and the two trailing marks read as one group. This applies to every header, not only
+the migrated ones.
+
+### 2a. Absent is not zero
+
+A builder **omits** a fact it cannot answer rather than emitting a zero. Okta reports a
+group's `usedInRuleCount` only once the rules payload has loaded — and `ruleCount` reads
+`0` in that same window — so neither renders until it is positive. A user's
+`managedBy.rules` is absent until the membership analysis has run. An empty row is dropped
+entirely, so the region shrinks to what is actually known instead of asserting "0
+references" about a question the panel never asked.
+
+`memberCount` is the deliberate asymmetry: the list payload always carries it, so
+`0 members` is a real answer. The rule of thumb is whether zero and unknown are
+distinguishable at that field's source. `lastLogin` is the same test read the other way —
+`null` means never signed in and is stated, `undefined` means the payload did not carry it
+and is omitted.
+
 ### 3. The sticky stack replaces the magic offset
 
 Each band measures itself and publishes its height as a CSS custom property; the band below
@@ -132,6 +153,17 @@ navigation that did not happen.
   the app.
 - `PageHeader`'s badge renders through shared `Badge`, retiring the last palette keyed on
   `error` (ADR-0002). No call site passed `error`.
+- **`shared/CopyableId`** is the new home for the inline id recipe — a truncating `<code>`
+  beside a ghost `IconButton` that flips to a confirmation. It was hand-rolled identically
+  in `ContextBar` and the user identity card, both of which also pinned the glyph to
+  `w-3.5 h-3.5` and the text to `text-[11px]`, arbitrary values the identifier contract and
+  `Icon`'s own scale already answer. Both now use it, and so does the header's `id` fact.
+  It is distinct from `CopyButton`, which is a labelled button for copying a _body_ of text.
+- The header carries the entity id even though `ContextBar` also shows one. They are not
+  the same id: the context bar's belongs to the live Okta tab, the header's to what you are
+  browsing, and on a drilled-in view those routinely differ.
+- `Icon` gains `clock` for the timestamp facts. Identity facts use registry glyphs, never
+  emoji.
 - Three of the four badge palettes are gone; the fourth (`UserIdentityCard`'s) goes when
   the Overview tab gains a header.
 - `SWAP_MS` in `PageHeader` is a hand-kept mirror of `--dur-move`, in the same arrangement

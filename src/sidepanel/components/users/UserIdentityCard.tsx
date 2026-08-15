@@ -15,9 +15,7 @@
  */
 import React from 'react';
 import type { OktaUser } from '../../../shared/types';
-import { IconButton, OpenInOktaLink, userStatusVariant, type UserStatusVariant } from '../shared';
-import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
-import Icon from '../overview/shared/Icon';
+import { CopyableId, OpenInOktaLink, userStatusVariant, type UserStatusVariant } from '../shared';
 
 /** Props for {@link UserIdentityCard}. */
 interface UserIdentityCardProps {
@@ -59,12 +57,6 @@ const UserIdentityCard: React.FC<UserIdentityCardProps> = ({
   showOktaLink = true,
   showId = true,
 }) => {
-  const { copied: idCopied, copy: copyId } = useCopyToClipboard();
-
-  const handleCopyId = () => {
-    copyId(user.id);
-  };
-
   const initials =
     `${user.profile.firstName?.[0] ?? '?'}${user.profile.lastName?.[0] ?? ''}`.toUpperCase();
 
@@ -97,24 +89,7 @@ const UserIdentityCard: React.FC<UserIdentityCardProps> = ({
 
           <div className="text-xs text-neutral-700 mt-0.5 truncate">{user.profile.email}</div>
 
-          {showId && (
-            <div className="flex items-center gap-1 mt-1">
-              <code className="text-[11px] font-mono text-neutral-500 truncate">{user.id}</code>
-              <IconButton
-                label={idCopied ? 'Copied!' : 'Copy user id'}
-                onClick={handleCopyId}
-                variant="ghost"
-                size="sm"
-                className="shrink-0"
-              >
-                <Icon
-                  type={idCopied ? 'clipboard-check' : 'clipboard'}
-                  size="sm"
-                  className={`w-3.5 h-3.5 ${idCopied ? 'text-success-text' : ''}`}
-                />
-              </IconButton>
-            </div>
-          )}
+          {showId && <CopyableId value={user.id} label="Copy user id" className="mt-1" />}
 
           {user.profile.genderPronouns && (
             <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 text-[11px] font-medium rounded-md border border-purple-200 mt-1.5">
