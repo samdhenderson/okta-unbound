@@ -4,8 +4,12 @@
  *
  * Purpose-built for the one question an admin drills in with — *where do this
  * group's members come from, and what depends on it?* — so the sections are
- * ordered by how often each settles a real question: identity, membership source,
- * rules, app push, metadata.
+ * ordered by how often each settles a real question: membership source, members,
+ * access, rules, app push, and last the group's own reference facts.
+ *
+ * It opens on membership source rather than on an identity card because the tab's
+ * `PageHeader` now describes the group itself (ADR-0032) — name, type and member count
+ * live there, one scroll-pinned line above this view.
  *
  * Rendered as a **sibling** of the (hidden, still-mounted) groups list rather than
  * in place of it, so the list's filters, selection, loaded window and per-row
@@ -29,7 +33,6 @@
  * than fetching a second time — see that hook's module doc.
  */
 import React from 'react';
-import GroupIdentitySection from './GroupIdentitySection';
 import GroupMembershipSourceSection from './GroupMembershipSourceSection';
 import GroupMembersSection from './GroupMembersSection';
 import GroupAccessSection from './GroupAccessSection';
@@ -50,8 +53,6 @@ interface GroupDetailViewProps {
   group: GroupSummary;
   /** Connected Okta tab id; reads are disabled and the gate button greys out when null. */
   targetTabId: number | null;
-  /** Okta org origin, enabling the Admin Console deep link. */
-  oktaOrigin?: string;
   /** Deep-links a rule in the Rules tab (from either rule list, or a contribution). */
   onNavigateToRule?: (ruleId: string) => void;
   /**
@@ -77,15 +78,14 @@ interface GroupDetailViewProps {
 }
 
 /**
- * Detail view for one group: identity, membership source, a member roster with
- * add/remove, the two rule relationships, app push, and metadata. Export and
- * per-member membership writes are its only mutations; everything else here
- * still just reads.
+ * Detail view for one group: membership source, a member roster with add/remove,
+ * what membership grants, the two rule relationships, app push, and the group's own
+ * reference facts. Its identity is the header's job. Export and per-member membership
+ * writes are its only mutations; everything else here still just reads.
  */
 const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   group,
   targetTabId,
-  oktaOrigin,
   onNavigateToRule,
   autoAnalyze = false,
   isActive = true,
@@ -138,8 +138,6 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
           Export members
         </Button>
       </ActionBar>
-
-      <GroupIdentitySection group={group} oktaOrigin={oktaOrigin} />
 
       <GroupMembershipSourceSection
         memberCount={group.memberCount}
@@ -197,6 +195,7 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
 
       <GroupMetadataSection
         groupId={group.id}
+        description={group.description}
         created={group.created}
         lastUpdated={group.lastUpdated}
       />

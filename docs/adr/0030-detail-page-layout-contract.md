@@ -1,6 +1,6 @@
 # ADR-0030: One layout contract for detail pages, and where an action is allowed to live
 
-- Status: Accepted
+- Status: Accepted (amended by ADR-0032)
 - Date: 2026-08-14
 - Relates to: [ADR-0002](./0002-status-vocabulary-danger.md),
   [ADR-0016](./0016-in-tab-view-stack-navigation.md),
@@ -49,6 +49,10 @@ A sixth surface, the History tab's row, is a `<div onClick>` with no `role`, no
 `DetailSection` cards.** Four shared primitives carry it, and one rule decides
 where an action goes.
 
+> **Amended by [ADR-0032](./0032-the-sticky-stack-and-a-header-that-owns-identity.md).**
+> The identity header is no longer a card at the top of the _body_ — the tab's one
+> `PageHeader` describes the entity, and the body opens on its first real section.
+
 ### 1. The primitives
 
 - **`shared/DetailSection`** — promoted out of `groups/detail/`, where it already
@@ -85,6 +89,13 @@ pinned it is the only chrome on screen and must not let rows show through it.
 Keeping the page title pinned too would require `PageHeader` and `ActionBar` to
 share one sticky container; that is deliberately deferred rather than solved with a
 magic offset.
+
+> **Amended by [ADR-0032](./0032-the-sticky-stack-and-a-header-that-owns-identity.md).**
+> The deferral is resolved, but not by a shared container or a magic offset: each band
+> publishes its measured height as a CSS custom property and the band below consumes it.
+> `ActionBar` now parks at `calc(var(--rail-h,0px) + var(--header-h,0px))`, which also fixes
+> a pre-existing overlap — the strip and the rail were both `sticky top-0` in one scroller,
+> and the rail's `z-40` beat the strip's `z-10`.
 
 ### 4. Cross-entity navigation is a context, not a prop
 

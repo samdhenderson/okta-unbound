@@ -36,6 +36,8 @@ import Icon from '../overview/shared/Icon';
 import IconButton from './IconButton';
 import Badge, { type BadgeVariant } from './Badge';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { usePublishedHeight } from '../../hooks/usePublishedHeight';
+import { useStuck } from '../../hooks/useStuck';
 
 /**
  * How long the outgoing identity is held before the incoming one replaces it.
@@ -96,6 +98,16 @@ interface PageHeaderProps {
    * navigation that did not happen.
    */
   identityKey?: string;
+  /**
+   * Pin the header below the tab rail as the page scrolls under it, collapsing the
+   * identity region so the title, its badge and the back button stay on screen through a
+   * long list. Defaults to `false`, which leaves the header scrolling away as before.
+   *
+   * Pass the tab's `isActive`, not a bare `true`: a hidden panel is `display: none`, so
+   * its sentinel never intersects and it would otherwise report a permanently pinned
+   * header and publish a stale height (ADR-0018).
+   */
+  sticky?: boolean;
 }
 
 /**
@@ -135,8 +147,21 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   breadcrumbs,
   identity,
   identityKey,
+  sticky = false,
 }) => {
   const reduced = useReducedMotion();
+  const headerRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const pinned = useStuck(sentinelRef, headerRef, sticky);
+
+  // The action strip of a detail view parks directly beneath this header, so it needs to
+  // know how tall the header currently is — including mid-collapse, which is what keeps
+  // the two flush as the region animates shut (ADR-0032).
+  usePublishedHeight(headerRef, '--header-h', {
+    scopeSelector: '[data-header-scope]',
+    enabled: sticky,
+  });
 
   // The outgoing identity has to survive its own fade, so it is held in state while the
   // incoming one waits. `latest` keeps the current node reachable from the swap timer
@@ -190,7 +215,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   // While fading, the frozen outgoing node stays on screen; otherwise the live one does, so
   // a same-entity data refresh is reflected without waiting on any timer.
   const shownIdentity = fading ? held.node : identity;
-  const regionOpen = Boolean(shownIdentity) && !fading;
+  const regionOpen = Boolean(shownIdentity) && !fading && !pinned;
 
   // A header that has never been given an identity renders exactly the markup it did
   // before this region existed — the five call sites that do not use it are untouched.
@@ -198,47 +223,59 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   const align = hasRegion ? 'items-start' : 'items-center';
 
   return (
-    <div className="bg-white border-b border-neutral-200">
-      <div className={`px-5 py-4 flex ${align} justify-between gap-4`}>
-        <div className={`flex-1 min-w-0 flex ${align} gap-2`}>
-          {leadingNode && <div className="shrink-0">{leadingNode}</div>}
-          <div className="flex-1 min-w-0">
-            {breadcrumbs && <div className="mb-1">{breadcrumbs}</div>}
-            <div className="flex items-center gap-2">
-              <h1
-                className="text-lg font-semibold text-neutral-900"
-                style={{ fontFamily: 'var(--font-heading)' }}
-              >
-                {title}
-              </h1>
-              {badge && <Badge variant={badge.variant}>{badge.text}</Badge>}
-            </div>
-            {subtitle && <p className="mt-0.5 text-sm text-neutral-600">{subtitle}</p>}
+    <>
+      {/*
+        Zero-height sentinel in normal flow: once it scrolls past the line the header
+        sticks to, the header is pinned. See `useStuck`.
+      */}
+      {sticky && <div ref={sentinelRef} aria-hidden="true" className="h-0" />}
+      <div
+        ref={headerRef}
+        className={`bg-white border-b border-neutral-200 ${
+          sticky ? 'sticky top-[var(--rail-h,0px)] z-20' : ''
+        }`}
+      >
+        <div className={`px-5 py-4 flex ${align} justify-between gap-4`}>
+          <div className={`flex-1 min-w-0 flex ${align} gap-2`}>
+            {leadingNode && <div className="shrink-0">{leadingNode}</div>}
+            <div className="flex-1 min-w-0">
+              {breadcrumbs && <div className="mb-1">{breadcrumbs}</div>}
+              <div className="flex items-center gap-2">
+                <h1
+                  className="text-lg font-semibold text-neutral-900"
+                  style={{ fontFamily: 'var(--font-heading)' }}
+                >
+                  {title}
+                </h1>
+                {badge && <Badge variant={badge.variant}>{badge.text}</Badge>}
+              </div>
+              {subtitle && <p className="mt-0.5 text-sm text-neutral-600">{subtitle}</p>}
 
-            {/*
+              {/*
               Inside the title column rather than below the whole row, so the lines align
               with the title instead of with the back button. `.disclose` needs exactly one
               child carrying the clipping; the padded content is that child's child, which
               is also why its `mt-2` cannot add height while the region is closed.
             */}
-            {hasRegion && (
-              <div className="disclose" data-open={regionOpen ? 'true' : 'false'}>
-                <div>
-                  <div
-                    className={`mt-2 transition-opacity duration-(--dur-quick) ${
-                      fading ? 'opacity-0 ease-exit' : 'opacity-100 ease-entrance'
-                    }`}
-                  >
-                    {shownIdentity}
+              {hasRegion && (
+                <div className="disclose" data-open={regionOpen ? 'true' : 'false'}>
+                  <div>
+                    <div
+                      className={`mt-2 transition-opacity duration-(--dur-quick) ${
+                        fading ? 'opacity-0 ease-exit' : 'opacity-100 ease-entrance'
+                      }`}
+                    >
+                      {shownIdentity}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
+          {actions && <div className="shrink-0">{actions}</div>}
         </div>
-        {actions && <div className="shrink-0">{actions}</div>}
       </div>
-    </div>
+    </>
   );
 };
 

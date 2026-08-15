@@ -66,7 +66,15 @@ const TabPanel: React.FC<TabPanelProps> = ({ isActive, scrollRef, children }) =>
   }, [isActive, scrollRef]);
 
   return (
-    <div className={isActive ? 'tab-content active' : 'tab-content'} hidden={!isActive}>
+    // `data-header-scope` makes this panel the publishing scope for its own header's
+    // height (ADR-0032). It has to be per panel, not the shared scroller: every tab stays
+    // mounted (ADR-0018), so a document-scoped variable would be overwritten by whichever
+    // hidden tab measured last.
+    <div
+      data-header-scope
+      className={isActive ? 'tab-content active' : 'tab-content'}
+      hidden={!isActive}
+    >
       <Suspense fallback={<LoadingSpinner size="2xl" message="Loading tab..." centered />}>
         {children}
       </Suspense>
