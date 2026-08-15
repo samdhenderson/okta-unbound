@@ -1,0 +1,156 @@
+{
+  "projectId": "95a23085-7685-4b3f-9986-bedec30d1b07",
+  "shape": "storybook",
+  "pkg": "okta-unbound",
+  "globalName": "OktaUnbound",
+  "storybookConfigDir": ".storybook",
+  "storybookStatic": ".design-sync/sb-reference",
+  "entry": "src/sidepanel/components/shared/index.ts",
+  "titleMap": {
+    "ActiveFilterChips": null,
+    "ActivityBar": null,
+    "ActivityBarView": null,
+    "AddToGroupModal": null,
+    "AppListItem": null,
+    "AppOverview": null,
+    "AppScopeIndicator": null,
+    "AppsListPanel": null,
+    "AppsTab": null,
+    "AppsToolbar": null,
+    "AttributeFacet": null,
+    "AuditLogViewer": null,
+    "AuthPoliciesTab": null,
+    "AuthPolicyOverview": null,
+    "BreakdownDetailsModal": null,
+    "BreakdownReport": null,
+    "BulkOperationsPanel": null,
+    "CauseWorklist": null,
+    "CauseWorklistRow": null,
+    "ClauseChecklist": null,
+    "ClauseGroupList": null,
+    "ColumnPicker": null,
+    "ComparisonDiffTab": null,
+    "ComparisonHero": null,
+    "ComparisonOverviewTab": null,
+    "ComparisonSearchPhase": null,
+    "ComparisonTabBar": null,
+    "CompositionReports": null,
+    "ContextBar": null,
+    "CopyMembersModal": null,
+    "CrossGroupSearch": null,
+    "CurrentGroupRuleRelations": null,
+    "DetectedUserBanner": null,
+    "EntityPicker": null,
+    "ErrorBoundary": null,
+    "ExportContextBar": null,
+    "ExportFilterBox": null,
+    "ExportPreviewTable": null,
+    "ExportTab": null,
+    "GroupAccessSection": null,
+    "GroupCleanupPanel": null,
+    "GroupCollections": null,
+    "GroupComparisonModal": null,
+    "GroupExportModal": null,
+    "GroupFilterPanel": null,
+    "GroupFilterToggle": null,
+    "GroupListItem": null,
+    "GroupListItemSignal": null,
+    "GroupMembersSection": null,
+    "GroupMembershipSourceSection": null,
+    "GroupMembershipsList": null,
+    "GroupMergeModal": null,
+    "GroupOverview": null,
+    "GroupSearchBar": null,
+    "GroupSelectionBar": null,
+    "GroupSourceIndicator": null,
+    "GroupsListPanel": null,
+    "GroupsTab": null,
+    "Icon": null,
+    "MemberExplorer": null,
+    "MemberFilterPanel": null,
+    "MemberList": null,
+    "MemberRow": null,
+    "MemberSearchBar": null,
+    "MemberSourceMeter": null,
+    "MfaScanButton": null,
+    "OverviewTab": null,
+    "PoliciesListPanel": null,
+    "PolicyCard": null,
+    "PolicyRulesList": null,
+    "PresetControls": null,
+    "RuleCard": null,
+    "RuleConsolidationModal": null,
+    "RuleImpactModal": null,
+    "RulesListPanel": null,
+    "RulesMergeBanner": null,
+    "RulesMetaRow": null,
+    "RulesStatsGrid": null,
+    "RulesTab": null,
+    "RulesToolbar": null,
+    "StatCard": null,
+    "TabJumpPalette": null,
+    "TabNavigation": null,
+    "TabPanel": null,
+    "UserComparisonModal": null,
+    "UserComparisonPanel": null,
+    "UserComparisonView": null,
+    "UserDetailPanel": null,
+    "UserIdentityCard": null,
+    "UserLifecycleActions": null,
+    "UserOverview": null,
+    "UserProfileCard": null,
+    "UserSearchBar": null,
+    "UserSearchPanel": null,
+    "UserSearchResults": null,
+    "UsersTab": null
+  },
+  "overrides": {
+    "ActionBar": {
+      "cardMode": "column"
+    },
+    "CopyableId": {
+      "cardMode": "column"
+    },
+    "Tabs": {
+      "cardMode": "column"
+    },
+    "Modal": {
+      "cardMode": "single",
+      "primaryStory": "WithFooter",
+      "viewport": "480x640"
+    },
+    "EntityIdentity": {
+      "skip": ["shared-entityidentity--empty"]
+    },
+    "Button": {
+      "skip": ["shared-button--hover", "shared-button--focus"]
+    },
+    "FilterPill": {
+      "skip": ["shared-filterpill--hover", "shared-filterpill--focus"]
+    },
+    "IconButton": {
+      "skip": ["shared-iconbutton--hover", "shared-iconbutton--focus"]
+    },
+    "StretchedButton": {
+      "skip": ["shared-stretchedbutton--focus"]
+    },
+    "Breadcrumbs": {
+      "skip": ["shared-breadcrumbs--empty"]
+    },
+    "OpenInOktaLink": {
+      "skip": ["shared-openinoktalink--no-origin"]
+    },
+    "Skeleton": {
+      "skip": ["shared-skeleton--default", "shared-skeleton--text-narrow"]
+    }
+  },
+  "extraFonts": [
+    "src/sidepanel/fonts/inter-latin-wght-normal.woff2",
+    "src/sidepanel/fonts/roboto-mono-latin-400-normal.woff2"
+  ],
+  "storyImports": {
+    "shim": ["contexts/NavigationContext"]
+  },
+  "extraEntries": ["./src/sidepanel/contexts/NavigationContext.tsx"],
+  "readmeHeader": ".design-sync/conventions.md"
+}
