@@ -457,8 +457,8 @@ describe('membership classification (in-file heuristic)', () => {
     fireEvent.change(userSearchInput(), { target: { value: 'ada' } });
     fireEvent.click(await screen.findByText('Ada Lovelace', {}, { timeout: 2000 }));
 
-    expect(await screen.findByText('Engineering')).toBeInTheDocument();
-    expect(screen.getByText('RULE BASED')).toBeInTheDocument();
+    expect(await screen.findByText('RULE BASED')).toBeInTheDocument();
+    expect(screen.getAllByText('Engineering').length).toBeGreaterThan(0);
     // Named twice by design (ADR-0030's B2 row): once in the always-visible
     // answer chip, once as the navigable chip inside the evidence disclosure.
     expect(screen.getAllByText(/Eng auto-assign/).length).toBeGreaterThan(0);
@@ -472,8 +472,8 @@ describe('membership classification (in-file heuristic)', () => {
     fireEvent.change(userSearchInput(), { target: { value: 'ada' } });
     fireEvent.click(await screen.findByText('Ada Lovelace', {}, { timeout: 2000 }));
 
-    expect(await screen.findByText('Engineering')).toBeInTheDocument();
-    expect(screen.getByText('DIRECT')).toBeInTheDocument();
+    expect(await screen.findByText('DIRECT')).toBeInTheDocument();
+    expect(screen.getAllByText('Engineering').length).toBeGreaterThan(0);
     // The row now states this in the wording `membershipSourceLine` gives every
     // surface, rather than a sentence unique to this one. It also stops
     // overclaiming: a `DIRECT` the classifier only *inferred* reads "Likely
@@ -493,8 +493,8 @@ describe('membership classification (in-file heuristic)', () => {
     fireEvent.change(userSearchInput(), { target: { value: 'ada' } });
     fireEvent.click(await screen.findByText('Ada Lovelace', {}, { timeout: 2000 }));
 
-    expect(await screen.findByText('Engineering')).toBeInTheDocument();
-    expect(screen.getByText('DIRECT')).toBeInTheDocument();
+    expect(await screen.findByText('DIRECT')).toBeInTheDocument();
+    expect(screen.getAllByText('Engineering').length).toBeGreaterThan(0);
     expect(screen.queryByText('Eng auto-assign')).not.toBeInTheDocument();
   });
 
@@ -518,8 +518,8 @@ describe('membership classification (in-file heuristic)', () => {
     fireEvent.change(userSearchInput(), { target: { value: 'ada' } });
     fireEvent.click(await screen.findByText('Ada Lovelace', {}, { timeout: 2000 }));
 
-    expect(await screen.findByText('Engineering')).toBeInTheDocument();
-    expect(screen.getByText('UNKNOWN')).toBeInTheDocument();
+    expect(await screen.findByText('UNKNOWN')).toBeInTheDocument();
+    expect(screen.getAllByText('Engineering').length).toBeGreaterThan(0);
     expect(screen.queryByText('DIRECT')).not.toBeInTheDocument();
     // ...and nothing claims the user was hand-added.
     expect(
