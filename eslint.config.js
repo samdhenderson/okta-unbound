@@ -8,7 +8,13 @@ import prettier from 'eslint-config-prettier';
 
 export default [
   {
-    ignores: ['dist/**', 'node_modules/**', '.github/**', 'docs/**'],
+    // `.design-sync/**` holds design-sync tooling, not app source: the owned
+    // preview wrappers there mirror the converter's own generated `compose()`
+    // helper, whose `any`s are inherent to introspecting Storybook CSF exports
+    // at runtime. They are compiled by esbuild for the design bundle and never
+    // enter the extension build, so linting them to `src/` rules would force a
+    // pointless divergence from the generator they must stay in step with.
+    ignores: ['dist/**', 'node_modules/**', '.github/**', 'docs/**', '.design-sync/**'],
   },
   {
     files: ['**/*.{ts,tsx}'],

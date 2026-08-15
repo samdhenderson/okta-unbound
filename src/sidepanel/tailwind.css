@@ -1,5 +1,36 @@
 @import 'tailwindcss';
 
+/*
+ * Self-hosted webfonts. The type tokens below name Inter and Roboto Mono, but
+ * nothing ever loaded them — the panel silently fell back to `-apple-system`
+ * (SF Pro on macOS, Segoe UI on Windows), so the shipped UI did not render the
+ * typeface its own design system specifies. These two files close that gap.
+ *
+ * Self-hosted rather than CDN-linked on purpose: the MV3
+ * `content_security_policy` forbids remote font origins, and a webfont request
+ * from the side panel would leak usage signal to a third party.
+ *
+ * Provenance: copied from the `@fontsource-variable/inter` and
+ * `@fontsource/roboto-mono` npm packages (latin subsets, SIL Open Font
+ * License 1.1). Inter is the variable cut, so one 48 KB file covers the whole
+ * 100–900 range the panel uses (400 body, 500 secondary, 600 headings).
+ */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./fonts/inter-latin-wght-normal.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'Roboto Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/roboto-mono-latin-400-normal.woff2') format('woff2');
+}
+
 @theme {
   /* Odyssey Design System - Color Tokens */
   --color-primary: #546be7;
