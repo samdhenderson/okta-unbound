@@ -2,7 +2,7 @@
  * Tests for the shared user-status → variant map (ADR-0002 vocabulary).
  *
  * Pins every known Okta user status to its canonical variant — the single
- * source of truth converged onto by UserSearchResults, UserIdentity, and
+ * source of truth converged onto by UserSearchResults, UserIdentityCard, and
  * MemberRow — plus the neutral fallback for unknown statuses.
  */
 import { describe, it, expect } from 'vitest';

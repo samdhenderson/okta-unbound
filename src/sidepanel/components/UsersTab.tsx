@@ -58,8 +58,9 @@ import React, { useRef } from 'react';
 import PageHeader from './shared/PageHeader';
 import Breadcrumbs from './shared/Breadcrumbs';
 import AlertMessage from './shared/AlertMessage';
-import { ActionBar, Button } from './shared';
+import { ActionBar, Button, EntityIdentity, OpenInOktaLink } from './shared';
 import { AddToGroupModal, UserComparisonPanel, UserDetailPanel, UserSearchPanel } from './users';
+import { userIdentity } from './users/userIdentity';
 import { useUsersTabState } from '../hooks/useUsersTabState';
 import { userDisplayName } from '../../shared/utils/userDisplay';
 
@@ -106,8 +107,16 @@ const UsersTab: React.FC<UsersTabProps> = ({
     isActive,
     compareViewRef,
   });
-  const { selectedUser, memberships, lifecycle, addToGroup, nav, isDetailOpen, isCompareOpen } =
-    state;
+  const {
+    selectedUser,
+    memberships,
+    isLoadingMemberships,
+    lifecycle,
+    addToGroup,
+    nav,
+    isDetailOpen,
+    isCompareOpen,
+  } = state;
 
   // Re-resolve the pushed entry against the live selection: the entry is a snapshot
   // taken at push time, while `selectedUser` is patched in place (a lifecycle action
@@ -117,6 +126,21 @@ const UsersTab: React.FC<UsersTabProps> = ({
     currentEntry && selectedUser?.id === currentEntry.userId
       ? userDisplayName(selectedUser)
       : currentEntry?.userName;
+
+  // The header describes a user only on the detail rung, and only once the loaded user is
+  // the one the rung is for — otherwise the stack's snapshot name still stands and the
+  // status badge would belong to somebody else. Compare is a different subject entirely
+  // (two users), so it keeps a plain title.
+  const detailUser =
+    isDetailOpen && !isCompareOpen && currentEntry && selectedUser?.id === currentEntry.userId
+      ? selectedUser
+      : undefined;
+  const identity = detailUser
+    ? userIdentity(detailUser, {
+        // Omitted while loading, so the region shows no count rather than "0 groups".
+        groupCount: isLoadingMemberships ? undefined : memberships.length,
+      })
+    : undefined;
 
   return (
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
@@ -142,8 +166,26 @@ const UsersTab: React.FC<UsersTabProps> = ({
         onBack={nav.isRoot ? undefined : nav.pop}
         backLabel={isCompareOpen ? 'Back to user' : 'Back to search'}
         breadcrumbs={nav.isRoot ? undefined : <Breadcrumbs items={nav.trail} />}
+        sticky={isActive}
+        identityKey={identity?.key}
+        identity={identity ? <EntityIdentity rows={identity.rows} /> : undefined}
         badge={
-          selectedUser ? { text: `${memberships.length} Groups`, variant: 'primary' } : undefined
+          // On the detail rung the badge becomes the user's Okta status and the group
+          // count moves into the region below it; elsewhere the count stays the badge.
+          identity
+            ? identity.badge
+            : selectedUser
+              ? { text: `${memberships.length} Groups`, variant: 'primary' }
+              : undefined
+        }
+        actions={
+          identity?.link && (
+            <OpenInOktaLink
+              oktaOrigin={state.oktaOrigin}
+              entityType={identity.link.entityType}
+              entityId={identity.link.entityId}
+            />
+          )
         }
       />
 

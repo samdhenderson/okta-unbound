@@ -16,11 +16,17 @@
  * not shadow with a scroll box of its own. `sticky top-0` therefore pins against
  * that root, and no intermediate wrapper sets `overflow` to break it.
  *
- * `PageHeader` lives in the same scroller and scrolls away above this strip, so
- * the strip carries an opaque background and its own border — pinned, it is the
- * only chrome on screen and must not let rows show through it. Keeping the
- * page title pinned as well would mean `PageHeader` and this strip sharing one
- * sticky container; that is deliberately not v1.
+ * It is the third band of the sticky stack (ADR-0032), so it parks below the two above it
+ * rather than at the top of the scroller: `top` resolves to the tab rail's published height
+ * plus the page header's. Both default to `0px`, so a story — or any surface with neither
+ * band — behaves exactly as a `top-0` strip.
+ *
+ * That offset also fixes a real overlap. This strip and the rail were both `sticky top-0`
+ * in one scroller, and the rail's `z-40` beat this strip's `z-10`, so a pinned action strip
+ * was rendering *underneath* the rail.
+ *
+ * The strip still carries an opaque background and its own border: pinned, it must not let
+ * rows show through it.
  */
 import React from 'react';
 
@@ -40,9 +46,9 @@ export interface ActionBarProps {
    */
   ariaLabel: string;
   /**
-   * Pin to the top of the scroller while the page scrolls under it. Defaults to
-   * `true`; pass `false` where the strip is already inside a fixed region (or in
-   * a story, where there is nothing to scroll).
+   * Pin below the bands above it — the tab rail and the page header — while the page
+   * scrolls under it. Defaults to `true`; pass `false` where the strip is already inside a
+   * fixed region (or in a story, where there is nothing to scroll).
    */
   sticky?: boolean;
   /** Extra classes merged after the layout classes. */
@@ -77,7 +83,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
     className={`
       flex flex-wrap items-center gap-2
       rounded-md border border-neutral-200 bg-white p-2
-      ${sticky ? 'sticky top-0 z-10' : ''}
+      ${sticky ? 'sticky top-[calc(var(--rail-h,0px)+var(--header-h,0px))] z-10' : ''}
       ${className}
     `
       .trim()

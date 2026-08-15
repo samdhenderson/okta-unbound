@@ -6,9 +6,13 @@
  * guard that a header rendered without any of them is unchanged, since every
  * existing call site (App, GroupsTab, UsersTab, RulesTab, AppsTab,
  * AuthPoliciesTab, ExportTab) passes only title/subtitle/badge/actions.
+ *
+ * Plus the identity region: what crossfades (the region), what deliberately does not
+ * (the `<h1>` and its badge), and the one-heading invariant that rules out holding an
+ * outgoing headline on screen.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Breadcrumbs from './Breadcrumbs';
 import PageHeader from './PageHeader';
@@ -64,6 +68,76 @@ describe('PageHeader', () => {
 
     expect(screen.getByText('EN')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+  });
+
+  it('renders the identity region below the title', () => {
+    render(
+      <PageHeader title="Engineering" identityKey="00gONE" identity={<span>1,284 members</span>} />,
+    );
+
+    expect(screen.getByText('1,284 members')).toBeInTheDocument();
+  });
+
+  it('holds the outgoing identity through the crossfade, then swaps it', async () => {
+    const { rerender } = render(
+      <PageHeader title="Engineering" identityKey="00gONE" identity={<span>1,284 members</span>} />,
+    );
+
+    rerender(
+      <PageHeader title="Support" identityKey="00gTWO" identity={<span>42 members</span>} />,
+    );
+
+    // The title is never deferred — it is the anchor the panel is read against.
+    expect(screen.getByRole('heading', { level: 1, name: 'Support' })).toBeInTheDocument();
+    // ...but the outgoing identity is still mounted, fading, one frame after the swap.
+    expect(screen.getByText('1,284 members')).toBeInTheDocument();
+
+    expect(await screen.findByText('42 members')).toBeInTheDocument();
+    expect(screen.queryByText('1,284 members')).not.toBeInTheDocument();
+  });
+
+  it('swaps a same-entity refresh immediately, with no crossfade to wait on', () => {
+    const { rerender } = render(
+      <PageHeader title="Engineering" identityKey="00gONE" identity={<span>1,283 members</span>} />,
+    );
+
+    // Same key: this is the member count arriving, not navigation to another group.
+    rerender(
+      <PageHeader title="Engineering" identityKey="00gONE" identity={<span>1,284 members</span>} />,
+    );
+
+    expect(screen.getByText('1,284 members')).toBeInTheDocument();
+    expect(screen.queryByText('1,283 members')).not.toBeInTheDocument();
+  });
+
+  it('keeps exactly one level-1 heading across an identity swap', async () => {
+    const { rerender } = render(
+      <PageHeader title="Engineering" identityKey="00gONE" identity={<span>1,284 members</span>} />,
+    );
+
+    rerender(
+      <PageHeader title="Support" identityKey="00gTWO" identity={<span>42 members</span>} />,
+    );
+
+    // Mid-transition: holding an outgoing headline as well would put two <h1>s in the
+    // tree, which the GroupsTab/UsersTab navigation suites assert can never happen.
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+
+    await screen.findByText('42 members');
+
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  });
+
+  it('closes the region when a rung has no identity', async () => {
+    const { rerender } = render(
+      <PageHeader title="Engineering" identityKey="00gONE" identity={<span>1,284 members</span>} />,
+    );
+
+    rerender(<PageHeader title="Groups" subtitle="Browse, search, and manage groups" />);
+
+    await waitFor(() => {
+      expect(screen.queryByText('1,284 members')).not.toBeInTheDocument();
+    });
   });
 
   it('renders a breadcrumb trail above the title', () => {

@@ -1,20 +1,24 @@
 /**
- * @module sidepanel/components/users/UserIdentity
+ * @module sidepanel/components/users/UserIdentityCard
  * @description Compact identity header for a single Okta user.
  *
- * The slim replacement for the former tall "user ID card": avatar, name, status
- * badge, title/department, email, an optional copyable user id, and an optional
- * "Open in Okta" link. Shared by {@link UserProfileCard} (Users tab) and
- * {@link UserOverview} so both render user identity consistently.
+ * Avatar, name, status badge, title/department, email, an optional copyable user id, and
+ * an optional "Open in Okta" link.
+ *
+ * The Overview tab is its only remaining consumer. Everywhere the panel has a `PageHeader`
+ * the header now describes the entity (ADR-0032), and the Users tab's detail rung dropped
+ * this card entirely — along with the `showName` prop that existed only to stop it
+ * repeating the title above it. Overview has no header to move into yet, so the card
+ * survives there, and with it the last of the four badge palettes: `VARIANT_CLASSES` below
+ * still recolours the shared `userStatusVariant()` decision through raw Tailwind hues
+ * rather than tokens. It goes when Overview gains a header.
  */
 import React from 'react';
 import type { OktaUser } from '../../../shared/types';
-import { IconButton, OpenInOktaLink, userStatusVariant, type UserStatusVariant } from '../shared';
-import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
-import Icon from '../overview/shared/Icon';
+import { CopyableId, OpenInOktaLink, userStatusVariant, type UserStatusVariant } from '../shared';
 
-/** Props for {@link UserIdentity}. */
-interface UserIdentityProps {
+/** Props for {@link UserIdentityCard}. */
+interface UserIdentityCardProps {
   /** The user whose identity to render. */
   user: OktaUser;
   /** Okta origin used to build the "Open in Okta" admin link; the link hides when absent. */
@@ -26,15 +30,6 @@ interface UserIdentityProps {
    * passes `false` because the masthead already shows the context entity's id.
    */
   showId?: boolean;
-  /**
-   * Whether to render the user's name as this card's heading. Defaults to `true`.
-   *
-   * A detail page whose `PageHeader` already names the user passes `false`: two
-   * headings carrying the identical string is a redundant heading outline, and in
-   * a 360px panel the repeat costs a line of vertical space directly under the
-   * title it repeats.
-   */
-  showName?: boolean;
 }
 
 /** Per-variant badge palette (this component's rich palette, keyed by shared variant). */
@@ -56,19 +51,12 @@ const getStatusBadgeClass = (status: string): string => {
  * Renders the compact user identity header (avatar, name, status, contact line,
  * optional id + Okta link). Presentational; copy-to-clipboard is self-contained.
  */
-const UserIdentity: React.FC<UserIdentityProps> = ({
+const UserIdentityCard: React.FC<UserIdentityCardProps> = ({
   user,
   oktaOrigin,
   showOktaLink = true,
   showId = true,
-  showName = true,
 }) => {
-  const { copied: idCopied, copy: copyId } = useCopyToClipboard();
-
-  const handleCopyId = () => {
-    copyId(user.id);
-  };
-
   const initials =
     `${user.profile.firstName?.[0] ?? '?'}${user.profile.lastName?.[0] ?? ''}`.toUpperCase();
 
@@ -83,11 +71,9 @@ const UserIdentity: React.FC<UserIdentityProps> = ({
         {/* Identity */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            {showName && (
-              <h2 className="text-base font-bold text-neutral-900 truncate">
-                {user.profile.firstName} {user.profile.lastName}
-              </h2>
-            )}
+            <h2 className="text-base font-bold text-neutral-900 truncate">
+              {user.profile.firstName} {user.profile.lastName}
+            </h2>
             <span className={getStatusBadgeClass(user.status)}>{user.status}</span>
           </div>
 
@@ -103,24 +89,7 @@ const UserIdentity: React.FC<UserIdentityProps> = ({
 
           <div className="text-xs text-neutral-700 mt-0.5 truncate">{user.profile.email}</div>
 
-          {showId && (
-            <div className="flex items-center gap-1 mt-1">
-              <code className="text-[11px] font-mono text-neutral-500 truncate">{user.id}</code>
-              <IconButton
-                label={idCopied ? 'Copied!' : 'Copy user id'}
-                onClick={handleCopyId}
-                variant="ghost"
-                size="sm"
-                className="shrink-0"
-              >
-                <Icon
-                  type={idCopied ? 'clipboard-check' : 'clipboard'}
-                  size="sm"
-                  className={`w-3.5 h-3.5 ${idCopied ? 'text-success-text' : ''}`}
-                />
-              </IconButton>
-            </div>
-          )}
+          {showId && <CopyableId value={user.id} label="Copy user id" className="mt-1" />}
 
           {user.profile.genderPronouns && (
             <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 text-[11px] font-medium rounded-md border border-purple-200 mt-1.5">
@@ -139,4 +108,4 @@ const UserIdentity: React.FC<UserIdentityProps> = ({
   );
 };
 
-export default UserIdentity;
+export default UserIdentityCard;

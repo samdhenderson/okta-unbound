@@ -44,6 +44,9 @@ import PageHeader from './shared/PageHeader';
 import Breadcrumbs from './shared/Breadcrumbs';
 import AlertMessage from './shared/AlertMessage';
 import Button from './shared/Button';
+import EntityIdentity from './shared/EntityIdentity';
+import OpenInOktaLink from './shared/OpenInOktaLink';
+import { groupIdentity } from './groups/groupIdentity';
 import { useOktaApi } from '../hooks/useOktaApi';
 import type { OperationResult } from '../hooks/useOktaApi/types';
 import { useGroupsLoader } from '../hooks/useGroupsLoader';
@@ -104,20 +107,6 @@ const groupCrumbLabel = (group: GroupSummary): string => group.name;
 
 /** Stable breadcrumb key for a group pushed onto the view stack. */
 const groupCrumbKey = (group: GroupSummary): string => group.id;
-
-/** PageHeader badge palette key for each Okta group type (its local `error`-keyed palette). */
-const groupTypeBadgeVariant: Record<GroupSummary['type'], 'primary' | 'warning' | 'neutral'> = {
-  OKTA_GROUP: 'primary',
-  APP_GROUP: 'warning',
-  BUILT_IN: 'neutral',
-};
-
-/** Human label for each Okta group type, shown as the detail header's badge. */
-const groupTypeBadgeText: Record<GroupSummary['type'], string> = {
-  OKTA_GROUP: 'Okta group',
-  APP_GROUP: 'App group',
-  BUILT_IN: 'Built-in',
-};
 
 /**
  * Renders the Groups tab and orchestrates the group loading/search/selection hooks
@@ -206,6 +195,10 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   const detailGroup = pushedGroup
     ? (groups.find((g) => g.id === pushedGroup.id) ?? pushedGroup)
     : undefined;
+
+  // The header's whole description of this group — title, type badge, member count and
+  // deep link — from one pure builder, so those four never disagree with each other.
+  const identity = detailGroup ? groupIdentity(detailGroup) : undefined;
 
   const { push: pushView } = nav;
   const handleOpenDetail = useCallback(
@@ -306,19 +299,24 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
 
   return (
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
-      {/* One header for the whole tab; its contents swap as views push/pop (ADR-0008). */}
+      {/*
+        One header for the whole tab; its contents swap as views push/pop (ADR-0008).
+        On the detail rung it also *describes* the group — name, type and member count all
+        come from one `groupIdentity()` descriptor, so the detail body below opens on the
+        membership source rather than on a card repeating this title.
+      */}
       <PageHeader
-        title={detailGroup ? detailGroup.name : 'Groups'}
-        subtitle={detailGroup ? undefined : 'Browse, search, and manage groups'}
+        title={identity ? identity.name : 'Groups'}
+        subtitle={identity ? undefined : 'Browse, search, and manage groups'}
         onBack={detailGroup ? nav.pop : undefined}
         backLabel="Back to groups"
         breadcrumbs={detailGroup ? <Breadcrumbs items={nav.trail} /> : undefined}
+        sticky={isActive}
+        identityKey={identity?.key}
+        identity={identity ? <EntityIdentity rows={identity.rows} /> : undefined}
         badge={
-          detailGroup
-            ? {
-                text: groupTypeBadgeText[detailGroup.type],
-                variant: groupTypeBadgeVariant[detailGroup.type],
-              }
+          identity
+            ? identity.badge
             : selectedGroupIds.size > 0
               ? { text: `${selectedGroupIds.size} Selected`, variant: 'primary' }
               : searchMode === 'cached'
@@ -326,7 +324,15 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
                 : { text: 'Live', variant: 'primary' }
         }
         actions={
-          detailGroup ? undefined : searchMode === 'live' ? (
+          identity ? (
+            identity.link && (
+              <OpenInOktaLink
+                oktaOrigin={oktaOrigin}
+                entityType={identity.link.entityType}
+                entityId={identity.link.entityId}
+              />
+            )
+          ) : searchMode === 'live' ? (
             <Button
               variant="primary"
               onClick={loadAllGroups}
@@ -507,7 +513,6 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
             <GroupDetailView
               group={detailGroup}
               targetTabId={targetTabId}
-              oktaOrigin={oktaOrigin}
               onNavigateToRule={onNavigateToRule}
               autoAnalyze={autoAnalyzeGroupId === detailGroup.id}
               isActive={isActive}

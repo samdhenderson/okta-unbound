@@ -1,12 +1,16 @@
 /**
  * @module sidepanel/components/groups/detail/GroupMetadataSection
- * @description Group id and Okta's own timestamps — real fields only.
+ * @description The group's own reference facts: description, id, and Okta's timestamps.
  *
- * Last of the sections because it answers the rarest question. It renders exactly
- * three facts Okta actually returns: the group id (copyable, since it is what
- * every API call and rule condition keys off), `created`, and `lastUpdated`. A
- * missing timestamp renders as "Not reported by Okta" rather than a placeholder
- * date.
+ * Last of the sections because it answers the rarest questions. It renders only fields
+ * Okta actually returns: the description, the group id (copyable, since it is what every
+ * API call and rule condition keys off), `created`, and `lastUpdated`. A missing timestamp
+ * renders as "Not reported by Okta" rather than a placeholder date.
+ *
+ * The description moved here when the page header took over the group's identity: the
+ * header's expanded region carries the facts you navigate by — name, type, member count —
+ * and a description is reference material, not a wayfinding aid. It is not dropped, since
+ * nothing else in the app renders it.
  *
  * There is deliberately no "last membership change" field: Okta exposes none, and
  * the one that used to be rendered here was always `undefined` outside fixtures.
@@ -19,6 +23,8 @@ import { formatDate } from '../../../../shared/utils/dateFormat';
 interface GroupMetadataSectionProps {
   /** The group's Okta id. */
   groupId: string;
+  /** The group's Okta description, if it has one. */
+  description?: string;
   /** When Okta created the group, if the payload carried it. */
   created?: Date;
   /** When Okta last updated the group *profile*, if the payload carried it. */
@@ -33,14 +39,23 @@ const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, 
   </div>
 );
 
-/** Renders the group's id plus its Okta-reported created/last-updated timestamps. */
+/** Renders the group's description and id plus its Okta-reported timestamps. */
 const GroupMetadataSection: React.FC<GroupMetadataSectionProps> = ({
   groupId,
+  description,
   created,
   lastUpdated,
 }) => (
-  <DetailSection title="Metadata">
+  <DetailSection title="About">
     <div className="space-y-3">
+      <Field label="Description">
+        {description?.trim() ? (
+          description
+        ) : (
+          <span className="text-neutral-500 italic">No description in Okta.</span>
+        )}
+      </Field>
+
       <Field label="Group ID">
         <div className="flex items-center gap-2">
           <code className="min-w-0 flex-1 truncate font-mono text-xs text-neutral-900">

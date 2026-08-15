@@ -9,9 +9,10 @@
  * tab's label unfurls beside its glyph. Every tab keeps its label as its
  * accessible name whether or not that label is currently visible.
  */
-import React from 'react';
+import React, { useRef } from 'react';
 import { Tabs, type TabItem } from './shared';
 import { TAB_DEFS, type TabType } from '../tabs';
+import { usePublishedHeight } from '../hooks/usePublishedHeight';
 
 export type { TabType } from '../tabs';
 
@@ -26,16 +27,26 @@ interface TabNavigationProps {
 const TAB_ITEMS: TabItem[] = TAB_DEFS.map(({ id, label, icon }) => ({ key: id, label, icon }));
 
 /** Renders the horizontal tab navigation and reports selection via `onTabChange`. */
-const TabNavigation: React.FC<TabNavigationProps> = ({ activeTab, onTabChange }) => (
-  <nav className="sticky top-0 z-40 bg-white">
-    <Tabs
-      tabs={TAB_ITEMS}
-      activeKey={activeTab}
-      onChange={(key) => onTabChange(key as TabType)}
-      variant="rail"
-      ariaLabel="Main sections"
-    />
-  </nav>
-);
+const TabNavigation: React.FC<TabNavigationProps> = ({ activeTab, onTabChange }) => {
+  const railRef = useRef<HTMLElement>(null);
+
+  // First band of the sticky stack (ADR-0032). The rail is a singleton, so it publishes on
+  // the document root: a pinned page header parks at `top: var(--rail-h)` and a detail
+  // view's action strip adds this to the header's own height. Measured rather than
+  // hard-coded because the rail rewraps at narrow widths.
+  usePublishedHeight(railRef, '--rail-h');
+
+  return (
+    <nav ref={railRef} className="sticky top-0 z-40 bg-white">
+      <Tabs
+        tabs={TAB_ITEMS}
+        activeKey={activeTab}
+        onChange={(key) => onTabChange(key as TabType)}
+        variant="rail"
+        ariaLabel="Main sections"
+      />
+    </nav>
+  );
+};
 
 export default TabNavigation;

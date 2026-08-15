@@ -43,7 +43,8 @@ export type IconType =
   | 'clipboard-check'
   | 'chevron-left'
   | 'chevron-right'
-  | 'close';
+  | 'close'
+  | 'clock';
 
 /** Props for {@link Icon}. */
 interface IconProps {
@@ -352,6 +353,16 @@ const Icon: React.FC<IconProps> = ({ type, className = '', size = 'md' }) => {
           strokeLinejoin="round"
           strokeWidth={2}
           d="M6 18L18 6M6 6l12 12"
+        />
+      </svg>
+    ),
+    clock: (
+      <svg className={baseClasses} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"
         />
       </svg>
     ),

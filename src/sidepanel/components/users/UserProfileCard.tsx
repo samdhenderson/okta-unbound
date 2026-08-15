@@ -2,16 +2,18 @@
  * @module sidepanel/components/users/UserProfileCard
  * @description Presentational card summarizing a single Okta user's profile.
  *
- * Renders the compact {@link UserIdentity} header followed by tabbed detail
- * sections (Account / Organization / Contact / Preferences / Custom) plus an
- * **All** tab — a flat, searchable list of every profile attribute. Sections with
- * no data self-hide. Used by the Users tab.
+ * Renders tabbed detail sections (Account / Organization / Contact / Preferences /
+ * Custom) plus an **All** tab — a flat, searchable list of every profile attribute.
+ * Sections with no data self-hide. Used by the Users tab.
+ *
+ * It no longer opens with an identity header: the tab's `PageHeader` describes the user
+ * on this rung (ADR-0032). That is also what retired the `showName` prop, which existed
+ * only to stop this card repeating the title directly beneath it.
  */
 import React, { useMemo, useState } from 'react';
 import type { OktaUser } from '../../../shared/types';
 import { Tabs, Input, type TabItem } from '../shared';
 import Icon from '../overview/shared/Icon';
-import UserIdentity from './UserIdentity';
 import {
   getAccountFields,
   getOrgFields,
@@ -26,21 +28,11 @@ import {
 interface UserProfileCardProps {
   /** The user to render. */
   user: OktaUser;
-  /** When true (default), renders the tabbed detail sections below the identity header. */
+  /** When true (default), renders the tabbed detail sections. */
   showCollapsibleSections?: boolean;
-  /** Okta origin used to build the "Open in Okta" admin link; the link is hidden when absent. */
-  oktaOrigin?: string | null;
-  /** Whether to render the identity header's "Open in Okta" deep link. Defaults to `true`. */
-  showOktaLink?: boolean;
   /**
-   * Whether the identity header repeats the user's name. Defaults to `true`; a
-   * detail page whose `PageHeader` already names the user passes `false`.
-   */
-  showName?: boolean;
-  /**
-   * Optional content rendered between the identity header and the detail sections
-   * (e.g. UsersTab's lifecycle-action controls). Renders regardless of
-   * `showCollapsibleSections`.
+   * Optional content rendered above the detail sections (e.g. UsersTab's
+   * lifecycle-action controls). Renders regardless of `showCollapsibleSections`.
    */
   afterCard?: React.ReactNode;
 }
@@ -62,16 +54,12 @@ const FieldGrid: React.FC<{ fields: ProfileField[] }> = ({ fields }) => (
 );
 
 /**
- * Shared user profile card used in the Users tab. Displays the compact identity
- * header, an optional `afterCard` slot, and tabbed detail sections including a
- * searchable "All attributes" view.
+ * Shared user profile card used in the Users tab. Displays an optional `afterCard`
+ * slot and tabbed detail sections including a searchable "All attributes" view.
  */
 const UserProfileCard: React.FC<UserProfileCardProps> = ({
   user,
   showCollapsibleSections = true,
-  oktaOrigin,
-  showOktaLink = true,
-  showName = true,
   afterCard,
 }) => {
   const sections = useMemo(() => {
@@ -113,13 +101,6 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
 
   return (
     <div className="space-y-4">
-      <UserIdentity
-        user={user}
-        oktaOrigin={oktaOrigin}
-        showOktaLink={showOktaLink}
-        showName={showName}
-      />
-
       {afterCard}
 
       {showCollapsibleSections && (
