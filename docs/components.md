@@ -45,9 +45,9 @@ info`) — never `error`.
 
 `shared/`: `Button`, `IconButton`, `StretchedButton`, `FilterPill`, `SortPill`,
 `CopyButton`, `OpenInOktaLink`, `Modal`, `Input`, `Checkbox`, `Select`, `Textarea`,
-`PageHeader`, `Breadcrumbs`, `Tabs`, `CollapsibleSection`, `AlertMessage`,
-`EmptyState`, `LoadingSpinner`, `Skeleton`, `ListRow`, `ScrollableList`,
-`SearchDropdown`, `SelectionChips`.
+`PageHeader`, `EntityIdentity`, `Breadcrumbs`, `Tabs`, `CollapsibleSection`,
+`AlertMessage`, `EmptyState`, `LoadingSpinner`, `Skeleton`, `ListRow`,
+`ScrollableList`, `SearchDropdown`, `SelectionChips`.
 
 `ListRow` is the **row chrome** primitive (ADR-0029): border, radius, hover,
 `density` (`compact` | `comfortable`), `state` (`default` | `selected` |
@@ -93,6 +93,32 @@ It shapes to the `trail` returned by `hooks/useViewStack.ts`, and drops into
 `PageHeader`'s additive `breadcrumbs` slot alongside its `onBack` / `leading`
 slot — a tab keeps **one** `PageHeader` mounted and swaps its contents as views
 are pushed and popped, rather than each view rendering its own header.
+
+`PageHeader` is also where the **entity you are browsing is described** (ADR-0032).
+Do not open a detail view with a card repeating the name and type already in the
+title. Pass `identity` (an opaque node, normally an `EntityIdentity`), `identityKey`
+(the entity's id — a change crossfades the region, no change swaps silently), and
+`sticky={isActive}` to pin it as the page scrolls under. The header owns chrome only
+and never learns what a group or a user is; the description comes from a **pure
+per-entity builder** returning an `EntityIdentityDescriptor`:
+
+```tsx
+const identity = detailGroup ? groupIdentity(detailGroup) : undefined;
+
+<PageHeader
+  title={identity?.name ?? 'Groups'}
+  badge={identity?.badge ?? listBadge}
+  identityKey={identity?.key}
+  identity={identity && <EntityIdentity lines={identity.lines} />}
+  sticky={isActive}
+/>;
+```
+
+Adding an entity kind is one new builder beside that entity (`groupIdentity.ts`,
+`userIdentity.ts`) plus a unit test, with no edit to anything shared. `PageHeader`
+still describes the _browsed_ entity and `ContextBar` still describes the _live Okta
+tab_ — the two must not converge.
+
 `overview/shared/`: `Icon`, `StatCard`.
 
 ## Documented raw-control exceptions

@@ -50,8 +50,6 @@ export type { AlertMessageData, AlertAction } from './AlertMessage';
 export type { DetailSectionProps } from './DetailSection';
 export type { ActionBarProps } from './ActionBar';
 export type { BadgeVariant, BadgeProps } from './Badge';
-export type { EntityIdentityProps } from './EntityIdentity';
-export type { EntityIdentityDescriptor, IdentityLine } from './identityDescriptor';
 export type { EntityLinkProps } from './EntityLink';
 export type { StatusType, UserStatusVariant } from './status';
 export { userStatusVariant } from './status';

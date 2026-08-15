@@ -59,6 +59,13 @@ Details: `docs/architecture.md`.
 - **Never hand-roll a list-row container** — use shared `ListRow` (`density`,
   `state`, `as`). Row interiors follow the typography contract in
   `docs/design-system.md`. (ADR-0029)
+- **The header describes the entity; the body must not repeat it.** A detail rung
+  passes `identity`/`identityKey` to `PageHeader`, fed by a pure per-entity
+  descriptor builder (`groupIdentity`, `userIdentity`) — never a second identity
+  card. `ContextBar` describes the _live Okta tab_, `PageHeader` what you are
+  _browsing_; the two never converge. (ADR-0032)
+- **Sticky bands publish their heights** — `--rail-h`, `--header-h`. Never
+  hard-code a sticky offset. (ADR-0032)
 - **No raw `console.*`.** Use `src/shared/utils/logger.ts`. **Never log XSRF tokens,
   request/response bodies, or PII** — identifiers and outcomes only.
 - **No new `any`.** Validate Okta responses at the boundary with zod. (ADR-0006)

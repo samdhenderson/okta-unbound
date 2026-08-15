@@ -52,6 +52,28 @@ contract and deliberately drops the other half:
   `Breadcrumbs` in `PageHeader`'s slot: ancestor crumbs are buttons, the current one
   is plain text with `aria-current="page"`. The back button and the current crumb are
   the same affordance — do not give them competing labels.
+- **The header describes the pushed entity; the body does not repeat it.** A detail
+  rung passes `identity` / `identityKey` to `PageHeader` and opens its body on the
+  first real section (ADR-0032). Two headings carrying the same string is a redundant
+  heading outline, and in a 360px panel the repeat costs a line directly under the
+  title it repeats.
+
+### Verifying the sticky stack
+
+The tab rail, the page header and a detail view's `ActionBar` each park below the one
+before it by publishing a measured height (`--rail-h`, `--header-h`). **None of this is
+checkable in jsdom or in a story** — neither has a scroller. It is a manual pass in the
+loaded extension:
+
+1. Drill into a group with a long member list and scroll. The header must collapse to
+   one line and pin **below** the rail, with the action strip flush beneath it — no
+   overlap, no gap, no jump at the moment it pins.
+2. Pop and drill into a different entity: the region morphs height and crossfades; the
+   title swaps immediately.
+3. Switch tabs mid-scroll and back. `--header-h` is `TabPanel`-scoped, so a hidden tab
+   must not move the visible tab's action strip.
+4. Repeat at 360px, and with **Reduce motion** on — the swap should be instant and the
+   pin should still work.
 
 ## Loading / empty / error states
 

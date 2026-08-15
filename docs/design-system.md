@@ -131,10 +131,10 @@ reduced-motion contract, and the skeleton-vs-spinner rule are in
 [motion.md](./motion.md) (ADR-0027, ADR-0028) — this section is just the pointer.
 
 One cross-cutting gotcha worth flagging here rather than only in the motion doc:
-`Modal.tsx`'s `EXIT_MS` constant and `useCountUp`'s `COUNT_UP_MS` constant are
-hand-kept mirrors of `--dur-quick` and `--dur-tell` respectively, not runtime
-reads of the CSS custom property — `getComputedStyle().getPropertyValue('--dur-*')`
-returns `''` in jsdom, so the duration cannot be sourced from CSS at the point
-these components need it in every environment this code runs in. If either token
-in `tailwind.css` moves, its hand-kept mirror must move with it; there is no lint
-gate for this today.
+`Modal.tsx`'s `EXIT_MS`, `useCountUp`'s `COUNT_UP_MS` and `PageHeader.tsx`'s
+`SWAP_MS` are hand-kept mirrors of `--dur-quick`, `--dur-tell` and `--dur-move`
+respectively, not runtime reads of the CSS custom property —
+`getComputedStyle().getPropertyValue('--dur-*')` returns `''` in jsdom, so the
+duration cannot be sourced from CSS at the point these components need it in every
+environment this code runs in. If any of those tokens in `tailwind.css` moves, its
+hand-kept mirror must move with it; there is no lint gate for this today.

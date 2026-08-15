@@ -77,7 +77,9 @@ levels:
   fetches is spending the shared scheduler budget invisibly.
 - **Within a tab — `useViewStack`** (ADR-0016) gives a tab shell a typed push/pop
   stack with a breadcrumb `trail`, rendered through one always-mounted `PageHeader`
-  (`onBack` / `breadcrumbs` slots) and the shared `Breadcrumbs`. The pushed view is a
+  (`onBack` / `breadcrumbs` slots) and the shared `Breadcrumbs`. That header also
+  **describes** the pushed entity (`identity` / `identityKey`, ADR-0032), so a detail
+  view opens on its first real section rather than on a card repeating the title. The pushed view is a
   **sibling** of the hidden-but-mounted list, not a replacement, so list state
   survives the round trip; `useScrollPreservation` carries the scroll offset that
   `display: none` destroys. Consumers: `GroupsTab` → `GroupDetailView` (the first),
