@@ -134,7 +134,6 @@ const meta = {
     memberships: [directMembership, ruleMembership],
     user,
     isLoading: false,
-    onNavigateToRule: fn(),
   },
   argTypes: {
     memberships: {
@@ -152,15 +151,16 @@ const meta = {
       description:
         'Okta origin used to build admin-console deep links; links are hidden when absent.',
     },
-    onNavigateToRule: {
-      description: 'Invoked with a rule id to navigate to that rule in the Rules tab.',
-    },
     actions: {
       description: 'Caller-supplied header controls, rendered on the right of the title row.',
     },
     recentlyAddedGroupId: {
       description:
         'Id of a group just successfully added this session; its row plays a one-shot `animate-affirm-flash` success flash.',
+    },
+    onProveMembershipSource: {
+      description:
+        'Asks Okta which rules manage one membership (`GET /api/v1/groups/{groupId}/users/{userId}/group-rules`). Supplied, every row gains a "Prove it" action; omitted, the surface is unchanged. **One API call per row**, so it only ever runs from that click.',
     },
   },
 } satisfies Meta<typeof GroupMembershipsList>;
@@ -223,6 +223,47 @@ export const AmbiguousAttribution: Story = {
 /** No user to explain against, so the row falls back to the raw condition text. */
 export const WithoutUser: Story = {
   args: { memberships: [formattedRuleMembership], user: undefined },
+};
+
+/**
+ * Every classification on this surface is a **deduction** — the user-side listing
+ * carries no attribution embed. Supplying `onProveMembershipSource` gives each row
+ * a "Prove it" action that spends **one** API call to replace that row's guess with
+ * Okta's own answer (ADR-0031). Press it on the ambiguous row: the candidate set
+ * stays, and Okta's answer is stated above it as a fact.
+ */
+export const ProvableAgainstOkta: Story = {
+  args: {
+    memberships: [ambiguousMembership, directMembership],
+    onProveMembershipSource: async () => ({
+      state: 'rules',
+      rules: [{ id: '0prFAKEhr', name: 'HR sync' }],
+    }),
+  },
+};
+
+/**
+ * Okta answering "no rule manages this membership" is an **authoritative manual
+ * add**, and reads as one. Okta saying *nothing* — a failed or unparseable
+ * response — is a different story (`ProofUnanswered`) and must never be shown
+ * this way.
+ */
+export const ProvenManualAdd: Story = {
+  args: {
+    memberships: [ambiguousMembership],
+    onProveMembershipSource: async () => ({ state: 'no-rules' }),
+  },
+};
+
+/**
+ * The honest failure mode: Okta was asked and did not answer, so the row's own
+ * hedged classification stands untouched and the action can be retried.
+ */
+export const ProofUnanswered: Story = {
+  args: {
+    memberships: [ambiguousMembership],
+    onProveMembershipSource: async () => ({ state: 'unknown' }),
+  },
 };
 
 /**

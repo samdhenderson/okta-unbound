@@ -12,22 +12,36 @@
  * expansion all survive the round trip — see
  * {@link sidepanel/hooks/useViewStack.useViewStack}.
  *
- * This is the container half: it owns the two read-only loads
- * ({@link sidepanel/hooks/useGroupSource.useGroupSource} for the rules that assign
- * into the group plus the gated member split, and
+ * This is the container half: it owns the read-only loads —
+ * {@link sidepanel/hooks/useGroupSource.useGroupSource} for the rules that assign
+ * into the group plus the gated member split,
  * {@link sidepanel/hooks/useGroupRuleReferences.useGroupRuleReferences} for the
- * rules that merely reference it) and hands their state to pure sections. It never
- * mutates anything.
+ * rules that merely reference it, and
+ * {@link sidepanel/hooks/useGroupAccessGrants.useGroupAccessGrants} for what
+ * membership actually grants (assigned apps, admin roles) — and hands their state
+ * to pure sections.
+ *
+ * It also owns the view's two mutating surfaces: a page-level "Export members"
+ * action in the sticky `ActionBar` (ADR-0030), and per-member add/remove in
+ * {@link GroupMembersSection}, whose state lives in
+ * {@link module:sidepanel/components/groups/detail/useGroupMembersSection.useGroupMembersSection}.
+ * The members section piggybacks on `useGroupSource`'s gated member read rather
+ * than fetching a second time — see that hook's module doc.
  */
 import React from 'react';
 import GroupIdentitySection from './GroupIdentitySection';
 import GroupMembershipSourceSection from './GroupMembershipSourceSection';
+import GroupMembersSection from './GroupMembersSection';
+import GroupAccessSection from './GroupAccessSection';
 import GroupRulesSection from './GroupRulesSection';
 import GroupPushSection from './GroupPushSection';
 import GroupMetadataSection from './GroupMetadataSection';
 import { useGroupSource } from '../../../hooks/useGroupSource';
 import { useOwedLoad } from '../../../hooks/useOwedLoad';
 import { useGroupRuleReferences } from '../../../hooks/useGroupRuleReferences';
+import { useGroupAccessGrants } from '../../../hooks/useGroupAccessGrants';
+import { useGroupMembersSection } from './useGroupMembersSection';
+import { ActionBar, Button } from '../../shared';
 import type { GroupSummary } from '../../../../shared/types';
 
 /** Props for {@link GroupDetailView}. */
@@ -53,11 +67,20 @@ interface GroupDetailViewProps {
    * than issued from a hidden tab. Defaults to `true`.
    */
   isActive?: boolean;
+  /**
+   * Opens the Export tab pre-scoped to this group's members (the page-level
+   * "Export members" action). Optional and forwarded as-is from `GroupsTab`;
+   * omitting it disables the action rather than breaking the view — `App.tsx`
+   * does not wire this through to the Groups tab yet.
+   */
+  onExportGroup?: (groupId: string, groupName: string) => void;
 }
 
 /**
- * Read-only detail view for one group: identity, membership source, the two rule
- * relationships, app push, and metadata.
+ * Detail view for one group: identity, membership source, a member roster with
+ * add/remove, the two rule relationships, app push, and metadata. Export and
+ * per-member membership writes are its only mutations; everything else here
+ * still just reads.
  */
 const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   group,
@@ -66,9 +89,21 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   onNavigateToRule,
   autoAnalyze = false,
   isActive = true,
+  onExportGroup,
 }) => {
   const source = useGroupSource(targetTabId ?? undefined);
   const references = useGroupRuleReferences(group.id, targetTabId ?? undefined, isActive);
+  const accessGrants = useGroupAccessGrants(group.id, targetTabId ?? undefined, isActive);
+  // `resummarize` keeps the membership-source meter honest after a write. The
+  // cache invalidation that rides every membership write fixes the *next* read;
+  // the meter above this section is React state, so without this it would keep
+  // showing pre-mutation counts for as long as the view stayed open.
+  const membersSection = useGroupMembersSection(
+    group,
+    targetTabId,
+    source.memberStatus,
+    source.resummarize,
+  );
 
   // `open` is memoized on the (stable) API operation, so this runs once per group.
   // While the Groups tab is hidden the open is *owed* rather than run: it reaches
@@ -91,6 +126,19 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
 
   return (
     <div className="space-y-3" data-testid="group-detail-view">
+      <ActionBar ariaLabel={`Actions for ${group.name}`}>
+        <Button
+          variant="primary"
+          size="sm"
+          icon="download"
+          onClick={() => onExportGroup?.(group.id, group.name)}
+          disabled={!onExportGroup}
+          title="Export this group's members (opens the Export tab with column picker + presets)"
+        >
+          Export members
+        </Button>
+      </ActionBar>
+
       <GroupIdentitySection group={group} oktaOrigin={oktaOrigin} />
 
       <GroupMembershipSourceSection
@@ -101,6 +149,38 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
         onAnalyze={source.analyzeMembers}
         canAnalyze={targetTabId !== null}
         onNavigateToRule={onNavigateToRule}
+      />
+
+      <GroupMembersSection
+        groupType={group.type}
+        memberCount={group.memberCount}
+        members={membersSection.members}
+        status={source.memberStatus}
+        error={source.error}
+        onAnalyze={source.analyzeMembers}
+        canAnalyze={targetTabId !== null}
+        removeTarget={membersSection.removeTarget}
+        onRequestRemove={membersSection.requestRemove}
+        onCancelRemove={membersSection.cancelRemove}
+        onConfirmRemove={membersSection.confirmRemove}
+        removeStatus={membersSection.removeStatus}
+        removeError={membersSection.removeError}
+        addQuery={membersSection.addQuery}
+        onAddQueryChange={membersSection.setAddQuery}
+        addResults={membersSection.addResults}
+        isSearchingToAdd={membersSection.isSearchingToAdd}
+        addSearchError={membersSection.addSearchError}
+        onSelectToAdd={membersSection.selectToAdd}
+        addStatus={membersSection.addStatus}
+        addError={membersSection.addError}
+      />
+
+      <GroupAccessSection
+        apps={accessGrants.apps}
+        appsStatus={accessGrants.appsStatus}
+        appsError={accessGrants.appsError}
+        roles={accessGrants.roles}
+        rolesStatus={accessGrants.rolesStatus}
       />
 
       <GroupRulesSection

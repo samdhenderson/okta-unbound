@@ -1,15 +1,29 @@
 /**
- * @module sidepanel/components/groups/detail/DetailSection
- * @description White card wrapper for one section of the Group Detail view.
+ * @module sidepanel/components/shared/DetailSection
+ * @description White card wrapper for one section of a detail view (ADR-0030).
  *
  * A section is an eyebrow heading, an optional one-line explanation, an optional
- * trailing header slot (a count, a gated action), and a body. Elevation comes from
- * the 1px border alone, per the Odyssey surface model — no drop shadow on cards.
+ * trailing header slot, and a body. Elevation comes from the 1px border alone,
+ * per the Odyssey surface model — no drop shadow on cards.
+ *
+ * Originally scoped to the Group Detail view; promoted to the shared barrel when
+ * the detail pages adopted one layout language, because it was already the only
+ * section primitive in the codebase and four other surfaces were hand-rolling
+ * near-copies of it with a drifting eyebrow (`tracking-wider` in `RuleCard` and
+ * `PolicyCard` against `tracking-wide` here). This is the version that wins.
+ *
+ * ## What belongs in `actions`
+ *
+ * A verb **scoped to this section's data** — a gate button that loads it, a
+ * control that mutates it, a count of it. A verb whose object is the whole page
+ * belongs in `ActionBar` instead. The split is not cosmetic: a page-level slot has
+ * no view of whether this section's data is loaded, so putting "Add member" up
+ * there would let a reader mutate a list that is still behind its gate.
  */
 import React from 'react';
 
 /** Props for {@link DetailSection}. */
-interface DetailSectionProps {
+export interface DetailSectionProps {
   /** Section heading, rendered as an uppercase eyebrow `<h2>`. */
   title: string;
   /** Optional one-line explanation under the heading. */
@@ -26,7 +40,7 @@ interface DetailSectionProps {
 }
 
 /**
- * One card-shaped section of the Group Detail view.
+ * One card-shaped section of a detail view.
  *
  * @example
  * ```tsx

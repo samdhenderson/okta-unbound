@@ -17,6 +17,8 @@ import { useProgressOptional } from '../contexts/ProgressContext';
 import { createCancellation } from '../../shared/scheduler/cancellation';
 import { createCoreApi } from './useOktaApi/core';
 import { createGroupMemberOperations } from './useOktaApi/groupMembers';
+import { invalidate } from '../cache/entityCache';
+import { cacheKeys } from '../cache/keys';
 import { createGroupCleanupOperations } from './useOktaApi/groupCleanup';
 import { createGroupBulkOperations } from './useOktaApi/groupBulkOps';
 import { createGroupDiscoveryOperations } from './useOktaApi/groupDiscovery';
@@ -140,7 +142,17 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
     [targetTabId, checkCancelled, resetCancellation, progressBridge, onResult, onProgress],
   );
 
-  const groupMemberOps = useMemo(() => createGroupMemberOperations(coreApi), [coreApi]);
+  // Every membership write drops that group's cached member list. The derived
+  // `memberSource` breakdown goes with it for free — `memberSourceCache`
+  // registers it as derived from `groupMembers`, so the cascade in `invalidate`
+  // handles it and no second key is named here.
+  const groupMemberOps = useMemo(
+    () =>
+      createGroupMemberOperations(coreApi, (groupId) =>
+        invalidate(cacheKeys.groupMembers(groupId)),
+      ),
+    [coreApi],
+  );
   const groupCleanupOps = useMemo(
     () => createGroupCleanupOperations(coreApi, groupMemberOps.removeUserFromGroup),
     [coreApi, groupMemberOps],
@@ -198,6 +210,9 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
       // Group operations
       getAllGroupMembers: groupMemberOps.getAllGroupMembers,
+      // One call, one membership, asked only when a reader presses "Prove it"
+      // (ADR-0031). Never run for a list: it is linear in group count.
+      getMembershipRuleProof: groupMemberOps.getMembershipRuleProof,
       removeUserFromGroup: groupMemberOps.removeUserFromGroup,
       removeUserFromGroups: groupMemberOps.removeUserFromGroups,
       addUserToGroup: groupMemberOps.addUserToGroup,

@@ -39,7 +39,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useGroupSource } from './useGroupSource';
 import { OKTA_PAGE_SIZE } from '../../shared/utils/oktaPagination';
 import { setEntry, resetEntityCache } from '../cache/entityCache';
-import type { GroupSummary, OktaGroupRule } from '../../shared/types';
+import type { GroupSummary, OktaGroupRule, OktaUser } from '../../shared/types';
 
 const runtimeSendMessage = chrome.runtime.sendMessage as ReturnType<typeof vi.fn>;
 const storageGet = chrome.storage.local.get as ReturnType<typeof vi.fn>;
@@ -73,8 +73,14 @@ const feedingRule: OktaGroupRule = {
   actions: { assignUserToGroups: { groupIds: [GROUP_ID] } },
 };
 
-/** A schema-valid group member row. */
-function makeMember(index: number) {
+/**
+ * A schema-valid group member row.
+ *
+ * `status` is a literal rather than a widened `string` so the same fixture serves
+ * both roles it plays here: a raw API payload, and a typed `OktaUser[]` handed
+ * straight to `resummarize`.
+ */
+function makeMember(index: number): OktaUser {
   return {
     id: `00uFAKE${index}`,
     status: 'ACTIVE',
@@ -312,5 +318,59 @@ describe('useGroupSource entity-cache reuse', () => {
 
     expect(result.current.breakdown?.total).toBe(MEMBER_COUNT);
     expect(memberPageEndpoints()).toHaveLength(Math.ceil(MEMBER_COUNT / OKTA_PAGE_SIZE));
+  });
+});
+
+/**
+ * `resummarize` corrects the split after a membership write **without touching
+ * Okta**, which is the only reason it can be called on every add/remove.
+ *
+ * It exists because `breakdown` is React state: the cache invalidation that rides
+ * every membership write fixes the *next* read, but the meter rendered directly
+ * above the Members section would keep showing pre-mutation counts for as long as
+ * the view stayed mounted. The rules from the last analysis are still in hand and
+ * `summarizeMemberSources` is pure, so the honest answer costs nothing.
+ */
+describe('useGroupSource.resummarize', () => {
+  it('re-splits a changed roster without scheduling a single request', async () => {
+    installHarness(3);
+    const { result } = renderHook(() => useGroupSource(1));
+
+    await act(async () => {
+      result.current.open(group);
+    });
+    await waitFor(() => expect(result.current.rulesStatus).toBe('done'));
+    await act(async () => {
+      result.current.analyzeMembers();
+    });
+    await waitFor(() => expect(result.current.memberStatus).toBe('done'));
+    expect(result.current.breakdown?.total).toBe(3);
+
+    const before = scheduledEndpoints().length;
+
+    // One member removed, as the Members section would report it.
+    await act(async () => {
+      result.current.resummarize([makeMember(0), makeMember(1)]);
+    });
+
+    expect(result.current.breakdown?.total).toBe(2);
+    expect(scheduledEndpoints()).toHaveLength(before);
+  });
+
+  it('is a no-op before an analysis has run, since there is no split to correct', async () => {
+    installHarness(3);
+    const { result } = renderHook(() => useGroupSource(1));
+
+    await act(async () => {
+      result.current.open(group);
+    });
+    await waitFor(() => expect(result.current.rulesStatus).toBe('done'));
+
+    await act(async () => {
+      result.current.resummarize([makeMember(0)]);
+    });
+
+    expect(result.current.breakdown).toBeNull();
+    expect(result.current.memberStatus).toBe('idle');
   });
 });

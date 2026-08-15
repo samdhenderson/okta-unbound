@@ -29,11 +29,13 @@
  * user — a pushed view would otherwise hide the profile that deep link is for.
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import type React from 'react';
 import type { GroupMembership, OktaUser, UserInfo } from '../../shared/types';
 import type { AlertMessageData } from '../components/shared/AlertMessage';
 import { invalidate } from '../cache/entityCache';
+import { useOktaApi } from './useOktaApi';
+import type { MemberRuleAttribution } from '../../shared/membership/memberRuleAttribution';
 import { cacheKeys } from '../cache/keys';
 import { userDisplayName } from '../../shared/utils/userDisplay';
 import { useUserContext } from './useUserContext';
@@ -70,13 +72,31 @@ export interface UseUsersTabStateOptions {
   compareViewRef?: React.RefObject<HTMLElement | null>;
 }
 
-/** One pushed view of the Users tab's stack: a comparison anchored on a user. */
-export interface UserCompareEntry {
-  /** Id of the user the comparison is anchored on (its left-hand side). */
-  userId: string;
-  /** That user's display name at push time, for the breadcrumb/subtitle. */
-  userName: string;
-}
+/**
+ * One pushed view of the Users tab's stack.
+ *
+ * Two rungs, in this order: a user's **detail** page, and a **comparison**
+ * anchored on that user. The detail page used to render inline under the search
+ * box, which left the tab with two navigation models at once — a real stack for
+ * the comparison, and nothing at all for the page you were actually reading. The
+ * header could not name the user you had open, and there was no back affordance
+ * (ADR-0030; the Groups tab has drilled in this way since ADR-0016).
+ */
+export type UsersViewEntry =
+  | {
+      kind: 'detail';
+      /** Id of the user whose profile + memberships are shown. */
+      userId: string;
+      /** That user's display name at push time, for the breadcrumb/title. */
+      userName: string;
+    }
+  | {
+      kind: 'compare';
+      /** Id of the user the comparison is anchored on (its left-hand side). */
+      userId: string;
+      /** That user's display name at push time, for the breadcrumb/subtitle. */
+      userName: string;
+    };
 
 /** Return shape of {@link useUsersTabState}. */
 export interface UseUsersTabStateReturn {
@@ -117,10 +137,21 @@ export interface UseUsersTabStateReturn {
   selectUser: (user: OktaUser) => Promise<void>;
   /** Clears the search, selection, memberships and both banners. */
   clearSearch: () => void;
-  /** The tab's sub-navigation stack; its one pushed view is the comparison. */
-  nav: ViewStack<UserCompareEntry>;
-  /** Whether a comparison view is pushed (i.e. the stack is not at its root). */
+  /** The tab's sub-navigation stack: search → a user's detail → their comparison. */
+  nav: ViewStack<UsersViewEntry>;
+  /** Whether a user's detail page is the view on screen. */
+  isDetailOpen: boolean;
+  /** Whether a comparison is the view on screen (the stack's second rung). */
   isCompareOpen: boolean;
+  /**
+   * Asks Okta which rules manage one of the selected user's memberships
+   * (ADR-0031). `undefined` when there is no selected user or no connected tab,
+   * which is what hides the per-row "Prove it" action rather than offering one
+   * that cannot work.
+   *
+   * One request per call, so it is only ever invoked from that press.
+   */
+  proveMembershipSource?: (groupId: string) => Promise<MemberRuleAttribution>;
   /** Pushes the comparison view for the selected user. No-op without one. */
   openCompare: () => void;
   /** Pops the comparison view, returning to the search + profile body. */
@@ -149,11 +180,15 @@ export interface UseUsersTabStateReturn {
   recentlyAddedGroupId: string | null;
 }
 
-/** Breadcrumb label for the comparison view. The stack holds at most this one entry. */
-const compareCrumbLabel = (): string => 'Compare users';
+/**
+ * Breadcrumb label per rung: the detail rung is named for its user, so the trail
+ * reads `Users › Jane Doe › Compare users` rather than repeating the tab name.
+ */
+const viewCrumbLabel = (entry: UsersViewEntry): string =>
+  entry.kind === 'compare' ? 'Compare users' : entry.userName;
 
-/** Stable breadcrumb key for a pushed comparison. */
-const compareCrumbKey = (entry: UserCompareEntry): string => `compare-${entry.userId}`;
+/** Stable breadcrumb key: the same user can appear on both rungs at once. */
+const viewCrumbKey = (entry: UsersViewEntry): string => `${entry.kind}-${entry.userId}`;
 
 /**
  * Hook owning all Users-tab state and the hook wiring between its features.
@@ -187,13 +222,15 @@ export function useUsersTabState({
   // Sub-navigation (ADR-0016): the search + profile body stays mounted (hidden) and
   // the comparison renders as its sibling, so the selected user, their analysed
   // memberships and the search box all survive a push→pop round trip.
-  const nav = useViewStack<UserCompareEntry>({
+  const nav = useViewStack<UsersViewEntry>({
     rootLabel: 'User Search',
-    getLabel: compareCrumbLabel,
-    getKey: compareCrumbKey,
+    getLabel: viewCrumbLabel,
+    getKey: viewCrumbKey,
     viewRef: compareViewRef,
   });
-  const isCompareOpen = !nav.isRoot;
+  const currentView = nav.currentEntry?.kind ?? 'search';
+  const isDetailOpen = currentView === 'detail';
+  const isCompareOpen = currentView === 'compare';
 
   // Membership loading + attribution lives in the shared hook (also used by
   // UserOverview / user comparison). The orchestrator keeps owning the merged
@@ -217,15 +254,45 @@ export function useUsersTabState({
   const { searchQuery, setSearchQuery, searchResults, setSearchResults, isSearching } =
     useUsersTabSearch({ targetTabId, onError: setError, onSearchStart, enabled: isActive });
 
+  /**
+   * Put the stack on `user`'s detail rung — **idempotently**.
+   *
+   * The guard is load-bearing, not defensive: a membership reload after an
+   * Add-to-Group re-selects the same user, and the comparison copies a group and
+   * re-selects too. Without it every one of those would push a second detail rung
+   * and stack duplicate breadcrumbs behind the reader.
+   *
+   * Held in a ref rather than read off `nav.currentEntry` so the callback keeps a
+   * stable identity (`useViewStack` documents why reading `currentEntry` in a
+   * callback is a trap), and cleared whenever the stack returns to root.
+   */
+  const detailUserIdRef = useRef<string | null>(null);
+  const { push: pushView } = nav;
+  const showUserDetail = useCallback(
+    (user: OktaUser) => {
+      if (detailUserIdRef.current === user.id) return;
+      detailUserIdRef.current = user.id;
+      pushView({ kind: 'detail', userId: user.id, userName: userDisplayName(user) });
+    },
+    [pushView],
+  );
+
+  // Returning to the search results ends the detail rung, so the next selection —
+  // even of the same user — pushes afresh rather than being swallowed as a repeat.
+  useEffect(() => {
+    if (nav.isRoot) detailUserIdRef.current = null;
+  }, [nav.isRoot]);
+
   const handleSelectUser = useCallback(
     async (user: OktaUser) => {
       if (!targetTabId) return;
 
       setRecentlyAddedGroupId(null);
       setSelectedUser(user);
+      showUserDetail(user);
       await loadMemberships(user);
     },
-    [targetTabId, loadMemberships],
+    [targetTabId, loadMemberships, showUserDetail],
   );
 
   // After adding the user to a group their memberships have changed — drop the
@@ -272,11 +339,22 @@ export function useUsersTabState({
     setSearchQuery('');
   }, [setSearchResults, setSearchQuery]);
 
+  // The detected-user banner and the cross-tab deep link both select a user
+  // without going through `handleSelectUser`, so they open the detail rung here.
+  // `null` means the selection was cleared, which is the root's business.
+  const onDetectedUserSelected = useCallback(
+    (user: OktaUser | null) => {
+      setSelectedUser(user);
+      if (user) showUserDetail(user);
+    },
+    [showUserDetail],
+  );
+
   const { loadDetectedUser, loadUserById } = useDetectedUser({
     targetTabId,
     detectedUserId: userInfo?.userId,
     loadMemberships,
-    onSelectUser: setSelectedUser,
+    onSelectUser: onDetectedUserSelected,
     onError: setError,
     onLoadingChange: setIsLoadingMemberships,
     onResetSearch,
@@ -366,11 +444,22 @@ export function useUsersTabState({
   const dismissError = useCallback(() => setError(null), []);
   const dismissResultMessage = useCallback(() => setResultMessage(null), []);
 
-  const { push: pushCompare, pop: popCompare } = nav;
+  // §8: this orchestrator owns one scheduler-routed read of its own — the
+  // per-membership proof, which needs both the selected user and a live tab.
+  const { getMembershipRuleProof } = useOktaApi({ targetTabId: targetTabId ?? null });
+  const proveMembershipSource = useMemo(
+    () =>
+      selectedUser && targetTabId
+        ? (groupId: string) => getMembershipRuleProof(groupId, selectedUser.id)
+        : undefined,
+    [selectedUser, targetTabId, getMembershipRuleProof],
+  );
+
+  const { pop: popCompare } = nav;
   const openCompare = useCallback(() => {
     if (!selectedUser) return;
-    pushCompare({ userId: selectedUser.id, userName: userDisplayName(selectedUser) });
-  }, [selectedUser, pushCompare]);
+    pushView({ kind: 'compare', userId: selectedUser.id, userName: userDisplayName(selectedUser) });
+  }, [selectedUser, pushView]);
   const closeCompare = popCompare;
 
   return {
@@ -392,7 +481,9 @@ export function useUsersTabState({
     selectUser: handleSelectUser,
     clearSearch,
     nav,
+    isDetailOpen,
     isCompareOpen,
+    proveMembershipSource,
     openCompare,
     closeCompare,
     refreshSelectedUserMemberships,

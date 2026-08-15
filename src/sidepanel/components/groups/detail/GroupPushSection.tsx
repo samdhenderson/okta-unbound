@@ -12,7 +12,7 @@
  * non-fatal and can be skipped), so an unknown is never rendered as a zero.
  */
 import React from 'react';
-import DetailSection from './DetailSection';
+import { DetailSection } from '../../shared';
 import type { PushGroupMapping } from '../../../../shared/types';
 
 /** Props for {@link GroupPushSection}. */

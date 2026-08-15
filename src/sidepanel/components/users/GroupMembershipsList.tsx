@@ -16,16 +16,22 @@
  * UsersTab's "Add to Group" flow succeeds) via `recentlyAddedGroupId`; that row
  * plays a one-shot `animate-affirm-flash` so the confirmation lands on the group
  * that changed rather than only in a banner above the fold.
+ *
+ * Every classification here is a **deduction** — this endpoint carries no
+ * attribution embed (ADR-0020). Supply `onProveMembershipSource` and each row
+ * gains a "Prove it" action that replaces its guess with Okta's own answer for
+ * that one membership (ADR-0031); see
+ * {@link sidepanel/components/users/GroupMembershipsListProof}. It is one API
+ * call per row and is never run automatically.
  */
-import React from 'react';
-import { Button, IconButton, Skeleton } from '../shared';
+import React, { useId, useState } from 'react';
+import { Badge, EntityLink, IconButton, Skeleton, type BadgeVariant } from '../shared';
+import Icon from '../overview/shared/Icon';
 import ClauseChecklist from '../groups/detail/ClauseChecklist';
-import type {
-  GroupMembership,
-  MembershipAttribution,
-  MembershipRule,
-  OktaUser,
-} from '../../../shared/types';
+import MembershipProofAction, { useMembershipProofs } from './GroupMembershipsListProof';
+import { membershipSourceLine, sourceLineLabel } from '../../../shared/membership/sourceLine';
+import type { MemberRuleAttribution } from '../../../shared/membership/memberRuleAttribution';
+import type { GroupMembership, MembershipRule, OktaUser } from '../../../shared/types';
 import { oktaAdminEntityUrl } from '../../../shared/utils/oktaUrl';
 
 /**
@@ -59,8 +65,6 @@ interface GroupMembershipsListProps {
   currentGroupId?: string;
   /** Okta origin used to build admin-console deep links; links are hidden when absent. */
   oktaOrigin?: string | null;
-  /** Invoked with a rule id to navigate to that rule in the Rules tab. */
-  onNavigateToRule?: (ruleId: string) => void;
   /** Caller-supplied header controls, rendered on the right of the title row. */
   actions?: React.ReactNode;
   /**
@@ -70,78 +74,44 @@ interface GroupMembershipsListProps {
    * non-matching ids render no flash.
    */
   recentlyAddedGroupId?: string | null;
+  /**
+   * Asks Okta which rules manage one membership
+   * (`GET /api/v1/groups/{groupId}/users/{userId}/group-rules`), resolving to its
+   * three-state answer. Supplied, every row gains a "Prove it" action; omitted,
+   * the surface stays exactly as it was.
+   *
+   * **One API call per row**, so it is invoked only from that click — never for
+   * the list, and never on mount.
+   */
+  onProveMembershipSource?: (groupId: string) => Promise<MemberRuleAttribution>;
 }
 
-/** Props for {@link RuleAttributionBlock}. */
-interface RuleAttributionBlockProps {
+/** Props for {@link RuleEvidence}. */
+interface RuleEvidenceProps {
   /** One rule this membership is attributed to. */
   rule: MembershipRule;
-  /** How much evidence stands behind the attribution, which decides the block's label. */
-  attribution: MembershipAttribution;
   /** The user to explain the rule's condition against; omitted, the raw condition is shown. */
   user?: OktaUser;
-  /** Invoked with the rule id to navigate to it in the Rules tab. */
-  onNavigateToRule?: (ruleId: string) => void;
 }
 
 /**
- * How a rule is introduced, by the evidence behind the attribution — a candidate
- * from a guess must never be captioned as the rule that added the user.
+ * One attributed rule inside the evidence disclosure: a link to it, and its
+ * condition explained clause by clause against the user.
+ *
+ * It deliberately carries **no caption**. The chip above the disclosure already
+ * says how much the attribution is worth ("Added by Rule:" / "Possible rule:"),
+ * and repeating that phrase once per rule was how this surface used to read —
+ * three hedges stacked down the row for a single hedged answer.
  */
-const attributionLabel: Record<MembershipAttribution, string> = {
-  exact: 'Added by Rule:',
-  inferred: 'Likely added by rule:',
-  ambiguous: 'Possible rule:',
-};
-
-/**
- * One attributed rule: its name, the "View Rule" deep link, and its condition
- * explained clause by clause against the user (or the raw condition when no user
- * was supplied).
- */
-const RuleAttributionBlock: React.FC<RuleAttributionBlockProps> = ({
-  rule,
-  attribution,
-  user,
-  onNavigateToRule,
-}) => (
-  <div className="p-3 bg-primary-light rounded-md border border-primary-highlight">
-    <div className="flex items-center gap-2 mb-2">
-      <svg
-        className="w-4 h-4 text-primary-text"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M13 10V3L4 14h7v7l9-11h-7z"
-        />
-      </svg>
-      <span className="text-sm font-semibold text-primary-dark">
-        {attributionLabel[attribution]}
-      </span>
-      <span className="text-sm text-primary-text">{rule.name}</span>
-      {onNavigateToRule && (
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => onNavigateToRule(rule.id)}
-          title="View this rule in Rules tab"
-          className="ml-auto"
-        >
-          View Rule
-        </Button>
-      )}
-    </div>
+const RuleEvidence: React.FC<RuleEvidenceProps> = ({ rule, user }) => (
+  <div className="rounded-md border border-neutral-200 bg-white p-3">
+    <EntityLink type="rule" id={rule.id} name={rule.name} />
     <div className="mt-2">
-      <span className="text-xs font-semibold text-primary-text block mb-1">Condition:</span>
+      <span className="mb-1 block text-xs font-semibold text-neutral-600">Condition</span>
       {user ? (
         <ClauseChecklist expression={conditionExpressionOf(rule)} user={user} />
       ) : (
-        <code className="block text-xs font-mono text-neutral-900 bg-white p-2 rounded-md border border-primary-highlight overflow-x-auto break-words whitespace-pre-wrap">
+        <code className="block overflow-x-auto whitespace-pre-wrap break-words rounded-md border border-neutral-200 bg-neutral-50 p-2 font-mono text-xs text-neutral-900">
           {conditionExpressionOf(rule) || 'No condition expression'}
         </code>
       )}
@@ -149,16 +119,102 @@ const RuleAttributionBlock: React.FC<RuleAttributionBlockProps> = ({
   </div>
 );
 
-/** Maps a membership type to its Tailwind badge class (rule-based, direct, or fallback). */
-const getMembershipTypeBadge = (type: string) => {
+/**
+ * Maps a membership type to its {@link Badge} variant.
+ *
+ * This used to return `badge badge-info` / `badge-success` / `badge-muted` —
+ * class names whose CSS was dropped in the Tailwind v4 migration and never
+ * replaced, so the badge rendered as unstyled inline text. The shared primitive
+ * is what stops that being expressible.
+ */
+const membershipTypeVariant = (type: string): BadgeVariant => {
   switch (type) {
     case 'RULE_BASED':
-      return 'badge badge-info';
+      return 'primary';
     case 'DIRECT':
-      return 'badge badge-success';
+      return 'success';
     default:
-      return 'badge badge-muted';
+      return 'neutral';
   }
+};
+
+/**
+ * A membership's answer, and — when there is rule evidence behind it — a way to
+ * check that evidence without it occupying the row until asked for.
+ *
+ * The chip is always visible and is the whole answer for most rows: a proven
+ * classification reads as a chip, a deduction or a missing one reads muted, and
+ * the fuller caveat rides on `title`. That split is `membershipSourceLine`'s
+ * `proven`, shared with the comparison view so the same evidence never reads two
+ * different ways on two screens.
+ *
+ * The evidence sits behind a disclosure because this list is as long as the user
+ * has groups. Always-open blocks meant a twelve-group user scrolled past twelve
+ * clause checklists to find the one they came for; closed by default, the row is
+ * one line and the proof is one click. `.disclose` animates `grid-template-rows`
+ * with no JS measurement and holds the panel `inert` while collapsed, so nothing
+ * inside it is tabbable or announced until it is open.
+ */
+const MembershipSourceRow: React.FC<{
+  membership: GroupMembership;
+  user?: OktaUser;
+}> = ({ membership, user }) => {
+  const line = membershipSourceLine(membership);
+  const label = sourceLineLabel(line);
+  const [open, setOpen] = useState(false);
+  const evidenceId = useId();
+  const rules = membership.rules;
+  const hasEvidence = rules.length > 0;
+
+  return (
+    <div className="mt-3">
+      <div className="flex items-start justify-between gap-2">
+        <span
+          className={
+            line.proven
+              ? 'min-w-0 rounded bg-neutral-100 px-1.5 py-0.5 text-xs font-medium text-neutral-700'
+              : 'min-w-0 text-xs italic text-neutral-500'
+          }
+          title={`${label} — ${line.description}`}
+        >
+          {/* Its own node so the caption stays findable as a phrase, and so a
+              label expecting a value ("Added by Rule:") is not glued to it. */}
+          <span>{line.caption}</span>
+          {line.detail && <span> {line.detail}</span>}
+        </span>
+
+        {hasEvidence && (
+          <IconButton
+            label={open ? 'Hide the condition' : 'Check the condition'}
+            variant="ghost"
+            size="sm"
+            expanded={open}
+            controls={evidenceId}
+            className="shrink-0"
+            onClick={() => setOpen((v: boolean) => !v)}
+          >
+            <Icon
+              type="chevron-right"
+              size="sm"
+              className={`transition-transform duration-(--dur-quick) ${open ? 'rotate-90' : ''}`}
+            />
+          </IconButton>
+        )}
+      </div>
+
+      {hasEvidence && (
+        <div id={evidenceId} className="disclose" data-open={open} inert={!open || undefined}>
+          <div>
+            <div className="space-y-2 pt-2">
+              {rules.map((rule) => (
+                <RuleEvidence key={rule.id} rule={rule} user={user} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 /**
@@ -171,10 +227,12 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
   isLoading,
   currentGroupId,
   oktaOrigin,
-  onNavigateToRule,
   actions,
   recentlyAddedGroupId,
+  onProveMembershipSource,
 }) => {
+  const proofs = useMembershipProofs(onProveMembershipSource);
+
   const highlightCurrentGroup = (groupId: string) => {
     return currentGroupId && groupId === currentGroupId;
   };
@@ -258,47 +316,35 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
                   )}
                 </div>
                 <div className="flex gap-2 shrink-0">
-                  <span className={getMembershipTypeBadge(membership.membershipType)}>
+                  <Badge variant={membershipTypeVariant(membership.membershipType)}>
                     {membership.membershipType.replace('_', ' ')}
-                  </span>
-                  <span className="px-2 py-0.5 rounded-md bg-neutral-100 text-neutral-700 text-xs font-medium border border-neutral-200">
-                    {membership.group.type}
-                  </span>
+                  </Badge>
+                  <Badge variant="neutral">{membership.group.type}</Badge>
                 </div>
               </div>
 
-              {/* Show rule details if rule-based */}
-              {membership.membershipType === 'RULE_BASED' && membership.rules.length > 0 && (
-                <div className="mt-3 space-y-3">
-                  {membership.rules.map((rule) => (
-                    <RuleAttributionBlock
-                      key={rule.id}
-                      rule={rule}
-                      attribution={membership.attribution}
-                      user={user}
-                      onNavigateToRule={onNavigateToRule}
-                    />
-                  ))}
-                </div>
-              )}
+              {/*
+                One path for every membership, instead of three branches that
+                between them left three cases rendering nothing at all. The chip
+                is the answer; rule evidence, when there is any, is one click
+                below it rather than pushed into the row whether or not anyone
+                wanted it.
+              */}
+              <MembershipSourceRow membership={membership} user={user} />
 
-              {membership.membershipType === 'DIRECT' && (
-                <div className="mt-3 p-3 bg-neutral-50 rounded-md border border-neutral-200">
-                  <p className="text-xs text-neutral-600 flex items-center gap-2">
-                    <svg
-                      className="w-3.5 h-3.5 text-neutral-500"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    This user was added directly to the group (not through a rule)
-                  </p>
-                </div>
+              {/*
+                The deduction above stays exactly as it was; this is the way out
+                of it. One explicit call asks Okta about this one membership and
+                states the answer as a fact (ADR-0031). It is deliberately last:
+                the row reads as "here is what we worked out — and here is what
+                Okta says", not the other way round.
+              */}
+              {proofs.enabled && (
+                <MembershipProofAction
+                  membership={membership}
+                  outcome={proofs.outcomeFor(membership.group.id)}
+                  onProve={proofs.prove}
+                />
               )}
             </div>
           ))}

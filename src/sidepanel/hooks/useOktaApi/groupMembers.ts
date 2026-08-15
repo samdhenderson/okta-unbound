@@ -10,17 +10,57 @@ import { logAction } from '../../../shared/undoManager';
 import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
 import {
   GROUP_RULES_EXPAND,
+  interpretGroupRules,
   memberWithGroupRulesSchema,
+  type MemberRuleAttribution,
   type MemberWithGroupRules,
 } from '@/shared/membership/memberRuleAttribution';
+import { createLogger } from '@/shared/utils/logger';
+
+const log = createLogger('useOktaApi');
+
+/**
+ * The rule-reference array out of a `…/group-rules` response body.
+ *
+ * The documented body **is** the array. Okta has shipped the same list nested
+ * under a key elsewhere though (`_embedded['group-rules']` on the member
+ * listing), so an object carrying that key is unwrapped rather than discarded.
+ * Anything else returns `undefined`, which
+ * {@link module:shared/membership/memberRuleAttribution.interpretGroupRules}
+ * reads as `unknown` — never as "no rule".
+ *
+ * @param data - The raw response payload.
+ * @returns The rule-reference array, or `undefined` when the payload is not one.
+ */
+function groupRulesPayload(data: unknown): unknown {
+  if (Array.isArray(data)) return data;
+  if (typeof data === 'object' && data !== null && GROUP_RULES_EXPAND in data) {
+    return (data as Record<string, unknown>)[GROUP_RULES_EXPAND];
+  }
+  return undefined;
+}
 
 /**
  * Build add/remove/list operations for individual group memberships.
  *
  * @param coreApi - Shared transport surface (see {@link CoreApi}).
- * @returns `{ removeUserFromGroup, removeUserFromGroups, getAllGroupMembers, addUserToGroup }`.
+ * @param onMembershipChanged - Called with a group id after **every** successful
+ * membership write here. This module deliberately knows nothing about the entity
+ * cache — it reports that a group's membership moved and lets the assembly point
+ * (`useOktaApi`) decide what that invalidates.
+ *
+ * The seam lives here rather than at the call sites because there are six of
+ * them, and two (`groupBulkOps`, `groupCleanup`) are inside this same API layer,
+ * receiving `removeUserFromGroup` as an injected primitive. Firing from the
+ * primitive is the only place that covers all six without teaching the API layer
+ * about caching.
+ * @returns `{ removeUserFromGroup, removeUserFromGroups, getAllGroupMembers,
+ * getMembershipRuleProof, addUserToGroup }`.
  */
-export function createGroupMemberOperations(coreApi: CoreApi) {
+export function createGroupMemberOperations(
+  coreApi: CoreApi,
+  onMembershipChanged?: (groupId: string) => void,
+) {
   /**
    * Remove a single user from a group (DELETE membership).
    *
@@ -41,6 +81,10 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
       `/api/v1/groups/${groupId}/users/${user.id}`,
       'DELETE',
     );
+
+    // Fires regardless of `skipUndoLog`: that flag controls the *audit* entry a
+    // bulk caller aggregates, not whether this group's membership actually moved.
+    if (result.success) onMembershipChanged?.(groupId);
 
     // Log undo action if successful (skip for bulk operations which log at the end)
     if (result.success && !skipUndoLog) {
@@ -91,6 +135,7 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
       groupIds,
       async (groupId) => {
         await coreApi.makeApiRequest(`/api/v1/groups/${groupId}/users/${userId}`, 'DELETE');
+        onMembershipChanged?.(groupId);
         completedCount += 1;
         onProgress?.(completedCount, groupIds.length);
       },
@@ -154,6 +199,53 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
   };
 
   /**
+   * Ask Okta which rules manage **one** user's membership of **one** group.
+   *
+   * `GET /api/v1/groups/{groupId}/users/{userId}/group-rules` is the documented
+   * per-membership counterpart to the `expand=group-rules` embed
+   * {@link getAllGroupMembers} rides along on. It is the user-detail page's only
+   * route to an authoritative answer, since `GET /api/v1/users/{id}/groups`
+   * carries no attribution embed at all (ADR-0020, ADR-0031).
+   *
+   * **One call per membership, so this is never run for a whole list.** A
+   * 40-group user would be 40 requests; the caller gates it behind an explicit
+   * per-row action. Exactly one request, no pagination — the response is the
+   * complete rule set for that one membership.
+   *
+   * @param groupId - The group whose membership is in question.
+   * @param userId - The member.
+   * @returns The three-state {@link MemberRuleAttribution}, read through the same
+   * interpreter as the embed so `no-rules` (Okta asserting a manual add) can
+   * never collapse into `unknown`. A failed request is `unknown` — the absence of
+   * an answer, never an answer.
+   * @remarks Routed through `coreApi.makeApiRequest`, i.e. the background
+   * scheduler, like every other Okta call. Never throws: the caller is a UI
+   * affordance and the honest failure mode is "Okta did not answer".
+   */
+  const getMembershipRuleProof = async (
+    groupId: string,
+    userId: string,
+  ): Promise<MemberRuleAttribution> => {
+    const result = await coreApi.makeApiRequest(
+      `/api/v1/groups/${groupId}/users/${userId}/group-rules`,
+    );
+
+    if (!result.success) {
+      // Identifiers and the outcome only — never the response body.
+      log.warn('Membership rule proof unavailable', {
+        groupId,
+        userId,
+        status: result.status,
+      });
+      return { state: 'unknown' };
+    }
+
+    // Validated at the response boundary (ADR-0006): every entry goes through
+    // `interpretGroupRules`' zod schema, and anything unusable degrades.
+    return interpretGroupRules(groupRulesPayload(result.data));
+  };
+
+  /**
    * Add a user to a group (PUT membership) and log an undo action on success.
    *
    * @param groupId - Target group id.
@@ -175,6 +267,7 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
     );
 
     if (result.success) {
+      onMembershipChanged?.(groupId);
       await logAction(`Added ${user.profile.firstName} ${user.profile.lastName} to ${groupName}`, {
         type: 'ADD_USER_TO_GROUP',
         userId: user.id,
@@ -196,6 +289,7 @@ export function createGroupMemberOperations(coreApi: CoreApi) {
     removeUserFromGroup,
     removeUserFromGroups,
     getAllGroupMembers,
+    getMembershipRuleProof,
     addUserToGroup,
   };
 }

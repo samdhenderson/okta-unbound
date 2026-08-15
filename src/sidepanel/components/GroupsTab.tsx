@@ -29,6 +29,15 @@
  * tab must stay inert while hidden — `isActive` gates the live-search debounce (the
  * one hook here that can issue an Okta request without a click) and extends the
  * list's scroll preservation to cover the tab-level hide as well as the push/pop one.
+ *
+ * ## The detail view's own mutations
+ *
+ * {@link GroupDetailView} is no longer purely read-only: it owns a page-level
+ * "Export members" action (`onExportGroup`, forwarded straight through and left
+ * optional here) and a Members section with per-member add/remove. Neither is
+ * shell state — both live in the detail view itself (its own hook,
+ * `useGroupMembersSection`), since only that view knows a section's load/gate
+ * status well enough to mutate it safely.
  */
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import PageHeader from './shared/PageHeader';
@@ -75,6 +84,14 @@ interface GroupsTabProps {
   /** Called once the highlighted group has been shown, so the parent can clear it. */
   onGroupSelected?: () => void;
   /**
+   * Opens the Export tab pre-scoped to a group's members — the detail view's
+   * page-level "Export members" action (ADR-0030). Optional: `App.tsx` already
+   * owns a `handleExportGroup` of this shape for the Overview tab but does not
+   * yet wire it through to the Groups tab, so this stays a no-op action rather
+   * than a hard requirement until that wiring lands.
+   */
+  onExportGroup?: (groupId: string, groupName: string) => void;
+  /**
    * Whether this is the selected top-level tab. The tab stays mounted while
    * hidden, so background work that could reach Okta (the live-search debounce)
    * is gated on it. Defaults to `true` for standalone use.
@@ -114,6 +131,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   selectedGroupId,
   onGroupSelected,
   isActive = true,
+  onExportGroup,
 }) => {
   // Shell-owned state: error has three producers (loader, live search, useOktaApi
   // onResult) so it stays here; searchMode is read by three hooks so it stays above
@@ -493,6 +511,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
               onNavigateToRule={onNavigateToRule}
               autoAnalyze={autoAnalyzeGroupId === detailGroup.id}
               isActive={isActive}
+              onExportGroup={onExportGroup}
             />
           </div>
         )}

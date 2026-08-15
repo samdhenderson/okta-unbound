@@ -6,20 +6,24 @@
  * action's state live in {@link sidepanel/hooks/useUsersTabState.useUsersTabState};
  * this component composes {@link UserProfileCard} (with
  * {@link UserLifecycleActions} in its `afterCard` slot) and
- * {@link GroupMembershipsList} (with the Compare / Add to Group controls in its
- * `actions` slot) and forwards intent.
+ * {@link GroupMembershipsList}, and forwards intent.
  *
- * The user comparison is deliberately **not** mounted here: it is a pushed view
- * (ADR-0016) and stays a sibling of this panel in {@link UsersTab}, so this panel is
- * one of the things that survives — hidden, not unmounted — behind it. Compare is
- * therefore a push, and the button below is the element focus returns to on pop.
+ * **Page-level actions are deliberately not here.** Compare and Add-to-Group act
+ * on the whole user, so they live in {@link UsersTab}'s `ActionBar` above this
+ * panel (ADR-0030). They used to sit in `GroupMembershipsList`'s header slot — the
+ * same slot as controls acting on that one card — which made the page's main verb
+ * read as a property of its groups section.
+ *
+ * The user comparison is deliberately **not** mounted here either: it is the next
+ * rung of the tab's view stack (ADR-0016) and stays a sibling of this panel in
+ * {@link UsersTab}, so this panel survives — hidden, not unmounted — behind it.
  */
 import React from 'react';
-import { Button } from '../shared';
 import GroupMembershipsList from './GroupMembershipsList';
 import UserLifecycleActions from './UserLifecycleActions';
 import UserProfileCard from './UserProfileCard';
 import type { GroupMembership, OktaUser } from '../../../shared/types';
+import type { MemberRuleAttribution } from '../../../shared/membership/memberRuleAttribution';
 import type { LifecycleAction } from '../../hooks/useUserLifecycleActions';
 
 /** Props for {@link UserDetailPanel}. */
@@ -34,8 +38,6 @@ export interface UserDetailPanelProps {
   isLoadingMemberships: boolean;
   /** Id of the currently detected group; highlights that group in the membership list. */
   currentGroupId?: string;
-  /** Invoked with a rule id to navigate to that rule in the Rules tab. */
-  onNavigateToRule?: (ruleId: string) => void;
   /**
    * Id of the group just added via the Add-to-Group flow, forwarded so that row
    * plays its one-shot success flash rather than the confirmation only landing in
@@ -52,10 +54,11 @@ export interface UserDetailPanelProps {
   onCancelLifecycleAction: () => void;
   /** Run the armed lifecycle action (the confirm button). */
   onConfirmLifecycleAction: () => void;
-  /** Pushes the user-comparison view. */
-  onCompare: () => void;
-  /** Opens the Add-to-Group modal. */
-  onAddToGroup: () => void;
+  /**
+   * Asks Okta which rules manage one membership, replacing that row's deduction
+   * with Okta's own answer (ADR-0031). Omitted, no row offers the action.
+   */
+  onProveMembershipSource?: (groupId: string) => Promise<MemberRuleAttribution>;
 }
 
 /**
@@ -68,21 +71,22 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
   memberships,
   isLoadingMemberships,
   currentGroupId,
-  onNavigateToRule,
   recentlyAddedGroupId,
   isLifecycleLoading,
   pendingLifecycleAction,
   onRequestLifecycleAction,
   onCancelLifecycleAction,
   onConfirmLifecycleAction,
-  onCompare,
-  onAddToGroup,
+  onProveMembershipSource,
 }) => {
   return (
     <div className="space-y-6 animate-rise-in">
       <UserProfileCard
         user={user}
         oktaOrigin={oktaOrigin}
+        // The tab's PageHeader names the user on this rung, so the identity card
+        // does not repeat it (ADR-0030).
+        showName={false}
         afterCard={
           <UserLifecycleActions
             user={user}
@@ -102,30 +106,8 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
         isLoading={isLoadingMemberships}
         currentGroupId={currentGroupId}
         oktaOrigin={oktaOrigin}
-        onNavigateToRule={onNavigateToRule}
         recentlyAddedGroupId={recentlyAddedGroupId}
-        actions={
-          <>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon="users"
-              onClick={onCompare}
-              disabled={isLoadingMemberships}
-              title="Compare group & app access with another user"
-            >
-              Compare
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={onAddToGroup}
-              disabled={isLoadingMemberships}
-            >
-              Add to Group
-            </Button>
-          </>
-        }
+        onProveMembershipSource={onProveMembershipSource}
       />
     </div>
   );

@@ -288,7 +288,7 @@ describe('user search: 600ms debounce contract', () => {
     // Prop identity churn that must NOT reschedule the debounce timer. If
     // handleSearch loses its memoized identity the effect re-runs forever.
     for (let i = 0; i < 5; i++) {
-      rerender(<UsersTab targetTabId={1} currentGroupId={`x${i}`} onNavigateToRule={() => {}} />);
+      rerender(<UsersTab targetTabId={1} currentGroupId={`x${i}`} />);
       await advance(50);
     }
     await advance(600);
@@ -386,7 +386,7 @@ describe('detected user: manual-load banner', () => {
     const { rerender } = render(<UsersTab targetTabId={1} currentGroupId="a" />);
 
     for (let i = 0; i < 3; i++) {
-      rerender(<UsersTab targetTabId={1} currentGroupId={`b${i}`} onNavigateToRule={() => {}} />);
+      rerender(<UsersTab targetTabId={1} currentGroupId={`b${i}`} />);
       await flush();
     }
 
@@ -459,7 +459,9 @@ describe('membership classification (in-file heuristic)', () => {
 
     expect(await screen.findByText('Engineering')).toBeInTheDocument();
     expect(screen.getByText('RULE BASED')).toBeInTheDocument();
-    expect(screen.getByText('Eng auto-assign')).toBeInTheDocument();
+    // Named twice by design (ADR-0030's B2 row): once in the always-visible
+    // answer chip, once as the navigable chip inside the evidence disclosure.
+    expect(screen.getAllByText(/Eng auto-assign/).length).toBeGreaterThan(0);
   });
 
   it('classifies a group with no active rules as DIRECT', async () => {
@@ -472,9 +474,11 @@ describe('membership classification (in-file heuristic)', () => {
 
     expect(await screen.findByText('Engineering')).toBeInTheDocument();
     expect(screen.getByText('DIRECT')).toBeInTheDocument();
-    expect(
-      screen.getByText('This user was added directly to the group (not through a rule)'),
-    ).toBeInTheDocument();
+    // The row now states this in the wording `membershipSourceLine` gives every
+    // surface, rather than a sentence unique to this one. It also stops
+    // overclaiming: a `DIRECT` the classifier only *inferred* reads "Likely
+    // added directly", where the old fixed sentence asserted it flatly.
+    expect(screen.getByText('Added directly')).toBeInTheDocument();
   });
 
   it('classifies an excluded user as DIRECT even when an active rule targets the group', async () => {
@@ -551,8 +555,9 @@ describe('compare entry point', () => {
   it('pushes the comparison view from the Compare action', async () => {
     await renderWithSelectedUser();
 
-    // At the root of the view stack: the tab's own header, and no comparison.
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('User Search');
+    // On the detail rung, one below the root: the header names the user being
+    // read (it used to say "User Search" even here), and there is no comparison.
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Ada Lovelace');
     expect(screen.queryByRole('button', { name: 'Back to user' })).not.toBeInTheDocument();
 
     await act(async () => {

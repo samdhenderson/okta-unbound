@@ -33,6 +33,11 @@ interface UserProfileCardProps {
   /** Whether to render the identity header's "Open in Okta" deep link. Defaults to `true`. */
   showOktaLink?: boolean;
   /**
+   * Whether the identity header repeats the user's name. Defaults to `true`; a
+   * detail page whose `PageHeader` already names the user passes `false`.
+   */
+  showName?: boolean;
+  /**
    * Optional content rendered between the identity header and the detail sections
    * (e.g. UsersTab's lifecycle-action controls). Renders regardless of
    * `showCollapsibleSections`.
@@ -66,6 +71,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
   showCollapsibleSections = true,
   oktaOrigin,
   showOktaLink = true,
+  showName = true,
   afterCard,
 }) => {
   const sections = useMemo(() => {
@@ -107,7 +113,12 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({
 
   return (
     <div className="space-y-4">
-      <UserIdentity user={user} oktaOrigin={oktaOrigin} showOktaLink={showOktaLink} />
+      <UserIdentity
+        user={user}
+        oktaOrigin={oktaOrigin}
+        showOktaLink={showOktaLink}
+        showName={showName}
+      />
 
       {afterCard}
 

@@ -13,8 +13,7 @@
  * {@link sidepanel/hooks/useGroupRuleReferences.useGroupRuleReferences}.
  */
 import React from 'react';
-import { AlertMessage, LoadingSpinner } from '../../shared';
-import DetailSection from './DetailSection';
+import { AlertMessage, DetailSection, LoadingSpinner } from '../../shared';
 import RuleLinkRow from './RuleLinkRow';
 import type { FeedingRule, SourceStatus } from '../../../hooks/useGroupSource';
 import type { ReferencingRule } from '../../../hooks/useGroupRuleReferences';
