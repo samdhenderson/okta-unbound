@@ -616,8 +616,12 @@ describe('lifecycle actions', () => {
     ).toBeInTheDocument();
     // Exactly one GET /users/u1 after the load: the status refresh.
     expect(schedulerEndpoints().filter((e) => e === '/api/v1/users/u1')).toHaveLength(1);
-    // status-only patch: badge flips but profile.department survives.
+    // status-only patch: badge flips but profile.department survives. The department is
+    // read from the profile card's Org tab now that the header owns identity and the card
+    // no longer opens with a title/department line (ADR-0032) — same invariant, same
+    // fixture value, one click further in.
     expect(screen.getAllByText('SUSPENDED').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('tab', { name: /Org/ }));
     expect(screen.getByText('Engineering')).toBeInTheDocument();
   });
 

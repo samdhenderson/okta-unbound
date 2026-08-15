@@ -2,10 +2,16 @@
  * @module sidepanel/components/users/UserIdentityCard
  * @description Compact identity header for a single Okta user.
  *
- * The slim replacement for the former tall "user ID card": avatar, name, status
- * badge, title/department, email, an optional copyable user id, and an optional
- * "Open in Okta" link. Shared by {@link UserProfileCard} (Users tab) and
- * {@link UserOverview} so both render user identity consistently.
+ * Avatar, name, status badge, title/department, email, an optional copyable user id, and
+ * an optional "Open in Okta" link.
+ *
+ * The Overview tab is its only remaining consumer. Everywhere the panel has a `PageHeader`
+ * the header now describes the entity (ADR-0032), and the Users tab's detail rung dropped
+ * this card entirely — along with the `showName` prop that existed only to stop it
+ * repeating the title above it. Overview has no header to move into yet, so the card
+ * survives there, and with it the last of the four badge palettes: `VARIANT_CLASSES` below
+ * still recolours the shared `userStatusVariant()` decision through raw Tailwind hues
+ * rather than tokens. It goes when Overview gains a header.
  */
 import React from 'react';
 import type { OktaUser } from '../../../shared/types';
@@ -26,15 +32,6 @@ interface UserIdentityCardProps {
    * passes `false` because the masthead already shows the context entity's id.
    */
   showId?: boolean;
-  /**
-   * Whether to render the user's name as this card's heading. Defaults to `true`.
-   *
-   * A detail page whose `PageHeader` already names the user passes `false`: two
-   * headings carrying the identical string is a redundant heading outline, and in
-   * a 360px panel the repeat costs a line of vertical space directly under the
-   * title it repeats.
-   */
-  showName?: boolean;
 }
 
 /** Per-variant badge palette (this component's rich palette, keyed by shared variant). */
@@ -61,7 +58,6 @@ const UserIdentityCard: React.FC<UserIdentityCardProps> = ({
   oktaOrigin,
   showOktaLink = true,
   showId = true,
-  showName = true,
 }) => {
   const { copied: idCopied, copy: copyId } = useCopyToClipboard();
 
@@ -83,11 +79,9 @@ const UserIdentityCard: React.FC<UserIdentityCardProps> = ({
         {/* Identity */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            {showName && (
-              <h2 className="text-base font-bold text-neutral-900 truncate">
-                {user.profile.firstName} {user.profile.lastName}
-              </h2>
-            )}
+            <h2 className="text-base font-bold text-neutral-900 truncate">
+              {user.profile.firstName} {user.profile.lastName}
+            </h2>
             <span className={getStatusBadgeClass(user.status)}>{user.status}</span>
           </div>
 

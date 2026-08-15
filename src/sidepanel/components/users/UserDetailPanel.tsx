@@ -83,10 +83,6 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
     <div className="space-y-6 animate-rise-in">
       <UserProfileCard
         user={user}
-        oktaOrigin={oktaOrigin}
-        // The tab's PageHeader names the user on this rung, so the identity card
-        // does not repeat it (ADR-0030).
-        showName={false}
         afterCard={
           <UserLifecycleActions
             user={user}
