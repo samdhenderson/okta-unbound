@@ -357,11 +357,22 @@ const App: React.FC = () => {
       <NavigationProvider handlers={navigationHandlers}>
         {/* `h-screen` + `overflow-y-auto` make *this* div the scroller, not the
           document — every root-scrolling tab shares it, which is why each
-          `TabPanel` needs the ref to preserve its own offset across a tab switch. */}
+          `TabPanel` needs the ref to preserve its own offset across a tab switch.
+
+          `overflow-anchor: none` because scroll anchoring and the sticky stack are
+          incompatible here (ADR-0032). A pinned `PageHeader` deliberately collapses its
+          identity region, losing ~72px *above* the viewport; Chrome's scroll anchoring
+          reads that as content shifting under the user and compensates by pulling
+          `scrollTop` back — far enough, on a small scroll, to un-pin the header, which
+          re-expands the region, which restores the height, which re-pins it. The panel
+          visibly grew and shrank in a loop for anyone scrolling slowly. Anchoring exists
+          to absorb *unintended* reflow above the fold; every height change in this
+          scroller is intentional and driven by scroll position, so there is nothing here
+          for it to usefully protect. */}
         <div
           ref={scrollRootRef}
           data-testid="app-scroll-root"
-          className="flex flex-col h-screen overflow-y-auto pb-14 bg-canvas"
+          className="flex flex-col h-screen overflow-y-auto [overflow-anchor:none] pb-14 bg-canvas"
         >
           <ContextBar
             pageType={effective.pageType}
