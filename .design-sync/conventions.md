@@ -164,13 +164,25 @@ its height, and the band below consumes the variable:
 | `PageHeader sticky`            | `var(--rail-h)`                         | `--header-h`, onto the nearest `[data-header-scope]` ancestor |
 | `ActionBar` (default `sticky`) | `calc(var(--rail-h) + var(--header-h))` | —                                                             |
 
-Two consequences that bite in a design:
+Three consequences that bite in a design:
 
 - **A sticky `PageHeader` must have a `[data-header-scope]` ancestor.** Without one it
   publishes nothing, `--header-h` stays `0px`, and a sticky `ActionBar` slides up
   underneath the header.
 - Both variables default to `0px`, so a component shown on its own behaves like a
   plain `top-0` strip. That is correct — don't "fix" it with a literal offset.
+- **The scroller needs `[overflow-anchor:none]`.** A pinned `PageHeader` deliberately
+  collapses its identity region, losing ~72px above the viewport; Chrome's scroll
+  anchoring compensates by pulling `scrollTop` back, which un-pins the header, which
+  re-expands the region — and the page grows and shrinks in a loop for anyone
+  scrolling slowly. Put it on the same element that owns `overflow-y-auto`:
+  `className="bg-canvas h-screen overflow-y-auto [overflow-anchor:none]"`.
+
+A sticky `ActionBar` also **merges into the header as it docks** — over the first 64px
+of scroll it bleeds to the panel edges, flattens, covers the header's seam and grows a
+shadow, so the two read as one pinned surface. It is automatic (a scroll-driven
+animation on the component's own `dock-band` class); render `<ActionBar>` inside a
+`px-6` gutter and it lands correctly. Don't restyle the strip to "fix" the flattening.
 
 ### The header owns the entity; the body must not repeat it
 
