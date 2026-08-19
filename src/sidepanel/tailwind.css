@@ -115,6 +115,21 @@
   --animate-pop-in: pop-in var(--dur-travel) var(--ease-standard) both;
   --animate-skeleton-sweep: skeleton-sweep 1.4s linear infinite;
 
+  /*
+   * Scroll-progress geometry for `.dock-band` (see `@layer components`). Not
+   * durations: these describe *how far you scroll*, not how long something takes,
+   * which is why they sit apart from the `--dur-*` scale.
+   */
+  --merge-range: 64px; /* scroll distance over which the strip merges into the header */
+  --merge-bleed: 1.5rem; /* the tab content wrapper's `px-6` gutter, cancelled at full merge */
+  --merge-radius: 0.375rem; /* the strip's resting corner — `rounded-md`, animated to 0 */
+  /*
+   * The one shadow on a non-overlay surface. `docs/design-system.md` reserves
+   * shadows for things that lift above the canvas — which a docked band is: rows
+   * scroll underneath it. It only exists at full merge; at rest it is `none`.
+   */
+  --shadow-dock: 0 7px 11px -9px rgb(16 24 40 / 0.1);
+
   @keyframes rise-in {
     from {
       opacity: 0;
@@ -354,6 +369,75 @@
     background-size: 200% 100%;
     animation: var(--animate-skeleton-sweep);
   }
+
+  /*
+   * The docking band — the sticky action strip merging into the page header as
+   * the rung scrolls (ADR-0032). At rest it is a rounded card inset in the page
+   * gutter; at full merge it has bled edge to edge, dropped its radius and its
+   * top/side borders, covered the header's bottom seam and grown a shadow, so
+   * header and strip read as one continuous pinned surface.
+   *
+   * ## Why the chrome lives on a pseudo-element
+   *
+   * `.dock-band` itself never moves: its padding and its button row are static,
+   * so the buttons do not drift sideways as the band bleeds. All the animated
+   * geometry sits on an absolutely positioned `::before`, which lays out on its
+   * own — none of this per-frame work reflows the buttons. (These are not
+   * compositable properties, so the merge is main-thread style work while
+   * scrolling; confined to one small positioned box, it is cheap.)
+   *
+   * `top: -1px` at the end is how the header's seam disappears without
+   * `PageHeader` knowing this band exists: the strip paints *over* that 1px
+   * border. A `[data-header-scope]:has(.dock-band)` selector would have been the
+   * obvious alternative and is wrong — `UsersTab` keeps both rungs mounted and
+   * merely `hidden` (ADR-0016), so it would fade the seam on the search rung too,
+   * where there is no strip to replace it.
+   *
+   * ## The two guards
+   *
+   * `@supports` matters: a browser that drops the unknown `animation-timeline`
+   * declaration would run `dock-band` on the *document* timeline at `0s` with
+   * `fill: both` and snap permanently to the merged state. Guarded, it simply
+   * keeps the resting card.
+   *
+   * Reduced motion is handled at the bottom of this file by clearing
+   * `animation-name`, not by the blanket `1ms` rule — see the note there.
+   */
+  .dock-band {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .dock-band::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    top: 0;
+    bottom: 0;
+    inset-inline: 0;
+    background: var(--color-white);
+    border: 1px solid var(--color-neutral-200);
+    border-radius: var(--merge-radius);
+  }
+
+  @supports (animation-timeline: scroll()) {
+    .dock-band::before {
+      animation: dock-band linear both;
+      animation-timeline: scroll(nearest block);
+      animation-range: 0 var(--merge-range);
+    }
+  }
+
+  @keyframes dock-band {
+    to {
+      top: -1px;
+      inset-inline: calc(var(--merge-bleed) * -1);
+      border-radius: 0;
+      border-top-color: transparent;
+      border-inline-color: transparent;
+      box-shadow: var(--shadow-dock);
+    }
+  }
 }
 
 /*
@@ -369,6 +453,12 @@
  * selector list, because a list goes stale the first time someone adds a new
  * spinner. `revert` is deliberately not used inside the `!important` block — it
  * reverts to the UA value (`0s`) and defeats the exemption.
+ *
+ * `.dock-band` needs its own rule below because the blanket one does not reach
+ * it. A scroll-driven animation is progress-based: `animation-duration` plays no
+ * part in it, so setting the duration to `1ms` leaves the merge running exactly
+ * as before. Clearing `animation-name` is what actually stops it, and it leaves
+ * the strip at its resting geometry — the correct static fallback.
  */
 @media (prefers-reduced-motion: reduce) {
   *:not(.motion-exempt, .motion-exempt *),
@@ -379,6 +469,10 @@
     transition-duration: 1ms !important;
     scroll-behavior: auto !important;
   }
+
+  .dock-band::before {
+    animation-name: none !important;
+  }
 }
 
 [data-motion='off'] *:not(.motion-exempt, .motion-exempt *),
@@ -388,4 +482,8 @@
   animation-iteration-count: 1 !important;
   transition-duration: 1ms !important;
   scroll-behavior: auto !important;
+}
+
+[data-motion='off'] .dock-band::before {
+  animation-name: none !important;
 }

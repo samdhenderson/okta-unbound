@@ -22,11 +22,31 @@
  * band — behaves exactly as a `top-0` strip.
  *
  * That offset also fixes a real overlap. This strip and the rail were both `sticky top-0`
- * in one scroller, and the rail's `z-40` beat this strip's `z-10`, so a pinned action strip
- * was rendering *underneath* the rail.
+ * in one scroller, and the rail's `z-40` beat this strip's, so a pinned action strip was
+ * rendering *underneath* the rail. The strip now sits at `z-30`: above the page header
+ * (`z-20`) so it can cover that header's bottom border as it merges, and still below the
+ * rail.
  *
  * The strip still carries an opaque background and its own border: pinned, it must not let
  * rows show through it.
+ *
+ * ## How it docks
+ *
+ * Reaching its parking spot is not the same as looking parked. A strip that stays a rounded,
+ * inset card once pinned reads as "a card stopped moving", not "the strip joined the header" —
+ * so a sticky strip merges into the band above it as you scroll. Over the first
+ * `--merge-range` of scroll it bleeds out to the panel edges, loses its radius and its
+ * top/side borders, covers the header's bottom seam and grows a shadow; header and strip end
+ * up one continuous pinned surface with a single bottom edge.
+ *
+ * The mechanism is a CSS scroll-driven animation (`.dock-band` in `tailwind.css`), not a
+ * transition on a stuck flag and not a scroll listener. It tracks the scroll position
+ * directly, and it costs no per-frame JavaScript on the one shared scroller — the same reason
+ * {@link sidepanel/hooks/useStuck.useStuck} is an `IntersectionObserver` rather than an
+ * `onScroll` handler.
+ *
+ * Only the sticky strip merges. A `sticky={false}` strip never docks, so there is nothing for
+ * it to dock *into*, and it keeps the plain card chrome.
  */
 import React from 'react';
 
@@ -47,8 +67,9 @@ export interface ActionBarProps {
   ariaLabel: string;
   /**
    * Pin below the bands above it — the tab rail and the page header — while the page
-   * scrolls under it. Defaults to `true`; pass `false` where the strip is already inside a
-   * fixed region (or in a story, where there is nothing to scroll).
+   * scrolls under it, merging into the header as it docks. Defaults to `true`; pass `false`
+   * where the strip is already inside a fixed region (or in a story, where there is nothing
+   * to scroll), which also opts out of the merge.
    */
   sticky?: boolean;
   /** Extra classes merged after the layout classes. */
@@ -81,9 +102,20 @@ const ActionBar: React.FC<ActionBarProps> = ({
     aria-label={ariaLabel}
     data-testid={testId}
     className={`
-      flex flex-wrap items-center gap-2
-      rounded-md border border-neutral-200 bg-white p-2
-      ${sticky ? 'sticky top-[calc(var(--rail-h,0px)+var(--header-h,0px))] z-10' : ''}
+      flex flex-wrap items-center gap-2 p-2
+      ${
+        sticky
+          ? // `dock-band` carries the background, border and radius on a pseudo-element so
+            // it can bleed and flatten into the header without shifting the buttons.
+            // `z-30` puts the band *above* the page header (`z-20`) and still below the tab
+            // rail (`z-40`). Above the header because the merge's last move is covering the
+            // header's 1px bottom border with the band's own top edge, and at `z-10` the
+            // header simply painted over that cover — the seam stayed visible at full merge.
+            // The two bands never overlap by more than that 1px: the strip's `top` tracks
+            // `--header-h` live, so it stays flush through the header's collapse.
+            'dock-band sticky top-[calc(var(--rail-h,0px)+var(--header-h,0px))] z-30'
+          : 'rounded-md border border-neutral-200 bg-white'
+      }
       ${className}
     `
       .trim()

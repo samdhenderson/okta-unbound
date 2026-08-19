@@ -220,3 +220,28 @@ done; this section is what the _next_ run should distrust.
   chromium. No story loads a remote asset, so `[ASSETS_BLOCKED]` never applied and a
   network-sandboxed shell was never a risk here — that changes the moment a story
   references a CDN image.
+
+- **`ActionBar`'s scroll-driven merge is NOT verified by this sync, by construction.**
+  The strip merges into the header over the first `--merge-range` (64px) of scroll
+  (`.dock-band`, ADR-0032). Compare cannot see it: captures force reduced motion, which
+  is precisely what clears `.dock-band`'s `animation-name`, and neither panel is ever
+  scrolled — so both sides show the strip's **resting** geometry and grade `match`
+  honestly while saying nothing about the merge. Same blind-spot class as
+  `[FONT_MISSING]`: both panels agree for a reason unrelated to correctness.
+  It was verified out-of-band by stepping a Playwright scroller 4px at a time and
+  reading the `::before` computed style (inset `0 → -24px`, radius `6px → 0`, `top`
+  `0 → -1px`, shadow in). **A regression in the merge would pass this sync silently** —
+  re-run that step-through if `.dock-band` or the merge tokens change.
+
+- **`[overflow-anchor:none]` ships only because a story happens to use it.** The
+  conventions header instructs the design agent to put that class on the scroller (it
+  is load-bearing — without it the pinned header's identity collapse fights Chrome's
+  scroll anchoring and the page loops; ADR-0032 §3b). The design project ships
+  **static** compiled CSS scraped from the storybook build (`[CSS_FROM_STORYBOOK]`), so
+  the class exists there only while something in `src/` or the stories still emits it —
+  today `ActionBar.stories.tsx`'s `StickyInAScroller` and `App.tsx`. If both stop using
+  it, the class silently vanishes from `_ds_bundle.css` and the header's instruction
+  becomes a no-op with no error anywhere. Verify with:
+  `grep -o '\\[overflow-anchor\\\\:none\\]' ds-bundle/_ds_bundle.css`
+  This applies to **every arbitrary-value Tailwind class the header names** — the
+  design agent has no live Tailwind compiler, only this static sheet.

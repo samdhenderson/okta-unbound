@@ -107,7 +107,7 @@ consumes it in its own `top`. One owner per variable, every value measured.
 | --------------- | ------------------------------------- | ------------------------------- | ----------------------------------------------- |
 | `TabNavigation` | `sticky top-0 z-40`                   | `--rail-h` on the document root | —                                               |
 | `PageHeader`    | `sticky top-[var(--rail-h,0px)] z-20` | `--header-h` on its `TabPanel`  | `--rail-h`                                      |
-| `ActionBar`     | `sticky z-10`                         | —                               | `calc(var(--rail-h,0px) + var(--header-h,0px))` |
+| `ActionBar`     | `sticky z-30`                         | —                               | `calc(var(--rail-h,0px) + var(--header-h,0px))` |
 
 This is what ADR-0030 declined, but not in the form it declined it. A hard-coded offset
 rots the moment a band's padding or wrapping changes; a measured one cannot. Both variables
@@ -127,6 +127,57 @@ report a permanently pinned header and publish a stale height.
 header, watched by an `IntersectionObserver` whose `rootMargin` comes from the header's own
 resolved `top`. No scroll listener, nothing per frame, and no component needs a reference
 to the shared scroller — or any knowledge that the rail is what it parks below.
+
+### 3a. The third band merges into the second
+
+Reaching the parking spot is not the same as looking parked. A strip that stays a rounded,
+inset card once pinned reads as "a card stopped moving", not "the strip joined the header" —
+three separate pieces of chrome stacked at the top of the panel rather than one.
+
+So over the first `--merge-range` (64px) of scroll, `ActionBar` bleeds out to the panel
+edges, drops its radius and its top/side borders, covers the header's 1px bottom border and
+grows `--shadow-dock` underneath. Header and strip end up one continuous pinned surface with
+a single bottom edge.
+
+Three things this is not:
+
+- **Not a transition on the pinned flag.** It is a CSS **scroll-driven animation**
+  (`animation-timeline: scroll(nearest block)`, `.dock-band` in `tailwind.css`) — the first
+  in the panel. It tracks scroll position rather than running on a clock, and it costs no
+  per-frame JavaScript on the shared scroller, for the same reason `useStuck` is an
+  `IntersectionObserver`.
+- **Not animated on the strip itself.** All the moving geometry lives on an absolutely
+  positioned `::before` carrying the background, border, radius and shadow. The strip's own
+  box never changes, so the buttons do not drift sideways as it bleeds and none of the
+  per-frame work reflows them.
+- **Not a change to `PageHeader`.** The seam disappears because the strip paints _over_ it,
+  which is why the strip moved from `z-10` to `z-30` — above the header, still below the
+  rail. The obvious alternative, `[data-header-scope]:has(.dock-band)` on the header, is
+  wrong: `UsersTab` keeps both rungs mounted and merely `hidden` (ADR-0016), so it would
+  fade the seam on the search rung too, where there is no strip to replace it.
+
+Reduced motion needs its own rule. A scroll-driven animation is progress-based, so the
+blanket `animation-duration: 1ms` in `tailwind.css` does not touch it — `animation-name` is
+cleared instead, leaving the strip at its resting geometry. The whole thing is wrapped in
+`@supports (animation-timeline: scroll())`: without the guard, a browser that drops the
+unknown declaration would run the keyframes on the _document_ timeline at `0s` with
+`fill: both` and snap permanently to the merged state.
+
+### 3b. Scroll anchoring has to be off
+
+The header collapsing its identity region loses ~72px **above** the viewport. Chrome's
+scroll anchoring reads that as content shifting under the user and compensates by pulling
+`scrollTop` back — far enough, on a small scroll, to un-pin the header, which re-expands the
+region, which restores the height, which re-pins it. The panel visibly grew and shrank in a
+loop for anyone scrolling slowly, and `scrollTop` snapped back to 0 on every nudge.
+
+The app's scroll root therefore carries `overflow-anchor: none`. Anchoring exists to absorb
+_unintended_ reflow above the fold; every height change in this scroller is intentional and
+driven by scroll position, so there is nothing here for it to usefully protect.
+
+Measured, stepping the scroller 4px at a time: with anchoring on, `scrollTop` set to 8 read
+back as 0 and `scrollHeight` oscillated 807 → 781 → 807. With it off, `scrollTop` tracks
+exactly and `scrollHeight` settles once at 735.
 
 ### 4. Only the region crossfades
 
@@ -168,7 +219,11 @@ navigation that did not happen.
   the Overview tab gains a header.
 - `SWAP_MS` in `PageHeader` is a hand-kept mirror of `--dur-move`, in the same arrangement
   as `Modal`'s `EXIT_MS` and `useCountUp`'s `COUNT_UP_MS`. There is no lint gate.
-- The sticky stack cannot be verified in jsdom or in a story — neither has a scroller. It is
-  a manual check in the loaded extension, listed in `docs/ux-guidelines.md`.
+- The sticky stack cannot be verified in jsdom — there is no scroller and no layout. It is a
+  manual check in the loaded extension, listed in `docs/ux-guidelines.md`. A story _can_
+  carry a scroller, and `ActionBar`'s `StickyInAScroller` now does: rail-less, but with a
+  real sticky `PageHeader` above the strip, so the merge and the pin are both exercisable by
+  hand. It opts into motion (`parameters: { motion: 'on' }`) because stories default to
+  `data-motion="off"`, under which the merge is correctly inert.
 - Overview, Apps, Policies, Rules and Export keep their static headers. Every new prop is
   optional and a header given none of them renders exactly the markup it did before.
