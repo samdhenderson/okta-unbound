@@ -85,3 +85,52 @@ export function getCustomProfileFields(profile: Record<string, unknown>): Array<
       value !== '',
   );
 }
+
+/**
+ * Okta's base user-profile attributes, in the order Okta's own documentation
+ * lists them.
+ *
+ * **Fallback only.** The authoritative list is the org's own schema
+ * (`getUserProfileSchema` → `GET /api/v1/meta/schemas/user/default`), which also
+ * carries human titles, types, and mutability, and is the only source that knows
+ * about the org's *custom* attributes. Use this constant solely when that call
+ * returns `null`, so the attribute inventory still shows every base attribute —
+ * including the ones unset on the user being viewed — instead of collapsing to
+ * whatever keys happen to be present on that one profile.
+ *
+ * Not filtered here: consumers must still run every key through
+ * {@link isExcludedProfileField}.
+ */
+export const BASE_PROFILE_ATTRIBUTES: readonly string[] = [
+  'login',
+  'email',
+  'secondEmail',
+  'firstName',
+  'lastName',
+  'middleName',
+  'honorificPrefix',
+  'honorificSuffix',
+  'displayName',
+  'nickName',
+  'profileUrl',
+  'title',
+  'userType',
+  'department',
+  'division',
+  'organization',
+  'costCenter',
+  'employeeNumber',
+  'manager',
+  'managerId',
+  'primaryPhone',
+  'mobilePhone',
+  'streetAddress',
+  'city',
+  'state',
+  'zipCode',
+  'countryCode',
+  'postalAddress',
+  'preferredLanguage',
+  'locale',
+  'timezone',
+] as const;

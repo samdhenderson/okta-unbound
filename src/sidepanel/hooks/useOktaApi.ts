@@ -234,6 +234,10 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       getUserGroupMemberships: userOps.getUserGroupMemberships,
       searchUsers: userOps.searchUsers,
       getUserById: userOps.getUserById,
+      // Org-wide, not per-user: the full profile-attribute definition, including
+      // attributes unset on the user being viewed. Cache under
+      // `cacheKeys.userSchema(oktaOrigin)` — never re-ask per user.
+      getUserProfileSchema: userOps.getUserProfileSchema,
       searchApps: appOps.searchApps,
       suspendUser: userOps.suspendUser,
       unsuspendUser: userOps.unsuspendUser,
@@ -243,6 +247,10 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       getAllApps: appOps.getAllApps,
       getAppById: appOps.getAppById,
       getAppAssignmentCounts: appOps.getAppAssignmentCounts,
+      // Fallback for naming an app's granting group when the
+      // `expand=user/{userId}` embed named none. Linear in app count, so
+      // gate it behind an explicit per-row action, never a list load (ADR-0031).
+      getAppGroupAssignments: appOps.getAppGroupAssignments,
 
       // Auth policy operations (read-only: Auth Policies tab)
       listPolicies: policyOps.listPolicies,

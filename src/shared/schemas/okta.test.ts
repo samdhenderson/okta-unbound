@@ -8,6 +8,7 @@ import {
   oktaAppListItemSchema,
   oktaAppGroupSchema,
   extractAppAssignmentScope,
+  extractAppGrantGroupId,
   oktaPolicyListItemSchema,
   oktaPolicyRuleSchema,
   parseOkta,
@@ -402,5 +403,111 @@ describe('app-assignment scope (_embedded on oktaAppListItemSchema)', () => {
       },
     });
     expect(scope).toBe('GROUP');
+  });
+});
+
+/**
+ * The same `expand=user/{userId}` embed also names the group Okta credits for
+ * the assignment, at `_embedded.user._links.group.href`. `extractAppGrantGroupId`
+ * is the read: it must never drop the app, never throw, and — because the value
+ * comes out of an untrusted response body and is destined for a request path —
+ * never return a segment that is not a well-formed Okta group id.
+ */
+describe('extractAppGrantGroupId (_embedded.user._links.group.href)', () => {
+  /** Build an embed whose group link points at `href`. */
+  const embedWithHref = (href: unknown) => ({
+    user: { id: '00uFAKE0001', scope: 'GROUP', _links: { group: { href } } },
+  });
+
+  it('extracts the trailing 00g… segment of a well-formed group href', () => {
+    expect(
+      extractAppGrantGroupId(
+        embedWithHref('https://example.okta.com/api/v1/groups/00gFAKEgroup00000001'),
+      ),
+    ).toBe('00gFAKEgroup00000001');
+  });
+
+  it('accepts a relative href and ignores a trailing slash, query and fragment', () => {
+    expect(extractAppGrantGroupId(embedWithHref('/api/v1/groups/00gFAKEgroup00000001/'))).toBe(
+      '00gFAKEgroup00000001',
+    );
+    expect(
+      extractAppGrantGroupId(embedWithHref('/api/v1/groups/00gFAKEgroup00000001?expand=stats')),
+    ).toBe('00gFAKEgroup00000001');
+    expect(extractAppGrantGroupId(embedWithHref('/api/v1/groups/00gFAKEgroup00000001#x'))).toBe(
+      '00gFAKEgroup00000001',
+    );
+  });
+
+  it.each([
+    ['no _links at all', { user: { id: '00uFAKE0001', scope: 'USER' } }],
+    ['_links with no group', { user: { id: '00uFAKE0001', _links: { self: { href: '/x' } } } }],
+    ['a group link with no href', { user: { id: '00uFAKE0001', _links: { group: {} } } }],
+    ['an undefined embed', undefined],
+    ['a null embed', null],
+    ['a string embed', 'nonsense'],
+    ['an array embed', [{ user: { _links: { group: { href: '/api/v1/groups/00gFAKE1' } } } }]],
+    ['a non-object user', { user: 'nonsense' }],
+    ['a user missing its id', { _links: { group: { href: '/api/v1/groups/00gFAKE1' } } }],
+  ])('returns undefined for %s', (_label, embedded) => {
+    expect(extractAppGrantGroupId(embedded)).toBeUndefined();
+  });
+
+  it.each([
+    // A user id is not a group id — the prefix check is the whole point.
+    ['a user id', '/api/v1/users/00uFAKE00000000000001'],
+    // Path traversal: the trailing segment is attacker-chosen, and this value
+    // would be interpolated straight into a request path if it were trusted.
+    ['a traversal path', 'https://example.okta.com/api/v1/groups/00gFAKE/../../../users/me'],
+    ['a bare traversal', '../../etc/passwd'],
+    ['a traversal ending in a slash', '/api/v1/groups/00gFAKEgroup00000001/../../'],
+    ['an empty href', ''],
+    ['only slashes', '///'],
+    ['a query string with no path segment', '?groupId=00gFAKEgroup00000001'],
+    ['a too-short group id', '/api/v1/groups/00gFAKE001'],
+    ['a group id with a path separator smuggled in', '/api/v1/groups/00gFAKEgroup00000001%2Fx'],
+    ['a non-alphanumeric group id', '/api/v1/groups/00gFAKE-group-00001'],
+  ])('rejects %s and returns undefined', (_label, href) => {
+    expect(extractAppGrantGroupId(embedWithHref(href))).toBeUndefined();
+  });
+
+  it('returns undefined when the href is not a string', () => {
+    expect(extractAppGrantGroupId(embedWithHref(42))).toBeUndefined();
+    expect(extractAppGrantGroupId(embedWithHref(null))).toBeUndefined();
+    expect(
+      extractAppGrantGroupId(embedWithHref({ toString: () => '/api/v1/groups/00gFAKE1' })),
+    ).toBeUndefined();
+  });
+
+  it('reports both scope USER and a grant group — Okta prefers USER, it does not exclude a group', () => {
+    const embedded = {
+      user: {
+        id: '00uFAKE0001',
+        scope: 'USER',
+        _links: { group: { href: '/api/v1/groups/00gFAKEgroup00000001' } },
+      },
+    };
+    // Both facts are true at once; neither reading may suppress the other.
+    expect(extractAppAssignmentScope(embedded)).toBe('USER');
+    expect(extractAppGrantGroupId(embedded)).toBe('00gFAKEgroup00000001');
+  });
+
+  it('a malformed _links costs neither the app-user row nor its scope', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const rows = [
+      { id: '00uFAKE0001', scope: 'USER', _links: 'nonsense' },
+      { id: '00uFAKE0002', scope: 'GROUP', _links: [1, 2, 3] },
+      { id: '00uFAKE0003', scope: 'GROUP', _links: { group: 'nonsense' } },
+    ];
+
+    // parseOktaList DROPS a row that fails validation, so a strict `_links`
+    // would silently remove an app-user. Every row must survive.
+    const parsed = parseOktaList(oktaAppUserSchema, rows, 'test');
+    expect(parsed.map((r) => r.id)).toEqual(['00uFAKE0001', '00uFAKE0002', '00uFAKE0003']);
+
+    // …and the scope read off the same object is unaffected by the bad link.
+    expect(extractAppAssignmentScope({ user: rows[0] })).toBe('USER');
+    expect(extractAppGrantGroupId({ user: rows[0] })).toBeUndefined();
+    vi.restoreAllMocks();
   });
 });

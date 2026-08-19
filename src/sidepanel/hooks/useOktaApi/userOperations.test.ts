@@ -608,3 +608,227 @@ describe('getUserApps assignment scope', () => {
     ]);
   });
 });
+
+describe('getUserProfileSchema', () => {
+  /** A minimal org schema payload: one base and one custom attribute. */
+  const schemaPayload = {
+    id: 'https://example.okta.com/meta/schemas/user/default',
+    definitions: {
+      base: {
+        properties: {
+          login: {
+            title: 'Username',
+            type: 'string',
+            required: true,
+            mutability: 'READ_WRITE',
+            master: { type: 'PROFILE_MASTER', priority: [{ type: 'APP' }] },
+          },
+        },
+      },
+      custom: {
+        properties: {
+          badgeId: { title: 'Badge ID', type: 'string', mutability: 'READ_ONLY' },
+        },
+      },
+    },
+    properties: { profile: { allOf: [{ $ref: '#/definitions/base' }] } },
+  };
+
+  it('reads the org schema endpoint and returns the validated payload', async () => {
+    const core = makeCore({
+      makeApiRequest: vi.fn().mockResolvedValue({ success: true, data: schemaPayload }),
+    });
+    const { getUserProfileSchema } = createUserOperations(core);
+
+    const result = await getUserProfileSchema();
+
+    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/meta/schemas/user/default');
+    expect(result?.definitions?.base?.properties?.login).toMatchObject({
+      title: 'Username',
+      type: 'string',
+      required: true,
+      mutability: 'READ_WRITE',
+    });
+    // Captured now for the future attribute editor, which must skip
+    // externally-mastered attributes.
+    expect(result?.definitions?.base?.properties?.login?.master?.type).toBe('PROFILE_MASTER');
+    expect(result?.definitions?.custom?.properties?.badgeId).toMatchObject({
+      title: 'Badge ID',
+      mutability: 'READ_ONLY',
+    });
+  });
+
+  it('returns null when the request is unsuccessful', async () => {
+    const core = makeCore({
+      makeApiRequest: vi.fn().mockResolvedValue({ success: false, error: 'HTTP 403' }),
+    });
+    const { getUserProfileSchema } = createUserOperations(core);
+    expect(await getUserProfileSchema()).toBeNull();
+  });
+
+  it('returns null when the payload is not a schema object', async () => {
+    const core = makeCore({
+      makeApiRequest: vi.fn().mockResolvedValue({ success: true, data: 'not a schema' }),
+    });
+    const { getUserProfileSchema } = createUserOperations(core);
+    expect(await getUserProfileSchema()).toBeNull();
+  });
+
+  it('returns null and swallows a thrown error', async () => {
+    const core = makeCore({
+      makeApiRequest: vi.fn().mockRejectedValue(new Error('boom')),
+    });
+    const { getUserProfileSchema } = createUserOperations(core);
+    expect(await getUserProfileSchema()).toBeNull();
+  });
+
+  it('drops a malformed property without dropping the rest of the schema', async () => {
+    const core = makeCore({
+      makeApiRequest: vi.fn().mockResolvedValue({
+        success: true,
+        data: {
+          definitions: {
+            base: {
+              properties: {
+                login: { title: 'Username', type: 'string' },
+                // Not an object at all — the one attribute is dropped, the
+                // inventory is not (ADR-0006: degrade, never fail closed).
+                broken: 'nonsense',
+                alsoBroken: { title: 42 },
+              },
+            },
+          },
+        },
+      }),
+    });
+    const { getUserProfileSchema } = createUserOperations(core);
+
+    const result = await getUserProfileSchema();
+
+    expect(result).not.toBeNull();
+    expect(Object.keys(result?.definitions?.base?.properties ?? {})).toEqual(['login']);
+  });
+});
+
+/**
+ * Task A4: name the group that grants an app, on load, for **zero** extra
+ * requests. The grant group rides the SAME `expand=user/{userId}` response the
+ * `scope` is read from, so these cases pin that the field is populated from the
+ * embed, that a hostile or malformed link never becomes an answer, and that a
+ * `USER` scope and a grant group can coexist on one row.
+ */
+describe('getUserApps grant group', () => {
+  /** A single successful page with no next link. */
+  const onePage = (data: unknown[]) => ({ success: true, data, headers: {} });
+
+  /** An app row whose embedded app-user names `href` as its group link. */
+  const rowWithGroupHref = (href: unknown, scope = 'GROUP') => ({
+    id: '0oaFAKEapp000001',
+    label: 'One',
+    _embedded: { user: { id: '00uFAKE0001', scope, _links: { group: { href } } } },
+  });
+
+  it('reads grantGroupId off the embed without issuing a request per app', async () => {
+    const makeApiRequest = vi
+      .fn()
+      .mockResolvedValue(
+        onePage([rowWithGroupHref('https://example.okta.com/api/v1/groups/00gFAKEgroup00000001')]),
+      );
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    const { apps } = await getUserApps('00uFAKE0001');
+
+    expect(apps).toEqual([
+      {
+        id: '0oaFAKEapp000001',
+        label: 'One',
+        scope: 'GROUP',
+        grantGroupId: '00gFAKEgroup00000001',
+      },
+    ]);
+    // One page, one call — naming the group cost nothing.
+    expect(makeApiRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves grantGroupId undefined when the embed carries no _links', async () => {
+    const makeApiRequest = vi.fn().mockResolvedValue(
+      onePage([
+        {
+          id: '0oaFAKEapp000001',
+          label: 'One',
+          _embedded: { user: { id: '00uFAKE0001', scope: 'GROUP' } },
+        },
+      ]),
+    );
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    const { apps } = await getUserApps('00uFAKE0001');
+
+    // Okta named no group. That is "unknown", never "assigned directly".
+    expect(apps[0].grantGroupId).toBeUndefined();
+    expect(apps[0].scope).toBe('GROUP');
+  });
+
+  it.each([
+    ['a user id', '/api/v1/users/00uFAKE00000000000001'],
+    ['a path-traversal href', 'https://example.okta.com/api/v1/groups/00gFAKE/../../../users/me'],
+    ['a bare traversal', '../../etc/passwd'],
+    ['an empty href', ''],
+    ['a query string with no path segment', '?groupId=00gFAKEgroup00000001'],
+    ['a too-short id', '/api/v1/groups/00gFAKE'],
+  ])('keeps the app but reports no grant group for %s', async (_label, href) => {
+    const makeApiRequest = vi.fn().mockResolvedValue(onePage([rowWithGroupHref(href)]));
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    const { apps, complete } = await getUserApps('00uFAKE0001');
+
+    expect(apps).toHaveLength(1);
+    expect(apps[0].id).toBe('0oaFAKEapp000001');
+    expect(apps[0].grantGroupId).toBeUndefined();
+    expect(complete).toBe(true);
+  });
+
+  it('keeps BOTH scope USER and grantGroupId — a direct assignment does not exclude a group path', async () => {
+    const makeApiRequest = vi
+      .fn()
+      .mockResolvedValue(
+        onePage([rowWithGroupHref('/api/v1/groups/00gFAKEgroup00000001', 'USER')]),
+      );
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    const { apps } = await getUserApps('00uFAKE0001');
+
+    // Okta reports one scope and prefers USER; the group path is still real.
+    expect(apps[0].scope).toBe('USER');
+    expect(apps[0].grantGroupId).toBe('00gFAKEgroup00000001');
+  });
+
+  it('a malformed _links never drops the app (and never costs its scope)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const makeApiRequest = vi.fn().mockResolvedValue(
+      onePage([
+        {
+          id: '0oaFAKEapp000001',
+          label: 'One',
+          _embedded: { user: { id: '00uFAKE0001', scope: 'USER', _links: 'nonsense' } },
+        },
+        {
+          id: '0oaFAKEapp000002',
+          label: 'Two',
+          _embedded: { user: { id: '00uFAKE0001', scope: 'GROUP', _links: { group: 42 } } },
+        },
+      ]),
+    );
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    const { apps, complete } = await getUserApps('00uFAKE0001');
+
+    // Under-reporting access is the failure mode that matters: both rows survive.
+    expect(apps).toEqual([
+      { id: '0oaFAKEapp000001', label: 'One', scope: 'USER', grantGroupId: undefined },
+      { id: '0oaFAKEapp000002', label: 'Two', scope: 'GROUP', grantGroupId: undefined },
+    ]);
+    expect(complete).toBe(true);
+    vi.restoreAllMocks();
+  });
+});

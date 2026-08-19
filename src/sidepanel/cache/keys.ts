@@ -114,4 +114,33 @@ export const cacheKeys = {
    * @param policyType - The Okta policy type, e.g. `ACCESS_POLICY`.
    */
   policies: (policyType: string): EntityKey => ['policies', policyType],
+
+  /**
+   * The org's user-profile schema — every base and custom attribute definition
+   * from `GET /api/v1/meta/schemas/user/default`.
+   *
+   * Org-wide, so it scopes by origin exactly like {@link cacheKeys.apps} and
+   * never by tab id (see the module note). Held at {@link TTL_LONG}: an admin
+   * changing the profile schema is a rare, deliberate act, and every user detail
+   * view reads it.
+   *
+   * @param oktaOrigin - The connected org's origin, e.g. `https://example.okta.com`.
+   */
+  userSchema: (oktaOrigin?: string | null): EntityKey => ['userSchema', oktaOrigin ?? 'unknown'],
+
+  /**
+   * The ids of every group assigned to one application.
+   *
+   * Entity-scoped, so it keys on the Okta app id alone (see the module note) —
+   * the same shape as {@link cacheKeys.appAssignmentCounts}, and a separate key
+   * from it because the two carry different payloads even though both are filled
+   * by a walk of `/api/v1/apps/{id}/groups`.
+   *
+   * Held at {@link TTL_LONG}: it is the fallback for naming the group that
+   * grants a user an app, it costs a full pagination walk per app, and app-group
+   * assignments change far less often than membership does.
+   *
+   * @param appId - The Okta application id.
+   */
+  appGroups: (appId: string): EntityKey => ['appGroups', appId],
 } as const;

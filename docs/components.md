@@ -46,7 +46,7 @@ info`) — never `error`.
 `shared/`: `Button`, `IconButton`, `StretchedButton`, `FilterPill`, `SortPill`,
 `CopyButton`, `CopyableId`, `OpenInOktaLink`, `Modal`, `Input`, `Checkbox`, `Select`,
 `Textarea`, `PageHeader`, `EntityIdentity`, `Breadcrumbs`, `Tabs`, `CollapsibleSection`,
-`AlertMessage`, `EmptyState`, `LoadingSpinner`, `Skeleton`, `ListRow`,
+`AlertMessage`, `EmptyState`, `Eyebrow`, `LoadingSpinner`, `Skeleton`, `ListRow`,
 `ScrollableList`, `SearchDropdown`, `SelectionChips`.
 
 There are **two** copy primitives and they are not interchangeable. `CopyButton` is a
@@ -61,6 +61,18 @@ never the interior — the interior follows the typography contract in
 `docs/design-system.md`. Never hand-roll a row container. Prefer
 `StretchedButton` over `as="button"` when the row holds its own controls, since
 a button cannot legally contain a checkbox or another button.
+
+`Eyebrow` is the **uppercase section label** — `text-xs font-semibold uppercase
+tracking-wide text-neutral-600`, fixed. That one recipe had been hand-rolled across
+roughly eighteen files in four variants (`tracking-wide` vs `tracking-wider`,
+`text-xs` vs the off-scale `text-[10px]`/`text-[11px]`, `text-neutral-500`/`600`/`700`),
+so several sizes of the same element could appear on one screen; ADR-0030 settled the
+values in prose but never extracted the primitive, and the drift continued. There is
+deliberately **no colour, size or tracking prop** — a section wanting a different
+eyebrow treatment is the drift this exists to stop, and `className` takes layout and
+spacing only. `as` picks `span` (default), `div` or `h3`; use `h3` only when the
+eyebrow is a real section heading that should join the document outline. It is a label,
+not a control: a section header needing a verb composes it beside a `Button`.
 
 `IconButton` is also the **disclosure** primitive: pass `expanded` + `controls`
 and it emits `aria-expanded` / `aria-controls` (as `active` does `aria-pressed`).

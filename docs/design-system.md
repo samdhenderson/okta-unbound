@@ -47,7 +47,7 @@ Native-Okta model: a **gray canvas** with **white cards** floating on it.
   `--shadow-dock` across the merge. At rest — unmerged, or with motion off — it has no
   shadow at all. Reach for this only if you are pinning a band, and use the token.
 - Field labels (label-above-value) are `text-xs font-medium text-neutral-600`; uppercase
-  section eyebrows are `text-xs font-semibold uppercase tracking-wide`.
+  section eyebrows go through the shared `Eyebrow` primitive — see Typography below.
 
 **Status vocabulary is `danger`, not `error`** (ADR-0002). The status union is
 `'success' | 'warning' | 'danger' | 'info'`.
@@ -69,6 +69,15 @@ the genuinely chart-only tints (`INDIGO_RAMP`) are documented in that module.
 Type scale via Tailwind: `text-xs` (chips/meta), `text-sm` (body), `text-base`
 (emphasis), `text-lg` (modal/section titles). Weights: `font-medium` (secondary),
 `font-semibold` (primary/headings).
+
+**There is exactly one eyebrow recipe: `text-xs font-semibold uppercase tracking-wide
+text-neutral-600`**, and it lives in the shared `Eyebrow` component
+(`components/shared/Eyebrow.tsx`) — never hand-roll it. It had drifted into four
+recipes across ~18 files (`tracking-wider`, the off-scale `text-[10px]`/`text-[11px]`,
+and `text-neutral-500`/`600`/`700`); ADR-0030 settled `tracking-wide` as the survivor,
+and the primitive is what keeps it settled. `Eyebrow` has no colour, size or tracking
+prop by design; a section that wants a different treatment is the drift it exists to
+stop.
 
 ## Spacing
 

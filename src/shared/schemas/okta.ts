@@ -241,6 +241,27 @@ export const oktaAppUserSchema = z
     created: z.string().nullish(),
     lastUpdated: z.string().nullish(),
     credentials: z.object({ userName: z.string().optional() }).passthrough().optional(),
+    // Typed for exactly one reason: `expand=user/{userId}` on `GET /api/v1/apps`
+    // embeds this object, and when the assignment reaches the user through a
+    // group Okta names that group here as `_links.group.href`. It already
+    // survived `.passthrough()`; naming it makes it reachable from TypeScript so
+    // `getUserApps` can say WHICH group grants an app without spending a request
+    // per app. Shape mirrors {@link oktaAppGroupAssignmentSchema}'s `_links`.
+    //
+    // `.catch(undefined)` is load-bearing leniency (ADR-0006), not decoration.
+    // This schema is applied through `parseOktaList` on the App Users walks,
+    // which DROP a row that fails validation, and it also gates
+    // {@link extractAppAssignmentScope}'s read of `scope`. Without the catch a
+    // `_links` of an unexpected shape would cost a whole app-user row on one
+    // path and a perfectly good `scope` on the other. A malformed link must
+    // degrade to "Okta named no group" — never to a missing app.
+    _links: z
+      .object({
+        group: z.object({ href: z.string().optional() }).passthrough().optional(),
+      })
+      .passthrough()
+      .optional()
+      .catch(undefined),
   })
   .passthrough();
 
@@ -291,6 +312,82 @@ export function extractAppAssignmentScope(embedded: unknown): AppAssignmentScope
 
   const { scope } = parsed.data;
   return scope === 'USER' || scope === 'GROUP' ? scope : undefined;
+}
+
+/**
+ * Shape a string must match to be accepted as an Okta group id: the `00g`
+ * prefix followed by an alphanumeric body, 18+ characters in total.
+ *
+ * Guards {@link extractAppGrantGroupId}. The value it filters arrives inside an
+ * untrusted Okta response body and is destined for interpolation into a request
+ * path, so it is checked rather than trusted — the same posture
+ * `POLICY_ID_PATTERN` (`useOktaApi/policyOperations`) applies to the
+ * `_links.accessPolicy` href, and the reason `shared/utils/oktaUrl` parses
+ * hostnames instead of substring-matching them (`docs/security.md` §6).
+ */
+const GROUP_ID_PATTERN = /^00g[A-Za-z0-9]{15,}$/;
+
+/**
+ * Take the last non-empty path segment of an href.
+ *
+ * @param href - Raw href value; may be absolute or relative.
+ * @returns The trailing segment, or `undefined` when there is none.
+ * @remarks Query string and fragment are stripped first and trailing slashes
+ * ignored, so `.../groups/{id}/?x=1` still yields `{id}`. Deliberately a string
+ * scan rather than `new URL`, so a relative href parses too and no origin is
+ * ever inferred from response data.
+ */
+function trailingPathSegment(href: string): string | undefined {
+  const path = href.split('?')[0].split('#')[0].replace(/\/+$/, '');
+  const segment = path.split('/').pop();
+  return segment ? segment : undefined;
+}
+
+/**
+ * Read the id of the group Okta named as the source of an app assignment, out of
+ * an app list row's `_embedded` value (populated by
+ * `GET /api/v1/apps?...&expand=user/{userId}`).
+ *
+ * Sibling of {@link extractAppAssignmentScope} over the same embed: that one
+ * reads *how* the assignment was granted, this one reads *which group* granted
+ * it, from `_embedded.user._links.group.href`. Both are pure, total, and
+ * side-effect free, and both cost zero additional requests — the data is already
+ * in a response the caller holds.
+ *
+ * **This is not the complement of `scope`.** Okta reports a single `scope` per
+ * app-user and prefers `'USER'`, so a user who is both directly assigned *and*
+ * reached by an assigned group reports `'USER'` — and may still carry a group
+ * link. A `'USER'` row with a group id is not a contradiction; both facts are
+ * true, and callers must be able to state both.
+ *
+ * **A missing answer is `undefined`, never "direct".** An absent, malformed, or
+ * rejected link means Okta named no group *here* — it is not a claim that no
+ * group path exists (ADR-0020: a failed or silent lookup is never rendered as an
+ * attribution).
+ *
+ * @param embedded - The row's raw `_embedded` value (shape not guaranteed).
+ * @returns The granting group's Okta id, or `undefined` when the embed is
+ * missing or malformed, carries no group link, or yields a trailing segment that
+ * does not match {@link GROUP_ID_PATTERN}. Never throws, never guesses.
+ * @remarks The extracted segment is validated before it is returned because it
+ * originates in an untrusted response body and callers interpolate it into a
+ * request path; anything that fails the pattern is discarded rather than passed
+ * on. The href itself is never logged (it can carry tenant identifiers).
+ * @example
+ * const groupId = extractAppGrantGroupId(app._embedded); // '00g…' | undefined
+ */
+export function extractAppGrantGroupId(embedded: unknown): string | undefined {
+  if (typeof embedded !== 'object' || embedded === null) return undefined;
+
+  // Same embed, same shape, same schema as `extractAppAssignmentScope` reads.
+  const parsed = oktaAppUserSchema.safeParse((embedded as Record<string, unknown>).user);
+  if (!parsed.success) return undefined;
+
+  const href = parsed.data._links?.group?.href;
+  if (typeof href !== 'string' || href.length === 0) return undefined;
+
+  const candidate = trailingPathSegment(href);
+  return candidate && GROUP_ID_PATTERN.test(candidate) ? candidate : undefined;
 }
 
 /**
@@ -459,3 +556,149 @@ export function parseOktaList<S extends z.ZodTypeAny>(
 
   return valid;
 }
+
+/**
+ * One property of the org's user-profile schema
+ * (`GET /api/v1/meta/schemas/user/default`) — a single attribute's metadata, not
+ * a value.
+ *
+ * Deliberately lenient, following the {@link oktaAppListItemSchema} precedent:
+ * **every** field is optional and unknown fields `.passthrough()`, because Okta
+ * emits a different subset per property type (a string attribute carries
+ * `pattern`/`maxLength`, an enum carries `enum`/`oneOf`, an array carries
+ * `items`) and org-defined attributes add their own. A property that fails this
+ * shape is dropped by {@link oktaUserProfileSchemaSchema}, never thrown on — a
+ * single malformed attribute must not cost the caller the whole inventory.
+ *
+ * Several fields are captured **ahead of their first reader** so the editing work
+ * ("C. Bulk Attribute Editor" in `docs/features-plan.md`) does not have to reopen
+ * this schema. Nothing renders them today:
+ * - `mutability` — `READ_WRITE` | `READ_ONLY` | `WRITE_ONLY`. An editor must not
+ *   offer a field Okta will refuse to write.
+ * - `master` — where the attribute is mastered (`PROFILE_MASTER` = an external
+ *   source such as AD/LDAP/an app owns it, `OKTA` = Okta owns it, `OVERRIDE`).
+ *   Skipping externally-mastered attributes is the editor's stated differentiator.
+ * - `required`, `type`, `enum`, `oneOf` — what an editor needs to render and
+ *   validate an input for the attribute.
+ *
+ * `mutability`, `type` and the `master.type` are plain `z.string()`, not enums:
+ * an unrecognized value from a future Okta release must survive validation and be
+ * narrowed by the reader, rather than dropping the property.
+ */
+export const oktaUserSchemaPropertySchema = z
+  .object({
+    /** Human label Okta shows for the attribute; falls back to the key when absent. */
+    title: z.string().optional(),
+    /** JSON-schema type, e.g. `string`, `boolean`, `number`, `array`. */
+    type: z.string().optional(),
+    /** `READ_WRITE` | `READ_ONLY` | `WRITE_ONLY` — kept for the future editor. */
+    mutability: z.string().optional(),
+    /** Whether Okta requires a value. Kept for the future editor. */
+    required: z.boolean().optional(),
+    /** Allowed values, when the attribute is an enum. Values are org-defined JSON. */
+    enum: z.array(z.unknown()).optional(),
+    /**
+     * Labelled enum variants (`{ const, title }`). `z.unknown()` per entry for the
+     * same reason as `enum`: the value type is whatever the attribute's `type` is.
+     */
+    oneOf: z.array(z.unknown()).optional(),
+    /**
+     * Profile-mastering block. `type` is the mastering mode and `priority` the
+     * ordered source list; the latter is `z.unknown()` because its entries vary by
+     * mastering source and nothing reads into it yet.
+     */
+    master: z
+      .object({
+        type: z.string().optional(),
+        priority: z.unknown().optional(),
+      })
+      .passthrough()
+      .nullish(),
+  })
+  .passthrough();
+
+/** Inferred type of a validated {@link oktaUserSchemaPropertySchema}. */
+export type OktaUserSchemaProperty = z.infer<typeof oktaUserSchemaPropertySchema>;
+
+/**
+ * A `{ properties: … }` block, validated **per property**.
+ *
+ * The transform is the lenient contract of {@link parseOktaList} applied to an
+ * object instead of an array: each property is `safeParse`d on its own, the valid
+ * ones are kept and the malformed ones are dropped with a counts-only warning.
+ * A plain `z.record(oktaUserSchemaPropertySchema)` would instead fail the entire
+ * block over one bad attribute, which would silently empty the inventory.
+ */
+const oktaUserSchemaPropertiesSchema = z.record(z.string(), z.unknown()).transform((raw, ctx) => {
+  const properties: Record<string, OktaUserSchemaProperty> = {};
+  let dropped = 0;
+  for (const [key, value] of Object.entries(raw)) {
+    const result = oktaUserSchemaPropertySchema.safeParse(value);
+    if (result.success) {
+      properties[key] = result.data;
+    } else {
+      // Count only — never the key or the value: org-defined attribute names
+      // and titles are org data.
+      dropped += 1;
+    }
+  }
+  if (dropped > 0) {
+    log.warn('Dropped malformed properties from Okta user schema', {
+      context: ctx.path.join('.') || 'definitions',
+      dropped,
+      total: Object.keys(raw).length,
+    });
+  }
+  return properties;
+});
+
+/** A `{ properties }` definition block (`definitions.base` / `definitions.custom`). */
+const oktaUserSchemaDefinitionSchema = z
+  .object({
+    properties: oktaUserSchemaPropertiesSchema.optional(),
+  })
+  .passthrough();
+
+/**
+ * The org's user-profile schema, from `GET /api/v1/meta/schemas/user/default`.
+ *
+ * This is the only source of the **complete** attribute inventory: every base and
+ * org-defined (custom) property, including the ones that are unset on any given
+ * user and therefore absent from that user's `profile` object. One cached call per
+ * org (`cacheKeys.userSchema`) backs the Users tab's "all attributes" view and,
+ * later, the attribute editor.
+ *
+ * Deliberately lenient, following the {@link oktaAppListItemSchema} precedent:
+ * nothing is required, unknown fields `.passthrough()`, and a malformed individual
+ * property is dropped rather than failing the payload (see
+ * {@link oktaUserSchemaPropertySchema}). `properties.profile.allOf` — Okta's
+ * JSON-schema composition pointer — is `z.unknown()`: it is not read, it only
+ * survives via passthrough so a future reader can reach it without a schema change.
+ */
+export const oktaUserProfileSchemaSchema = z
+  .object({
+    id: z.string().optional(),
+    name: z.string().optional(),
+    definitions: z
+      .object({
+        base: oktaUserSchemaDefinitionSchema.optional(),
+        custom: oktaUserSchemaDefinitionSchema.optional(),
+      })
+      .passthrough()
+      .optional(),
+    properties: z
+      .object({
+        profile: z
+          .object({
+            allOf: z.unknown().optional(),
+          })
+          .passthrough()
+          .optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
+/** Inferred type of a validated {@link oktaUserProfileSchemaSchema} response. */
+export type OktaUserProfileSchema = z.infer<typeof oktaUserProfileSchemaSchema>;
