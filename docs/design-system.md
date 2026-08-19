@@ -41,6 +41,11 @@ Native-Okta model: a **gray canvas** with **white cards** floating on it.
   not a shadow.
 - Shadows are reserved for **true overlays** that lift above the canvas — the `Modal`
   and dropdowns/popovers. The fixed `ActivityBar` sits on a top border, not a shadow.
+  There is exactly **one** exception, and it is deliberately narrow: a sticky `ActionBar`
+  that has merged into the page header (ADR-0032) is no longer a card sitting on the
+  canvas but a pinned band with rows scrolling _underneath_ it, so it grows
+  `--shadow-dock` across the merge. At rest — unmerged, or with motion off — it has no
+  shadow at all. Reach for this only if you are pinning a band, and use the token.
 - Field labels (label-above-value) are `text-xs font-medium text-neutral-600`; uppercase
   section eyebrows are `text-xs font-semibold uppercase tracking-wide`.
 

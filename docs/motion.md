@@ -145,6 +145,45 @@ shimmer surface behind loading placeholders — categorically different from the
 nine above (a continuous loop, not a one-shot transition), so it isn't counted
 among them.
 
+## The scroll-driven one
+
+`.dock-band` is the panel's only **progress-driven** animation: it advances with
+scroll position, not with a clock, so no duration token applies to it. It is what
+merges a pinned `ActionBar` into the `PageHeader` above it — bleeding to the panel
+edges, dropping its radius and borders, covering the header's seam and growing
+`--shadow-dock` over the first `--merge-range` (64px) of scroll (ADR-0032).
+
+```css
+@supports (animation-timeline: scroll()) {
+  .dock-band::before {
+    animation: dock-band linear both;
+    animation-timeline: scroll(nearest block);
+    animation-range: 0 var(--merge-range);
+  }
+}
+```
+
+Three things to know before adding another one:
+
+- **`@supports` is not optional.** A browser that drops the unknown
+  `animation-timeline` declaration runs the keyframes on the _document_ timeline
+  at `0s` with `fill: both` — permanently stuck at the end state. Guarded, it
+  simply keeps the base styles.
+- **Reduced motion needs an explicit rule.** The blanket
+  `animation-duration: 1ms` below does nothing here: duration plays no part in a
+  progress-based timeline. `tailwind.css` clears `animation-name` for `.dock-band`
+  in both reduced-motion blocks instead, which leaves the element at its base
+  styles. Any new scroll-driven animation must add itself to both.
+- **Animate a positioned pseudo-element, not the element.** These are not
+  compositable properties, so every frame of scroll is style work; keeping it on
+  an absolutely positioned `::before` means it never reflows the real content.
+  Animating layout properties on the element itself also risks a feedback loop —
+  the size change alters `scrollHeight`, which alters the progress. Relatedly, the
+  app's scroll root sets `overflow-anchor: none`; see ADR-0032 §3b.
+
+Stories default to `data-motion="off"`, so a scroll-driven animation renders inert
+there. A story that showcases one opts back in with `parameters: { motion: 'on' }`.
+
 ## Reduced motion
 
 A blanket rule in `@layer components`, with an opt-in exemption:
@@ -175,6 +214,9 @@ A blanket rule in `@layer components`, with an opt-in exemption:
 - **`revert` is deliberately not used** inside the `!important` block — it would
   revert to the UA default (`0s`), defeating the exemption for anything relying on
   it.
+- **The block does not reach scroll-driven animations.** Duration is not what
+  drives them, so `.dock-band::before` gets its own `animation-name: none`
+  override in both blocks. See "The scroll-driven one" above.
 - The identical block is duplicated under `[data-motion='off'] *…` rather than
   combined with the media query, because CSS cannot `OR` a media-feature condition
   with an attribute selector in one rule, and routing both through a shared
