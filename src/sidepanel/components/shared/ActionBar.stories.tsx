@@ -8,8 +8,9 @@ import EntityIdentity from './EntityIdentity';
 import PageHeader from './PageHeader';
 
 /**
- * The page-level action strip of a detail view: a pill that hugs its verbs, widens
- * into the header as it docks, and moves whatever no longer fits behind **More**.
+ * The page-level action strip of a detail view: a card the width of the rung that
+ * widens into the header as it docks, and moves whatever no longer fits behind
+ * **More**.
  */
 const meta = {
   title: 'Shared/ActionBar',
@@ -23,7 +24,7 @@ const meta = {
           "The rule this enforces: **a verb whose object is the whole page belongs here; a verb scoped to one section's data belongs in that section's `DetailSection.actions` slot.**\n\n" +
           'Before this existed, "Compare" sat in the group-memberships card header — structurally indistinguishable from "Add to group", which acts on that card alone — so the page\'s most important action read as a property of one section.\n\n' +
           '**Actions are data, not children.** The strip takes `ActionDescriptor[]` rather than `Button` children, because a strip that cannot see what it holds cannot decide what fits. With descriptors it measures each action once and re-splits the row as the panel is dragged: everything on a wide panel, icons dropped when it tightens, the tail behind **More** when it tightens further. `shared/actionBarFit` does the arithmetic and `shared/useActionOverflow` does the measuring; this component only renders their answer. The price is that a descriptor can carry no JSX — an arbitrary node cannot be measured from a cached width, nor re-rendered into the tier with different chrome. Arbitrary UI goes in `expansion`, which is the whole point of that slot.\n\n' +
-          "**A pill at rest, a band once docked.** The strip hugs its actions rather than spanning the column: a two-verb strip is two verbs wide. Reaching its parking spot is not the same as looking parked, so over the last `--merge-range` (16px of travel) before it docks it widens to the panel edges, drops its radius and its top and side borders, covers the header's bottom seam and grows a shadow — header and strip end up one continuous pinned surface. The hug is **painted, not laid out**: the band keeps its full layout width and only its chrome stops at the last button. That is what lets the overflow observer watch a width that never churns, and it is why the leading buttons hold still through the whole merge. The one exception is the trailing **More** cluster, which rides the widening edge.\n\n" +
+          "**A card at rest, a band once docked.** The strip is the width of every other card on the rung — it spans the tab column and stops at its margins, so it lines up with the sections beneath it instead of reading as a different kind of object. Reaching its parking spot is not the same as looking parked, so over the last `--merge-range` (16px of travel) before it docks it grows *past* those margins to the panel edges, drops its radius and its top and side borders, covers the header's bottom seam and grows a shadow — header and strip end up one continuous pinned surface. Only the chrome moves: the merge animates a `::before` box, never the row, so every verb holds still and the overflow observer watches a band width that never churns. **More** sits at the trailing edge with a hairline immediately to its left, which is the boundary between the verbs and the way to reach the rest of them.\n\n" +
           '**The cramped ladder: icons first, then overflow.** When the row tightens, every bar action drops its glyph — globally, never per action, because a row with some icons and some without reads as broken. Only when the bare labels still do not fit does the tail move into the tier, last-declared first. A `pinned` action never leaves the bar, and a `primary` action is pinned by default.\n\n' +
           '**The tier is a region, not a menu.** What sits behind **More** is a second row inside the band: it stretches the strip downward through the shared `.disclose` grid instead of dropping a card into the flow beneath it, and it shares the strip\'s chrome and its merge. It holds two things, in order — the actions that did not fit, which the strip owns and the caller never sees, and then `expansion` verbatim, be that an account-state block, a form, or anything else. That second half is exactly why it is a disclosure region rather than a `role="menu"` popover: a menu may contain menu items and nothing else, which would forbid the arbitrary UI this slot exists for. Its children stay mounted while closed, held out of the tab order and the accessible tree with `inert`.\n\n' +
           '**Why it sticks:** the side panel has exactly one scroller, the `overflow-y-auto` app root, which `TabPanel` shares and which the Users tab does not shadow with a scroll box of its own. The strip is the third band of the sticky stack (ADR-0032), parking below the tab rail and the page header rather than at the top of the scroller.\n\n' +
@@ -43,7 +44,7 @@ const meta = {
     },
     sticky: {
       description:
-        'Pin below the tab rail and the page header while the page scrolls under it, merging into the header as it docks. Defaults to `true`; pass `false` in an already-fixed region, which also opts out of the merge (the strip then simply keeps its resting pill).',
+        'Pin below the tab rail and the page header while the page scrolls under it, merging into the header as it docks. Defaults to `true`; pass `false` in an already-fixed region, which also opts out of the merge (the strip then simply keeps its resting card).',
     },
     expansion: {
       description:
@@ -145,10 +146,13 @@ export const Default: Story = {};
  * and an `aria-expanded` button pointing at an empty region is an a11y defect,
  * not a courtesy.
  *
- * It is also why the chrome is transparent at rest here. A `rounded-md` button
- * inside a `rounded-md` pill with 8px of padding is concentric radii, which
- * always read wrong, so the strip *is* the button until it docks — the
- * background and border fade in as the merge widens it into a bar.
+ * It is still a full-width card, exactly like the three-verb one. An earlier
+ * revision painted no chrome at all here, because a `rounded-md` button inside a
+ * `rounded-md` pill with 8px of padding is concentric radii and always reads
+ * wrong — but that was an artefact of the strip hugging its buttons. A card the
+ * width of the rung has no concentric anything, and a group-detail strip that
+ * looked like a bare button while the user-detail one looked like a card was the
+ * inconsistency the shared primitive exists to prevent.
  */
 export const SingleAction: Story = {
   args: {
@@ -170,15 +174,14 @@ export const AtPanelWidth: Story = {
 /**
  * The real detail-rung composition: a sticky `PageHeader` above, the strip below it, sections
  * scrolling underneath. Scroll the frame to watch the strip **merge into the header** — over
- * the last `--merge-range` (16px) before it parks it widens from its resting pill out to the
+ * the last `--merge-range` (16px) before it parks it grows from the rung's margins out to the
  * panel edges, drops its radius and its top/side borders, covers the header's bottom seam and
  * grows a shadow, so the two become one continuous pinned surface.
  *
- * The buttons do not move: only the chrome behind them does — with one exception. The trailing
- * **More** cluster rides the widening edge out to the panel's right margin, because a
- * disclosure stranded 200px short of the edge of a full-bleed band reads as a stray verb. The
- * leading buttons are the ones that must hold still, and they do: the hug is painted rather
- * than laid out, so nothing in flow is on the timeline.
+ * The buttons do not move — none of them, including **More**. Only the chrome behind them does:
+ * the merge animates a `::before` box while the row keeps the column's padding throughout, so
+ * the verbs stay aligned with the header's own content once the two have become one surface.
+ * Nothing in flow is on the timeline.
  *
  * Note *when* it happens: nothing changes until the strip is nearly home, and it is fully
  * merged the instant it stops. Measured in Chromium at a 420px viewport, it rests unmerged
@@ -190,7 +193,7 @@ export const AtPanelWidth: Story = {
  * A motion showcase, so it opts back into motion (`parameters: { motion: 'on' }`) — there is
  * nothing to see with `data-motion="off"`. That off state is not a rendering artefact: a
  * scroll-driven animation cannot be shortened to `1ms` the way a timed one can, so reduced
- * motion clears its `animation-name` instead and the strip simply keeps its resting pill.
+ * motion clears its `animation-name` instead and the strip simply keeps its resting card.
  * Flip the toolbar's motion control to see exactly what a `prefers-reduced-motion` user gets.
  */
 export const StickyInAScroller: Story = {
@@ -198,10 +201,9 @@ export const StickyInAScroller: Story = {
   args: {
     sticky: true,
     // A tier, because the rung this mirrors has one: `UserActionBar` keeps the
-    // account-state verbs behind **More**. Without it there is no More cluster in
-    // the DOM at all, and the docstring below would be describing travel that this
-    // story could not show — measured `--dock-more-travel: 0px` while the stories
-    // that do have a cluster published 546px and 11px.
+    // account-state verbs behind **More**. Without it there is no More control in
+    // the DOM at all, and this story could not show the trailing edge the docstring
+    // below describes.
     actions: [
       { id: 'add-group', label: 'Add group', icon: 'plus', variant: 'primary', onClick: fn() },
       { id: 'compare', label: 'Compare', icon: 'users', onClick: fn() },
@@ -466,30 +468,37 @@ export const TierHoldsOverflowAndCustomContent: Story = {
   },
 };
 /**
- * The resting shape, next to something that really is column-width. A `DetailSection` spans
- * the rung; the strip above it does not — it is exactly as wide as the verbs it holds. That
- * difference is the whole point of the hug, and it is what the merge spends its last 32px of
- * travel erasing.
+ * The resting shape, next to the thing it has to agree with. A `DetailSection` spans the rung;
+ * so does the strip above it, to the same two margins — the left edges line up, the right
+ * edges line up, and **More** sits at that shared right edge rather than floating somewhere in
+ * the middle of the column. Only the merge takes the strip past those margins.
  *
  * **Visual only — no `play`, so this is not a test.** It renders (which the browser suite and
  * its axe run do check), and nothing more. The behavioural claims live in `Overflows`,
  * `IconsDropBeforeOverflow`, `PinnedNeverOverflows` and
  * `TierHoldsOverflowAndCustomContent`.
  */
-export const HugAtRest: Story = {
+export const AlignsWithTheRung: Story = {
   args: {
     actions: [
       { id: 'add-group', label: 'Add group', icon: 'plus', variant: 'primary', onClick: fn() },
       { id: 'compare', label: 'Compare', icon: 'users', onClick: fn() },
     ],
+    expansion: (
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="secondary" size="sm" icon="pause" onClick={fn()}>
+          Suspend user
+        </Button>
+      </div>
+    ),
   },
   render: (args) => (
     <div className="w-[480px] space-y-6 bg-canvas p-6">
       <ActionBar {...args} />
       <DetailSection title="Membership source">
         <p className="text-sm text-neutral-600">
-          A section fills the column edge to edge. The strip above it stops at its last button, and
-          only grows into a band as it docks.
+          A section fills the column edge to edge, and so does the strip above it. They are the same
+          kind of box until the strip docks and grows past the column into the panel.
         </p>
       </DetailSection>
     </div>

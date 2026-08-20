@@ -13,6 +13,13 @@
  * the rules that keep a *hidden* rung from committing garbage, the loop guard,
  * which element each published variable lands on, and that the previous split is
  * threaded back in so the deadband spans successive resizes.
+ *
+ * Two cases were removed under ADR-0022 when the resting strip became a
+ * full-width card: `--bar-content-measured` and `--dock-more-travel` no longer
+ * exist to be published, so "measures the pill from the widest right edge" had no
+ * subject left. Nothing they covered went uncovered — the surviving case still
+ * pins that `--dock-offset` lands on the parent and `--bar-bleed` on the band,
+ * which is the only part of the publishing that a reviewer cannot see is wrong.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
@@ -370,7 +377,7 @@ describe('useActionOverflow', () => {
   });
 
   describe('the published variables', () => {
-    it('puts --dock-offset on the parent and the other three on the band', () => {
+    it('puts --dock-offset on the parent and --bar-bleed on the band', () => {
       // The sentinel reads `--dock-offset` and it is the band's *sibling*, so a
       // value set on the band is invisible to it and the merge finishes early —
       // silently. This assertion is the only thing standing between that bug and
@@ -384,33 +391,12 @@ describe('useActionOverflow', () => {
       const band = fixture.band.style;
       const parent = fixture.parent.style;
 
-      // maxRight 406 (the cluster) − band.left 24 + 8px of row padding-inline-end.
-      expect(band.getPropertyValue('--bar-content-measured')).toBe('390px');
-      // clientWidth 500 − (cluster.right 406 − band.left 24).
-      expect(band.getPropertyValue('--dock-more-travel')).toBe('118px');
       expect(band.getPropertyValue('--bar-bleed')).toBe('24px');
       expect(band.getPropertyValue('--dock-offset')).toBe('');
 
       // band.top 100 − sentinel.top 76.
       expect(parent.getPropertyValue('--dock-offset')).toBe('24px');
       expect(parent.getPropertyValue('--bar-bleed')).toBe('');
-      expect(parent.getPropertyValue('--bar-content-measured')).toBe('');
-    });
-
-    it('measures the pill from the widest right edge, not the last child', () => {
-      // A wrapped row parks its last item on line two near x=0; measuring from it
-      // would paint the pill as a stub across the actions still on line one.
-      const fixture = makeFixture({ width: 500 });
-      setRect(fixture.cluster, { left: 32, top: 148, width: 50 });
-
-      mount(fixture);
-
-      // The last child now ends at 82; the widest ends at 348. Measuring from the
-      // last one would paint a 66px pill under a 332px row.
-      expect(fixture.band.style.getPropertyValue('--bar-content-measured')).toBe('332px');
-      // …and a row on two lines gets no travel at all, or the cluster would be
-      // translated off the end of its own line.
-      expect(fixture.band.style.getPropertyValue('--dock-more-travel')).toBe('0px');
     });
 
     it('publishes nothing while the band is hidden', () => {

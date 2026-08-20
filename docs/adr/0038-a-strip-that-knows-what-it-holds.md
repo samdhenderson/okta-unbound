@@ -58,8 +58,8 @@ new resting shape makes worse:
 ## Decision
 
 **The strip takes its actions as data, so it can measure them and decide how many
-fit; it hugs those actions at rest and widens as it docks; and the merge that
-drives that widening is made to actually run.**
+fit; it rests as a card the width of the rung and grows past the rung's margins as
+it docks; and the merge that drives that growth is made to actually run.**
 
 ### 1. Actions are descriptors, not children
 
@@ -108,34 +108,54 @@ self-referential and the split would oscillate between two states that each just
 the other. Promotion additionally demands one `gap` of slack beyond what the action
 needs, so the deadband has to be crossed twice to oscillate.
 
-### 3. The hug is painted, not laid out
+### 3. The merge is painted, not laid out
 
-At rest the strip is a pill the width of its buttons; as it docks it widens to the
-panel bleed. **The band keeps its full layout width throughout** and only its
-`::before` chrome stops at the last button
-(`inset-inline-end: calc(100% - var(--bar-content-w))`).
+At rest the strip is a card the width of the rung — `inset-inline: 0` of a column
+the tab already inset by `px-6`, so it lines up with every `DetailSection` beneath
+it. As it docks, the `::before` chrome alone grows to `-1 * var(--bar-bleed)` on
+both sides and reaches the panel edges.
 
-Two things follow, and both are the reason for the technique. The overflow observer
-watches a width that does not churn while the merge runs; and the leading buttons
-never move, because nothing in flow is on the timeline. The one exception is the
-trailing More cluster, which is the last in-flow item — not `margin-inline-start:
-auto`, which would orphan it at the far side of the column — and rides the widening
-edge on `translate`, which composites and reflows nothing.
+Two things follow, and both are the reason for animating a pseudo-element rather
+than the band. The overflow observer watches a width that does not churn while the
+merge runs; and **no verb moves**, because nothing in flow is on the timeline. The
+row keeps the column's padding whether the chrome is inside the margins or past
+them, which is also what keeps the verbs aligned with the header's own content once
+the two have become one surface.
 
-Rejected: `width: fit-content` is not interpolatable and flips discretely at 50%;
-animating the row's own width relayouts every button every frame on the one shared
-scroller; `clip-path: inset()` clips to the border box at full open and would
-delete `--shadow-dock`, which is the entire point of the merged state.
+**More** is pushed to the trailing edge with `ms-auto`, carrying its hairline
+separator inside the same wrapper so the rule cannot be left behind by that margin.
+The row's `gap-2` still applies on top of the auto margin, so a full row keeps its
+breathing room rather than butting the last verb against the rule.
 
-The `calc(100% - 100%)` fallback is load-bearing: with no measurement — jsdom, no
-`ResizeObserver` — the strip is exactly the full-width band that shipped before, so
-no test and no non-measuring path has to know any of this exists.
+Rejected: animating the row's own width relayouts every button every frame on the
+one shared scroller; `clip-path: inset()` clips to the border box at full open and
+would delete `--shadow-dock`, which is the entire point of the merged state.
 
-An open tier is a panel, not a pill, so it eases the chrome out to `100%` of the
-column. `--bar-content-w` is a registered `@property` so it can transition at all,
-and the merge keyframe carries **only a `to` block** so its implicit `from`
-re-resolves as that transition runs. Verified mid-merge in Chromium: opening the
-tier eased `inset-inline-end` rather than jumping.
+#### The hug, and why it went
+
+The first version of this decision had the strip **hug its actions** at rest — a
+pill the width of its buttons, painted with
+`inset-inline-end: calc(100% - var(--bar-content-w))`, with `--bar-content-w` a
+registered `@property` so an opening tier could ease it out to `100%`, and a
+`dock-more` animation translating the More cluster out to the docked edge. All of
+it was built and measured working, including the registered-property transition
+re-resolving a running scroll-driven animation's implicit `from` mid-merge.
+
+It was reversed on review, and the reason is not a defect in the mechanism. A pill
+is a fourth kind of box on a rung that already has a header, cards and rows, and it
+reads as a different sort of object from the sections it governs. Its disclosure is
+worse: pinned to the pill's trailing edge, **More** floats somewhere mid-column with
+nothing beneath it, when the one place a "rest of the actions" control belongs is
+the right edge of the thing it acts on. A card gets both for free — the edges line
+up with the sections, and the trailing edge is a real edge.
+
+What the reversal deleted: `--bar-content-measured`, `--dock-more-travel`, the
+`@property --bar-content-w` registration and its transition, the
+`[data-tier-open]` width override, the `dock-more` keyframes, and the `data-bare`
+chromeless treatment for a one-action strip — that last one existed only because a
+button inside a pill of the same radius reads as concentric, which a full-width
+card cannot be. Two published variables survive, because they measure geometry CSS
+cannot see: `--bar-bleed` and `--dock-offset`.
 
 ### 4. The timeline is hoisted, and two geometry errors are corrected
 
@@ -185,7 +205,7 @@ band plus its measured bleed, painted `--color-canvas`. Canvas-on-canvas at rest
 so it is invisible in flow; opaque the moment the strip pins, in **every** motion
 mode — animated, reduced-motion, `@supports not`, `data-motion="off"` — with no
 observer and nothing to desync. Six lines of stateless CSS is what makes the
-reduced-motion fallback (a pill that pins and never widens) safe at all.
+reduced-motion fallback (a card that pins and never grows) safe at all.
 
 Rejected: a `useStuck`-driven `data-docked` flip. `useStuck` reads
 `getComputedStyle().top` once and re-arms only on `window.resize`, but this band's
@@ -240,10 +260,6 @@ a request to disclose anything, so the tier is never auto-opened.
   button pointing at an empty region is an a11y defect. Its label is fixed at
   "More" in both states — `aria-expanded` carries the state, and a label that
   changed with state would violate §2's constant-width constraint.
-- **A one-action strip renders no chrome at rest.** A `rounded-md` button inside a
-  `rounded-md` pill with 8px of padding is two concentric equal radii, which always
-  reads as a mistake; the lone strip _is_ the button until it docks and grows a bar
-  around itself. Internal behaviour keyed on the degenerate case, not a prop.
 - **A hidden rung measures zero, and that is routine.** Tabs stay mounted
   (ADR-0018) and the Users tab renders the detail rung `hidden` while searching, so
   the hook never caches a zero, never splits from a zero budget, guesses "everything

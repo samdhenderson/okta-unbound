@@ -62,29 +62,34 @@ Native-Okta model: a **gray canvas** with **white cards** floating on it.
 
 ### The docking band's resting shape
 
-`ActionBar` **hugs its actions at rest** — a pill the width of its buttons,
-left-aligned in the column — and widens to the panel bleed only as it docks. Two
-consequences for anything built near it:
+`ActionBar` at rest is **a card the width of the rung** — it spans the tab column
+and stops at the same left and right margins as every `DetailSection` below it — and
+grows past those margins to the panel bleed only as it docks. Two consequences for
+anything built near it:
 
-- **The hug is painted, not laid out.** The band keeps its full layout width and only
-  its `::before` chrome stops at the last button, so the leading buttons never move
-  during the merge and the overflow observer watches a width that does not churn. Do
-  not "fix" a strip that measures wider than it looks.
-- **A lone action gets no chrome at all** until it docks. A `rounded-md` button inside
-  a `rounded-md` pill with 8px of padding is two concentric equal radii, which always
-  reads as a mistake.
+- **Only the chrome merges.** The band's `::before` is what animates; the row inside
+  keeps the column's padding the whole way, so no verb moves during the merge and the
+  overflow observer watches a band width that does not churn. Do not put a layout
+  property on that timeline.
+- **The disclosure owns the trailing edge.** **More** is pushed there with `ms-auto`
+  and carries its hairline separator with it, so the rule always reads as the
+  boundary between the verbs and the way to reach the rest of them — wherever the
+  verbs happen to end.
 
-Four custom properties carry the geometry, published imperatively by
+An earlier revision had the strip hug its buttons at rest, with a lone action getting
+no chrome at all to avoid concentric radii. Both went when the strip became a card:
+a pill is a fourth kind of box on a rung that already has a header, cards and rows,
+and its disclosure ends up floating mid-column with nothing under it.
+
+Two custom properties carry the geometry, published imperatively by
 `useActionOverflow` and consumed only by `tailwind.css`. They are a contract, not
 implementation detail — **never pass a `style` prop to the band**, or React clears
 them on its next render.
 
-| Property                 | Host                | Meaning                                       |
-| ------------------------ | ------------------- | --------------------------------------------- |
-| `--bar-content-measured` | the band            | How wide the painted pill must be             |
-| `--dock-more-travel`     | the band            | How far **More** slides to the docked edge    |
-| `--bar-bleed`            | the band            | The band's distance from the panel edge       |
-| `--dock-offset`          | the band's _parent_ | Rung margin between the sentinel and the band |
+| Property        | Host                | Meaning                                       |
+| --------------- | ------------------- | --------------------------------------------- |
+| `--bar-bleed`   | the band            | The band's distance from the panel edge       |
+| `--dock-offset` | the band's _parent_ | Rung margin between the sentinel and the band |
 
 `--dock-offset` is on the parent because the element that reads it is the dock
 sentinel — the band's _sibling_, which cannot see a property set on the band.

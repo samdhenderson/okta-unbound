@@ -255,21 +255,6 @@
   }
 }
 
-/*
- * Registered so it can be transitioned: an unregistered custom property is a
- * token stream and interpolates discretely, which would make the strip's chrome
- * snap to full width the instant its second tier opens. Registered as a
- * `<length-percentage>`, the measured pill width eases out to `100%` in step
- * with `.disclose`'s own height transition — and, because the merge keyframe
- * carries only a `to` block, the running scroll-driven animation re-resolves its
- * implicit `from` as this changes. Verified in Chromium, mid-merge.
- */
-@property --bar-content-w {
-  syntax: '<length-percentage>';
-  inherits: true;
-  initial-value: 100%;
-}
-
 @layer components {
   .tab-content {
     @apply hidden;
@@ -475,30 +460,6 @@
   .dock-band {
     position: relative;
     isolation: isolate;
-    /*
-     * The measured pill width, published by `useActionOverflow` as
-     * `--bar-content-measured`. Indirected through a second property so the
-     * `[data-tier-open]` rule below can win: the measured value arrives as an
-     * inline style, which would out-specify any stylesheet rule.
-     */
-    --bar-content-w: var(--bar-content-measured, 100%);
-    /*
-     * Unguarded on purpose. The measured width is a function of the row's
-     * *content*, not the panel's width — the buttons are left-aligned, so a
-     * wider panel does not make the pill wider. Measured constant at 328px from
-     * a 1000px panel down to 380px, changing only when the split or the icons
-     * do. Those are exactly the moments the ease is wanted: the pill resizes
-     * with the button that appeared or the glyph that left, rather than snapping.
-     * An earlier `[data-resizing]` escape hatch was written for a per-pointer-move
-     * lag that does not exist, and removed once measured.
-     */
-    transition: --bar-content-w var(--dur-move) var(--ease-standard);
-  }
-
-  /* An open second tier is a panel, not a pill. It fills its column — not the
-     panel bleed: a strip floating mid-page has no business in the gutters. */
-  .dock-band[data-tier-open='true'] {
-    --bar-content-w: 100%;
   }
 
   .dock-band::before {
@@ -508,14 +469,12 @@
     top: 0;
     bottom: 0;
     /*
-     * The hug is painted, not laid out. The band keeps its full layout width —
-     * which is what lets `useActionOverflow` observe a width that does not churn
-     * as the merge runs — while the chrome stops at the last button. Animating
-     * the row's own width instead would relayout every button every frame on the
-     * one shared scroller, and `fit-content` cannot be interpolated at all.
+     * The resting strip is a card like every other card on the rung: it spans
+     * the tab column and stops at its margins. Only the merge takes it past
+     * them, and only the chrome moves — the row inside keeps the column's
+     * padding the whole way, so the buttons never shift.
      */
-    inset-inline-start: 0;
-    inset-inline-end: calc(100% - var(--bar-content-w));
+    inset-inline: 0;
     background: var(--color-white);
     border: 1px solid var(--color-neutral-200);
     border-radius: var(--merge-radius);
@@ -525,25 +484,13 @@
   }
 
   /*
-   * The degenerate one-action strip: a `rounded-md` button inside a `rounded-md`
-   * pill with 8px of padding is two concentric equal radii, which always reads
-   * as a mistake. So a lone action gets no chrome at all — the strip *is* the
-   * button, until it docks and grows a bar around itself.
-   */
-  .dock-band[data-bare='true']::before {
-    background: transparent;
-    border-color: transparent;
-  }
-
-  /*
    * The bleed plate: opaque, panel-wide, and always present.
    *
    * The band is `inset-inline: 0` of a box the tab column already inset by
    * `px-6`, so a strip that is pinned but not merged has transparent gutters and
    * page rows scroll through them. That is a live bug today, visible to anyone
    * with `prefers-reduced-motion` (which clears the merge outright) and on any
-   * engine without `animation-timeline`. The hug pill would widen the leak from
-   * 48px to ~250px.
+   * engine without `animation-timeline`.
    *
    * Canvas-on-canvas at rest, so it is invisible in flow; opaque the moment the
    * strip pins, in every motion mode, with no observer and nothing to desync.
@@ -619,7 +566,7 @@
      * non-sticky strip (`sticky={false}`, every story) renders no sentinel, so
      * `--dock-progress` would resolve to null and — per the note above — snap the
      * chrome permanently to its merged state. Gated, such a strip simply keeps
-     * its resting pill, which is what a story should show.
+     * its resting card, which is what a story should show.
      */
     :has(> .dock-sentinel) > .dock-band::before {
       animation: dock-band linear both;
@@ -632,31 +579,12 @@
        */
       animation-range: cover calc(100% - var(--merge-range)) cover 100%;
     }
-
-    :has(> .dock-sentinel) > .dock-band[data-bare='true']::before {
-      animation-name: dock-band-bare;
-    }
-
-    /*
-     * The trailing More cluster is the last in-flow item, so at rest it sits
-     * against the pill's edge rather than orphaned at the far side of the column.
-     * It rides the widening edge on the same timeline. `translate` because it
-     * composites and reflows nothing; a px var because `translate` percentages
-     * resolve against the moving element's own box, not its parent's.
-     */
-    :has(> .dock-sentinel) > .dock-band .dock-more {
-      animation: dock-more linear both;
-      animation-timeline: --dock-progress;
-      animation-range: cover calc(100% - var(--merge-range)) cover 100%;
-    }
   }
 
   /*
-   * Only a `to` block, and deliberately so. The implicit 0% keyframe is the
-   * element's own computed value, so it re-resolves when `--bar-content-w`
-   * transitions — which is what lets the second tier widen the chrome while the
-   * merge animation is mid-flight. An explicit `from` would freeze the resting
-   * width and the tier would open against a pill that never grew.
+   * Only a `to` block. The implicit 0% keyframe is the element's own computed
+   * value, so the resting card is described once — in `::before` — rather than
+   * duplicated here and left to drift out of sync with it.
    */
   @keyframes dock-band {
     to {
@@ -666,24 +594,6 @@
       border-top-color: transparent;
       border-inline-color: transparent;
       box-shadow: var(--shadow-dock);
-    }
-  }
-
-  /* The lone-action strip has no chrome to flatten, so it grows one instead. */
-  @keyframes dock-band-bare {
-    to {
-      top: -1px;
-      inset-inline: calc(-1 * var(--bar-bleed, var(--merge-bleed)));
-      border-radius: 0;
-      background: var(--color-white);
-      border-bottom-color: var(--color-neutral-200);
-      box-shadow: var(--shadow-dock);
-    }
-  }
-
-  @keyframes dock-more {
-    to {
-      translate: var(--dock-more-travel, 0px);
     }
   }
 }
@@ -723,8 +633,7 @@
     scroll-behavior: auto !important;
   }
 
-  .dock-band::before,
-  .dock-band .dock-more {
+  .dock-band::before {
     animation-name: none !important;
   }
 }
@@ -738,7 +647,6 @@
   scroll-behavior: auto !important;
 }
 
-[data-motion='off'] .dock-band::before,
-[data-motion='off'] .dock-band .dock-more {
+[data-motion='off'] .dock-band::before {
   animation-name: none !important;
 }

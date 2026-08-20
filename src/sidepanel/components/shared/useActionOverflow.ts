@@ -54,7 +54,7 @@
  *    ActionBar would have to know about it. The browser already knows when the
  *    band became visible; asking it is strictly more reliable than asking React.
  *
- * ## The four published variables
+ * ## The two published variables
  *
  * Written imperatively through the refs, the way
  * {@link sidepanel/hooks/usePublishedHeight.usePublishedHeight} writes `--rail-h`.
@@ -63,23 +63,24 @@
  *
  * | Variable | Host | Meaning |
  * | --- | --- | --- |
- * | `--bar-content-measured` | band | How wide the painted pill has to be to cover the row |
- * | `--dock-more-travel` | band | How far the More cluster slides to reach the docked edge |
  * | `--bar-bleed` | band | How far the band's box sits from the panel edge |
  * | `--dock-offset` | band's **parent** | The rung margin between the sentinel and the band |
  *
  * `--dock-offset` is the odd one out and it has to be. The element that *reads*
  * it is the dock sentinel — it subtracts the offset in its `view-timeline-inset`
- * so that the merge finishes on the frame the strip parks, rather than 24px of
- * `space-y` margin early — and the sentinel is the band's **sibling**, not its
+ * so that the merge finishes on the frame the strip parks, rather than a
+ * `space-y` step early — and the sentinel is the band's **sibling**, not its
  * descendant. A custom property set on the band is invisible to it. The parent
  * is the nearest element both of them inherit from, so that is where it goes.
  * Publishing it on the band instead does not error, it just silently mistimes
  * the merge, which is why this is written down rather than left to be inferred.
  *
- * `--bar-content-measured` uses the **maximum** right edge across the row's
- * children rather than the last child's. A wrapped row puts its last item on
- * line two, often at `x ≈ 0`, and the pill would be measured as a stub.
+ * There were two more. `--bar-content-measured` and `--dock-more-travel` drove a
+ * resting strip that hugged its buttons and a More control that slid out to the
+ * docked edge; both were measured working and both went when the strip became a
+ * full-width card, because a card's chrome is the column and its disclosure is
+ * already at the trailing edge. The geometry this hook still measures is the
+ * geometry the merge cannot get from CSS alone.
  */
 import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { fitActions } from './actionBarFit';
@@ -334,50 +335,13 @@ export function useActionOverflow(
     if (document.activeElement !== node) refs.more.current?.focus();
   };
 
-  /** Publish the four merge variables from the row's current geometry. */
+  /** Publish the two merge variables from the band's current geometry. */
   const publish = (): void => {
     const band = refs.band.current;
     if (!band) return;
-    const bandWidth = band.clientWidth;
-    if (bandWidth <= 0) return;
+    if (band.clientWidth <= 0) return;
 
     const bandRect = band.getBoundingClientRect();
-    const row = rowOf(band);
-
-    if (row) {
-      const rowStyle = getComputedStyle(row);
-      const padEnd = readPx(rowStyle, 'padding-inline-end', 'padding-right');
-
-      let maxRight = bandRect.left;
-      let minTop = Number.POSITIVE_INFINITY;
-      let maxTop = Number.NEGATIVE_INFINITY;
-      for (const child of row.children) {
-        const probe = refs.probe.current;
-        if (probe && (child === probe || probe.contains(child))) continue;
-        const rect = child.getBoundingClientRect();
-        if (rect.width <= 0 && rect.height <= 0) continue;
-        maxRight = Math.max(maxRight, rect.right);
-        minTop = Math.min(minTop, rect.top);
-        maxTop = Math.max(maxTop, rect.top);
-      }
-
-      // The max right edge, not the last child's: a wrapped row parks its last
-      // item on line two near x=0 and would measure the pill as a stub.
-      band.style.setProperty(
-        '--bar-content-measured',
-        `${Math.ceil(maxRight - bandRect.left + padEnd)}px`,
-      );
-
-      const wrapped = maxTop - minTop > 1;
-      const cluster = refs.cluster.current;
-      // On a wrapped row the cluster is on its own line already; translating it
-      // toward the docked edge would shove it off the end of that line.
-      const travel =
-        wrapped || !cluster
-          ? 0
-          : Math.round(bandWidth - (cluster.getBoundingClientRect().right - bandRect.left));
-      band.style.setProperty('--dock-more-travel', `${travel}px`);
-    }
 
     // The side panel *is* the viewport, so the band's distance from the left of
     // the viewport is exactly the gutter the merge has to bleed across. Measured
@@ -530,8 +494,6 @@ export function useActionOverflow(
     return () => {
       band.removeEventListener('focusin', remember);
       observer.disconnect();
-      band.style.removeProperty('--bar-content-measured');
-      band.style.removeProperty('--dock-more-travel');
       band.style.removeProperty('--bar-bleed');
       band.parentElement?.style.removeProperty('--dock-offset');
     };

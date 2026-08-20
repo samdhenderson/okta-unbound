@@ -140,10 +140,10 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
 
   return (
     /*
-      `space-y-6`, the same step the Users detail rung uses. It was `space-y-3`
-      while the strip painted a full-width slab, where 12px read as the gap
-      between two cards. The strip now hugs its one button, and 12px under a pill
-      makes the first `DetailSection` look attached to it rather than following it.
+      `space-y-6`, the same step the Users detail rung uses. It was `space-y-3`,
+      which is the card-to-card gap and not the rung's step — the strip is a card
+      the width of the column like every section under it, so it takes the same
+      rhythm as the rest of the rung rather than a tighter one of its own.
     */
     <div className="space-y-6" data-testid="group-detail-view">
       <ActionBar ariaLabel={`Actions for ${group.name}`} actions={actions} />

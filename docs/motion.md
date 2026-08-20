@@ -149,10 +149,10 @@ among them.
 
 `.dock-band` is the panel's only **progress-driven** animation: it advances with
 scroll position, not with a clock, so no duration token applies to it. It merges a
-pinned `ActionBar` into the `PageHeader` above it — the strip **hugs its actions at
-rest** and, over the last `--merge-range` **before it parks**, widens to the panel
-edges, drops its radius and borders, covers the header's seam and grows
-`--shadow-dock` (ADR-0032, corrected by ADR-0038).
+pinned `ActionBar` into the `PageHeader` above it — the strip **rests as a card the
+width of the rung** and, over the last `--merge-range` **before it parks**, grows
+past the column's margins to the panel edges, drops its radius and borders, covers
+the header's seam and grows `--shadow-dock` (ADR-0032, corrected by ADR-0038).
 
 The timeline is a `view-timeline` on a zero-size sentinel `ActionBar` renders just
 before itself, not `scroll()`: the merge is a function of how close the strip is to
@@ -205,9 +205,10 @@ child of its `space-y-6` rung and the sentinel floats, so **nothing collects a s
 and the measured value is `0px`**. It earns its keep the day a page renders
 something above the strip inside the rung.
 
-A second animation, `dock-more`, rides the same timeline and range: the trailing
-**More** cluster `translate`s to the docked edge as the chrome widens, so it stays
-against the pill at rest rather than orphaned across the column.
+There was briefly a second animation, `dock-more`, translating the **More** cluster
+out to the docked edge as the chrome widened. It went with the hug: a card's
+disclosure is already at the trailing edge, and moving it during the merge would
+break the rule that nothing in flow is on this timeline.
 
 Four things to know before adding another one:
 
@@ -215,18 +216,17 @@ Four things to know before adding another one:
   drops the unknown `animation-timeline` runs the keyframes on the _document_
   timeline at `0s` with `fill: both` — permanently stuck at the end state; an
   unresolvable name fails the same way, and a non-sticky strip renders no sentinel.
-- **Only a `to` block, when the resting value must stay live.** `dock-band`'s
-  implicit `from` is the element's own computed value, which is what lets the
-  disclosure tier widen the chrome mid-merge. An explicit `from` freezes it.
+- **Only a `to` block.** `dock-band`'s implicit `from` is the element's own computed
+  value, so the resting card is described once — in `::before` — instead of being
+  duplicated in a `from` block that then drifts out of sync with it.
 - **Reduced motion needs an explicit rule.** Duration plays no part in a
   progress-based timeline, so `tailwind.css` clears `animation-name` for
-  `.dock-band::before` and `.dock-band .dock-more` in both blocks instead. Any new
-  one must add itself to both — and must be safe at rest, which for this one means
+  `.dock-band::before` in both blocks instead. Any new one must add itself to both — and must be safe at rest, which for this one means
   the unconditional `::after` bleed plate covering the gutters.
 - **Animate a positioned pseudo-element, not the element.** These are not
   compositable properties, so every frame of scroll is style work; on an absolutely
-  positioned `::before` it never reflows the real content — which is also what lets
-  the strip hug its buttons while the band keeps the constant layout width its
+  positioned `::before` it never reflows the real content — which is what lets the
+  chrome bleed past the column while the band keeps the constant layout width its
   `ResizeObserver` depends on. Animating the element itself risks a feedback loop:
   the size change alters `scrollHeight`, which alters the progress. Relatedly, the
   scroll root sets `overflow-anchor: none`; see ADR-0032 §3b.
@@ -265,8 +265,8 @@ A blanket rule in `@layer components`, with an opt-in exemption:
   revert to the UA default (`0s`), defeating the exemption for anything relying on
   it.
 - **The block does not reach scroll-driven animations.** Duration is not what
-  drives them, so `.dock-band::before` and `.dock-band .dock-more` get their own
-  `animation-name: none` override in both blocks. See "The scroll-driven one"
+  drives them, so `.dock-band::before` gets its own `animation-name: none`
+  override in both blocks. See "The scroll-driven one"
   above.
 - The identical block is duplicated under `[data-motion='off'] *…` rather than
   combined with the media query, because CSS cannot `OR` a media-feature condition

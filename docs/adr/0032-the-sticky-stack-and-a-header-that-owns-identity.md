@@ -138,7 +138,7 @@ to the shared scroller — or any knowledge that the rail is what it parks below
 > `fill: both` pinned the animation on its `to` keyframe. The strip rendered
 > permanently merged from the day this ADR landed. ADR-0038 hoists the name with
 > `timeline-scope`, corrects `--merge-range` (64px → 16px) and the timeline inset,
-> and adds the resting hug this section's merge was always supposed to end.
+> and gives the merge a resting shape to start from: a card the width of the rung.
 
 Reaching the parking spot is not the same as looking parked. A strip that stays a rounded,
 inset card once pinned reads as "a card stopped moving", not "the strip joined the header" —

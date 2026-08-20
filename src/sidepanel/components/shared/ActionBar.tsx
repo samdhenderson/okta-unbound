@@ -45,18 +45,27 @@
  *
  * ## How it docks
  *
- * At rest the strip **hugs its actions** — a pill the width of its buttons, not a
- * slab spanning the column. Reaching its parking spot is not the same as looking
- * parked, so over the last `--merge-range` of travel it widens to the panel
- * edges, loses its radius and its top/side borders, covers the header's bottom
- * seam and grows a shadow. Header and strip end up one continuous pinned surface
- * with a single bottom edge.
+ * At rest the strip is a **card like every other card on the rung** — it spans
+ * the tab column and stops at its margins, so it lines up with the sections
+ * below it rather than announcing itself as a different kind of object. Reaching
+ * its parking spot is not the same as looking parked, so over the last
+ * `--merge-range` of travel it grows *past* those margins to the panel edges,
+ * loses its radius and its top/side borders, covers the header's bottom seam and
+ * grows a shadow. Header and strip end up one continuous pinned surface with a
+ * single bottom edge.
  *
- * The hug is **painted, not laid out**: the band keeps its full layout width and
- * only its `::before` chrome stops at the last button. That is what lets the
- * overflow observer watch a width that does not churn while the merge runs, and
- * it is why the leading buttons hold still — nothing in flow is on the timeline.
- * The one exception is the trailing More cluster, which rides the widening edge.
+ * Only the chrome moves. The merge animates the `::before` box, never the row,
+ * so the buttons hold still through all of it — the row keeps the column's
+ * padding whether the band is inside its margins or past them, which is also
+ * what keeps the verbs aligned with the header's own content once the two have
+ * become one surface. Nothing in flow is on the timeline, which is why the
+ * overflow observer can watch a band width that never churns.
+ *
+ * An earlier revision made the resting strip hug its buttons — a pill the width
+ * of its verbs. It was measured working, and dropped anyway: a pill is a fourth
+ * kind of box on a rung that already has a header, cards and rows, and the
+ * disclosure that has to sit at its trailing edge ends up floating mid-column
+ * with nothing under it.
  *
  * **Over the last `--merge-range` of travel, not the first of scroll.** The merge
  * is a function of how close the strip is to the header, which is why this
@@ -75,7 +84,7 @@
  * {@link sidepanel/hooks/useStuck.useStuck} is an `IntersectionObserver`.
  *
  * A `sticky={false}` strip renders no sentinel, so it never docks and there is
- * nothing for it to dock *into*. It still hugs; it simply keeps the resting pill.
+ * nothing for it to dock *into*. It simply keeps the resting card.
  *
  * ## The disclosure tier
  *
@@ -291,9 +300,6 @@ const ActionBar: React.FC<ActionBarProps> = ({
       role="group"
       aria-label={ariaLabel}
       data-testid={testId}
-      data-tier-open={hasTier && open}
-      // A lone action gets no ring around it — see `.dock-band[data-bare]`.
-      data-bare={ordered.length === 1 && !hasTier}
       className={`
       dock-band
       ${
@@ -328,10 +334,18 @@ const ActionBar: React.FC<ActionBarProps> = ({
               clusterRef.current = node;
               moreRef.current = node?.querySelector('button') ?? null;
             }}
-            className="inline-flex items-center"
+            /*
+             * `ms-auto` parks the whole cluster — separator and control together —
+             * at the strip's trailing edge, so the rule reads as the boundary
+             * between "the verbs" and "the way to the rest of them" wherever the
+             * verbs happen to end. The separator is inside this span rather than a
+             * sibling of it precisely so it cannot be left behind by that margin.
+             * The row's `gap-2` still applies on top of the auto margin, so a full
+             * row keeps its breathing room instead of butting the last verb
+             * against the rule.
+             */
+            className="ms-auto inline-flex items-center"
           >
-            {/* The region boundary. Without it More reads as a fourth verb rather
-                than as the way to reach the rest of them. */}
             <span aria-hidden="true" className="mx-1 w-px self-stretch bg-neutral-200" />
             <Button
               variant="ghost"
@@ -345,7 +359,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
               // Rotated, never swapped for another glyph: a label or icon that
               // changes with state changes the cluster's width, and the fit
               // arithmetic requires that width to be constant.
-              className="dock-more [&_svg]:transition-transform [&_svg]:duration-(--dur-quick) aria-expanded:[&_svg]:rotate-180"
+              className="[&_svg]:transition-transform [&_svg]:duration-(--dur-quick) aria-expanded:[&_svg]:rotate-180"
             >
               More
             </Button>
