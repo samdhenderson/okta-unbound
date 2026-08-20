@@ -61,15 +61,16 @@ answer.
 
 ## Call-collapsing cheat sheet
 
-| Endpoint                               | Parameter                   | Embeds                            | Saves                 |
-| -------------------------------------- | --------------------------- | --------------------------------- | --------------------- |
-| `GET /api/v1/groups`                   | `expand=stats`              | Exact member count                | 1 call per group      |
-| `GET /api/v1/groups`                   | `expand=app`                | Source app for app-sourced groups | 1 call per group      |
-| `GET /api/v1/groups/{id}/users`        | `expand=group-rules`        | Per-member rule attribution       | 1 call per member     |
-| `GET /api/v1/apps?filter=user.id eq …` | `expand=user/{id}`          | Assignment `scope`                | 1 call per app        |
-| `GET /api/v1/apps/{id}/groups`         | `expand=group`              | The full group object             | 1 call per assignment |
-| `GET /api/v1/devices`                  | `expand=user`               | The device's users                | 1 call per device     |
-| Any list endpoint                      | `limit=1` + `x-total-count` | Exact total, in a header          | A full walk to count  |
+| Endpoint                               | Parameter                   | Embeds                            | Saves                   |
+| -------------------------------------- | --------------------------- | --------------------------------- | ----------------------- |
+| `GET /api/v1/groups`                   | `expand=stats`              | Exact member count                | 1 call per group        |
+| `GET /api/v1/groups`                   | `expand=app`                | Source app for app-sourced groups | 1 call per group        |
+| `GET /api/v1/groups/{id}/users`        | `expand=group-rules`        | Per-member rule attribution       | 1 call per member       |
+| `GET /api/v1/apps?filter=user.id eq …` | `expand=user/{id}`          | Assignment `scope`                | 1 call per app          |
+| `GET /api/v1/apps?filter=user.id eq …` | (none — read `features`)    | The user's profile source(s)      | The whole mappings walk |
+| `GET /api/v1/apps/{id}/groups`         | `expand=group`              | The full group object             | 1 call per assignment   |
+| `GET /api/v1/devices`                  | `expand=user`               | The device's users                | 1 call per device       |
+| Any list endpoint                      | `limit=1` + `x-total-count` | Exact total, in a header          | A full walk to count    |
 
 Contracts, embed shapes, and per-parameter pagination behaviour are in
 `references/request-optimization.md`.
@@ -105,7 +106,7 @@ Check the prefix before putting an id in a path. Passing a rule id where a group
 belongs is a real and common bug, and the resulting 404 does not say which argument
 was wrong.
 
-## Three warnings that change answers
+## Four warnings that change answers
 
 These cause silently wrong reports rather than errors, so they are stated here
 rather than deferred.
@@ -121,6 +122,14 @@ Okta reports a single scope per app-user and prefers `USER`. A user assigned bot
 directly and via a group reports `USER`, and the group path is invisible in that
 response. Establishing that no group path exists requires intersecting the app's
 group assignments with the user's groups.
+
+**`master.priority` exists only for `OVERRIDE`.** A user-schema property whose
+`master.type` is `PROFILE_MASTER` — the ordinary case — names no sources, because
+the order it follows is org-level. Resolving such a block through `priority` never
+errors; it simply always finds nothing, and whatever the code does with "nothing"
+becomes its verdict for the whole org. The profile source is on the **app row**
+(`features` contains `PROFILE_MASTERING`), free on the assigned-apps call. See
+`users-and-mfa.md` § Profile sourcing.
 
 **Okta exposes no group-membership timestamp.** Neither the group member listing nor
 `GET /api/v1/users/{id}/groups` carries an "added on" date, and the user-side
@@ -206,6 +215,8 @@ the intended use of this skill.
 | Writing or reading an Okta Expression Language condition                                          | `references/groups-and-rules.md`                         |
 | Determining MFA enrollment, factor strength, or FastPass usage                                    | `references/users-and-mfa.md`                            |
 | Reading or filtering user profile attributes and custom schema                                    | `references/users-and-mfa.md`                            |
+| Deciding whether a profile attribute is editable, or who masters it                               | `references/users-and-mfa.md` (Profile sourcing)         |
+| Finding a user's profile source / profile master                                                  | `references/users-and-mfa.md` (Profile sourcing)         |
 | Interpreting user status (STAGED vs PROVISIONED vs DEPROVISIONED)                                 | `references/users-and-mfa.md`                            |
 | Determining who can access an app, and by which path                                              | `references/apps-and-policies.md`                        |
 | Finding the sign-on or access policy that governs an app                                          | `references/apps-and-policies.md`                        |

@@ -69,50 +69,6 @@ describe('getUserLastLogin', () => {
   });
 });
 
-describe('getUserAppAssignments', () => {
-  it('returns the first-page count when there are no more pages', async () => {
-    const core = makeCore({
-      makeApiRequest: vi.fn().mockResolvedValue({
-        success: true,
-        data: [{ id: 'a' }, { id: 'b' }],
-        headers: {},
-      }),
-    });
-    const { getUserAppAssignments } = createUserOperations(core);
-
-    const count = await getUserAppAssignments('00uFAKE1');
-
-    expect(core.makeApiRequest).toHaveBeenCalledWith(
-      '/api/v1/apps?filter=user.id+eq+"00uFAKE1"&limit=200',
-    );
-    expect(count).toBe(2);
-  });
-
-  it('returns the first-page count when a next-page Link header is present', async () => {
-    const core = makeCore({
-      makeApiRequest: vi.fn().mockResolvedValue({
-        success: true,
-        data: [{ id: 'a' }],
-        headers: { Link: '<https://example.okta.com/api/v1/apps?after=x>; rel="next"' },
-      }),
-    });
-    const { getUserAppAssignments } = createUserOperations(core);
-    expect(await getUserAppAssignments('00uFAKE1')).toBe(1);
-  });
-
-  it('returns 0 when the request has no data', async () => {
-    const core = makeCore({ makeApiRequest: vi.fn().mockResolvedValue({ success: false }) });
-    const { getUserAppAssignments } = createUserOperations(core);
-    expect(await getUserAppAssignments('00uFAKE1')).toBe(0);
-  });
-
-  it('returns 0 on a thrown error', async () => {
-    const core = makeCore({ makeApiRequest: vi.fn().mockRejectedValue(new Error('down')) });
-    const { getUserAppAssignments } = createUserOperations(core);
-    expect(await getUserAppAssignments('00uFAKE1')).toBe(0);
-  });
-});
-
 describe('getUserApps', () => {
   it('walks Link pagination and flattens id + label/name/id fallback', async () => {
     const makeApiRequest = vi
@@ -135,9 +91,9 @@ describe('getUserApps', () => {
 
     expect(makeApiRequest).toHaveBeenCalledTimes(2);
     expect(apps).toEqual([
-      { id: 'a1', label: 'App One' },
-      { id: 'a2', label: 'App Two' },
-      { id: 'a3', label: 'a3' },
+      { id: 'a1', label: 'App One', isProfileSource: false },
+      { id: 'a2', label: 'App Two', isProfileSource: false },
+      { id: 'a3', label: 'a3', isProfileSource: false },
     ]);
     expect(complete).toBe(true);
   });
@@ -166,7 +122,7 @@ describe('getUserApps', () => {
     // The distinction the flag exists for: one real app in hand, and an unknown
     // number missing. Neither "1 app" nor "0 apps" is the truth.
     expect(await getUserApps('00uFAKE1')).toEqual({
-      apps: [{ id: 'a1', label: 'App One', scope: undefined }],
+      apps: [{ id: 'a1', label: 'App One', scope: undefined, isProfileSource: false }],
       complete: false,
     });
   });
@@ -467,7 +423,7 @@ describe('getUserApps boundary validation', () => {
     // A dropped row is not an incomplete walk: every page was fetched, so the
     // answer is complete even though one malformed row did not survive validation.
     expect(await getUserApps('00uFAKE1')).toEqual({
-      apps: [{ id: '0oaFAKE1', label: 'App One' }],
+      apps: [{ id: '0oaFAKE1', label: 'App One', isProfileSource: false }],
       complete: true,
     });
   });
@@ -525,8 +481,8 @@ describe('getUserApps assignment scope', () => {
     // fields to each page, never a request.
     expect(makeApiRequest).toHaveBeenCalledTimes(2);
     expect(apps).toEqual([
-      { id: '0oaFAKE1', label: 'One', scope: 'USER' },
-      { id: '0oaFAKE2', label: 'Two', scope: 'GROUP' },
+      { id: '0oaFAKE1', label: 'One', scope: 'USER', isProfileSource: false },
+      { id: '0oaFAKE2', label: 'Two', scope: 'GROUP', isProfileSource: false },
     ]);
   });
 
@@ -565,7 +521,12 @@ describe('getUserApps assignment scope', () => {
     // The app must NOT be dropped: under-reporting a user's access is far worse
     // than a missing scope (ADR-0006 degrades, it does not fail closed).
     expect(apps).toHaveLength(1);
-    expect(apps[0]).toEqual({ id: '0oaFAKE1', label: 'One', scope: undefined });
+    expect(apps[0]).toEqual({
+      id: '0oaFAKE1',
+      label: 'One',
+      scope: undefined,
+      isProfileSource: false,
+    });
   });
 
   it.each([
@@ -601,10 +562,173 @@ describe('getUserApps assignment scope', () => {
     const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
 
     expect((await getUserApps('00uFAKE1')).apps).toEqual([
-      { id: '0oaFAKE1', label: 'One', scope: 'USER' },
-      { id: '0oaFAKE2', label: 'Two', scope: undefined },
-      { id: '0oaFAKE3', label: 'Three', scope: undefined },
-      { id: '0oaFAKE4', label: 'Four', scope: 'GROUP' },
+      { id: '0oaFAKE1', label: 'One', scope: 'USER', isProfileSource: false },
+      { id: '0oaFAKE2', label: 'Two', scope: undefined, isProfileSource: false },
+      { id: '0oaFAKE3', label: 'Three', scope: undefined, isProfileSource: false },
+      { id: '0oaFAKE4', label: 'Four', scope: 'GROUP', isProfileSource: false },
     ]);
+  });
+});
+
+/**
+ * Task A4: name the group that grants an app, on load, for **zero** extra
+ * requests. The grant group rides the SAME `expand=user/{userId}` response the
+ * `scope` is read from, so these cases pin that the field is populated from the
+ * embed, that a hostile or malformed link never becomes an answer, and that a
+ * `USER` scope and a grant group can coexist on one row.
+ */
+describe('getUserApps grant group', () => {
+  /** A single successful page with no next link. */
+  const onePage = (data: unknown[]) => ({ success: true, data, headers: {} });
+
+  /** An app row whose embedded app-user names `href` as its group link. */
+  const rowWithGroupHref = (href: unknown, scope = 'GROUP') => ({
+    id: '0oaFAKEapp000001',
+    label: 'One',
+    _embedded: { user: { id: '00uFAKE0001', scope, _links: { group: { href } } } },
+  });
+
+  it('reads grantGroupId off the embed without issuing a request per app', async () => {
+    const makeApiRequest = vi
+      .fn()
+      .mockResolvedValue(
+        onePage([rowWithGroupHref('https://example.okta.com/api/v1/groups/00gFAKEgroup00000001')]),
+      );
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    const { apps } = await getUserApps('00uFAKE0001');
+
+    expect(apps).toEqual([
+      {
+        id: '0oaFAKEapp000001',
+        label: 'One',
+        scope: 'GROUP',
+        grantGroupId: '00gFAKEgroup00000001',
+        isProfileSource: false,
+      },
+    ]);
+    // One page, one call — naming the group cost nothing.
+    expect(makeApiRequest).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+   * The app row's `features` is what the profile-editability gate resolves a
+   * `PROFILE_MASTER` attribute against (ADR-0037). Like `scope` and
+   * `grantGroupId` it rides the page this walk already fetches, so the pin here
+   * is on the read, not on a request count — and paired, because a reader that
+   * hard-coded `false` would satisfy half of it.
+   */
+  it('reads PROFILE_MASTERING off features without issuing a request per app', async () => {
+    const makeApiRequest = vi.fn().mockResolvedValue(
+      onePage([
+        {
+          id: '0oaFAKEapp000001',
+          label: 'Workday',
+          features: ['IMPORT_PROFILE_UPDATES', 'PROFILE_MASTERING', 'IMPORT_NEW_USERS'],
+        },
+        { id: '0oaFAKEapp000002', label: 'Salesforce', features: ['SSO', 'GROUP_PUSH'] },
+        { id: '0oaFAKEapp000003', label: 'Slack' },
+      ]),
+    );
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    const { apps } = await getUserApps('00uFAKE0001');
+
+    expect(apps.map((app) => app.isProfileSource)).toEqual([true, false, false]);
+    expect(makeApiRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves grantGroupId undefined when the embed carries no _links', async () => {
+    const makeApiRequest = vi.fn().mockResolvedValue(
+      onePage([
+        {
+          id: '0oaFAKEapp000001',
+          label: 'One',
+          _embedded: { user: { id: '00uFAKE0001', scope: 'GROUP' } },
+        },
+      ]),
+    );
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    const { apps } = await getUserApps('00uFAKE0001');
+
+    // Okta named no group. That is "unknown", never "assigned directly".
+    expect(apps[0].grantGroupId).toBeUndefined();
+    expect(apps[0].scope).toBe('GROUP');
+  });
+
+  it.each([
+    ['a user id', '/api/v1/users/00uFAKE00000000000001'],
+    ['a path-traversal href', 'https://example.okta.com/api/v1/groups/00gFAKE/../../../users/me'],
+    ['a bare traversal', '../../etc/passwd'],
+    ['an empty href', ''],
+    ['a query string with no path segment', '?groupId=00gFAKEgroup00000001'],
+    ['a too-short id', '/api/v1/groups/00gFAKE'],
+  ])('keeps the app but reports no grant group for %s', async (_label, href) => {
+    const makeApiRequest = vi.fn().mockResolvedValue(onePage([rowWithGroupHref(href)]));
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    const { apps, complete } = await getUserApps('00uFAKE0001');
+
+    expect(apps).toHaveLength(1);
+    expect(apps[0].id).toBe('0oaFAKEapp000001');
+    expect(apps[0].grantGroupId).toBeUndefined();
+    expect(complete).toBe(true);
+  });
+
+  it('keeps BOTH scope USER and grantGroupId — a direct assignment does not exclude a group path', async () => {
+    const makeApiRequest = vi
+      .fn()
+      .mockResolvedValue(
+        onePage([rowWithGroupHref('/api/v1/groups/00gFAKEgroup00000001', 'USER')]),
+      );
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    const { apps } = await getUserApps('00uFAKE0001');
+
+    // Okta reports one scope and prefers USER; the group path is still real.
+    expect(apps[0].scope).toBe('USER');
+    expect(apps[0].grantGroupId).toBe('00gFAKEgroup00000001');
+  });
+
+  it('a malformed _links never drops the app (and never costs its scope)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const makeApiRequest = vi.fn().mockResolvedValue(
+      onePage([
+        {
+          id: '0oaFAKEapp000001',
+          label: 'One',
+          _embedded: { user: { id: '00uFAKE0001', scope: 'USER', _links: 'nonsense' } },
+        },
+        {
+          id: '0oaFAKEapp000002',
+          label: 'Two',
+          _embedded: { user: { id: '00uFAKE0001', scope: 'GROUP', _links: { group: 42 } } },
+        },
+      ]),
+    );
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    const { apps, complete } = await getUserApps('00uFAKE0001');
+
+    // Under-reporting access is the failure mode that matters: both rows survive.
+    expect(apps).toEqual([
+      {
+        id: '0oaFAKEapp000001',
+        label: 'One',
+        scope: 'USER',
+        grantGroupId: undefined,
+        isProfileSource: false,
+      },
+      {
+        id: '0oaFAKEapp000002',
+        label: 'Two',
+        scope: 'GROUP',
+        grantGroupId: undefined,
+        isProfileSource: false,
+      },
+    ]);
+    expect(complete).toBe(true);
+    vi.restoreAllMocks();
   });
 });

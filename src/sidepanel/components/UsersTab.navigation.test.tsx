@@ -444,4 +444,62 @@ describe('UsersTab sub-navigation', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('User Search');
     expect(screen.queryByRole('heading', { name: 'Ada Lovelace' })).not.toBeInTheDocument();
   });
+
+  // ------------------------------------------------ no fan-out on navigation
+  /**
+   * CHARACTERIZATION — added ahead of the detail rung's rebuild into three
+   * tabbed panes (Groups / Apps / Profile), and still green against it with no
+   * retarget: they name no rung-internal DOM, only the requests a round trip is
+   * allowed to make. Quirk 3 above pins that a *pushed* comparison survives
+   * re-renders; these two pin the other half, which the rework could have broken
+   * just as quietly: **moving between rungs is free**. The memberships walk is
+   * served from the entity cache and the apps walk belongs to the comparison
+   * alone, so a round trip must add neither. (The rung's own panes now defer
+   * their loads the same way — a pane switch that refetches is the same
+   * regression, one level down.)
+   */
+  const adaGroupsCalls = () =>
+    schedulerEndpoints().filter((e) => /^\/api\/v1\/users\/u1\/groups/.test(e));
+
+  it('re-opens the same user from the search results without re-walking their memberships', async () => {
+    const uev = userEvent.setup();
+    await renderWithAda(uev);
+
+    // One walk for the load, and no app read at all — apps are the comparison's
+    // business, and it has not been pushed.
+    expect(adaGroupsCalls()).toHaveLength(1);
+    expect(userAppsCalls()).toHaveLength(0);
+
+    await uev.click(screen.getByRole('button', { name: 'Back to search' }));
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('User Search');
+
+    // Back down the same rung. The search itself is a request; re-selecting the
+    // user is not, because the analysis is still cached under their id.
+    await uev.type(tabSearchInput(), 'ada');
+    await uev.click(await screen.findByRole('button', { name: /Ada Lovelace/ }, { timeout: 3000 }));
+    await screen.findByRole('button', { name: 'Back to search' });
+
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Ada Lovelace');
+    expect(adaGroupsCalls()).toHaveLength(1);
+    expect(userAppsCalls()).toHaveLength(0);
+  });
+
+  it('pops back from a finished comparison without re-walking the anchor user', async () => {
+    const uev = userEvent.setup();
+    await renderWithAda(uev);
+    await pushCompare(uev);
+    await chooseComparedUser(uev);
+
+    const groupsBefore = adaGroupsCalls().length;
+    const appsBefore = userAppsCalls().length;
+
+    await uev.click(screen.getByRole('button', { name: 'Back to user' }));
+    await screen.findByRole('button', { name: 'Back to search' });
+    // Long enough for a reset-driven effect to re-fire if one were going to.
+    await new Promise((r) => setTimeout(r, 700));
+
+    // Popping resets the comparison (quirk 1) — that reset must cost nothing.
+    expect(adaGroupsCalls()).toHaveLength(groupsBefore);
+    expect(userAppsCalls()).toHaveLength(appsBefore);
+  });
 });

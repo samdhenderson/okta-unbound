@@ -43,14 +43,27 @@ export interface UserComparisonPanelProps {
   /** The context user's group memberships, used as the left-hand comparison baseline. */
   contextGroups: GroupMembership[];
   /**
-   * Okta org origin, used to build the deep link offered for a group the user
-   * must *leave*. Absent, the link simply does not render.
+   * Okta org origin. Two uses: the deep link offered for a group the user must
+   * *leave* (absent, the link simply does not render), and the cache/storage key
+   * for the org profile schema and the admin's profile display configuration
+   * behind the Attributes tab (absent, both fall back to defaults).
    */
   oktaOrigin?: string | null;
   /** Tab id of the Okta admin tab; API calls are scheduled against it. */
   targetTabId: number;
   /** Called after a group is copied onto the context user so the tab can refresh it. */
   onGroupsChanged: () => void;
+  /**
+   * Publishes a context-user profile save back to whoever owns that user.
+   *
+   * The context user is the Users tab's `selectedUser`, held in React state
+   * rather than in the entity cache, so a save here is invisible to the rest of
+   * the tab unless it is lifted. **Without this prop the left column is
+   * deliberately read-only** — an edit that reached Okta with nothing to publish
+   * it would leave both this panel and the Profile pane rendering values Okta no
+   * longer holds, silently.
+   */
+  onContextUserUpdated?: (user: OktaUser) => void;
 }
 
 /**
@@ -66,6 +79,7 @@ const UserComparisonPanel: React.FC<UserComparisonPanelProps> = ({
   oktaOrigin,
   targetTabId,
   onGroupsChanged,
+  onContextUserUpdated,
 }) => {
   const comparison = useUserComparison({
     isActive,
@@ -73,7 +87,11 @@ const UserComparisonPanel: React.FC<UserComparisonPanelProps> = ({
     contextUser,
     contextGroups,
     targetTabId,
+    // Also what keys the org profile schema and the admin's profile display
+    // config behind the Attributes tab, not only the deep link below.
+    oktaOrigin,
     onGroupsChanged,
+    onContextUserUpdated,
   });
 
   return (

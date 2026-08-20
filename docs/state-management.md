@@ -17,11 +17,11 @@ The overhaul broke up four files that concentrated risk and blocked testing:
 `UsersTab.tsx` (1364 → 237 lines), `GroupsTab.tsx` (935 → 509),
 `UserComparisonModal.tsx` (967 → 91), `content/index.ts` (1344 → 328).
 
-**~300 lines is the target, not a description of the current tree.** Nine components
-are still over it, `GroupsTab.tsx` (509) and `RulesTab.tsx` (451) furthest. Two are
-benign by construction — `Icon.tsx` (363) is a flat glyph registry and
-`ActivityBarView.tsx` (316) is a presentational shell — but the rest are decomposition
-candidates. Find them rather than trusting this list, which goes stale:
+**~300 lines is the target, not a description of the current tree.** Over a dozen
+components are still above it, `GroupsTab.tsx` and `RulesTab.tsx` furthest. Two are
+benign by construction — `Icon.tsx` is a flat glyph registry and `ActivityBarView.tsx`
+is a presentational shell — but the rest are decomposition candidates. Count them
+rather than trusting a number written here, which goes stale within a PR or two:
 
 ```
 find src/sidepanel/components -name "*.tsx" \
@@ -49,9 +49,28 @@ the same playbook for any future large component:
 - Good: `useOktaApi/` (module split), `overview/members/` (small focused
   components), `ProgressContext` (documented, `useMemo`d).
 - The once near-identical `useGroupContext`/`useUserContext` now share a
-  `useOktaTabContext` base (`src/sidepanel/hooks/useOktaTabContext.ts`, 308 lines);
-  `useGroupContext.ts` (62 lines) and `useUserContext.ts` (57 lines) are thin
-  wrappers over it — a worked example of the extract-a-hook pattern.
+  `useOktaTabContext` base (`src/sidepanel/hooks/useOktaTabContext.ts`);
+  `useGroupContext.ts` and `useUserContext.ts` are thin wrappers over it — a worked
+  example of the extract-a-hook pattern.
+- **Lift only what a neighbour reads.** `useUserDetailPanes` owns the user rung's
+  three panes but lifts exactly one thing: _which_ pane is on screen, because the
+  action bar and the page header above the card both read it. Every filter, pill and
+  disclosure inside a pane stays local — panes are hidden rather than unmounted, so
+  local state survives a switch without being lifted or persisted.
+- **One hook serving two differently-shaped surfaces keys on the domain identifier,
+  not on the row type.** `useProfileEdit` drives both the Users tab's flat attribute
+  list and the Compare view's two-column parity rows. It returns
+  `cells: Record<string, AttributeEditCell>` keyed by the bare Okta attribute
+  **name** — the same key as the draft and the patch — so each surface indexes
+  `cells[attribute.name]` from whatever row type it already has. Widening a derived
+  row type to carry edit state instead would have coupled the hook to one surface's
+  shape and forced the other to fabricate it. The hook also holds no module state, so
+  the Compare view simply instantiates two (ADR-0035).
+- **A config that is read differently from how it is stored** keeps both copies.
+  `useProfileDisplayConfig` holds the stored config (written back verbatim) beside a
+  reconciled one (projected onto what exists right now); the second is what renders,
+  the first is what survives a failed load. See ADR-0033 for why the reconciliation
+  must not write back.
 
 ## Sub-navigation inside a tab: the view stack
 
@@ -97,6 +116,10 @@ whether its tab is visible.** The convention:
   use is unaffected) and passes it down to hooks as `enabled?: boolean`.
 - **Deferred re-arm** — put `enabled` in the effect's guard _and_ its dependency
   array. The work is deferred, not dropped: it runs on the next show (`useAppsData`).
+  The same gate nests one level down: `useUserDetailPanes` passes `pane === 'apps'`
+  and `pane === 'profile'` into `useUserApps` and the org's schema read, so opening a
+  user pays for the default pane only and entering another pane later runs the work
+  that was deferred rather than dropping it.
 - **Owed-load latch** — when the effect must _not_ re-run on every return to the tab:
   raise an `owedRef` in one effect keyed on the real inputs, pay it in a second effect
   gated on `enabled` (`useGroupRuleReferences`). Without this, gating turns every tab

@@ -120,8 +120,28 @@
    * durations: these describe *how far you scroll*, not how long something takes,
    * which is why they sit apart from the `--dur-*` scale.
    */
-  --merge-range: 64px; /* scroll distance over which the strip merges into the header */
-  --merge-bleed: 1.5rem; /* the tab content wrapper's `px-6` gutter, cancelled at full merge */
+  /*
+   * Distance over which the strip merges into the header, measured along the
+   * sentinel's timeline — which is to say the gap the strip has to close, not
+   * how far the page scrolled. The two are not the same: `PageHeader` collapses
+   * its identity region on the way down, so the strip closes a 24px gap over
+   * ~24px of scroll while itself travelling ~96px.
+   *
+   * It MUST be shorter than that gap, or the merge is already part-done before
+   * the page has moved and the strip can never show its resting shape. The gap
+   * is the tab column's `py-6` — 24px — and only that: the strip is the first
+   * child of its `space-y-6` rung at every call site, and the sentinel floats,
+   * so no `space-y` step lands above either of them.
+   *
+   * Measured on the real component in Chromium: at 64px it started 61% merged,
+   * at 32px still 25%. At 16px it rests flat through ~7px of scroll, merges over
+   * the next ~17, and reaches 100% on exactly the frame the strip parks.
+   */
+  --merge-range: 16px;
+  /* Fallback gutter, used until `useActionOverflow` publishes the measured
+     `--bar-bleed`. The literal is the tab content wrapper's `px-6`; the measured
+     value is exact and also survives a panel wider than `max-w-7xl`. */
+  --merge-bleed: 1.5rem;
   --merge-radius: 0.375rem; /* the strip's resting corner — `rounded-md`, animated to 0 */
   /*
    * The one shadow on a non-overlay surface. `docs/design-system.md` reserves
@@ -386,6 +406,11 @@
    * compositable properties, so the merge is main-thread style work while
    * scrolling; confined to one small positioned box, it is cheap.)
    *
+   * Because the chrome is `inset: 0` of the band, it also covers whatever the
+   * band grows to hold: `ActionBar`'s disclosure row sits *inside* this box, so
+   * opening it stretches the same painted surface downward instead of dropping a
+   * second card into the page flow.
+   *
    * `top: -1px` at the end is how the header's seam disappears without
    * `PageHeader` knowing this band exists: the strip paints *over* that 1px
    * border. A `[data-header-scope]:has(.dock-band)` selector would have been the
@@ -393,12 +418,41 @@
    * merely `hidden` (ADR-0016), so it would fade the seam on the search rung too,
    * where there is no strip to replace it.
    *
+   * ## The merge tracks *docking*, not scrolling
+   *
+   * The obvious timeline — `scroll(nearest block)` over the first `--merge-range`
+   * of scroll — is wrong, and visibly so: it starts merging the instant anything
+   * moves, so a strip that begins 300px down the rung has already bled to the
+   * panel edges while it is still floating mid-page, and then travels up to the
+   * header pre-merged. The animation has to be a function of *how close the strip
+   * is to its parking spot*, and scroll offset does not know that.
+   *
+   * `--dock-progress` is that function. `.dock-sentinel` is a zero-size marker
+   * `ActionBar` renders immediately before the strip, so it sits at the strip's
+   * **undocked** position and keeps moving after the strip itself has stopped.
+   * Its view timeline is measured against a scrollport inset from the top by the
+   * two bands already parked there (`--rail-h + --header-h`), which puts
+   * `cover 100%` exactly on the line where the strip docks. The animation then
+   * runs over the last `--merge-range` before that line and holds at full merge
+   * for the rest of the scroll (`both`).
+   *
+   * The sentinel **floats** so that it can be a sibling of the strip without
+   * being one for layout. A sibling in a `space-y-*` rung collects that rung's
+   * `margin-block-end`, and an in-flow marker would push the strip down by a
+   * full step. A float takes no space, block siblings ignore it
+   * entirely, and its margin lands on a zero-size box where it does nothing.
+   * (`position: absolute` would also leave the flow, but its containing block is
+   * the nearest positioned ancestor, which here is outside the shared scroller —
+   * exactly the case where an out-of-flow box stops scrolling with the content it
+   * is supposed to be marking.)
+   *
    * ## The two guards
    *
    * `@supports` matters: a browser that drops the unknown `animation-timeline`
    * declaration would run `dock-band` on the *document* timeline at `0s` with
    * `fill: both` and snap permanently to the merged state. Guarded, it simply
-   * keeps the resting card.
+   * keeps the resting card — which is also what happens if the sentinel is
+   * missing, since an unresolvable timeline name leaves the animation inactive.
    *
    * Reduced motion is handled at the bottom of this file by clearing
    * `animation-name`, not by the blanket `1ms` rule — see the note there.
@@ -414,24 +468,128 @@
     z-index: -1;
     top: 0;
     bottom: 0;
+    /*
+     * The resting strip is a card like every other card on the rung: it spans
+     * the tab column and stops at its margins. Only the merge takes it past
+     * them, and only the chrome moves — the row inside keeps the column's
+     * padding the whole way, so the buttons never shift.
+     */
     inset-inline: 0;
     background: var(--color-white);
     border: 1px solid var(--color-neutral-200);
     border-radius: var(--merge-radius);
+    /* At full merge this box overhangs into both gutters. Without this it is a
+       hit-testable slab sitting over the page. */
+    pointer-events: none;
   }
 
-  @supports (animation-timeline: scroll()) {
-    .dock-band::before {
+  /*
+   * The bleed plate: opaque, panel-wide, and always present.
+   *
+   * The band is `inset-inline: 0` of a box the tab column already inset by
+   * `px-6`, so a strip that is pinned but not merged has transparent gutters and
+   * page rows scroll through them. That is a live bug today, visible to anyone
+   * with `prefers-reduced-motion` (which clears the merge outright) and on any
+   * engine without `animation-timeline`.
+   *
+   * Canvas-on-canvas at rest, so it is invisible in flow; opaque the moment the
+   * strip pins, in every motion mode, with no observer and nothing to desync.
+   */
+  :has(> .dock-sentinel) > .dock-band::after {
+    content: '';
+    position: absolute;
+    z-index: -2;
+    inset-block: 0;
+    inset-inline: calc(-1 * var(--bar-bleed, var(--merge-bleed)));
+    background: var(--color-canvas);
+    pointer-events: none;
+  }
+
+  .dock-sentinel {
+    /*
+     * Two declarations, not one: `float: inline-start` reached Chrome later than
+     * the scroll-driven animations this sentinel exists for, and it sits outside
+     * the `@supports` guard below. On an engine that drops it, `left` keeps the
+     * marker out of flow — falling back to `float: none` would drop it into the
+     * rung, where it would collect a `space-y-*` step and open a visible gap
+     * above the strip.
+     */
+    float: left;
+    float: inline-start;
+    inline-size: 0;
+    block-size: 0;
+  }
+
+  @supports (animation-timeline: view()) {
+    /*
+     * A named timeline is referenceable by the element that declares it and by
+     * that element's DESCENDANTS — not, as this file long claimed, by its
+     * following siblings. The sentinel is the band's sibling, so without this
+     * hoist `--dock-progress` resolves to null on the band's `::before`; and a
+     * null timeline with `fill: both` holds the animation on its `to` keyframe
+     * forever. The strip did not fail to merge, it failed to *un*-merge: it has
+     * been rendering permanently full-bleed. Measured in Chromium via
+     * `getAnimations()` — `timeline: null, playState: finished`.
+     *
+     * `timeline-scope` lifts the name onto whichever element directly holds the
+     * sentinel, which is exactly the band's parent. Self-installing, so no
+     * consumer opts in. The obvious alternative — wrapping sentinel and band
+     * together — resolves the timeline too, but a real wrapper becomes the sticky
+     * containing block and traps the strip (fixed once already, in 09a83dd), and
+     * a `display: contents` wrapper was measured swallowing the rung's
+     * `space-y-6` step, which is the regression `UserActionBar` documents.
+     */
+    :has(> .dock-sentinel) {
+      timeline-scope: --dock-progress;
+    }
+
+    .dock-sentinel {
+      view-timeline: --dock-progress block;
+      /*
+       * Shrink the scrollport by the bands already parked at the top, so the
+       * timeline's end lands on the strip's parking line rather than on the
+       * scroller's own top edge.
+       *
+       * Less `--dock-offset`, because the sentinel does not sit where it claims
+       * to: the rung's `space-y-*` step lands on the *band* (the sentinel is the
+       * first child and collects no margin), so the marker floats a full step
+       * above the position it marks. Uncorrected, the merge was measured
+       * finishing 28px before the strip parked. `useActionOverflow` publishes the
+       * real distance.
+       */
+      view-timeline-inset: calc(var(--rail-h, 0px) + var(--header-h, 0px) - var(--dock-offset, 0px))
+        0px;
+    }
+
+    /*
+     * Gated on the sentinel's presence, not applied to every `.dock-band`. A
+     * non-sticky strip (`sticky={false}`, every story) renders no sentinel, so
+     * `--dock-progress` would resolve to null and — per the note above — snap the
+     * chrome permanently to its merged state. Gated, such a strip simply keeps
+     * its resting card, which is what a story should show.
+     */
+    :has(> .dock-sentinel) > .dock-band::before {
       animation: dock-band linear both;
-      animation-timeline: scroll(nearest block);
-      animation-range: 0 var(--merge-range);
+      animation-timeline: --dock-progress;
+      /*
+       * A zero-height subject collapses `entry`/`contain`/`exit` to a point, so
+       * the range is taken off `cover`, whose end is "the subject reached the
+       * inset scrollport's top edge" — the docking line. Backing off
+       * `--merge-range` from it makes the merge finish exactly as the strip parks.
+       */
+      animation-range: cover calc(100% - var(--merge-range)) cover 100%;
     }
   }
 
+  /*
+   * Only a `to` block. The implicit 0% keyframe is the element's own computed
+   * value, so the resting card is described once — in `::before` — rather than
+   * duplicated here and left to drift out of sync with it.
+   */
   @keyframes dock-band {
     to {
       top: -1px;
-      inset-inline: calc(var(--merge-bleed) * -1);
+      inset-inline: calc(-1 * var(--bar-bleed, var(--merge-bleed)));
       border-radius: 0;
       border-top-color: transparent;
       border-inline-color: transparent;
@@ -459,6 +617,11 @@
  * part in it, so setting the duration to `1ms` leaves the merge running exactly
  * as before. Clearing `animation-name` is what actually stops it, and it leaves
  * the strip at its resting geometry — the correct static fallback.
+ *
+ * That fallback is only *safe* because of the bleed plate: a reduced-motion strip
+ * pins as a pill and never widens, so without an opaque plate behind it the page
+ * would scroll through the gutters either side. The plate is unconditional for
+ * exactly this reason — see `.dock-band::after`.
  */
 @media (prefers-reduced-motion: reduce) {
   *:not(.motion-exempt, .motion-exempt *),

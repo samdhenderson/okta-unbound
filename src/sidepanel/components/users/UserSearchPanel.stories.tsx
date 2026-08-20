@@ -92,14 +92,14 @@ export const WithResults: Story = {
 /** The admin page has a different user open — manual Load only. */
 export const WithDetectedUser: Story = {
   args: {
-    detectedUser: { userId: 'u1', userName: 'Ada Lovelace', userStatus: 'ACTIVE' },
+    detectedUser: { userId: '00uFAKE0001', userName: 'Ada Lovelace', userStatus: 'ACTIVE' },
   },
 };
 
 /** The detected user is being loaded, so the banner's Load button is disabled. */
 export const DetectedUserLoading: Story = {
   args: {
-    detectedUser: { userId: 'u1', userName: 'Ada Lovelace', userStatus: 'ACTIVE' },
+    detectedUser: { userId: '00uFAKE0001', userName: 'Ada Lovelace', userStatus: 'ACTIVE' },
     isDetectedUserLoading: true,
   },
 };
@@ -116,4 +116,33 @@ export const WithError: Story = {
 /** A user is selected — the results and the empty state give way to the detail panel. */
 export const UserSelected: Story = {
   args: { hasSelectedUser: true, searchResults: mockUsers.slice(10, 14) },
+};
+
+/**
+ * The whole tightened rung at once: the search box, the one-line detected-user
+ * banner and the compact results under their quiet match count.
+ */
+export const BannerAndResults: Story = {
+  args: {
+    searchQuery: 'ada',
+    searchResults: mockUsers.slice(10, 14),
+    detectedUser: { userId: '00uFAKE0001', userName: 'Ada Lovelace', userStatus: 'ACTIVE' },
+  },
+};
+
+/**
+ * The same rung at 360px — the width the demotion was for. The banner keeps its
+ * verb on the row and each result stays two lines.
+ */
+export const Compact360: Story = {
+  args: {
+    searchQuery: 'ada',
+    searchResults: mockUsers.slice(10, 14),
+    detectedUser: {
+      userId: '00uFAKE0005',
+      userName: 'Bartholomew Featherstonehaugh-Wintergreen',
+      userStatus: 'LOCKED_OUT',
+    },
+  },
+  parameters: { viewport: { value: 'sidepanelCompact' } },
 };

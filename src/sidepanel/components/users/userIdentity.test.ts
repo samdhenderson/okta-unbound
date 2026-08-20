@@ -85,6 +85,42 @@ describe('userIdentity', () => {
     });
   });
 
+  it('omits the app count entirely while the apps request is still outstanding', () => {
+    // The header must not say "0 apps" about a question the panel has not asked yet.
+    // Only `groupCount` was supplied, so the counts row carries exactly that one fact.
+    const counts = rowsOf(makeUser(), { groupCount: 3 }).counts;
+
+    expect(counts).toEqual([expect.objectContaining({ icon: 'users' })]);
+    expect(counts).not.toContainEqual(expect.objectContaining({ icon: 'app' }));
+  });
+
+  it.each([
+    [0, '0', 'apps'],
+    [1, '1', 'app'],
+    [1284, '1,284', 'apps'],
+  ])('renders a known app count of %i as "%s %s"', (appCount, value, label) => {
+    // Zero is a real answer once the list has loaded — the omission above is about
+    // not having asked, not about having no apps.
+    expect(rowsOf(makeUser(), { groupCount: 3, appCount }).counts).toContainEqual(
+      expect.objectContaining({ kind: 'metric', icon: 'app', value, label }),
+    );
+  });
+
+  it('puts apps after groups on the counts row', () => {
+    expect(
+      rowsOf(makeUser(), { groupCount: 3, appCount: 7 }).counts.map((fact) =>
+        fact.kind === 'metric' ? fact.icon : fact.kind,
+      ),
+    ).toEqual(['users', 'app']);
+  });
+
+  it('reports an app count even when the group count has not landed', () => {
+    // The two facts are independent fetches; neither gates the other.
+    expect(rowsOf(makeUser(), { appCount: 7 }).counts).toEqual([
+      expect.objectContaining({ icon: 'app', value: '7', label: 'apps' }),
+    ]);
+  });
+
   it('reports the rules that grant this user membership, when Okta named any', () => {
     const user = makeUser({
       managedBy: { rules: [{ id: '0prA', name: 'Engineers' }] },

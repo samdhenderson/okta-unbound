@@ -10,7 +10,9 @@ import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
 import {
   oktaAppListItemSchema,
   extractAppAssignmentScope,
+  extractAppGrantGroupId,
   type OktaAppListItem,
+  isProfileSourceApp,
   type AppAssignmentScope,
 } from '@/shared/schemas/okta';
 import { createLogger } from '../../../shared/utils/logger';
@@ -25,6 +27,42 @@ export interface UserAppAssignment {
   label: string;
   /** How the assignment was granted, when Okta reported it. */
   scope?: AppAssignmentScope;
+  /**
+   * Id of the group Okta named as the source of this assignment, when it named
+   * one (`_embedded.user._links.group.href` on the expanded app row).
+   *
+   * `undefined` means **Okta named no group here** — it is not a claim that no
+   * group path exists, and must never be rendered as "assigned directly"
+   * (ADR-0020: a silent or failed lookup is never an attribution). Nor is it the
+   * complement of {@link UserAppAssignment.scope}: Okta reports one scope per
+   * app-user and prefers `'USER'`, so a row can legitimately carry both
+   * `scope: 'USER'` and a `grantGroupId`.
+   *
+   * Costs no extra request — it rides the same `expand=user/{userId}` response
+   * the scope is read from. When it is absent and a reader wants an answer, the
+   * fallback is `appOperations.getAppGroupAssignments`, behind an explicit
+   * action (ADR-0031).
+   */
+  grantGroupId?: string;
+  /**
+   * Whether Okta reports this app as a **profile source** (`features` contains
+   * `PROFILE_MASTERING`).
+   *
+   * This is the per-user half of the profile-attribute editability gate: an
+   * attribute whose schema says it follows the org's profile-source order is
+   * owned by Okta — and editable — for a user attached to no profile source.
+   * See `sidepanel/components/users/profileEditability`.
+   *
+   * `false` covers both "Okta listed features and this is not one of them" and
+   * "Okta named no features at all". The two are not distinguished here because
+   * the gate never *unlocks* on this field alone — an app list that has not
+   * completed keeps every mastered attribute locked regardless, so a `false` we
+   * are unsure of cannot open anything.
+   *
+   * Costs no extra request: it rides the same app rows `scope` and
+   * `grantGroupId` are read from.
+   */
+  isProfileSource: boolean;
 }
 
 /**
@@ -73,39 +111,6 @@ export function createUserOperations(coreApi: CoreApi) {
     } catch (error) {
       log.error(`Failed to get last login for user ${userId}:`, error);
       return null;
-    }
-  };
-
-  /**
-   * Approximate how many apps a user is assigned, from the first page.
-   *
-   * @param userId - User to inspect.
-   * @returns First-page assignment count (max 200), or `0` on error.
-   * @remarks Does not walk pagination; a floor for users with >200 assignments.
-   */
-  const getUserAppAssignments = async (userId: string): Promise<number> => {
-    try {
-      // Fetch first page with the standard page size to get app assignments count
-      const response = await coreApi.makeApiRequest(
-        `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=${OKTA_PAGE_SIZE}`,
-      );
-      if (response.success && response.data) {
-        const firstPageCount = response.data.length;
-
-        // Check if there are more pages by looking for Link header with rel="next"
-        const linkHeader = response.headers?.['link'] || response.headers?.['Link'];
-        const hasMorePages = linkHeader && linkHeader.includes('rel="next"');
-
-        if (hasMorePages) {
-          return firstPageCount;
-        }
-
-        return firstPageCount;
-      }
-      return 0;
-    } catch (error) {
-      log.error(`Failed to get app assignments for user ${userId}:`, error);
-      return 0;
     }
   };
 
@@ -159,6 +164,16 @@ export function createUserOperations(coreApi: CoreApi) {
                 // not a recognizable app-user yields undefined, so the app is still
                 // listed with its scope simply unknown.
                 scope: extractAppAssignmentScope(app._embedded),
+                // Same embed, same page, same request: the group Okta credits
+                // for the assignment, validated on read (a segment that is not
+                // a well-formed group id yields undefined rather than flowing
+                // into a later request path). Still zero extra requests.
+                grantGroupId: extractAppGrantGroupId(app._embedded),
+                // Read off the row itself rather than the embed: `features` is a
+                // property of the app instance, not of this user's assignment to
+                // it. Still the same request — this is what the Okta admin
+                // console reads to show a user's profile source.
+                isProfileSource: isProfileSourceApp(app.features),
               });
             }
           },
@@ -418,7 +433,6 @@ export function createUserOperations(coreApi: CoreApi) {
 
   return {
     getUserLastLogin,
-    getUserAppAssignments,
     getUserApps,
     batchGetUserDetails,
     scanGroupMfa,

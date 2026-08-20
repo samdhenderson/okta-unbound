@@ -3,7 +3,7 @@
  * @description Facade hook that exposes the whole Okta API surface to the side panel.
  *
  * Composes the per-concern operation modules under `useOktaApi/` (core, group
- * members/cleanup/bulk/discovery/analysis, users, apps, policies, exports, push groups) into a
+ * members/cleanup/bulk/discovery/analysis, users, profiles, apps, policies, exports, push groups) into a
  * single memoized object. No request is issued here directly: every call routes
  * through the extension's rate-limited path — side panel → background
  * `ApiScheduler` → content script `fetch` against the live Okta session. This hook
@@ -23,6 +23,7 @@ import { createGroupCleanupOperations } from './useOktaApi/groupCleanup';
 import { createGroupBulkOperations } from './useOktaApi/groupBulkOps';
 import { createGroupDiscoveryOperations } from './useOktaApi/groupDiscovery';
 import { createUserOperations } from './useOktaApi/userOperations';
+import { createProfileOperations } from './useOktaApi/profileOperations';
 import { createAppOperations } from './useOktaApi/appOperations';
 import { createPolicyOperations } from './useOktaApi/policyOperations';
 import { createExportEngineOperations } from './useOktaApi/exportEngine';
@@ -168,6 +169,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
   );
   const groupDiscoveryOps = useMemo(() => createGroupDiscoveryOperations(coreApi), [coreApi]);
   const userOps = useMemo(() => createUserOperations(coreApi), [coreApi]);
+  const profileOps = useMemo(() => createProfileOperations(coreApi), [coreApi]);
   const appOps = useMemo(() => createAppOperations(coreApi), [coreApi]);
   const policyOps = useMemo(() => createPolicyOperations(coreApi), [coreApi]);
   const exportEngineOps = useMemo(() => createExportEngineOperations(coreApi), [coreApi]);
@@ -207,6 +209,14 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
       // Core API
       makeApiRequest: coreApi.makeApiRequest,
+      // The reusable "many calls, one tracked operation" wiring (ADR-0009):
+      // start → live counts in the ActivityBar → cancel → complete. Exposed so a
+      // side-panel hook whose fan-out is linear in list length can pay its cost
+      // *visibly* rather than as a silent background burst — `useUserApps`'s
+      // granting-group fallback is the first such caller. Reach for it only when
+      // the work is genuinely a batch; a single request still goes through
+      // `makeApiRequest`.
+      runOperation: coreApi.runOperation,
 
       // Group operations
       getAllGroupMembers: groupMemberOps.getAllGroupMembers,
@@ -227,13 +237,23 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
       // User operations
       getUserLastLogin: userOps.getUserLastLogin,
-      getUserAppAssignments: userOps.getUserAppAssignments,
       getUserApps: userOps.getUserApps,
       batchGetUserDetails: userOps.batchGetUserDetails,
       scanGroupMfa: userOps.scanGroupMfa,
       getUserGroupMemberships: userOps.getUserGroupMemberships,
       searchUsers: userOps.searchUsers,
       getUserById: userOps.getUserById,
+      // Org-wide, not per-user: the full profile-attribute definition, including
+      // attributes unset on the user being viewed. Cache under
+      // `cacheKeys.userSchema(oktaOrigin)` — never re-ask per user.
+      getUserProfileSchema: profileOps.getUserProfileSchema,
+      // The whole validated user, profile object included — what an editor needs
+      // and what `getUserById`'s six-field projection deliberately is not.
+      getUserRaw: profileOps.getUserRaw,
+      // The extension's first profile write. Its result is three-state
+      // ('saved' | 'failed' | 'unknown'); an 'unknown' MAY have applied and must
+      // never be rendered as a plain failure (see `profileOperations`).
+      updateUserProfile: profileOps.updateUserProfile,
       searchApps: appOps.searchApps,
       suspendUser: userOps.suspendUser,
       unsuspendUser: userOps.unsuspendUser,
@@ -243,6 +263,10 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       getAllApps: appOps.getAllApps,
       getAppById: appOps.getAppById,
       getAppAssignmentCounts: appOps.getAppAssignmentCounts,
+      // Fallback for naming an app's granting group when the
+      // `expand=user/{userId}` embed named none. Linear in app count, so
+      // gate it behind an explicit per-row action, never a list load (ADR-0031).
+      getAppGroupAssignments: appOps.getAppGroupAssignments,
 
       // Auth policy operations (read-only: Auth Policies tab)
       listPolicies: policyOps.listPolicies,
@@ -281,6 +305,7 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       groupDiscoveryOps,
       groupBulkOps,
       userOps,
+      profileOps,
       appOps,
       policyOps,
       exportEngineOps,

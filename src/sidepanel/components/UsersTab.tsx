@@ -3,17 +3,20 @@
  * @description Users tab: search users and analyse their group memberships.
  *
  * Debounced live search over Okta users (or auto-loading the user detected on the
- * page), a rich profile card with collapsible detail sections, lifecycle actions
- * (suspend / unsuspend / reset password) behind confirm modals, an "Add to Group"
- * flow, and per-group membership attribution (rule-based vs. direct) computed by
- * `analyzeMemberships`. Security-sensitive profile fields are never shown.
+ * page), then a detail rung of three tabbed panes — the groups the user is in,
+ * the apps they can reach and the profile attributes the rules read — with an
+ * "Add to Group" flow and per-group membership attribution (rule-based vs.
+ * direct) computed by `analyzeMemberships`. Security-sensitive profile fields are
+ * never shown.
  *
  * The tab itself is composition only: all state and hook wiring live in
- * {@link sidepanel/hooks/useUsersTabState.useUsersTabState}, the search surface in
- * {@link UserSearchPanel} and the selected-user surface in {@link UserDetailPanel}.
- * The Add-to-Group modal confirms through that hook's `confirmAddToGroup` wrapper
- * rather than `addToGroup.confirmAddToGroup`, so the group being added is captured
- * for the membership list's one-shot success flash before the modal resets itself.
+ * {@link sidepanel/hooks/useUsersTabState.useUsersTabState}, the header in
+ * {@link UserRungHeader}, the action strip in {@link UserActionBar}, the search
+ * surface in {@link UserSearchPanel} and the selected-user surface in
+ * {@link UserDetailPanel}. The Add-to-Group modal confirms through that hook's
+ * `confirmAddToGroup` wrapper rather than `addToGroup.confirmAddToGroup`, so the
+ * group being added is captured for the membership list's one-shot success flash
+ * before the modal resets itself.
  *
  * ## Sub-navigation
  *
@@ -29,8 +32,8 @@
  * `User Search › Ada Lovelace › Compare users`.
  *
  * All three regions are **hidden rather than unmounted** (ADR-0016), so the search
- * box, the selected user, their analysed memberships and the profile card's own
- * section expansion all survive a push→pop round trip. What clears a finished
+ * box, the selected user, their analysed memberships and each detail pane's own
+ * filter, pills and open disclosures all survive a push→pop round trip. What clears a finished
  * comparison is `useUserComparison`'s reset effect — keyed on "a comparison is
  * pushed" — rather than an unmount. One `PageHeader` stays mounted throughout and
  * swaps its contents, per ADR-0008's stable-region precedent.
@@ -39,9 +42,18 @@
  * the first focusable descendant of that ref: one container wrapping both rungs
  * would send focus into the hidden one.
  *
- * Page-level verbs (Compare, Add to Group) live in a sticky `ActionBar` on the detail
- * rung, not in `GroupMembershipsList`'s header slot where they used to sit beside
- * controls acting on that one card (ADR-0030).
+ * ## The tiered action strip
+ *
+ * Every page-level verb lives in {@link UserActionBar} on the detail rung, not in
+ * `GroupMembershipsList`'s header slot where Compare and Add group used to sit
+ * beside controls acting on that one card, and not in a `Lifecycle Actions` card
+ * of its own (ADR-0030). The account-state verbs sit one press away behind the
+ * strip's **More** disclosure; the tier's open state is owned here rather than in
+ * the strip, so it collapses whenever the rung changes.
+ *
+ * There is deliberately **no Export button**: the Export tab has no user-scoped
+ * descriptor to open, and a control that does nothing is worse than an absent
+ * one. See {@link UserActionBar} for the full note.
  *
  * Unlike the Groups tab this one owns no scroll box of its own: its body scrolls the
  * app root scroller, whose offset belongs to {@link TabPanel} (ADR-0018). There is
@@ -54,15 +66,17 @@
  * debounce, the Add-to-Group type-ahead and the comparison's own user search — the
  * four things here that can reach Okta without a click.
  */
-import React, { useRef } from 'react';
-import PageHeader from './shared/PageHeader';
-import Breadcrumbs from './shared/Breadcrumbs';
+import React, { useRef, useState } from 'react';
 import AlertMessage from './shared/AlertMessage';
-import { ActionBar, Button, EntityIdentity, OpenInOktaLink } from './shared';
-import { AddToGroupModal, UserComparisonPanel, UserDetailPanel, UserSearchPanel } from './users';
-import { userIdentity } from './users/userIdentity';
+import {
+  AddToGroupModal,
+  UserActionBar,
+  UserComparisonPanel,
+  UserDetailPanel,
+  UserRungHeader,
+  UserSearchPanel,
+} from './users';
 import { useUsersTabState } from '../hooks/useUsersTabState';
-import { userDisplayName } from '../../shared/utils/userDisplay';
 
 interface UsersTabProps {
   /** Chrome tab id of the connected Okta tab; required for all user/group API calls. */
@@ -114,82 +128,64 @@ const UsersTab: React.FC<UsersTabProps> = ({
     lifecycle,
     addToGroup,
     nav,
+    panes,
     isDetailOpen,
     isCompareOpen,
   } = state;
 
-  // Re-resolve the pushed entry against the live selection: the entry is a snapshot
-  // taken at push time, while `selectedUser` is patched in place (a lifecycle action
-  // rewrites its status) and its memberships reload after a group is copied.
-  const currentEntry = nav.currentEntry;
-  const currentName =
-    currentEntry && selectedUser?.id === currentEntry.userId
-      ? userDisplayName(selectedUser)
-      : currentEntry?.userName;
-
-  // The header describes a user only on the detail rung, and only once the loaded user is
-  // the one the rung is for — otherwise the stack's snapshot name still stands and the
-  // status badge would belong to somebody else. Compare is a different subject entirely
-  // (two users), so it keeps a plain title.
-  const detailUser =
-    isDetailOpen && !isCompareOpen && currentEntry && selectedUser?.id === currentEntry.userId
-      ? selectedUser
-      : undefined;
-  const identity = detailUser
-    ? userIdentity(detailUser, {
-        // Omitted while loading, so the region shows no count rather than "0 groups".
-        groupCount: isLoadingMemberships ? undefined : memberships.length,
-      })
-    : undefined;
+  // The strip's disclosure tier is a property of the strip you are looking at,
+  // not of the user, so it collapses whenever the rung changes — leaving the
+  // detail page and coming back should not re-open a band of destructive verbs
+  // behind you.
+  // Adjusted during render rather than in an effect, the pattern `PageHeader`
+  // uses: React re-renders immediately without committing the open frame.
+  const [manageOpen, setManageOpen] = useState(false);
+  const [manageRung, setManageRung] = useState(isDetailOpen);
+  if (manageRung !== isDetailOpen) {
+    setManageRung(isDetailOpen);
+    setManageOpen(false);
+  }
 
   return (
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
       {/*
         One header for the whole tab; its contents swap as views push/pop
-        (ADR-0008, ADR-0016). It now names the user you have open — before the
-        detail page became a rung of this stack the title read "User Search" even
-        while you were reading someone's profile, and there was no way back.
+        (ADR-0008, ADR-0016). It names the user you have open — before the detail
+        page became a rung of this stack the title read "User Search" even while
+        you were reading someone's profile, and there was no way back.
       */}
-      <PageHeader
-        // Root title matches the stack's `rootLabel`, so the header and the
-        // breadcrumb trail never disagree about what the root is called.
-        title={
-          isCompareOpen ? 'Compare users' : isDetailOpen ? (currentName ?? 'User') : 'User Search'
-        }
-        subtitle={
-          isCompareOpen
-            ? `${currentName} vs. another user`
-            : isDetailOpen
-              ? undefined
-              : 'Search users and analyze their group memberships'
-        }
-        onBack={nav.isRoot ? undefined : nav.pop}
-        backLabel={isCompareOpen ? 'Back to user' : 'Back to search'}
-        breadcrumbs={nav.isRoot ? undefined : <Breadcrumbs items={nav.trail} />}
-        sticky={isActive}
-        identityKey={identity?.key}
-        identity={identity ? <EntityIdentity rows={identity.rows} /> : undefined}
-        badge={
-          // On the detail rung the badge becomes the user's Okta status and the group
-          // count moves into the region below it; elsewhere the count stays the badge.
-          identity
-            ? identity.badge
-            : selectedUser
-              ? { text: `${memberships.length} Groups`, variant: 'primary' }
-              : undefined
-        }
-        actions={
-          identity?.link && (
-            <OpenInOktaLink
-              oktaOrigin={state.oktaOrigin}
-              entityType={identity.link.entityType}
-              entityId={identity.link.entityId}
-            />
-          )
-        }
+      <UserRungHeader
+        nav={nav}
+        isDetailOpen={isDetailOpen}
+        isCompareOpen={isCompareOpen}
+        selectedUser={selectedUser}
+        membershipCount={memberships.length}
+        isLoadingMemberships={isLoadingMemberships}
+        appCount={panes.appCount}
+        oktaOrigin={state.oktaOrigin}
+        isActive={isActive}
       />
 
-      <div className="max-w-7xl mx-auto px-6 py-6">
+      <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+        {/*
+          The result banner sits OUTSIDE the rung switch, above both regions.
+          Every outcome it reports — a lifecycle verb, an add-to-group, a profile
+          save — is triggered from the detail rung, and the search region that
+          used to host it is `hidden` the whole time a user is open. (jsdom loads
+          no stylesheet, so the tests never saw it disappear.) It is also where
+          the profile save's inline `Undo` lands: there is no toast primitive in
+          this panel, and `AlertMessage`'s action slot is the sanctioned place
+          for an inline verb.
+        */}
+        {state.resultMessage && (
+          <AlertMessage
+            message={state.resultMessage}
+            onDismiss={state.dismissResultMessage}
+            {...(state.resultAction ? { action: state.resultAction } : {})}
+            className="animate-rise-in"
+          />
+        )}
+
         {/*
           Hidden, never unmounted: the search box, the selected user's profile card
           and its per-section expansion all live in this subtree, as does the Compare
@@ -212,25 +208,14 @@ const UsersTab: React.FC<UsersTabProps> = ({
             hasSelectedUser={Boolean(selectedUser)}
             hasError={Boolean(state.error)}
             alerts={
-              <>
-                {/* Error Display */}
-                {state.error && (
-                  <AlertMessage
-                    message={{ text: state.error, type: 'danger' }}
-                    onDismiss={state.dismissError}
-                    className="animate-rise-in"
-                  />
-                )}
-
-                {/* Lifecycle operation result */}
-                {state.resultMessage && (
-                  <AlertMessage
-                    message={state.resultMessage}
-                    onDismiss={state.dismissResultMessage}
-                    className="animate-rise-in"
-                  />
-                )}
-              </>
+              /* Search / load failures only; the result banner is above, outside the rung switch. */
+              state.error ? (
+                <AlertMessage
+                  message={{ text: state.error, type: 'danger' }}
+                  onDismiss={state.dismissError}
+                  className="animate-rise-in"
+                />
+              ) : undefined
             }
           />
         </div>
@@ -263,46 +248,48 @@ const UsersTab: React.FC<UsersTabProps> = ({
               className={isDetailOpen ? 'space-y-6 focus:outline-none' : 'hidden'}
             >
               {/*
-                Page-level verbs, pinned while the memberships scroll under them
-                (ADR-0030). These used to sit in `GroupMembershipsList`'s header
-                slot — the same slot as controls acting on that one card — so the
-                page's main action read as a property of its groups section.
+                Every page-level verb, tiered: the everyday ones in the strip's
+                row, the account-state ones one press away behind the strip's own
+                **More** disclosure (ADR-0030). They used to sit in
+                `GroupMembershipsList`'s header slot and in a `Lifecycle Actions`
+                card of their own.
               */}
-              <ActionBar ariaLabel={`Actions for ${userDisplayName(selectedUser)}`}>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon="users"
-                  onClick={state.openCompare}
-                  disabled={state.isLoadingMemberships}
-                  title="Compare group & app access with another user"
-                >
-                  Compare
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon="plus"
-                  onClick={addToGroup.openModal}
-                  disabled={state.isLoadingMemberships}
-                >
-                  Add to Group
-                </Button>
-              </ActionBar>
-
-              <UserDetailPanel
+              <UserActionBar
                 user={selectedUser}
-                oktaOrigin={state.oktaOrigin}
-                memberships={memberships}
+                onCompare={state.openCompare}
+                onAddToGroup={addToGroup.openModal}
                 isLoadingMemberships={state.isLoadingMemberships}
-                currentGroupId={currentGroupId}
-                recentlyAddedGroupId={state.recentlyAddedGroupId}
+                tierOpen={manageOpen}
+                onTierOpenChange={setManageOpen}
                 isLifecycleLoading={lifecycle.isLifecycleLoading}
                 pendingLifecycleAction={lifecycle.pendingLifecycleAction}
                 onRequestLifecycleAction={lifecycle.setPendingLifecycleAction}
                 onCancelLifecycleAction={() => lifecycle.setPendingLifecycleAction(null)}
                 onConfirmLifecycleAction={lifecycle.confirmLifecycleAction}
+              />
+
+              <UserDetailPanel
+                user={selectedUser}
+                oktaOrigin={state.oktaOrigin}
+                pane={panes.pane}
+                onPaneChange={panes.setPane}
+                memberships={memberships}
+                isLoadingMemberships={state.isLoadingMemberships}
+                currentGroupId={currentGroupId}
+                recentlyAddedGroupId={state.recentlyAddedGroupId}
                 onProveMembershipSource={state.proveMembershipSource}
+                apps={panes.apps}
+                isLoadingApps={panes.isLoadingApps}
+                appsComplete={panes.appsComplete}
+                appsByGroupId={panes.appsByGroupId}
+                appCount={panes.appCount}
+                attributes={panes.attributes}
+                isLoadingProfile={panes.isLoadingProfile}
+                profileConfig={panes.profileConfig}
+                onProfileConfigChange={panes.updateProfileConfig}
+                onProfileConfigReset={panes.resetProfileConfig}
+                ruleReads={panes.ruleReads}
+                profileEdit={state.profileEdit}
               />
             </div>
 
@@ -321,6 +308,7 @@ const UsersTab: React.FC<UsersTabProps> = ({
                   contextGroups={memberships}
                   targetTabId={targetTabId}
                   onGroupsChanged={state.refreshSelectedUserMemberships}
+                  onContextUserUpdated={state.applySelectedUserUpdate}
                 />
               </div>
             )}

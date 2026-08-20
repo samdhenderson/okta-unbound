@@ -1,14 +1,29 @@
 /**
  * @module sidepanel/components/users/DetectedUserBanner
- * @description Presentational "detected in admin" banner for the Users tab.
+ * @description Presentational "open in admin" banner for the Users tab.
  *
  * Shown when the Okta admin page has a user open that differs from the one
  * explicitly selected in the tab. Loading is MANUAL only (the Load button), so admin
  * navigation never hijacks the tab. All visibility/dismiss logic lives in the parent;
  * this component only renders the detected user and forwards Load / Dismiss intent.
+ *
+ * ## One line, one clear choice
+ *
+ * The banner used to offer two equal-weight buttons — a `secondary` Load beside a
+ * `ghost` Dismiss — so the choice read as ambiguous: nothing said which one the
+ * banner was for. It is now a single row: an {@link sidepanel/components/shared/Eyebrow}
+ * naming the source, the user and their status, then one `primary` Load and an
+ * `IconButton` to dismiss. The verb wins the row; declining it is a close control.
+ *
+ * The status no longer has a pill of its own. That pill was a hand-rolled palette
+ * (a nested ternary over `ACTIVE` / `DEPROVISIONED` / everything else) — one of the
+ * copies of the recipe ADR-0030 moved into shared `Badge`, and the third element on
+ * a line that is trying to be one line. The status rides in the `{name} · {STATUS}`
+ * line instead.
  */
 import React from 'react';
-import { Button } from '../shared';
+import { Button, Eyebrow, IconButton } from '../shared';
+import Icon from '../overview/shared/Icon';
 import type { UserInfo } from '../../../shared/types';
 
 /** Props for {@link DetectedUserBanner}. */
@@ -24,8 +39,8 @@ interface DetectedUserBannerProps {
 }
 
 /**
- * The Users tab's detected-user banner: shows the page's user with a status badge
- * and manual Load / Dismiss actions. Purely presentational.
+ * The Users tab's detected-user banner: one line naming the user open in the admin
+ * console, with a single Load verb and a dismiss control. Purely presentational.
  */
 const DetectedUserBanner: React.FC<DetectedUserBannerProps> = ({
   userInfo,
@@ -34,30 +49,19 @@ const DetectedUserBanner: React.FC<DetectedUserBannerProps> = ({
   onDismiss,
 }) => {
   return (
-    <div className="px-4 py-2.5 bg-primary-light border border-primary-highlight rounded-md flex items-center gap-2">
-      <span className="text-sm text-neutral-700">
-        Detected in admin: <strong className="text-neutral-900">{userInfo.userName}</strong>
+    <div className="px-3 py-2 bg-primary-light border border-primary-highlight rounded-md flex items-center gap-2">
+      <Eyebrow className="shrink-0">Open in admin</Eyebrow>
+      <span className="min-w-0 flex-1 truncate text-sm text-neutral-700">
+        <strong className="font-semibold text-neutral-900">{userInfo.userName}</strong>
+        {userInfo.userStatus ? ` · ${userInfo.userStatus}` : ''}
       </span>
-      {userInfo.userStatus && (
-        <span
-          className={`px-2.5 py-0.5 text-xs font-bold rounded-md ${
-            userInfo.userStatus === 'ACTIVE'
-              ? 'bg-success-light text-success-text'
-              : userInfo.userStatus === 'DEPROVISIONED'
-                ? 'bg-danger-light text-danger-text'
-                : 'bg-warning-light text-warning-text'
-          }`}
-        >
-          {userInfo.userStatus}
-        </span>
-      )}
-      <div className="ml-auto flex items-center gap-2">
-        <Button variant="secondary" size="sm" onClick={onLoad} disabled={isLoading}>
+      <div className="flex shrink-0 items-center gap-1">
+        <Button variant="primary" size="sm" onClick={onLoad} disabled={isLoading}>
           Load
         </Button>
-        <Button variant="ghost" size="sm" onClick={onDismiss}>
-          Dismiss
-        </Button>
+        <IconButton label="Dismiss" size="sm" onClick={onDismiss}>
+          <Icon type="close" size="sm" />
+        </IconButton>
       </div>
     </div>
   );

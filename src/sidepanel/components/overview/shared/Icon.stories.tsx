@@ -127,6 +127,7 @@ export const AllIcons: Story = {
       'clipboard',
       'clipboard-check',
       'chevron-left',
+      'chevron-down',
       'chevron-right',
     ];
 

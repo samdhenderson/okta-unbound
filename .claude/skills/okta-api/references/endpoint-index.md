@@ -22,7 +22,14 @@ Marker legend lives in `../SKILL.md`.
 | `GET /api/v1/users/{id}/appLinks`            | Apps as the user sees them                           | `apps-and-policies.md`      | U   |
 | `POST /api/v1/users/{id}/lifecycle/{action}` | Activate, suspend, deactivate, unlock, reset         | `users-and-mfa.md`          | V   |
 | `POST /api/v1/users`                         | Creating a user                                      | Okta docs                   | U   |
-| `POST /api/v1/users/{id}`                    | Partial profile update (Okta merges)                 | Okta docs                   | U   |
+| `POST /api/v1/users/{id}`                    | Partial profile update — merge assumed, not verified | Okta docs                   | U   |
+
+`POST /api/v1/users/{id}` stays `U` deliberately: okta-unbound now **depends** on the
+merge behaviour — it ships a sparse `{ profile }` patch — but nobody has checked it
+against a live org. `useOktaApi/profileOperations.ts` owns the write and documents the
+full-profile fallback (strip every `mutability !== 'READ_WRITE'`) at the one function
+that would implement it. See ADR-0035 (`0035-the-first-profile-write.md`); flip this row to `V` only after a real org
+confirms unlisted attributes survive.
 
 ## Groups
 
@@ -92,23 +99,31 @@ Types: `ACCESS_POLICY`, `OKTA_SIGN_ON`, `MFA_ENROLL`, `PASSWORD`, `IDP_DISCOVERY
 
 ## Org and admin surfaces
 
-| Endpoint                                      | Use when                                           | Depth                       | M   |
-| --------------------------------------------- | -------------------------------------------------- | --------------------------- | --- |
-| `GET /api/v1/devices`                         | Device posture; `expand=user` embeds users         | `admin-and-org-surfaces.md` | V   |
-| `GET /api/v1/zones`                           | Network zones referenced by policy rules           | `admin-and-org-surfaces.md` | V   |
-| `GET /api/v1/idps`                            | Federation and social IdPs                         | `admin-and-org-surfaces.md` | V   |
-| `GET /api/v1/trustedOrigins`                  | CORS/redirect allow-lists                          | `admin-and-org-surfaces.md` | U   |
-| `GET /api/v1/behaviors`                       | Behavioural detection rules                        | `admin-and-org-surfaces.md` | U   |
-| `GET /api/v1/eventHooks`                      | Outbound webhooks — the alternative to polling     | `admin-and-org-surfaces.md` | U   |
-| `GET /api/v1/inlineHooks`                     | Hooks that modify flows in-flight                  | `admin-and-org-surfaces.md` | U   |
-| `GET /api/v1/iam/roles`                       | Custom admin roles                                 | `admin-and-org-surfaces.md` | D   |
-| `GET /api/v1/mappings`                        | Where a profile attribute actually comes from      | `admin-and-org-surfaces.md` | U   |
-| `GET /api/v1/users/{id}/linkedObjects/{name}` | Manager/report relationships (not a profile field) | `admin-and-org-surfaces.md` | U   |
-| `GET /api/v1/meta/types/user`                 | User types in the org                              | `admin-and-org-surfaces.md` | U   |
-| `GET /api/v1/meta/schemas/user/default`       | Discovering custom profile attributes              | `admin-and-org-surfaces.md` | U   |
-| `GET /api/v1/sessions/me`                     | Is the browser session still valid                 | `admin-and-org-surfaces.md` | U   |
-| `GET /api/v1/brands`                          | Sign-in page customisation                         | `admin-and-org-surfaces.md` | U   |
-| `GET /api/v1/org`                             | Org metadata — stamp it into exports               | `admin-and-org-surfaces.md` | U   |
+| Endpoint                                      | Use when                                                                          | Depth                       | M   |
+| --------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------- | --- |
+| `GET /api/v1/devices`                         | Device posture; `expand=user` embeds users                                        | `admin-and-org-surfaces.md` | V   |
+| `GET /api/v1/zones`                           | Network zones referenced by policy rules                                          | `admin-and-org-surfaces.md` | V   |
+| `GET /api/v1/idps`                            | Federation and social IdPs                                                        | `admin-and-org-surfaces.md` | V   |
+| `GET /api/v1/trustedOrigins`                  | CORS/redirect allow-lists                                                         | `admin-and-org-surfaces.md` | U   |
+| `GET /api/v1/behaviors`                       | Behavioural detection rules                                                       | `admin-and-org-surfaces.md` | U   |
+| `GET /api/v1/eventHooks`                      | Outbound webhooks — the alternative to polling                                    | `admin-and-org-surfaces.md` | U   |
+| `GET /api/v1/inlineHooks`                     | Hooks that modify flows in-flight                                                 | `admin-and-org-surfaces.md` | U   |
+| `GET /api/v1/iam/roles`                       | Custom admin roles                                                                | `admin-and-org-surfaces.md` | D   |
+| `GET /api/v1/mappings`                        | App↔Okta attribute mapping expressions — NOT how you find a user's profile source | `users-and-mfa.md`          | U   |
+| `GET /api/v1/users/{id}/linkedObjects/{name}` | Manager/report relationships (not a profile field)                                | `admin-and-org-surfaces.md` | U   |
+| `GET /api/v1/meta/types/user`                 | User types in the org                                                             | `admin-and-org-surfaces.md` | U   |
+| `GET /api/v1/meta/schemas/user/default`       | Custom profile attributes + per-attribute `master`                                | `users-and-mfa.md`          | V   |
+| `GET /api/v1/sessions/me`                     | Is the browser session still valid                                                | `admin-and-org-surfaces.md` | U   |
+| `GET /api/v1/brands`                          | Sign-in page customisation                                                        | `admin-and-org-surfaces.md` | U   |
+| `GET /api/v1/org`                             | Org metadata — stamp it into exports                                              | `admin-and-org-surfaces.md` | U   |
+
+> **Do not reach for `/api/v1/mappings` to find a user's profile source.** It
+> answers a different question — which expression populates an app-user attribute
+> — and costs a list call plus a fetch per mapping. The profile source is on the
+> app row already returned by
+> `GET /api/v1/apps?filter=user.id eq "{id}"&expand=user/{id}`: an app whose
+> `features` contain `PROFILE_MASTERING`. See `users-and-mfa.md` § Profile
+> sourcing, and ADR-0037 for the bug that came of getting this wrong.
 
 ## Auth
 

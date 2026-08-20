@@ -43,6 +43,7 @@ export type IconType =
   | 'clipboard-check'
   | 'chevron-left'
   | 'chevron-right'
+  | 'chevron-down'
   | 'close'
   | 'clock';
 
@@ -342,6 +343,14 @@ const Icon: React.FC<IconProps> = ({ type, className = '', size = 'md' }) => {
     'chevron-right': (
       <svg className={baseClasses} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+      </svg>
+    ),
+    // The disclosure glyph. Points down when the region it controls is closed and
+    // is rotated 180deg by the caller when it opens — a rotation, never a swap to
+    // `minus`, so the control's width cannot change with its state.
+    'chevron-down': (
+      <svg className={baseClasses} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
       </svg>
     ),
     // The dismiss glyph. This exact path was inlined in eleven components before

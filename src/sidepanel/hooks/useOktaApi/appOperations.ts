@@ -1,7 +1,8 @@
 /**
  * @module hooks/useOktaApi/appOperations
  * @description App-scoped read operations: type-ahead app search, the full app
- * inventory, single-app lookup, and assignment counts.
+ * inventory, single-app lookup, assignment counts, and the app's assigned-group
+ * list (the fallback for naming an app's granting group).
  *
  * Powers the Export tab's search-to-select for app-scoped exports (App Users /
  * App Groups) and the Applications tab's inventory. Like every read here,
@@ -11,7 +12,11 @@
 
 import type { CoreApi } from './core';
 import { oktaAppListItemSchema, type OktaAppListItem } from '@/shared/schemas/okta';
-import { oktaAppUserSchema, oktaAppGroupSchema } from '@/shared/schemas/okta';
+import {
+  oktaAppUserSchema,
+  oktaAppGroupSchema,
+  oktaAppGroupAssignmentSchema,
+} from '@/shared/schemas/okta';
 import { parseOkta, parseOktaList } from '@/shared/schemas/okta';
 import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
 import { createLogger } from '@/shared/utils/logger';
@@ -40,7 +45,8 @@ export interface AppSummary {
  * Build app-scoped operations bound to a {@link CoreApi} transport.
  *
  * @param coreApi - Shared transport surface.
- * @returns `{ searchApps, getAllApps, getAppById, getAppAssignmentCounts }`.
+ * @returns `{ searchApps, getAllApps, getAppById, getAppAssignmentCounts,
+ * getAppGroupAssignments }`.
  */
 export function createAppOperations(coreApi: CoreApi) {
   /**
@@ -148,5 +154,59 @@ export function createAppOperations(coreApi: CoreApi) {
     }
   };
 
-  return { searchApps, getAllApps, getAppById, getAppAssignmentCounts };
+  /**
+   * List the ids of every group assigned to an app.
+   *
+   * **Fallback only.** The primary answer to "which group grants this app?" is
+   * already in hand: `userOperations.getUserApps` reads `grantGroupId` off the
+   * `expand=user/{userId}` embed for zero additional requests. This operation
+   * exists for the rows where that embed was silent, and it answers a strictly
+   * weaker question — the groups assigned to the app, not the group that granted
+   * it to a particular user. Intersecting it with a user's memberships narrows
+   * the candidates; it does not by itself name the grantor.
+   *
+   * **A caller must gate it behind an explicit, per-row action.** It costs at
+   * least one request per app (more for apps with over 200 assigned groups), so
+   * firing it across a user's app list is linear in app count — the cost lesson
+   * ADR-0031 records for the per-membership proof, and the reason that read is
+   * user-initiated rather than automatic.
+   *
+   * @param appId - App whose group assignments to list.
+   * @returns Every assigned group id across all pages, or `null` when the walk
+   * failed. Never throws.
+   * @remarks `null` and `[]` are deliberately different answers: `[]` is Okta
+   * positively reporting **no groups assigned**, `null` is **no answer**.
+   * Collapsing them would manufacture a confident "no group grants this" out of
+   * a failed request, which is exactly the defect ADR-0020 removed from the
+   * attribution paths. Rows are validated with
+   * {@link oktaAppGroupAssignmentSchema}, so a malformed row is dropped
+   * leniently (ADR-0006) rather than failing the walk. Issued at `low` priority
+   * like its neighbour {@link getAppAssignmentCounts}, so a bulk read never
+   * starves interactive work. Cache under `cacheKeys.appGroups(appId)`.
+   */
+  const getAppGroupAssignments = async (appId: string): Promise<string[] | null> => {
+    try {
+      const groups = await fetchAllPages(
+        (url) => coreApi.makeApiRequest(url, 'GET', undefined, 'low'),
+        `/api/v1/apps/${encodeURIComponent(appId)}/groups?limit=${OKTA_PAGE_SIZE}`,
+        {
+          schema: oktaAppGroupAssignmentSchema,
+          context: 'GET /api/v1/apps/{id}/groups',
+        },
+      );
+      return groups.map((group) => group.id);
+    } catch {
+      // Identifier + outcome only — never the response body or a group name.
+      log.error('getAppGroupAssignments failed', { code: 'app_group_assignments_failed', appId });
+      return null;
+    }
+  };
+
+  return {
+    searchApps,
+    getAllApps,
+    getAppById,
+    getAppAssignmentCounts,
+    getAppGroupAssignments,
+  };
 }

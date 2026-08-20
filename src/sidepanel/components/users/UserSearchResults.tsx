@@ -2,17 +2,39 @@
  * @module sidepanel/components/users/UserSearchResults
  * @description Clickable list of user search results with status badges.
  *
- * Each row is {@link sidepanel/components/shared/ListRow} at `comfortable` density
- * rendered `as="button"` (ADR-0029). It used to be a `<div onClick>` with no role,
- * no `tabIndex` and no focus ring, so a keyboard user could not reach a search
- * result at all; `ListRow` supplies the button semantics, the pointer cursor and
- * the focus ring, and the row is now tab-reachable and Enter/Space-activatable.
- * A plain `as="button"` is safe here because the interior is text and a status
- * pill — no nested control, so no `nested-interactive` violation.
+ * ## The heading is a label, not a headline
  *
- * The interior follows the row typography contract in `docs/design-system.md`,
- * which fixed a title that carried no size class (rendering at 16px beside every
- * peer row's 14px) and a secondary line a step too large.
+ * The block used to open with an `<h3 className="text-lg font-semibold">Search
+ * Results</h3>` beside a `px-3 py-1 bg-neutral-100` count pill — two elements
+ * saying one thing, and the pair outweighed the `PageHeader` title sitting
+ * directly above it. Both are replaced by a single quiet
+ * {@link sidepanel/components/shared/Eyebrow} reading `"{n} matches"`. It is
+ * rendered as a `div` rather than a heading on purpose: the count labels the
+ * region, it does not title a section, and re-entering it into the document
+ * outline under the page's `<h1>` is what made it look like a headline in the
+ * first place.
+ *
+ * ## Rows are two lines at `compact`
+ *
+ * Each row is {@link sidepanel/components/shared/ListRow} at `compact` density
+ * rendered `as="button"` (ADR-0029). It used to be a `<div onClick>` with no
+ * role, no `tabIndex` and no focus ring, so a keyboard user could not reach a
+ * search result at all; `ListRow` supplies the button semantics, the pointer
+ * cursor and the focus ring. A plain `as="button"` is safe here because the
+ * interior is text and a status mark — no nested control, so no
+ * `nested-interactive` violation.
+ *
+ * The third line (`Login:` in mono) is gone. A login duplicated the email in
+ * every real case, so it cost a third line per row to restate the second one.
+ * The interior otherwise follows the row typography contract in
+ * `docs/design-system.md`, whose sized primary line fixed a title that carried
+ * no size class at all and rendered at 16px beside every peer row's 14px.
+ *
+ * The status mark is the shared {@link sidepanel/components/shared/Badge}. This
+ * file previously carried its own `VARIANT_CLASSES` palette — one of three
+ * hand-rolled copies of the recipe ADR-0030 had already moved into `Badge`.
+ * `BadgeVariant` is a superset of `UserStatusVariant`, so `userStatusVariant()`
+ * drops straight into `variant` with no mapping layer between them.
  *
  * The row list uses `.rise-in-stagger` (a wrapper class, not a per-row index prop)
  * so results feel like they land one after another rather than appearing as one
@@ -21,7 +43,7 @@
 import React from 'react';
 import { useStaggerReveal } from '../../hooks/useStaggerReveal';
 import type { OktaUser } from '../../../shared/types';
-import { ListRow, userStatusVariant, type UserStatusVariant } from '../shared';
+import { Badge, Eyebrow, ListRow, userStatusVariant } from '../shared';
 
 /** Props for {@link UserSearchResults}. */
 interface UserSearchResultsProps {
@@ -31,22 +53,9 @@ interface UserSearchResultsProps {
   onSelectUser: (user: OktaUser) => void;
 }
 
-/** Per-variant badge color classes (token palette, keyed by the shared variant map). */
-const VARIANT_CLASSES: Record<UserStatusVariant, string> = {
-  success: 'bg-success-light text-success-text',
-  info: 'bg-primary-light text-primary-text',
-  warning: 'bg-warning-light text-warning-text',
-  danger: 'bg-danger-light text-danger-text',
-  neutral: 'bg-neutral-100 text-neutral-700',
-};
-
-/** Maps an Okta user status to its badge classes via the shared variant map (ADR-0002). */
-const getStatusBadgeClass = (status: string) =>
-  `px-2 py-0.5 rounded-md text-xs font-medium ${VARIANT_CLASSES[userStatusVariant(status)]}`;
-
 /**
- * Displays a list of user search results as clickable cards; renders nothing when
- * there are no results.
+ * Displays a list of user search results as compact, clickable rows; renders
+ * nothing when there are no results.
  */
 const UserSearchResults: React.FC<UserSearchResultsProps> = ({ results, onSelectUser }) => {
   const setStaggerRef = useStaggerReveal();
@@ -56,13 +65,10 @@ const UserSearchResults: React.FC<UserSearchResultsProps> = ({ results, onSelect
   }
 
   return (
-    <div className="space-y-4 animate-rise-in">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-neutral-900">Search Results</h3>
-        <span className="px-3 py-1 bg-neutral-100 text-neutral-700 text-sm font-medium rounded-md">
-          {results.length} {results.length === 1 ? 'user' : 'users'}
-        </span>
-      </div>
+    <div className="space-y-2 animate-rise-in">
+      <Eyebrow as="div">
+        {results.length} {results.length === 1 ? 'match' : 'matches'}
+      </Eyebrow>
       <div ref={setStaggerRef} className="space-y-3 rise-in-stagger">
         {results.map((user) => (
           // `className="group"` only names the hover group — `ListRow` owns the
@@ -70,21 +76,20 @@ const UserSearchResults: React.FC<UserSearchResultsProps> = ({ results, onSelect
           <ListRow
             key={user.id}
             as="button"
-            density="comfortable"
+            density="compact"
             onClick={() => onSelectUser(user)}
             className="group"
           >
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <h4 className="mb-1 text-sm font-semibold text-neutral-900 group-hover:text-primary-text transition-colors duration-(--dur-instant)">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1 min-w-0 text-left">
+                <h4 className="truncate text-sm font-semibold text-neutral-900 group-hover:text-primary-text transition-colors duration-(--dur-instant)">
                   {user.profile.firstName} {user.profile.lastName}
                 </h4>
-                <div className="mb-1 text-xs text-neutral-600">{user.profile.email}</div>
-                <div className="font-mono text-xs text-neutral-500">
-                  Login: {user.profile.login}
-                </div>
+                <div className="truncate text-xs text-neutral-600">{user.profile.email}</div>
               </div>
-              <span className={getStatusBadgeClass(user.status)}>{user.status}</span>
+              <Badge variant={userStatusVariant(user.status)} className="shrink-0">
+                {user.status}
+              </Badge>
             </div>
           </ListRow>
         ))}

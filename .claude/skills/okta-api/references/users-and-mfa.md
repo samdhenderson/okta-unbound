@@ -86,6 +86,94 @@ GET /api/v1/meta/types/user                # user types in the org
 repo-exercised. Fetch the schema docs from `doc-sources.md` before depending on
 field-level detail.
 
+**`/default` is the schema of the default user type, not of every user.** A user
+on a custom type is governed by that type's schema, reachable through
+`/api/v1/meta/types/user` → `_links.schema.href`. A gate that reads `/default`
+for everyone applies one type's `mutability` and `master` blocks to another
+type's users. `[docs]`
+
+## Profile sourcing (profile mastering)
+
+The question — _"can I edit this attribute on this user, or does something else
+own it?"_ — is answered by two facts that live in different responses, and
+conflating them is how a panel comes to lock every attribute in the org.
+
+### `master.type` has three values and they are not variations on a theme
+
+`[docs]` `[verified: sidepanel/components/users/profileEditability, ADR-0037]`
+
+| `master.type`    | Means                                                  | Carries `master.priority` |
+| ---------------- | ------------------------------------------------------ | ------------------------- |
+| `OKTA`           | Okta owns the attribute.                               | no                        |
+| `PROFILE_MASTER` | Follows the **org's** profile-source order.            | **no**                    |
+| `OVERRIDE`       | This attribute has its own source list, per attribute. | yes                       |
+
+**`master.priority` is populated for `OVERRIDE` and only for `OVERRIDE`.** The
+terraform provider states it outright — _"Prioritized list of profile sources
+(required when 'master' is 'OVERRIDE')"_ — and its entries are
+`{ type: 'APP', value: '<appInstanceId>' }` (AD and LDAP are app instances too).
+
+This is the trap. `PROFILE_MASTER` is the value orgs carry on ordinary base
+attributes, and it names **no sources at all**, because the order it follows is
+org-level. Code that resolves a `PROFILE_MASTER` block by walking its `priority`
+is reading a field that is never there — it will not error, it will simply always
+find nothing, and whatever it does with "nothing" becomes its answer for the
+entire org. This repo shipped that bug and had to write ADR-0037 about it.
+
+### The profile source is on the app row — no extra call
+
+`[verified: useOktaApi/userOperations → getUserApps, shared/schemas/okta →
+isProfileSourceApp, ADR-0037]`
+
+Asked whether a user's profile source is available through the API, Okta Support
+answers _"currently, there is no API call to determine the user's profile
+source."_ `[docs]` That is true of a dedicated endpoint and **false of the
+question**. The Admin Console derives it from the ordinary assigned-apps call:
+
+```
+GET /api/v1/apps?filter=user.id eq "{userId}"&expand=user/{userId}&limit=200
+```
+
+Each row carries `features`, e.g.
+`["IMPORT_PROFILE_UPDATES", "PROFILE_MASTERING", "IMPORT_NEW_USERS"]`. An app
+whose `features` contain **`PROFILE_MASTERING`** is a profile source for the
+users assigned to it. Since this is the same request a user's app list already
+costs, the profile source is **free** — do not reach for `/api/v1/mappings` to
+answer this.
+
+Three things that make the difference between right and plausible:
+
+- **`IMPORT_PROFILE_UPDATES` is not a synonym.** An app can import profile
+  updates without being anyone's source of truth. Accepting it as equivalent
+  locks attributes for every user of every provisioned app.
+- **`orn` corroborates, it does not decide.** A Custom Identity Source app's
+  `orn` carries a `custom_identity_source` segment, which names the _kind_ of
+  source — but AD, LDAP and HR apps are profile sources without it.
+- **No source attached means Okta is the source.** _"If an external profile
+  source isn't identified, Okta is the source for all profiles."_ `[docs]` A user
+  assigned to none of the org's profile-source apps is Okta-mastered, and their
+  `PROFILE_MASTER` attributes are editable — including in orgs that do have a
+  profile source, for every user that source has never heard of.
+
+**An identity-source app returns `signOnMode: null`.** It is not a sign-on app,
+so the field is present and null rather than absent. A response schema that types
+it as "optional string" accepts `undefined` and rejects `null`, and a lenient list
+parser that drops invalid rows will then drop **the profile source itself** —
+silently, because the drop is logged as a count. This repo shipped exactly that
+and it cost the Apps pane an app and the editability gate its whole answer. Never
+enumerate which fields an Okta list row may null; make every field below `id`
+degrade to "not reported" instead of costing the row.
+`[verified: shared/schemas/okta → oktaAppListItemSchema, ADR-0037]`
+
+**Only one profile source per user at a time.** `[docs]` Several attached sources
+are resolved by an org-level priority order Okta does not expose, so a user in two
+of them has a source you can bound but cannot name. Say so; do not pick one.
+
+**The residual.** Assignment is not confirmed matching. A user assigned to a
+profile-source app that Okta has not linked them to is reported the same way as
+one it has. The `expand=user/{userId}` embed carries `syncState` and `externalId`,
+which narrow it — `[unverified]`, value vocabulary not confirmed here.
+
 **`profile.userType` is a plain string and is not the same thing as a user _type_
 object.** A rule or report keying on `profile.userType` is reading a profile field.
 The user-type object from `/api/v1/meta/types/user` is a separate concept governing

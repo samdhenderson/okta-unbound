@@ -1,8 +1,12 @@
 /**
  * @module sidepanel/components/users/GroupMembershipsListProof
- * @description The per-row "Prove it" affordance on the user-detail memberships
+ * @description The per-row "Ask Okta" affordance on the user-detail memberships
  * list: one explicit request that converts one hedged guess into Okta's own
  * answer.
+ *
+ * It lives **inside the row's disclosure** (never on a collapsed row), so the
+ * cost is offered to a reader who has already opened the row they care about
+ * rather than once per group in a list nobody has looked at yet.
  *
  * Everything else on that surface is a client-side deduction, because
  * `GET /api/v1/users/{id}/groups` carries no attribution embed (ADR-0020). ADR-0031
@@ -157,7 +161,7 @@ const MembershipProofAction: React.FC<MembershipProofActionProps> = ({
         onClick={() => onProve(membership)}
         title="Ask Okta which rules manage this membership (one API call)"
       >
-        Prove it
+        Ask Okta
       </Button>
       {outcome?.status === 'unanswered' && (
         // Not a failure of the membership, and not an answer about it: the row

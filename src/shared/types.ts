@@ -31,6 +31,25 @@ export interface OktaUser {
       name: string;
     }>;
   };
+  /**
+   * How the *account* is mastered, as opposed to how one attribute is.
+   *
+   * `provider.type` is `'OKTA'` when Okta owns the credential, or
+   * `'ACTIVE_DIRECTORY'` / `'IMPORT'` / `'FEDERATION'` when an external directory
+   * does. This is the signal that decides whether `login` may be edited — a
+   * per-attribute `master` block cannot answer it, because `login` is a
+   * credential, not a profile attribute.
+   *
+   * Deliberately narrow: Okta also returns `credentials.password` and
+   * `credentials.recovery_question` on this object, and the zod schema strips
+   * them at the boundary rather than carrying credential material into state.
+   */
+  credentials?: {
+    provider?: {
+      type?: string;
+      name?: string;
+    };
+  };
   profile: {
     login: string;
     email: string;

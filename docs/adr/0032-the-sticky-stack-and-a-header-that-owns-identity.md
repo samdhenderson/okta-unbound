@@ -1,6 +1,6 @@
 # ADR-0032: The sticky stack, and a header that owns entity identity
 
-- Status: Accepted
+- Status: Accepted (§3a amended by ADR-0038)
 - Date: 2026-08-15
 - Amends: ADR-0030 (its identity-header section, and its deferral of a pinned title)
 - Relates to: ADR-0018 (every tab stays mounted), ADR-0027 (motion tokens),
@@ -130,22 +130,57 @@ to the shared scroller — or any knowledge that the rail is what it parks below
 
 ### 3a. The third band merges into the second
 
+> **Amended by [ADR-0038](./0038-a-strip-that-knows-what-it-holds.md).**
+> The decision below is right and the shipped mechanism did not work. A named view
+> timeline is referenceable by the declaring element and its _descendants_, not by
+> its following siblings — so the sentinel-before-the-band structure this section
+> describes resolved `--dock-progress` to `null`, and a null timeline with
+> `fill: both` pinned the animation on its `to` keyframe. The strip rendered
+> permanently merged from the day this ADR landed. ADR-0038 hoists the name with
+> `timeline-scope`, corrects `--merge-range` (64px → 16px) and the timeline inset,
+> and gives the merge a resting shape to start from: a card the width of the rung.
+
 Reaching the parking spot is not the same as looking parked. A strip that stays a rounded,
 inset card once pinned reads as "a card stopped moving", not "the strip joined the header" —
 three separate pieces of chrome stacked at the top of the panel rather than one.
 
-So over the first `--merge-range` (64px) of scroll, `ActionBar` bleeds out to the panel
-edges, drops its radius and its top/side borders, covers the header's 1px bottom border and
-grows `--shadow-dock` underneath. Header and strip end up one continuous pinned surface with
-a single bottom edge.
+So over the last `--merge-range` (64px) of travel **before it parks**, `ActionBar` bleeds
+out to the panel edges, drops its radius and its top/side borders, covers the header's 1px
+bottom border and grows `--shadow-dock` underneath. Header and strip end up one continuous
+pinned surface with a single bottom edge.
 
-Three things this is not:
+Four things this is not:
 
 - **Not a transition on the pinned flag.** It is a CSS **scroll-driven animation**
-  (`animation-timeline: scroll(nearest block)`, `.dock-band` in `tailwind.css`) — the first
-  in the panel. It tracks scroll position rather than running on a clock, and it costs no
-  per-frame JavaScript on the shared scroller, for the same reason `useStuck` is an
-  `IntersectionObserver`.
+  (`.dock-band` in `tailwind.css`) — the first in the panel. It tracks position rather than
+  running on a clock, and it costs no per-frame JavaScript on the shared scroller, for the
+  same reason `useStuck` is an `IntersectionObserver`.
+- **Not a function of scroll offset.** It was, first: `animation-timeline: scroll(nearest
+block)` over the _first_ 64px of scroll. That is wrong whenever the strip does not start
+  at the top of the scroller, which on the Users tab it never does — the strip finished
+  merging while it was still floating in the middle of the rung, then travelled up to the
+  header already flattened, and the arrival it exists to dramatise had already happened
+  offstage. The animation must be a function of **distance to the parking spot**, and scroll
+  offset does not carry that.
+
+  So `ActionBar` renders a zero-size **`.dock-sentinel`** immediately before itself, which
+  publishes a `view-timeline` named `--dock-progress`. The sentinel sits at the strip's
+  _undocked_ position and keeps moving after the strip has stopped, so it is what knows how
+  far there is left to go. Its scrollport is inset from the top by
+  `calc(var(--rail-h,0px) + var(--header-h,0px))` — the two bands already parked there —
+  which puts `cover 100%` exactly on the docking line; the animation runs
+  `cover calc(100% - var(--merge-range))` → `cover 100%` and holds at full merge afterwards.
+  The same two custom properties therefore drive both the strip's `top` and the moment its
+  merge completes, so the two cannot drift apart.
+
+  The sentinel **floats**. It has to precede the band — that is the scope a named timeline is
+  visible in — but a sibling inside a `space-y-*` rung collects that rung's step, and an
+  in-flow marker would push the strip down by a full 24px. A float takes no space and block
+  siblings ignore it, so its margin lands on a zero-size box and does nothing.
+  `position: absolute` also leaves the flow, but its containing block is the nearest
+  positioned ancestor — outside the shared scroller here, which is precisely the case where
+  an out-of-flow box stops scrolling with the content it is marking.
+
 - **Not animated on the strip itself.** All the moving geometry lives on an absolutely
   positioned `::before` carrying the background, border, radius and shadow. The strip's own
   box never changes, so the buttons do not drift sideways as it bleeds and none of the
@@ -159,9 +194,33 @@ Three things this is not:
 Reduced motion needs its own rule. A scroll-driven animation is progress-based, so the
 blanket `animation-duration: 1ms` in `tailwind.css` does not touch it — `animation-name` is
 cleared instead, leaving the strip at its resting geometry. The whole thing is wrapped in
-`@supports (animation-timeline: scroll())`: without the guard, a browser that drops the
+`@supports (animation-timeline: view())`: without the guard, a browser that drops the
 unknown declaration would run the keyframes on the _document_ timeline at `0s` with
-`fill: both` and snap permanently to the merged state.
+`fill: both` and snap permanently to the merged state. A missing sentinel degrades the same
+way — an unresolvable timeline name leaves the animation inactive and the resting card in
+place.
+
+### 3c. A second tier belongs inside the band, not under it
+
+`ActionBar` takes an `expansion`: a disclosure row that opens **inside** the band, under the
+same painted chrome, growing the strip downward. The Users tab's **Manage** tier is the first
+one (ADR-0030's account-state verbs).
+
+It was a sibling of the strip first, on the reasoning that a sticky element cannot grow a
+second row without moving the buttons above it. That reasoning is wrong — `sticky` pins the
+box's _top_ edge, so a row added at the bottom grows away from the buttons and leaves them
+exactly where they were. What the sibling version produced instead was a whole second card
+popping into the page flow, arriving with the page rather than with the control that summoned
+it, plus a `display: contents` wrapper needed to keep the two glued — which then swallowed the
+rung's own `space-y-6` step (Tailwind v4 puts it on the _earlier_ sibling as
+`margin-block-end`, and a `contents` box has no margin to put it on) and left the detail card
+butted against the strip.
+
+Inside the band, all of that goes away: the chrome is `inset: 0` of the band, so it stretches
+over the row for free and the merge carries it; the height animates through the shared
+`.disclose` grid; and the strip is a plain child of its rung again, collecting the rung's
+spacing like everything else. The row's children stay mounted while closed, held out of the
+tab order and the accessible tree with `inert` — the `CollapsibleSection` contract.
 
 ### 3b. Scroll anchoring has to be off
 

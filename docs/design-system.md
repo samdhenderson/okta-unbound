@@ -46,11 +46,53 @@ Native-Okta model: a **gray canvas** with **white cards** floating on it.
   canvas but a pinned band with rows scrolling _underneath_ it, so it grows
   `--shadow-dock` across the merge. At rest — unmerged, or with motion off — it has no
   shadow at all. Reach for this only if you are pinning a band, and use the token.
+
+  The same exception covers the **bleed plate** that band paints: an opaque
+  `--color-canvas` slab spanning the panel behind it, so page rows disappear _under_ a
+  pinned strip instead of scrolling through the `px-6` gutters either side of it. That
+  is the one sanctioned place a component paints the canvas colour itself, and it is
+  unconditional — with motion off or reduced the strip pins without ever widening, and
+  without the plate the leak is permanent (ADR-0038).
+
 - Field labels (label-above-value) are `text-xs font-medium text-neutral-600`; uppercase
-  section eyebrows are `text-xs font-semibold uppercase tracking-wide`.
+  section eyebrows go through the shared `Eyebrow` primitive — see Typography below.
 
 **Status vocabulary is `danger`, not `error`** (ADR-0002). The status union is
 `'success' | 'warning' | 'danger' | 'info'`.
+
+### The docking band's resting shape
+
+`ActionBar` at rest is **a card the width of the rung** — it spans the tab column
+and stops at the same left and right margins as every `DetailSection` below it — and
+grows past those margins to the panel bleed only as it docks. Two consequences for
+anything built near it:
+
+- **Only the chrome merges.** The band's `::before` is what animates; the row inside
+  keeps the column's padding the whole way, so no verb moves during the merge and the
+  overflow observer watches a band width that does not churn. Do not put a layout
+  property on that timeline.
+- **The disclosure owns the trailing edge.** **More** is pushed there with `ms-auto`
+  and carries its hairline separator with it, so the rule always reads as the
+  boundary between the verbs and the way to reach the rest of them — wherever the
+  verbs happen to end.
+
+An earlier revision had the strip hug its buttons at rest, with a lone action getting
+no chrome at all to avoid concentric radii. Both went when the strip became a card:
+a pill is a fourth kind of box on a rung that already has a header, cards and rows,
+and its disclosure ends up floating mid-column with nothing under it.
+
+Two custom properties carry the geometry, published imperatively by
+`useActionOverflow` and consumed only by `tailwind.css`. They are a contract, not
+implementation detail — **never pass a `style` prop to the band**, or React clears
+them on its next render.
+
+| Property        | Host                | Meaning                                       |
+| --------------- | ------------------- | --------------------------------------------- |
+| `--bar-bleed`   | the band            | The band's distance from the panel edge       |
+| `--dock-offset` | the band's _parent_ | Rung margin between the sentinel and the band |
+
+`--dock-offset` is on the parent because the element that reads it is the dock
+sentinel — the band's _sibling_, which cannot see a property set on the band.
 
 ### Chart / dataviz palettes
 
@@ -69,6 +111,15 @@ the genuinely chart-only tints (`INDIGO_RAMP`) are documented in that module.
 Type scale via Tailwind: `text-xs` (chips/meta), `text-sm` (body), `text-base`
 (emphasis), `text-lg` (modal/section titles). Weights: `font-medium` (secondary),
 `font-semibold` (primary/headings).
+
+**There is exactly one eyebrow recipe: `text-xs font-semibold uppercase tracking-wide
+text-neutral-600`**, and it lives in the shared `Eyebrow` component
+(`components/shared/Eyebrow.tsx`) — never hand-roll it. It had drifted into four
+recipes across ~18 files (`tracking-wider`, the off-scale `text-[10px]`/`text-[11px]`,
+and `text-neutral-500`/`600`/`700`); ADR-0030 settled `tracking-wide` as the survivor,
+and the primitive is what keeps it settled. `Eyebrow` has no colour, size or tracking
+prop by design; a section that wants a different treatment is the drift it exists to
+stop.
 
 ## Spacing
 

@@ -8,10 +8,13 @@ isn't re-litigated.
 The single fact that reshapes everything: **the write surface is narrow and the session
 is single-tenant**. Today the app can `suspend`/`unsuspend` users,
 `resetPassword(sendEmail=true)`, add/remove group members, run bulk group ops,
-`activate`/`deactivate` rules, and — since Feature A4 — **create / delete group rules**
-(zod-validated, via the safe create → activate → retire sequence). It still has **no**
-profile write, no user `activate`/`reactivate`, no in-place rule edit, no app-push
-writes, and no policy ops. Every API call targets one browser tab's Okta session — two
+`activate`/`deactivate` rules, **create / delete group rules** (Feature A4 — zod-validated,
+via the safe create → activate → retire sequence), and — since
+[ADR-0035](./adr/0035-the-first-profile-write.md) — a **single-user
+profile write** (`POST /api/v1/users/{id}`, sparse patch, gated on schema mutability and
+mastering, predicted, audited and undoable). It still has **no** bulk profile write, no
+user `activate`/`reactivate`, no in-place rule edit, no app-push writes, and no policy
+ops. Every API call targets one browser tab's Okta session — two
 tenants at once is impossible. See [architecture.md](./architecture.md).
 
 **Ground rules for every feature below** (the code must satisfy these):
@@ -47,6 +50,7 @@ Status legend: `[ ]` todo · `[~]` partially done · `[x]` done.
 | List entry (paste/search → chips)       | `Textarea`, `Input`, `SelectionChips`, `ComparisonSearchPhase`     | `components/shared/`, `users/comparison/`                    |
 | Confirm / destructive gate              | shared `Modal`                                                     | `components/shared/Modal.tsx`                                |
 | Audit + undo                            | `logAction`, `logBulkRemoveAction`, `AuditLogViewer`               | `shared/undoManager.ts`, `components/AuditLogViewer.tsx`     |
+| Prior-state capture + restore           | `logProfileUpdateAction`, `useUndoAction` (drift-checked rewrite)  | `shared/undoManager.ts`, `hooks/useUndoAction.ts`            |
 | Rule read + write                       | `getGroupRulesForGroup`; `ruleWrites` (create/delete/(de)activate) | `groupDiscovery.ts`, `hooks/useOktaApi/ruleWrites.ts`        |
 | Population diff (who gains/loses)       | `classifyGroupImpact`, `summarizeRuleImpact`                       | `shared/membership/ruleImpact.ts`                            |
 
@@ -62,16 +66,16 @@ The two primitives worth building **once** and reusing across C/D:
 
 ## Catalog (ranked by impact ÷ effort)
 
-| Feature                                | Effort | Impact   | Verdict                         |
-| -------------------------------------- | ------ | -------- | ------------------------------- |
-| A. Orphan/Clutter + Rule Consolidation | M      | High     | `[x]` **Shipped (flagship)**    |
-| B. Rule Impact Preview                 | L–M    | High     | `[x]` **Shipped**               |
-| C. Bulk Attribute Editor               | M      | High     | `[ ]` **Build (next)**          |
-| D. Bulk Lifecycle Console              | M      | Med–High | Fast follow                     |
-| E. Group Push deploy                   | H      | Med      | Parked                          |
-| F. OEL Sandbox (full)                  | H      | Med      | Parked (interpreter now exists) |
-| G. Policy Migrator                     | XL     | Med      | Rejected (single-tenant block)  |
-| H. Clause-level rule explainer         | S–M    | High     | `[ ]` **Build**                 |
+| Feature                                | Effort | Impact   | Verdict                          |
+| -------------------------------------- | ------ | -------- | -------------------------------- |
+| A. Orphan/Clutter + Rule Consolidation | M      | High     | `[x]` **Shipped (flagship)**     |
+| B. Rule Impact Preview                 | L–M    | High     | `[x]` **Shipped**                |
+| C. Bulk Attribute Editor               | M      | High     | `[ ]` Single-user editor shipped |
+| D. Bulk Lifecycle Console              | M      | Med–High | Fast follow                      |
+| E. Group Push deploy                   | H      | Med      | Parked                           |
+| F. OEL Sandbox (full)                  | H      | Med      | Parked (interpreter now exists)  |
+| G. Policy Migrator                     | XL     | Med      | Rejected (single-tenant block)   |
+| H. Clause-level rule explainer         | S–M    | High     | `[ ]` **Build**                  |
 
 ---
 
@@ -109,27 +113,57 @@ rule targets + exclusions and labeled as such inline.
 
 ---
 
-## C. `[ ]` Bulk Attribute Editor — safeguarded profile write (next build)
+## C. `[ ]` Bulk Attribute Editor — safeguarded profile write (single-user editor shipped)
 
 Mass-edit one profile field (department rename, title change) across many users, without
 fighting externally-mastered (AD/HR) profiles.
 
-- New endpoint: `POST /api/v1/users/{id}` (partial profile update — Okta merges);
-  follow the `suspendUser` content-script pattern; zod-validate the response (ADR-0006).
-- **Mastering detection (the differentiator):** skip users whose target attribute is
-  externally mastered — check `profileMastered` / `credentials.provider`
-  (`ACTIVE_DIRECTORY`, `IMPORT`) from `getUserById`. Skipped users are **listed with a
-  reason**, never silently dropped.
-- Reuse: `BulkTargetList` (paste/search → chips), bulk loop + `ProgressContext`, `Modal`
-  confirm, `logAction` audit.
-- UX flow: paste/search users → resolved chips → pick attribute (from a curated
-  **allow-list**, no login/email footguns) + new value → **mandatory `PreflightSummary`**
-  (N updatable / M skipped-locked + reasons, capturing old values) → confirm modal
-  restating counts → run through scheduler with live progress → results summary
-  (updated / skipped / failed) + CSV export + audit entry.
+The schema facts were banked first ([ADR-0033](./adr/0033-admin-authored-profile-display.md)):
+`getUserProfileSchema` → `cacheKeys.userSchema`, with `oktaUserSchemaPropertySchema`
+capturing `mutability`, `required`, `type`, `enum`/`oneOf` and the `master` block — the
+mastering signal this feature's differentiator turns on.
+
+**The single-user inline editor has since landed**
+([ADR-0035](./adr/0035-the-first-profile-write.md)), which is most of
+this item's machinery. What exists today:
+
+- The write itself — `updateUserProfile` (`POST /api/v1/users/{id}`, sparse patch,
+  zod-validated response) plus `getUserRaw`, in `useOktaApi/profileOperations.ts`. Its
+  result is **three-state**: `saved` / `failed` / `unknown`, where `unknown` means the
+  write may have applied and must never be shown as a failure.
+- The per-attribute gate — `components/users/profileEditability.ts`: schema
+  `mutability`, per-attribute `master.type`, account-level
+  `credentials.provider.type`, and a value-type gate, each lock naming its reason.
+- The prediction — `shared/membership/blastRadius.ts`, a pure zero-API engine
+  answering "what does this edit do to their group access?", hedged (`likely-*`) or
+  withheld with a named reason
+  ([ADR-0036](./adr/0036-a-predicted-access-change-is-never-asserted.md)).
+- The capture and the restore — `logProfileUpdateAction` with PII caps, and
+  `useUndoAction`, the repo's **first undo executor**: re-read, refuse on drift, write
+  the prior values, record a linked entry of its own.
+- One hook, both surfaces — `useProfileEdit` drives the Profile pane and each column
+  of the two-user Compare view.
+
+**Superseded:** the "curated **allow-list**, no login/email footguns" line below was the
+original plan and ADR-0035 §3 replaces it. `login` is editable when Okta masters the
+account; the mastering signal locks exactly the accounts where a write would be
+overwritten or is not ours to make, which is a narrower and more accurate lock than a
+blanket deny.
+
+What remains for the bulk build:
+
+- **Cohort resolution** — paste/search users → resolved chips, reusing `BulkTargetList`.
+- **Preflight over many users** — one `PreflightSummary` running the existing
+  per-attribute gate across the cohort (N updatable / M skipped-locked + reasons,
+  capturing old values), then a confirm modal restating the counts.
+- **The run** — bulk loop + `ProgressContext` on the scheduler path, with live progress.
+- **Results** — updated / skipped / failed summary plus **CSV export** (every cell
+  through `csvUtils.escapeCSV`) and the audit entry.
 - _Enhancement:_ value **templating** (find-replace / derive-from-existing) with a
   per-user before→after table.
-- _Safeguard:_ preflight captures prior values so undo can restore them.
+- **Unverified, and blocking nothing yet:** the sparse-patch merge behaviour of
+  `POST /api/v1/users/{id}` has not been checked against a real org. Confirm it before
+  fanning the write out across a cohort; the fallback lives in `profileOperations.ts`.
 - Done when: an admin can change one field across a resolved cohort, locked profiles are
   auto-skipped with reasons, the change is previewed/confirmed/audited/undoable, green.
 
@@ -193,12 +227,35 @@ Carried forward from the A/B build (surfaced while working, none blocking):
   the existing counts.
 - **`useGroupsLoader` mount-rehydrate races `loadAllGroups`** (characterized in its
   docstring) — relevant if A1/A2 start triggering loads.
+- **Finish the eyebrow migration.** `Eyebrow` (ADR-0030's recipe, finally extracted) is
+  the single uppercase section label, but roughly eighteen files still hand-roll
+  `uppercase tracking-*` — `RuleCard`, `ContextBar`, `PolicyCard`, `StatCard`,
+  `ColumnPicker`, `PresetControls` and the rest of
+  `grep -rl "uppercase tracking" src/sidepanel/components`. Mechanical and exempt from
+  the plan gate (ADR-0024), but do it as its own PR: it is the only thing that stops the
+  four-recipe drift returning, and each swap is a visual diff worth seeing on its own.
+- **Dead-code pass over `src/shared/tabState/`.** `TabStateManager` writes
+  `chrome.storage.local` directly, so the background's `saveTabState` / `loadTabState` /
+  `clearTabState` message actions (`src/background/index.ts:244`–`300`) have no sender
+  anywhere in the codebase — three validated message actions maintained for nobody.
+  `RulesTab` is the module's only consumer while its `TabName` union spans every tab.
+  While there: the lone `chrome.storage.sync.set` at `src/background/index.ts:326` has no
+  reader either (ADR-0033 §2). Run `npm run knip` and remove what it confirms; removing a
+  message action is a security-surface reduction, so review it as one.
 
 ---
 
 ## Detail-page layout contract adoption — pending ADR-0030 migration
 
-Four detail-page surfaces still need to adopt the `DetailSection` / `ActionBar` /
+ADR-0030 said Users and Groups adopt the contract first. Both have:
+
+- [x] **Groups** — the group detail view pushed from the list, with the header owning
+      identity (ADR-0032).
+- [x] **Users** — the detail rung is now `UserActionBar` above three tabbed panes of one
+      card (`UserDetailPanel`), the header describes the user (`userIdentity`), and
+      `UserProfileCard` / `userProfileSections.ts` are deleted rather than restyled.
+
+Four detail-page surfaces still need the `DetailSection` / `ActionBar` /
 `EntityLink` / `Badge` contract from [ADR-0030](./adr/0030-detail-page-layout-contract.md):
 
 - [ ] **Rules** (`src/sidepanel/components/RuleCard.tsx`) — hand-rolls an `<a>` with

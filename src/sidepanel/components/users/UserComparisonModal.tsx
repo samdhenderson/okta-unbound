@@ -35,14 +35,23 @@ interface UserComparisonModalProps {
   /** The context user's group memberships, used as the left-hand comparison baseline. */
   contextGroups: GroupMembership[];
   /**
-   * Okta org origin, used to build the deep link offered for a group the user
-   * must *leave*. Absent, the link simply does not render.
+   * Okta org origin. Two uses: the deep link offered for a group the user must
+   * *leave* (absent, the link simply does not render), and the cache/storage key
+   * for the org profile schema and the admin's profile display configuration
+   * behind the Attributes tab (absent, both fall back to defaults).
    */
   oktaOrigin?: string | null;
   /** Tab id of the Okta admin tab; API calls are scheduled against it. */
   targetTabId: number;
   /** Called after a group is successfully copied onto the context user so the parent can refresh. */
   onGroupsChanged: () => void;
+  /**
+   * Publishes a context-user profile save back to whoever owns that user. The
+   * Overview rung holds its user in the entity cache, so it republishes there;
+   * absent, the left column stays read-only rather than accepting an edit
+   * nothing would re-render from.
+   */
+  onContextUserUpdated?: (user: OktaUser) => void;
 }
 
 /**
@@ -58,13 +67,18 @@ const UserComparisonModal: React.FC<UserComparisonModalProps> = ({
   oktaOrigin,
   targetTabId,
   onGroupsChanged,
+  onContextUserUpdated,
 }) => {
   const comparison = useUserComparison({
     isActive: isOpen,
     contextUser,
     contextGroups,
     targetTabId,
+    // Also what keys the org profile schema and the admin's profile display
+    // config behind the Attributes tab, not only the deep link below.
+    oktaOrigin,
     onGroupsChanged,
+    onContextUserUpdated,
   });
 
   return (

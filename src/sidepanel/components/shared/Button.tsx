@@ -5,6 +5,11 @@
  * Five variants and three sizes, with optional leading/trailing icon, loading
  * spinner, badge, and full-width layout. For icon-only affordances use
  * `IconButton`; for filter toggles use `FilterPill`.
+ *
+ * A button that shows and hides a region passes `expanded` + `controls`, exactly
+ * as `IconButton` does — a labelled disclosure trigger (the user detail rung's
+ * **Manage** tier) is still a disclosure, and hand-rolling a `<button>` to get
+ * `aria-expanded` onto it is banned.
  */
 import React from 'react';
 import Icon, { type IconType } from '../overview/shared/Icon';
@@ -38,6 +43,14 @@ interface ButtonProps {
   badge?: string;
   /** Native `title` tooltip. */
   title?: string;
+  /**
+   * For a labelled disclosure trigger — reflected as `aria-expanded`. Pair with
+   * {@link ButtonProps.controls} so assistive tech can reach the region it
+   * shows/hides. `IconButton` carries the same pair for icon-only disclosures.
+   */
+  expanded?: boolean;
+  /** `id` of the region this button shows/hides — reflected as `aria-controls`. */
+  controls?: string;
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
@@ -99,6 +112,8 @@ const Button: React.FC<ButtonProps> = ({
   fullWidth = false,
   badge,
   title,
+  expanded,
+  controls,
 }) => {
   const baseClasses = `
     inline-flex items-center justify-center gap-2
@@ -119,6 +134,8 @@ const Button: React.FC<ButtonProps> = ({
       disabled={disabled || loading}
       className={`${baseClasses} ${className}`}
       title={title}
+      aria-expanded={expanded}
+      aria-controls={controls}
       style={{ fontFamily: 'var(--font-heading)' }}
     >
       {loading && (

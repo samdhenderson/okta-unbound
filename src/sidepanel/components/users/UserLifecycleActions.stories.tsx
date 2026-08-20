@@ -10,7 +10,7 @@ const user = (over: Partial<OktaUser> = {}): OktaUser => ({
   ...over,
 });
 
-/** The Users tab's lifecycle-actions panel + confirmation modal (status-gated). */
+/** The Manage tier's body: the account-state verbs + their confirm modal (status-gated). */
 const meta = {
   title: 'Users/UserLifecycleActions',
   component: UserLifecycleActions,
@@ -20,11 +20,32 @@ const meta = {
     docs: {
       description: {
         component:
-          "The Users tab's lifecycle-actions panel plus its confirmation modal, gated by user status.\n\n" +
-          'Offers only the actions valid for the current status — Suspend + Reset Password for ACTIVE, Unsuspend for SUSPENDED, and a notice (no actions) for DEPROVISIONED. Trigger buttons disable while an action is in flight; arming an action opens a confirmation modal that the parent commits. Presentational — the parent owns the pending-action state and the API call.',
+          "The **Manage tier's body** on the user-detail rung: the account-state verbs plus their " +
+          'confirmation modal, gated by user status.\n\n' +
+          'It lost its card. These used to be a `Lifecycle Actions` card of their own, stacked with ' +
+          'the profile and the memberships as though "suspend this person" were a section of the ' +
+          "page's content. It is not — it is a verb whose object is the whole page, so ADR-0030 puts " +
+          'it in the `ActionBar`, one press away behind **Manage** (`UserActionBar`). ' +
+          '**The `useUserLifecycleActions` state machine, every confirm modal and the status-driven ' +
+          'gating are unchanged; only the placement moved.**\n\n' +
+          'Reading order is deliberate: the non-destructive verbs first, a rule, then the destructive ' +
+          'one alone on its own row with the consequence stated beside it. `Each asks to confirm` is ' +
+          'stated once for the band rather than implied per button.\n\n' +
+          'Offers only the actions valid for the current status — Reset password + Suspend for ' +
+          'ACTIVE, Unsuspend for SUSPENDED, Reset password alone for RECOVERY / LOCKED_OUT / ' +
+          'PASSWORD_EXPIRED, and a notice for DEPROVISIONED. Presentational: the parent owns the ' +
+          'pending-action state and the API call.',
       },
     },
   },
+  decorators: [
+    (Story) => (
+      // The band the tier-2 body renders into, so the story shows what ships.
+      <div className="rounded-b-md border border-neutral-200 bg-white px-4 py-3">
+        <Story />
+      </div>
+    ),
+  ],
   args: {
     user: user(),
     isLifecycleLoading: false,
@@ -50,12 +71,17 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** ACTIVE user: Suspend + Reset Password are offered. */
+/** ACTIVE user: Reset password above the rule, Suspend user below it. */
 export const Active: Story = {};
 
-/** SUSPENDED user: only Unsuspend is offered. */
+/** SUSPENDED user: the destructive row becomes the restorative one. */
 export const Suspended: Story = {
   args: { user: user({ status: 'SUSPENDED' }) },
+};
+
+/** LOCKED_OUT user: Reset password only — there is no destructive row to rule off. */
+export const LockedOut: Story = {
+  args: { user: user({ status: 'LOCKED_OUT' }) },
 };
 
 /** DEPROVISIONED user: no actions available, just the notice. */
@@ -76,4 +102,9 @@ export const ConfirmingSuspend: Story = {
 /** The reset-password action is armed — the confirmation modal is open. */
 export const ConfirmingResetPassword: Story = {
   args: { pendingLifecycleAction: 'resetPassword' },
+};
+
+/** The 360px floor: the consequence text and its button must wrap, not squeeze. */
+export const Narrow: Story = {
+  parameters: { viewport: { value: 'sidepanelCompact' } },
 };

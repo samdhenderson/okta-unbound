@@ -73,3 +73,6 @@ shots/
 .design-sync/node_modules
 .ds-sync/
 ds-bundle/
+
+#Design Sync Exports for UI changes and New Feature UI
+designDocs/

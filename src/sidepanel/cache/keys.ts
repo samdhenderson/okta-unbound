@@ -114,4 +114,66 @@ export const cacheKeys = {
    * @param policyType - The Okta policy type, e.g. `ACCESS_POLICY`.
    */
   policies: (policyType: string): EntityKey => ['policies', policyType],
+
+  /**
+   * The org's user-profile schema — every base and custom attribute definition
+   * from `GET /api/v1/meta/schemas/user/default`.
+   *
+   * Org-wide, so it scopes by origin exactly like {@link cacheKeys.apps} and
+   * never by tab id (see the module note). Held at {@link TTL_LONG}: an admin
+   * changing the profile schema is a rare, deliberate act, and every user detail
+   * view reads it.
+   *
+   * @param oktaOrigin - The connected org's origin, e.g. `https://example.okta.com`.
+   */
+  userSchema: (oktaOrigin?: string | null): EntityKey => ['userSchema', oktaOrigin ?? 'unknown'],
+
+  /**
+   * The ids of every group assigned to one application.
+   *
+   * Entity-scoped, so it keys on the Okta app id alone (see the module note) —
+   * the same shape as {@link cacheKeys.appAssignmentCounts}, and a separate key
+   * from it because the two carry different payloads even though both are filled
+   * by a walk of `/api/v1/apps/{id}/groups`.
+   *
+   * Held at {@link TTL_LONG}: it is the fallback for naming the group that
+   * grants a user an app, it costs a full pagination walk per app, and app-group
+   * assignments change far less often than membership does.
+   *
+   * @param appId - The Okta application id.
+   */
+  appGroups: (appId: string): EntityKey => ['appGroups', appId],
+
+  /**
+   * One user's application assignments, as `userOperations.getUserApps` reports
+   * them — the rows **and** the `complete` flag saying whether the pagination
+   * walk finished.
+   *
+   * Entity-scoped, so it keys on the Okta user id alone (see the module note).
+   * The cached value is the whole {@link UserAppsResult}, not just its rows: a
+   * partial walk is a different fact from a short list, and caching only the
+   * array would let the incompleteness be dropped on the first cache hit.
+   *
+   * Read by the Users tab's Apps pane, which loads on first entry to that pane
+   * rather than on detail open — so the entry is what makes returning to the
+   * pane free rather than a refetch.
+   *
+   * @param userId - The Okta user id.
+   */
+  userApps: (userId: string): EntityKey => ['userApps', userId],
+
+  /**
+   * One user's full `OktaUser` object, as the Overview rung loads it.
+   *
+   * Promoted from an inline literal in `UserOverview` once a second writer
+   * appeared: a profile save publishes the user Okta returned straight into this
+   * entry, so the rung re-renders with the new values and spends no request. A
+   * writer and a reader disagreeing by one character is the silent-failure shape
+   * this file exists to prevent, and two inline copies is exactly how that
+   * happens.
+   *
+   * Not used by the Users tab, which holds its selected user in React state
+   * rather than in the cache.
+   */
+  userDetails: (userId: string): EntityKey => ['userDetails', userId],
 } as const;

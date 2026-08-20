@@ -209,6 +209,7 @@ interface HarnessProps {
   contextGroups?: GroupMembership[];
   onGroupsChanged?: () => void;
   onClose?: () => void;
+  onContextUserUpdated?: (user: OktaUser) => void;
 }
 
 /**
@@ -220,6 +221,7 @@ const Harness: React.FC<HarnessProps> = ({
   contextGroups = CONTEXT_GROUPS,
   onGroupsChanged,
   onClose,
+  onContextUserUpdated,
 }) => {
   const [isOpen, setIsOpen] = React.useState(true);
   const [bump, setBump] = React.useState(0);
@@ -239,6 +241,7 @@ const Harness: React.FC<HarnessProps> = ({
         contextGroups={contextGroups}
         targetTabId={TAB_ID}
         onGroupsChanged={() => onGroupsChanged?.()}
+        {...(onContextUserUpdated ? { onContextUserUpdated } : {})}
       />
     </div>
   );
@@ -247,6 +250,17 @@ const Harness: React.FC<HarnessProps> = ({
 // ----------------------------------------------------------------- helpers
 
 const searchInput = () => screen.getByPlaceholderText('Search by email, name, or login…');
+
+/**
+ * The search-results region's label.
+ *
+ * RETARGETED (ADR-0022(3)): the `Search Results` heading and the separate count
+ * pill beside it collapsed into one `"{n} matches"` eyebrow, so a single node now
+ * carries both facts these assertions ever read off them — that results are on
+ * screen at all, and how many. Anchored, so it matches the label and not a
+ * container that happens to contain it.
+ */
+const RESULTS_COUNT = /^\d+ match(es)?$/;
 
 /** Drives the search phase and picks Bob. The debounce is 600ms and is not injectable. */
 async function selectComparedUser(user: OktaUser = comparedUser) {
@@ -267,10 +281,11 @@ async function openComparison() {
   await waitForLoadToSettle();
 }
 
-const tab = (name: 'Overview' | 'Groups' | 'Apps') =>
-  screen.getByRole('tab', { name: new RegExp(`^${name}`) });
+type ComparisonTab = 'Overview' | 'Groups' | 'Apps' | 'Attributes';
 
-const gotoTab = async (name: 'Overview' | 'Groups' | 'Apps') => userEvent.click(tab(name));
+const tab = (name: ComparisonTab) => screen.getByRole('tab', { name: new RegExp(`^${name}`) });
+
+const gotoTab = async (name: ComparisonTab) => userEvent.click(tab(name));
 
 /**
  * Show every row regardless of the diff tab's filter.
@@ -392,7 +407,7 @@ describe('UserComparisonModal', () => {
         screen.getByRole('heading', { name: 'Compare with another user' }),
       ).toBeInTheDocument();
       expect(searchInput()).toHaveValue('');
-      expect(screen.queryByText('Search Results')).not.toBeInTheDocument();
+      expect(screen.queryByText(RESULTS_COUNT)).not.toBeInTheDocument();
       expect(screen.getByText('Start typing to search')).toBeInTheDocument();
 
       // Reselecting the same user refires both app loads, and activeTab is back to Overview.
@@ -882,13 +897,14 @@ describe('UserComparisonModal', () => {
       expect(userSearchCalls()).toHaveLength(0);
 
       await userEvent.type(searchInput(), 'xample');
-      await screen.findByText('Search Results', {}, { timeout: 3000 });
+      await screen.findByText(RESULTS_COUNT, {}, { timeout: 3000 });
 
       // The API returned both Bob and Alice; only Bob is offered as a result card.
       // (Scoped to the result headings: "Alice Context" also appears in the blurb above.)
       const resultNames = screen.getAllByRole('heading', { level: 4 }).map((h) => h.textContent);
       expect(resultNames).toEqual(['Bob Compared']);
-      expect(screen.getByText('1 user')).toBeInTheDocument();
+      // …and the region says so: one match, not the two the API returned.
+      expect(screen.getByText('1 match')).toBeInTheDocument();
     });
 
     it('CHARACTERIZED: a failed search shows no error at all — the modal drops useUserSearch.error', async () => {
@@ -913,7 +929,7 @@ describe('UserComparisonModal', () => {
 
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
       expect(screen.queryByText('Search backend exploded')).not.toBeInTheDocument();
-      expect(screen.queryByText('Search Results')).not.toBeInTheDocument();
+      expect(screen.queryByText(RESULTS_COUNT)).not.toBeInTheDocument();
       // Nor does the "start typing" prompt come back — the phase renders as simply empty.
       expect(screen.queryByText('Start typing to search')).not.toBeInTheDocument();
     });
@@ -921,12 +937,39 @@ describe('UserComparisonModal', () => {
     it('clearing the query restores the empty prompt and drops the results', async () => {
       render(<Harness />);
       await userEvent.type(searchInput(), 'bob');
-      await screen.findByText('Search Results', {}, { timeout: 3000 });
+      await screen.findByText(RESULTS_COUNT, {}, { timeout: 3000 });
 
       await userEvent.clear(searchInput());
 
-      await waitFor(() => expect(screen.queryByText('Search Results')).not.toBeInTheDocument());
+      await waitFor(() => expect(screen.queryByText(RESULTS_COUNT)).not.toBeInTheDocument());
       expect(screen.getByText('Start typing to search')).toBeInTheDocument();
+    });
+  });
+
+  describe('editing the context column', () => {
+    // The last hop of the profile-edit chain, and the one that fails silently.
+    // `useComparisonProfileEdit` refuses to edit the context column unless the
+    // host supplied `onContextUserUpdated`, because the context user lives in
+    // the host's state and a save with nowhere to land leaves every surface
+    // rendering values Okta no longer holds. Every link below it can be wired
+    // correctly and the column still be read-only, with nothing red to say so.
+    it('offers no Edit control for the context user when the host cannot publish the save', async () => {
+      render(<Harness />);
+      await openComparison();
+      await gotoTab('Attributes');
+
+      expect(screen.queryByRole('button', { name: /Edit Alice Context/ })).not.toBeInTheDocument();
+      // The compared column is unaffected — it is `useUserComparison`'s own
+      // state, so it always has somewhere to publish to.
+      expect(screen.getByRole('button', { name: /Edit Bob Compared/ })).toBeInTheDocument();
+    });
+
+    it('offers Edit for the context user once the host supplies onContextUserUpdated', async () => {
+      render(<Harness onContextUserUpdated={vi.fn()} />);
+      await openComparison();
+      await gotoTab('Attributes');
+
+      expect(screen.getByRole('button', { name: /Edit Alice Context/ })).toBeInTheDocument();
     });
   });
 
@@ -935,7 +978,11 @@ describe('UserComparisonModal', () => {
       render(<Harness />);
       await openComparison();
 
-      expect(screen.getAllByRole('tab')).toHaveLength(3);
+      // BEHAVIOR CHANGE, not a retarget (ADR-0012): the comparison gained an
+      // `Attributes` dimension, so the bar is four tabs rather than three. Named
+      // rather than counted, so adding a fifth has to be stated here too.
+      expect(screen.getAllByRole('tab')).toHaveLength(4);
+      expect(tab('Attributes')).toBeInTheDocument();
       expect(tab('Overview')).toHaveAttribute('aria-selected', 'true');
       expect(tab('Groups')).toHaveAttribute('aria-selected', 'false');
 

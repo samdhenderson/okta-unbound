@@ -62,7 +62,7 @@ const stateStyles: Record<
   GROUP: {
     label: 'Via group',
     description:
-      'Okta reports this assignment as coming from a group rather than from a direct assignment. Which group grants it is not shown — naming it costs an extra request per app.',
+      'Okta reports this assignment as coming from a group rather than from a direct assignment. Which group is named only where Okta identified it; this never guesses.',
     className: chipClasses,
   },
   unknown: {

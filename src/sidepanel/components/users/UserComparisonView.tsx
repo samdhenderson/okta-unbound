@@ -6,7 +6,14 @@
  * optimistic group-copy) is owned by
  * {@link sidepanel/hooks/useUserComparison.useUserComparison} and handed in whole as
  * {@link UserComparisonViewProps.comparison}. This component only renders the search
- * phase or the hero / tab-bar / overview / diff subcomponents and forwards intent.
+ * phase or the hero / tab-bar / overview / diff / attributes subcomponents and
+ * forwards intent.
+ *
+ * The four tabs answer four different questions. Groups and apps are *set*
+ * diffs — who holds what. {@link ComparisonAttributesTab} is a *value* diff, and
+ * it is the one that usually explains the other two, because the attributes are
+ * the evidence group rules read. It feeds no similarity figure: `overallSimilarity`
+ * averages exactly two Jaccard terms, and attributes are not access.
  *
  * ## Why the hook lives in the host, not here
  *
@@ -20,6 +27,15 @@
  * "Change user" is rendered here rather than by the host: the dialog has a footer and
  * the pushed view does not, so the one affordance that must exist in both lives with
  * the surface it acts on.
+ *
+ * ## The one write this surface performs
+ *
+ * The Attributes tab is editable for **either** user, and the confirmation for
+ * whichever column is saving is mounted here rather than inside the tab — a tab
+ * switch must not be able to unmount a modal with a write in flight. The state
+ * behind it is `comparison.attributeEdit`, so this component still owns none of
+ * it. The context column stays read-only unless the host gave
+ * `useUserComparison` an `onContextUserUpdated` to publish the save through.
  *
  * ## Why `onViewClauses` is not passed to the overview tab
  *
@@ -48,6 +64,8 @@ import ComparisonHero from './comparison/ComparisonHero';
 import ComparisonTabBar from './comparison/ComparisonTabBar';
 import ComparisonOverviewTab from './comparison/ComparisonOverviewTab';
 import ComparisonDiffTab from './comparison/ComparisonDiffTab';
+import ComparisonAttributesTab from './comparison/ComparisonAttributesTab';
+import ProfileSaveModal from './ProfileSaveModal';
 import AppScopeIndicator from './comparison/AppScopeIndicator';
 import GroupSourceIndicator from './comparison/GroupSourceIndicator';
 import { groupParityRows, appParityRows } from './comparison/comparisonAnalytics';
@@ -93,6 +111,11 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
     causes,
     groupDiffCount,
     appDiffCount,
+    attributeParity,
+    attributeDiffCount,
+    attributeConfig,
+    attributeRuleReads,
+    attributeEdit,
     groupSimilarity,
     appSimilarity,
     overallSimilarity,
@@ -152,6 +175,7 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
             onChange={setActiveTab}
             groupDiff={groupDiffCount}
             appDiff={appDiffCount}
+            attributeDiff={attributeDiffCount}
           />
 
           {isLoading && (
@@ -333,6 +357,30 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
                 />
               )}
 
+              {activeTab === 'attributes' && (
+                <ComparisonAttributesTab
+                  contextName={contextName}
+                  comparedName={comparedName}
+                  // Ordered by the pure module (differences first, then the
+                  // config's order, then A–Z) and handed over untouched — the tab
+                  // filters and groups, it never re-sorts.
+                  rows={attributeParity.rows}
+                  // Kept and counted rather than dropped: a compare that silently
+                  // omitted the one differing attribute explaining an access gap
+                  // would be worse than no compare at all.
+                  hiddenRows={attributeParity.hiddenRows}
+                  hiddenDifferences={attributeParity.hiddenDifferences}
+                  config={attributeConfig}
+                  ruleReads={attributeRuleReads}
+                  // Either user's profile is editable from this tab; the two
+                  // editors are independent, and a column that cannot be edited
+                  // — no host to publish a context-side save, or the surface
+                  // hidden — reports that through its own `canEdit`.
+                  contextEdit={attributeEdit?.context}
+                  comparedEdit={attributeEdit?.compared}
+                />
+              )}
+
               {activeTab === 'apps' && (
                 <ComparisonDiffTab
                   contextName={contextName}
@@ -366,6 +414,25 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
                 />
               )}
             </>
+          )}
+
+          {/* The one confirmation the comparison may be showing, whichever
+              column armed it. Mounted here rather than inside the Attributes tab
+              so it is not unmounted mid-write by a tab switch, and outside the
+              loading/error branches for the same reason. `useComparisonProfileEdit`
+              guarantees at most one. */}
+          {attributeEdit?.pendingSave && (
+            <ProfileSaveModal
+              changes={attributeEdit.pendingSave.changes}
+              userName={attributeEdit.pendingSave.userName}
+              onCancel={attributeEdit.pendingSave.cancel}
+              onConfirm={attributeEdit.pendingSave.confirm}
+              isSaving={attributeEdit.pendingSave.isSaving}
+              report={attributeEdit.pendingSave.report}
+              onAnalyze={attributeEdit.pendingSave.analyze}
+              isAnalyzing={attributeEdit.pendingSave.isAnalyzing}
+              error={attributeEdit.pendingSave.error}
+            />
           )}
         </div>
       )}

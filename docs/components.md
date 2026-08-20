@@ -45,9 +45,10 @@ info`) — never `error`.
 
 `shared/`: `Button`, `IconButton`, `StretchedButton`, `FilterPill`, `SortPill`,
 `CopyButton`, `CopyableId`, `OpenInOktaLink`, `Modal`, `Input`, `Checkbox`, `Select`,
-`Textarea`, `PageHeader`, `EntityIdentity`, `Breadcrumbs`, `Tabs`, `CollapsibleSection`,
-`AlertMessage`, `EmptyState`, `LoadingSpinner`, `Skeleton`, `ListRow`,
-`ScrollableList`, `SearchDropdown`, `SelectionChips`.
+`Textarea`, `PageHeader`, `EntityIdentity`, `EntityLink`, `Badge`, `Breadcrumbs`, `Tabs`,
+`CollapsibleSection`, `DetailSection`, `ActionBar`, `AlertMessage`, `EmptyState`,
+`Eyebrow`, `LoadingSpinner`, `Skeleton`, `ListRow`, `ScrollableList`, `SearchDropdown`,
+`SelectionChips`.
 
 There are **two** copy primitives and they are not interchangeable. `CopyButton` is a
 labelled `Button` for copying a _body_ of text (a list of emails, a CSV). `CopyableId` is
@@ -61,6 +62,18 @@ never the interior — the interior follows the typography contract in
 `docs/design-system.md`. Never hand-roll a row container. Prefer
 `StretchedButton` over `as="button"` when the row holds its own controls, since
 a button cannot legally contain a checkbox or another button.
+
+`Eyebrow` is the **uppercase section label** — `text-xs font-semibold uppercase
+tracking-wide text-neutral-600`, fixed. That one recipe had been hand-rolled across
+roughly eighteen files in four variants (`tracking-wide` vs `tracking-wider`,
+`text-xs` vs the off-scale `text-[10px]`/`text-[11px]`, `text-neutral-500`/`600`/`700`),
+so several sizes of the same element could appear on one screen; ADR-0030 settled the
+values in prose but never extracted the primitive, and the drift continued. There is
+deliberately **no colour, size or tracking prop** — a section wanting a different
+eyebrow treatment is the drift this exists to stop, and `className` takes layout and
+spacing only. `as` picks `span` (default), `div` or `h3`; use `h3` only when the
+eyebrow is a real section heading that should join the document outline. It is a label,
+not a control: a section header needing a verb composes it beside a `Button`.
 
 `IconButton` is also the **disclosure** primitive: pass `expanded` + `controls`
 and it emits `aria-expanded` / `aria-controls` (as `active` does `aria-pressed`).
@@ -134,6 +147,51 @@ Adding an entity kind is one new builder beside that entity (`groupIdentity.ts`,
 still describes the _browsed_ entity and `ContextBar` still describes the _live Okta
 tab_ — the two must not converge, and on a drilled-in view their ids routinely differ.
 
+`ActionBar` is the detail rung's **verb strip**, and it takes its verbs as **data**
+(ADR-0038) — never `Button` children, which is what it took before:
+
+```tsx
+<ActionBar
+  ariaLabel={`Actions for ${userDisplayName(user)}`}
+  actions={[
+    { id: 'add', label: 'Add group', icon: 'plus', variant: 'primary', onClick: onAdd },
+    { id: 'compare', label: 'Compare', icon: 'users', onClick: onCompare },
+  ]}
+  expansion={<UserLifecycleActions {...lifecycle} />}
+/>
+```
+
+Declaration order is reading order _and_ overflow order: the strip measures each
+action and, as the panel narrows, drops every icon at once and then moves the tail
+behind **More**. So put the verb an admin came to press first, and expect the last
+one to be the first to disappear.
+
+- **`priority`** is `flex` by default (`pinned` for a `primary` action). Use `pinned`
+  only for the page's own main verb — the row wraps under a pinned action rather than
+  overflowing it. Use `tier` for a verb that should live behind **More** from the
+  start. It is not a way to move a section's verb onto the strip; ADR-0030 §2 still
+  decides that.
+- **`expansion`** is arbitrary caller JSX in the disclosure tier — a form, an
+  account-state block, anything. That slot is why the tier is a region and not a
+  `role="menu"`, and why a descriptor may not carry a `ReactNode`: a node cannot be
+  measured from a cached width.
+- **Never render your own More button.** The strip owns the control, the region and
+  its `aria-controls` target, and renders the control only when the tier has content.
+  Leave the tier uncontrolled unless the page has to collapse it on a rung change.
+
+**A detail rung that answers several questions about one entity uses tabbed panes of
+one card**, not a stack of sections — `UserDetailPanel` is the pattern (Groups / Apps /
+Profile, through shared `Tabs`). Stacking made the page a scroll where the reader
+wanted a comparison. Panes render as siblings and the inactive ones carry the `hidden`
+**attribute** as well as the class (ADR-0016/ADR-0018), so each keeps its own filter,
+pills and disclosures as local state; the attribute matters because jsdom loads no
+stylesheet, and a class-only hide leaves every pane answering `getByRole` at once. Only
+the active pane may load — which pane is showing is the one piece of state that lifts,
+because the loads are gated on it (see
+[state-management.md](./state-management.md)) — and a pane's tab shows **no count**
+until a walk has returned, tested by a `hasLoaded` flag rather than `items.length`
+("Unknown is not zero", below). The panel composes and does not fetch.
+
 `overview/shared/`: `Icon`, `StatCard`.
 
 ## Documented raw-control exceptions
@@ -166,13 +224,17 @@ comment at the call site:
   `aria-activedescendant` to a shared primitive for one consumer is the wrong
   trade. A `Input`-level combobox mode is accepted future work, gated on a second
   consumer.)
-- **Genuinely custom controls:** `ComparisonTabBar` — a one-off `role="tab"` bar.
-  Re-evaluated for migration to `Tabs` `segmented` and **kept**: `segmented`
-  ignores `TabItem.icon` (only `rail` renders one), so the swap would silently
-  drop the Overview/Groups/Apps glyphs. Retiring it means either accepting that
-  loss or teaching `segmented` to render icons, and the latter needs a second
-  consumer before it earns a place in a shared primitive. Its off-scale
-  `text-[10px]` badge has been brought onto the scale in the meantime.
+- **Genuinely custom controls:** `ComparisonTabBar` — a one-off `role="tab"` bar,
+  now **four** tabs (Overview / Groups / Apps / Attributes). Re-evaluated for
+  migration to `Tabs` `segmented` and **kept**: `segmented` ignores `TabItem.icon`
+  (only `rail` renders one), so the swap would silently drop the four glyphs.
+  Retiring it means either accepting that loss or teaching `segmented` to render
+  icons, and the latter needs a second consumer before it earns a place in a shared
+  primitive. Its off-scale `text-[10px]` badge has been brought onto the scale in the
+  meantime. The fourth tab is also why it is a `grid grid-cols-2 sm:grid-cols-4`
+  rather than a flex row: four icon+label tabs need ~440px against the ~330px a
+  360px panel has, so below 640px the bar takes a second row instead of truncating a
+  label or dropping the glyphs.
   Also: the dynamic-color banner, radio-cards, the `AttributeFacet`
   data-viz spread bars, and the Export tab's `EntityPicker` selectable entity
   cards (`role="button"` icon+title+description rows; `Button` is a centered

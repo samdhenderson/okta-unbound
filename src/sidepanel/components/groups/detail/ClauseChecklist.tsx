@@ -41,7 +41,8 @@ import {
   type ClauseStatus,
   type RuleExplanationSummary,
 } from '../../../../shared/rules/explainExpression';
-import type { RuleExprValue, RuleUnevaluableReason } from '../../../../shared/ruleEvaluator';
+import type { RuleExprValue } from '../../../../shared/ruleEvaluator';
+import { UNEVALUABLE_REASON_TEXT } from '../../../../shared/rules/unevaluableReasonText';
 import type { OktaUser } from '../../../../shared/types';
 
 /** Props for {@link ClauseChecklist}. */
@@ -110,27 +111,6 @@ const statusPresentation: Record<ClauseStatus, StatusPresentation> = {
   },
 };
 
-/**
- * Reason code → plain language, phrased so no sentence reads as "the user did not
- * qualify". Reason codes are non-sensitive constants (unlike the expression text
- * and resolved values beside them).
- */
-const reasonText: Record<RuleUnevaluableReason, string> = {
-  empty: 'This rule carries no condition expression, so there was nothing to check.',
-  'too-long': 'The condition is longer than this panel will analyze.',
-  'parse-error': 'The condition could not be parsed here.',
-  'unsupported-operator': 'Uses an operator this panel cannot evaluate.',
-  'group-membership-fn': "Needs the user's full group list, which this panel does not have.",
-  'group-name-regex':
-    'Matches group names with a regular expression, which this panel does not run.',
-  'unknown-fn': 'Calls a function this panel cannot evaluate.',
-  'fn-arity': 'Calls a function with an unexpected number of arguments.',
-  'unsupported-node': 'Uses a form of expression this panel cannot evaluate.',
-  'operand-type': "A value's type does not fit the comparison, so no verdict was reached.",
-  'not-a-boolean': 'Does not resolve to true or false on its own.',
-  'walk-failed': 'The condition was too deeply nested to analyze.',
-};
-
 /** Whole-expression verdict → its chip label and token classes. */
 const resultPresentation = {
   match: { label: 'Rule matches this user', chipClass: 'bg-success-light text-success-text' },
@@ -186,7 +166,9 @@ const ClauseRow: React.FC<ClauseRowProps> = ({ clause }) => {
       <ResolvedValue value={clause.resolvedValue} />
 
       {clause.reasonCode && (
-        <p className="mt-1 text-xs text-neutral-600">{reasonText[clause.reasonCode]}</p>
+        <p className="mt-1 text-xs text-neutral-600">
+          {UNEVALUABLE_REASON_TEXT[clause.reasonCode]}
+        </p>
       )}
     </li>
   );
@@ -243,7 +225,9 @@ const ClauseChecklist: React.FC<ClauseChecklistProps> = ({ expression, user, max
           This condition could not be checked clause by clause, so no part of it is shown as
           failing.
         </p>
-        {reasonCode && <p className="mt-1 text-xs text-neutral-600">{reasonText[reasonCode]}</p>}
+        {reasonCode && (
+          <p className="mt-1 text-xs text-neutral-600">{UNEVALUABLE_REASON_TEXT[reasonCode]}</p>
+        )}
       </div>
     );
   }

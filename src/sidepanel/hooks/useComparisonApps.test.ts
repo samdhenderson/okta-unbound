@@ -100,6 +100,48 @@ describe('useComparisonApps', () => {
     expect(hook.current.contextApps).toEqual([]);
   });
 
+  /*
+   * `appsLoaded` exists for one reason: both app arrays start `[]` with
+   * `appsIncomplete` false, which is indistinguishable from a completed walk
+   * that found nothing. The profile-editability gate reads exactly that shape as
+   * "this user is attached to no profile source" and unlocks every mastered
+   * attribute — so before this flag, the whole loading window and every reset
+   * rendered attributes editable that Okta owns.
+   *
+   * Paired on purpose: a flag that were simply always false would satisfy the
+   * first two assertions and be useless.
+   */
+  describe('appsLoaded distinguishes "nothing yet" from "nothing"', () => {
+    it('is false before a walk has returned, even though the lists are empty', async () => {
+      api.getUserApps.mockImplementation(() => new Promise(() => {}));
+
+      const { result: hook } = renderHook(() =>
+        useComparisonApps({ targetTabId: 1, contextUserId: CONTEXT_ID, comparedUser }),
+      );
+      await act(async () => {});
+
+      expect(hook.current.contextApps).toEqual([]);
+      expect(hook.current.appsIncomplete).toBe(false);
+      expect(hook.current.appsLoaded).toBe(false);
+    });
+
+    it('is false again after a reset, so the emptied lists are not read as an answer', async () => {
+      const { result: hook } = await load(result(true, ['Slack']), result(true, ['Zoom']));
+      expect(hook.current.appsLoaded).toBe(true);
+
+      act(() => hook.current.resetApps());
+
+      expect(hook.current.appsLoaded).toBe(false);
+    });
+
+    it('is true for a completed walk that genuinely returned no apps', async () => {
+      const { result: hook } = await load(result(true), result(true));
+
+      expect(hook.current.contextApps).toEqual([]);
+      expect(hook.current.appsLoaded).toBe(true);
+    });
+  });
+
   it('does not fetch until a user is selected', async () => {
     renderHook(() =>
       useComparisonApps({ targetTabId: 1, contextUserId: CONTEXT_ID, comparedUser: null }),
