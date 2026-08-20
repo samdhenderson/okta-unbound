@@ -155,6 +155,16 @@ Three things that make the difference between right and plausible:
   `PROFILE_MASTER` attributes are editable — including in orgs that do have a
   profile source, for every user that source has never heard of.
 
+**An identity-source app returns `signOnMode: null`.** It is not a sign-on app,
+so the field is present and null rather than absent. A response schema that types
+it as "optional string" accepts `undefined` and rejects `null`, and a lenient list
+parser that drops invalid rows will then drop **the profile source itself** —
+silently, because the drop is logged as a count. This repo shipped exactly that
+and it cost the Apps pane an app and the editability gate its whole answer. Never
+enumerate which fields an Okta list row may null; make every field below `id`
+degrade to "not reported" instead of costing the row.
+`[verified: shared/schemas/okta → oktaAppListItemSchema, ADR-0037]`
+
 **Only one profile source per user at a time.** `[docs]` Several attached sources
 are resolved by an org-level priority order Okta does not expose, so a user in two
 of them has a source you can bound but cannot name. Say so; do not pick one.

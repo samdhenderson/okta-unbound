@@ -68,6 +68,18 @@ a badge is the wrong trade.
 profile updates without being anyone's source of truth, and accepting the two as
 synonyms would lock attributes for every user of every provisioned app.
 
+**Every field below `id` on that schema is now `.catch(undefined)`, and that is
+the fix as much as `features` is.** `signOnMode` was `z.string().optional()`,
+which accepts `undefined` and rejects `null` — and a Custom Identity Source app
+has no sign-on mode, so Okta sends `signOnMode: null` and `parseOktaList` dropped
+the row. The org's own profile source was therefore missing from every user's app
+list before this ADR's check ever ran: the Apps pane had been quietly short an
+app, and the gate resolved `PROFILE_MASTER` against a list that could not contain
+the answer. The `_embedded` comment in that schema had already argued "a missing
+badge is cheap; a missing app is not" — the field declarations simply did not
+honour it. Enumerating which fields Okta may null is the losing move, so a bad
+value now degrades to "not reported" rather than costing the application.
+
 `orn` carries `custom_identity_source` for a Custom Identity Source app, which is
 how one org's source was first identified — but Active Directory, LDAP and HR
 apps are profile sources without it, so it names the _kind_ of source and does

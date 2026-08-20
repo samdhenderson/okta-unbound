@@ -176,12 +176,28 @@ export const oktaGroupListItemSchema = z
 export const oktaAppListItemSchema = z
   .object({
     id: z.string(),
-    name: z.string().optional(),
-    label: z.string().optional(),
-    status: z.string().optional(),
-    signOnMode: z.string().optional(),
-    created: z.string().nullish(),
-    lastUpdated: z.string().nullish(),
+    // Every field below `id` is `.catch(undefined)`, and that is the schema's
+    // whole contract rather than defensive decoration. `parseOktaList` DROPS a
+    // row that fails validation, so on the app walks any single unexpected value
+    // costs the caller a whole application — under-reporting someone's access to
+    // preserve a badge.
+    //
+    // This was not hypothetical. `signOnMode` was `z.string().optional()`, which
+    // accepts `undefined` and rejects `null` — and a Custom Identity Source app
+    // has no sign-on mode, so Okta sends `signOnMode: null` and the org's
+    // *profile source* was silently dropped from every user's app list. It cost
+    // the Apps pane an app and cost the profile-editability gate the one fact it
+    // resolves a `PROFILE_MASTER` attribute against, which unlocked attributes
+    // Okta owns (ADR-0037).
+    //
+    // Enumerating which fields Okta may null is the losing move; a caught field
+    // degrades to "not reported", which every reader here already handles.
+    name: z.string().optional().catch(undefined),
+    label: z.string().optional().catch(undefined),
+    status: z.string().optional().catch(undefined),
+    signOnMode: z.string().optional().catch(undefined),
+    created: z.string().nullish().catch(undefined),
+    lastUpdated: z.string().nullish().catch(undefined),
     // Declared as `z.unknown()` (the same choice as `oktaGroupRuleSchema` below)
     // because the link set varies per app and per endpoint, and none of it is
     // contractually stable. It survived `.passthrough()` already; naming it here
@@ -213,11 +229,8 @@ export const oktaAppListItemSchema = z
     // `getUserApps` already requests, so reading it costs no request at all;
     // see {@link isProfileSourceApp}.
     //
-    // `.catch(undefined)` for the same reason as `oktaAppUserSchema._links`:
-    // `parseOktaList` DROPS a row that fails validation (ADR-0006), so a
-    // `features` of an unexpected shape must degrade to "we cannot say whether
-    // this app is a profile source" — never to a missing app. Absence is a lock,
-    // not an unlock, so degrading here is safe in the direction that matters.
+    // Caught like its siblings above; absence here is a lock, not an unlock, so
+    // degrading is safe in the direction that matters.
     features: z.array(z.string()).optional().catch(undefined),
     // The app's Okta Resource Name, e.g.
     // `orn:okta:idp:00oFAKE:custom_identity_source:0oaFAKE`. Corroborating only:

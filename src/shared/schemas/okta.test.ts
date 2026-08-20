@@ -438,6 +438,64 @@ describe('isProfileSourceApp (features on oktaAppListItemSchema)', () => {
     expect(isProfileSourceApp(features as string[] | undefined)).toBe(false);
   });
 
+  /*
+   * The shape that produced the bug, reduced from a real Custom Identity Source
+   * row (fake ids). `signOnMode` is `null` — an identity source has no sign-on
+   * mode — and the field was `z.string().optional()`, which accepts `undefined`
+   * and rejects `null`. `parseOktaList` drops a row that fails validation, so
+   * the org's own profile source vanished from every user's app list: the Apps
+   * pane lost an app, and the editability gate lost the only fact that locks a
+   * `PROFILE_MASTER` attribute. ADR-0037.
+   */
+  it('keeps an identity-source app whose signOnMode is null, and reads it as a source', () => {
+    const identitySource = {
+      id: '0oaFAKEsrc00000000',
+      orn: 'orn:okta:idp:00oFAKE:apps:custom_identity_source:0oaFAKEsrc00000000',
+      name: 'custom_identity_source',
+      label: 'Example Identity Source',
+      status: 'ACTIVE',
+      signOnMode: null,
+      created: '2024-05-21T15:18:07.000Z',
+      lastUpdated: '2024-06-04T12:57:34.000Z',
+      features: ['IMPORT_PROFILE_UPDATES', 'PROFILE_MASTERING', 'IMPORT_NEW_USERS'],
+      _embedded: {
+        user: { id: '00uFAKE1', scope: 'USER', status: 'ACTIVE', syncState: 'SYNCHRONIZED' },
+      },
+    };
+
+    const apps = parseOktaList(oktaAppListItemSchema, [identitySource], 'test');
+
+    expect(apps).toHaveLength(1);
+    expect(isProfileSourceApp(apps[0].features)).toBe(true);
+    // Null degrades to "not reported" rather than costing the row.
+    expect(apps[0].signOnMode).toBeUndefined();
+    expect(apps[0].label).toBe('Example Identity Source');
+  });
+
+  /*
+   * The general form of the same rule: no field below `id` may cost the row.
+   * Enumerating which fields Okta may null is the losing move.
+   */
+  it.each([
+    ['signOnMode', { signOnMode: null }],
+    ['status', { status: null }],
+    ['label', { label: null }],
+    ['name', { name: null }],
+    ['created', { created: 42 }],
+    ['lastUpdated', { lastUpdated: {} }],
+    ['label as a number', { label: 7 }],
+  ])('never drops an app row over a bad %s', (_label, override) => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const apps = parseOktaList(
+      oktaAppListItemSchema,
+      [{ id: '0oaFAKE1', label: 'One', ...override }],
+      'test',
+    );
+
+    expect(apps.map((a) => a.id)).toEqual(['0oaFAKE1']);
+  });
+
   it('parses features off a well-formed row', () => {
     const apps = parseOktaList(
       oktaAppListItemSchema,
