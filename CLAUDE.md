@@ -136,6 +136,8 @@ be reviewed with `security-logging-reviewer`.
 | Documenting code / TypeDoc / API comments      | `docs/development.md`                              | `docs-maintainer`           |
 | Writing / updating a spec or ADR               | `docs/README.md` + the affected doc                | `docs-maintainer`           |
 | Understanding the whole system                 | `docs/architecture.md`                             | —                           |
+| Unattended nightly maintenance run             | `SESSION.md`, `CONVENTIONS.md`                     | see `SESSION.md`'s roster   |
+| Fixing a named correctness bug (`DEBT.md`)     | the cited item's **Problem**/**Done when**         | `bugfix`                    |
 
 ## Where things are
 
@@ -148,6 +150,9 @@ be reviewed with `security-logging-reviewer`.
 - Caching: `src/sidepanel/cache/` (`entityCache` + `useEntityQuery`; every cache key
   literal lives in `keys.ts`).
 - Shared utils: `src/shared/utils/` (`logger`, `oktaUrl`, `dateFormat`, …).
+- Nightly maintenance system: `SESSION.md` (the sequence), `CONVENTIONS.md`
+  (technical standards it enforces), `IMPROVEMENTS.md` / `DEBT.md` (the two
+  backlogs, `I-NNN` / `D-NNN`), `NIGHTLY.md` (append-only session log).
 
 ## Plan-and-approval gate for risky changes
 
@@ -166,6 +171,39 @@ part of a program plan, and single-file fixes with no design content.
 The test: _would a reviewer disagree with the approach after the code exists?_ If
 yes, plan first. If the only disagreement possible is "you missed one," don't. Use
 **plan mode** as the mechanism. (ADR-0024, amending ADR-0013)
+
+## Nightly maintenance system
+
+An unattended session works from `IMPROVEMENTS.md`/`DEBT.md`, follows
+`CONVENTIONS.md` for technical standards, and runs the exact sequence in
+`SESSION.md`. These are the durable rules that govern it — they live here,
+not duplicated into `SESSION.md` or the agent files, so there is one place
+that can't drift out of sync with itself:
+
+- **Never merge, never force-push, never skip a hook.** A nightly session
+  opens one PR against `main` and stops. Landing it is always a human
+  decision.
+- **No dependency changes, no `manifest.json` changes.** Both need an ADR
+  and Sam's explicit review — file a `DEBT.md`/`IMPROVEMENTS.md` item
+  instead of touching either directly.
+- **A failing baseline is the whole session.** If the verification ladder
+  (`CONVENTIONS.md`) is red before any work starts, the night's only job is
+  fixing that — no backlog item gets picked up alongside a red baseline.
+- **File cap:** a night implements 2–3 backlog items, one commit per item,
+  on branch `nightly/YYYY-MM-DD`. Prefer items that touch disjoint files, and
+  prefer files untouched by the last 3 nightly branches, so failures stay
+  isolated and reviewable.
+- **`src/sidepanel/components/groups/detail/` is off-limits** beyond what a
+  specific claimed `DEBT.md`/`IMPROVEMENTS.md` item requires, until Sam
+  merges his own Group Detail v2 to `main`. Remove this rule once that
+  lands.
+- **New work discovered mid-session** (a bug noticed while fixing something
+  else, a UX inconsistency spotted in passing) gets filed as a new
+  `IMPROVEMENTS.md`/`DEBT.md` item, never folded into the current item's
+  diff — one concern per commit applies here exactly as it does to any PR.
+- **Architecturally significant items stay research-only** until Sam signs
+  off on a proposal — same bar as the plan-and-approval gate above
+  (`I-008`/`D-007` are seeded in that state already).
 
 ## Working agreement
 
