@@ -386,6 +386,11 @@
    * compositable properties, so the merge is main-thread style work while
    * scrolling; confined to one small positioned box, it is cheap.)
    *
+   * Because the chrome is `inset: 0` of the band, it also covers whatever the
+   * band grows to hold: `ActionBar`'s disclosure row sits *inside* this box, so
+   * opening it stretches the same painted surface downward instead of dropping a
+   * second card into the page flow.
+   *
    * `top: -1px` at the end is how the header's seam disappears without
    * `PageHeader` knowing this band exists: the strip paints *over* that 1px
    * border. A `[data-header-scope]:has(.dock-band)` selector would have been the
@@ -393,12 +398,42 @@
    * merely `hidden` (ADR-0016), so it would fade the seam on the search rung too,
    * where there is no strip to replace it.
    *
+   * ## The merge tracks *docking*, not scrolling
+   *
+   * The obvious timeline — `scroll(nearest block)` over the first `--merge-range`
+   * of scroll — is wrong, and visibly so: it starts merging the instant anything
+   * moves, so a strip that begins 300px down the rung has already bled to the
+   * panel edges while it is still floating mid-page, and then travels up to the
+   * header pre-merged. The animation has to be a function of *how close the strip
+   * is to its parking spot*, and scroll offset does not know that.
+   *
+   * `--dock-progress` is that function. `.dock-sentinel` is a zero-size marker
+   * `ActionBar` renders immediately before the strip, so it sits at the strip's
+   * **undocked** position and keeps moving after the strip itself has stopped.
+   * Its view timeline is measured against a scrollport inset from the top by the
+   * two bands already parked there (`--rail-h + --header-h`), which puts
+   * `cover 100%` exactly on the line where the strip docks. The animation then
+   * runs over the last `--merge-range` before that line and holds at full merge
+   * for the rest of the scroll (`both`).
+   *
+   * The sentinel **floats** so that it can be a sibling of the strip without
+   * being one for layout. It has to be a preceding sibling — that is the scope a
+   * named timeline is visible in — but a sibling in a `space-y-*` rung collects
+   * that rung's `margin-block-end`, and an in-flow marker would push the strip
+   * down by a full step. A float takes no space, block siblings ignore it
+   * entirely, and its margin lands on a zero-size box where it does nothing.
+   * (`position: absolute` would also leave the flow, but its containing block is
+   * the nearest positioned ancestor, which here is outside the shared scroller —
+   * exactly the case where an out-of-flow box stops scrolling with the content it
+   * is supposed to be marking.)
+   *
    * ## The two guards
    *
    * `@supports` matters: a browser that drops the unknown `animation-timeline`
    * declaration would run `dock-band` on the *document* timeline at `0s` with
    * `fill: both` and snap permanently to the merged state. Guarded, it simply
-   * keeps the resting card.
+   * keeps the resting card — which is also what happens if the sentinel is
+   * missing, since an unresolvable timeline name leaves the animation inactive.
    *
    * Reduced motion is handled at the bottom of this file by clearing
    * `animation-name`, not by the blanket `1ms` rule — see the note there.
@@ -420,11 +455,42 @@
     border-radius: var(--merge-radius);
   }
 
-  @supports (animation-timeline: scroll()) {
+  .dock-sentinel {
+    /*
+     * Two declarations, not one: `float: inline-start` reached Chrome later than
+     * the scroll-driven animations this sentinel exists for, and it sits outside
+     * the `@supports` guard below. On an engine that drops it, `left` keeps the
+     * marker out of flow — falling back to `float: none` would drop it into the
+     * rung, where it would collect a `space-y-*` step and open a visible gap
+     * above the strip.
+     */
+    float: left;
+    float: inline-start;
+    inline-size: 0;
+    block-size: 0;
+  }
+
+  @supports (animation-timeline: view()) {
+    .dock-sentinel {
+      view-timeline: --dock-progress block;
+      /*
+       * Shrink the scrollport by the bands already parked at the top, so the
+       * timeline's end lands on the strip's parking line rather than on the
+       * scroller's own top edge.
+       */
+      view-timeline-inset: calc(var(--rail-h, 0px) + var(--header-h, 0px)) 0px;
+    }
+
     .dock-band::before {
       animation: dock-band linear both;
-      animation-timeline: scroll(nearest block);
-      animation-range: 0 var(--merge-range);
+      animation-timeline: --dock-progress;
+      /*
+       * A zero-height subject collapses `entry`/`contain`/`exit` to a point, so
+       * the range is taken off `cover`, whose end is "the subject reached the
+       * inset scrollport's top edge" — the docking line. Backing off
+       * `--merge-range` from it makes the merge finish exactly as the strip parks.
+       */
+      animation-range: cover calc(100% - var(--merge-range)) cover 100%;
     }
   }
 

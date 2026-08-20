@@ -28,10 +28,10 @@ const meta = {
           'account-state verbs. Suspending someone is one press further away than comparing them, ' +
           'which is the whole point of the tier — and `Each asks to confirm` is stated once for the ' +
           'band rather than implied per button.\n\n' +
-          'The band is drawn to read as part of the bar rather than as a card that appeared under it: ' +
-          '`-mt-px` pulls its top border onto the strip’s bottom one and only its bottom corners are ' +
-          'rounded. It is a *sibling* of `ActionBar`, not a child, because the strip is sticky and a ' +
-          'sticky element cannot grow a second row without moving the buttons above it.\n\n' +
+          'The band **is** the bar rather than a card that appeared under it: it is `ActionBar`’s ' +
+          '`expansion` slot, so it sits inside the strip, shares its chrome, docks with it, and opens ' +
+          'by stretching the strip downward through the shared `.disclose` grid. Its contents stay ' +
+          'mounted while closed, held out of the tab order and the accessible tree with `inert`.\n\n' +
           '**There is no Export button and no Clear sessions button, deliberately.** The Export tab ' +
           'has no user-scoped descriptor to open (`users` is whole-org; the `search-to-select` ' +
           'descriptors take a group or an app), and `useUserLifecycleActions` implements ' +

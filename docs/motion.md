@@ -151,15 +151,25 @@ among them.
 scroll position, not with a clock, so no duration token applies to it. It is what
 merges a pinned `ActionBar` into the `PageHeader` above it — bleeding to the panel
 edges, dropping its radius and borders, covering the header's seam and growing
-`--shadow-dock` over the first `--merge-range` (64px) of scroll (ADR-0032).
+`--shadow-dock` over the last `--merge-range` (64px) **before the strip parks**
+(ADR-0032).
+
+The timeline is a `view-timeline` on a zero-size sentinel `ActionBar` renders just
+before itself, not `scroll()`: the merge is a function of how close the strip is to
+the header, and scroll offset does not carry that. A strip that starts partway down
+a long rung would otherwise finish merging while still floating mid-page.
 
 ```css
-@supports (animation-timeline: scroll()) {
-  .dock-band::before {
-    animation: dock-band linear both;
-    animation-timeline: scroll(nearest block);
-    animation-range: 0 var(--merge-range);
-  }
+.dock-sentinel {
+  view-timeline: --dock-progress block;
+  /* the bands already parked at the top — so `cover 100%` is the docking line */
+  view-timeline-inset: calc(var(--rail-h, 0px) + var(--header-h, 0px)) 0px;
+}
+
+.dock-band::before {
+  animation: dock-band linear both;
+  animation-timeline: --dock-progress;
+  animation-range: cover calc(100% - var(--merge-range)) cover 100%;
 }
 ```
 

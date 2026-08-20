@@ -13,12 +13,19 @@
  *   ({@link UserLifecycleActions}). Suspending someone is one press further away
  *   than comparing them, which is the whole point of the tier.
  *
- * The band is drawn to read as part of the bar rather than as a card that
- * appeared under it: `-mt-px` pulls its top border onto the strip's bottom one,
- * and only its bottom corners are rounded. It is a sibling of `ActionBar` rather
- * than a child because the strip is sticky — the band scrolls under the pinned
- * bar, and a sticky element cannot grow a second row without moving the buttons
- * above it.
+ * The band **is** the bar, not a card under it: it is `ActionBar`'s `expansion`
+ * slot, so it lives inside the strip, shares its chrome, docks with it, and opens
+ * by stretching the strip downward through the shared `.disclose` grid.
+ *
+ * It was a *sibling* of `ActionBar` first, on the reasoning that a sticky element
+ * cannot grow a second row without moving the buttons above it. That reasoning is
+ * wrong: sticky pins the box's **top** edge, so a row added at the bottom grows
+ * away from the buttons and leaves them exactly where they were. What the sibling
+ * version actually produced was a whole second card popping into the page flow
+ * under the strip — arriving with the page rather than with the control that
+ * summoned it — plus a wrapper that had to be `display: contents` to keep the two
+ * glued, which then swallowed the rung's own `space-y-6` step and left the detail
+ * card butted against the strip.
  *
  * ## What is not here
  *
@@ -111,79 +118,63 @@ const UserActionBar: React.FC<UserActionBarProps> = ({
   onConfirmLifecycleAction,
   sticky = true,
 }) => (
-  // `contents`, not a plain wrapper: this node groups the strip with the band it
-  // owns, and must not become the strip's containing block. `position: sticky`
-  // travels only within its parent's box, and a bare `<div>` here is exactly as
-  // tall as the strip — so the strip reached its parent's bottom edge
-  // immediately, never pinned, and scrolled away with the rung. `display:
-  // contents` generates no box, so the strip's containing block is the rung
-  // itself and it has the whole page to stay pinned over (ADR-0032 §3).
-  //
-  // It also keeps the band glued. The rung carries `space-y-6`, whose
-  // `& > :not([hidden]) ~ :not([hidden])` matches DOM *children* of the rung —
-  // this node, not the two inside it — so no 24px margin is injected between the
-  // strip and the band, and the band's `-mt-px` overlap survives. Returning a
-  // fragment instead would lose that: `space-y-6` out-specifies `-mt-px`.
-  <div className="contents">
+  <ActionBar
+    ariaLabel={`Actions for ${userDisplayName(user)}`}
+    sticky={sticky}
+    expansionId={MANAGE_BAND_ID}
+    expansionOpen={manageOpen}
+    expansion={
+      /* Tier 2 — mounted whether or not it is open, held out of the tab order and
+         the accessible tree by `ActionBar`'s `inert` while closed. */
+      <UserLifecycleActions
+        user={user}
+        isLifecycleLoading={isLifecycleLoading}
+        pendingLifecycleAction={pendingLifecycleAction}
+        onRequestAction={onRequestLifecycleAction}
+        onCancel={onCancelLifecycleAction}
+        onConfirm={onConfirmLifecycleAction}
+      />
+    }
+  >
     {/*
-      Page-level verbs, pinned while the panes scroll under them (ADR-0030).
-      These used to sit in `GroupMembershipsList`'s header slot — the same slot
-      as controls acting on that one card — so the page's main action read as a
-      property of its groups section.
+      Tier 1 — page-level verbs, pinned while the panes scroll under them
+      (ADR-0030). These used to sit in `GroupMembershipsList`'s header slot — the
+      same slot as controls acting on that one card — so the page's main action
+      read as a property of its groups section.
     */}
-    <ActionBar ariaLabel={`Actions for ${userDisplayName(user)}`} sticky={sticky}>
-      <Button
-        variant="primary"
-        size="sm"
-        icon="users"
-        onClick={onCompare}
-        disabled={isLoadingMemberships}
-        title="Compare group & app access with another user"
-      >
-        Compare
-      </Button>
-      <Button
-        variant="secondary"
-        size="sm"
-        icon="plus"
-        onClick={onAddToGroup}
-        disabled={isLoadingMemberships}
-      >
-        Add to Group
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        // `minus` while open is the registry's collapse glyph; `settings` names
-        // what the tier holds rather than what pressing it does.
-        icon={manageOpen ? 'minus' : 'settings'}
-        onClick={onToggleManage}
-        expanded={manageOpen}
-        controls={MANAGE_BAND_ID}
-        title={manageOpen ? 'Hide account-state actions' : 'Show account-state actions'}
-      >
-        Manage
-      </Button>
-    </ActionBar>
-
-    {manageOpen && (
-      <div
-        id={MANAGE_BAND_ID}
-        // `-mt-px` overlaps the strip's bottom border so the two read as one
-        // piece of chrome rather than a card that appeared underneath it.
-        className="-mt-px rounded-b-md border border-neutral-200 bg-white px-4 py-3"
-      >
-        <UserLifecycleActions
-          user={user}
-          isLifecycleLoading={isLifecycleLoading}
-          pendingLifecycleAction={pendingLifecycleAction}
-          onRequestAction={onRequestLifecycleAction}
-          onCancel={onCancelLifecycleAction}
-          onConfirm={onConfirmLifecycleAction}
-        />
-      </div>
-    )}
-  </div>
+    <Button
+      variant="primary"
+      size="sm"
+      icon="users"
+      onClick={onCompare}
+      disabled={isLoadingMemberships}
+      title="Compare group & app access with another user"
+    >
+      Compare
+    </Button>
+    <Button
+      variant="secondary"
+      size="sm"
+      icon="plus"
+      onClick={onAddToGroup}
+      disabled={isLoadingMemberships}
+    >
+      Add to Group
+    </Button>
+    <Button
+      variant="ghost"
+      size="sm"
+      // `minus` while open is the registry's collapse glyph; `settings` names
+      // what the tier holds rather than what pressing it does.
+      icon={manageOpen ? 'minus' : 'settings'}
+      onClick={onToggleManage}
+      expanded={manageOpen}
+      controls={MANAGE_BAND_ID}
+      title={manageOpen ? 'Hide account-state actions' : 'Show account-state actions'}
+    >
+      Manage
+    </Button>
+  </ActionBar>
 );
 
 export default UserActionBar;
