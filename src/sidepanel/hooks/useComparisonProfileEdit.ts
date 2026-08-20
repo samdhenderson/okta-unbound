@@ -61,6 +61,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useProfileEdit, type AttributeEditCell } from './useProfileEdit';
 import { useBlastRadius } from './useBlastRadius';
 import type { AttributeDescriptor } from '../components/users/profileAttributes';
+import type { ProfileMastering } from '../components/users/profileEditability';
 import type { DraftChange } from '../components/users/profileDraft';
 import type {
   BlastRadiusReport,
@@ -164,6 +165,13 @@ export interface UseComparisonProfileEditOptions {
   readonly contextName: string;
   /** The anchor user's attribute inventory, exactly as the tab renders it. */
   readonly contextAttributes: readonly AttributeDescriptor[];
+  /**
+   * Which profile sources are attached to the anchor user, for the editability
+   * gate — the app list `useComparisonApps` already walked, discarded when that
+   * walk came back incomplete. Without it every `PROFILE_MASTER` attribute stays
+   * locked ({@link module:sidepanel/components/users/profileEditability}).
+   */
+  readonly contextMastering: ProfileMastering;
   /** The anchor user's complete membership list, for the blast-radius engine. */
   readonly contextMemberships: readonly GroupMembership[];
   /**
@@ -177,6 +185,8 @@ export interface UseComparisonProfileEditOptions {
   readonly comparedName: string;
   /** The compared user's attribute inventory. */
   readonly comparedAttributes: readonly AttributeDescriptor[];
+  /** The same, for the compared user. See {@link UseComparisonProfileEditOptions.contextMastering}. */
+  readonly comparedMastering: ProfileMastering;
   /** The compared user's complete membership list. */
   readonly comparedMemberships: readonly GroupMembership[];
   /** Lifts a saved compared user — `setComparedUser` in `useUserComparison`. */
@@ -208,6 +218,7 @@ interface SideOptions {
   readonly user: OktaUser | null;
   readonly userName: string;
   readonly attributes: readonly AttributeDescriptor[];
+  readonly mastering: ProfileMastering;
   readonly memberships: readonly GroupMembership[];
   readonly onUserUpdated?: (user: OktaUser) => void;
   readonly rules: RuleInventoryState;
@@ -238,6 +249,7 @@ function useComparisonEditSide({
   user,
   userName,
   attributes,
+  mastering,
   memberships,
   onUserUpdated,
   rules,
@@ -253,6 +265,7 @@ function useComparisonEditSide({
   const edit = useProfileEdit({
     user,
     attributes,
+    mastering,
     targetTabId,
     onUserUpdated: onUserUpdated ?? NO_LIFT,
     enabled: enabled && canPublish,
@@ -424,11 +437,13 @@ export function useComparisonProfileEdit({
   contextUser,
   contextName,
   contextAttributes,
+  contextMastering,
   contextMemberships,
   onContextUserUpdated,
   comparedUser,
   comparedName,
   comparedAttributes,
+  comparedMastering,
   comparedMemberships,
   onComparedUserUpdated,
   rules,
@@ -440,6 +455,7 @@ export function useComparisonProfileEdit({
     user: contextUser,
     userName: contextName,
     attributes: contextAttributes,
+    mastering: contextMastering,
     memberships: contextMemberships,
     ...(onContextUserUpdated === undefined ? {} : { onUserUpdated: onContextUserUpdated }),
     rules,
@@ -452,6 +468,7 @@ export function useComparisonProfileEdit({
     user: comparedUser,
     userName: comparedName,
     attributes: comparedAttributes,
+    mastering: comparedMastering,
     memberships: comparedMemberships,
     onUserUpdated: onComparedUserUpdated,
     rules,

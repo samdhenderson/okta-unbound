@@ -120,6 +120,34 @@ but Okta means a write here is overwritten at the next import. The **account's**
 `login`; a per-attribute `master` block cannot answer it. An absent provider type
 also locks — an absence is not a confirmation that Okta owns the credential.
 
+**And mastering is a fact about a user, not about an org.** This was the gate's
+worst bug in practice. `master.type: 'PROFILE_MASTER'` on a schema property does
+not mean "every user's copy of this attribute is owned elsewhere"; it means
+"whichever of the sources in `master.priority` this user is attached to owns it",
+and a user attached to none of them is Okta-mastered for that attribute and
+editable in the Okta console. Reading the schema alone locked the HR-sourced
+attributes of every user the HR app had never heard of — wrong in exactly the orgs
+that have a profile source at all, which is to say the ones this feature is for.
+
+`master.priority` names app instances (AD and LDAP are app instances too), so the
+per-user half of the answer is the user's own app assignments. Both surfaces
+already hold them — the Users tab through the same `cacheKeys.userApps` entry its
+Apps pane walks, the comparison through `useComparisonApps` — so the check costs no
+request the panel was not already making, and the Profile pane's walk is gated on
+that pane like every other load (ADR-0018). It reaches the pure gate as
+`ProfileMastering`, an app-id → label map; `profileEditability` still does no I/O.
+
+The unlock stays narrow, because the claim being made is an _absence_. An attribute
+unlocks only when the `master.type` is literally `PROFILE_MASTER`, every entry of
+`priority` is an `APP` entry this module can test a user against, the user's app
+list has loaded **and the pagination walk finished**, and none of the priority apps
+is in it. A truncated walk answers "absent" for every app it never reached, so it is
+discarded rather than trusted. Anything else — a mastering mode this module does not
+model, an unparseable `priority`, a source kind it cannot check, no list yet — locks
+exactly as before. When it does lock, it now names the _app_ rather than the string
+`PROFILE_MASTER`, which named the mastering mode as though it were a system an admin
+could go and look at.
+
 **A value-type gate.** `string` (free text, or a `select` where the schema
 enumerates values), `boolean` and `number`/`integer` are editable; `array`,
 `object`, an absent type and an unrecognised type lock with the reason named. This
@@ -227,6 +255,10 @@ stale copy back over the top. A test pins the order.
   `getUserRaw`, deliberately separate from `userOperations.getUserById`, whose flat
   six-field projection three call sites depend on. Undo exists for exactly one
   action type, and the exhaustive `Record` keeps the next one from joining silently.
+- **Residual.** A user assigned to a profile-source app whose _matching_ Okta has
+  not confirmed is treated as mastered by it, because assignment is all the app
+  list reports. That errs toward the lock, which is the direction this gate errs in
+  everywhere else.
 - **Residual.** An attribute whose schema `mutability` is _absent_ is not locked by
   gate 4 — only a present, non-`READ_WRITE` value locks. Okta emits it in practice,
   and the type and mastering gates still run, but the posture is strictly weaker

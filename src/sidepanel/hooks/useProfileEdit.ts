@@ -78,6 +78,7 @@ import type { AttributeDescriptor } from '../components/users/profileAttributes'
 import {
   attributeEditability,
   type AttributeEditability,
+  type ProfileMastering,
 } from '../components/users/profileEditability';
 import {
   coerceDraftValue,
@@ -145,6 +146,14 @@ export interface UseProfileEditOptions {
   readonly onUserUpdated: (user: OktaUser) => void;
   /** Whether the surface is visible. `false` blocks entering edit mode and blocks the write (ADR-0018). */
   readonly enabled: boolean;
+  /**
+   * Which profile sources are attached to this user, for the editability gate.
+   *
+   * Taken rather than derived for the same reason `attributes` is: the surface
+   * already holds the app list, and a second walk here could disagree with it.
+   * Omitting it locks every `PROFILE_MASTER` attribute, which is safe.
+   */
+  readonly mastering?: ProfileMastering;
 }
 
 /** What {@link useProfileEdit} returns. */
@@ -208,11 +217,12 @@ interface AttributeEntry {
 function indexAttributes(
   attributes: readonly AttributeDescriptor[],
   user: OktaUser,
+  mastering: ProfileMastering | undefined,
 ): ReadonlyMap<string, AttributeEntry> {
   const entries = new Map<string, AttributeEntry>();
 
   for (const attribute of attributes) {
-    const editability = attributeEditability(attribute, user);
+    const editability = attributeEditability(attribute, user, mastering);
     const existing = entries.get(attribute.name);
     if (existing === undefined || (existing.editability.editable && !editability.editable)) {
       entries.set(attribute.name, { attribute, editability });
@@ -300,6 +310,7 @@ export function useProfileEdit({
   targetTabId,
   onUserUpdated,
   enabled,
+  mastering,
 }: UseProfileEditOptions): UseProfileEditReturn {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState<Readonly<Record<string, string>>>({});
@@ -323,8 +334,11 @@ export function useProfileEdit({
   }
 
   const entries = useMemo(
-    () => (user === null ? new Map<string, AttributeEntry>() : indexAttributes(attributes, user)),
-    [attributes, user],
+    () =>
+      user === null
+        ? new Map<string, AttributeEntry>()
+        : indexAttributes(attributes, user, mastering),
+    [attributes, user, mastering],
   );
 
   // Nothing below is computed unless the surface is actually editing: a rung

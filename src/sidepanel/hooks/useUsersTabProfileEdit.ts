@@ -64,7 +64,10 @@ import type { AlertAction, AlertMessageData } from '../components/shared/AlertMe
 import type { ProfileSaveModalProps } from '../components/users/ProfileSaveModal';
 import type { ProfileEditControls } from '../components/users/UserProfilePaneHeader';
 import type { AttributeDescriptor } from '../components/users/profileAttributes';
-import { attributeEditability } from '../components/users/profileEditability';
+import {
+  attributeEditability,
+  type ProfileMastering,
+} from '../components/users/profileEditability';
 import type { RuleInventoryState } from '../../shared/membership/blastRadiusTypes';
 import type { GroupMembership, OktaUser } from '../../shared/types';
 import { getUndoHistory } from '../../shared/undoManager';
@@ -118,13 +121,19 @@ function attributeCountLabel(count: number): string {
  *
  * @param attributes - The inventory exactly as the pane renders it.
  * @param user - The user the verdicts are about.
+ * @param mastering - The profile sources attached to that user, so an attribute
+ *   the org masters externally but this user is not sourced from still counts.
  * @returns `true` when at least one attribute would render a control.
  */
-function hasEditableAttribute(attributes: readonly AttributeDescriptor[], user: OktaUser): boolean {
+function hasEditableAttribute(
+  attributes: readonly AttributeDescriptor[],
+  user: OktaUser,
+  mastering: ProfileMastering | undefined,
+): boolean {
   const verdicts = new Map<string, boolean>();
 
   for (const attribute of attributes) {
-    const editable = attributeEditability(attribute, user).editable;
+    const editable = attributeEditability(attribute, user, mastering).editable;
     const existing = verdicts.get(attribute.name);
     verdicts.set(attribute.name, existing === undefined ? editable : existing && editable);
   }
@@ -177,6 +186,12 @@ export interface UseUsersTabProfileEditOptions {
   memberships: GroupMembership[];
   /** The org's rule inventory, three-state. `unresolved` predicts nothing at all. */
   rules: RuleInventoryState;
+  /**
+   * Which profile sources are attached to the user, as `useUserDetailPanes`
+   * resolved them. Decides whether an org-wide `PROFILE_MASTER` attribute is
+   * mastered for *this* person; absent, every one of them stays locked.
+   */
+  mastering?: ProfileMastering;
   /** Tab whose scheduler runs the write. */
   targetTabId: number | undefined;
   /**
@@ -224,12 +239,13 @@ export function useUsersTabProfileEdit({
   attributes,
   memberships,
   rules,
+  mastering,
   targetTabId,
   enabled,
   onUserUpdated,
   onResult,
 }: UseUsersTabProfileEditOptions): UserProfileEditing {
-  const edit = useProfileEdit({ user, attributes, targetTabId, onUserUpdated, enabled });
+  const edit = useProfileEdit({ user, attributes, targetTabId, onUserUpdated, enabled, mastering });
   const blast = useBlastRadius({ user, memberships, rules });
   const { undo } = useUndoAction({ targetTabId });
   const { getUserRaw } = useOktaApi({ targetTabId: targetTabId ?? null });
@@ -246,8 +262,8 @@ export function useUsersTabProfileEdit({
   }, [draftPatch, resetReport]);
 
   const canEdit = useMemo(
-    () => (user === null ? false : hasEditableAttribute(attributes, user)),
-    [attributes, user],
+    () => (user === null ? false : hasEditableAttribute(attributes, user, mastering)),
+    [attributes, user, mastering],
   );
 
   const runUndo = useCallback(

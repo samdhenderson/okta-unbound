@@ -50,6 +50,7 @@ import {
   allProfileAttributes,
   type AttributeDescriptor,
 } from '../components/users/profileAttributes';
+import { profileMastering } from '../components/users/profileEditability';
 import { profileRuleReads } from '../components/users/profileRuleReads';
 import { loadCachedGroupNames } from './fetchGroupRulesRequest';
 import type { OktaUser, GroupMembership } from '../../shared/types';
@@ -346,6 +347,23 @@ export function useUserComparison({
     [comparedUser, userSchema],
   );
 
+  // Which profile sources each column's user is actually attached to — the fact
+  // that turns an org-wide `PROFILE_MASTER` on a schema property into a verdict
+  // about one person (`profileEditability`). It costs nothing extra: these are
+  // the app lists the Apps tab already walked. `appsIncomplete` covers both
+  // users, so a truncated walk on either side locks the mastered attributes on
+  // both — the safe direction, and the one that keeps the two columns telling
+  // the same story about the same attribute.
+  const contextMastering = useMemo(
+    () => profileMastering(contextApps, !appsIncomplete),
+    [contextApps, appsIncomplete],
+  );
+
+  const comparedMastering = useMemo(
+    () => profileMastering(comparedApps, !appsIncomplete),
+    [comparedApps, appsIncomplete],
+  );
+
   // The attribute vocabulary the config is reconciled against: the union of both
   // users' inventories, because an attribute only the compared user carries still
   // needs a configured placement — it is exactly the kind of difference this tab
@@ -399,11 +417,13 @@ export function useUserComparison({
     contextUser,
     contextName,
     contextAttributes,
+    contextMastering,
     contextMemberships: contextGroups,
     ...(onContextUserUpdated === undefined ? {} : { onContextUserUpdated }),
     comparedUser,
     comparedName,
     comparedAttributes,
+    comparedMastering,
     comparedMemberships: comparedGroups,
     onComparedUserUpdated: setComparedUser,
     rules: ruleInventory,

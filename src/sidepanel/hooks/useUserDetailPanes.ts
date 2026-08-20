@@ -25,6 +25,17 @@
  * - **The org's profile schema** — one org-wide read cached under
  *   {@link sidepanel/cache/keys.cacheKeys.userSchema} at `TTL_LONG`, gated on
  *   `pane === 'profile'`. It is asked per **org**, never per user.
+ * - **The user's app assignments**, gated on `pane === 'profile'` as well. Not
+ *   for the Apps pane — for the *editability* gate: `master.priority` on a schema
+ *   property names app instances, and whether this user is attached to any of
+ *   them is what turns an org-wide `PROFILE_MASTER` into a fact about one person
+ *   ({@link module:sidepanel/components/users/profileEditability}). It is the
+ *   same walk the Apps pane runs, read through the same cache key, so the two
+ *   panes cost one walk between them however they are visited — and the entity
+ *   cache folds concurrent asks onto one in-flight promise. What it deliberately
+ *   does **not** reuse is `useUserApps`: that hook follows its list with a
+ *   per-app fan-out to name granting groups, which the Profile pane has no use
+ *   for and must not pay for.
  *
  * The whole hook is additionally gated on the Users tab being the visible one,
  * so a hidden tab spends no scheduler budget (ADR-0018).
@@ -58,11 +69,12 @@ import {
   allProfileAttributes,
   type AttributeDescriptor,
 } from '../components/users/profileAttributes';
+import { profileMastering, type ProfileMastering } from '../components/users/profileEditability';
 import { profileRuleReads } from '../components/users/profileRuleReads';
 import { useOktaApi } from './useOktaApi';
 import { useProfileDisplayConfig } from './useProfileDisplayConfig';
 import { useUserApps, type AppsByGroupId } from './useUserApps';
-import type { UserAppAssignment } from './useOktaApi/userOperations';
+import type { UserAppAssignment, UserAppsResult } from './useOktaApi/userOperations';
 import type { RuleInventoryState } from './useUserMemberships';
 
 /** Which pane of the user-detail rung is on screen. */
@@ -128,6 +140,14 @@ export interface UseUserDetailPanesReturn {
    * grant this user access. Attributes no qualifying rule reads are absent.
    */
   ruleReads: Record<string, string[]>;
+  /**
+   * Which profile sources are attached to this user, for the editability gate.
+   *
+   * Empty (`{}`) until the Profile pane's app walk has finished, which reads as
+   * "cannot say" and leaves every externally-mastered attribute locked — the
+   * conservative direction.
+   */
+  mastering: ProfileMastering;
 }
 
 /**
@@ -158,7 +178,7 @@ export function useUserDetailPanes({
   enabled = true,
 }: UseUserDetailPanesOptions): UseUserDetailPanesReturn {
   const [pane, setPane] = useState<UserDetailPane>('groups');
-  const { getUserProfileSchema } = useOktaApi({ targetTabId: targetTabId ?? null });
+  const { getUserProfileSchema, getUserApps } = useOktaApi({ targetTabId: targetTabId ?? null });
 
   // A new user opens on Groups. Without this the rung would inherit whichever
   // pane the previous user was left on, and the header's counts would describe
@@ -188,6 +208,22 @@ export function useUserDetailPanes({
     cacheKeys.userSchema(oktaOrigin),
     () => getUserProfileSchema(),
     { ttl: TTL_LONG, enabled: enabled && pane === 'profile' && Boolean(targetTabId) },
+  );
+
+  // The same key `useUserApps` uses, deliberately: whichever pane is opened first
+  // pays for the walk and the other reads it back from the cache.
+  const masteringApps = useEntityQuery<UserAppsResult>(
+    cacheKeys.userApps(userId ?? 'none'),
+    () => getUserApps(userId as string),
+    { enabled: enabled && pane === 'profile' && Boolean(userId) },
+  );
+
+  // An incomplete walk is discarded rather than trusted: the gate's only question
+  // is whether a mastering app is *absent*, and a truncated list answers "absent"
+  // for every app it never reached.
+  const mastering = useMemo(
+    () => profileMastering(masteringApps.data?.apps, masteringApps.data?.complete ?? false),
+    [masteringApps.data],
   );
 
   const attributes = useMemo(
@@ -227,5 +263,6 @@ export function useUserDetailPanes({
     updateProfileConfig,
     resetProfileConfig,
     ruleReads,
+    mastering,
   };
 }

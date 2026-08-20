@@ -81,10 +81,14 @@ const options = (
   contextUser: CONTEXT_USER,
   contextName: 'Ada Context',
   contextAttributes: attributes('Sales'),
+  // Both columns' attributes carry no `master` block, so the mastering context is
+  // never consulted; `{}` is the honest "nothing walked yet" value.
+  contextMastering: {},
   contextMemberships: NO_MEMBERSHIPS,
   comparedUser: COMPARED_USER,
   comparedName: 'Bo Compared',
   comparedAttributes: attributes('Support'),
+  comparedMastering: {},
   comparedMemberships: NO_MEMBERSHIPS,
   onComparedUserUpdated: vi.fn(),
   rules: { status: 'available', rules: [] },

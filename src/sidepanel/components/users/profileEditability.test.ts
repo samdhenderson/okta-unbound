@@ -10,7 +10,7 @@
  * Fixtures use only fake placeholders (`00uFAKE…`, `user@example.com`) per CLAUDE.md.
  */
 import { describe, it, expect } from 'vitest';
-import { attributeEditability } from './profileEditability';
+import { attributeEditability, profileMastering } from './profileEditability';
 import { oktaUserSchemaPropertySchema } from '../../../shared/schemas/okta';
 import type { OktaUserSchemaProperty } from '../../../shared/schemas/okta';
 import type { AttributeDescriptor } from './profileAttributes';
@@ -96,7 +96,15 @@ describe('attributeEditability', () => {
       expect(verdict).toMatchObject({ editable: false, reason: 'read-only' });
     });
 
-    it('locks a PROFILE_MASTER attribute and names the source', () => {
+    /*
+     * RETARGETED (ADR-0022(3)): the contract — a `PROFILE_MASTER` block with
+     * nothing checkable behind it locks — is unchanged and still asserted here.
+     * What changed is the copy: the old version asserted `source: 'Profile
+     * Master'`, which named the mastering *mode* as though it were a system an
+     * admin could go and look at. With no `priority` list there is no source to
+     * name, so the verdict now carries none.
+     */
+    it('locks a PROFILE_MASTER attribute with no priority list, naming no source', () => {
       const verdict = attributeEditability(
         attribute(
           'department',
@@ -106,13 +114,12 @@ describe('attributeEditability', () => {
         user,
       );
 
-      expect(verdict).toMatchObject({
-        editable: false,
-        reason: 'externally-mastered',
-        source: 'Profile Master',
-      });
+      expect(verdict).toMatchObject({ editable: false, reason: 'externally-mastered' });
       expect(verdict.editable).toBe(false);
-      if (!verdict.editable) expect(verdict.explanation).toContain('Profile Master');
+      if (!verdict.editable) {
+        expect(verdict.source).toBeUndefined();
+        expect(verdict.explanation).toContain('profile source outside Okta');
+      }
     });
 
     it('treats a master type it does not recognize as external', () => {
@@ -334,5 +341,157 @@ describe('attributeEditability', () => {
         attributeEditability(attribute('nickName', '', property({ type: 'string' })), user),
       ).toMatchObject({ editable: true, required: false });
     });
+  });
+
+  /*
+   * The bug these pin: `master` on a schema property describes the ORG, and the
+   * panel was reading it as though it described every user. An org with one HR
+   * profile source had every mastered attribute locked on every user — including
+   * the ones that source has never heard of, whose attributes Okta itself lets
+   * you edit.
+   *
+   * Every case is a PAIR. A one-sided assertion passes for the wrong reason: a
+   * gate that simply locked everything would satisfy half of them, and that is
+   * precisely the regression being guarded against.
+   */
+  describe('a PROFILE_MASTER block is resolved per user, not per org', () => {
+    const HR_APP = '0oaFAKEhr0000000000';
+    const AD_APP = '0oaFAKEad0000000000';
+
+    /** `department`, mastered by the HR app at the org level. */
+    const mastered = () =>
+      attribute(
+        'department',
+        'Platform',
+        property({
+          type: 'string',
+          master: { type: 'PROFILE_MASTER', priority: [{ type: 'APP', value: HR_APP }] },
+        }),
+      );
+
+    it('locks it for a user the mastering app is assigned to, and names the app', () => {
+      const verdict = attributeEditability(
+        mastered(),
+        user,
+        profileMastering([{ id: HR_APP, label: 'Workday' }], true),
+      );
+
+      expect(verdict).toMatchObject({
+        editable: false,
+        reason: 'externally-mastered',
+        source: 'Workday',
+      });
+      if (!verdict.editable) expect(verdict.explanation).toContain('Workday');
+    });
+
+    it('leaves it editable for a user assigned to none of the mastering apps', () => {
+      const verdict = attributeEditability(
+        mastered(),
+        user,
+        profileMastering([{ id: AD_APP, label: 'Active Directory' }], true),
+      );
+
+      expect(verdict).toMatchObject({ editable: true, control: 'text' });
+    });
+
+    it('leaves it editable for a user with no app assignments at all', () => {
+      expect(attributeEditability(mastered(), user, profileMastering([], true))).toMatchObject({
+        editable: true,
+        control: 'text',
+      });
+    });
+
+    it('locks it while the app list has not loaded — an absence cannot be proven yet', () => {
+      expect(attributeEditability(mastered(), user, {})).toMatchObject({
+        editable: false,
+        reason: 'externally-mastered',
+      });
+    });
+
+    it('locks it when the app walk did not finish, even though the app is missing from it', () => {
+      // The rows say the HR app is absent. The walk says it never got to the end.
+      // Only the second of those is an answer.
+      const partial = profileMastering([{ id: AD_APP, label: 'Active Directory' }], false);
+
+      expect(attributeEditability(mastered(), user, partial)).toMatchObject({
+        editable: false,
+        reason: 'externally-mastered',
+      });
+    });
+
+    it('locks it when a priority entry names a source kind it cannot check a user against', () => {
+      const agentMastered = attribute(
+        'department',
+        'Platform',
+        property({
+          type: 'string',
+          master: {
+            type: 'PROFILE_MASTER',
+            priority: [
+              { type: 'APP', value: HR_APP },
+              { type: 'AGENT', value: 'agent-1' },
+            ],
+          },
+        }),
+      );
+
+      // The user matches no APP entry, but the AGENT entry is unanswerable — so
+      // the list as a whole is, and "no match" would be a confident wrong answer.
+      expect(attributeEditability(agentMastered, user, profileMastering([], true))).toMatchObject({
+        editable: false,
+        reason: 'externally-mastered',
+      });
+    });
+
+    it('locks it when the priority list is not the shape this module knows', () => {
+      const malformed = attribute(
+        'department',
+        'Platform',
+        property({ type: 'string', master: { type: 'PROFILE_MASTER', priority: ['0oaFAKE'] } }),
+      );
+
+      expect(attributeEditability(malformed, user, profileMastering([], true))).toMatchObject({
+        editable: false,
+        reason: 'externally-mastered',
+      });
+    });
+
+    it('does not extend the per-user check to a mastering mode it does not know', () => {
+      const overridden = attribute(
+        'department',
+        'Platform',
+        property({
+          type: 'string',
+          master: { type: 'OVERRIDE', priority: [{ type: 'APP', value: HR_APP }] },
+        }),
+      );
+
+      expect(attributeEditability(overridden, user, profileMastering([], true))).toMatchObject({
+        editable: false,
+        reason: 'externally-mastered',
+      });
+    });
+  });
+});
+
+describe('profileMastering', () => {
+  it('indexes a completed walk by app id', () => {
+    const context = profileMastering([{ id: '0oaFAKE1', label: 'Workday' }], true);
+
+    expect(context.assignedApps?.get('0oaFAKE1')).toBe('Workday');
+  });
+
+  it('reports nothing for an unfinished walk, so absence is never inferred from it', () => {
+    expect(
+      profileMastering([{ id: '0oaFAKE1', label: 'Workday' }], false).assignedApps,
+    ).toBeUndefined();
+  });
+
+  it('reports nothing when no walk has returned', () => {
+    expect(profileMastering(undefined, true).assignedApps).toBeUndefined();
+  });
+
+  it('distinguishes a completed empty walk from no walk at all', () => {
+    expect(profileMastering([], true).assignedApps?.size).toBe(0);
   });
 });
