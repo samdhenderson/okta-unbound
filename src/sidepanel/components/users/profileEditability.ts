@@ -22,21 +22,43 @@
  *
  * ## Mastering is a per-user fact, not an org-wide one
  *
- * `master.type: 'PROFILE_MASTER'` on a schema property does **not** mean "every
- * user's copy of this attribute is owned elsewhere". It means "whichever of the
- * sources in `master.priority` this user is attached to owns it" — and a user
- * attached to *none* of them is Okta-mastered for that attribute and editable in
- * the Okta console. Reading the schema alone and locking the attribute for the
- * whole org is therefore wrong in exactly the orgs that have a profile source at
- * all: it locks the HR-sourced attributes of every user the HR app has never
- * heard of.
+ * A `master` block on a schema property describes the **org**, and the user's own
+ * app assignments are what turn it into a fact about one person. Reading the
+ * schema alone and locking the attribute for the whole org is wrong in exactly
+ * the orgs that have a profile source at all: it locks the HR-sourced attributes
+ * of every user the HR app has never heard of.
  *
- * The per-user half of the answer is {@link ProfileMastering} — the apps the user
- * is actually assigned to, which is what `master.priority` names (AD and LDAP are
- * app instances too). It stays deny-by-default: the attribute only unlocks when
- * the priority list is fully understood **and** the user's app list has loaded
- * **completely**. A partial list cannot prove an absence, and an absence is the
- * whole claim being made.
+ * Okta's three mastering modes are not variations on one theme, and this module
+ * resolves each on its own terms (ADR-0037):
+ *
+ * - **`OKTA`** — Okta owns it. Editable.
+ * - **`PROFILE_MASTER`** — the attribute follows the *org's* profile-source
+ *   order. It carries **no** `master.priority`; the list of sources is org-level,
+ *   not per-attribute. So the question is simply whether this user is attached to
+ *   a profile source at all — and a user attached to none is Okta-mastered, since
+ *   "if an external profile source isn't identified, Okta is the source for all
+ *   profiles".
+ * - **`OVERRIDE`** — this attribute's source order differs from the org's, named
+ *   per-attribute in `master.priority`. **Locked unconditionally.** An admin has
+ *   deliberately singled this attribute out for a source of its own, which is the
+ *   least likely place for this panel to be the right tool; resolving it per user
+ *   would add a second mastering model for a case the surfaces do not need.
+ *
+ * `master.priority` is populated **only** for `OVERRIDE` — a `PROFILE_MASTER`
+ * block carries none, because its sources are org-level. Resolving a
+ * `PROFILE_MASTER` block *through* `priority`, as this module once did, cannot
+ * ever succeed: there is nothing there to resolve, so every such attribute fell
+ * to the unconditional lock. That was the bug (ADR-0037).
+ *
+ * The per-user half of the answer is {@link ProfileMastering}: which of the
+ * user's apps Okta reports as profile sources (`features` contains
+ * `PROFILE_MASTERING` — see `isProfileSourceApp` in `shared/schemas/okta`). It
+ * rides the app-assignment walk the surfaces already make, so the check costs no
+ * request.
+ *
+ * It stays deny-by-default: an attribute only unlocks when the user's app list
+ * has loaded **completely**. A partial list cannot prove an absence, and an
+ * absence is the whole claim being made.
  *
  * ## Copy
  *
@@ -66,7 +88,7 @@ export type EditControl = 'text' | 'number' | 'select' | 'checkbox';
  * - `write-only` — Okta accepts a value but never returns one, so there is no
  *   before-value to edit against.
  * - `externally-mastered` — the attribute's own `master` block names a source
- *   other than Okta; a write here would be overwritten at the next import.
+ *   other than Okta, so the attribute is changed there rather than here.
  * - `account-mastered` — the *account's* credentials are mastered outside Okta,
  *   which is what decides `login`.
  * - `unsupported-type` — an array or object attribute (a repeater UI this panel
@@ -92,14 +114,18 @@ export type LockReason =
  */
 export interface ProfileMastering {
   /**
-   * App id → display label, for every app this user is assigned to.
+   * App id → display label, for the apps Okta reports as a **profile source**
+   * for this user (`features` contains `PROFILE_MASTERING`).
    *
-   * **`undefined` is not "no apps".** It means the list has not loaded, or the
-   * pagination walk did not finish — in which case nothing can be proven absent
-   * from it and every externally-mastered attribute stays locked. Pass an empty
-   * map only for a completed walk that genuinely returned nothing.
+   * **`undefined` is not "no sources".** It means the app list has not loaded, or
+   * the pagination walk did not finish — in which case nothing can be proven
+   * absent from it and every externally-mastered attribute stays locked.
+   *
+   * An **empty map** is the opposite, and is a real answer: a completed walk that
+   * found this user attached to no profile source, so Okta owns their profile.
+   * That is what unlocks the attributes this gate used to lock for everyone.
    */
-  readonly assignedApps?: ReadonlyMap<string, string>;
+  readonly profileSources?: ReadonlyMap<string, string>;
 }
 
 /**
@@ -117,11 +143,25 @@ export interface ProfileMastering {
  * ```
  */
 export function profileMastering(
-  apps: readonly { readonly id: string; readonly label: string }[] | undefined,
+  apps:
+    | readonly {
+        readonly id: string;
+        readonly label: string;
+        readonly isProfileSource?: boolean;
+      }[]
+    | undefined,
   complete: boolean,
 ): ProfileMastering {
   if (apps === undefined || !complete) return {};
-  return { assignedApps: new Map(apps.map((app) => [app.id, app.label])) };
+
+  const profileSources = new Map<string, string>();
+  for (const app of apps) {
+    // Strictly `=== true`: an absent flag is an app whose features we could not
+    // read, and this map's *emptiness* is what unlocks an attribute. Only a
+    // positive answer may keep a source out of it.
+    if (app.isProfileSource === true) profileSources.set(app.id, app.label);
+  }
+  return { profileSources };
 }
 
 /** One choice of a `select`-rendered attribute. */
@@ -172,16 +212,18 @@ export type AttributeEditability =
 const OKTA_MASTER = 'OKTA';
 
 /**
- * The one `master.type` whose scope is decided per user, by `master.priority`.
+ * The one `master.type` whose scope is decided per user.
+ *
+ * `PROFILE_MASTER` means "this attribute follows the org's profile-source order".
+ * The order itself is org-level, so the block names no sources and carries no
+ * `master.priority`; the only question left is whether *this* user is attached to
+ * a profile source at all.
  *
  * Every other non-{@link OKTA_MASTER} value — `OVERRIDE`, or anything a future
  * Okta release adds — locks unconditionally: this module knows what
  * `PROFILE_MASTER` means and declines to guess at the rest.
  */
 const PROFILE_MASTER = 'PROFILE_MASTER';
-
-/** The `master.priority` entry kind this module can check a user against. */
-const APP_PRIORITY_SOURCE = 'APP';
 
 /** The attribute whose editability the account's credential provider decides. */
 const LOGIN_ATTRIBUTE = 'login';
@@ -291,92 +333,72 @@ function mutabilityLock(mutability: string): AttributeEditability {
   );
 }
 
-/** One entry of a schema property's `master.priority` list. */
-interface MasterPriorityEntry {
-  /** Source kind — `APP` for an app instance, which is all this module checks. */
-  readonly type: string;
-  /** The source's id; for `APP`, an Okta app instance id. */
-  readonly value: string;
-}
-
-/**
- * `master.priority` narrowed, or `undefined` when it is absent, empty, or not the
- * shape this module knows.
- *
- * The schema types it as `z.unknown()` on purpose (ADR-0006 keeps the boundary
- * lenient so an unfamiliar payload survives validation), so the narrowing has to
- * happen at the reader. `undefined` from here means "cannot be checked", which
- * the caller turns into a lock — never into an unlock.
- */
-function masterPriority(raw: unknown): MasterPriorityEntry[] | undefined {
-  if (!Array.isArray(raw) || raw.length === 0) return undefined;
-
-  const entries: MasterPriorityEntry[] = [];
-  for (const entry of raw) {
-    if (entry === null || typeof entry !== 'object') return undefined;
-    const record = entry as { type?: unknown; value?: unknown };
-    if (typeof record.type !== 'string' || typeof record.value !== 'string') return undefined;
-    entries.push({ type: record.type, value: record.value });
-  }
-  return entries;
-}
-
 /**
  * Whether an external system masters this attribute **for this user**, or
  * `undefined` when Okta owns it and the gate should carry on.
  *
  * See the module header: the schema's `master` block describes the org, and the
- * user's app assignments are what turn it into a fact about one person. Every
+ * user's profile sources are what turn it into a fact about one person. Every
  * step that cannot complete the check falls back to the unconditional lock.
  */
 function masteringLock(
   property: OktaUserSchemaProperty,
   mastering: ProfileMastering | undefined,
 ): AttributeEditability | undefined {
-  const master = property.master;
-  const type = master?.type;
+  const type = property.master?.type;
   if (type === undefined || type === OKTA_MASTER) return undefined;
 
+  // `OVERRIDE`, and any mode a future Okta release adds. Named when we can name
+  // it, so the sentence points at something rather than at a mastering mode.
   if (type !== PROFILE_MASTER) {
     const source = humanizeSource(type);
     return locked(
       'externally-mastered',
-      `An external system masters this attribute (${source}), so a change made here would be overwritten at the next import.`,
+      `An external system masters this attribute (${source}), so it is changed there rather than here.`,
       source,
     );
   }
 
-  // `PROFILE_MASTER` with nothing checkable behind it: the org says an external
-  // source owns this attribute and this panel cannot say whether that source
-  // reaches this user, so it assumes it does.
-  const unresolved = locked(
+  const sources = mastering?.profileSources;
+  // The app list has not loaded, or its walk did not finish. The org says an
+  // external source owns this attribute and this panel cannot yet say whether one
+  // reaches this user, so it assumes one does.
+  if (sources === undefined) {
+    return locked(
+      'externally-mastered',
+      'A profile source outside Okta masters this attribute, so it is changed there rather than here.',
+    );
+  }
+
+  // The unlock. A completed walk that found this user attached to no profile
+  // source: "if an external profile source isn't identified, Okta is the source
+  // for all profiles", and so may this panel be.
+  if (sources.size === 0) return undefined;
+
+  const names = [...sources.values()].filter((name) => name !== '');
+  if (names.length === 0) {
+    return locked(
+      'externally-mastered',
+      'A profile source outside Okta masters this attribute, so it is changed there rather than here.',
+    );
+  }
+
+  if (names.length === 1) {
+    return locked(
+      'externally-mastered',
+      `${names[0]} is this user's profile source, so this attribute is changed there rather than here.`,
+      names[0],
+    );
+  }
+
+  // Okta permits one profile source per user at a time and resolves several by an
+  // org-level priority order it does not expose. Naming one of them would be a
+  // guess dressed as an attribution (ADR-0020), so the sentence lists them and the
+  // verdict carries no `source`.
+  return locked(
     'externally-mastered',
-    'A profile source outside Okta masters this attribute, so a change made here would be overwritten at the next import.',
+    `This user is attached to more than one profile source (${names.join(', ')}), and Okta does not report which of them owns this attribute.`,
   );
-
-  const priority = masterPriority(master?.priority);
-  if (priority === undefined) return unresolved;
-  // A source kind this module cannot test a user against makes the whole list
-  // unanswerable — a "no match" over the entries it *does* understand would be a
-  // confident wrong answer about the ones it does not.
-  if (priority.some((entry) => entry.type !== APP_PRIORITY_SOURCE)) return unresolved;
-
-  const assigned = mastering?.assignedApps;
-  if (assigned === undefined) return unresolved;
-
-  const applied = priority.find((entry) => assigned.has(entry.value));
-  // The org masters this attribute from sources this user is attached to none of.
-  // Okta owns their copy, and so may this panel.
-  if (applied === undefined) return undefined;
-
-  const appName = assigned.get(applied.value);
-  return appName === undefined || appName === ''
-    ? unresolved
-    : locked(
-        'externally-mastered',
-        `${appName} is this user's profile source for this attribute, so a change made here would be overwritten at the next import.`,
-        appName,
-      );
 }
 
 /** The sentence for a type this panel has no control for. */
@@ -411,9 +433,8 @@ function typeLock(type: string | undefined): AttributeEditability {
  * 5. `master.type` — anything that is not {@link OKTA_MASTER} and not absent is
  *    an external master, and a write here would be overwritten at the next
  *    import. A `PROFILE_MASTER` block is the one case resolved **per user**: it
- *    locks only when this user is assigned to one of the apps in its
- *    `master.priority`, which requires `mastering` to carry a complete app list.
- *    Without one, it locks anyway.
+ *    locks only when this user is attached to a profile source, which requires
+ *    `mastering` to carry a complete app list. Without one, it locks anyway.
  * 6. `type` — `string` (free text, or a `select` when the schema enumerates the
  *    values), `boolean`, `number`/`integer`. An `array` or `object` attribute
  *    needs a repeater UI this panel does not have.
@@ -424,7 +445,7 @@ function typeLock(type: string | undefined): AttributeEditability {
  * @param mastering - What is known about the profile sources attached to this
  *   user. Omitting it is safe and conservative — every `PROFILE_MASTER`
  *   attribute simply stays locked, which is what this gate did before the
- *   per-user check existed.
+ *   per-user check existed. It never *opens* an attribute the schema locks.
  * @returns How to edit the attribute, or why it is locked.
  *
  * @example

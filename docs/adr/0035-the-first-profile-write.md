@@ -103,6 +103,13 @@ Okta answered, and nothing changed.
 
 ### 3. The editability gate is mastering-aware, and that replaces the allow-list
 
+> **Superseded in part by [ADR-0037](./0037-the-profile-source-is-a-fact-about-the-user.md).**
+> The per-user mastering check described below was inoperative: it resolved
+> `master.priority`, which Okta populates only for `OVERRIDE`, so every
+> `PROFILE_MASTER` attribute fell to the unconditional lock and the check never
+> ran. The principle stands; the mechanism is now the `features` field on the
+> user's app rows. The paragraphs below are left as written.
+
 `profileEditability.attributeEditability` returns, per attribute per user, either
 _how_ to edit it or _why_ it is locked — as a discriminated union, so no caller can
 read `control` without having established there is one. Six gates run in order,

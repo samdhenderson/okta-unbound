@@ -34,6 +34,7 @@ const GROUP_ID = '00gFAKE00000000000001';
 const app = (over: Partial<UserAppAssignment> = {}): UserAppAssignment => ({
   id: APP_ID,
   label: 'Salesforce',
+  isProfileSource: false,
   ...over,
 });
 

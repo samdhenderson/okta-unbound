@@ -205,6 +205,27 @@ export const oktaAppListItemSchema = z
     // missing app is not. Readers must validate what they pull out of it — see
     // {@link extractAppAssignmentScope}.
     _embedded: z.unknown().optional(),
+    // The provisioning features Okta has enabled on this app instance. Named
+    // here — rather than left to `.passthrough()` — because `PROFILE_MASTERING`
+    // is how Okta reports that an app is a **profile source**, which is the
+    // per-user half of the profile-attribute editability gate
+    // (`sidepanel/components/users/profileEditability`). It rides the app rows
+    // `getUserApps` already requests, so reading it costs no request at all;
+    // see {@link isProfileSourceApp}.
+    //
+    // `.catch(undefined)` for the same reason as `oktaAppUserSchema._links`:
+    // `parseOktaList` DROPS a row that fails validation (ADR-0006), so a
+    // `features` of an unexpected shape must degrade to "we cannot say whether
+    // this app is a profile source" — never to a missing app. Absence is a lock,
+    // not an unlock, so degrading here is safe in the direction that matters.
+    features: z.array(z.string()).optional().catch(undefined),
+    // The app's Okta Resource Name, e.g.
+    // `orn:okta:idp:00oFAKE:custom_identity_source:0oaFAKE`. Corroborating only:
+    // its resource segment identifies a Custom Identity Source, but Active
+    // Directory, LDAP and HR apps are profile sources without it, so
+    // {@link isProfileSourceApp} gates on `features` instead. Kept because it is
+    // what lets a surface say what *kind* of source an app is.
+    orn: z.string().optional().catch(undefined),
   })
   .passthrough();
 
@@ -334,6 +355,41 @@ export function extractAppAssignmentScope(embedded: unknown): AppAssignmentScope
 
   const { scope } = parsed.data;
   return scope === 'USER' || scope === 'GROUP' ? scope : undefined;
+}
+
+/**
+ * The `features` value that means an app instance is a **profile source** — what
+ * Okta's admin console calls the profile master for the users assigned to it.
+ *
+ * `IMPORT_PROFILE_UPDATES` is deliberately not accepted as a synonym. An app can
+ * import profile updates without being anyone's source of truth; `PROFILE_MASTERING`
+ * is the flag Okta sets when the app actually owns the profile, and it is the one
+ * the console reads.
+ */
+const PROFILE_SOURCE_FEATURE = 'PROFILE_MASTERING';
+
+/**
+ * Whether Okta reports this app instance as a profile source.
+ *
+ * This is the fact that turns an org-wide `master.type: 'PROFILE_MASTER'` on a
+ * schema property into a verdict about one person: an attribute that follows the
+ * org's profile-source order is owned by Okta for a user attached to no profile
+ * source, and editable in the console. See
+ * {@link module:sidepanel/components/users/profileEditability}.
+ *
+ * Pure and total. `undefined` — Okta named no features, or the array failed
+ * validation and {@link oktaAppListItemSchema} caught it — returns `false`, which
+ * the gate reads as "not a source we can name". That is the safe direction only
+ * because the gate never unlocks on this alone: an unknown app list keeps every
+ * mastered attribute locked regardless.
+ *
+ * @param features - The app row's `features` array, or `undefined`.
+ * @returns `true` when the array contains `PROFILE_MASTERING`.
+ * @example
+ * isProfileSourceApp(['IMPORT_NEW_USERS', 'PROFILE_MASTERING']); // true
+ */
+export function isProfileSourceApp(features: readonly string[] | undefined): boolean {
+  return features !== undefined && features.includes(PROFILE_SOURCE_FEATURE);
 }
 
 /**
@@ -509,7 +565,17 @@ export type OktaGroupListItem = z.infer<typeof oktaGroupListItemSchema>;
  * @example
  * const user = parseOkta(oktaUserSchema, await res.json(), 'GET /users/{id}');
  */
-export function parseOkta<T>(schema: z.ZodType<T>, data: unknown, context: string): T {
+export function parseOkta<T>(
+  // The third type argument leaves the schema's *input* type unconstrained. Zod
+  // defaults it to the output type, which stops inference dead on any schema
+  // whose two differ — `.catch()`, `.transform()`, `.default()`. Without it,
+  // adding a `.catch()` to a field of a schema parsed through here becomes a
+  // compile error at every call site, which is a reason not to make a schema more
+  // lenient, and ADR-0006 wants the opposite pressure.
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
+  data: unknown,
+  context: string,
+): T {
   const result = schema.safeParse(data);
   if (!result.success) {
     // Log only issue paths + codes — never zod's default message, which echoes the

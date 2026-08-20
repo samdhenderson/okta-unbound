@@ -53,7 +53,12 @@ const MEMBERSHIPS: GroupMembership[] = [
 const rowFor = (app: UserAppAssignment) => summarizeAppSources([app], MEMBERSHIPS).rows[0];
 
 /** `scope: 'USER'` alone: Okta reports a direct assignment and credits no group. */
-const directOnly = rowFor({ id: '0oaFAKEapp000005', label: 'Zoom', scope: 'USER' });
+const directOnly = rowFor({
+  id: '0oaFAKEapp000005',
+  label: 'Zoom',
+  scope: 'USER',
+  isProfileSource: false,
+});
 
 /** `scope: 'USER'` **and** a credited group. Both facts are true; the row says both. */
 const directAndViaGroup = rowFor({
@@ -61,6 +66,7 @@ const directAndViaGroup = rowFor({
   label: 'Salesforce',
   scope: 'USER',
   grantGroupId: SALES_GROUP,
+  isProfileSource: false,
 });
 
 /** `scope: 'GROUP'` with the group named — the ordinary group-granted row. */
@@ -69,13 +75,19 @@ const viaNamedGroup = rowFor({
   label: 'Workday',
   scope: 'GROUP',
   grantGroupId: WORKDAY_GROUP,
+  isProfileSource: true,
 });
 
 /** `scope: 'GROUP'` and no group named: Okta said "a group", and named none. */
-const viaUnnamedGroup = rowFor({ id: '0oaFAKEapp000004', label: 'Figma', scope: 'GROUP' });
+const viaUnnamedGroup = rowFor({
+  id: '0oaFAKEapp000004',
+  label: 'Figma',
+  scope: 'GROUP',
+  isProfileSource: false,
+});
 
 /** No scope at all — its own state, and neither "direct" nor "via group". */
-const sourceUnknown = rowFor({ id: '0oaFAKEapp000006', label: 'Slack' });
+const sourceUnknown = rowFor({ id: '0oaFAKEapp000006', label: 'Slack', isProfileSource: false });
 
 /** An app whose assignment is itself administrative access. */
 const privileged = rowFor({
@@ -83,6 +95,7 @@ const privileged = rowFor({
   label: 'Okta Admin Console',
   scope: 'GROUP',
   grantGroupId: ADMINS_GROUP,
+  isProfileSource: false,
 });
 
 /** One app on the Users tab's Apps pane. */

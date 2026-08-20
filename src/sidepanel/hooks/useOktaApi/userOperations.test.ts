@@ -91,9 +91,9 @@ describe('getUserApps', () => {
 
     expect(makeApiRequest).toHaveBeenCalledTimes(2);
     expect(apps).toEqual([
-      { id: 'a1', label: 'App One' },
-      { id: 'a2', label: 'App Two' },
-      { id: 'a3', label: 'a3' },
+      { id: 'a1', label: 'App One', isProfileSource: false },
+      { id: 'a2', label: 'App Two', isProfileSource: false },
+      { id: 'a3', label: 'a3', isProfileSource: false },
     ]);
     expect(complete).toBe(true);
   });
@@ -122,7 +122,7 @@ describe('getUserApps', () => {
     // The distinction the flag exists for: one real app in hand, and an unknown
     // number missing. Neither "1 app" nor "0 apps" is the truth.
     expect(await getUserApps('00uFAKE1')).toEqual({
-      apps: [{ id: 'a1', label: 'App One', scope: undefined }],
+      apps: [{ id: 'a1', label: 'App One', scope: undefined, isProfileSource: false }],
       complete: false,
     });
   });
@@ -423,7 +423,7 @@ describe('getUserApps boundary validation', () => {
     // A dropped row is not an incomplete walk: every page was fetched, so the
     // answer is complete even though one malformed row did not survive validation.
     expect(await getUserApps('00uFAKE1')).toEqual({
-      apps: [{ id: '0oaFAKE1', label: 'App One' }],
+      apps: [{ id: '0oaFAKE1', label: 'App One', isProfileSource: false }],
       complete: true,
     });
   });
@@ -481,8 +481,8 @@ describe('getUserApps assignment scope', () => {
     // fields to each page, never a request.
     expect(makeApiRequest).toHaveBeenCalledTimes(2);
     expect(apps).toEqual([
-      { id: '0oaFAKE1', label: 'One', scope: 'USER' },
-      { id: '0oaFAKE2', label: 'Two', scope: 'GROUP' },
+      { id: '0oaFAKE1', label: 'One', scope: 'USER', isProfileSource: false },
+      { id: '0oaFAKE2', label: 'Two', scope: 'GROUP', isProfileSource: false },
     ]);
   });
 
@@ -521,7 +521,12 @@ describe('getUserApps assignment scope', () => {
     // The app must NOT be dropped: under-reporting a user's access is far worse
     // than a missing scope (ADR-0006 degrades, it does not fail closed).
     expect(apps).toHaveLength(1);
-    expect(apps[0]).toEqual({ id: '0oaFAKE1', label: 'One', scope: undefined });
+    expect(apps[0]).toEqual({
+      id: '0oaFAKE1',
+      label: 'One',
+      scope: undefined,
+      isProfileSource: false,
+    });
   });
 
   it.each([
@@ -557,10 +562,10 @@ describe('getUserApps assignment scope', () => {
     const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
 
     expect((await getUserApps('00uFAKE1')).apps).toEqual([
-      { id: '0oaFAKE1', label: 'One', scope: 'USER' },
-      { id: '0oaFAKE2', label: 'Two', scope: undefined },
-      { id: '0oaFAKE3', label: 'Three', scope: undefined },
-      { id: '0oaFAKE4', label: 'Four', scope: 'GROUP' },
+      { id: '0oaFAKE1', label: 'One', scope: 'USER', isProfileSource: false },
+      { id: '0oaFAKE2', label: 'Two', scope: undefined, isProfileSource: false },
+      { id: '0oaFAKE3', label: 'Three', scope: undefined, isProfileSource: false },
+      { id: '0oaFAKE4', label: 'Four', scope: 'GROUP', isProfileSource: false },
     ]);
   });
 });
@@ -599,9 +604,37 @@ describe('getUserApps grant group', () => {
         label: 'One',
         scope: 'GROUP',
         grantGroupId: '00gFAKEgroup00000001',
+        isProfileSource: false,
       },
     ]);
     // One page, one call — naming the group cost nothing.
+    expect(makeApiRequest).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+   * The app row's `features` is what the profile-editability gate resolves a
+   * `PROFILE_MASTER` attribute against (ADR-0037). Like `scope` and
+   * `grantGroupId` it rides the page this walk already fetches, so the pin here
+   * is on the read, not on a request count — and paired, because a reader that
+   * hard-coded `false` would satisfy half of it.
+   */
+  it('reads PROFILE_MASTERING off features without issuing a request per app', async () => {
+    const makeApiRequest = vi.fn().mockResolvedValue(
+      onePage([
+        {
+          id: '0oaFAKEapp000001',
+          label: 'Workday',
+          features: ['IMPORT_PROFILE_UPDATES', 'PROFILE_MASTERING', 'IMPORT_NEW_USERS'],
+        },
+        { id: '0oaFAKEapp000002', label: 'Salesforce', features: ['SSO', 'GROUP_PUSH'] },
+        { id: '0oaFAKEapp000003', label: 'Slack' },
+      ]),
+    );
+    const { getUserApps } = createUserOperations(makeCore({ makeApiRequest }));
+
+    const { apps } = await getUserApps('00uFAKE0001');
+
+    expect(apps.map((app) => app.isProfileSource)).toEqual([true, false, false]);
     expect(makeApiRequest).toHaveBeenCalledTimes(1);
   });
 
@@ -680,8 +713,20 @@ describe('getUserApps grant group', () => {
 
     // Under-reporting access is the failure mode that matters: both rows survive.
     expect(apps).toEqual([
-      { id: '0oaFAKEapp000001', label: 'One', scope: 'USER', grantGroupId: undefined },
-      { id: '0oaFAKEapp000002', label: 'Two', scope: 'GROUP', grantGroupId: undefined },
+      {
+        id: '0oaFAKEapp000001',
+        label: 'One',
+        scope: 'USER',
+        grantGroupId: undefined,
+        isProfileSource: false,
+      },
+      {
+        id: '0oaFAKEapp000002',
+        label: 'Two',
+        scope: 'GROUP',
+        grantGroupId: undefined,
+        isProfileSource: false,
+      },
     ]);
     expect(complete).toBe(true);
     vi.restoreAllMocks();

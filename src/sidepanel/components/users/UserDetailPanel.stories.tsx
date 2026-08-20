@@ -51,9 +51,23 @@ const ruleMembership: GroupMembership = {
 const MEMBERSHIPS = [directMembership, ruleMembership];
 
 const APPS: UserAppAssignment[] = [
-  { id: '0oaFAKEapp000001', label: 'Salesforce', scope: 'USER', grantGroupId: ENGINEERING_GROUP },
-  { id: '0oaFAKEapp000002', label: 'Workday', scope: 'GROUP', grantGroupId: ENGINEERING_GROUP },
-  { id: '0oaFAKEapp000003', label: 'Figma', scope: 'GROUP' },
+  {
+    id: '0oaFAKEapp000001',
+    label: 'Salesforce',
+    scope: 'USER',
+    grantGroupId: ENGINEERING_GROUP,
+    isProfileSource: false,
+  },
+  {
+    id: '0oaFAKEapp000002',
+    label: 'Workday',
+    scope: 'GROUP',
+    grantGroupId: ENGINEERING_GROUP,
+    // This user's profile source, which is why the Profile pane's mastered
+    // attributes render locked in these stories.
+    isProfileSource: true,
+  },
+  { id: '0oaFAKEapp000003', label: 'Figma', scope: 'GROUP', isProfileSource: false },
 ];
 
 const APPS_BY_GROUP: Record<string, string[]> = {

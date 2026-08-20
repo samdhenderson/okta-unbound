@@ -50,6 +50,7 @@ const APPS: UserAppAssignment[] = [
     label: 'Salesforce',
     scope: 'USER',
     grantGroupId: SALES_GROUP,
+    isProfileSource: false,
   },
   // A privileged app, granted through a group.
   {
@@ -57,6 +58,7 @@ const APPS: UserAppAssignment[] = [
     label: 'Okta Admin Console',
     scope: 'GROUP',
     grantGroupId: ADMINS_GROUP,
+    isProfileSource: false,
   },
   // Group-scoped, group named, and that group is itself app-mastered.
   {
@@ -64,13 +66,16 @@ const APPS: UserAppAssignment[] = [
     label: 'Workday',
     scope: 'GROUP',
     grantGroupId: WORKDAY_GROUP,
+    // The org's profile source. Nothing in this pane renders it yet; it is set
+    // truthfully so a fixture never teaches the wrong shape.
+    isProfileSource: true,
   },
   // Group-scoped and unresolved: Okta said "a group", and named none.
-  { id: '0oaFAKEapp000004', label: 'Figma', scope: 'GROUP' },
+  { id: '0oaFAKEapp000004', label: 'Figma', scope: 'GROUP', isProfileSource: false },
   // A plain direct assignment, no group anywhere in the answer.
-  { id: '0oaFAKEapp000005', label: 'Zoom', scope: 'USER' },
+  { id: '0oaFAKEapp000005', label: 'Zoom', scope: 'USER', isProfileSource: false },
   // No scope at all — unknown, which is neither "direct" nor "via group".
-  { id: '0oaFAKEapp000006', label: 'Slack' },
+  { id: '0oaFAKEapp000006', label: 'Slack', isProfileSource: false },
 ];
 
 /** Which apps this user has, and which group grants each one. */

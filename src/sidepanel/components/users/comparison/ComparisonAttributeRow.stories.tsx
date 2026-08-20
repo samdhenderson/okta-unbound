@@ -224,7 +224,7 @@ export const LockedWhileEditing: Story = {
         editable: false,
         reason: 'externally-mastered',
         explanation:
-          'An external system masters this attribute (Active Directory), so a change made here would be overwritten at the next import.',
+          'An external system masters this attribute (Active Directory), so it is changed there rather than here.',
       },
       onChange: undefined,
     }),

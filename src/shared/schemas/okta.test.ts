@@ -9,6 +9,7 @@ import {
   oktaAppGroupSchema,
   extractAppAssignmentScope,
   extractAppGrantGroupId,
+  isProfileSourceApp,
   oktaPolicyListItemSchema,
   oktaPolicyRuleSchema,
   parseOkta,
@@ -403,6 +404,91 @@ describe('app-assignment scope (_embedded on oktaAppListItemSchema)', () => {
       },
     });
     expect(scope).toBe('GROUP');
+  });
+});
+
+/**
+ * `features` on an app row is what makes the profile-attribute editability gate
+ * a per-user question rather than an org-wide one: `PROFILE_MASTERING` marks the
+ * app as a profile source, and a user attached to none of them is Okta-mastered.
+ * It rides the app-assignment walk, so the read must be as forgiving as the
+ * scope read beside it — an app is never worth losing over it.
+ */
+describe('isProfileSourceApp (features on oktaAppListItemSchema)', () => {
+  it('reads PROFILE_MASTERING off a real profile-source app', () => {
+    expect(
+      isProfileSourceApp(['IMPORT_PROFILE_UPDATES', 'PROFILE_MASTERING', 'IMPORT_NEW_USERS']),
+    ).toBe(true);
+  });
+
+  /*
+   * The distinction that decides the gate. An app can import profile updates
+   * without being anyone's source of truth, so accepting IMPORT_PROFILE_UPDATES
+   * as a synonym would lock attributes for every user of every provisioned app.
+   */
+  it('does not accept IMPORT_PROFILE_UPDATES as a synonym', () => {
+    expect(isProfileSourceApp(['IMPORT_PROFILE_UPDATES', 'IMPORT_NEW_USERS'])).toBe(false);
+  });
+
+  it.each([
+    ['no features at all', undefined],
+    ['an empty list', []],
+    ['unrelated features', ['SSO', 'GROUP_PUSH', 'PUSH_PROFILE_UPDATES']],
+  ])('returns false for %s', (_label, features) => {
+    expect(isProfileSourceApp(features as string[] | undefined)).toBe(false);
+  });
+
+  it('parses features off a well-formed row', () => {
+    const apps = parseOktaList(
+      oktaAppListItemSchema,
+      [
+        {
+          id: '0oaFAKE1',
+          label: 'Workday',
+          features: ['PROFILE_MASTERING'],
+          orn: 'orn:okta:idp:00oFAKE:custom_identity_source:0oaFAKE1',
+        },
+      ],
+      'test',
+    );
+
+    expect(isProfileSourceApp(apps[0].features)).toBe(true);
+    expect(apps[0].orn).toBe('orn:okta:idp:00oFAKE:custom_identity_source:0oaFAKE1');
+  });
+
+  /*
+   * `parseOktaList` DROPS a row that fails validation, so without the `.catch()`
+   * on these fields a malformed `features` would remove the app from a user's
+   * list entirely — under-reporting access to fix a badge. Every row survives,
+   * and the unreadable ones simply report no features.
+   */
+  it('never drops an app row over a malformed features or orn value', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const rows = [
+      { id: '0oaFAKE1', label: 'One', features: ['PROFILE_MASTERING'] },
+      { id: '0oaFAKE2', label: 'Two', features: 'PROFILE_MASTERING' },
+      { id: '0oaFAKE3', label: 'Three', features: [7, null] },
+      { id: '0oaFAKE4', label: 'Four', features: null },
+      { id: '0oaFAKE5', label: 'Five', orn: 42 },
+    ];
+
+    const apps = parseOktaList(oktaAppListItemSchema, rows, 'test');
+
+    expect(apps.map((a) => a.id)).toEqual([
+      '0oaFAKE1',
+      '0oaFAKE2',
+      '0oaFAKE3',
+      '0oaFAKE4',
+      '0oaFAKE5',
+    ]);
+    // Unreadable → undefined → not a source. Absence never unlocks an attribute
+    // on its own; see the `profileMastering` suite.
+    expect(apps.slice(1).map((a) => isProfileSourceApp(a.features))).toEqual([
+      false,
+      false,
+      false,
+      false,
+    ]);
   });
 });
 

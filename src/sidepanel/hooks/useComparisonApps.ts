@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useOktaApi } from './useOktaApi';
 import type { OktaUser } from '../../shared/types';
-import type { AppEntry } from '../components/users/comparison/comparisonAnalytics';
+import type { UserAppAssignment } from './useOktaApi/userOperations';
 
 /** Inputs to {@link useComparisonApps}. */
 interface UseComparisonAppsOptions {
@@ -23,12 +23,29 @@ interface UseComparisonAppsOptions {
 
 /** Value returned by {@link useComparisonApps}. */
 interface UseComparisonAppsReturn {
-  /** App assignments for the context user. */
-  contextApps: AppEntry[];
-  /** App assignments for the compared user. */
-  comparedApps: AppEntry[];
+  /**
+   * App assignments for the context user.
+   *
+   * The full {@link UserAppAssignment} rather than the narrower `AppEntry` the
+   * comparison's diffing needs: `isProfileSource` rides the same walk and is what
+   * the profile-editability gate resolves a `PROFILE_MASTER` attribute against.
+   * `AppEntry` is a structural subset, so every existing consumer is unaffected.
+   */
+  contextApps: UserAppAssignment[];
+  /** App assignments for the compared user. See {@link contextApps}. */
+  comparedApps: UserAppAssignment[];
   /** True while both users' app lists are being (re)fetched. */
   isLoadingApps: boolean;
+  /**
+   * Whether a walk has actually returned.
+   *
+   * The same distinction `useUserApps.hasLoaded` draws, and needed here for the
+   * same reason: an empty `contextApps` means *either* nothing has loaded yet
+   * *or* the walk finished and the user genuinely has no apps. A consumer that
+   * collapses the two reads "no profile source" off a list that has not arrived,
+   * and unlocks attributes it cannot yet prove anything about.
+   */
+  appsLoaded: boolean;
   /**
    * True when **either** user's app walk did not finish, so the lists above are
    * short by an unknown amount. Consumers must not present a count, an overlap
@@ -65,9 +82,13 @@ export function useComparisonApps({
 }: UseComparisonAppsOptions): UseComparisonAppsReturn {
   const { getUserApps } = useOktaApi({ targetTabId: targetTabId ?? null });
 
-  const [contextApps, setContextApps] = useState<AppEntry[]>([]);
-  const [comparedApps, setComparedApps] = useState<AppEntry[]>([]);
+  const [contextApps, setContextApps] = useState<UserAppAssignment[]>([]);
+  const [comparedApps, setComparedApps] = useState<UserAppAssignment[]>([]);
   const [isLoadingApps, setIsLoadingApps] = useState(false);
+  // Starts false and is cleared by `resetApps`, so "the lists are empty because
+  // nothing has run" never reads as "the lists are empty because there is
+  // nothing". See the field doc on the return type.
+  const [appsLoaded, setAppsLoaded] = useState(false);
   // Starts false and is only ever set from a completed load: "nothing has failed"
   // is the honest reading before anything has been attempted.
   const [appsIncomplete, setAppsIncomplete] = useState(false);
@@ -88,6 +109,7 @@ export function useComparisonApps({
         // the buckets are a set difference, so a missing row on one side becomes a
         // spurious "only the other user has this".
         setAppsIncomplete(!context.complete || !compared.complete);
+        setAppsLoaded(true);
       })
       .finally(() => {
         if (!cancelled) setIsLoadingApps(false);
@@ -109,7 +131,11 @@ export function useComparisonApps({
     setContextApps([]);
     setComparedApps([]);
     setAppsIncomplete(false);
+    // Cleared with the lists it describes. Leaving it set would present the
+    // emptied arrays as a finished answer — which is how a reset came to unlock
+    // every profile-mastered attribute until the next walk returned.
+    setAppsLoaded(false);
   }, []);
 
-  return { contextApps, comparedApps, isLoadingApps, appsIncomplete, resetApps };
+  return { contextApps, comparedApps, isLoadingApps, appsLoaded, appsIncomplete, resetApps };
 }

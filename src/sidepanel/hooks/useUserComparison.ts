@@ -221,13 +221,12 @@ export function useUserComparison({
   const [comparedUser, setComparedUser] = useState<OktaUser | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
 
-  const { contextApps, comparedApps, isLoadingApps, appsIncomplete, resetApps } = useComparisonApps(
-    {
+  const { contextApps, comparedApps, isLoadingApps, appsLoaded, appsIncomplete, resetApps } =
+    useComparisonApps({
       targetTabId,
       contextUserId: contextUser.id,
       comparedUser,
-    },
-  );
+    });
 
   // Refresh the compared user's memberships after a group is copied onto them,
   // so the row re-buckets on the next load (mirrors the context-side refresh the
@@ -354,14 +353,21 @@ export function useUserComparison({
   // users, so a truncated walk on either side locks the mastered attributes on
   // both — the safe direction, and the one that keeps the two columns telling
   // the same story about the same attribute.
+  //
+  // `appsLoaded` is the load-bearing half. Both arrays start `[]` with
+  // `appsIncomplete` false, so passing them straight through would hand the gate
+  // a *completed empty walk* — "this user is attached to no profile source" —
+  // for the whole loading window and again after every `resetApps`. That reads
+  // as an answer and unlocks every mastered attribute. `undefined` is the honest
+  // value until a walk returns, and it locks.
   const contextMastering = useMemo(
-    () => profileMastering(contextApps, !appsIncomplete),
-    [contextApps, appsIncomplete],
+    () => profileMastering(appsLoaded ? contextApps : undefined, !appsIncomplete),
+    [appsLoaded, contextApps, appsIncomplete],
   );
 
   const comparedMastering = useMemo(
-    () => profileMastering(comparedApps, !appsIncomplete),
-    [comparedApps, appsIncomplete],
+    () => profileMastering(appsLoaded ? comparedApps : undefined, !appsIncomplete),
+    [appsLoaded, comparedApps, appsIncomplete],
   );
 
   // The attribute vocabulary the config is reconciled against: the union of both

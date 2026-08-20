@@ -288,12 +288,12 @@ export const LockedWriteOnly: Story = {
   },
 };
 
-/** A profile master owns the attribute; a write here would be overwritten at the next import. */
+/** A profile master owns the attribute, so it is changed at that source rather than here. */
 export const LockedExternallyMastered: Story = {
   args: {
     editability: locked(
       'externally-mastered',
-      'An external system masters this attribute (Active Directory), so a change made here would be overwritten at the next import.',
+      'An external system masters this attribute (Active Directory), so it is changed there rather than here.',
       'Active Directory',
     ),
     onChange: fn(),
@@ -343,7 +343,7 @@ export const Compact: Story = {
     attribute: streetAddress,
     editability: locked(
       'externally-mastered',
-      'An external system masters this attribute (Active Directory), so a change made here would be overwritten at the next import.',
+      'An external system masters this attribute (Active Directory), so it is changed there rather than here.',
       'Active Directory',
     ),
     onChange: fn(),

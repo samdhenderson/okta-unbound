@@ -12,6 +12,7 @@ import {
   extractAppAssignmentScope,
   extractAppGrantGroupId,
   type OktaAppListItem,
+  isProfileSourceApp,
   type AppAssignmentScope,
 } from '@/shared/schemas/okta';
 import { createLogger } from '../../../shared/utils/logger';
@@ -43,6 +44,25 @@ export interface UserAppAssignment {
    * action (ADR-0031).
    */
   grantGroupId?: string;
+  /**
+   * Whether Okta reports this app as a **profile source** (`features` contains
+   * `PROFILE_MASTERING`).
+   *
+   * This is the per-user half of the profile-attribute editability gate: an
+   * attribute whose schema says it follows the org's profile-source order is
+   * owned by Okta — and editable — for a user attached to no profile source.
+   * See `sidepanel/components/users/profileEditability`.
+   *
+   * `false` covers both "Okta listed features and this is not one of them" and
+   * "Okta named no features at all". The two are not distinguished here because
+   * the gate never *unlocks* on this field alone — an app list that has not
+   * completed keeps every mastered attribute locked regardless, so a `false` we
+   * are unsure of cannot open anything.
+   *
+   * Costs no extra request: it rides the same app rows `scope` and
+   * `grantGroupId` are read from.
+   */
+  isProfileSource: boolean;
 }
 
 /**
@@ -149,6 +169,11 @@ export function createUserOperations(coreApi: CoreApi) {
                 // a well-formed group id yields undefined rather than flowing
                 // into a later request path). Still zero extra requests.
                 grantGroupId: extractAppGrantGroupId(app._embedded),
+                // Read off the row itself rather than the embed: `features` is a
+                // property of the app instance, not of this user's assignment to
+                // it. Still the same request — this is what the Okta admin
+                // console reads to show a user's profile source.
+                isProfileSource: isProfileSourceApp(app.features),
               });
             }
           },

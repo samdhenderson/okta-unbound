@@ -43,6 +43,7 @@ convention; the specs in [`../`](../README.md) describe the _what_.
 | [0034](./0034-naming-the-group-that-grants-an-app.md)              | Naming the group that grants an app                                               | Accepted | Embed first at zero cost; a visible, cancellable intersection only where scope is `GROUP`.                                   |
 | [0035](./0035-the-first-profile-write.md)                          | The first profile write — an unconfirmed outcome is never reported as a failure   | Accepted | Sparse patch on unverified merge; `'unknown'` ≠ `'failed'`; mastering gate replaces the allow-list; undo is a forward write. |
 | [0036](./0036-a-predicted-access-change-is-never-asserted.md)      | A predicted access change is hedged, withheld, or silent — never asserted         | Accepted | Zero-cost blast radius; six gates before a removal; an unevaluable rule withholds; one pass, never a fixed point.            |
+| [0037](./0037-the-profile-source-is-a-fact-about-the-user.md)      | A user's profile source is on the app row, not in the schema                      | Accepted | `master.priority` exists only for `OVERRIDE`; `features: PROFILE_MASTERING` names the source; no source attached ⇒ editable. |
 
 ## Adding an ADR
 
