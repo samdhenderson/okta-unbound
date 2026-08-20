@@ -114,6 +114,14 @@ rule targets + exclusions and labeled as such inline.
 Mass-edit one profile field (department rename, title change) across many users, without
 fighting externally-mastered (AD/HR) profiles.
 
+**The schema facts are already banked** ([ADR-0033](./adr/0033-admin-authored-profile-display.md)).
+The org's profile schema is read, validated and cached (`getUserProfileSchema` →
+`cacheKeys.userSchema`), and `oktaUserSchemaPropertySchema` already captures
+`mutability`, `required`, `type`, `enum`/`oneOf` and the `master` block — the mastering
+signal this feature's differentiator turns on — plus `AttributeDescriptor.raw` for
+round-tripping a non-string value. Nothing renders any of it yet; this build is their
+first reader, and it inherits a validated boundary rather than designing one.
+
 - New endpoint: `POST /api/v1/users/{id}` (partial profile update — Okta merges);
   follow the `suspendUser` content-script pattern; zod-validate the response (ADR-0006).
 - **Mastering detection (the differentiator):** skip users whose target attribute is
@@ -193,12 +201,35 @@ Carried forward from the A/B build (surfaced while working, none blocking):
   the existing counts.
 - **`useGroupsLoader` mount-rehydrate races `loadAllGroups`** (characterized in its
   docstring) — relevant if A1/A2 start triggering loads.
+- **Finish the eyebrow migration.** `Eyebrow` (ADR-0030's recipe, finally extracted) is
+  the single uppercase section label, but roughly eighteen files still hand-roll
+  `uppercase tracking-*` — `RuleCard`, `ContextBar`, `PolicyCard`, `StatCard`,
+  `ColumnPicker`, `PresetControls` and the rest of
+  `grep -rl "uppercase tracking" src/sidepanel/components`. Mechanical and exempt from
+  the plan gate (ADR-0024), but do it as its own PR: it is the only thing that stops the
+  four-recipe drift returning, and each swap is a visual diff worth seeing on its own.
+- **Dead-code pass over `src/shared/tabState/`.** `TabStateManager` writes
+  `chrome.storage.local` directly, so the background's `saveTabState` / `loadTabState` /
+  `clearTabState` message actions (`src/background/index.ts:244`–`300`) have no sender
+  anywhere in the codebase — three validated message actions maintained for nobody.
+  `RulesTab` is the module's only consumer while its `TabName` union spans every tab.
+  While there: the lone `chrome.storage.sync.set` at `src/background/index.ts:326` has no
+  reader either (ADR-0033 §2). Run `npm run knip` and remove what it confirms; removing a
+  message action is a security-surface reduction, so review it as one.
 
 ---
 
 ## Detail-page layout contract adoption — pending ADR-0030 migration
 
-Four detail-page surfaces still need to adopt the `DetailSection` / `ActionBar` /
+ADR-0030 said Users and Groups adopt the contract first. Both have:
+
+- [x] **Groups** — the group detail view pushed from the list, with the header owning
+      identity (ADR-0032).
+- [x] **Users** — the detail rung is now `UserActionBar` above three tabbed panes of one
+      card (`UserDetailPanel`), the header describes the user (`userIdentity`), and
+      `UserProfileCard` / `userProfileSections.ts` are deleted rather than restyled.
+
+Four detail-page surfaces still need the `DetailSection` / `ActionBar` /
 `EntityLink` / `Badge` contract from [ADR-0030](./adr/0030-detail-page-layout-contract.md):
 
 - [ ] **Rules** (`src/sidepanel/components/RuleCard.tsx`) — hand-rolls an `<a>` with

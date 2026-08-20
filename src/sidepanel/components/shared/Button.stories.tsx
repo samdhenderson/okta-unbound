@@ -115,3 +115,25 @@ export const Sizes: Story = {
   ),
   args: { variant: 'primary' },
 };
+
+/**
+ * A labelled **disclosure** trigger: `expanded` + `controls` put `aria-expanded`
+ * and `aria-controls` on the button, so the region it shows is reachable from it.
+ * The same pair `IconButton` carries for icon-only chevrons.
+ */
+export const Disclosure: Story = {
+  render: (args) => (
+    <div>
+      <Button {...args} expanded controls="button-disclosure-region" icon="minus">
+        Manage
+      </Button>
+      <div
+        id="button-disclosure-region"
+        className="mt-2 rounded-md border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700"
+      >
+        The region this button shows and hides.
+      </div>
+    </div>
+  ),
+  args: { variant: 'ghost', size: 'sm' },
+};

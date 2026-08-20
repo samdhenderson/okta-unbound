@@ -248,6 +248,17 @@ const Harness: React.FC<HarnessProps> = ({
 
 const searchInput = () => screen.getByPlaceholderText('Search by email, name, or login…');
 
+/**
+ * The search-results region's label.
+ *
+ * RETARGETED (ADR-0022(3)): the `Search Results` heading and the separate count
+ * pill beside it collapsed into one `"{n} matches"` eyebrow, so a single node now
+ * carries both facts these assertions ever read off them — that results are on
+ * screen at all, and how many. Anchored, so it matches the label and not a
+ * container that happens to contain it.
+ */
+const RESULTS_COUNT = /^\d+ match(es)?$/;
+
 /** Drives the search phase and picks Bob. The debounce is 600ms and is not injectable. */
 async function selectComparedUser(user: OktaUser = comparedUser) {
   await userEvent.type(searchInput(), 'bob');
@@ -267,10 +278,11 @@ async function openComparison() {
   await waitForLoadToSettle();
 }
 
-const tab = (name: 'Overview' | 'Groups' | 'Apps') =>
-  screen.getByRole('tab', { name: new RegExp(`^${name}`) });
+type ComparisonTab = 'Overview' | 'Groups' | 'Apps';
 
-const gotoTab = async (name: 'Overview' | 'Groups' | 'Apps') => userEvent.click(tab(name));
+const tab = (name: ComparisonTab) => screen.getByRole('tab', { name: new RegExp(`^${name}`) });
+
+const gotoTab = async (name: ComparisonTab) => userEvent.click(tab(name));
 
 /**
  * Show every row regardless of the diff tab's filter.
@@ -392,7 +404,7 @@ describe('UserComparisonModal', () => {
         screen.getByRole('heading', { name: 'Compare with another user' }),
       ).toBeInTheDocument();
       expect(searchInput()).toHaveValue('');
-      expect(screen.queryByText('Search Results')).not.toBeInTheDocument();
+      expect(screen.queryByText(RESULTS_COUNT)).not.toBeInTheDocument();
       expect(screen.getByText('Start typing to search')).toBeInTheDocument();
 
       // Reselecting the same user refires both app loads, and activeTab is back to Overview.
@@ -882,13 +894,14 @@ describe('UserComparisonModal', () => {
       expect(userSearchCalls()).toHaveLength(0);
 
       await userEvent.type(searchInput(), 'xample');
-      await screen.findByText('Search Results', {}, { timeout: 3000 });
+      await screen.findByText(RESULTS_COUNT, {}, { timeout: 3000 });
 
       // The API returned both Bob and Alice; only Bob is offered as a result card.
       // (Scoped to the result headings: "Alice Context" also appears in the blurb above.)
       const resultNames = screen.getAllByRole('heading', { level: 4 }).map((h) => h.textContent);
       expect(resultNames).toEqual(['Bob Compared']);
-      expect(screen.getByText('1 user')).toBeInTheDocument();
+      // …and the region says so: one match, not the two the API returned.
+      expect(screen.getByText('1 match')).toBeInTheDocument();
     });
 
     it('CHARACTERIZED: a failed search shows no error at all — the modal drops useUserSearch.error', async () => {
@@ -913,7 +926,7 @@ describe('UserComparisonModal', () => {
 
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
       expect(screen.queryByText('Search backend exploded')).not.toBeInTheDocument();
-      expect(screen.queryByText('Search Results')).not.toBeInTheDocument();
+      expect(screen.queryByText(RESULTS_COUNT)).not.toBeInTheDocument();
       // Nor does the "start typing" prompt come back — the phase renders as simply empty.
       expect(screen.queryByText('Start typing to search')).not.toBeInTheDocument();
     });
@@ -921,11 +934,11 @@ describe('UserComparisonModal', () => {
     it('clearing the query restores the empty prompt and drops the results', async () => {
       render(<Harness />);
       await userEvent.type(searchInput(), 'bob');
-      await screen.findByText('Search Results', {}, { timeout: 3000 });
+      await screen.findByText(RESULTS_COUNT, {}, { timeout: 3000 });
 
       await userEvent.clear(searchInput());
 
-      await waitFor(() => expect(screen.queryByText('Search Results')).not.toBeInTheDocument());
+      await waitFor(() => expect(screen.queryByText(RESULTS_COUNT)).not.toBeInTheDocument());
       expect(screen.getByText('Start typing to search')).toBeInTheDocument();
     });
   });

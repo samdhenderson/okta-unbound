@@ -207,6 +207,14 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
       // Core API
       makeApiRequest: coreApi.makeApiRequest,
+      // The reusable "many calls, one tracked operation" wiring (ADR-0009):
+      // start → live counts in the ActivityBar → cancel → complete. Exposed so a
+      // side-panel hook whose fan-out is linear in list length can pay its cost
+      // *visibly* rather than as a silent background burst — `useUserApps`'s
+      // granting-group fallback is the first such caller. Reach for it only when
+      // the work is genuinely a batch; a single request still goes through
+      // `makeApiRequest`.
+      runOperation: coreApi.runOperation,
 
       // Group operations
       getAllGroupMembers: groupMemberOps.getAllGroupMembers,
@@ -227,7 +235,6 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
 
       // User operations
       getUserLastLogin: userOps.getUserLastLogin,
-      getUserAppAssignments: userOps.getUserAppAssignments,
       getUserApps: userOps.getUserApps,
       batchGetUserDetails: userOps.batchGetUserDetails,
       scanGroupMfa: userOps.scanGroupMfa,

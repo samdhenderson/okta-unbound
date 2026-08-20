@@ -448,13 +448,15 @@ describe('UsersTab sub-navigation', () => {
   // ------------------------------------------------ no fan-out on navigation
   /**
    * CHARACTERIZATION — added ahead of the detail rung's rebuild into three
-   * tabbed panes (Groups / Apps / Profile). Quirk 3 above pins that a *pushed*
-   * comparison survives re-renders; these two pin the other half, which the
-   * rework can break just as quietly: **moving between rungs is free**. The
-   * memberships walk is served from the entity cache and the apps walk belongs
-   * to the comparison alone, so a round trip must add neither. Wave 1 retargets
-   * these rather than deleting them — a pane switch that refetches is exactly
-   * the regression they exist to catch.
+   * tabbed panes (Groups / Apps / Profile), and still green against it with no
+   * retarget: they name no rung-internal DOM, only the requests a round trip is
+   * allowed to make. Quirk 3 above pins that a *pushed* comparison survives
+   * re-renders; these two pin the other half, which the rework could have broken
+   * just as quietly: **moving between rungs is free**. The memberships walk is
+   * served from the entity cache and the apps walk belongs to the comparison
+   * alone, so a round trip must add neither. (The rung's own panes now defer
+   * their loads the same way — a pane switch that refetches is the same
+   * regression, one level down.)
    */
   const adaGroupsCalls = () =>
     schedulerEndpoints().filter((e) => /^\/api\/v1\/users\/u1\/groups/.test(e));

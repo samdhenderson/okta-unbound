@@ -20,6 +20,16 @@
  * reach Okta without a click — live user-page detection, the user-search debounce
  * and the Add-to-Group type-ahead (ADR-0018).
  *
+ * ## The detail rung's panes
+ *
+ * Which of the rung's three panes (Groups / Apps / Profile) is on screen — and
+ * the apps and profile-schema loads gated on it — live in
+ * {@link sidepanel/hooks/useUserDetailPanes.useUserDetailPanes}, surfaced here as
+ * `panes`. It is a separate hook rather than more fields on this one because the
+ * pane's own filters and disclosures stay local to their pane; only `pane`
+ * itself is read by anything outside the card (the tiered `ActionBar` and the
+ * header's apps metric).
+ *
  * ## Sub-navigation
  *
  * The hook also owns the tab's {@link sidepanel/hooks/useViewStack.useViewStack}
@@ -45,6 +55,7 @@ import { useDetectedUser } from './useDetectedUser';
 import { useUserLifecycleActions } from './useUserLifecycleActions';
 import { useAddToGroup } from './useAddToGroup';
 import { useViewStack, type ViewStack } from './useViewStack';
+import { useUserDetailPanes, type UseUserDetailPanesReturn } from './useUserDetailPanes';
 
 /** Options for {@link useUsersTabState}. */
 export interface UseUsersTabStateOptions {
@@ -167,6 +178,14 @@ export interface UseUsersTabStateReturn {
   /** The Add-to-Group modal's state machine (type-ahead, selection, add). */
   addToGroup: ReturnType<typeof useAddToGroup>;
   /**
+   * The detail rung's three panes: which one is on screen, and the apps and
+   * profile data each of them loads on first entry. Lives in its own hook
+   * ({@link sidepanel/hooks/useUserDetailPanes.useUserDetailPanes}) because
+   * `pane` is the only piece of that state the rung's neighbours read — the
+   * tiered `ActionBar` and the header's apps metric.
+   */
+  panes: UseUserDetailPanesReturn;
+  /**
    * The Add-to-Group modal's confirm handler — use this in place of
    * {@link UseUsersTabStateReturn.addToGroup}'s own `confirmAddToGroup`. It snapshots
    * the group being confirmed before delegating, so the row for that group can flash
@@ -236,7 +255,7 @@ export function useUsersTabState({
   // UserOverview / user comparison). The orchestrator keeps owning the merged
   // `error` banner and the `isLoadingMemberships` flag via the hook's callbacks,
   // so last-write-wins across search / auto-load / lifecycle is preserved.
-  const { memberships, loadMemberships, clearMemberships } = useUserMemberships({
+  const { memberships, rules, loadMemberships, clearMemberships } = useUserMemberships({
     targetTabId,
     onError: setError,
     onLoadingChange: setIsLoadingMemberships,
@@ -455,6 +474,18 @@ export function useUsersTabState({
     [selectedUser, targetTabId, getMembershipRuleProof],
   );
 
+  // The detail rung's panes. Both of its loads are gated on their own pane and on
+  // `isActive`, so opening a user pays for Groups only and a hidden tab pays for
+  // nothing (ADR-0018).
+  const panes = useUserDetailPanes({
+    user: selectedUser,
+    targetTabId,
+    oktaOrigin,
+    memberships,
+    rules,
+    enabled: isActive,
+  });
+
   const { pop: popCompare } = nav;
   const openCompare = useCallback(() => {
     if (!selectedUser) return;
@@ -489,6 +520,7 @@ export function useUsersTabState({
     refreshSelectedUserMemberships,
     lifecycle,
     addToGroup,
+    panes,
     confirmAddToGroup,
     recentlyAddedGroupId,
   };

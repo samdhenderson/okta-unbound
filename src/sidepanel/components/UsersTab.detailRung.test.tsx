@@ -1,19 +1,20 @@
 /**
- * CHARACTERIZATION TESTS for the Users tab's **detail rung**, as it exists today.
+ * CHARACTERIZATION TESTS for the Users tab's **detail rung**.
  *
- * The rung is about to be rebuilt into three tabbed panes (Groups / Apps /
- * Profile) with the lifecycle-actions card folded into a tiered `ActionBar`. That
- * moves a lot of DOM. Under ADR-0022(3) a replaced unit has its suite **retargeted
- * assertion by assertion**, never deleted wholesale — which only works if the
- * assertions exist and are legible first. That is what this file is: the current
- * contract, written down so the next wave can prove it survived.
+ * Written before the rung was rebuilt into three tabbed panes (Groups / Apps /
+ * Profile) with the lifecycle-actions card folded into a tiered `ActionBar`, and
+ * **retargeted onto that DOM assertion by assertion** afterwards (ADR-0022(3)) —
+ * which is what the file was for. Nothing was dropped in the move: every case
+ * that existed before the rework exists after it, stating the same contract
+ * against the surface that now carries it.
  *
- * **Wave 1 retargets these; it does not delete them.** Each block below says what
- * it protects. Where a query depends on something the rework is explicitly
- * replacing (a tab named "All", a card headed "Lifecycle Actions"), the dependency
- * is isolated in a single helper at the top of the block, so retargeting means
- * editing the helper rather than every assertion under it. Anything that pins
- * behavior nobody is endorsing carries its own `CHARACTERIZATION:` note.
+ * Each block below says what it protects, and each isolates its dependency on
+ * *where* the rung puts things in a single helper at the top of the block — a
+ * profile tab named "All" became `openAttributeSurface`'s Profile pane, a card
+ * headed "Lifecycle Actions" became `openManageBand`, a row-level "Prove it"
+ * became `openRow` + "Ask Okta" — so the retarget edited the helper rather than
+ * every assertion under it. Anything that pins behavior nobody is endorsing
+ * carries its own `CHARACTERIZATION:` note; those notes survived the move too.
  *
  * Harness: the same one `UsersTab.test.tsx` and `UsersTab.navigation.test.tsx`
  * use. There is no MSW here and there is nothing for it to intercept — the side
@@ -244,13 +245,13 @@ beforeEach(() => {
 // ===========================================================================
 // 1. Every membership states its source, in the shared wording.
 //
-//    Wave 1 moves these rows into a Groups pane. RETARGET, do not delete: the
-//    contract is that each classification still reaches the reader as the
-//    sentence `membershipSourceLine` composes for it — which is why the expected
-//    strings here are derived from that function rather than typed out. Three of
-//    the four cases (UNKNOWN, app-mastered, rule-managed-but-unattributed) once
-//    rendered as blank space on this surface, so "it says something" is the
-//    load-bearing half of the assertion.
+//    Survived the move into the Groups pane with no edit at all — the point of
+//    deriving the expected strings from `membershipSourceLine` rather than
+//    typing them out. The contract is that each classification still reaches the
+//    reader as the sentence that function composes for it. Three of the four
+//    cases (UNKNOWN, app-mastered, rule-managed-but-unattributed) once rendered
+//    as blank space on this surface, so "it says something" is the load-bearing
+//    half of the assertion.
 // ===========================================================================
 describe('detail rung: memberships render with their source line', () => {
   it('words a rule-attributed, a direct and an app-mastered membership as `membershipSourceLine` does', async () => {
@@ -315,17 +316,34 @@ describe('detail rung: memberships render with their source line', () => {
 // ===========================================================================
 // 2. Lifecycle gating is driven by the user's Okta status.
 //
-//    Wave 1 folds these buttons into a tiered ActionBar. RETARGET, do not
-//    delete: which verbs a status offers, and that every verb confirms before it
-//    acts, are the contract — where the buttons sit is not.
+//    RETARGETED (ADR-0022(3)): the buttons moved into the tiered `ActionBar`'s
+//    second tier, behind the **Manage** disclosure, and their labels are
+//    sentence case. Both are captured in the two helpers below — the vocabulary
+//    and `openManageBand` — so every assertion under them is the one that was
+//    written before the rework. Which verbs a status offers, and that every verb
+//    confirms before it acts, are the contract; where the buttons sit is not.
 // ===========================================================================
 describe('detail rung: lifecycle verbs are gated by status', () => {
-  /** The full vocabulary; a status is characterized by which subset it offers. */
-  const ALL_VERBS = ['Suspend User', 'Unsuspend User', 'Reset Password'] as const;
+  /**
+   * The full vocabulary; a status is characterized by which subset it offers.
+   * Sentence case since the rework — the *dialog* titles and confirm buttons are
+   * unchanged, so only the trigger names moved.
+   */
+  const ALL_VERBS = ['Suspend user', 'Unsuspend user', 'Reset password'] as const;
 
   /** Which verbs the rung currently offers, in vocabulary order. */
   const offeredVerbs = () =>
     ALL_VERBS.filter((name) => detail().queryByRole('button', { name }) !== null);
+
+  /**
+   * The ONE place this block knows where the account-state verbs live: tier 2 of
+   * the action strip, which is not rendered at all until **Manage** is pressed.
+   * Opening it is navigation, not an action — nothing is issued by it, which the
+   * `lifecycleCalls()` assertions under each test continue to prove.
+   */
+  async function openManageBand(uev: ReturnType<typeof userEvent.setup>) {
+    await uev.click(detail().getByRole('button', { name: 'Manage' }));
+  }
 
   async function renderWithStatus(
     uev: ReturnType<typeof userEvent.setup>,
@@ -342,13 +360,14 @@ describe('detail rung: lifecycle verbs are gated by status', () => {
     }));
     render(<UsersTab targetTabId={1} />);
     await loadDetectedUser(uev);
+    await openManageBand(uev);
   }
 
   it('offers suspend and reset-password — and not unsuspend — for an ACTIVE user', async () => {
     const uev = userEvent.setup();
     await renderWithStatus(uev, 'ACTIVE');
 
-    expect(offeredVerbs()).toEqual(['Suspend User', 'Reset Password']);
+    expect(offeredVerbs()).toEqual(['Suspend user', 'Reset password']);
   });
 
   it('offers unsuspend only for a SUSPENDED user', async () => {
@@ -358,7 +377,7 @@ describe('detail rung: lifecycle verbs are gated by status', () => {
     // CHARACTERIZATION: reset-password is withheld from a suspended user, who
     // cannot sign in to use it. Nobody has endorsed that as a rule — it is what
     // the status gate does today, and the rework must not change it silently.
-    expect(offeredVerbs()).toEqual(['Unsuspend User']);
+    expect(offeredVerbs()).toEqual(['Unsuspend user']);
   });
 
   it('offers nothing for a DEPROVISIONED user, and says so instead of rendering an empty card', async () => {
@@ -374,21 +393,21 @@ describe('detail rung: lifecycle verbs are gated by status', () => {
   it.each([
     {
       status: 'ACTIVE' as const,
-      verb: 'Suspend User',
+      verb: 'Suspend user',
       dialogTitle: 'Suspend User',
       confirm: 'Suspend',
       endpoint: `/api/v1/users/${ADA_ID}/lifecycle/suspend`,
     },
     {
       status: 'ACTIVE' as const,
-      verb: 'Reset Password',
+      verb: 'Reset password',
       dialogTitle: 'Reset Password',
       confirm: 'Send Reset Email',
       endpoint: `/api/v1/users/${ADA_ID}/lifecycle/reset_password?sendEmail=true`,
     },
     {
       status: 'SUSPENDED' as const,
-      verb: 'Unsuspend User',
+      verb: 'Unsuspend user',
       dialogTitle: 'Unsuspend User',
       confirm: 'Unsuspend',
       endpoint: `/api/v1/users/${ADA_ID}/lifecycle/unsuspend`,
@@ -415,27 +434,48 @@ describe('detail rung: lifecycle verbs are gated by status', () => {
     route(/\/lifecycle\//, () => ({ success: true }));
     await renderWithStatus(uev, 'ACTIVE');
 
-    await uev.click(detail().getByRole('button', { name: 'Suspend User' }));
+    await uev.click(detail().getByRole('button', { name: 'Suspend user' }));
     await uev.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(lifecycleCalls()).toEqual([]);
-    // Still offered — cancelling arms nothing and consumes nothing.
-    expect(offeredVerbs()).toEqual(['Suspend User', 'Reset Password']);
+    // Still offered — cancelling arms nothing, consumes nothing, and does not
+    // collapse the Manage band the verb was reached through.
+    expect(offeredVerbs()).toEqual(['Suspend user', 'Reset password']);
   });
 });
 
 // ===========================================================================
-// 3. "Prove it" is one call per row, per click (ADR-0031).
+// 3. The per-row proof is one call per row, per click (ADR-0031).
 //
-//    Wave 1 moves this into the Groups pane. RETARGET, do not delete: the whole
-//    point of the affordance is its cost. A forty-group user is forty requests,
-//    so it may never run on mount, never for a list, and never for a row nobody
-//    pressed. Counting scheduler endpoints is the only way to say that.
+//    RETARGETED (ADR-0022(3)): the affordance is now called **Ask Okta** and
+//    sits inside the row's disclosure instead of on the collapsed row, so the
+//    row is opened first. The contract is untouched: the whole point of the
+//    affordance is its cost. A forty-group user is forty requests, so it may
+//    never run on mount, never for a list, never for a row nobody pressed — and
+//    now, never for a row nobody even opened. Counting scheduler endpoints is
+//    the only way to say that.
 // ===========================================================================
 describe('detail rung: proving one membership costs exactly one request', () => {
   const proofEndpoint = (group: OktaGroup) =>
     `/api/v1/groups/${group.id}/users/${ADA_ID}/group-rules`;
+
+  /**
+   * The ONE place this block knows where the proof action lives: behind the
+   * row's disclosure. Opening a row is navigation and must cost nothing, which
+   * the `proofCalls()` assertions on either side of it keep proving.
+   */
+  async function openRow(uev: ReturnType<typeof userEvent.setup>, groupName: string) {
+    await uev.click(
+      within(rowFor(groupName)).getByRole('button', {
+        name: `Show how ${groupName} was granted`,
+      }),
+    );
+  }
+
+  /** That row's proof action — `Ask Okta`, once the row is open. */
+  const proofAction = (groupName: string) =>
+    within(rowFor(groupName)).getByRole('button', { name: 'Ask Okta' });
 
   async function renderWithTwoGroups(uev: ReturnType<typeof userEvent.setup>) {
     route(new RegExp(`^/api/v1/users/${ADA_ID}/groups`), () => ({
@@ -454,16 +494,22 @@ describe('detail rung: proving one membership costs exactly one request', () => 
 
     // Two rows, two offers, and nothing spent until one is taken. The endpoint
     // count is asserted first, so an auto-proving regression fails as "it asked"
-    // rather than as "the button vanished".
+    // rather than as "the button vanished" — and again after both disclosures
+    // are open, since reading a row is not asking about it.
     expect(proofCalls()).toEqual([]);
-    expect(detail().getAllByRole('button', { name: /Prove it/ })).toHaveLength(2);
 
-    await uev.click(within(rowFor('Engineering Staff')).getByRole('button', { name: /Prove it/ }));
+    await openRow(uev, 'Engineering Staff');
+    await openRow(uev, 'Ops Handbook');
+
+    expect(proofCalls()).toEqual([]);
+    expect(detail().getAllByRole('button', { name: 'Ask Okta' })).toHaveLength(2);
+
+    await uev.click(proofAction('Engineering Staff'));
 
     // One row, one request — the other row is untouched.
     await waitFor(() => expect(proofCalls()).toEqual([proofEndpoint(gRuleFed)]));
 
-    await uev.click(within(rowFor('Ops Handbook')).getByRole('button', { name: /Prove it/ }));
+    await uev.click(proofAction('Ops Handbook'));
 
     await waitFor(() =>
       expect(proofCalls()).toEqual([proofEndpoint(gRuleFed), proofEndpoint(gDirect)]),
@@ -490,17 +536,19 @@ describe('detail rung: proving one membership costs exactly one request', () => 
     );
     const otherRow = membershipSourceLine(classified(gDirect));
 
-    await uev.click(within(rowFor('Engineering Staff')).getByRole('button', { name: /Prove it/ }));
+    await openRow(uev, 'Engineering Staff');
+    await uev.click(proofAction('Engineering Staff'));
 
     expect(await detail().findByText(sourceLineLabel(proven))).toBeInTheDocument();
     // CHARACTERIZATION: Okta's answer is added *beside* the deduction, never over
     // it — the row keeps saying what the classifier worked out, then what Okta
-    // says. The rework must not collapse the two into one line.
+    // says. The rework did not collapse the two into one line: the answer landed
+    // in the disclosure, and the row's own source sentence is unchanged.
     expect(sourceSentence(deduced.caption)).toBe(sourceLineLabel(deduced));
     expect(sourceSentence(otherRow.caption)).toBe(sourceLineLabel(otherRow));
-    expect(
-      within(rowFor('Ops Handbook')).getByRole('button', { name: /Prove it/ }),
-    ).toBeInTheDocument();
+    // The row nobody pressed still only *offers* an answer — it did not acquire one.
+    await openRow(uev, 'Ops Handbook');
+    expect(proofAction('Ops Handbook')).toBeInTheDocument();
   });
 
   it('reports a failed proof as no answer rather than as an answer', async () => {
@@ -508,7 +556,8 @@ describe('detail rung: proving one membership costs exactly one request', () => 
     route(/\/group-rules$/, () => ({ success: false, error: 'nope' }));
     await renderWithTwoGroups(uev);
 
-    await uev.click(within(rowFor('Engineering Staff')).getByRole('button', { name: /Prove it/ }));
+    await openRow(uev, 'Engineering Staff');
+    await uev.click(proofAction('Engineering Staff'));
 
     expect(
       await detail().findByText(/Okta did not answer for this membership/),
@@ -523,21 +572,23 @@ describe('detail rung: proving one membership costs exactly one request', () => 
 // ===========================================================================
 // 4. The user's profile attributes are reachable from the rung.
 //
-//    Wave 1 replaces the tab strip with a Profile pane, so the assertions here
-//    are about the *capability* — a named attribute and its value are findable,
-//    and a filter narrows the surface to it — never about a tab called "All".
-//    RETARGET the one helper below; the assertions under it should stand
-//    unchanged.
+//    RETARGETED (ADR-0022(3)): the profile tab strip is gone with
+//    `UserProfileCard`; the full attribute list is the rung's **Profile** pane.
+//    The assertions were always about the *capability* — a named attribute and
+//    its value are findable, and a filter narrows the surface to it — so only
+//    the one navigation helper below moved. Attribute labels are humanized now
+//    (`title` renders as `Title`), which is a label change, not a capability
+//    one: the attribute named is the same attribute.
 // ===========================================================================
 describe('detail rung: profile attributes are reachable and filterable', () => {
   /**
-   * The ONE place this block knows how today's rung exposes the full attribute
-   * list: a profile tab named "All". Wave 1 replaces this navigation, not the
-   * expectations that follow it.
+   * The ONE place this block knows how the rung exposes the full attribute list:
+   * the Profile pane. The tab's accessible name carries its count, so it is
+   * matched by prefix rather than exactly.
    */
   async function openAttributeSurface(uev: ReturnType<typeof userEvent.setup>) {
-    await uev.click(detail().getByRole('tab', { name: 'All' }));
-    return detail().getByPlaceholderText(/Filter all attributes/);
+    await uev.click(detail().getByRole('tab', { name: /^Profile/ }));
+    return detail().getByLabelText('Filter attributes');
   }
 
   async function renderWithProfile(uev: ReturnType<typeof userEvent.setup>) {
@@ -554,9 +605,9 @@ describe('detail rung: profile attributes are reachable and filterable', () => {
     await renderWithProfile(uev);
     await openAttributeSurface(uev);
 
-    expect(detail().getByText('title')).toBeInTheDocument();
+    expect(detail().getByText('Title')).toBeInTheDocument();
     expect(detail().getByText('Countess of Lovelace')).toBeInTheDocument();
-    expect(detail().getByText('login')).toBeInTheDocument();
+    expect(detail().getByText('Login')).toBeInTheDocument();
   });
 
   it('narrows the attribute list to a subset when filtered', async () => {
@@ -567,14 +618,14 @@ describe('detail rung: profile attributes are reachable and filterable', () => {
     await uev.type(filter, 'countess');
 
     // Matched on the value, not just the label — the filter reads both.
-    expect(detail().getByText('title')).toBeInTheDocument();
+    expect(detail().getByText('Title')).toBeInTheDocument();
     expect(detail().getByText('Countess of Lovelace')).toBeInTheDocument();
-    expect(detail().queryByText('login')).not.toBeInTheDocument();
+    expect(detail().queryByText('Login')).not.toBeInTheDocument();
 
     await uev.clear(filter);
     await uev.type(filter, 'no-such-attribute');
 
-    expect(detail().getByText('No matching attributes')).toBeInTheDocument();
-    expect(detail().queryByText('title')).not.toBeInTheDocument();
+    expect(detail().getByText('No attributes match')).toBeInTheDocument();
+    expect(detail().queryByText('Title')).not.toBeInTheDocument();
   });
 });

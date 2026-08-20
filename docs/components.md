@@ -146,6 +146,19 @@ Adding an entity kind is one new builder beside that entity (`groupIdentity.ts`,
 still describes the _browsed_ entity and `ContextBar` still describes the _live Okta
 tab_ — the two must not converge, and on a drilled-in view their ids routinely differ.
 
+**A detail rung that answers several questions about one entity uses tabbed panes of
+one card**, not a stack of sections — `UserDetailPanel` is the pattern (Groups / Apps /
+Profile, through shared `Tabs`). Stacking made the page a scroll where the reader
+wanted a comparison. Panes render as siblings and the inactive ones carry the `hidden`
+**attribute** as well as the class (ADR-0016/ADR-0018), so each keeps its own filter,
+pills and disclosures as local state; the attribute matters because jsdom loads no
+stylesheet, and a class-only hide leaves every pane answering `getByRole` at once. Only
+the active pane may load — which pane is showing is the one piece of state that lifts,
+because the loads are gated on it (see
+[state-management.md](./state-management.md)) — and a pane's tab shows **no count**
+until a walk has returned, tested by a `hasLoaded` flag rather than `items.length`
+("Unknown is not zero", below). The panel composes and does not fetch.
+
 `overview/shared/`: `Icon`, `StatCard`.
 
 ## Documented raw-control exceptions
@@ -178,7 +191,7 @@ comment at the call site:
   `aria-activedescendant` to a shared primitive for one consumer is the wrong
   trade. A `Input`-level combobox mode is accepted future work, gated on a second
   consumer.)
-- **Genuinely custom controls:** `ComparisonTabBar` — a one-off `role="tab"` bar.
+- **Genuinely custom controls:** `ComparisonTabBar` — a one-off `role="tab"` bar,
   Re-evaluated for migration to `Tabs` `segmented` and **kept**: `segmented`
   ignores `TabItem.icon` (only `rail` renders one), so the swap would silently
   drop the Overview/Groups/Apps glyphs. Retiring it means either accepting that

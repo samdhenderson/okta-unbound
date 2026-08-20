@@ -143,4 +143,22 @@ export const cacheKeys = {
    * @param appId - The Okta application id.
    */
   appGroups: (appId: string): EntityKey => ['appGroups', appId],
+
+  /**
+   * One user's application assignments, as `userOperations.getUserApps` reports
+   * them — the rows **and** the `complete` flag saying whether the pagination
+   * walk finished.
+   *
+   * Entity-scoped, so it keys on the Okta user id alone (see the module note).
+   * The cached value is the whole {@link UserAppsResult}, not just its rows: a
+   * partial walk is a different fact from a short list, and caching only the
+   * array would let the incompleteness be dropped on the first cache hit.
+   *
+   * Read by the Users tab's Apps pane, which loads on first entry to that pane
+   * rather than on detail open — so the entry is what makes returning to the
+   * pane free rather than a refetch.
+   *
+   * @param userId - The Okta user id.
+   */
+  userApps: (userId: string): EntityKey => ['userApps', userId],
 } as const;

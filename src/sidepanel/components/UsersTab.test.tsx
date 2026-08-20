@@ -25,7 +25,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, fireEvent } from '@testing-library/react';
+import { render, screen, act, fireEvent, within } from '@testing-library/react';
 import UsersTab from './UsersTab';
 
 // ---------------------------------------------------------------------------
@@ -191,6 +191,29 @@ async function flush() {
 
 const userSearchInput = () => screen.getByPlaceholderText('Search by email, name, or login...');
 const groupSearchInput = () => screen.getByPlaceholderText('Type to search by group name...');
+
+/**
+ * The detected-user banner's own label. It read `Detected in admin` before the
+ * banner was reduced to one row; the eyebrow is the same statement — *this user
+ * is the one open in the admin console* — and is what distinguishes the banner
+ * from the loaded rung, which is all these assertions ever needed of it.
+ */
+const DETECTED_BANNER = 'Open in admin';
+
+/**
+ * One membership row, scoped by the group id the row carries.
+ *
+ * Scoping is mandatory rather than tidy: the Groups pane header renders a filter
+ * pill for every bucket (`Rule`, `Direct`, `App`, `Unresolved`), so an unscoped
+ * query for a verdict finds the pill instead of the row's answer — and an
+ * unscoped *negative* would fail against the pill for the wrong reason.
+ */
+function membershipRow(groupName: string): HTMLElement {
+  const heading = screen.getByRole('heading', { level: 4, name: groupName });
+  const row = heading.closest('[data-group-id]');
+  expect(row).not.toBeNull();
+  return row as HTMLElement;
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -369,7 +392,7 @@ describe('detected user: manual-load banner', () => {
 
     // No fetch on detection — the banner is shown instead.
     expect(userDetailCalls()).toHaveLength(0);
-    expect(screen.getByText(/Detected in admin/)).toBeInTheDocument();
+    expect(screen.getByText(DETECTED_BANNER)).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Load' }));
@@ -391,7 +414,7 @@ describe('detected user: manual-load banner', () => {
     }
 
     expect(userDetailCalls()).toHaveLength(0);
-    expect(screen.getByText(/Detected in admin/)).toBeInTheDocument();
+    expect(screen.getByText(DETECTED_BANNER)).toBeInTheDocument();
   });
 
   it('surfaces an error when a manual Load fails', async () => {
@@ -418,13 +441,21 @@ describe('detected user: manual-load banner', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     });
 
-    expect(screen.queryByText(/Detected in admin/)).not.toBeInTheDocument();
+    expect(screen.queryByText(DETECTED_BANNER)).not.toBeInTheDocument();
     expect(userDetailCalls()).toHaveLength(0);
   });
 });
 
 // ===========================================================================
 // 3. Manual user selection → membership analysis (in-file heuristic, AS-IS).
+//
+//    RETARGETED (ADR-0022(3)): the row no longer prints the raw membership enum
+//    (`RULE BASED` / `DIRECT` / `UNKNOWN`) beside a second group-type badge. It
+//    carries one verdict badge from `membershipVerdict`, which is that same
+//    classification stated in the reader's vocabulary — `Rule`, `Direct`, `App`,
+//    `Unresolved` — so each assertion below reads the badge the row now wears
+//    instead of the enum it used to print. Every badge is read *inside its row*:
+//    the pane header carries a filter pill per bucket with the same four words.
 // ===========================================================================
 describe('membership classification (in-file heuristic)', () => {
   beforeEach(() => {
@@ -446,7 +477,11 @@ describe('membership classification (in-file heuristic)', () => {
     fireEvent.click(card);
 
     expect(await screen.findByText('Salesforce')).toBeInTheDocument();
-    expect(screen.getByText('RULE BASED')).toBeInTheDocument();
+    // An app-mastered group is still not reported as a manual add: `App` is the
+    // RULE_BASED-with-no-rule branch of the classifier, named for what it is.
+    const salesforce = membershipRow('Salesforce');
+    expect(within(salesforce).getByText('App')).toBeInTheDocument();
+    expect(within(salesforce).queryByText(/^Direct/)).not.toBeInTheDocument();
   });
 
   it('classifies a group with a matching ACTIVE rule as RULE_BASED and shows the rule', async () => {
@@ -458,7 +493,7 @@ describe('membership classification (in-file heuristic)', () => {
     fireEvent.click(await screen.findByText('Ada Lovelace', {}, { timeout: 2000 }));
 
     expect(await screen.findByText('Engineering')).toBeInTheDocument();
-    expect(screen.getByText('RULE BASED')).toBeInTheDocument();
+    expect(within(membershipRow('Engineering')).getByText('Rule')).toBeInTheDocument();
     // Named twice by design (ADR-0030's B2 row): once in the always-visible
     // answer chip, once as the navigable chip inside the evidence disclosure.
     expect(screen.getAllByText(/Eng auto-assign/).length).toBeGreaterThan(0);
@@ -473,11 +508,12 @@ describe('membership classification (in-file heuristic)', () => {
     fireEvent.click(await screen.findByText('Ada Lovelace', {}, { timeout: 2000 }));
 
     expect(await screen.findByText('Engineering')).toBeInTheDocument();
-    expect(screen.getByText('DIRECT')).toBeInTheDocument();
+    expect(within(membershipRow('Engineering')).getByText('Direct')).toBeInTheDocument();
     // The row now states this in the wording `membershipSourceLine` gives every
     // surface, rather than a sentence unique to this one. It also stops
     // overclaiming: a `DIRECT` the classifier only *inferred* reads "Likely
-    // added directly", where the old fixed sentence asserted it flatly.
+    // added directly", where the old fixed sentence asserted it flatly — and the
+    // badge hedges with it, as `Direct?`.
     expect(screen.getByText('Added directly')).toBeInTheDocument();
   });
 
@@ -494,7 +530,7 @@ describe('membership classification (in-file heuristic)', () => {
     fireEvent.click(await screen.findByText('Ada Lovelace', {}, { timeout: 2000 }));
 
     expect(await screen.findByText('Engineering')).toBeInTheDocument();
-    expect(screen.getByText('DIRECT')).toBeInTheDocument();
+    expect(within(membershipRow('Engineering')).getByText('Direct')).toBeInTheDocument();
     expect(screen.queryByText('Eng auto-assign')).not.toBeInTheDocument();
   });
 
@@ -519,12 +555,21 @@ describe('membership classification (in-file heuristic)', () => {
     fireEvent.click(await screen.findByText('Ada Lovelace', {}, { timeout: 2000 }));
 
     expect(await screen.findByText('Engineering')).toBeInTheDocument();
-    expect(screen.getByText('UNKNOWN')).toBeInTheDocument();
-    expect(screen.queryByText('DIRECT')).not.toBeInTheDocument();
-    // ...and nothing claims the user was hand-added.
-    expect(
-      screen.queryByText('This user was added directly to the group (not through a rule)'),
-    ).not.toBeInTheDocument();
+    const engineering = membershipRow('Engineering');
+    expect(within(engineering).getByText('Unresolved')).toBeInTheDocument();
+    // Scoped to the row on purpose: the pane header now offers a `Direct` filter
+    // pill, so an unscoped negative would match the pill and fail for a reason
+    // that has nothing to do with the classification. `/^Direct/` also covers the
+    // hedged `Direct?`, which would be the same overclaim wearing a question mark.
+    expect(within(engineering).queryByText(/^Direct/)).not.toBeInTheDocument();
+    // ...and nothing claims the user was hand-added. RETARGETED — and it was
+    // VACUOUS as written: the sentence this named ("This user was added directly
+    // to the group (not through a rule)") exists in no state of the app any more,
+    // so the negative could never have failed. Every claim of a manual add is
+    // worded by `membershipSourceLine` now — `Added directly` / `Likely added
+    // directly` — which the DIRECT case above asserts is what a real one looks
+    // like, so this negative can fail again.
+    expect(within(engineering).queryByText(/added directly/i)).not.toBeInTheDocument();
     // the rules-fetch failure is swallowed — no error banner.
     expect(screen.queryByText('nope')).not.toBeInTheDocument();
   });
@@ -574,6 +619,12 @@ describe('compare entry point', () => {
 
 // ===========================================================================
 // 4. Lifecycle confirm flow (real useOktaApi → scheduler).
+//
+//    RETARGETED (ADR-0022(3)): the verbs moved out of a `Lifecycle Actions` card
+//    into the action strip's second tier, behind the **Manage** disclosure, and
+//    their labels are sentence case. `renderWithActiveUser` opens that band, so
+//    the copy, the endpoint counting and the profile-preservation assertions
+//    under it are the ones written before the rework.
 // ===========================================================================
 describe('lifecycle actions', () => {
   async function renderWithActiveUser() {
@@ -591,6 +642,9 @@ describe('lifecycle actions', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Load' }));
     });
     await screen.findByRole('heading', { name: 'Ada Lovelace' });
+    // The account-state verbs are one press away, in the strip's second tier.
+    // Opening it issues nothing, which the endpoint assertions below still prove.
+    fireEvent.click(screen.getByRole('button', { name: 'Manage' }));
     // Drop the load's scheduler calls so per-test assertions see only what follows.
     runtimeSendMessage.mockClear();
   }
@@ -605,7 +659,7 @@ describe('lifecycle actions', () => {
       data: { id: 'u1', status: 'SUSPENDED', profile: { firstName: 'Ada', lastName: 'Lovelace' } },
     }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Suspend User' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Suspend user' }));
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Suspend' }));
     });
@@ -616,13 +670,17 @@ describe('lifecycle actions', () => {
     ).toBeInTheDocument();
     // Exactly one GET /users/u1 after the load: the status refresh.
     expect(schedulerEndpoints().filter((e) => e === '/api/v1/users/u1')).toHaveLength(1);
-    // status-only patch: badge flips but profile.department survives. The department is
-    // read from the profile card's Org tab now that the header owns identity and the card
-    // no longer opens with a title/department line (ADR-0032) — same invariant, same
-    // fixture value, one click further in.
+    // status-only patch: badge flips but profile.department survives. The refresh
+    // response carries no `profile` at all, so a merge that took it wholesale would
+    // lose the department — which is the invariant, and the reason this reads a
+    // profile attribute rather than the status alone. It is read from the rung's
+    // Profile pane now that the profile card is gone (ADR-0032): same invariant,
+    // same fixture value, one click further in.
     expect(screen.getAllByText('SUSPENDED').length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole('tab', { name: /Org/ }));
-    expect(screen.getByText('Engineering')).toBeInTheDocument();
+    // The pane defers the org's profile-schema read until it is first asked for,
+    // so the attributes land a tick after the tab does.
+    fireEvent.click(screen.getByRole('tab', { name: /^Profile/ }));
+    expect(await screen.findByText('Engineering')).toBeInTheDocument();
   });
 
   it('resetPassword skips the getUserById refresh and reloads no memberships', async () => {
@@ -630,7 +688,7 @@ describe('lifecycle actions', () => {
     await renderWithActiveUser();
     tabsSendMessage.mockClear();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reset Password' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset password' }));
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Send Reset Email' }));
     });
@@ -646,7 +704,7 @@ describe('lifecycle actions', () => {
     route(/\/lifecycle\/suspend/, () => ({ success: false, error: 'cannot suspend' }));
     await renderWithActiveUser();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Suspend User' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Suspend user' }));
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Suspend' }));
     });

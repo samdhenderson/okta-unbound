@@ -69,50 +69,6 @@ describe('getUserLastLogin', () => {
   });
 });
 
-describe('getUserAppAssignments', () => {
-  it('returns the first-page count when there are no more pages', async () => {
-    const core = makeCore({
-      makeApiRequest: vi.fn().mockResolvedValue({
-        success: true,
-        data: [{ id: 'a' }, { id: 'b' }],
-        headers: {},
-      }),
-    });
-    const { getUserAppAssignments } = createUserOperations(core);
-
-    const count = await getUserAppAssignments('00uFAKE1');
-
-    expect(core.makeApiRequest).toHaveBeenCalledWith(
-      '/api/v1/apps?filter=user.id+eq+"00uFAKE1"&limit=200',
-    );
-    expect(count).toBe(2);
-  });
-
-  it('returns the first-page count when a next-page Link header is present', async () => {
-    const core = makeCore({
-      makeApiRequest: vi.fn().mockResolvedValue({
-        success: true,
-        data: [{ id: 'a' }],
-        headers: { Link: '<https://example.okta.com/api/v1/apps?after=x>; rel="next"' },
-      }),
-    });
-    const { getUserAppAssignments } = createUserOperations(core);
-    expect(await getUserAppAssignments('00uFAKE1')).toBe(1);
-  });
-
-  it('returns 0 when the request has no data', async () => {
-    const core = makeCore({ makeApiRequest: vi.fn().mockResolvedValue({ success: false }) });
-    const { getUserAppAssignments } = createUserOperations(core);
-    expect(await getUserAppAssignments('00uFAKE1')).toBe(0);
-  });
-
-  it('returns 0 on a thrown error', async () => {
-    const core = makeCore({ makeApiRequest: vi.fn().mockRejectedValue(new Error('down')) });
-    const { getUserAppAssignments } = createUserOperations(core);
-    expect(await getUserAppAssignments('00uFAKE1')).toBe(0);
-  });
-});
-
 describe('getUserApps', () => {
   it('walks Link pagination and flattens id + label/name/id fallback', async () => {
     const makeApiRequest = vi

@@ -48,10 +48,12 @@ Side panel (useOktaApi)  →  Background (ApiScheduler: rate limit, retry, backo
 
 ## The API client: `useOktaApi/`
 
-`src/sidepanel/hooks/useOktaApi/` is a factory decomposed into 13 focused modules
+`src/sidepanel/hooks/useOktaApi/` is a factory decomposed into one module per concern
 (`core`, `groupMembers`, `groupBulkOps`, `groupCleanup`, `groupDiscovery`,
-`groupAnalysis`, `ruleImpact`, `ruleWrites`, `userOperations`,
-`pushGroupOps`, `utilities`, `types`, `index`). `core.ts` exposes `makeApiRequest`
+`groupAnalysis`, `ruleImpact`, `ruleWrites`, `userOperations`, `appOperations`,
+`policyOperations`, `exportEngine`, `currentUserCache`, `pushGroupOps`, `utilities`,
+`types`, `index` — list the directory rather than trusting a count here). `core.ts`
+exposes `makeApiRequest`
 (via background) and
 `sendMessage` (direct to content). **This module layout is the reference pattern**
 for decomposing other large areas — extend it, don't reinvent it.
@@ -90,8 +92,15 @@ levels:
 
 ## Persistence
 
-- `chrome.storage.local` / `sync` — tab state, preferences.
-- IndexedDB via `idb` — audit log (`shared/storage/auditStore.ts`).
+- `chrome.storage.local` — per-tab UI state (`shared/tabState/`). `chrome.storage.sync`
+  has exactly one write and no reader; do not build on it without deciding sync
+  semantics first (ADR-0033).
+- IndexedDB via `idb` — audit log (`shared/storage/auditStore.ts`), export presets
+  (`presetStore.ts`), and the per-org profile display config (`profileDisplayStore.ts`,
+  ADR-0033). All three follow one shape: a lazily-opened reused connection, a typed
+  `DBSchema`, and a singleton export whose methods never throw at the caller.
+- Both are **plaintext**. No credentials or session material, minimal PII, TTL'd — see
+  [security.md](./security.md).
 
 ## Type safety
 

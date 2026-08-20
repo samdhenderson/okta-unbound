@@ -28,6 +28,17 @@ export interface UserIdentityOptions {
    * misleading `0`.
    */
   groupCount?: number;
+  /**
+   * How many applications are assigned to the user, when the tab has already loaded
+   * them. Omitted while the apps request is still outstanding — same rule as
+   * {@link UserIdentityOptions.groupCount}, and for the same reason: a user with no
+   * apps and a user whose apps have not been fetched are different answers, and only
+   * one of them is `0`.
+   *
+   * The count must come from the full assignment list the Apps pane already
+   * resolves, not from a first-page count.
+   */
+  appCount?: number;
 }
 
 /** A counted fact, with its label pluralised to match. */
@@ -47,10 +58,11 @@ const metric = (
 /**
  * Build the header identity descriptor for a user.
  *
- * Rows are identity, then counts, then timestamps. Facts Okta has not reported are omitted
- * rather than zeroed: `managedBy.rules` is absent until the membership analysis has run.
- * A `lastLogin` of `null` is the exception — that is a real answer ("never"), not a
- * missing one, so it is stated.
+ * Rows are identity, then counts, then timestamps. The counts row carries groups and then
+ * apps. Facts Okta has not reported are omitted rather than zeroed: `managedBy.rules` is
+ * absent until the membership analysis has run, and both counts are absent until their
+ * payload lands. A `lastLogin` of `null` is the exception — that is a real answer
+ * ("never"), not a missing one, so it is stated.
  *
  * @param user - The user being browsed.
  * @param options - See {@link UserIdentityOptions}.
@@ -58,18 +70,24 @@ const metric = (
  *
  * @example
  * ```ts
- * const identity = userIdentity(user, { groupCount: memberships.length });
+ * const identity = userIdentity(user, {
+ *   groupCount: memberships.length,
+ *   appCount: apps?.length, // `undefined` until the apps request resolves
+ * });
  * ```
  */
 export function userIdentity(
   user: OktaUser,
   options: UserIdentityOptions = {},
 ): EntityIdentityDescriptor {
-  const { groupCount } = options;
+  const { groupCount, appCount } = options;
 
   const counts: IdentityRow = [];
   if (groupCount !== undefined) {
     counts.push(metric('users', groupCount, 'group'));
+  }
+  if (appCount !== undefined) {
+    counts.push(metric('app', appCount, 'app', 'Applications assigned to this user'));
   }
   const managingRules = user.managedBy?.rules?.length ?? 0;
   if (managingRules > 0) {

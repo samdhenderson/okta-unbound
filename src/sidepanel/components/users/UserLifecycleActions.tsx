@@ -1,23 +1,41 @@
 /**
  * @module sidepanel/components/users/UserLifecycleActions
- * @description Presentational lifecycle-actions panel + confirm modal for the Users tab.
+ * @description The Manage tier's body — the account-state verbs and their confirm modal.
  *
  * A pure view over the {@link useUserLifecycleActions} state machine: the
- * suspend / unsuspend / reset-password buttons (gated by the user's status) and the
- * confirmation modal that arms each action. All state and the scheduler-backed
- * requests live in the hook; this component only renders it and forwards intent.
+ * suspend / unsuspend / reset-password buttons (gated by the user's status) and
+ * the confirmation modal that arms each action. All state and the
+ * scheduler-backed requests live in the hook; this component only renders it and
+ * forwards intent. **The state machine, the gating and every confirm modal are
+ * unchanged** — only where this renders has moved.
  *
- * Rendered inside `UserProfileCard`'s `afterCard` slot. The confirm modal is the
- * shared `Modal` (fixed-position overlay), so co-locating it with the panel here is
- * DOM-position-independent and pixel-identical to keeping it as a sibling.
+ * ## Why it lost its card
+ *
+ * These used to be a `Lifecycle Actions` card of their own, stacked with the
+ * profile and the memberships as though "suspend this person" were a section of
+ * the page's content. It is not: it is a verb whose object is the whole page, so
+ * ADR-0030 puts it in the `ActionBar`. It is also the page's most consequential
+ * verb, which is why it is not in the strip's first tier beside Compare — it
+ * sits one press away, behind **Manage**, in a band that reads as part of the
+ * bar ({@link UserActionBar}).
+ *
+ * ## The band's own argument
+ *
+ * Reading order is deliberate: the non-destructive verbs first, a rule, then the
+ * destructive one alone on its own row with the consequence spelled out beside
+ * it. `Each asks to confirm` is stated once for the band rather than implied per
+ * button, so nothing here reads as a one-click action.
+ *
+ * Security: this component issues nothing and logs nothing. The user's name and
+ * email appear only inside the confirm modal, rendered through React's escaping.
  */
 import React from 'react';
-import { Button, Modal } from '../shared';
+import { Button, Eyebrow, Modal } from '../shared';
 import type { OktaUser } from '../../../shared/types';
 import type { LifecycleAction } from '../../hooks/useUserLifecycleActions';
 
 /** Props for {@link UserLifecycleActions}. */
-interface UserLifecycleActionsProps {
+export interface UserLifecycleActionsProps {
   /** The selected user the actions apply to. */
   user: OktaUser;
   /** True while a confirmed action is in flight (disables the trigger buttons). */
@@ -33,9 +51,23 @@ interface UserLifecycleActionsProps {
 }
 
 /**
- * The Users tab's lifecycle actions (suspend / unsuspend / reset password) and their
- * confirmation modal. Deprovisioned users see a "no actions available" notice
- * instead. All logic lives in `useUserLifecycleActions`.
+ * Statuses for which Okta accepts a password-reset email. Unchanged from the
+ * card this replaced — the gating is status-driven, not placement-driven.
+ */
+const RESET_PASSWORD_STATUSES: ReadonlySet<OktaUser['status']> = new Set([
+  'ACTIVE',
+  'RECOVERY',
+  'LOCKED_OUT',
+  'PASSWORD_EXPIRED',
+]);
+
+/**
+ * The Manage tier's body: the account-state verbs valid for this user's status,
+ * and the confirmation modal that arms each of them. A deprovisioned user sees
+ * the "no actions available" notice instead. All logic lives in
+ * `useUserLifecycleActions`.
+ *
+ * @param props - See {@link UserLifecycleActionsProps}.
  */
 const UserLifecycleActions: React.FC<UserLifecycleActionsProps> = ({
   user,
@@ -45,55 +77,79 @@ const UserLifecycleActions: React.FC<UserLifecycleActionsProps> = ({
   onCancel,
   onConfirm,
 }) => {
+  const canResetPassword = RESET_PASSWORD_STATUSES.has(user.status);
+  const isSuspended = user.status === 'SUSPENDED';
+  // Exactly the gating the card had: Suspend for an ACTIVE user, Unsuspend for a
+  // SUSPENDED one, and no destructive row at all for any other status — never a
+  // disabled button offering something Okta would refuse.
+  const hasDestructive = user.status === 'ACTIVE' || isSuspended;
+
   return (
     <>
       {user.status !== 'DEPROVISIONED' ? (
-        <div className="bg-white rounded-md border border-neutral-200 px-5 py-4">
-          <h3 className="text-xs font-semibold text-neutral-600 uppercase tracking-wide mb-3">
-            Lifecycle Actions
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {user.status === 'ACTIVE' && (
-              <Button
-                variant="danger"
-                size="sm"
-                disabled={isLifecycleLoading}
-                onClick={() => onRequestAction('suspend')}
-              >
-                Suspend User
-              </Button>
-            )}
-            {user.status === 'SUSPENDED' && (
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={isLifecycleLoading}
-                onClick={() => onRequestAction('unsuspend')}
-              >
-                Unsuspend User
-              </Button>
-            )}
-            {(user.status === 'ACTIVE' ||
-              user.status === 'RECOVERY' ||
-              user.status === 'LOCKED_OUT' ||
-              user.status === 'PASSWORD_EXPIRED') && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <Eyebrow>Account state</Eyebrow>
+            {/*
+              Stated once for the band. Repeating it per button would read as a
+              warning about one verb rather than a property of all of them.
+            */}
+            <span className="text-xs text-neutral-600">Each asks to confirm</span>
+          </div>
+
+          {canResetPassword && (
+            <div className="flex flex-wrap gap-2">
               <Button
                 variant="secondary"
                 size="sm"
+                icon="refresh"
                 disabled={isLifecycleLoading}
                 onClick={() => onRequestAction('resetPassword')}
               >
-                Reset Password
+                Reset password
               </Button>
-            )}
-          </div>
+            </div>
+          )}
+
+          {canResetPassword && hasDestructive && <div className="h-px bg-neutral-200" />}
+
+          {/*
+            The destructive verb alone on its row, with what it costs stated
+            beside it rather than only inside the modal it opens.
+          */}
+          {hasDestructive && (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs text-danger-text">
+                {isSuspended ? 'Restores sign-in immediately' : 'Blocks sign-in until reversed'}
+              </span>
+              {isSuspended ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon="refresh"
+                  disabled={isLifecycleLoading}
+                  onClick={() => onRequestAction('unsuspend')}
+                >
+                  Unsuspend user
+                </Button>
+              ) : (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  icon="pause"
+                  disabled={isLifecycleLoading}
+                  onClick={() => onRequestAction('suspend')}
+                >
+                  Suspend user
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       ) : (
-        <div className="px-5 py-3 bg-neutral-50 rounded-md border border-neutral-200">
-          <p className="text-xs text-neutral-500">
-            No lifecycle actions are available for deprovisioned users.
-          </p>
-        </div>
+        <p className="text-xs text-neutral-500">
+          No lifecycle actions are available for deprovisioned users.
+        </p>
       )}
 
       {/* Confirmation modal for lifecycle actions */}

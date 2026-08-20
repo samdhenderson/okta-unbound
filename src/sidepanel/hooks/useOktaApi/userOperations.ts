@@ -97,39 +97,6 @@ export function createUserOperations(coreApi: CoreApi) {
   };
 
   /**
-   * Approximate how many apps a user is assigned, from the first page.
-   *
-   * @param userId - User to inspect.
-   * @returns First-page assignment count (max 200), or `0` on error.
-   * @remarks Does not walk pagination; a floor for users with >200 assignments.
-   */
-  const getUserAppAssignments = async (userId: string): Promise<number> => {
-    try {
-      // Fetch first page with the standard page size to get app assignments count
-      const response = await coreApi.makeApiRequest(
-        `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=${OKTA_PAGE_SIZE}`,
-      );
-      if (response.success && response.data) {
-        const firstPageCount = response.data.length;
-
-        // Check if there are more pages by looking for Link header with rel="next"
-        const linkHeader = response.headers?.['link'] || response.headers?.['Link'];
-        const hasMorePages = linkHeader && linkHeader.includes('rel="next"');
-
-        if (hasMorePages) {
-          return firstPageCount;
-        }
-
-        return firstPageCount;
-      }
-      return 0;
-    } catch (error) {
-      log.error(`Failed to get app assignments for user ${userId}:`, error);
-      return 0;
-    }
-  };
-
-  /**
    * List all apps assigned to a user (id + display label + assignment scope).
    *
    * @param userId - User whose apps to list.
@@ -493,7 +460,6 @@ export function createUserOperations(coreApi: CoreApi) {
 
   return {
     getUserLastLogin,
-    getUserAppAssignments,
     getUserApps,
     batchGetUserDetails,
     scanGroupMfa,
