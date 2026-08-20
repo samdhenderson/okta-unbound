@@ -192,12 +192,16 @@ comment at the call site:
   trade. A `Input`-level combobox mode is accepted future work, gated on a second
   consumer.)
 - **Genuinely custom controls:** `ComparisonTabBar` — a one-off `role="tab"` bar,
-  Re-evaluated for migration to `Tabs` `segmented` and **kept**: `segmented`
-  ignores `TabItem.icon` (only `rail` renders one), so the swap would silently
-  drop the Overview/Groups/Apps glyphs. Retiring it means either accepting that
-  loss or teaching `segmented` to render icons, and the latter needs a second
-  consumer before it earns a place in a shared primitive. Its off-scale
-  `text-[10px]` badge has been brought onto the scale in the meantime.
+  now **four** tabs (Overview / Groups / Apps / Attributes). Re-evaluated for
+  migration to `Tabs` `segmented` and **kept**: `segmented` ignores `TabItem.icon`
+  (only `rail` renders one), so the swap would silently drop the four glyphs.
+  Retiring it means either accepting that loss or teaching `segmented` to render
+  icons, and the latter needs a second consumer before it earns a place in a shared
+  primitive. Its off-scale `text-[10px]` badge has been brought onto the scale in the
+  meantime. The fourth tab is also why it is a `grid grid-cols-2 sm:grid-cols-4`
+  rather than a flex row: four icon+label tabs need ~440px against the ~330px a
+  360px panel has, so below 640px the bar takes a second row instead of truncating a
+  label or dropping the glyphs.
   Also: the dynamic-color banner, radio-cards, the `AttributeFacet`
   data-viz spread bars, and the Export tab's `EntityPicker` selectable entity
   cards (`role="button"` icon+title+description rows; `Button` is a centered

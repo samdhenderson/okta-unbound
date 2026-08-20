@@ -6,7 +6,14 @@
  * optimistic group-copy) is owned by
  * {@link sidepanel/hooks/useUserComparison.useUserComparison} and handed in whole as
  * {@link UserComparisonViewProps.comparison}. This component only renders the search
- * phase or the hero / tab-bar / overview / diff subcomponents and forwards intent.
+ * phase or the hero / tab-bar / overview / diff / attributes subcomponents and
+ * forwards intent.
+ *
+ * The four tabs answer four different questions. Groups and apps are *set*
+ * diffs — who holds what. {@link ComparisonAttributesTab} is a *value* diff, and
+ * it is the one that usually explains the other two, because the attributes are
+ * the evidence group rules read. It feeds no similarity figure: `overallSimilarity`
+ * averages exactly two Jaccard terms, and attributes are not access.
  *
  * ## Why the hook lives in the host, not here
  *
@@ -48,6 +55,7 @@ import ComparisonHero from './comparison/ComparisonHero';
 import ComparisonTabBar from './comparison/ComparisonTabBar';
 import ComparisonOverviewTab from './comparison/ComparisonOverviewTab';
 import ComparisonDiffTab from './comparison/ComparisonDiffTab';
+import ComparisonAttributesTab from './comparison/ComparisonAttributesTab';
 import AppScopeIndicator from './comparison/AppScopeIndicator';
 import GroupSourceIndicator from './comparison/GroupSourceIndicator';
 import { groupParityRows, appParityRows } from './comparison/comparisonAnalytics';
@@ -93,6 +101,10 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
     causes,
     groupDiffCount,
     appDiffCount,
+    attributeParity,
+    attributeDiffCount,
+    attributeConfig,
+    attributeRuleReads,
     groupSimilarity,
     appSimilarity,
     overallSimilarity,
@@ -152,6 +164,7 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
             onChange={setActiveTab}
             groupDiff={groupDiffCount}
             appDiff={appDiffCount}
+            attributeDiff={attributeDiffCount}
           />
 
           {isLoading && (
@@ -330,6 +343,24 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
                     if (row.inContext && row.inCompared) return null;
                     return <GroupSourceIndicator membership={row.membership} />;
                   }}
+                />
+              )}
+
+              {activeTab === 'attributes' && (
+                <ComparisonAttributesTab
+                  contextName={contextName}
+                  comparedName={comparedName}
+                  // Ordered by the pure module (differences first, then the
+                  // config's order, then A–Z) and handed over untouched — the tab
+                  // filters and groups, it never re-sorts.
+                  rows={attributeParity.rows}
+                  // Kept and counted rather than dropped: a compare that silently
+                  // omitted the one differing attribute explaining an access gap
+                  // would be worse than no compare at all.
+                  hiddenRows={attributeParity.hiddenRows}
+                  hiddenDifferences={attributeParity.hiddenDifferences}
+                  config={attributeConfig}
+                  ruleReads={attributeRuleReads}
                 />
               )}
 

@@ -29,6 +29,10 @@ import { useUserSearch } from './useUserSearch';
 import { useUserMemberships } from './useUserMemberships';
 import { useComparisonApps } from './useComparisonApps';
 import { useGroupCopy } from './useGroupCopy';
+import { useOktaApi } from './useOktaApi';
+import { useProfileDisplayConfig } from './useProfileDisplayConfig';
+import { useEntityQuery } from '../cache/useEntityQuery';
+import { cacheKeys, TTL_LONG } from '../cache/keys';
 import { userDisplayName } from '../../shared/utils/userDisplay';
 import {
   jaccard,
@@ -37,8 +41,54 @@ import {
   type TabKey,
 } from '../components/users/comparison/comparisonAnalytics';
 import { classifyAccessCauses } from '../components/users/comparison/accessCause';
+import {
+  attributeParityRows,
+  type AttributeParityResult,
+} from '../components/users/comparison/attributeParity';
+import { allProfileAttributes } from '../components/users/profileAttributes';
+import { profileRuleReads } from '../components/users/profileRuleReads';
 import { loadCachedGroupNames } from './fetchGroupRulesRequest';
 import type { OktaUser, GroupMembership } from '../../shared/types';
+import type { OktaUserProfileSchema } from '../../shared/schemas/okta';
+
+/**
+ * The attribute dimension before a second user is picked: no rows, no hidden
+ * rows, no differences. A frozen module-level constant so the memo below hands
+ * back one stable reference across every render of the search phase.
+ */
+const NO_ATTRIBUTE_PARITY: AttributeParityResult = Object.freeze({
+  rows: [],
+  hiddenRows: [],
+  hiddenDifferences: 0,
+  differenceCount: 0,
+});
+
+/** No attribute is read by any granting rule — the answer before rules resolve. */
+const NO_RULE_READS: Record<string, string[]> = Object.freeze({});
+
+/**
+ * Union two `profileRuleReads` maps, preserving each map's rule order.
+ *
+ * The chip beside an attribute has to answer "does a rule read this?" for the
+ * **pair**, not for the baseline alone. A rule reading `department` to grant the
+ * *compared* user a group the context user lacks is precisely the explanation
+ * this tab exists to surface, and keying the chips off one user would drop it.
+ */
+function mergeRuleReads(
+  first: Record<string, string[]>,
+  second: Record<string, string[]>,
+): Record<string, string[]> {
+  const merged: Record<string, string[]> = { ...first };
+  for (const [name, ruleNames] of Object.entries(second)) {
+    const held = merged[name];
+    if (!held) {
+      merged[name] = [...ruleNames];
+      continue;
+    }
+    merged[name] = [...held, ...ruleNames.filter((ruleName) => !held.includes(ruleName))];
+  }
+  return merged;
+}
 
 /** Options for {@link useUserComparison}. */
 export interface UseUserComparisonOptions {
@@ -61,6 +111,17 @@ export interface UseUserComparisonOptions {
   contextGroups: GroupMembership[];
   /** Tab whose content script performs all comparison API calls. */
   targetTabId: number;
+  /**
+   * The connected org's origin. Two things need it, both belonging to the
+   * Attributes dimension: the org-wide profile schema is cached under
+   * `cacheKeys.userSchema(oktaOrigin)`, and the admin's profile display
+   * configuration is stored per org.
+   *
+   * Absent, both degrade rather than fail — the attribute inventory falls back to
+   * the user's own profile keys plus `BASE_PROFILE_ATTRIBUTES`, and the display
+   * config falls back to its defaults.
+   */
+  oktaOrigin?: string | null;
   /** Called after groups are copied so the parent can refresh context data. */
   onGroupsChanged: () => void;
 }
@@ -74,7 +135,9 @@ export interface UseUserComparisonOptions {
  * @param options - See `UseUserComparisonOptions`.
  * @returns The comparison view model: `comparedUser` and search state, `activeTab`
  *   control, `groupBuckets` / `appBuckets` with their diff counts and per-facet
- *   plus `overallSimilarity`, the classified `causes` worklist, aggregated
+ *   plus `overallSimilarity`, the `attributeParity` value diff with its own
+ *   `attributeDiffCount`, `attributeConfig` and `attributeRuleReads`, the
+ *   classified `causes` worklist, aggregated
  *   `isLoading` / `loadError`, group-copy state (`addingGroupId`, `addError`) and
  *   the bidirectional `addToContext` / `addToCompared` actions, display names, and
  *   the `selectUser` / `changeUser` actions.
@@ -85,6 +148,12 @@ export interface UseUserComparisonOptions {
  *   and is **advisory**: the group half still loaded, so the view caveats instead
  *   of blanking, `appSimilarity` becomes `null`, and `similarityScope` reports
  *   `'groups-only'` to say what the surviving headline actually covers.
+ *
+ *   `attributeParity` is the **fourth dimension**: a value diff over both users'
+ *   profile attributes, honouring the admin's display configuration, split into
+ *   the rows that config makes visible and the rows it hides (kept, and counted,
+ *   so the tab can disclose what it is not showing). It feeds no similarity
+ *   figure — see `overallSimilarity` below.
  *
  *   `causes` classifies the `onlyCompared` bucket by remedy
  *   ({@link classifyAccessCauses}), and is **`undefined` until the org rule
@@ -97,6 +166,7 @@ export function useUserComparison({
   contextUser,
   contextGroups,
   targetTabId,
+  oktaOrigin,
   onGroupsChanged,
 }: UseUserComparisonOptions) {
   const { searchQuery, setSearchQuery, searchResults, isSearching, clearSearch } = useUserSearch({
@@ -204,6 +274,83 @@ export function useUserComparison({
     [contextApps, comparedApps],
   );
 
+  // ---------------------------------------------------------------------------
+  // The Attributes dimension.
+  //
+  // Everything below derives from `comparedUser`, the org schema and the admin's
+  // display config. There is deliberately **no new state**: the reset-on-hide
+  // effect above nulls `comparedUser`, and with it every attribute value here
+  // collapses to `NO_ATTRIBUTE_PARITY` / `NO_RULE_READS`, so a stale attribute
+  // diff cannot survive a close-and-reopen (ADR-0026 names this hook as the
+  // reset-on-hide exemplar). The schema itself is org-wide and cached across
+  // comparisons on purpose — it is not part of any one comparison's state.
+  //
+  // None of this touches `overallSimilarity` or `similarityScope`. Those average
+  // exactly two Jaccard terms and publish a number in the hero; attributes are
+  // not access, and folding them in would silently change what that number has
+  // always meant.
+  // ---------------------------------------------------------------------------
+
+  const { getUserProfileSchema } = useOktaApi({ targetTabId });
+
+  // One org-wide request at TTL_LONG, shared with every other consumer of the
+  // same key — a second comparison, or the Users tab's profile pane, costs
+  // nothing. Gated on the surface being visible AND a user being picked
+  // (ADR-0018): a mounted-but-hidden comparison, and the search phase, have
+  // nothing to render it into.
+  const { data: userSchema } = useEntityQuery<OktaUserProfileSchema | null>(
+    cacheKeys.userSchema(oktaOrigin),
+    getUserProfileSchema,
+    { ttl: TTL_LONG, enabled: isActive && comparedUser !== null },
+  );
+
+  // The attribute vocabulary the config is reconciled against: the union of both
+  // users' inventories, because an attribute only the compared user carries still
+  // needs a configured placement — it is exactly the kind of difference this tab
+  // exists to find.
+  const knownAttributeNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const attribute of allProfileAttributes(contextUser, userSchema)) {
+      names.add(attribute.name);
+    }
+    if (comparedUser) {
+      for (const attribute of allProfileAttributes(comparedUser, userSchema)) {
+        names.add(attribute.name);
+      }
+    }
+    return [...names];
+  }, [contextUser, comparedUser, userSchema]);
+
+  // The same configuration the Users tab's Profile pane reads: categories, order,
+  // labels and visibility. Reused rather than reinvented — two different groupings
+  // from one config would be a bug an admin could never explain.
+  const { config: attributeConfig } = useProfileDisplayConfig(oktaOrigin, knownAttributeNames);
+
+  // Memoized for the same reason `causes` is: the comparison is a pushed view
+  // that re-renders on every nav change (ADR-0016), and rebuilding both users'
+  // inventories on each of those is pure waste.
+  const attributeParity = useMemo(
+    () =>
+      comparedUser
+        ? attributeParityRows(contextUser, comparedUser, userSchema, attributeConfig)
+        : NO_ATTRIBUTE_PARITY,
+    [contextUser, comparedUser, userSchema, attributeConfig],
+  );
+
+  // Which rules read each attribute and currently grant access — for the pair,
+  // not for the baseline alone (see `mergeRuleReads`). `unavailable` and
+  // `unresolved` both yield an empty map: a chip is a positive claim that a rule
+  // reads this attribute, and no rules were seen.
+  const attributeRuleReads = useMemo(() => {
+    if (ruleInventory.status !== 'available') return NO_RULE_READS;
+    const contextReads = profileRuleReads(ruleInventory.rules, contextUser, contextGroups);
+    if (!comparedUser) return contextReads;
+    return mergeRuleReads(
+      contextReads,
+      profileRuleReads(ruleInventory.rules, comparedUser, comparedGroups),
+    );
+  }, [ruleInventory, contextUser, contextGroups, comparedUser, comparedGroups]);
+
   // Why the compared user has group access the context user lacks, grouped by the
   // remedy that would close it. Memoized because classification parses every
   // targeting rule's condition: the comparison is a pushed view that re-renders on
@@ -278,6 +425,10 @@ export function useUserComparison({
 
   const groupDiffCount = groupBuckets.onlyCompared.length + groupBuckets.onlyContext.length;
   const appDiffCount = appBuckets.onlyCompared.length + appBuckets.onlyContext.length;
+  // The VISIBLE differences only. The badge has to agree with what the tab lists
+  // on arrival; the ones a config hides are counted separately and disclosed by
+  // the tab itself, which can also offer to reveal them.
+  const attributeDiffCount = attributeParity.differenceCount;
 
   const groupSimilarity = jaccard(
     groupBuckets.shared.length,
@@ -329,6 +480,10 @@ export function useUserComparison({
     causes,
     groupDiffCount,
     appDiffCount,
+    attributeParity,
+    attributeDiffCount,
+    attributeConfig,
+    attributeRuleReads,
     groupSimilarity,
     appSimilarity,
     overallSimilarity,

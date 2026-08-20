@@ -278,7 +278,7 @@ async function openComparison() {
   await waitForLoadToSettle();
 }
 
-type ComparisonTab = 'Overview' | 'Groups' | 'Apps';
+type ComparisonTab = 'Overview' | 'Groups' | 'Apps' | 'Attributes';
 
 const tab = (name: ComparisonTab) => screen.getByRole('tab', { name: new RegExp(`^${name}`) });
 
@@ -948,7 +948,11 @@ describe('UserComparisonModal', () => {
       render(<Harness />);
       await openComparison();
 
-      expect(screen.getAllByRole('tab')).toHaveLength(3);
+      // BEHAVIOR CHANGE, not a retarget (ADR-0012): the comparison gained an
+      // `Attributes` dimension, so the bar is four tabs rather than three. Named
+      // rather than counted, so adding a fifth has to be stated here too.
+      expect(screen.getAllByRole('tab')).toHaveLength(4);
+      expect(tab('Attributes')).toBeInTheDocument();
       expect(tab('Overview')).toHaveAttribute('aria-selected', 'true');
       expect(tab('Groups')).toHaveAttribute('aria-selected', 'false');
 

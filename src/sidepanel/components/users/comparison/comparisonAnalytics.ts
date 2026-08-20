@@ -30,8 +30,8 @@ export interface AppEntry {
   scope?: AppAssignmentScope;
 }
 
-/** Identifier for the three comparison tabs. */
-export type TabKey = 'overview' | 'groups' | 'apps';
+/** Identifier for the four comparison tabs. */
+export type TabKey = 'overview' | 'groups' | 'apps' | 'attributes';
 
 /**
  * A single row in a diff bucket (group or app): `id` + `label`, plus whatever

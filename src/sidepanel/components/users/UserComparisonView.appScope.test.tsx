@@ -4,6 +4,7 @@ import UserComparisonView from './UserComparisonView';
 import type { UserComparisonState } from '../../hooks/useUserComparison';
 import type { AppEntry } from './comparison/comparisonAnalytics';
 import type { GroupMembership, OktaUser } from '../../../shared/types';
+import { DEFAULT_PROFILE_DISPLAY_CONFIG } from '../../../shared/storage/profileDisplayStore';
 
 /**
  * Phase 4.2 — the Apps tab states how Okta reports each assignment.
@@ -77,6 +78,12 @@ const comparison = (appBuckets: AppBucketFixture = DEFAULT_APPS): UserComparison
     causes: [],
     groupDiffCount: 0,
     appDiffCount: 4,
+    // The Attributes dimension is inert for this suite — it renders the Apps
+    // tab — but the state literal has to be whole.
+    attributeParity: { rows: [], hiddenRows: [], hiddenDifferences: 0, differenceCount: 0 },
+    attributeDiffCount: 0,
+    attributeConfig: DEFAULT_PROFILE_DISPLAY_CONFIG,
+    attributeRuleReads: {},
     groupSimilarity: 0,
     appSimilarity: 20,
     overallSimilarity: 10,
