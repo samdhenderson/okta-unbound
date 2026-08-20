@@ -644,7 +644,10 @@ describe('lifecycle actions', () => {
     await screen.findByRole('heading', { name: 'Ada Lovelace' });
     // The account-state verbs are one press away, in the strip's second tier.
     // Opening it issues nothing, which the endpoint assertions below still prove.
-    fireEvent.click(screen.getByRole('button', { name: 'Manage' }));
+    // The control that opens the tier is `ActionBar`'s own **More** — it was a
+    // per-page button labelled "Manage" until ADR-0038 moved the disclosure into
+    // the shared strip. A helper locator, not an assertion (ADR-0022(3)).
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
     // Drop the load's scheduler calls so per-test assertions see only what follows.
     runtimeSendMessage.mockClear();
   }
@@ -736,7 +739,9 @@ describe('add-to-group: 300ms group search (memoized searchGroups)', () => {
     });
     await screen.findByRole('heading', { name: 'Ada Lovelace' });
     runtimeSendMessage.mockClear();
-    fireEvent.click(screen.getByRole('button', { name: 'Add to Group' }));
+    // "Add to Group" shortened to "Add group" under ADR-0038 so both row verbs
+    // still seat at the 360px panel floor. The modal it opens keeps its own title.
+    fireEvent.click(screen.getByRole('button', { name: 'Add group' }));
   }
 
   it('fires exactly one /api/v1/groups search 300ms after typing and does NOT loop', async () => {

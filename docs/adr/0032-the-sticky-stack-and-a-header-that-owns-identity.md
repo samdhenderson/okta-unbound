@@ -1,6 +1,6 @@
 # ADR-0032: The sticky stack, and a header that owns entity identity
 
-- Status: Accepted
+- Status: Accepted (§3a amended by ADR-0038)
 - Date: 2026-08-15
 - Amends: ADR-0030 (its identity-header section, and its deferral of a pinned title)
 - Relates to: ADR-0018 (every tab stays mounted), ADR-0027 (motion tokens),
@@ -129,6 +129,16 @@ resolved `top`. No scroll listener, nothing per frame, and no component needs a 
 to the shared scroller — or any knowledge that the rail is what it parks below.
 
 ### 3a. The third band merges into the second
+
+> **Amended by [ADR-0038](./0038-a-strip-that-knows-what-it-holds.md).**
+> The decision below is right and the shipped mechanism did not work. A named view
+> timeline is referenceable by the declaring element and its _descendants_, not by
+> its following siblings — so the sentinel-before-the-band structure this section
+> describes resolved `--dock-progress` to `null`, and a null timeline with
+> `fill: both` pinned the animation on its `to` keyframe. The strip rendered
+> permanently merged from the day this ADR landed. ADR-0038 hoists the name with
+> `timeline-scope`, corrects `--merge-range` (64px → 16px) and the timeline inset,
+> and adds the resting hug this section's merge was always supposed to end.
 
 Reaching the parking spot is not the same as looking parked. A strip that stays a rounded,
 inset card once pinned reads as "a card stopped moving", not "the strip joined the header" —

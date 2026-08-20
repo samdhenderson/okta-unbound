@@ -1,6 +1,6 @@
 /**
  * @module sidepanel/components/users/UserLifecycleActions
- * @description The Manage tier's body — the account-state verbs and their confirm modal.
+ * @description The disclosure tier's body — the account-state verbs and their confirm modal.
  *
  * A pure view over the {@link useUserLifecycleActions} state machine: the
  * suspend / unsuspend / reset-password buttons (gated by the user's status) and
@@ -15,9 +15,12 @@
  * profile and the memberships as though "suspend this person" were a section of
  * the page's content. It is not: it is a verb whose object is the whole page, so
  * ADR-0030 puts it in the `ActionBar`. It is also the page's most consequential
- * verb, which is why it is not in the strip's first tier beside Compare — it
- * sits one press away, behind **Manage**, in a band that reads as part of the
- * bar ({@link UserActionBar}).
+ * verb, which is why it does not sit in the row beside Compare — it is one press
+ * away, behind the strip's **More** disclosure, in a band that reads as part of
+ * the bar ({@link UserActionBar}). The control that opens it belongs to the
+ * shared `ActionBar`, not to this component or to `UserActionBar`; it was a
+ * page-authored button labelled "Manage" until ADR-0038 moved the disclosure
+ * into the strip itself.
  *
  * ## The band's own argument
  *
@@ -62,7 +65,7 @@ const RESET_PASSWORD_STATUSES: ReadonlySet<OktaUser['status']> = new Set([
 ]);
 
 /**
- * The Manage tier's body: the account-state verbs valid for this user's status,
+ * The disclosure tier's body: the account-state verbs valid for this user's status,
  * and the confirmation modal that arms each of them. A deprovisioned user sees
  * the "no actions available" notice instead. All logic lives in
  * `useUserLifecycleActions`.

@@ -1,31 +1,36 @@
 /**
  * @module sidepanel/components/users/UserActionBar
- * @description The user-detail rung's two-tier action strip.
+ * @description The user-detail rung's action strip — which of a user's verbs are
+ * one press away, and which are two.
  *
- * Every verb whose object is the whole user lives here (ADR-0030) — but they are
- * not equal, and a flat row of five buttons said they were. The strip is
- * therefore **tiered**:
+ * Every verb whose object is the whole user belongs on this strip (ADR-0030), but
+ * a flat row of them claimed they were all equal and they are not. *Add group*
+ * and *Compare* are the verbs you reach for while reading someone's page, and the
+ * worst either can do is add a membership you can remove again. Suspending an
+ * account or resetting its password changes who that person is to the org between
+ * one press and the next, and there is no symmetric press to take it back. So the
+ * account-state verbs ({@link UserLifecycleActions}) go in the strip's disclosure
+ * tier, one press behind **More**, and the everyday two stay in the row. That
+ * asymmetry — not the number of buttons — is why this strip has a second tier.
  *
- * - **Tier 1**, inside the shared `ActionBar`: the verbs you reach for while
- *   reading — *Compare*, *Add to Group*, and *Manage*, which is not a verb at
- *   all but the disclosure for tier 2.
- * - **Tier 2**, only when Manage is open: the account-state verbs
- *   ({@link UserLifecycleActions}). Suspending someone is one press further away
- *   than comparing them, which is the whole point of the tier.
+ * `ActionBar` owns the tier itself: the **More** control, the region it opens and
+ * that region's `aria-controls` target. This component only decides what goes on
+ * each side of it, which is why there is no disclosure button in the code below.
  *
- * The band **is** the bar, not a card under it: it is `ActionBar`'s `expansion`
- * slot, so it lives inside the strip, shares its chrome, docks with it, and opens
- * by stretching the strip downward through the shared `.disclose` grid.
+ * *Add group* leads and is the `primary` variant; *Compare* follows and overflows
+ * first. Comparing is a lookup, adding is the thing an admin came here to do. The
+ * label is *Add group*, not "Add to Group": at the 360px panel floor both verbs
+ * plus **More** only seat if the first one is short, and the object is already
+ * named by the header above the strip.
  *
- * It was a *sibling* of `ActionBar` first, on the reasoning that a sticky element
- * cannot grow a second row without moving the buttons above it. That reasoning is
- * wrong: sticky pins the box's **top** edge, so a row added at the bottom grows
- * away from the buttons and leaves them exactly where they were. What the sibling
- * version actually produced was a whole second card popping into the page flow
- * under the strip — arriving with the page rather than with the control that
- * summoned it — plus a wrapper that had to be `display: contents` to keep the two
- * glued, which then swallowed the rung's own `space-y-6` step and left the detail
- * card butted against the strip.
+ * The tier is `ActionBar`'s `expansion` slot, so it lives *inside* the strip and
+ * grows it downward. It was a sibling of the strip first, on the reasoning that a
+ * sticky element cannot grow a second row without moving the buttons above it —
+ * wrong, because sticky pins the box's top edge and a row added at the bottom
+ * grows away from them. What the sibling version produced was a second card
+ * arriving in the page flow rather than out of the control that summoned it, plus
+ * a `display: contents` wrapper to keep the two glued that then swallowed the
+ * rung's `space-y-6` step and butted the detail card against the strip.
  *
  * ## What is not here
  *
@@ -41,14 +46,11 @@
  * a view over that state machine, not a place to add a fourth Okta write.
  */
 import React from 'react';
-import { ActionBar, Button } from '../shared';
+import { ActionBar, type ActionDescriptor } from '../shared';
 import UserLifecycleActions from './UserLifecycleActions';
 import { userDisplayName } from '../../../shared/utils/userDisplay';
 import type { OktaUser } from '../../../shared/types';
 import type { LifecycleAction } from '../../hooks/useUserLifecycleActions';
-
-/** `id` of the tier-2 band, so Manage can point `aria-controls` at it. */
-const MANAGE_BAND_ID = 'user-action-bar-manage';
 
 /** Props for {@link UserActionBar}. */
 export interface UserActionBarProps {
@@ -59,15 +61,15 @@ export interface UserActionBarProps {
   /** Opens the Add-to-Group modal. */
   onAddToGroup: () => void;
   /**
-   * True while the user's memberships are loading. Both tier-1 verbs need them
+   * True while the user's memberships are loading. Both row verbs need them
    * — a comparison of an unloaded left-hand side is meaningless, and adding to a
    * group would not know which groups the user is already in — so both disable.
    */
   isLoadingMemberships: boolean;
-  /** Whether tier 2 is showing. Owned by the tab, so it collapses on a rung change. */
-  manageOpen: boolean;
-  /** Toggles tier 2. */
-  onToggleManage: () => void;
+  /** Whether the disclosure tier is showing. Owned by the tab, so it collapses on a rung change. */
+  tierOpen: boolean;
+  /** Called with the tier's next open state when **More** is pressed. */
+  onTierOpenChange: (open: boolean) => void;
   /** True while a confirmed lifecycle action is in flight. */
   isLifecycleLoading: boolean;
   /** The lifecycle action awaiting confirmation, or `null`. Drives the confirm modal. */
@@ -86,8 +88,8 @@ export interface UserActionBarProps {
 }
 
 /**
- * The user-detail rung's action strip: the everyday verbs in tier 1, the
- * account-state verbs behind **Manage** in tier 2.
+ * The user-detail rung's action strip: the everyday verbs in the row, the
+ * account-state verbs behind **More**.
  *
  * @param props - See {@link UserActionBarProps}.
  *
@@ -98,8 +100,8 @@ export interface UserActionBarProps {
  *   onCompare={openCompare}
  *   onAddToGroup={addToGroup.openModal}
  *   isLoadingMemberships={isLoadingMemberships}
- *   manageOpen={manageOpen}
- *   onToggleManage={() => setManageOpen((open) => !open)}
+ *   tierOpen={manageOpen}
+ *   onTierOpenChange={setManageOpen}
  *   {...lifecycleProps}
  * />
  * ```
@@ -109,72 +111,58 @@ const UserActionBar: React.FC<UserActionBarProps> = ({
   onCompare,
   onAddToGroup,
   isLoadingMemberships,
-  manageOpen,
-  onToggleManage,
+  tierOpen,
+  onTierOpenChange,
   isLifecycleLoading,
   pendingLifecycleAction,
   onRequestLifecycleAction,
   onCancelLifecycleAction,
   onConfirmLifecycleAction,
   sticky = true,
-}) => (
-  <ActionBar
-    ariaLabel={`Actions for ${userDisplayName(user)}`}
-    sticky={sticky}
-    expansionId={MANAGE_BAND_ID}
-    expansionOpen={manageOpen}
-    expansion={
-      /* Tier 2 — mounted whether or not it is open, held out of the tab order and
-         the accessible tree by `ActionBar`'s `inert` while closed. */
-      <UserLifecycleActions
-        user={user}
-        isLifecycleLoading={isLifecycleLoading}
-        pendingLifecycleAction={pendingLifecycleAction}
-        onRequestAction={onRequestLifecycleAction}
-        onCancel={onCancelLifecycleAction}
-        onConfirm={onConfirmLifecycleAction}
-      />
-    }
-  >
-    {/*
-      Tier 1 — page-level verbs, pinned while the panes scroll under them
-      (ADR-0030). These used to sit in `GroupMembershipsList`'s header slot — the
-      same slot as controls acting on that one card — so the page's main action
-      read as a property of its groups section.
-    */}
-    <Button
-      variant="primary"
-      size="sm"
-      icon="users"
-      onClick={onCompare}
-      disabled={isLoadingMemberships}
-      title="Compare group & app access with another user"
-    >
-      Compare
-    </Button>
-    <Button
-      variant="secondary"
-      size="sm"
-      icon="plus"
-      onClick={onAddToGroup}
-      disabled={isLoadingMemberships}
-    >
-      Add to Group
-    </Button>
-    <Button
-      variant="ghost"
-      size="sm"
-      // `minus` while open is the registry's collapse glyph; `settings` names
-      // what the tier holds rather than what pressing it does.
-      icon={manageOpen ? 'minus' : 'settings'}
-      onClick={onToggleManage}
-      expanded={manageOpen}
-      controls={MANAGE_BAND_ID}
-      title={manageOpen ? 'Hide account-state actions' : 'Show account-state actions'}
-    >
-      Manage
-    </Button>
-  </ActionBar>
-);
+}) => {
+  // Declaration order is reading order and overflow order both: `primary` pins
+  // `Add group` in the row, and `Compare` is the first thing to move behind
+  // **More** when the panel tightens.
+  const actions: ActionDescriptor[] = [
+    {
+      id: 'add-to-group',
+      label: 'Add group',
+      icon: 'plus',
+      variant: 'primary',
+      onClick: onAddToGroup,
+      disabled: isLoadingMemberships,
+    },
+    {
+      id: 'compare',
+      label: 'Compare',
+      icon: 'users',
+      onClick: onCompare,
+      disabled: isLoadingMemberships,
+      title: 'Compare group & app access with another user',
+    },
+  ];
+
+  return (
+    <ActionBar
+      ariaLabel={`Actions for ${userDisplayName(user)}`}
+      sticky={sticky}
+      actions={actions}
+      tierOpen={tierOpen}
+      onTierOpenChange={onTierOpenChange}
+      expansion={
+        /* The tier — mounted whether or not it is open, held out of the tab order
+           and the accessible tree by `ActionBar`'s `inert` while closed. */
+        <UserLifecycleActions
+          user={user}
+          isLifecycleLoading={isLifecycleLoading}
+          pendingLifecycleAction={pendingLifecycleAction}
+          onRequestAction={onRequestLifecycleAction}
+          onCancel={onCancelLifecycleAction}
+          onConfirm={onConfirmLifecycleAction}
+        />
+      }
+    />
+  );
+};
 
 export default UserActionBar;

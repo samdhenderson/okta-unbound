@@ -1,6 +1,6 @@
 # ADR-0030: One layout contract for detail pages, and where an action is allowed to live
 
-- Status: Accepted (amended by ADR-0032)
+- Status: Accepted (amended by ADR-0032, ADR-0038)
 - Date: 2026-08-14
 - Relates to: [ADR-0002](./0002-status-vocabulary-danger.md),
   [ADR-0016](./0016-in-tab-view-stack-navigation.md),
@@ -75,6 +75,13 @@ This is not a matter of taste. A page-level slot has no view of whether a given
 section's data is loaded, so an "Add member" button in the header would let a
 reader mutate a list that is still behind its analyze gate. The slot that owns the
 data is the slot that owns its verbs.
+
+> **Amended by [ADR-0038](./0038-a-strip-that-knows-what-it-holds.md).**
+> This rule says _where_ an action lives; it never said _how many_ fit. `ActionBar`
+> now takes its verbs as descriptors and measures them, so a page declares the set it
+> wants and the strip decides which of them stay in the row, which lose their icon and
+> which move behind **More**. The rule above is unchanged — a section's verb still
+> belongs to that section — and `priority` is not a way to smuggle one into the strip.
 
 ### 3. Why `ActionBar` can be sticky
 

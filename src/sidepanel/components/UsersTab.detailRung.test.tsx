@@ -15,6 +15,10 @@
  * became `openRow` + "Ask Okta" — so the retarget edited the helper rather than
  * every assertion under it. Anything that pins behavior nobody is endorsing
  * carries its own `CHARACTERIZATION:` note; those notes survived the move too.
+ * The same move happened a second time under ADR-0022(3) when `ActionBar` took
+ * ownership of its own disclosure: the caller-supplied **Manage** button became
+ * the strip's built-in **More**, so `openManageBand`'s locator moved and not one
+ * assertion did.
  *
  * Harness: the same one `UsersTab.test.tsx` and `UsersTab.navigation.test.tsx`
  * use. There is no MSW here and there is nothing for it to intercept — the side
@@ -336,13 +340,15 @@ describe('detail rung: lifecycle verbs are gated by status', () => {
     ALL_VERBS.filter((name) => detail().queryByRole('button', { name }) !== null);
 
   /**
-   * The ONE place this block knows where the account-state verbs live: tier 2 of
-   * the action strip, which is not rendered at all until **Manage** is pressed.
+   * The ONE place this block knows where the account-state verbs live: the
+   * action strip's disclosure tier, which is not reachable until **More** is
+   * pressed.
+   *
    * Opening it is navigation, not an action — nothing is issued by it, which the
    * `lifecycleCalls()` assertions under each test continue to prove.
    */
   async function openManageBand(uev: ReturnType<typeof userEvent.setup>) {
-    await uev.click(detail().getByRole('button', { name: 'Manage' }));
+    await uev.click(detail().getByRole('button', { name: 'More' }));
   }
 
   async function renderWithStatus(

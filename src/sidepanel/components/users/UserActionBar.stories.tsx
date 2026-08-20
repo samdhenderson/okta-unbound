@@ -11,7 +11,7 @@ const user = (over: Partial<OktaUser> = {}): OktaUser => ({
   ...over,
 });
 
-/** The user-detail rung's two-tier action strip. */
+/** The user-detail rung's action strip: the everyday verbs, and the rest behind **More**. */
 const meta = {
   title: 'Users/UserActionBar',
   component: UserActionBar,
@@ -23,15 +23,21 @@ const meta = {
         component:
           'Every verb whose object is the whole user (ADR-0030) — but they are not equal, and a flat ' +
           'row of five buttons said they were.\n\n' +
-          '**Tier 1** holds the verbs you reach for while reading: *Compare*, *Add to Group*, and ' +
-          '*Manage*, which is not a verb at all but the disclosure for tier 2. **Tier 2** holds the ' +
-          'account-state verbs. Suspending someone is one press further away than comparing them, ' +
-          'which is the whole point of the tier — and `Each asks to confirm` is stated once for the ' +
-          'band rather than implied per button.\n\n' +
-          'The band **is** the bar rather than a card that appeared under it: it is `ActionBar`’s ' +
-          '`expansion` slot, so it sits inside the strip, shares its chrome, docks with it, and opens ' +
-          'by stretching the strip downward through the shared `.disclose` grid. Its contents stay ' +
-          'mounted while closed, held out of the tab order and the accessible tree with `inert`.\n\n' +
+          'The **row** holds the verbs you reach for while reading: *Add group* (the primary, and the ' +
+          'one that never overflows) then *Compare*, which is the first to move behind **More** when ' +
+          'the panel tightens. The **disclosure tier** holds the account-state verbs. Suspending ' +
+          'someone is one press further away than comparing them, which is the whole point of the ' +
+          'tier — and `Each asks to confirm` is stated once for the band rather than implied per ' +
+          'button.\n\n' +
+          'The disclosure belongs to the shared `ActionBar`, not to this component: the strip renders ' +
+          'its own **More** control, owns the region it opens and owns that region’s `aria-controls` ' +
+          'target. `UserActionBar` only decides what sits on each side of it — two descriptors in the ' +
+          'row, `UserLifecycleActions` in the `expansion` slot — which is why there is no disclosure ' +
+          'button in its source.\n\n' +
+          'Because the tier is that `expansion` slot it sits inside the strip, shares its chrome, ' +
+          'docks with it, and opens by stretching the strip downward through the shared `.disclose` ' +
+          'grid. Its contents stay mounted while closed, held out of the tab order and the accessible ' +
+          'tree with `inert`.\n\n' +
           '**There is no Export button and no Clear sessions button, deliberately.** The Export tab ' +
           'has no user-scoped descriptor to open (`users` is whole-org; the `search-to-select` ' +
           'descriptors take a group or an app), and `useUserLifecycleActions` implements ' +
@@ -48,8 +54,8 @@ const meta = {
     onCompare: fn(),
     onAddToGroup: fn(),
     isLoadingMemberships: false,
-    manageOpen: false,
-    onToggleManage: fn(),
+    tierOpen: false,
+    onTierOpenChange: fn(),
     isLifecycleLoading: false,
     pendingLifecycleAction: null,
     onRequestLifecycleAction: fn(),
@@ -63,12 +69,15 @@ const meta = {
     onCompare: { description: 'Opens the comparison rung.' },
     onAddToGroup: { description: 'Opens the Add-to-Group modal.' },
     isLoadingMemberships: {
-      description: 'True while memberships load — both tier-1 verbs need them, so both disable.',
+      description: 'True while memberships load — both row verbs need them, so both disable.',
     },
-    manageOpen: {
-      description: 'Whether tier 2 is showing. Owned by the tab, so a rung change collapses it.',
+    tierOpen: {
+      description:
+        'Whether the disclosure tier is showing. Owned by the tab, so a rung change collapses it.',
     },
-    onToggleManage: { description: 'Toggles tier 2.' },
+    onTierOpenChange: {
+      description: 'Called with the tier’s next open state when **More** is pressed.',
+    },
     isLifecycleLoading: { description: 'True while a confirmed lifecycle action is in flight.' },
     pendingLifecycleAction: { description: 'The action awaiting confirmation, or `null`.' },
     sticky: {
@@ -80,52 +89,55 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Tier 1 only: the everyday verbs, with Manage closed. */
+/** The row only: the everyday verbs, with the tier closed behind **More**. */
 export const Default: Story = {};
 
-/** Memberships are still loading, so Compare and Add to Group are both unavailable. */
+/** Memberships are still loading, so Compare and Add group are both unavailable. */
 export const LoadingMemberships: Story = {
   args: { isLoadingMemberships: true },
 };
 
-/** An ACTIVE user with Manage open: reset password above the rule, suspend below it. */
-export const ManageOpenActive: Story = {
-  args: { manageOpen: true },
+/** An ACTIVE user with the tier open: reset password above the rule, suspend below it. */
+export const TierOpenActive: Story = {
+  args: { tierOpen: true },
 };
 
 /** A SUSPENDED user: the destructive row becomes the restorative one. */
-export const ManageOpenSuspended: Story = {
-  args: { manageOpen: true, user: user({ status: 'SUSPENDED' }) },
+export const TierOpenSuspended: Story = {
+  args: { tierOpen: true, user: user({ status: 'SUSPENDED' }) },
 };
 
-/** A DEPROVISIONED user: the band carries the notice rather than a row of disabled buttons. */
-export const ManageOpenDeprovisioned: Story = {
-  args: { manageOpen: true, user: user({ status: 'DEPROVISIONED' }) },
+/** A DEPROVISIONED user: the tier carries the notice rather than a row of disabled buttons. */
+export const TierOpenDeprovisioned: Story = {
+  args: { tierOpen: true, user: user({ status: 'DEPROVISIONED' }) },
 };
 
-/** A lifecycle action is in flight — every verb in the band is disabled. */
-export const ManageOpenLifecycleRunning: Story = {
-  args: { manageOpen: true, isLifecycleLoading: true },
+/** A lifecycle action is in flight — every verb in the tier is disabled. */
+export const TierOpenLifecycleRunning: Story = {
+  args: { tierOpen: true, isLifecycleLoading: true },
 };
 
 /** The suspend action is armed, so its confirmation modal is open. */
 export const ConfirmingSuspend: Story = {
-  args: { manageOpen: true, pendingLifecycleAction: 'suspend' },
+  args: { tierOpen: true, pendingLifecycleAction: 'suspend' },
 };
 
 /**
- * Manage is a real disclosure: `aria-expanded` flips and `aria-controls` points at
- * the band, so the region it reveals is reachable from the button that reveals it.
+ * More is a real disclosure: `aria-expanded` flips and `aria-controls` points at
+ * the tier, so the region it reveals is reachable from the button that reveals it.
+ *
+ * The control is the shared `ActionBar`'s, not this component's — this story is
+ * what proves `UserActionBar` still wires a working disclosure through it.
  */
-export const ManageIsADisclosure: Story = {
+export const MoreIsADisclosure: Story = {
   render: (args) => {
     // eslint-disable-next-line react-hooks/rules-of-hooks -- a story render fn is a component
     const [open, setOpen] = useState(false);
-    return <UserActionBar {...args} manageOpen={open} onToggleManage={() => setOpen(!open)} />;
+    return <UserActionBar {...args} tierOpen={open} onTierOpenChange={setOpen} />;
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const manage = canvas.getByRole('button', { name: 'Manage' });
+    const manage = canvas.getByRole('button', { name: 'More' });
     await expect(manage).toHaveAttribute('aria-expanded', 'false');
 
     await userEvent.click(manage);
@@ -138,10 +150,28 @@ export const ManageIsADisclosure: Story = {
 };
 
 /**
- * The 360px floor with the band open — three tier-1 buttons plus a wrapping tier-2
- * band is exactly where a narrow panel breaks.
+ * The 360px panel floor with the tier open — the width this strip's shape was
+ * designed against.
+ *
+ * It is the rung of the cramped ladder that actually fires on this page: at
+ * `sidepanelCompact` the glyphs drop from *both* row verbs at once (icons are
+ * all-or-nothing, never per-action) and, once they have, *Add group*, *Compare*
+ * and **More** all still seat on one line — so nothing overflows into the tier
+ * and the tier holds only `UserLifecycleActions`. That budget is why the label
+ * is *Add group* rather than "Add to Group": the longer label does not fit
+ * beside Compare and the disclosure at this width, and the object of the verb is
+ * already named by the header above the strip.
+ *
+ * Open, because the floor has to hold with the strip at its tallest: the tier's
+ * own row wraps here too, and it is the state in which a too-wide row would
+ * push the strip past the panel edge rather than merely onto a second line.
+ *
+ * Note the viewport preset resizes the **explorer preview** only — the headless
+ * story runner renders at its own window width (ADR-0014), so this story is the
+ * visual proof of the floor and `actionBarFit`'s table-driven tests are the
+ * automated one.
  */
-export const NarrowManageOpen: Story = {
-  args: { manageOpen: true },
+export const NarrowTierOpen: Story = {
+  args: { tierOpen: true },
   parameters: { viewport: { value: 'sidepanelCompact' } },
 };

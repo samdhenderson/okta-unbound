@@ -46,11 +46,48 @@ Native-Okta model: a **gray canvas** with **white cards** floating on it.
   canvas but a pinned band with rows scrolling _underneath_ it, so it grows
   `--shadow-dock` across the merge. At rest — unmerged, or with motion off — it has no
   shadow at all. Reach for this only if you are pinning a band, and use the token.
+
+  The same exception covers the **bleed plate** that band paints: an opaque
+  `--color-canvas` slab spanning the panel behind it, so page rows disappear _under_ a
+  pinned strip instead of scrolling through the `px-6` gutters either side of it. That
+  is the one sanctioned place a component paints the canvas colour itself, and it is
+  unconditional — with motion off or reduced the strip pins without ever widening, and
+  without the plate the leak is permanent (ADR-0038).
+
 - Field labels (label-above-value) are `text-xs font-medium text-neutral-600`; uppercase
   section eyebrows go through the shared `Eyebrow` primitive — see Typography below.
 
 **Status vocabulary is `danger`, not `error`** (ADR-0002). The status union is
 `'success' | 'warning' | 'danger' | 'info'`.
+
+### The docking band's resting shape
+
+`ActionBar` **hugs its actions at rest** — a pill the width of its buttons,
+left-aligned in the column — and widens to the panel bleed only as it docks. Two
+consequences for anything built near it:
+
+- **The hug is painted, not laid out.** The band keeps its full layout width and only
+  its `::before` chrome stops at the last button, so the leading buttons never move
+  during the merge and the overflow observer watches a width that does not churn. Do
+  not "fix" a strip that measures wider than it looks.
+- **A lone action gets no chrome at all** until it docks. A `rounded-md` button inside
+  a `rounded-md` pill with 8px of padding is two concentric equal radii, which always
+  reads as a mistake.
+
+Four custom properties carry the geometry, published imperatively by
+`useActionOverflow` and consumed only by `tailwind.css`. They are a contract, not
+implementation detail — **never pass a `style` prop to the band**, or React clears
+them on its next render.
+
+| Property                 | Host                | Meaning                                       |
+| ------------------------ | ------------------- | --------------------------------------------- |
+| `--bar-content-measured` | the band            | How wide the painted pill must be             |
+| `--dock-more-travel`     | the band            | How far **More** slides to the docked edge    |
+| `--bar-bleed`            | the band            | The band's distance from the panel edge       |
+| `--dock-offset`          | the band's _parent_ | Rung margin between the sentinel and the band |
+
+`--dock-offset` is on the parent because the element that reads it is the dock
+sentinel — the band's _sibling_, which cannot see a property set on the band.
 
 ### Chart / dataviz palettes
 

@@ -120,8 +120,28 @@
    * durations: these describe *how far you scroll*, not how long something takes,
    * which is why they sit apart from the `--dur-*` scale.
    */
-  --merge-range: 64px; /* scroll distance over which the strip merges into the header */
-  --merge-bleed: 1.5rem; /* the tab content wrapper's `px-6` gutter, cancelled at full merge */
+  /*
+   * Distance over which the strip merges into the header, measured along the
+   * sentinel's timeline — which is to say the gap the strip has to close, not
+   * how far the page scrolled. The two are not the same: `PageHeader` collapses
+   * its identity region on the way down, so the strip closes a 24px gap over
+   * ~24px of scroll while itself travelling ~96px.
+   *
+   * It MUST be shorter than that gap, or the merge is already part-done before
+   * the page has moved and the strip can never show its resting shape. The gap
+   * is the tab column's `py-6` — 24px — and only that: the strip is the first
+   * child of its `space-y-6` rung at every call site, and the sentinel floats,
+   * so no `space-y` step lands above either of them.
+   *
+   * Measured on the real component in Chromium: at 64px it started 61% merged,
+   * at 32px still 25%. At 16px it rests flat through ~7px of scroll, merges over
+   * the next ~17, and reaches 100% on exactly the frame the strip parks.
+   */
+  --merge-range: 16px;
+  /* Fallback gutter, used until `useActionOverflow` publishes the measured
+     `--bar-bleed`. The literal is the tab content wrapper's `px-6`; the measured
+     value is exact and also survives a panel wider than `max-w-7xl`. */
+  --merge-bleed: 1.5rem;
   --merge-radius: 0.375rem; /* the strip's resting corner — `rounded-md`, animated to 0 */
   /*
    * The one shadow on a non-overlay surface. `docs/design-system.md` reserves
@@ -233,6 +253,21 @@
       background-position: -200% 0;
     }
   }
+}
+
+/*
+ * Registered so it can be transitioned: an unregistered custom property is a
+ * token stream and interpolates discretely, which would make the strip's chrome
+ * snap to full width the instant its second tier opens. Registered as a
+ * `<length-percentage>`, the measured pill width eases out to `100%` in step
+ * with `.disclose`'s own height transition — and, because the merge keyframe
+ * carries only a `to` block, the running scroll-driven animation re-resolves its
+ * implicit `from` as this changes. Verified in Chromium, mid-merge.
+ */
+@property --bar-content-w {
+  syntax: '<length-percentage>';
+  inherits: true;
+  initial-value: 100%;
 }
 
 @layer components {
@@ -417,10 +452,9 @@
    * for the rest of the scroll (`both`).
    *
    * The sentinel **floats** so that it can be a sibling of the strip without
-   * being one for layout. It has to be a preceding sibling — that is the scope a
-   * named timeline is visible in — but a sibling in a `space-y-*` rung collects
-   * that rung's `margin-block-end`, and an in-flow marker would push the strip
-   * down by a full step. A float takes no space, block siblings ignore it
+   * being one for layout. A sibling in a `space-y-*` rung collects that rung's
+   * `margin-block-end`, and an in-flow marker would push the strip down by a
+   * full step. A float takes no space, block siblings ignore it
    * entirely, and its margin lands on a zero-size box where it does nothing.
    * (`position: absolute` would also leave the flow, but its containing block is
    * the nearest positioned ancestor, which here is outside the shared scroller —
@@ -441,6 +475,30 @@
   .dock-band {
     position: relative;
     isolation: isolate;
+    /*
+     * The measured pill width, published by `useActionOverflow` as
+     * `--bar-content-measured`. Indirected through a second property so the
+     * `[data-tier-open]` rule below can win: the measured value arrives as an
+     * inline style, which would out-specify any stylesheet rule.
+     */
+    --bar-content-w: var(--bar-content-measured, 100%);
+    /*
+     * Unguarded on purpose. The measured width is a function of the row's
+     * *content*, not the panel's width — the buttons are left-aligned, so a
+     * wider panel does not make the pill wider. Measured constant at 328px from
+     * a 1000px panel down to 380px, changing only when the split or the icons
+     * do. Those are exactly the moments the ease is wanted: the pill resizes
+     * with the button that appeared or the glyph that left, rather than snapping.
+     * An earlier `[data-resizing]` escape hatch was written for a per-pointer-move
+     * lag that does not exist, and removed once measured.
+     */
+    transition: --bar-content-w var(--dur-move) var(--ease-standard);
+  }
+
+  /* An open second tier is a panel, not a pill. It fills its column — not the
+     panel bleed: a strip floating mid-page has no business in the gutters. */
+  .dock-band[data-tier-open='true'] {
+    --bar-content-w: 100%;
   }
 
   .dock-band::before {
@@ -449,10 +507,55 @@
     z-index: -1;
     top: 0;
     bottom: 0;
-    inset-inline: 0;
+    /*
+     * The hug is painted, not laid out. The band keeps its full layout width —
+     * which is what lets `useActionOverflow` observe a width that does not churn
+     * as the merge runs — while the chrome stops at the last button. Animating
+     * the row's own width instead would relayout every button every frame on the
+     * one shared scroller, and `fit-content` cannot be interpolated at all.
+     */
+    inset-inline-start: 0;
+    inset-inline-end: calc(100% - var(--bar-content-w));
     background: var(--color-white);
     border: 1px solid var(--color-neutral-200);
     border-radius: var(--merge-radius);
+    /* At full merge this box overhangs into both gutters. Without this it is a
+       hit-testable slab sitting over the page. */
+    pointer-events: none;
+  }
+
+  /*
+   * The degenerate one-action strip: a `rounded-md` button inside a `rounded-md`
+   * pill with 8px of padding is two concentric equal radii, which always reads
+   * as a mistake. So a lone action gets no chrome at all — the strip *is* the
+   * button, until it docks and grows a bar around itself.
+   */
+  .dock-band[data-bare='true']::before {
+    background: transparent;
+    border-color: transparent;
+  }
+
+  /*
+   * The bleed plate: opaque, panel-wide, and always present.
+   *
+   * The band is `inset-inline: 0` of a box the tab column already inset by
+   * `px-6`, so a strip that is pinned but not merged has transparent gutters and
+   * page rows scroll through them. That is a live bug today, visible to anyone
+   * with `prefers-reduced-motion` (which clears the merge outright) and on any
+   * engine without `animation-timeline`. The hug pill would widen the leak from
+   * 48px to ~250px.
+   *
+   * Canvas-on-canvas at rest, so it is invisible in flow; opaque the moment the
+   * strip pins, in every motion mode, with no observer and nothing to desync.
+   */
+  :has(> .dock-sentinel) > .dock-band::after {
+    content: '';
+    position: absolute;
+    z-index: -2;
+    inset-block: 0;
+    inset-inline: calc(-1 * var(--bar-bleed, var(--merge-bleed)));
+    background: var(--color-canvas);
+    pointer-events: none;
   }
 
   .dock-sentinel {
@@ -471,17 +574,54 @@
   }
 
   @supports (animation-timeline: view()) {
+    /*
+     * A named timeline is referenceable by the element that declares it and by
+     * that element's DESCENDANTS — not, as this file long claimed, by its
+     * following siblings. The sentinel is the band's sibling, so without this
+     * hoist `--dock-progress` resolves to null on the band's `::before`; and a
+     * null timeline with `fill: both` holds the animation on its `to` keyframe
+     * forever. The strip did not fail to merge, it failed to *un*-merge: it has
+     * been rendering permanently full-bleed. Measured in Chromium via
+     * `getAnimations()` — `timeline: null, playState: finished`.
+     *
+     * `timeline-scope` lifts the name onto whichever element directly holds the
+     * sentinel, which is exactly the band's parent. Self-installing, so no
+     * consumer opts in. The obvious alternative — wrapping sentinel and band
+     * together — resolves the timeline too, but a real wrapper becomes the sticky
+     * containing block and traps the strip (fixed once already, in 09a83dd), and
+     * a `display: contents` wrapper was measured swallowing the rung's
+     * `space-y-6` step, which is the regression `UserActionBar` documents.
+     */
+    :has(> .dock-sentinel) {
+      timeline-scope: --dock-progress;
+    }
+
     .dock-sentinel {
       view-timeline: --dock-progress block;
       /*
        * Shrink the scrollport by the bands already parked at the top, so the
        * timeline's end lands on the strip's parking line rather than on the
        * scroller's own top edge.
+       *
+       * Less `--dock-offset`, because the sentinel does not sit where it claims
+       * to: the rung's `space-y-*` step lands on the *band* (the sentinel is the
+       * first child and collects no margin), so the marker floats a full step
+       * above the position it marks. Uncorrected, the merge was measured
+       * finishing 28px before the strip parked. `useActionOverflow` publishes the
+       * real distance.
        */
-      view-timeline-inset: calc(var(--rail-h, 0px) + var(--header-h, 0px)) 0px;
+      view-timeline-inset: calc(var(--rail-h, 0px) + var(--header-h, 0px) - var(--dock-offset, 0px))
+        0px;
     }
 
-    .dock-band::before {
+    /*
+     * Gated on the sentinel's presence, not applied to every `.dock-band`. A
+     * non-sticky strip (`sticky={false}`, every story) renders no sentinel, so
+     * `--dock-progress` would resolve to null and — per the note above — snap the
+     * chrome permanently to its merged state. Gated, such a strip simply keeps
+     * its resting pill, which is what a story should show.
+     */
+    :has(> .dock-sentinel) > .dock-band::before {
       animation: dock-band linear both;
       animation-timeline: --dock-progress;
       /*
@@ -492,16 +632,58 @@
        */
       animation-range: cover calc(100% - var(--merge-range)) cover 100%;
     }
+
+    :has(> .dock-sentinel) > .dock-band[data-bare='true']::before {
+      animation-name: dock-band-bare;
+    }
+
+    /*
+     * The trailing More cluster is the last in-flow item, so at rest it sits
+     * against the pill's edge rather than orphaned at the far side of the column.
+     * It rides the widening edge on the same timeline. `translate` because it
+     * composites and reflows nothing; a px var because `translate` percentages
+     * resolve against the moving element's own box, not its parent's.
+     */
+    :has(> .dock-sentinel) > .dock-band .dock-more {
+      animation: dock-more linear both;
+      animation-timeline: --dock-progress;
+      animation-range: cover calc(100% - var(--merge-range)) cover 100%;
+    }
   }
 
+  /*
+   * Only a `to` block, and deliberately so. The implicit 0% keyframe is the
+   * element's own computed value, so it re-resolves when `--bar-content-w`
+   * transitions — which is what lets the second tier widen the chrome while the
+   * merge animation is mid-flight. An explicit `from` would freeze the resting
+   * width and the tier would open against a pill that never grew.
+   */
   @keyframes dock-band {
     to {
       top: -1px;
-      inset-inline: calc(var(--merge-bleed) * -1);
+      inset-inline: calc(-1 * var(--bar-bleed, var(--merge-bleed)));
       border-radius: 0;
       border-top-color: transparent;
       border-inline-color: transparent;
       box-shadow: var(--shadow-dock);
+    }
+  }
+
+  /* The lone-action strip has no chrome to flatten, so it grows one instead. */
+  @keyframes dock-band-bare {
+    to {
+      top: -1px;
+      inset-inline: calc(-1 * var(--bar-bleed, var(--merge-bleed)));
+      border-radius: 0;
+      background: var(--color-white);
+      border-bottom-color: var(--color-neutral-200);
+      box-shadow: var(--shadow-dock);
+    }
+  }
+
+  @keyframes dock-more {
+    to {
+      translate: var(--dock-more-travel, 0px);
     }
   }
 }
@@ -525,6 +707,11 @@
  * part in it, so setting the duration to `1ms` leaves the merge running exactly
  * as before. Clearing `animation-name` is what actually stops it, and it leaves
  * the strip at its resting geometry — the correct static fallback.
+ *
+ * That fallback is only *safe* because of the bleed plate: a reduced-motion strip
+ * pins as a pill and never widens, so without an opaque plate behind it the page
+ * would scroll through the gutters either side. The plate is unconditional for
+ * exactly this reason — see `.dock-band::after`.
  */
 @media (prefers-reduced-motion: reduce) {
   *:not(.motion-exempt, .motion-exempt *),
@@ -536,7 +723,8 @@
     scroll-behavior: auto !important;
   }
 
-  .dock-band::before {
+  .dock-band::before,
+  .dock-band .dock-more {
     animation-name: none !important;
   }
 }
@@ -550,6 +738,7 @@
   scroll-behavior: auto !important;
 }
 
-[data-motion='off'] .dock-band::before {
+[data-motion='off'] .dock-band::before,
+[data-motion='off'] .dock-band .dock-more {
   animation-name: none !important;
 }

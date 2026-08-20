@@ -45,9 +45,10 @@ info`) — never `error`.
 
 `shared/`: `Button`, `IconButton`, `StretchedButton`, `FilterPill`, `SortPill`,
 `CopyButton`, `CopyableId`, `OpenInOktaLink`, `Modal`, `Input`, `Checkbox`, `Select`,
-`Textarea`, `PageHeader`, `EntityIdentity`, `Breadcrumbs`, `Tabs`, `CollapsibleSection`,
-`AlertMessage`, `EmptyState`, `Eyebrow`, `LoadingSpinner`, `Skeleton`, `ListRow`,
-`ScrollableList`, `SearchDropdown`, `SelectionChips`.
+`Textarea`, `PageHeader`, `EntityIdentity`, `EntityLink`, `Badge`, `Breadcrumbs`, `Tabs`,
+`CollapsibleSection`, `DetailSection`, `ActionBar`, `AlertMessage`, `EmptyState`,
+`Eyebrow`, `LoadingSpinner`, `Skeleton`, `ListRow`, `ScrollableList`, `SearchDropdown`,
+`SelectionChips`.
 
 There are **two** copy primitives and they are not interchangeable. `CopyButton` is a
 labelled `Button` for copying a _body_ of text (a list of emails, a CSV). `CopyableId` is
@@ -145,6 +146,38 @@ Adding an entity kind is one new builder beside that entity (`groupIdentity.ts`,
 `userIdentity.ts`) plus a unit test, with no edit to anything shared. `PageHeader`
 still describes the _browsed_ entity and `ContextBar` still describes the _live Okta
 tab_ — the two must not converge, and on a drilled-in view their ids routinely differ.
+
+`ActionBar` is the detail rung's **verb strip**, and it takes its verbs as **data**
+(ADR-0038) — never `Button` children, which is what it took before:
+
+```tsx
+<ActionBar
+  ariaLabel={`Actions for ${userDisplayName(user)}`}
+  actions={[
+    { id: 'add', label: 'Add group', icon: 'plus', variant: 'primary', onClick: onAdd },
+    { id: 'compare', label: 'Compare', icon: 'users', onClick: onCompare },
+  ]}
+  expansion={<UserLifecycleActions {...lifecycle} />}
+/>
+```
+
+Declaration order is reading order _and_ overflow order: the strip measures each
+action and, as the panel narrows, drops every icon at once and then moves the tail
+behind **More**. So put the verb an admin came to press first, and expect the last
+one to be the first to disappear.
+
+- **`priority`** is `flex` by default (`pinned` for a `primary` action). Use `pinned`
+  only for the page's own main verb — the row wraps under a pinned action rather than
+  overflowing it. Use `tier` for a verb that should live behind **More** from the
+  start. It is not a way to move a section's verb onto the strip; ADR-0030 §2 still
+  decides that.
+- **`expansion`** is arbitrary caller JSX in the disclosure tier — a form, an
+  account-state block, anything. That slot is why the tier is a region and not a
+  `role="menu"`, and why a descriptor may not carry a `ReactNode`: a node cannot be
+  measured from a cached width.
+- **Never render your own More button.** The strip owns the control, the region and
+  its `aria-controls` target, and renders the control only when the tier has content.
+  Leave the tier uncontrolled unless the page has to collapse it on a rung change.
 
 **A detail rung that answers several questions about one entity uses tabbed panes of
 one card**, not a stack of sections — `UserDetailPanel` is the pattern (Groups / Apps /

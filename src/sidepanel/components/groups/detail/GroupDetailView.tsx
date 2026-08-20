@@ -44,7 +44,7 @@ import { useOwedLoad } from '../../../hooks/useOwedLoad';
 import { useGroupRuleReferences } from '../../../hooks/useGroupRuleReferences';
 import { useGroupAccessGrants } from '../../../hooks/useGroupAccessGrants';
 import { useGroupMembersSection } from './useGroupMembersSection';
-import { ActionBar, Button } from '../../shared';
+import { ActionBar, type ActionDescriptor } from '../../shared';
 import type { GroupSummary } from '../../../../shared/types';
 
 /** Props for {@link GroupDetailView}. */
@@ -124,20 +124,29 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
     analyzeMembers();
   });
 
+  // One verb, no tier: `ActionBar` renders no **More** control and nothing to
+  // disclose, so this strip is the button and the chrome it grows as it docks.
+  const actions: ActionDescriptor[] = [
+    {
+      id: 'export-members',
+      label: 'Export members',
+      icon: 'download',
+      variant: 'primary',
+      onClick: () => onExportGroup?.(group.id, group.name),
+      disabled: !onExportGroup,
+      title: "Export this group's members (opens the Export tab with column picker + presets)",
+    },
+  ];
+
   return (
-    <div className="space-y-3" data-testid="group-detail-view">
-      <ActionBar ariaLabel={`Actions for ${group.name}`}>
-        <Button
-          variant="primary"
-          size="sm"
-          icon="download"
-          onClick={() => onExportGroup?.(group.id, group.name)}
-          disabled={!onExportGroup}
-          title="Export this group's members (opens the Export tab with column picker + presets)"
-        >
-          Export members
-        </Button>
-      </ActionBar>
+    /*
+      `space-y-6`, the same step the Users detail rung uses. It was `space-y-3`
+      while the strip painted a full-width slab, where 12px read as the gap
+      between two cards. The strip now hugs its one button, and 12px under a pill
+      makes the first `DetailSection` look attached to it rather than following it.
+    */
+    <div className="space-y-6" data-testid="group-detail-view">
+      <ActionBar ariaLabel={`Actions for ${group.name}`} actions={actions} />
 
       <GroupMembershipSourceSection
         memberCount={group.memberCount}

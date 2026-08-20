@@ -45,11 +45,11 @@
  * ## The tiered action strip
  *
  * Every page-level verb lives in {@link UserActionBar} on the detail rung, not in
- * `GroupMembershipsList`'s header slot where Compare and Add to Group used to sit
+ * `GroupMembershipsList`'s header slot where Compare and Add group used to sit
  * beside controls acting on that one card, and not in a `Lifecycle Actions` card
- * of its own (ADR-0030). The account-state verbs sit one press away behind
- * **Manage**; `manageOpen` is owned here, not in the strip, so it collapses
- * whenever the rung changes.
+ * of its own (ADR-0030). The account-state verbs sit one press away behind the
+ * strip's **More** disclosure; the tier's open state is owned here rather than in
+ * the strip, so it collapses whenever the rung changes.
  *
  * There is deliberately **no Export button**: the Export tab has no user-scoped
  * descriptor to open, and a control that does nothing is worse than an absent
@@ -133,9 +133,10 @@ const UsersTab: React.FC<UsersTabProps> = ({
     isCompareOpen,
   } = state;
 
-  // The Manage tier is a property of the strip you are looking at, not of the
-  // user, so it collapses whenever the rung changes — leaving the detail page and
-  // coming back should not re-open a band of destructive verbs behind you.
+  // The strip's disclosure tier is a property of the strip you are looking at,
+  // not of the user, so it collapses whenever the rung changes — leaving the
+  // detail page and coming back should not re-open a band of destructive verbs
+  // behind you.
   // Adjusted during render rather than in an effect, the pattern `PageHeader`
   // uses: React re-renders immediately without committing the open frame.
   const [manageOpen, setManageOpen] = useState(false);
@@ -247,18 +248,19 @@ const UsersTab: React.FC<UsersTabProps> = ({
               className={isDetailOpen ? 'space-y-6 focus:outline-none' : 'hidden'}
             >
               {/*
-                Every page-level verb, tiered: the everyday ones pinned in the
-                strip, the account-state ones one press away behind Manage
-                (ADR-0030). They used to sit in `GroupMembershipsList`'s header
-                slot and in a `Lifecycle Actions` card of their own.
+                Every page-level verb, tiered: the everyday ones in the strip's
+                row, the account-state ones one press away behind the strip's own
+                **More** disclosure (ADR-0030). They used to sit in
+                `GroupMembershipsList`'s header slot and in a `Lifecycle Actions`
+                card of their own.
               */}
               <UserActionBar
                 user={selectedUser}
                 onCompare={state.openCompare}
                 onAddToGroup={addToGroup.openModal}
                 isLoadingMemberships={state.isLoadingMemberships}
-                manageOpen={manageOpen}
-                onToggleManage={() => setManageOpen((open) => !open)}
+                tierOpen={manageOpen}
+                onTierOpenChange={setManageOpen}
                 isLifecycleLoading={lifecycle.isLifecycleLoading}
                 pendingLifecycleAction={lifecycle.pendingLifecycleAction}
                 onRequestLifecycleAction={lifecycle.setPendingLifecycleAction}
