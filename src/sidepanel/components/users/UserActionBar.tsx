@@ -111,7 +111,20 @@ const UserActionBar: React.FC<UserActionBarProps> = ({
   onConfirmLifecycleAction,
   sticky = true,
 }) => (
-  <div>
+  // `contents`, not a plain wrapper: this node groups the strip with the band it
+  // owns, and must not become the strip's containing block. `position: sticky`
+  // travels only within its parent's box, and a bare `<div>` here is exactly as
+  // tall as the strip — so the strip reached its parent's bottom edge
+  // immediately, never pinned, and scrolled away with the rung. `display:
+  // contents` generates no box, so the strip's containing block is the rung
+  // itself and it has the whole page to stay pinned over (ADR-0032 §3).
+  //
+  // It also keeps the band glued. The rung carries `space-y-6`, whose
+  // `& > :not([hidden]) ~ :not([hidden])` matches DOM *children* of the rung —
+  // this node, not the two inside it — so no 24px margin is injected between the
+  // strip and the band, and the band's `-mt-px` overlap survives. Returning a
+  // fragment instead would lose that: `space-y-6` out-specifies `-mt-px`.
+  <div className="contents">
     {/*
       Page-level verbs, pinned while the panes scroll under them (ADR-0030).
       These used to sit in `GroupMembershipsList`'s header slot — the same slot
