@@ -45,6 +45,13 @@ interface UserComparisonModalProps {
   targetTabId: number;
   /** Called after a group is successfully copied onto the context user so the parent can refresh. */
   onGroupsChanged: () => void;
+  /**
+   * Publishes a context-user profile save back to whoever owns that user. The
+   * Overview rung holds its user in the entity cache, so it republishes there;
+   * absent, the left column stays read-only rather than accepting an edit
+   * nothing would re-render from.
+   */
+  onContextUserUpdated?: (user: OktaUser) => void;
 }
 
 /**
@@ -60,6 +67,7 @@ const UserComparisonModal: React.FC<UserComparisonModalProps> = ({
   oktaOrigin,
   targetTabId,
   onGroupsChanged,
+  onContextUserUpdated,
 }) => {
   const comparison = useUserComparison({
     isActive: isOpen,
@@ -70,6 +78,7 @@ const UserComparisonModal: React.FC<UserComparisonModalProps> = ({
     // config behind the Attributes tab, not only the deep link below.
     oktaOrigin,
     onGroupsChanged,
+    onContextUserUpdated,
   });
 
   return (

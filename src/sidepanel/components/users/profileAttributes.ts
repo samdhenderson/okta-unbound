@@ -61,10 +61,28 @@ export interface AttributeDescriptor {
   isEmpty: boolean;
   /** Render the value in a monospace font (ids and similar). */
   mono?: boolean;
+  /**
+   * The attribute's schema property, when the org's schema described it.
+   *
+   * Carried rather than flattened because the editability gate reads four of its
+   * fields (`mutability`, `master`, `type`, `enum`/`oneOf`, `required`) and a
+   * flattened copy would need widening again for the fifth. Absent for `system`
+   * attributes and for profile keys the schema never mentioned — and an attribute
+   * we cannot describe is one we decline to edit.
+   */
+  property?: OktaUserSchemaProperty;
 }
 
-/** Stringify an arbitrary attribute value for display; nullish and `''` collapse to `''`. */
-function toDisplay(value: unknown): string {
+/**
+ * Stringify an arbitrary attribute value for display; nullish and `''` collapse to `''`.
+ *
+ * Exported because three separate questions must be answered with the *same*
+ * string or they will silently disagree: what the row renders, whether a draft
+ * differs from the saved value, and whether the value in Okta is still the one we
+ * wrote. Two stringifiers would disagree on `5` versus `'5'`, and the
+ * disagreement would surface as an undo that refuses for no reason.
+ */
+export function toDisplay(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
@@ -185,6 +203,7 @@ function profileAttribute(
     value,
     raw,
     isEmpty: value === '',
+    property,
   };
 }
 

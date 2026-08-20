@@ -38,6 +38,14 @@
  * "loaded, and there are none", and collapsing the two would hide a real zero
  * forever, which is the same defect pointing the other way.
  *
+ * ## The panes' dialogs live here
+ *
+ * A pane renders and owns no dialog, so both of the Profile pane's are mounted
+ * at this level: `ProfileDisplayModal` behind the gear and `ProfileSaveModal`
+ * behind Save — the last thing between a draft and a live write to the org's
+ * directory. Both open from a nullable payload rather than a boolean beside one,
+ * so what is being confirmed and the fact that something is cannot drift apart.
+ *
  * ## Page-level actions are deliberately not here
  *
  * Compare, Add-to-Group and the account-state verbs act on the whole user, so
@@ -52,6 +60,8 @@ import GroupMembershipsList from './GroupMembershipsList';
 import UserAppsList from './UserAppsList';
 import UserProfilePane from './UserProfilePane';
 import ProfileDisplayModal from './ProfileDisplayModal';
+import ProfileSaveModal from './ProfileSaveModal';
+import { userDisplayName } from '../../../shared/utils/userDisplay';
 import type { AttributeDescriptor } from './profileAttributes';
 import type { GroupMembership, OktaUser } from '../../../shared/types';
 import type { MemberRuleAttribution } from '../../../shared/membership/memberRuleAttribution';
@@ -59,6 +69,7 @@ import type { ProfileDisplayConfig } from '../../../shared/storage/profileDispla
 import type { UserAppAssignment } from '../../hooks/useOktaApi/userOperations';
 import type { AppsByGroupId } from '../../hooks/useUserApps';
 import type { UserDetailPane } from '../../hooks/useUserDetailPanes';
+import type { UserProfileEditing } from '../../hooks/useUsersTabProfileEdit';
 
 /** Props for {@link UserDetailPanel}. */
 export interface UserDetailPanelProps {
@@ -131,6 +142,12 @@ export interface UserDetailPanelProps {
    * grant this user access. Absent attributes carry no mark.
    */
   ruleReads: Record<string, string[]>;
+  /**
+   * Makes the Profile pane editable. Absent renders it exactly as it rendered
+   * before editing existed — which is what a story, or a rung with no connected
+   * Okta tab, gets.
+   */
+  profileEdit?: UserProfileEditing;
 }
 
 /**
@@ -160,6 +177,7 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
   onProfileConfigChange,
   onProfileConfigReset,
   ruleReads,
+  profileEdit,
 }) => {
   // The gear belongs to the Profile pane, so its dialog's open state does too —
   // nothing outside this card reads it.
@@ -235,6 +253,8 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
           ruleReads={ruleReads}
           isLoading={isLoadingProfile}
           onConfigure={() => setIsConfiguringProfile(true)}
+          edit={profileEdit?.controls}
+          cells={profileEdit?.cells}
         />
       </div>
 
@@ -251,6 +271,15 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
         onReset={onProfileConfigReset}
         ruleReads={ruleReads}
       />
+
+      {/*
+        The save confirmation belongs here for the same reason the display modal
+        does: the pane renders and owns no dialog, and this is the last thing
+        between a draft and a live write to the org's directory. Its own
+        `changes` prop is the nullable discriminant that opens it, so it is
+        mounted unconditionally whenever the rung offers editing.
+      */}
+      {profileEdit && <ProfileSaveModal {...profileEdit.save} userName={userDisplayName(user)} />}
     </div>
   );
 };

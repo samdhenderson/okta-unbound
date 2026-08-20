@@ -1,7 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import ComparisonAttributesTab from './ComparisonAttributesTab';
 import type { AttributeParityRow, AttributeVerdict } from './attributeParity';
+import type { AttributeEditCell } from '../../../hooks/useProfileEdit';
+import type { ComparisonEditSide } from '../../../hooks/useComparisonProfileEdit';
 import type { ProfileDisplayConfig } from '../../../../shared/storage/profileDisplayStore';
 import { DEFAULT_PROFILE_DISPLAY_CONFIG } from '../../../../shared/storage/profileDisplayStore';
 
@@ -69,6 +71,45 @@ const CONFIG: ProfileDisplayConfig = {
   hidden: { employeeNumber: true },
 };
 
+/** One attribute's editing cell, as `useProfileEdit` hands it over. */
+const editCell = (name: string, over: Partial<AttributeEditCell> = {}): AttributeEditCell => ({
+  name,
+  editability: { editable: true, control: 'text', required: false },
+  dirty: false,
+  onChange: fn(),
+  ...over,
+});
+
+/** A map of editable cells, keyed by attribute name exactly as the tab joins them. */
+const editCells = (
+  names: readonly string[],
+  over: Record<string, Partial<AttributeEditCell>> = {},
+): Record<string, AttributeEditCell> =>
+  Object.fromEntries(names.map((name) => [name, editCell(name, over[name])]));
+
+/** One column's editor, as `useComparisonProfileEdit` hands it over. */
+const side = (
+  key: 'context' | 'compared',
+  userName: string,
+  over: Partial<ComparisonEditSide> = {},
+): ComparisonEditSide => ({
+  key,
+  userName,
+  cells: {},
+  isEditing: false,
+  isSaving: false,
+  hasChanges: false,
+  hasInvalid: false,
+  canEdit: true,
+  begin: fn(),
+  cancel: fn(),
+  requestSave: fn(),
+  ...over,
+});
+
+/** Every attribute name the fixtures above use. */
+const ALL_NAMES = ['department', 'manager', 'costCenter', 'userType', 'nickName', 'employeeNumber'];
+
 /** The attribute diff: two values per row, an equality marker, and the config's grouping. */
 const meta = {
   title: 'Users/Comparison/ComparisonAttributesTab',
@@ -93,8 +134,12 @@ const meta = {
           '**Hidden differences are disclosed, never dropped.** The display config can hide an attribute, and the ' +
           'one it hides may be the one explaining an access gap, so the count is stated above the list with a ' +
           'control that reveals those rows inline, marked as hidden.\n\n' +
-          'There is deliberately **no per-row action**: editing a profile attribute needs prior-state capture and ' +
-          'audit logging, which is a separate change.\n\n' +
+          '**Either user is editable, per side.** Which of the two values is right is exactly what a value diff ' +
+          'leaves the admin to decide, so the affordance works in both directions: one editor per column, each ' +
+          'naming its user, with the per-attribute cells joined to a row by the bare attribute name.\n\n' +
+          '**The counts and the markers do not follow the typing.** They describe what Okta holds; a dirty side ' +
+          'is marked with an `Edited` badge instead. And a hidden row holding a draft stays listed even with the ' +
+          'disclosure collapsed, so an edit can never be on screen nowhere and still in the patch.\n\n' +
           '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs), ' +
           '[Types](?path=/docs/internals-types--docs)',
       },
@@ -132,6 +177,12 @@ const meta = {
     ruleReads: {
       description:
         'Attribute Okta name to the rules that read it and currently grant either user access, from `profileRuleReads`.',
+    },
+    contextEdit: {
+      description: "The context user's editor. Absent leaves the left column read-only.",
+    },
+    comparedEdit: {
+      description: "The compared user's editor. Same contract as `contextEdit`.",
     },
   },
 } satisfies Meta<typeof ComparisonAttributesTab>;
@@ -232,6 +283,88 @@ export const CompactPanel: Story = {
       ),
       ...ROWS,
     ],
+  },
+  parameters: { viewport: { value: 'sidepanelCompact' } },
+};
+
+/**
+ * The compared column is editing. Every listed row's right-hand cell becomes a
+ * control; the left column, the marker column and all three counts are exactly
+ * as they were.
+ */
+export const EditingComparedColumn: Story = {
+  args: {
+    contextEdit: side('context', 'Ada Context'),
+    comparedEdit: side('compared', 'Bo Compared', {
+      isEditing: true,
+      cells: editCells(ALL_NAMES),
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() => expect(canvas.getByLabelText('Department')).toHaveValue('Design'));
+    expect(canvas.getByRole('button', { name: 'Differences 3' })).toBeInTheDocument();
+  },
+};
+
+/**
+ * A drafted change. The row says which side is holding it and the pill still
+ * counts two differences — the arithmetic describes Okta, not the form.
+ */
+export const EditedDraft: Story = {
+  args: {
+    comparedEdit: side('compared', 'Bo Compared', {
+      isEditing: true,
+      hasChanges: true,
+      cells: editCells(ALL_NAMES, {
+        department: { draft: 'Engineering', dirty: true },
+      }),
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() => expect(canvas.getByText('Edited')).toBeInTheDocument());
+    expect(canvas.getByRole('button', { name: 'Differences 3' })).toBeInTheDocument();
+  },
+};
+
+/**
+ * The honesty requirement, in the other direction: a config-hidden row that was
+ * revealed, edited, and then had its disclosure collapsed again stays on screen.
+ * Anything else would take the edit off screen without taking it out of the patch.
+ */
+export const DirtyHiddenRowStaysListed: Story = {
+  args: {
+    comparedEdit: side('compared', 'Bo Compared', {
+      isEditing: true,
+      hasChanges: true,
+      cells: editCells(ALL_NAMES, {
+        employeeNumber: { draft: 'E-0003', dirty: true },
+      }),
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // The disclosure is collapsed — it still offers to "Show" — and the row is
+    // listed anyway, still marked as one the config hides.
+    await waitFor(() => expect(canvas.getByText('Employee number')).toBeInTheDocument());
+    expect(canvas.getByRole('button', { name: 'Show' })).toBeInTheDocument();
+    expect(canvas.getByText('Hidden')).toBeInTheDocument();
+  },
+};
+
+/**
+ * Editing at 360px: the controls stack under the pills and the search field, and
+ * the value cells keep the same three-track grid the read-only rows use.
+ */
+export const EditingCompact: Story = {
+  args: {
+    contextEdit: side('context', 'Ada Context', {
+      isEditing: true,
+      hasChanges: true,
+      cells: editCells(ALL_NAMES, { department: { draft: 'Design', dirty: true } }),
+    }),
+    comparedEdit: side('compared', 'Bo Compared'),
   },
   parameters: { viewport: { value: 'sidepanelCompact' } },
 };

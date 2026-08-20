@@ -66,6 +66,28 @@ export const oktaUserSchema = z.object({
       rules: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
     })
     .optional(),
+  /**
+   * Account-level mastering. `provider.type` is `'OKTA'` when Okta owns the
+   * credential, or `'ACTIVE_DIRECTORY'` / `'IMPORT'` / `'FEDERATION'` when an
+   * external directory does — the signal that decides whether `login` is
+   * editable.
+   *
+   * **Deliberately not `.passthrough()`, unlike its siblings in this file.** Okta
+   * returns `credentials.password` and `credentials.recovery_question` on this
+   * object; passthrough would carry credential material through the boundary and
+   * into React state, where anything that serializes a user would pick it up.
+   * Stripping it here is the whole point of validating at the boundary.
+   */
+  credentials: z
+    .object({
+      provider: z
+        .object({
+          type: z.string().optional(),
+          name: z.string().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
   profile: oktaProfileSchema,
 });
 

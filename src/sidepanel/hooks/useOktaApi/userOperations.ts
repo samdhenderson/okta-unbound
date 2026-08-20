@@ -11,10 +11,8 @@ import {
   oktaAppListItemSchema,
   extractAppAssignmentScope,
   extractAppGrantGroupId,
-  oktaUserProfileSchemaSchema,
   type OktaAppListItem,
   type AppAssignmentScope,
-  type OktaUserProfileSchema,
 } from '@/shared/schemas/okta';
 import { createLogger } from '../../../shared/utils/logger';
 
@@ -408,56 +406,6 @@ export function createUserOperations(coreApi: CoreApi) {
     return { success: result.success, error: result.error };
   };
 
-  /**
-   * Read the org's user-profile schema — the definition of every base and
-   * org-defined (custom) profile attribute.
-   *
-   * @returns The validated {@link OktaUserProfileSchema}, or `null` when the
-   * request fails, returns no data, or returns a payload that does not validate.
-   * Never throws.
-   * @remarks One org-wide `GET /api/v1/meta/schemas/user/default`. This is the
-   * only way to learn about an attribute that is **unset** on the user being
-   * viewed — such an attribute is absent from that user's `profile` object, so a
-   * schema-less inventory silently under-reports what the org actually defines.
-   * Cache it under `cacheKeys.userSchema(oktaOrigin)` (org-wide, `TTL_LONG`)
-   * rather than re-asking per user.
-   *
-   * `null` is a first-class answer, not an error to surface: the caller falls
-   * back to `BASE_PROFILE_ATTRIBUTES` and renders the user's own profile keys, so
-   * a schema-endpoint failure costs custom-attribute *discovery*, never the view.
-   *
-   * Validation is lenient (ADR-0006): a malformed individual property is dropped
-   * and the rest of the schema is kept. Nothing about the response body is logged
-   * — profile schemas carry org-specific attribute names and labels.
-   */
-  const getUserProfileSchema = async (): Promise<OktaUserProfileSchema | null> => {
-    try {
-      const response = await coreApi.makeApiRequest('/api/v1/meta/schemas/user/default');
-      if (!response.success || !response.data) {
-        // Outcome only — never the payload or the error body.
-        log.error('Failed to fetch user profile schema', { success: response.success });
-        return null;
-      }
-
-      const parsed = oktaUserProfileSchemaSchema.safeParse(response.data);
-      if (!parsed.success) {
-        // Issue paths/codes only: zod's messages echo received values.
-        log.error('User profile schema failed validation', {
-          issues: parsed.error.issues.map((issue) => ({
-            path: issue.path.join('.'),
-            code: issue.code,
-          })),
-        });
-        return null;
-      }
-
-      return parsed.data;
-    } catch (error) {
-      log.error('getUserProfileSchema error:', error);
-      return null;
-    }
-  };
-
   return {
     getUserLastLogin,
     getUserApps,
@@ -466,7 +414,6 @@ export function createUserOperations(coreApi: CoreApi) {
     getUserGroupMemberships,
     searchUsers,
     getUserById,
-    getUserProfileSchema,
     suspendUser,
     unsuspendUser,
     resetPassword,

@@ -209,6 +209,7 @@ interface HarnessProps {
   contextGroups?: GroupMembership[];
   onGroupsChanged?: () => void;
   onClose?: () => void;
+  onContextUserUpdated?: (user: OktaUser) => void;
 }
 
 /**
@@ -220,6 +221,7 @@ const Harness: React.FC<HarnessProps> = ({
   contextGroups = CONTEXT_GROUPS,
   onGroupsChanged,
   onClose,
+  onContextUserUpdated,
 }) => {
   const [isOpen, setIsOpen] = React.useState(true);
   const [bump, setBump] = React.useState(0);
@@ -239,6 +241,7 @@ const Harness: React.FC<HarnessProps> = ({
         contextGroups={contextGroups}
         targetTabId={TAB_ID}
         onGroupsChanged={() => onGroupsChanged?.()}
+        {...(onContextUserUpdated ? { onContextUserUpdated } : {})}
       />
     </div>
   );
@@ -940,6 +943,33 @@ describe('UserComparisonModal', () => {
 
       await waitFor(() => expect(screen.queryByText(RESULTS_COUNT)).not.toBeInTheDocument());
       expect(screen.getByText('Start typing to search')).toBeInTheDocument();
+    });
+  });
+
+  describe('editing the context column', () => {
+    // The last hop of the profile-edit chain, and the one that fails silently.
+    // `useComparisonProfileEdit` refuses to edit the context column unless the
+    // host supplied `onContextUserUpdated`, because the context user lives in
+    // the host's state and a save with nowhere to land leaves every surface
+    // rendering values Okta no longer holds. Every link below it can be wired
+    // correctly and the column still be read-only, with nothing red to say so.
+    it('offers no Edit control for the context user when the host cannot publish the save', async () => {
+      render(<Harness />);
+      await openComparison();
+      await gotoTab('Attributes');
+
+      expect(screen.queryByRole('button', { name: /Edit Alice Context/ })).not.toBeInTheDocument();
+      // The compared column is unaffected — it is `useUserComparison`'s own
+      // state, so it always has somewhere to publish to.
+      expect(screen.getByRole('button', { name: /Edit Bob Compared/ })).toBeInTheDocument();
+    });
+
+    it('offers Edit for the context user once the host supplies onContextUserUpdated', async () => {
+      render(<Harness onContextUserUpdated={vi.fn()} />);
+      await openComparison();
+      await gotoTab('Attributes');
+
+      expect(screen.getByRole('button', { name: /Edit Alice Context/ })).toBeInTheDocument();
     });
   });
 

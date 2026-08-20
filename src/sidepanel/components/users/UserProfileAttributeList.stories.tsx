@@ -1,8 +1,9 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, within } from 'storybook/test';
+import { expect, fn, within } from 'storybook/test';
 import UserProfileAttributeList from './UserProfileAttributeList';
 import type { AttributeDescriptor } from './profileAttributes';
+import type { AttributeEditCell } from '../../hooks/useProfileEdit';
 
 const attribute = (
   name: string,
@@ -53,6 +54,61 @@ const longValues: AttributeDescriptor[] = [
     true,
   ),
 ];
+
+/**
+ * The cells `useProfileEdit` hands down in edit mode. `department` is a plain
+ * text field, `employeeType` a schema `select`, `costCenter` carries a
+ * validation message, and `id` is locked.
+ *
+ * A locked cell has **no `onChange`**, exactly as `useProfileEdit` builds it —
+ * and `onChange` is `ProfileEditCell`'s mode switch, so a locked attribute
+ * renders as its plain read-only value here rather than as the lock-plus-reason
+ * state that cell can also draw. The distinction on screen is that its
+ * neighbours have grown a control and it has not.
+ *
+ * `onChange` is a spy rather than real state: these stories are about which
+ * state each `<dd>` swaps to, not about typing.
+ */
+const editCells: Readonly<Record<string, AttributeEditCell>> = {
+  id: {
+    name: 'id',
+    editability: {
+      editable: false,
+      reason: 'system',
+      explanation: 'This is a system field, not a profile attribute, so it cannot be edited here.',
+    },
+    dirty: false,
+  },
+  department: {
+    name: 'department',
+    editability: { editable: true, control: 'text', required: false },
+    draft: 'Identity Platform',
+    dirty: true,
+    onChange: fn(),
+  },
+  employeeType: {
+    name: 'employeeType',
+    editability: {
+      editable: true,
+      control: 'select',
+      required: false,
+      options: [
+        { value: 'FULL_TIME', label: 'Full time' },
+        { value: 'CONTRACTOR', label: 'Contractor' },
+      ],
+    },
+    dirty: false,
+    onChange: fn(),
+  },
+  costCenter: {
+    name: 'costCenter',
+    editability: { editable: true, control: 'text', required: true },
+    draft: '',
+    dirty: true,
+    invalid: 'Okta requires a value for this attribute.',
+    onChange: fn(),
+  },
+};
 
 /** Attribute name → the group rules that read it. */
 const ruleReads: Record<string, string[]> = {
@@ -120,6 +176,10 @@ const meta = {
     ruleReads: {
       description:
         'Attribute name → the rules that read it. An attribute absent from the map gets no chip.',
+    },
+    cells: {
+      description:
+        'Attribute name → its edit cell while the surface is editing. Absent is the read-only path.',
     },
   },
 } satisfies Meta<typeof UserProfileAttributeList>;
@@ -230,5 +290,53 @@ export const Compact: Story = {
     attributes: [...attributes.filter((item) => item.name !== 'login'), ...longValues],
     layout: 'rows',
   },
+  parameters: { viewport: { value: 'sidepanelCompact' } },
+};
+
+// ---------------------------------------------------------------------------
+// Edit mode
+// ---------------------------------------------------------------------------
+
+/**
+ * Edit mode. Only the attributes with a cell swap their `<dd>` for a control —
+ * `login` and `firstName` have none here and render exactly as they do in read
+ * mode, which is the property that keeps the no-truncation contract above a
+ * fact about this file rather than about whichever branch ran.
+ *
+ * `costCenter` is required and empty, so it carries its validation message;
+ * `employeeType` is a schema `select`; `id` is locked and therefore has no
+ * control at all.
+ */
+export const Editing: Story = {
+  args: { cells: editCells },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // An editable attribute becomes a control named for its label.
+    await expect(canvas.getByRole('textbox', { name: 'Department' })).toHaveValue(
+      'Identity Platform',
+    );
+    await expect(canvas.getByRole('combobox', { name: 'Employee Type' })).toBeInTheDocument();
+
+    // A drafted value that fails validation says so beside its own control.
+    await expect(canvas.getByText('Okta requires a value for this attribute.')).toBeInTheDocument();
+
+    // A locked attribute grows no control — it stays the value it already was.
+    await expect(canvas.queryByRole('textbox', { name: 'User ID' })).not.toBeInTheDocument();
+    await expect(canvas.getByText('00uFAKE00000000000001')).toBeInTheDocument();
+
+    // An attribute with no cell is untouched by edit mode.
+    await expect(canvas.getByText('user@example.com')).toBeInTheDocument();
+  },
+};
+
+/** The same cells in `grid`, where each control fills its card. */
+export const EditingInGrid: Story = {
+  args: { cells: editCells, layout: 'grid' },
+};
+
+/** Edit mode at the 360px floor: the controls take the full value column. */
+export const EditingNarrow: Story = {
+  args: { cells: editCells },
   parameters: { viewport: { value: 'sidepanelCompact' } },
 };

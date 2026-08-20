@@ -17,6 +17,17 @@
  * (`DiffItem.membership` is the precedent for a facet-specific payload, but that
  * is an extra fact *about* a presence row, not a different kind of row.)
  *
+ * **The tab is editable; a row is still not.** Either user's profile can be
+ * edited from the Attributes tab, and none of that arrives here. The editors are
+ * keyed on `(user, attributes)` and hand back cells keyed by the bare attribute
+ * `name`, which the row component joins to `AttributeParityRow.name` at render
+ * time — so one editor serves both columns and this type keeps carrying exactly
+ * what it always did. Widening it with a draft or a dirty flag would make a
+ * derived fact carry mutable state, which is the same objection this module
+ * already raises about `ParityRow`. The `verdict` likewise never moves for a
+ * draft: it is a statement about what Okta holds, and re-verdicting an unsaved
+ * keystroke would claim two users agree while the directory says they differ.
+ *
  * **Attributes are deliberately excluded from the similarity score.**
  * `overallSimilarity` averages exactly two Jaccard terms — groups and apps — and
  * publishes the result as a number in the hero. Attributes are not access, and
@@ -67,7 +78,10 @@ export type AttributeVerdict = 'same' | 'differs' | 'onlyContext' | 'onlyCompare
  * One attribute, and how the two users' values for it compare.
  *
  * All fields `readonly`, matching `ParityRow` — a row is a derived fact
- * about a pair of users, and nothing downstream may edit it in place.
+ * about a pair of users, and nothing downstream may edit it in place. That holds
+ * even now the tab writes to profiles: an edit lives in the editor's own draft
+ * and is joined back to a row by {@link AttributeParityRow.name}, never merged
+ * into one.
  */
 export interface AttributeParityRow {
   /** {@link AttributeDescriptor.key} — `'status'` for a top-level field, `'profile.<name>'` for a profile one. */

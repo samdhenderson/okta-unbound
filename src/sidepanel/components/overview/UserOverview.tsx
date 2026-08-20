@@ -15,6 +15,8 @@ import { formatDateShort, getRelativeTime } from '../../../shared/utils/dateForm
 import { useUserMemberships } from '../../hooks/useUserMemberships';
 import { useOktaApi } from '../../hooks/useOktaApi';
 import { useEntityQuery } from '../../cache/useEntityQuery';
+import { setEntry } from '../../cache/entityCache';
+import { cacheKeys } from '../../cache/keys';
 import AlertMessage from '../shared/AlertMessage';
 import Button from '../shared/Button';
 import LoadingSpinner from '../shared/LoadingSpinner';
@@ -56,7 +58,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
     isLoading: isLoadingUser,
     error: userError,
   } = useEntityQuery<OktaUser>(
-    ['userDetails', userId],
+    cacheKeys.userDetails(userId),
     async () => {
       const userResponse = await makeApiRequest(`/api/v1/users/${userId}`);
       if (!userResponse.success || !userResponse.data) {
@@ -263,6 +265,10 @@ const UserOverview: React.FC<UserOverviewProps> = ({
           contextGroups={groups}
           targetTabId={targetTabId}
           onGroupsChanged={() => loadMemberships(userDetails, { force: true })}
+          // Republish straight into the cache entry this rung reads from. The
+          // user Okta returned from the write is the freshest copy there is, so
+          // re-fetching it would spend a request to learn what we already hold.
+          onContextUserUpdated={(user) => setEntry(cacheKeys.userDetails(userId), user)}
         />
       )}
     </div>

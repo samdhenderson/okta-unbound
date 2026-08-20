@@ -474,14 +474,14 @@ const App: React.FC = () => {
               onExportRequestConsumed={() => setExportRequest(null)}
             />
           ))}
-          {renderTabPanel('history', () => (
+          {renderTabPanel('history', (isActive) => (
             <div
               className="tab-content active"
               style={{ fontFamily: 'var(--font-primary)', padding: 0 }}
             >
               <PageHeader title="Audit Log" subtitle="View history of actions performed" />
               <div className="max-w-7xl mx-auto px-6 py-6">
-                <AuditLogViewer />
+                <AuditLogViewer isActive={isActive} targetTabId={tabContext.targetTabId ?? null} />
               </div>
             </div>
           ))}

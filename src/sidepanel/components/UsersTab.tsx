@@ -165,7 +165,26 @@ const UsersTab: React.FC<UsersTabProps> = ({
         isActive={isActive}
       />
 
-      <div className="max-w-7xl mx-auto px-6 py-6">
+      <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+        {/*
+          The result banner sits OUTSIDE the rung switch, above both regions.
+          Every outcome it reports — a lifecycle verb, an add-to-group, a profile
+          save — is triggered from the detail rung, and the search region that
+          used to host it is `hidden` the whole time a user is open. (jsdom loads
+          no stylesheet, so the tests never saw it disappear.) It is also where
+          the profile save's inline `Undo` lands: there is no toast primitive in
+          this panel, and `AlertMessage`'s action slot is the sanctioned place
+          for an inline verb.
+        */}
+        {state.resultMessage && (
+          <AlertMessage
+            message={state.resultMessage}
+            onDismiss={state.dismissResultMessage}
+            {...(state.resultAction ? { action: state.resultAction } : {})}
+            className="animate-rise-in"
+          />
+        )}
+
         {/*
           Hidden, never unmounted: the search box, the selected user's profile card
           and its per-section expansion all live in this subtree, as does the Compare
@@ -188,25 +207,14 @@ const UsersTab: React.FC<UsersTabProps> = ({
             hasSelectedUser={Boolean(selectedUser)}
             hasError={Boolean(state.error)}
             alerts={
-              <>
-                {/* Error Display */}
-                {state.error && (
-                  <AlertMessage
-                    message={{ text: state.error, type: 'danger' }}
-                    onDismiss={state.dismissError}
-                    className="animate-rise-in"
-                  />
-                )}
-
-                {/* Lifecycle operation result */}
-                {state.resultMessage && (
-                  <AlertMessage
-                    message={state.resultMessage}
-                    onDismiss={state.dismissResultMessage}
-                    className="animate-rise-in"
-                  />
-                )}
-              </>
+              /* Search / load failures only; the result banner is above, outside the rung switch. */
+              state.error ? (
+                <AlertMessage
+                  message={{ text: state.error, type: 'danger' }}
+                  onDismiss={state.dismissError}
+                  className="animate-rise-in"
+                />
+              ) : undefined
             }
           />
         </div>
@@ -279,6 +287,7 @@ const UsersTab: React.FC<UsersTabProps> = ({
                 onProfileConfigChange={panes.updateProfileConfig}
                 onProfileConfigReset={panes.resetProfileConfig}
                 ruleReads={panes.ruleReads}
+                profileEdit={state.profileEdit}
               />
             </div>
 
@@ -297,6 +306,7 @@ const UsersTab: React.FC<UsersTabProps> = ({
                   contextGroups={memberships}
                   targetTabId={targetTabId}
                   onGroupsChanged={state.refreshSelectedUserMemberships}
+                  onContextUserUpdated={state.applySelectedUserUpdate}
                 />
               </div>
             )}

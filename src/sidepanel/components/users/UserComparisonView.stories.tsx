@@ -133,6 +133,29 @@ const ATTRIBUTE_CONFIG: ProfileDisplayConfig = {
 };
 
 /**
+ * One column's editor at rest: read-only, with nothing drafted. The Attributes
+ * tab's editing states have their own stories on
+ * `ComparisonAttributesToolbar` and `ComparisonAttributesTab`; here the field
+ * exists so the state literal stays whole.
+ */
+const idleSide = (
+  key: 'context' | 'compared',
+  userName: string,
+): UserComparisonState['attributeEdit']['context'] => ({
+  key,
+  userName,
+  cells: {},
+  isEditing: false,
+  isSaving: false,
+  hasChanges: false,
+  hasInvalid: false,
+  canEdit: false,
+  begin: fn(),
+  cancel: fn(),
+  requestSave: fn(),
+});
+
+/**
  * A whole comparison view model, as {@link useUserComparison} would return it.
  * The view is purely presentational, so a story can hand it a literal instead of
  * standing up the hook (which would need the chrome messaging surface and a live
@@ -159,6 +182,11 @@ const comparison = (over: Partial<UserComparisonState> = {}): UserComparisonStat
   attributeDiffCount: 0,
   attributeConfig: DEFAULT_PROFILE_DISPLAY_CONFIG,
   attributeRuleReads: {},
+  attributeEdit: {
+    context: idleSide('context', 'First11 Last11'),
+    compared: idleSide('compared', 'First12 Last12'),
+    pendingSave: null,
+  },
   groupSimilarity: 0,
   appSimilarity: 0,
   overallSimilarity: 0,

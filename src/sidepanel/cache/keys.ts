@@ -161,4 +161,19 @@ export const cacheKeys = {
    * @param userId - The Okta user id.
    */
   userApps: (userId: string): EntityKey => ['userApps', userId],
+
+  /**
+   * One user's full `OktaUser` object, as the Overview rung loads it.
+   *
+   * Promoted from an inline literal in `UserOverview` once a second writer
+   * appeared: a profile save publishes the user Okta returned straight into this
+   * entry, so the rung re-renders with the new values and spends no request. A
+   * writer and a reader disagreeing by one character is the silent-failure shape
+   * this file exists to prevent, and two inline copies is exactly how that
+   * happens.
+   *
+   * Not used by the Users tab, which holds its selected user in React state
+   * rather than in the cache.
+   */
+  userDetails: (userId: string): EntityKey => ['userDetails', userId],
 } as const;

@@ -1,8 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import UserProfilePane from './UserProfilePane';
+import type { ProfileEditControls } from './UserProfilePaneHeader';
 import type { AttributeDescriptor } from './profileAttributes';
 import type { ProfileDisplayConfig } from '../../../shared/storage/profileDisplayStore';
+import type { AttributeEditCell } from '../../hooks/useProfileEdit';
 
 /** A profile attribute the user has a value for. */
 const attr = (
@@ -125,6 +127,54 @@ const CONFIG: ProfileDisplayConfig = {
   hidden: { state: true },
 };
 
+/**
+ * The pane-level verbs, resting: editing is offered, nothing typed yet.
+ *
+ * The pane owns none of this. The draft, the diff and the write live in
+ * `useProfileEdit`, and `Save` only *arms* the confirmation — the dialog belongs
+ * to `UserDetailPanel`, so this component is renderable without one.
+ */
+const EDIT_CONTROLS: ProfileEditControls = {
+  canEdit: true,
+  isEditing: false,
+  changeCount: 0,
+  hasInvalid: false,
+  onBeginEdit: fn(),
+  onCancelEdit: fn(),
+  onSave: fn(),
+};
+
+/**
+ * What `useProfileEdit` hands down in edit mode: `department` drafted to a new
+ * value, `title` untouched, and the `id` system field locked with its reason.
+ * `onChange` is a spy — these stories are about which state each `<dd>` swaps
+ * to, not about typing.
+ */
+const EDIT_CELLS: Readonly<Record<string, AttributeEditCell>> = {
+  id: {
+    name: 'id',
+    editability: {
+      editable: false,
+      reason: 'system',
+      explanation: 'This is a system field, not a profile attribute, so it cannot be edited here.',
+    },
+    dirty: false,
+  },
+  department: {
+    name: 'department',
+    editability: { editable: true, control: 'text', required: false },
+    draft: 'Identity Platform',
+    dirty: true,
+    onChange: fn(),
+  },
+  title: {
+    name: 'title',
+    editability: { editable: true, control: 'text', required: false },
+    dirty: false,
+    onChange: fn(),
+  },
+};
+
 /** Two rules read `department`, one reads `title`, and nothing reads the rest. */
 const RULE_READS: Record<string, string[]> = {
   department: ['Engineering → VPN Access', 'Engineering → Wiki'],
@@ -156,7 +206,13 @@ const meta = {
           'category — or under one that was deleted — collect in a final **Uncategorized** block that can never ' +
           'silently vanish.\n\n' +
           '`attributes`, `config` and `ruleReads` are props, not hooks: the pane renders and never fetches, and ' +
-          'the gear only calls `onConfigure` — the configuration modal is a separate component.\n\n' +
+          'it owns no dialog — the gear calls `onConfigure` and `Save` only *arms* the confirmation, both of ' +
+          'which are mounted by `UserDetailPanel`.\n\n' +
+          '**Editing** arrives the same way. `edit` carries the pane-level verbs and `cells` carries one entry ' +
+          'per attribute that has a control; an attribute with no cell renders exactly as it does in read ' +
+          'mode, which is what keeps the no-truncation contract a property of the file rather than of a ' +
+          'branch. The Edit button is **absent** rather than disabled when nothing on the profile can be ' +
+          'edited.\n\n' +
           '**Related internals:** [Components](?path=/docs/internals-components--docs)',
       },
     },
@@ -165,6 +221,8 @@ const meta = {
     attributes: { description: 'Every attribute of the profile, empty ones included.' },
     config: { description: "The admin's reconciled display configuration." },
     ruleReads: { description: 'Attribute name → the granting rules that read it.' },
+    edit: { description: 'The pane-level edit verbs; absent means the pane is read-only.' },
+    cells: { description: 'Attribute name → its edit cell. Empty outside edit mode.' },
   },
   args: {
     attributes: ATTRIBUTES,
@@ -319,4 +377,78 @@ export const Narrow: Story = {
       canvas.getByText('1200 Northwest Continental Boulevard, Building 4, Suite 1750'),
     ).toBeInTheDocument();
   },
+};
+
+// ---------------------------------------------------------------------------
+// Editing
+// ---------------------------------------------------------------------------
+
+/**
+ * Editing is offered but not under way: one **Edit** button beside the gear, and
+ * every value still read-only. This is the pane an admin lands on.
+ */
+export const Editable: Story = {
+  args: { edit: EDIT_CONTROLS },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: 'Edit' })).toBeEnabled();
+    // Nothing has become a control yet.
+    await expect(canvas.queryByRole('textbox', { name: 'Department' })).not.toBeInTheDocument();
+  },
+};
+
+/**
+ * A profile with nothing editable — every attribute read-only, externally
+ * mastered, or absent from the org's schema. The button is **gone**, not
+ * disabled: there would be no controls behind it and no lock reasons to explain.
+ */
+export const NothingEditable: Story = {
+  args: { edit: { ...EDIT_CONTROLS, canEdit: false } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+    await expect(
+      canvas.getByRole('button', { name: 'Configure attribute display' }),
+    ).toBeInTheDocument();
+  },
+};
+
+/**
+ * Edit mode with one attribute drafted. `department` is a text field holding the
+ * new value, `id` says why it is locked, and every attribute without a cell —
+ * the whole Contact & locale block — renders exactly as it does in read mode.
+ */
+export const Editing: Story = {
+  args: {
+    edit: { ...EDIT_CONTROLS, isEditing: true, changeCount: 1 },
+    cells: EDIT_CELLS,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByRole('textbox', { name: 'Department' })).toHaveValue(
+      'Identity Platform',
+    );
+    await expect(canvas.getByText('1 change')).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Save' })).toBeEnabled();
+
+    // An attribute with no cell is untouched by edit mode — including the long
+    // street address this pane exists to stop clipping.
+    await expect(
+      canvas.getByText('1200 Northwest Continental Boulevard, Building 4, Suite 1750'),
+    ).toBeInTheDocument();
+  },
+};
+
+/**
+ * Edit mode at the 360px floor. The header's three-control cluster wraps onto its
+ * own row rather than squeezing the summary sentence, and each control fills the
+ * value column beside its label.
+ */
+export const EditingNarrow: Story = {
+  args: {
+    edit: { ...EDIT_CONTROLS, isEditing: true, changeCount: 1 },
+    cells: EDIT_CELLS,
+  },
+  parameters: { viewport: { value: 'sidepanelCompact' } },
 };

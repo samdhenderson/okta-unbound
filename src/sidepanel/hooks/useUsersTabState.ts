@@ -30,6 +30,17 @@
  * itself is read by anything outside the card (the tiered `ActionBar` and the
  * header's apps metric).
  *
+ * ## Profile editing
+ *
+ * Three more hooks hang off the Profile pane — the draft, the blast-radius
+ * prediction and the one undo the panel executes — and they are composed one
+ * level out in
+ * {@link sidepanel/hooks/useUsersTabProfileEdit.useUsersTabProfileEdit} so this
+ * file gains a single `profileEdit` field instead of three state machines. What
+ * it *does* keep is the lift: `setSelectedUser` is handed in as `onUserUpdated`,
+ * because there is no `user` cache key and the object Okta returns after a save
+ * has nowhere else to land.
+ *
  * ## Sub-navigation
  *
  * The hook also owns the tab's {@link sidepanel/hooks/useViewStack.useViewStack}
@@ -42,7 +53,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import type React from 'react';
 import type { GroupMembership, OktaUser, UserInfo } from '../../shared/types';
-import type { AlertMessageData } from '../components/shared/AlertMessage';
+import type { AlertAction, AlertMessageData } from '../components/shared/AlertMessage';
 import { invalidate } from '../cache/entityCache';
 import { useOktaApi } from './useOktaApi';
 import type { MemberRuleAttribution } from '../../shared/membership/memberRuleAttribution';
@@ -56,6 +67,7 @@ import { useUserLifecycleActions } from './useUserLifecycleActions';
 import { useAddToGroup } from './useAddToGroup';
 import { useViewStack, type ViewStack } from './useViewStack';
 import { useUserDetailPanes, type UseUserDetailPanesReturn } from './useUserDetailPanes';
+import { useUsersTabProfileEdit, type UserProfileEditing } from './useUsersTabProfileEdit';
 
 /** Options for {@link useUsersTabState}. */
 export interface UseUsersTabStateOptions {
@@ -123,9 +135,20 @@ export interface UseUsersTabStateReturn {
   error: string | null;
   /** Dismisses the merged error banner. */
   dismissError: () => void;
-  /** Result banner for lifecycle / add-to-group outcomes. */
+  /** Result banner for lifecycle / add-to-group / profile-save outcomes. */
   resultMessage: AlertMessageData | null;
-  /** Dismisses the result banner. */
+  /**
+   * The result banner's inline action, when the outcome offers one — today only
+   * the `Undo` after a confirmed profile save.
+   *
+   * Held beside the message rather than inside it, but **only ever written
+   * together with it**: every publisher goes through one setter that clears the
+   * action, so a lifecycle result can never inherit the previous save's Undo
+   * button. There is no toast primitive in this panel; `AlertMessage`'s own
+   * action slot is where an inline verb belongs.
+   */
+  resultAction: AlertAction | null;
+  /** Dismisses the result banner and its action. */
   dismissResultMessage: () => void;
   /** Current search box value. */
   searchQuery: string;
@@ -186,6 +209,25 @@ export interface UseUsersTabStateReturn {
    */
   panes: UseUserDetailPanesReturn;
   /**
+   * Everything that makes the Profile pane editable — the header's verbs, the
+   * per-attribute cells and the save confirmation's props. Composed in
+   * {@link sidepanel/hooks/useUsersTabProfileEdit.useUsersTabProfileEdit} so this
+   * orchestrator gains one field rather than three hooks' worth of state.
+   */
+  profileEdit: UserProfileEditing;
+  /**
+   * Publishes a profile save made *outside* the Profile pane — today, the
+   * Compare rung's left column, which edits this same `selectedUser`.
+   *
+   * The same lift {@link UseUsersTabStateReturn.profileEdit} performs
+   * internally, exposed because the Compare rung sits beside the detail rung
+   * rather than inside it. There is no `user` cache key, so a save that is not
+   * lifted leaves every surface showing values Okta no longer holds; that is
+   * also why the Compare view refuses to edit its left column at all when this
+   * is not supplied.
+   */
+  applySelectedUserUpdate: (user: OktaUser) => void;
+  /**
    * The Add-to-Group modal's confirm handler — use this in place of
    * {@link UseUsersTabStateReturn.addToGroup}'s own `confirmAddToGroup`. It snapshots
    * the group being confirmed before delegating, so the row for that group can flash
@@ -226,7 +268,18 @@ export function useUsersTabState({
   const [isLoadingMemberships, setIsLoadingMemberships] = useState(false);
   const [selectedUser, setSelectedUser] = useState<OktaUser | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The banner and its inline action are two pieces of state with one writer.
+  // Every publisher — lifecycle, add-to-group, profile save — goes through
+  // `publishResult`, which clears the action unless the caller passes a new one;
+  // otherwise a suspend result would arrive still wearing the previous save's
+  // Undo button, which would then put values back into a profile nobody was
+  // looking at.
   const [resultMessage, setResultMessage] = useState<AlertMessageData | null>(null);
+  const [resultAction, setResultAction] = useState<AlertAction | null>(null);
+  const publishResult = useCallback((message: AlertMessageData, action?: AlertAction) => {
+    setResultMessage(message);
+    setResultAction(action ?? null);
+  }, []);
   // Detected-user banner is hidden per id once dismissed (the tab stays pinned to
   // the user you explicitly selected; admin navigation never swaps it).
   const [dismissedDetectedId, setDismissedDetectedId] = useState<string | null>(null);
@@ -423,6 +476,7 @@ export function useUsersTabState({
     clearMemberships();
     setError(null);
     setResultMessage(null);
+    setResultAction(null);
     resetNav();
   }, [setSearchQuery, setSearchResults, clearMemberships, resetNav]);
 
@@ -436,7 +490,7 @@ export function useUsersTabState({
   const lifecycle = useUserLifecycleActions({
     targetTabId,
     selectedUser,
-    onResult: setResultMessage,
+    onResult: publishResult,
     onUserStatusRefresh,
   });
 
@@ -446,7 +500,7 @@ export function useUsersTabState({
   const addToGroup = useAddToGroup({
     targetTabId,
     selectedUser,
-    onResult: setResultMessage,
+    onResult: publishResult,
     onAdded: handleUserAddedToGroup,
     enabled: isActive,
   });
@@ -461,7 +515,10 @@ export function useUsersTabState({
   }, [selectedGroup, confirmAddToGroupInner]);
 
   const dismissError = useCallback(() => setError(null), []);
-  const dismissResultMessage = useCallback(() => setResultMessage(null), []);
+  const dismissResultMessage = useCallback(() => {
+    setResultMessage(null);
+    setResultAction(null);
+  }, []);
 
   // §8: this orchestrator owns one scheduler-routed read of its own — the
   // per-membership proof, which needs both the selected user and a live tab.
@@ -486,6 +543,25 @@ export function useUsersTabState({
     enabled: isActive,
   });
 
+  // Profile editing, composed one hook further out so this file does not grow
+  // three more state machines. `enabled` is the pane gate as well as the tab
+  // gate: a draft is never begun, and a write is never sent, from a pane nobody
+  // is looking at (ADR-0018).
+  //
+  // `setSelectedUser` is the lift the whole flow turns on. There is no `user`
+  // cache key, so the object Okta returns has nowhere else to land and the pane
+  // would keep rendering the values the save just replaced.
+  const profileEdit = useUsersTabProfileEdit({
+    user: selectedUser,
+    attributes: panes.attributes,
+    memberships,
+    rules,
+    targetTabId,
+    enabled: isActive && panes.pane === 'profile',
+    onUserUpdated: setSelectedUser,
+    onResult: publishResult,
+  });
+
   const { pop: popCompare } = nav;
   const openCompare = useCallback(() => {
     if (!selectedUser) return;
@@ -501,6 +577,7 @@ export function useUsersTabState({
     error,
     dismissError,
     resultMessage,
+    resultAction,
     dismissResultMessage,
     searchQuery,
     setSearchQuery,
@@ -521,6 +598,8 @@ export function useUsersTabState({
     lifecycle,
     addToGroup,
     panes,
+    profileEdit,
+    applySelectedUserUpdate: setSelectedUser,
     confirmAddToGroup,
     recentlyAddedGroupId,
   };

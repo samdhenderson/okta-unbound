@@ -1,7 +1,9 @@
 import type { ComponentType } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, fn, waitFor, within } from 'storybook/test';
 import ComparisonAttributeRow from './ComparisonAttributeRow';
 import type { AttributeParityRow, AttributeVerdict } from './attributeParity';
+import type { AttributeEditCell } from '../../../hooks/useProfileEdit';
 
 /** One attribute parity row, as `attributeParityRows` would emit it. */
 const row = (
@@ -21,6 +23,18 @@ const row = (
   verdict,
   categoryKey: 'organization',
   hiddenByConfig: false,
+  ...over,
+});
+
+/**
+ * One side's editing cell, as `useProfileEdit` hands it over. Editable text by
+ * default; pass an `editability` to lock it or a `draft` to dirty it.
+ */
+const editCell = (name: string, over: Partial<AttributeEditCell> = {}): AttributeEditCell => ({
+  name,
+  editability: { editable: true, control: 'text', required: false },
+  dirty: false,
+  onChange: fn(),
   ...over,
 });
 
@@ -53,8 +67,14 @@ const meta = {
           'differing only in their tails would render identically beside a `≠` nobody could explain. An unset ' +
           'value is stated as `— not set` in the muted italic non-answer register `AppScopeIndicator` and ' +
           '`GroupSourceIndicator` share.\n\n' +
-          'There is deliberately **no per-row action**: writing a profile attribute needs prior-state capture and ' +
-          'audit logging, which is a separate change.',
+          '**Either side is editable.** Given a cell for a side, that side delegates to `ProfileEditCell` — the ' +
+          "same cell the Users tab's Profile pane renders, so an attribute locked in one surface is locked " +
+          'identically in the other, with the same sentence saying why.\n\n' +
+          '**The marker does not follow the typing.** `=` / `≠` is a statement about what Okta holds; flipping ' +
+          'it on an unsaved keystroke would claim two users now agree while the directory still says they ' +
+          'differ, and re-verdicting live would pull the row being typed in out from under the cursor (the ' +
+          'list is ordered differences-first). A dirty side is marked with an `Edited` badge whose tooltip ' +
+          'says what saving *would* make true.',
       },
     },
   },
@@ -77,6 +97,13 @@ const meta = {
     readers: {
       description:
         'Names of the rules that read this attribute and currently grant either user access. Absent renders no chip.',
+    },
+    contextCell: {
+      description:
+        "The context user's editing cell, joined by `row.name`. Present only while that column is editing.",
+    },
+    comparedCell: {
+      description: "The compared user's editing cell. Same contract as `contextCell`.",
     },
   },
 } satisfies Meta<typeof ComparisonAttributeRow>;
@@ -142,6 +169,87 @@ export const LongValuesCompact: Story = {
       '1 Example Street, Exampleton, EX1 2AC, Exampleshire',
       'differs',
     ),
+  },
+  parameters: { viewport: { value: 'sidepanelCompact' } },
+};
+
+/**
+ * The compared column is editing: its value cell becomes a control while the
+ * context column stays as it was. The marker is untouched — it still describes
+ * Okta.
+ */
+export const EditingOneSide: Story = {
+  args: { comparedCell: editCell('department') },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() => expect(canvas.getByLabelText('Department')).toHaveValue('Design'));
+    expect(canvas.getByRole('img', { name: 'The two users have different values' })).toBeVisible();
+  },
+};
+
+/**
+ * A drafted value. The `Edited` badge names the side holding it and hedges what
+ * saving would make true; the `≠` stays put, because Okta has not changed.
+ */
+export const EditedDraft: Story = {
+  args: {
+    comparedCell: editCell('department', { draft: 'Engineering', dirty: true }),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() =>
+      expect(canvas.getByTitle(/Bo Compared has an unsaved change/)).toBeInTheDocument(),
+    );
+    expect(canvas.getByRole('img', { name: 'The two users have different values' })).toBeVisible();
+  },
+};
+
+/** Both columns edited at once — each badge says whose change it is. */
+export const BothSidesEdited: Story = {
+  args: {
+    contextCell: editCell('department', { draft: 'Design', dirty: true }),
+    comparedCell: editCell('department', { draft: 'Design', dirty: true }),
+  },
+};
+
+/**
+ * An attribute an external system masters. In edit mode the lock is stated with
+ * its reason rather than rendering a bare value the admin might think they can
+ * change — the same treatment, and the same sentence, as the Profile pane.
+ */
+export const LockedWhileEditing: Story = {
+  args: {
+    comparedCell: editCell('department', {
+      editability: {
+        editable: false,
+        reason: 'externally-mastered',
+        explanation:
+          'An external system masters this attribute (Active Directory), so a change made here would be overwritten at the next import.',
+      },
+      onChange: undefined,
+    }),
+  },
+};
+
+/** A drafted value that fails validation, stated on the control it belongs to. */
+export const InvalidDraft: Story = {
+  args: {
+    comparedCell: editCell('department', {
+      draft: '',
+      dirty: true,
+      invalid: 'Department is required.',
+    }),
+  },
+};
+
+/**
+ * Editing at 360px: two controls plus the marker in the same three-track grid the
+ * read-only row uses, so nothing shifts on entering edit mode.
+ */
+export const EditingCompact: Story = {
+  args: {
+    contextCell: editCell('department'),
+    comparedCell: editCell('department', { draft: 'Engineering', dirty: true }),
   },
   parameters: { viewport: { value: 'sidepanelCompact' } },
 };

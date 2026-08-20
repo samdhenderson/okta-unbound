@@ -26,6 +26,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useUserSearch } from './useUserSearch';
+import { useComparisonProfileEdit } from './useComparisonProfileEdit';
 import { useUserMemberships } from './useUserMemberships';
 import { useComparisonApps } from './useComparisonApps';
 import { useGroupCopy } from './useGroupCopy';
@@ -45,7 +46,10 @@ import {
   attributeParityRows,
   type AttributeParityResult,
 } from '../components/users/comparison/attributeParity';
-import { allProfileAttributes } from '../components/users/profileAttributes';
+import {
+  allProfileAttributes,
+  type AttributeDescriptor,
+} from '../components/users/profileAttributes';
 import { profileRuleReads } from '../components/users/profileRuleReads';
 import { loadCachedGroupNames } from './fetchGroupRulesRequest';
 import type { OktaUser, GroupMembership } from '../../shared/types';
@@ -65,6 +69,9 @@ const NO_ATTRIBUTE_PARITY: AttributeParityResult = Object.freeze({
 
 /** No attribute is read by any granting rule — the answer before rules resolve. */
 const NO_RULE_READS: Record<string, string[]> = Object.freeze({});
+
+/** The compared side's inventory before a second user is picked. One stable reference. */
+const NO_ATTRIBUTES: readonly AttributeDescriptor[] = Object.freeze([]);
 
 /**
  * Union two `profileRuleReads` maps, preserving each map's rule order.
@@ -124,6 +131,19 @@ export interface UseUserComparisonOptions {
   oktaOrigin?: string | null;
   /** Called after groups are copied so the parent can refresh context data. */
   onGroupsChanged: () => void;
+  /**
+   * Publishes a context user the Attributes tab just saved, so every other
+   * surface showing that person sees the new truth.
+   *
+   * The compared user is local state here and lifting a save is a `setState`;
+   * the context user is a **prop** — the Users tab's `selectedUser` — so only
+   * the host that owns it can publish it. Optional, and **absent means the
+   * context column of the Attributes tab offers no edit affordance at all**: a
+   * save nobody publishes leaves the panel rendering values Okta no longer
+   * holds, which is worse than a missing button. See
+   * {@link module:sidepanel/hooks/useComparisonProfileEdit}.
+   */
+  onContextUserUpdated?: (user: OktaUser) => void;
 }
 
 /**
@@ -155,6 +175,13 @@ export interface UseUserComparisonOptions {
  *   so the tab can disclose what it is not showing). It feeds no similarity
  *   figure — see `overallSimilarity` below.
  *
+ *   `attributeEdit` is that dimension's **write** half: one editor per column
+ *   ({@link module:sidepanel/hooks/useComparisonProfileEdit}), each with its own
+ *   draft, its own blast-radius prediction and its own confirmation. It is always
+ *   present; a column that may not be edited says so through `canEdit` rather
+ *   than by being absent, and the context column is read-only unless the host
+ *   supplied `onContextUserUpdated`.
+ *
  *   `causes` classifies the `onlyCompared` bucket by remedy
  *   ({@link classifyAccessCauses}), and is **`undefined` until the org rule
  *   inventory has been resolved** — "not computed", which consumers must not render
@@ -168,6 +195,7 @@ export function useUserComparison({
   targetTabId,
   oktaOrigin,
   onGroupsChanged,
+  onContextUserUpdated,
 }: UseUserComparisonOptions) {
   const { searchQuery, setSearchQuery, searchResults, isSearching, clearSearch } = useUserSearch({
     targetTabId,
@@ -304,22 +332,30 @@ export function useUserComparison({
     { ttl: TTL_LONG, enabled: isActive && comparedUser !== null },
   );
 
+  // Each side's inventory, derived once and shared by everything that needs it:
+  // the reconciled config's vocabulary below, and each side's editor. The
+  // editors take the inventory rather than re-deriving it, so an editor can
+  // never offer a control for an attribute this surface does not list.
+  const contextAttributes = useMemo(
+    () => allProfileAttributes(contextUser, userSchema),
+    [contextUser, userSchema],
+  );
+
+  const comparedAttributes = useMemo(
+    () => (comparedUser ? allProfileAttributes(comparedUser, userSchema) : NO_ATTRIBUTES),
+    [comparedUser, userSchema],
+  );
+
   // The attribute vocabulary the config is reconciled against: the union of both
   // users' inventories, because an attribute only the compared user carries still
   // needs a configured placement — it is exactly the kind of difference this tab
   // exists to find.
   const knownAttributeNames = useMemo(() => {
     const names = new Set<string>();
-    for (const attribute of allProfileAttributes(contextUser, userSchema)) {
-      names.add(attribute.name);
-    }
-    if (comparedUser) {
-      for (const attribute of allProfileAttributes(comparedUser, userSchema)) {
-        names.add(attribute.name);
-      }
-    }
+    for (const attribute of contextAttributes) names.add(attribute.name);
+    for (const attribute of comparedAttributes) names.add(attribute.name);
     return [...names];
-  }, [contextUser, comparedUser, userSchema]);
+  }, [contextAttributes, comparedAttributes]);
 
   // The same configuration the Users tab's Profile pane reads: categories, order,
   // labels and visibility. Reused rather than reinvented — two different groupings
@@ -350,6 +386,30 @@ export function useUserComparison({
       profileRuleReads(ruleInventory.rules, comparedUser, comparedGroups),
     );
   }, [ruleInventory, contextUser, contextGroups, comparedUser, comparedGroups]);
+
+  const contextName = userDisplayName(contextUser);
+  const comparedName = comparedUser ? userDisplayName(comparedUser) : '';
+
+  // Editing, one independent editor per column, composed rather than inlined —
+  // two `useProfileEdit` instances plus a blast-radius prediction each is a
+  // concern of its own, and this hook is already long. Gated exactly as the
+  // schema read above is (ADR-0018/ADR-0026): a hidden comparison, and the
+  // search phase, cannot enter edit mode or write.
+  const attributeEdit = useComparisonProfileEdit({
+    contextUser,
+    contextName,
+    contextAttributes,
+    contextMemberships: contextGroups,
+    ...(onContextUserUpdated === undefined ? {} : { onContextUserUpdated }),
+    comparedUser,
+    comparedName,
+    comparedAttributes,
+    comparedMemberships: comparedGroups,
+    onComparedUserUpdated: setComparedUser,
+    rules: ruleInventory,
+    targetTabId,
+    enabled: isActive && comparedUser !== null,
+  });
 
   // Why the compared user has group access the context user lacks, grouped by the
   // remedy that would close it. Memoized because classification parses every
@@ -464,9 +524,6 @@ export function useUserComparison({
   // instead, which caveats rather than blanks.
   const loadError = groupsError;
 
-  const contextName = userDisplayName(contextUser);
-  const comparedName = comparedUser ? userDisplayName(comparedUser) : '';
-
   return {
     comparedUser,
     searchQuery,
@@ -484,6 +541,10 @@ export function useUserComparison({
     attributeDiffCount,
     attributeConfig,
     attributeRuleReads,
+    // Both columns' editors and the single confirmation on screen. Undefined is
+    // never returned — a column that cannot be edited says so with `canEdit`,
+    // not by being absent.
+    attributeEdit,
     groupSimilarity,
     appSimilarity,
     overallSimilarity,

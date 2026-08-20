@@ -35,11 +35,28 @@
  * each marked as hidden. The admin's configuration is still honoured by default;
  * it is just never allowed to be invisible.
  *
- * ## Not editable from here
+ * ## Editable, per side, without the marker following the typing
  *
- * There is no per-row action, and deliberately no equivalent of the Groups tab's
- * `renderContextAction`. Writing a profile attribute needs prior-state capture
- * and audit logging, which is a separate change.
+ * Either user's profile can be edited from here — which user is right is exactly
+ * what a value diff leaves the admin to decide, so the affordance has to work in
+ * both directions. The controls live in {@link ComparisonAttributesToolbar}, one
+ * cluster per user and each naming its user; the per-attribute cells come from a
+ * {@link module:sidepanel/hooks/useProfileEdit} instance per side and are joined
+ * to a row by the bare attribute `name`. `AttributeParityRow` is unchanged and
+ * stays a derived fact about a pair of users — nothing here edits one in place.
+ *
+ * The prior-state capture and audit entry that used to make this "a separate
+ * change" now exist: `useProfileEdit` records every write through
+ * {@link module:shared/undoManager} and `ProfileSaveModal` restates every change
+ * first. What has **not** changed is the arithmetic — the verdicts, the ordering
+ * and the three pill counts still describe what Okta holds, never the form.
+ *
+ * ## A dirty hidden row is shown whether or not hidden rows are revealed
+ *
+ * A row the config hides can be revealed, edited, and then the disclosure
+ * collapsed again — at which point the edit would be on screen nowhere and still
+ * in the patch. Any row carrying a draft on either side is therefore listed
+ * regardless of the disclosure, still marked `Hidden`.
  *
  * ## Security
  *
@@ -49,14 +66,13 @@
  * are banned — and **nothing in this module logs**.
  */
 import React, { useMemo, useState } from 'react';
-import { Button, EmptyState, Eyebrow, FilterPill, Input } from '../../shared';
+import { EmptyState, Eyebrow } from '../../shared';
 import ComparisonAttributeRow from './ComparisonAttributeRow';
+import ComparisonAttributesToolbar, { type AttributeFilter } from './ComparisonAttributesToolbar';
 import { UNCATEGORIZED, UNCATEGORIZED_LABEL } from '../profileAttributeBlocks';
 import type { AttributeParityRow, AttributeVerdict } from './attributeParity';
+import type { ComparisonEditSide } from '../../../hooks/useComparisonProfileEdit';
 import type { ProfileDisplayConfig } from '../../../../shared/storage/profileDisplayStore';
-
-/** Which rows the list is showing. Mirrors `ComparisonDiffTab`'s `ParityFilter`. */
-export type AttributeFilter = 'differences' | 'shared' | 'all';
 
 /** Props for {@link ComparisonAttributesTab}. */
 export interface ComparisonAttributesTabProps {
@@ -87,6 +103,14 @@ export interface ComparisonAttributesTabProps {
    * map carry no chip.
    */
   ruleReads: Record<string, string[]>;
+  /**
+   * The context user's editor, from `useComparisonProfileEdit`. Absent leaves
+   * the left column read-only — which is what every non-editing host, and every
+   * story of this tab that is about the diff rather than the editing, passes.
+   */
+  contextEdit?: ComparisonEditSide;
+  /** The compared user's editor. Same contract as `contextEdit`. */
+  comparedEdit?: ComparisonEditSide;
 }
 
 /** One rendered category: its label and the rows that landed in it, in list order. */
@@ -137,18 +161,41 @@ const ComparisonAttributesTab: React.FC<ComparisonAttributesTabProps> = ({
   hiddenDifferences,
   config,
   ruleReads,
+  contextEdit,
+  comparedEdit,
 }) => {
   const [filter, setFilter] = useState<AttributeFilter>('differences');
   const [query, setQuery] = useState('');
   const [revealHidden, setRevealHidden] = useState(false);
 
+  const contextCells = contextEdit?.cells;
+  const comparedCells = comparedEdit?.cells;
+
+  // Attribute names carrying an unsaved draft on either side. Both maps are
+  // empty unless their column is editing, so this is an empty set in every
+  // read-only render.
+  const dirtyNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const cells of [contextCells, comparedCells]) {
+      if (cells === undefined) continue;
+      for (const cell of Object.values(cells)) if (cell.dirty) names.add(cell.name);
+    }
+    return names;
+  }, [contextCells, comparedCells]);
+
   // Revealed rows join the list in their own categories rather than in a separate
   // block: an attribute's category is a fact about the attribute, not about
   // whether it happens to be hidden, and a second block would file the same
   // attribute in two places.
+  //
+  // A hidden row holding a draft is listed either way. Collapsing the disclosure
+  // over one would take the edit off screen without taking it out of the patch.
   const listed = useMemo(
-    () => (revealHidden ? [...rows, ...hiddenRows] : [...rows]),
-    [rows, hiddenRows, revealHidden],
+    () =>
+      revealHidden
+        ? [...rows, ...hiddenRows]
+        : [...rows, ...hiddenRows.filter((row) => dirtyNames.has(row.name))],
+    [rows, hiddenRows, revealHidden, dirtyNames],
   );
 
   const differenceCount = listed.filter((row) => isDifference(row.verdict)).length;
@@ -178,38 +225,20 @@ const ComparisonAttributesTab: React.FC<ComparisonAttributesTabProps> = ({
     // Viewport-derived rather than `h-full`, for the reason `ComparisonDiffTab`
     // documents: there is no definite-height chain to inherit in the side panel.
     <div className="flex min-h-[calc(100vh-22rem)] flex-1 flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <FilterPill active={filter === 'differences'} onClick={() => setFilter('differences')}>
-          Differences {differenceCount}
-        </FilterPill>
-        <FilterPill active={filter === 'shared'} onClick={() => setFilter('shared')}>
-          Shared {sharedCount}
-        </FilterPill>
-        <FilterPill active={filter === 'all'} onClick={() => setFilter('all')}>
-          All {listed.length}
-        </FilterPill>
-      </div>
-
-      <Input
-        type="search"
-        value={query}
-        onChange={setQuery}
-        placeholder="Filter attributes…"
-        ariaLabel="Filter attributes by name or value"
+      <ComparisonAttributesToolbar
+        filter={filter}
+        onFilterChange={setFilter}
+        differenceCount={differenceCount}
+        sharedCount={sharedCount}
+        totalCount={listed.length}
+        query={query}
+        onQueryChange={setQuery}
+        hiddenDifferences={hiddenDifferences}
+        revealHidden={revealHidden}
+        onToggleHidden={() => setRevealHidden((shown) => !shown)}
+        contextEdit={contextEdit}
+        comparedEdit={comparedEdit}
       />
-
-      {hiddenDifferences > 0 && (
-        <p className="flex flex-wrap items-center gap-1 text-xs text-neutral-600">
-          <span>
-            {hiddenDifferences === 1
-              ? '1 differing attribute hidden by your display config'
-              : `${hiddenDifferences} differing attributes hidden by your display config`}
-          </span>
-          <Button variant="ghost" size="sm" onClick={() => setRevealHidden((shown) => !shown)}>
-            {revealHidden ? 'Hide' : 'Show'}
-          </Button>
-        </p>
-      )}
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-neutral-200 bg-white">
         {blocks.length === 0 ? (
@@ -238,6 +267,12 @@ const ComparisonAttributesTab: React.FC<ComparisonAttributesTabProps> = ({
                       comparedName={comparedName}
                       showApiNames={config.showApiNames}
                       readers={config.showRuleChips ? ruleReads[row.name] : undefined}
+                      // Joined by the bare attribute name, which is the key the
+                      // parity row, the display config, the rule reads and both
+                      // editors already share. Undefined — the read-only case —
+                      // whenever that column is not editing.
+                      contextCell={contextCells?.[row.name]}
+                      comparedCell={comparedCells?.[row.name]}
                     />
                   ))}
                 </ul>

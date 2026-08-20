@@ -1,164 +1,213 @@
 /**
  * @module sidepanel/components/AuditLogViewer
- * @description Read-only audit trail of actions performed through the extension.
+ * @description The History tab: what the extension has done, and — for a profile
+ * write — the way back.
  *
- * Reads action history from the undo manager, live-refreshes on `chrome.storage`
- * `undoHistory` changes, renders each entry as an expandable row with type-specific
- * detail rows, and offers a confirm-gated "Clear History" action. Rendered inside
- * the History tab.
+ * The viewer owns three things and delegates everything else: the history it
+ * reads from `chrome.storage`, which row is open, and which destructive action
+ * is awaiting confirmation. A row is {@link AuditLogRow}; an undo confirmation
+ * is {@link AuditLogUndoModal}; the undo itself is `useUndoAction`.
+ *
+ * ## Why this is a rewrite
+ *
+ * The row it replaced was a `<div onClick>` with no `role` and no
+ * `aria-expanded`, so it was never keyboard reachable — and an Undo `<button>`
+ * inside a click-handling `div` nests interactive elements. Rebuilding the row
+ * also retired the file's `confirm()` (Clear History is now the shared `Modal`,
+ * which brings `role="dialog"`, a focus trap, focus restore and Escape) and the
+ * ungated `chrome.storage.onChanged` listener, which a hidden tab must not
+ * register (ADR-0018).
+ *
+ * Security: every string in this history — user names, emails, group and rule
+ * names, attribute names and values — is tenant PII. It is rendered through
+ * React's escaping and this component logs nothing at all.
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import type { UndoAction } from '../../shared/undoTypes';
-import { getUndoHistory, clearUndoHistory, formatActionTime } from '../../shared/undoManager';
-import Button from './shared/Button';
-import EmptyState from './shared/EmptyState';
+import { clearUndoHistory, getUndoHistory } from '../../shared/undoManager';
+import { useUndoAction } from '../hooks/useUndoAction';
+import AuditLogRow from './AuditLogRow';
+import AuditLogUndoModal from './AuditLogUndoModal';
+import { AlertMessage, Button, EmptyState, Modal, type AlertMessageData } from './shared';
+
+/** Props for {@link AuditLogViewer}. */
+export interface AuditLogViewerProps {
+  /**
+   * Tab hosting the live Okta session an undo's restoring write is scoped to.
+   * Without one the undo has nowhere to send its request.
+   */
+  targetTabId?: number | null;
+  /**
+   * Whether the History tab is the visible one. Tabs stay mounted (ADR-0018),
+   * so a hidden viewer registers no `chrome.storage` listener; becoming active
+   * re-reads the history to pick up anything it missed. Defaults to `true` so
+   * the component renders standalone in a story.
+   */
+  isActive?: boolean;
+}
+
+/** Feedback about an undo that has already resolved, shown above the list. */
+type Notice = AlertMessageData | null;
 
 /**
- * Displays the logged undo/audit action history as an expandable, clearable list.
- * Falls back to an {@link EmptyState} when no actions have been recorded.
+ * The recorded action history: an expandable list, a confirm-gated Clear
+ * History, and an Undo for the entries that have one.
+ *
+ * @param props - See {@link AuditLogViewerProps}.
  */
-const AuditLogViewer: React.FC = () => {
+const AuditLogViewer: React.FC<AuditLogViewerProps> = ({ targetTabId, isActive = true }) => {
   const [actions, setActions] = useState<UndoAction[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [pendingUndo, setPendingUndo] = useState<UndoAction | null>(null);
+  const [drifted, setDrifted] = useState<readonly string[] | undefined>(undefined);
+  const [undoError, setUndoError] = useState<string | undefined>(undefined);
+  const [isClearOpen, setIsClearOpen] = useState(false);
+  const [notice, setNotice] = useState<Notice>(null);
+
+  const { undo, undoingActionId, undoability } = useUndoAction({ targetTabId });
 
   const refresh = useCallback(async () => {
     const history = await getUndoHistory();
     setActions(history.actions);
   }, []);
 
+  // One effect for both the read and the subscription: a tab that is not
+  // listening must re-read when it becomes active, or it renders whatever the
+  // history looked like when it was last visible.
   useEffect(() => {
+    if (!isActive) return;
     refresh();
-  }, [refresh]);
-
-  // Listen for storage changes
-  useEffect(() => {
     const handler = (changes: { [key: string]: chrome.storage.StorageChange }) => {
       if (changes.undoHistory) refresh();
     };
     chrome.storage.onChanged.addListener(handler);
     return () => chrome.storage.onChanged.removeListener(handler);
-  }, [refresh]);
+  }, [isActive, refresh]);
 
-  const handleClear = async () => {
-    if (!confirm('Clear all audit history? This cannot be undone.')) return;
+  const openUndo = useCallback((action: UndoAction) => {
+    setNotice(null);
+    setDrifted(undefined);
+    setUndoError(undefined);
+    setPendingUndo(action);
+  }, []);
+
+  const closeUndo = useCallback(() => {
+    setPendingUndo(null);
+    setDrifted(undefined);
+    setUndoError(undefined);
+  }, []);
+
+  const confirmUndo = useCallback(async () => {
+    if (!pendingUndo) return;
+    const outcome = await undo(pendingUndo);
+
+    // A refusal is not an error the admin caused, so only `failed` is `danger`.
+    // Drift keeps the dialog open, because the explanation *is* the dialog.
+    if (outcome.kind === 'drifted') {
+      setUndoError(undefined);
+      setDrifted(outcome.attributeNames);
+      return;
+    }
+    if (outcome.kind === 'failed') {
+      setUndoError(outcome.error);
+      return;
+    }
+
+    closeUndo();
+    if (outcome.kind === 'undone') {
+      setNotice({
+        type: 'success',
+        text:
+          outcome.skipped > 0
+            ? `Restored ${outcome.restored} attribute${outcome.restored === 1 ? '' : 's'}; ${outcome.skipped} had no captured previous value and were left unchanged.`
+            : `Restored ${outcome.restored} attribute${outcome.restored === 1 ? '' : 's'}.`,
+      });
+    } else {
+      setNotice({
+        type: 'info',
+        text:
+          outcome.kind === 'already-undone'
+            ? 'This action has already been undone. Nothing was written.'
+            : outcome.reason,
+      });
+    }
+    refresh();
+  }, [closeUndo, pendingUndo, refresh, undo]);
+
+  const confirmClear = useCallback(async () => {
     await clearUndoHistory();
     setActions([]);
-  };
-
-  const getTypeLabel = (type: UndoAction['type']): string => {
-    switch (type) {
-      case 'REMOVE_USER_FROM_GROUP':
-        return 'User Removal';
-      case 'ADD_USER_TO_GROUP':
-        return 'User Addition';
-      case 'BULK_REMOVE_USERS_FROM_GROUP':
-        return 'Bulk Removal';
-      case 'BULK_ADD_USERS_TO_GROUP':
-        return 'Bulk Addition';
-      case 'ACTIVATE_RULE':
-        return 'Rule Activated';
-      case 'DEACTIVATE_RULE':
-        return 'Rule Deactivated';
-      default:
-        return 'Action';
-    }
-  };
-
-  const renderDetails = (action: UndoAction) => {
-    const m = action.metadata;
-    const rows: Array<[string, string]> = [];
-
-    if (m.type === 'REMOVE_USER_FROM_GROUP' || m.type === 'ADD_USER_TO_GROUP') {
-      rows.push(['User', `${m.userName} (${m.userEmail})`]);
-      rows.push(['Group', m.groupName]);
-      rows.push(['User ID', m.userId]);
-      rows.push(['Group ID', m.groupId]);
-    } else if (m.type === 'BULK_REMOVE_USERS_FROM_GROUP' || m.type === 'BULK_ADD_USERS_TO_GROUP') {
-      rows.push(['Group', m.groupName]);
-      rows.push(['Users affected', String(m.users.length)]);
-      rows.push(['Group ID', m.groupId]);
-      if (m.type === 'BULK_REMOVE_USERS_FROM_GROUP' && m.operationType) {
-        rows.push(['Operation', m.operationType]);
-      }
-    } else if (m.type === 'ACTIVATE_RULE' || m.type === 'DEACTIVATE_RULE') {
-      rows.push(['Rule', m.ruleName]);
-      rows.push(['Rule ID', m.ruleId]);
-    }
-
-    return (
-      <div className="px-4 pb-4 pt-2 border-t border-neutral-100 space-y-1">
-        {rows.map(([label, value]) => (
-          <div key={label} className="flex gap-2 text-sm">
-            <span className="font-medium text-neutral-600 min-w-25">{label}:</span>
-            <span className="text-neutral-900">{value}</span>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
-  if (actions.length === 0) {
-    return (
-      <EmptyState
-        icon="list"
-        title="No audit history"
-        description="Actions you perform (user removals, rule changes, etc.) will be logged here"
-      />
-    );
-  }
+    setExpandedId(null);
+    setNotice(null);
+    setIsClearOpen(false);
+  }, []);
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between p-3 bg-neutral-50 rounded-md border border-neutral-200">
-        <span className="text-sm font-medium text-neutral-700">
-          {actions.length} action{actions.length !== 1 ? 's' : ''} logged
-        </span>
-        <Button variant="secondary" size="sm" onClick={handleClear}>
-          Clear History
-        </Button>
-      </div>
+      {notice && <AlertMessage message={notice} onDismiss={() => setNotice(null)} />}
 
-      <div className="space-y-2">
-        {actions.map((action) => (
-          <div
-            key={action.id}
-            className="bg-white rounded-md border border-neutral-200 overflow-hidden"
-          >
-            <div
-              className="p-3 cursor-pointer hover:bg-neutral-50 flex items-center justify-between gap-3"
-              onClick={() => setExpandedId(expandedId === action.id ? null : action.id)}
-            >
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-neutral-900 truncate">
-                  {action.description}
-                </div>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="px-2 py-0.5 bg-neutral-100 text-neutral-600 text-xs font-medium rounded">
-                    {getTypeLabel(action.type)}
-                  </span>
-                  <span className="text-xs text-neutral-500">
-                    {formatActionTime(action.timestamp)}
-                  </span>
-                </div>
-              </div>
-              <svg
-                className={`w-4 h-4 text-neutral-400 transition-transform ${expandedId === action.id ? 'rotate-90' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-            </div>
-            {expandedId === action.id && renderDetails(action)}
+      {actions.length === 0 ? (
+        <EmptyState
+          icon="list"
+          title="No audit history"
+          description="Actions you perform (user removals, profile edits, rule changes) will be logged here"
+        />
+      ) : (
+        <>
+          <div className="flex items-center justify-between gap-3 rounded-md border border-neutral-200 bg-neutral-50 p-3">
+            <span className="text-sm font-medium text-neutral-700">
+              {actions.length} action{actions.length === 1 ? '' : 's'} logged
+            </span>
+            <Button variant="secondary" size="sm" onClick={() => setIsClearOpen(true)}>
+              Clear History
+            </Button>
           </div>
-        ))}
-      </div>
+
+          <div className="space-y-3">
+            {actions.map((action) => (
+              <AuditLogRow
+                key={action.id}
+                action={action}
+                isExpanded={expandedId === action.id}
+                onToggle={(id) => setExpandedId((open) => (open === id ? null : id))}
+                onUndo={openUndo}
+                undoability={undoability}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      <AuditLogUndoModal
+        action={pendingUndo}
+        onClose={closeUndo}
+        onConfirm={confirmUndo}
+        isUndoing={undoingActionId !== null && undoingActionId === pendingUndo?.id}
+        drifted={drifted}
+        error={undoError}
+      />
+
+      <Modal
+        isOpen={isClearOpen}
+        onClose={() => setIsClearOpen(false)}
+        title="Clear history?"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsClearOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={confirmClear}>
+              Clear history
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-pretty text-neutral-700">
+          All {actions.length} recorded action{actions.length === 1 ? '' : 's'} will be deleted from
+          this browser. Nothing in Okta changes, but any undo they still offered goes with them.
+        </p>
+      </Modal>
     </div>
   );
 };

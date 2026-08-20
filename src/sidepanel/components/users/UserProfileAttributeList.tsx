@@ -17,6 +17,17 @@
  * gets whatever height it needs. That is the specific defect this component
  * exists to fix, so a future `truncate` here would be a regression, not a tidy-up.
  *
+ * ## Edit mode is a swapped `<dd>`, not a second component
+ *
+ * When the pane is editing, the caller passes a `cells` map and this list renders
+ * the matching `<dd>` through
+ * {@link module:sidepanel/components/users/ProfileEditCell} — the same cell the
+ * Compare view uses, so an attribute locked on one surface is locked identically
+ * on the other. **The read-only path is untouched by that**: an attribute with no
+ * cell renders exactly the markup it always did, which is what keeps the
+ * no-truncation contract above a property of this file rather than of whichever
+ * branch happened to run.
+ *
  * ## Security
  *
  * Attribute values are end-user-controllable tenant data and frequently PII, as
@@ -26,8 +37,10 @@
  */
 import React from 'react';
 import { Badge } from '../shared';
+import ProfileEditCell from './ProfileEditCell';
 import type { ProfileDisplayConfig } from '../../../shared/storage/profileDisplayStore';
 import type { AttributeDescriptor } from './profileAttributes';
+import type { AttributeEditCell } from '../../hooks/useProfileEdit';
 
 /** The three presentations of an attribute list, from `ProfileDisplayConfig.layout`. */
 export type ProfileAttributeLayout = ProfileDisplayConfig['layout'];
@@ -47,6 +60,14 @@ export interface UserProfileAttributeListProps {
    * An attribute absent from the map gets no chip.
    */
   ruleReads: Record<string, string[]>;
+  /**
+   * Attribute Okta name → its edit cell, while the surface is editing.
+   *
+   * Absent — or absent for one attribute — is the read-only path, byte for byte
+   * as it renders when nothing is editable at all. `useProfileEdit` returns an
+   * empty map outside edit mode, so a caller may pass it unconditionally.
+   */
+  cells?: Readonly<Record<string, AttributeEditCell>>;
 }
 
 /** Outer list box: the gap between fields, and the grid track in `grid`. */
@@ -119,11 +140,13 @@ const UserProfileAttributeList: React.FC<UserProfileAttributeListProps> = ({
   showApiNames,
   showRuleChips,
   ruleReads,
+  cells,
 }) => (
   <dl className={listClasses[layout]}>
     {attributes.map((attribute) => {
       const readers = ruleReads[attribute.name];
       const chip = showRuleChips && readers && readers.length > 0 ? readers : undefined;
+      const cell = cells?.[attribute.name];
 
       return (
         <div key={attribute.key} className={fieldClasses[layout]}>
@@ -135,7 +158,26 @@ const UserProfileAttributeList: React.FC<UserProfileAttributeListProps> = ({
             {showApiNames ? attribute.name : attribute.label}
           </dt>
           <dd className={valueClasses[layout]}>
-            {attribute.isEmpty ? (
+            {cell ? (
+              // `w-full` so a control fills the value column rather than
+              // shrink-wrapping its content, which would leave a text field the
+              // width of the value it happens to hold. The chip wraps below it.
+              <div className="w-full min-w-0">
+                <ProfileEditCell
+                  attribute={attribute}
+                  editability={cell.editability}
+                  draft={cell.draft}
+                  // A cell only exists while the surface is editing, so `editing`
+                  // is unconditionally true here. Stated rather than inferred
+                  // from `onChange`, which a locked attribute does not carry —
+                  // inferring it is what used to swallow the lock's explanation.
+                  editing
+                  onChange={cell.onChange}
+                  invalid={cell.invalid}
+                  mono={attribute.mono}
+                />
+              </div>
+            ) : attribute.isEmpty ? (
               <span className="text-sm text-neutral-400" title="No value">
                 —
               </span>

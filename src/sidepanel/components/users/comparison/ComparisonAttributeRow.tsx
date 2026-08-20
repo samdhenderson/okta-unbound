@@ -29,11 +29,20 @@
  * register {@link AppScopeIndicator} and {@link GroupSourceIndicator} share,
  * never left as an empty box that could read as a rendering failure.
  *
- * ## No action
+ * ## Either side is editable, and the marker does not follow the typing
  *
- * There is deliberately no per-row control. Writing a profile attribute needs
- * prior-state capture and audit logging, which is a separate change; offering the
- * affordance before that exists would be the wrong kind of convenient.
+ * Given an {@link AttributeEditCell} for a side, that side's value cell
+ * delegates to {@link ProfileEditCell} — the same cell the Users tab's Profile
+ * pane renders, so an attribute locked in one surface is locked identically in
+ * the other, with the same sentence saying why. A side with no cell is unchanged.
+ *
+ * The marker is **not** recomputed from the draft, and the row is never
+ * re-sorted. `=` / `≠` states what Okta holds; flipping it on an unsaved
+ * keystroke would claim two users now agree while the directory still says they
+ * differ, and re-verdicting live would pull the row being typed in out from
+ * under the cursor (the list is ordered differences-first). A dirty side gets an
+ * `Edited` badge instead, whose tooltip says what saving *would* make true — a
+ * sentence in the row, not an edit to the authoritative marker.
  *
  * ## Security
  *
@@ -43,7 +52,10 @@
  */
 import React from 'react';
 import { Badge } from '../../shared';
+import ProfileEditCell from '../ProfileEditCell';
+import type { AttributeDescriptor } from '../profileAttributes';
 import type { AttributeParityRow, AttributeVerdict } from './attributeParity';
+import type { AttributeEditCell } from '../../../hooks/useProfileEdit';
 
 /** Props for {@link ComparisonAttributeRow}. */
 export interface ComparisonAttributeRowProps {
@@ -62,6 +74,14 @@ export interface ComparisonAttributeRowProps {
    * this" answer.
    */
   readers?: readonly string[];
+  /**
+   * The context user's editing cell for this attribute, joined by `row.name`.
+   * **Present only while that column is editing** — absent renders the left cell
+   * read-only, which is every other case.
+   */
+  contextCell?: AttributeEditCell;
+  /** The compared user's editing cell for this attribute. Same contract as `contextCell`. */
+  comparedCell?: AttributeEditCell;
 }
 
 /** `1 rule` / `3 rules` — the chip never says "rules" for one. */
@@ -94,23 +114,89 @@ function markerFor(
 }
 
 /**
- * One side of a row: the user it belongs to, and their value.
+ * The descriptor {@link ProfileEditCell} renders one side from — a **display
+ * projection**, not the authoritative one. The parity row carries the same
+ * stringified value `allProfileAttributes` put in `value`, plus the label and
+ * kind, which is the whole of what the cell reads. `raw` is deliberately not
+ * reconstructed: the descriptor the patch and the history entry are built from
+ * lives in `useProfileEdit`'s own index, and a second, half-populated copy must
+ * never be able to reach a write.
+ */
+const cellAttribute = (row: AttributeParityRow, value: string): AttributeDescriptor => ({
+  key: row.key,
+  name: row.name,
+  label: row.label,
+  kind: row.kind,
+  value,
+  raw: undefined,
+  isEmpty: value === '',
+});
+
+/**
+ * One side of a row: the user it belongs to, and their value — read-only, or the
+ * control for it when that column is editing.
  *
  * `min-h-9` is `Button`'s own `sm` height, quoted from `ComparisonDiffTab` so an
  * attribute row and a group row stand on the same rhythm.
  */
-const ValueCell: React.FC<{ userName: string; value: string }> = ({ userName, value }) => (
+const ValueCell: React.FC<{
+  userName: string;
+  row: AttributeParityRow;
+  value: string;
+  cell?: AttributeEditCell;
+}> = ({ userName, row, value, cell }) => (
   <span
     className="flex min-h-9 min-w-0 flex-col justify-center gap-0.5 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1"
-    title={value === '' ? `${userName} has no value for this attribute` : value}
+    // Only in read mode: a tooltip over a field the reader is typing into
+    // repeats a value they can already see and covers the one they are entering.
+    title={cell ? undefined : value === '' ? `${userName} has no value for this attribute` : value}
   >
     <span className="truncate text-xs text-neutral-500">{userName}</span>
-    {value === '' ? (
+    {cell ? (
+      <ProfileEditCell
+        attribute={cellAttribute(row, value)}
+        editability={cell.editability}
+        draft={cell.draft}
+        // A cell only exists while this column is editing. Stated rather than
+        // inferred from `onChange`, which a locked attribute does not carry.
+        editing
+        onChange={cell.onChange}
+        invalid={cell.invalid}
+      />
+    ) : value === '' ? (
       <span className="text-xs text-neutral-400 italic">— not set</span>
     ) : (
       <span className="min-w-0 text-sm break-words text-pretty text-neutral-900">{value}</span>
     )}
   </span>
+);
+
+/**
+ * What saving the current drafts *would* make true of this row — the hedge the
+ * `Edited` badge carries, so the unchanged `=` / `≠` never has to be read as a
+ * claim about the form.
+ */
+function hypothetical(contextValue: string, comparedValue: string): string {
+  if (contextValue === comparedValue) {
+    return contextValue === ''
+      ? 'Saving would leave neither user with a value here.'
+      : 'Saving would make the two values match.';
+  }
+  return 'The two values would still differ after saving.';
+}
+
+/**
+ * The mark saying one side has an unsaved change here. It names its user in the
+ * text as well as the tooltip: both columns can be dirty at once, and two bare
+ * `Edited` marks would say nothing about which profile holds which edit.
+ */
+const EditedBadge: React.FC<{ userName: string; wouldBe: string }> = ({ userName, wouldBe }) => (
+  <Badge
+    variant="warning"
+    title={`${userName} has an unsaved change to this attribute. The marker still describes what Okta holds today. ${wouldBe}`}
+  >
+    Edited<span className="sr-only">: {userName}</span>
+  </Badge>
 );
 
 /**
@@ -129,8 +215,16 @@ const ComparisonAttributeRow: React.FC<ComparisonAttributeRowProps> = ({
   comparedName,
   showApiNames,
   readers,
+  contextCell,
+  comparedCell,
 }) => {
   const marker = markerFor(row.verdict, contextName, comparedName);
+  // What each side would hold if saved right now — the hedge only, never the
+  // marker. See the module header for why the verdict does not move.
+  const wouldBe = hypothetical(
+    contextCell?.draft ?? row.contextValue,
+    comparedCell?.draft ?? row.comparedValue,
+  );
 
   return (
     <li className="flex flex-col gap-1.5 px-3 py-2 hover:bg-neutral-50/70">
@@ -156,11 +250,13 @@ const ComparisonAttributeRow: React.FC<ComparisonAttributeRowProps> = ({
             Hidden
           </Badge>
         )}
+        {contextCell?.dirty && <EditedBadge userName={contextName} wouldBe={wouldBe} />}
+        {comparedCell?.dirty && <EditedBadge userName={comparedName} wouldBe={wouldBe} />}
       </span>
 
       {/* Real equal thirds: grid TRACKS, not `flex-1` boxes. See the module header. */}
       <span className="grid grid-cols-[minmax(0,1fr)_2rem_minmax(0,1fr)] items-stretch gap-2">
-        <ValueCell userName={contextName} value={row.contextValue} />
+        <ValueCell userName={contextName} row={row} value={row.contextValue} cell={contextCell} />
         {/* Not a button, not focusable: a status that borrows the silhouette. */}
         <span
           role="img"
@@ -174,7 +270,12 @@ const ComparisonAttributeRow: React.FC<ComparisonAttributeRowProps> = ({
         >
           {marker.glyph}
         </span>
-        <ValueCell userName={comparedName} value={row.comparedValue} />
+        <ValueCell
+          userName={comparedName}
+          row={row}
+          value={row.comparedValue}
+          cell={comparedCell}
+        />
       </span>
     </li>
   );

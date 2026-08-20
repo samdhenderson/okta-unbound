@@ -62,6 +62,33 @@ const DEFAULT_APPS: AppBucketFixture = {
   onlyContext: [{ id: 'a5', label: 'Context Group Granted App', scope: 'GROUP' }],
 };
 
+/**
+ * Editing is inert in these suites — they render the Apps tab — but the state
+ * literal has to be whole, so a read-only column is stated rather than omitted.
+ */
+const idleSide = (
+  key: 'context' | 'compared',
+  userName: string,
+): UserComparisonState['attributeEdit']['context'] => ({
+  key,
+  userName,
+  cells: {},
+  isEditing: false,
+  isSaving: false,
+  hasChanges: false,
+  hasInvalid: false,
+  canEdit: false,
+  begin: vi.fn(),
+  cancel: vi.fn(),
+  requestSave: vi.fn(),
+});
+
+const NO_ATTRIBUTE_EDITING: UserComparisonState['attributeEdit'] = {
+  context: idleSide('context', 'Alice Context'),
+  compared: idleSide('compared', 'Bob Compared'),
+  pendingSave: null,
+};
+
 const comparison = (appBuckets: AppBucketFixture = DEFAULT_APPS): UserComparisonState =>
   ({
     comparedUser,
@@ -84,6 +111,7 @@ const comparison = (appBuckets: AppBucketFixture = DEFAULT_APPS): UserComparison
     attributeDiffCount: 0,
     attributeConfig: DEFAULT_PROFILE_DISPLAY_CONFIG,
     attributeRuleReads: {},
+    attributeEdit: NO_ATTRIBUTE_EDITING,
     groupSimilarity: 0,
     appSimilarity: 20,
     overallSimilarity: 10,

@@ -57,6 +57,15 @@ the same playbook for any future large component:
   action bar and the page header above the card both read it. Every filter, pill and
   disclosure inside a pane stays local — panes are hidden rather than unmounted, so
   local state survives a switch without being lifted or persisted.
+- **One hook serving two differently-shaped surfaces keys on the domain identifier,
+  not on the row type.** `useProfileEdit` drives both the Users tab's flat attribute
+  list and the Compare view's two-column parity rows. It returns
+  `cells: Record<string, AttributeEditCell>` keyed by the bare Okta attribute
+  **name** — the same key as the draft and the patch — so each surface indexes
+  `cells[attribute.name]` from whatever row type it already has. Widening a derived
+  row type to carry edit state instead would have coupled the hook to one surface's
+  shape and forced the other to fabricate it. The hook also holds no module state, so
+  the Compare view simply instantiates two (ADR-0035).
 - **A config that is read differently from how it is stored** keeps both copies.
   `useProfileDisplayConfig` holds the stored config (written back verbatim) beside a
   reconciled one (projected onto what exists right now); the second is what renders,

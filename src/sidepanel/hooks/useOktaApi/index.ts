@@ -18,6 +18,7 @@ export { createGroupCleanupOperations } from './groupCleanup';
 export { createGroupBulkOperations } from './groupBulkOps';
 export { createGroupDiscoveryOperations } from './groupDiscovery';
 export { createUserOperations } from './userOperations';
+export { createProfileOperations } from './profileOperations';
 export { createAppOperations } from './appOperations';
 export { createPolicyOperations, OKTA_POLICY_TYPES, type OktaPolicyType } from './policyOperations';
 export { createExportEngineOperations } from './exportEngine';

@@ -17,14 +17,30 @@
  * strings into an explanation of this person's access — and it is why the header
  * counts "read by rules that grant access" beside the plain attribute count.
  *
- * ## It renders; it does not fetch, and it does not configure
+ * ## It renders; it does not fetch, and it owns no dialog
  *
  * `attributes` and `config` arrive as props rather than being pulled from
  * `allProfileAttributes` / `useProfileDisplayConfig` inside the component. That
  * keeps the pane pure and story-able, and follows `docs/components.md`'s "list
- * rows derive; they never fetch" — the rung above owns the hooks. The gear does
- * not open anything either: it calls {@link UserProfilePaneProps.onConfigure},
- * and the configuration modal is a separate component.
+ * rows derive; they never fetch" — the rung above owns the hooks.
+ *
+ * The same goes for both of its dialogs. The gear calls
+ * {@link UserProfilePaneProps.onConfigure} and `Save` calls
+ * {@link ProfileEditControls.onSave}; the configuration modal and the save
+ * confirmation are mounted by {@link
+ * module:sidepanel/components/users/UserDetailPanel}, which already owns
+ * `ProfileDisplayModal` the same way. A pane that owned a live-write
+ * confirmation could not be rendered in a story without one.
+ *
+ * ## Editing
+ *
+ * The pane is editable when the rung hands it {@link UserProfilePaneProps.edit}
+ * and {@link UserProfilePaneProps.cells}. Neither is state it owns: the draft,
+ * the diff and the write all live in
+ * {@link module:sidepanel/hooks/useProfileEdit}, and the pane's only
+ * contribution is where the controls appear. An attribute with a cell renders
+ * its `<dd>` through `ProfileEditCell`; every other attribute renders exactly as
+ * it does in read mode.
  *
  * The grouping itself lives in `profileAttributeBlocks` — a pure module beside
  * this one, mirroring `profileAttributes` and `profileRuleReads` — so this file
@@ -48,6 +64,8 @@ import type { ProfileDisplayConfig } from '../../../shared/storage/profileDispla
 import type { AttributeDescriptor } from './profileAttributes';
 import { buildAttributeBlocks } from './profileAttributeBlocks';
 import UserProfileAttributeList from './UserProfileAttributeList';
+import UserProfilePaneHeader, { type ProfileEditControls } from './UserProfilePaneHeader';
+import type { AttributeEditCell } from '../../hooks/useProfileEdit';
 
 /** Props for {@link UserProfilePane}. */
 export interface UserProfilePaneProps {
@@ -73,6 +91,18 @@ export interface UserProfilePaneProps {
   onConfigure: () => void;
   /** Render placeholders instead of the list while the profile/schema loads. */
   isLoading?: boolean;
+  /**
+   * The pane-level edit verbs and the state deciding which of them show. Absent
+   * on a surface that does not offer editing at all — a story, or a rung with no
+   * connected Okta tab.
+   */
+  edit?: ProfileEditControls;
+  /**
+   * Attribute Okta name → its edit cell, from `useProfileEdit`. Empty outside
+   * edit mode, so it may be passed unconditionally; an attribute without a cell
+   * renders read-only.
+   */
+  cells?: Readonly<Record<string, AttributeEditCell>>;
 }
 
 /** `1 field` / `4 fields`. */
@@ -100,6 +130,8 @@ const UserProfilePane: React.FC<UserProfilePaneProps> = ({
   ruleReads,
   onConfigure,
   isLoading = false,
+  edit,
+  cells,
 }) => {
   const [filter, setFilter] = useState('');
   const [onlyRuleRead, setOnlyRuleRead] = useState(false);
@@ -125,20 +157,13 @@ const UserProfilePane: React.FC<UserProfilePaneProps> = ({
 
   return (
     <div>
-      <div className="flex items-start justify-between gap-3 px-4 py-3">
-        <p className="text-xs text-neutral-600 text-pretty">
-          {shown} of {total} attributes shown &middot; {readCount} read by rules that grant access
-        </p>
-        <IconButton
-          label="Configure attribute display"
-          variant="subtle"
-          size="md"
-          onClick={onConfigure}
-          className="shrink-0"
-        >
-          <Icon type="settings" size="sm" />
-        </IconButton>
-      </div>
+      <UserProfilePaneHeader
+        shown={shown}
+        total={total}
+        ruleReadCount={readCount}
+        onConfigure={onConfigure}
+        edit={edit}
+      />
 
       <div className="px-4 pb-3 space-y-2">
         <Input
@@ -210,6 +235,7 @@ const UserProfilePane: React.FC<UserProfilePaneProps> = ({
                 showApiNames={config.showApiNames}
                 showRuleChips={config.showRuleChips}
                 ruleReads={ruleReads}
+                cells={cells}
               />
             </section>
           ))}

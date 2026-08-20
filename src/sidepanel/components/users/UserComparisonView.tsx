@@ -28,6 +28,15 @@
  * the pushed view does not, so the one affordance that must exist in both lives with
  * the surface it acts on.
  *
+ * ## The one write this surface performs
+ *
+ * The Attributes tab is editable for **either** user, and the confirmation for
+ * whichever column is saving is mounted here rather than inside the tab — a tab
+ * switch must not be able to unmount a modal with a write in flight. The state
+ * behind it is `comparison.attributeEdit`, so this component still owns none of
+ * it. The context column stays read-only unless the host gave
+ * `useUserComparison` an `onContextUserUpdated` to publish the save through.
+ *
  * ## Why `onViewClauses` is not passed to the overview tab
  *
  * {@link ComparisonOverviewTab} accepts an optional `onViewClauses` that would deep-link
@@ -56,6 +65,7 @@ import ComparisonTabBar from './comparison/ComparisonTabBar';
 import ComparisonOverviewTab from './comparison/ComparisonOverviewTab';
 import ComparisonDiffTab from './comparison/ComparisonDiffTab';
 import ComparisonAttributesTab from './comparison/ComparisonAttributesTab';
+import ProfileSaveModal from './ProfileSaveModal';
 import AppScopeIndicator from './comparison/AppScopeIndicator';
 import GroupSourceIndicator from './comparison/GroupSourceIndicator';
 import { groupParityRows, appParityRows } from './comparison/comparisonAnalytics';
@@ -105,6 +115,7 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
     attributeDiffCount,
     attributeConfig,
     attributeRuleReads,
+    attributeEdit,
     groupSimilarity,
     appSimilarity,
     overallSimilarity,
@@ -361,6 +372,12 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
                   hiddenDifferences={attributeParity.hiddenDifferences}
                   config={attributeConfig}
                   ruleReads={attributeRuleReads}
+                  // Either user's profile is editable from this tab; the two
+                  // editors are independent, and a column that cannot be edited
+                  // — no host to publish a context-side save, or the surface
+                  // hidden — reports that through its own `canEdit`.
+                  contextEdit={attributeEdit?.context}
+                  comparedEdit={attributeEdit?.compared}
                 />
               )}
 
@@ -397,6 +414,25 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
                 />
               )}
             </>
+          )}
+
+          {/* The one confirmation the comparison may be showing, whichever
+              column armed it. Mounted here rather than inside the Attributes tab
+              so it is not unmounted mid-write by a tab switch, and outside the
+              loading/error branches for the same reason. `useComparisonProfileEdit`
+              guarantees at most one. */}
+          {attributeEdit?.pendingSave && (
+            <ProfileSaveModal
+              changes={attributeEdit.pendingSave.changes}
+              userName={attributeEdit.pendingSave.userName}
+              onCancel={attributeEdit.pendingSave.cancel}
+              onConfirm={attributeEdit.pendingSave.confirm}
+              isSaving={attributeEdit.pendingSave.isSaving}
+              report={attributeEdit.pendingSave.report}
+              onAnalyze={attributeEdit.pendingSave.analyze}
+              isAnalyzing={attributeEdit.pendingSave.isAnalyzing}
+              error={attributeEdit.pendingSave.error}
+            />
           )}
         </div>
       )}

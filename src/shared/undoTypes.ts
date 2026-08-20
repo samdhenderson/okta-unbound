@@ -16,7 +16,8 @@ export type ActionType =
   | 'BULK_ADD_USERS_TO_GROUP'
   | 'ACTIVATE_RULE'
   | 'DEACTIVATE_RULE'
-  | 'CONSOLIDATE_RULE';
+  | 'CONSOLIDATE_RULE'
+  | 'UPDATE_USER_PROFILE';
 
 /** A single recorded action in the history. */
 export interface UndoAction {
@@ -32,6 +33,16 @@ export interface UndoAction {
   metadata: UndoActionMetadata;
   /** Lifecycle outcome of the action. */
   status: 'completed' | 'undone' | 'failed' | 'partial';
+  /**
+   * The entry recording the write that undid this one. Set together with
+   * `status: 'undone'`.
+   *
+   * The pairing is stored in *both* directions — here, and on the undoing
+   * entry's `metadata.undoOfActionId` — because either side can be evicted by
+   * the 50-entry cap independently, and a row that says "Undone" should be able
+   * to point at the write that did it for as long as that write survives.
+   */
+  undoneByActionId?: string;
 }
 
 /** Discriminated union of per-action metadata, keyed on `type`. */
@@ -42,7 +53,8 @@ export type UndoActionMetadata =
   | BulkAddUsersMetadata
   | ActivateRuleMetadata
   | DeactivateRuleMetadata
-  | ConsolidateRuleMetadata;
+  | ConsolidateRuleMetadata
+  | UpdateUserProfileMetadata;
 
 /** Metadata for removing a single user from a group. */
 export interface RemoveUserMetadata {
@@ -130,6 +142,71 @@ export interface ConsolidateRuleMetadata {
   createdGroupIds: string[];
   /** The source rules that were deleted, with enough to recreate them. */
   retiredRules: RetiredRuleSnapshot[];
+}
+
+/**
+ * Why a captured attribute cannot be restored.
+ *
+ * - `too-large` — the previous value exceeded {@link MAX_CAPTURED_VALUE_CHARS}.
+ * - `too-many` — the edit changed more than {@link MAX_CAPTURED_ATTRIBUTES}
+ *   attributes, and this one fell outside the cap.
+ */
+export type CaptureOmission = 'too-large' | 'too-many';
+
+/**
+ * One attribute changed by a profile write, with enough prior state to put it
+ * back.
+ *
+ * **Values here are tenant PII in plaintext `chrome.storage.local`**, so the
+ * capture is bounded on both axes and an over-cap value is dropped *entirely*
+ * rather than truncated. A truncated prefix is still PII with none of the
+ * utility, and restoring a truncated value would silently corrupt the attribute
+ * — so `omitted` marks the change unrestorable instead. Never log these fields.
+ */
+export interface CapturedAttribute {
+  /** The attribute's bare Okta name. */
+  name: string;
+  /** Its human label at capture time. */
+  label: string;
+  /**
+   * The value before the write, stringified by `toDisplay`. **Absent** whenever
+   * `omitted` is set — deliberately not an empty string, which would be
+   * indistinguishable from a genuinely empty prior value.
+   */
+  beforeDisplay?: string;
+  /** The untouched prior value, for the restoring write. Absent when `omitted` is set. */
+  beforeRaw?: unknown;
+  /** The value after the write, stringified. This is what a drift check compares against. */
+  afterDisplay: string;
+  /** `false` when prior state was not captured faithfully; the row says so and offers no restore. */
+  restorable: boolean;
+  /** Why prior state was not captured. Present iff `restorable` is `false`. */
+  omitted?: CaptureOmission;
+}
+
+/**
+ * Metadata for a user profile write.
+ *
+ * Carries prior state so undo can *restore* rather than merely record — the
+ * requirement `docs/rockstar-parity-plan.md` places on every new write endpoint.
+ */
+export interface UpdateUserProfileMetadata {
+  type: 'UPDATE_USER_PROFILE';
+  userId: string;
+  /** The user's login at write time, so the history row names a person. */
+  userLogin: string;
+  /** The user's display name at write time. */
+  userName: string;
+  /** Every attribute the write touched, in the order the modal listed them. */
+  changes: CapturedAttribute[];
+  /**
+   * Set when this entry *is* an undo of an earlier one, naming that entry.
+   *
+   * Undo is a forward write, not a rollback — Okta has no rollback — so it earns
+   * its own history entry rather than erasing the original. This is the link
+   * between the two.
+   */
+  undoOfActionId?: string;
 }
 
 /** The persisted history container: recent actions plus its size cap. */

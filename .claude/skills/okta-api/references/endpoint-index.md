@@ -22,7 +22,14 @@ Marker legend lives in `../SKILL.md`.
 | `GET /api/v1/users/{id}/appLinks`            | Apps as the user sees them                           | `apps-and-policies.md`      | U   |
 | `POST /api/v1/users/{id}/lifecycle/{action}` | Activate, suspend, deactivate, unlock, reset         | `users-and-mfa.md`          | V   |
 | `POST /api/v1/users`                         | Creating a user                                      | Okta docs                   | U   |
-| `POST /api/v1/users/{id}`                    | Partial profile update (Okta merges)                 | Okta docs                   | U   |
+| `POST /api/v1/users/{id}`                    | Partial profile update — merge assumed, not verified | Okta docs                   | U   |
+
+`POST /api/v1/users/{id}` stays `U` deliberately: okta-unbound now **depends** on the
+merge behaviour — it ships a sparse `{ profile }` patch — but nobody has checked it
+against a live org. `useOktaApi/profileOperations.ts` owns the write and documents the
+full-profile fallback (strip every `mutability !== 'READ_WRITE'`) at the one function
+that would implement it. See ADR-0035 (`0035-the-first-profile-write.md`); flip this row to `V` only after a real org
+confirms unlisted attributes survive.
 
 ## Groups
 
