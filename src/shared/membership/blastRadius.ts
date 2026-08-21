@@ -69,6 +69,7 @@ import {
   type RuleMatchResult,
 } from '../ruleEvaluator';
 import { explainRuleExpression, type ClauseGroupReference } from '../rules/explainExpression';
+import { groupContextOf } from './groupContext';
 import {
   membershipBucket,
   membershipVerdict,
@@ -88,28 +89,6 @@ import type {
 // ---------------------------------------------------------------------------
 // Shape helpers — each one deliberately mirrors an existing module.
 // ---------------------------------------------------------------------------
-
-/**
- * The user's memberships in the shape the evaluator matches `isMemberOf*`
- * against.
- *
- * **Replicated verbatim from `accessCause.groupContextOf`, which is
- * module-private there** — it is a four-line internal detail of that file, not
- * part of its seam, and exporting it to reach across a feature boundary into
- * `shared/` would widen that seam for no other caller. `blastRadius.test.ts`
- * pins the two against each other on the same fixtures, so the copy cannot
- * drift: two divergent context mappers would mean one surface answering
- * `isMemberOfGroup` differently from the other about the same person.
- *
- * @param memberships - The user's **complete** membership list (ADR-0021).
- * @returns The id/name pairs the evaluator reads.
- */
-export function groupContextOf(memberships: readonly GroupMembership[]): RuleGroupContext {
-  return memberships.map((membership) => ({
-    id: membership.group.id,
-    name: membership.group.profile.name,
-  }));
-}
 
 /**
  * A rule's condition expression, whichever shape the rule arrived in.
