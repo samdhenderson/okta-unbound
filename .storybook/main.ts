@@ -74,16 +74,30 @@ const config: StorybookConfig = {
       '@': path.resolve(configDir, '../src'),
     };
 
-    // Pre-bundle `zod` up front. It is the one non-storybook runtime dependency a
-    // story file imports DIRECTLY (EntityPicker.stories builds fake descriptor
-    // schemas with it). Under the browser test runner it would otherwise be
-    // discovered lazily when that story loads, triggering a mid-run dep
-    // re-optimization that invalidates already-served module URLs (notably the
-    // addon-docs react-dom-shim) and fails the story with "Failed to fetch
-    // dynamically imported module". Including it here settles the optimizer before
-    // the suite runs.
+    // Pre-bundle `zod` and `react-dom` up front. These are the runtime bare
+    // specifiers the browser test runner would otherwise discover LAZILY, part-way
+    // through a run: `zod` because EntityPicker.stories builds fake descriptor
+    // schemas with it, `react-dom` because Modal.tsx imports `createPortal` from it
+    // (distinct from the `react-dom/client` specifier main.tsx uses, which Vite
+    // optimizes as a separate entry). Vite's dep scanner cannot pre-empt either one
+    // — under Vitest browser mode the scan entry is the tester HTML, not the story
+    // files, so every app dependency is discovered at request time.
+    //
+    // A lazy discovery triggers a mid-run dep re-optimization, which reloads the
+    // page and invalidates already-served module URLs. Whichever story file is in
+    // flight dies: mid-collection it surfaces as "Vitest failed to find the current
+    // suite", otherwise as "Failed to fetch dynamically imported module" (notably
+    // for the addon-docs react-dom-shim). The victim is a bystander — Vitest orders
+    // files largest-first, so it is whatever happens to be first, which is why
+    // `react-dom` (added to Modal.tsx in #68) was failing ActionBar.stories.tsx, a
+    // file that imports neither it nor Modal. Including them here settles the
+    // optimizer before the suite runs.
     viteConfig.optimizeDeps = viteConfig.optimizeDeps ?? {};
-    viteConfig.optimizeDeps.include = [...(viteConfig.optimizeDeps.include ?? []), 'zod'];
+    viteConfig.optimizeDeps.include = [
+      ...(viteConfig.optimizeDeps.include ?? []),
+      'zod',
+      'react-dom',
+    ];
     return viteConfig;
   },
 };
