@@ -27,6 +27,7 @@ import {
   type ClauseGroupRequirement,
 } from '../../../../shared/rules/explainExpression';
 import type { RuleGroupContext } from '../../../../shared/ruleEvaluator';
+import { groupContextOf } from '../../../../shared/membership/groupContext';
 import { isDeducedAttribution } from '../../../../shared/utils/membershipAnalysis';
 import type { GroupMembership, MembershipRule, OktaUser } from '../../../../shared/types';
 
@@ -209,14 +210,6 @@ export function classifyAccessCauses(input: AccessCauseInput): AccessCause[] {
   return onlyCompared.map((membership) =>
     classifyOne(membership, contextUser, rules, groupContext),
   );
-}
-
-/** The context user's memberships in the shape the evaluator matches against. */
-function groupContextOf(memberships: readonly GroupMembership[]): RuleGroupContext {
-  return memberships.map((membership) => ({
-    id: membership.group.id,
-    name: membership.group.profile.name,
-  }));
 }
 
 /**

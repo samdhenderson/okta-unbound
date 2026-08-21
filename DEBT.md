@@ -49,7 +49,7 @@ Format:
   now resolving correctly — prove it fails without the fix first.
 - **Risk:** Low-medium — additive data threading through 4 files, no
   evaluator changes.
-- **Status:** open
+- **Status:** done:#67
 
 ### D-002 · Dedupe the group-context builder duplicated in two files
 
@@ -66,7 +66,7 @@ Format:
   file; both existing call sites import it. Do this before or alongside
   D-001 so D-001 reuses the shared helper rather than adding a fourth copy.
 - **Risk:** Low.
-- **Status:** open
+- **Status:** done:#67
 
 ### D-003 · Silent app-label resolution failures in pushGroupOps
 
@@ -102,7 +102,7 @@ Format:
   stays green.
 - **Risk:** Medium — touches audit logging; route through
   `security-logging-reviewer` before merge.
-- **Status:** open
+- **Status:** done:#67
 
 ### D-005 · useRuleImpact.ts has zero test coverage on its race guards
 
@@ -280,3 +280,97 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   carve-out, and each is replaced by a strictly stronger wait on the element the
   caller actually goes on to assert against.
 - **Status:** done:#66
+
+### D-011 · App.tabpersistence.test.tsx's tab-mount waits are under-budgeted
+
+- **Category:** standards
+- **Priority:** P1
+- **Size:** S
+- **Files:** `src/sidepanel/App.tabpersistence.test.tsx`
+- **Problem:** The file passed inside a full-suite `test:coverage` run and
+  failed when run on its own (2 of 3 isolated runs red at
+  `findByLabelText('Select Engineering')`). Not environmental: every tab in
+  this suite is lazy — that is what the suite exists to pin — so the first
+  `openTab` for a tab pays a dynamic `import()` a later one does not, and
+  Testing Library's default `findBy*` budget of 1s is under that cost on a
+  cold module graph. In a full-suite run an earlier file had already warmed
+  the chunk, so the race was invisible. It surfaced through the pre-commit
+  `vitest related` hook, which pulled the file in as related to an unrelated
+  staged change and blocked the commit.
+- **Done when:** The waits that cross a tab's first mount carry an explicit
+  budget rather than the 1s default, and the file passes in isolation on
+  repeated runs.
+- **Risk:** Low — test-only, and strictly strengthening: each wait is on the
+  element its caller goes on to assert against, for longer. No assertion
+  weakened or removed (ADR-0012).
+- **Status:** done:#67
+
+### D-012 · `conditionExpressionOf` is replicated in four files
+
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/shared/membership/blastRadius.ts:103`,
+  `src/shared/utils/membershipAnalysis.ts:181`,
+  `src/sidepanel/components/users/comparison/accessCause.ts:221`,
+  `src/sidepanel/components/users/MembershipRuleEvidence.tsx:37`
+- **Problem:** Exactly the shape D-002 just fixed for `groupContextOf`, one
+  helper over: four copies of
+  `rule.conditionExpression || rule.conditions?.expression?.value || ''`,
+  three of them carrying a comment that points at one of the others.
+  ADR-0036 names it alongside `groupContextOf` as the second replicated
+  helper. `shared/membership/groupContext.ts` (added by D-002) is the
+  obvious home, or a sibling module beside it.
+- **Done when:** One implementation; all four call sites import it. Verify
+  first that all four really are identical — `ruleUtils.ts:22,114` and
+  `consolidation.ts:88` read the same field but are **not** the same helper
+  (different fallbacks, one lowercases and strips whitespace); they are not
+  part of this item.
+- **Risk:** Low — behavior-preserving if the identity check above holds.
+- **Status:** open
+
+### D-013 · An audit entry can misattribute who changed a rule, silently
+
+- **Category:** correctness
+- **Priority:** P1
+- **Size:** M
+- **Files:** `src/sidepanel/hooks/useRuleLifecycle.ts:93,99-106`
+- **Problem:** The underlying defect D-004 pinned but deliberately did not
+  fix. When the current-user lookup does not yield an email, the hook writes
+  the audit entry anyway, attributed to the literal `unknown@unknown.com`,
+  and surfaces nothing to the user — so the trail records a rule change with
+  a placeholder actor and reads exactly like a real entry. **The surface is
+  wider than D-004's filing said:** three distinct paths reach the
+  placeholder — the lookup throwing (the catch), a `success: false`
+  response, and a 200 whose profile carries no `email`. A fix that only
+  handles the throw would leave two paths misattributing. All three are
+  pinned by `useRuleLifecycle.test.ts` as `CURRENT BEHAVIOUR`, so a fix has
+  something to move.
+- **Done when:** Not yet defined — needs a decision first: refuse the
+  mutation, write the entry with an explicit "actor unknown" marker
+  distinguishable from a real address, or surface a warning. That is a
+  product call about an audit trail, not a code question. Whatever is
+  chosen, retarget the three `CURRENT BEHAVIOUR` tests assertion-by-
+  assertion rather than deleting them.
+- **Risk:** Medium — audit-trail semantics; route through
+  `security-logging-reviewer`.
+- **Status:** blocked:needs-human
+
+### D-014 · useRuleLifecycle re-implements CoreApi.getCurrentUser
+
+- **Category:** perf
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useRuleLifecycle.ts:99-106`,
+  `src/sidepanel/hooks/useOktaApi/core.ts:239-263`
+- **Problem:** `CoreApi.getCurrentUser()` already does exactly what the hook
+  hand-rolls — the same `/api/v1/users/me` call with the same
+  `unknown@unknown.com` fallback — plus a per-tab TTL cache. The hook
+  bypasses it and re-hits the endpoint on every activate/deactivate.
+- **Done when:** The hook calls `getCurrentUser()` from the facade; the
+  hand-rolled request is gone; `useRuleLifecycle.test.ts` still passes (it
+  mocks the facade, so the seam is already there).
+- **Risk:** Low, but **sequence it after D-013** — that item may change what
+  the fallback should be, and doing this first would move the decision into
+  a shared helper used by other callers.
+- **Status:** open

@@ -108,6 +108,14 @@ describe('GroupMembershipsList', () => {
     expect(screen.queryByText('title')).not.toBeInTheDocument();
   });
 
+  /**
+   * Retargeted for D-001, not weakened (ADR-0022 §3). This case used to reach the
+   * unevaluable branch through `isMemberOfGroup("00gFAKE2")`, which the pane can
+   * now answer from the user's own membership list — so it would be asserting the
+   * bug rather than the invariant. The invariant is unchanged and still pinned,
+   * against a condition that stays genuinely unevaluable: the evaluator declines
+   * to run tenant-authored regular expressions whatever group list it is handed.
+   */
   it('explains an unevaluable condition neutrally rather than as a failure', async () => {
     render(
       <GroupMembershipsList
@@ -119,7 +127,7 @@ describe('GroupMembershipsList', () => {
             rules: [
               {
                 ...formattedRuleMembership.rules[0],
-                conditionExpression: 'isMemberOfGroup("00gFAKE2")',
+                conditionExpression: 'isMemberOfGroupNameRegex("^Eng.*")',
               },
             ],
           },
@@ -215,7 +223,10 @@ describe('GroupMembershipsList', () => {
                 id: '0prFAKE2',
                 name: 'On-call rotation',
                 status: 'ACTIVE',
-                conditionExpression: 'isMemberOfGroup("00gFAKE2")',
+                // Retargeted for D-001 for the same reason as the case above:
+                // an `isMemberOfGroup` call is now answerable from the pane's own
+                // membership list, so it no longer exercises "not evaluated".
+                conditionExpression: 'isMemberOfGroupNameRegex("^On-call.*")',
               },
             ],
           },
@@ -252,6 +263,131 @@ describe('GroupMembershipsList', () => {
 
     expect(screen.getByText(/carries no condition expression/)).toBeInTheDocument();
     expect(screen.queryByText('Fail')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * D-001. This pane holds the user's whole group list, so a rule clause asking
+ * whether they are in some *other* group is a question it can answer — yet every
+ * `isMemberOf*` clause here used to render "Cannot be determined" while Compare
+ * Users, handed the identical rule and user, resolved it. These pin the wiring
+ * that closes that gap, and the two ways it could go wrong: a filtered view must
+ * not narrow the context, and a clause the evaluator genuinely declines must stay
+ * unevaluated.
+ */
+describe('GroupMembershipsList — isMemberOf* resolves against the loaded memberships', () => {
+  /** The rule-based row, whose condition asks about a group the user is also in. */
+  const gatedByPeerGroup: GroupMembership = {
+    ...formattedRuleMembership,
+    rules: [
+      {
+        ...formattedRuleMembership.rules[0],
+        conditionExpression: 'isMemberOfAnyGroup("00gFAKE2")',
+      },
+    ],
+  };
+
+  /** The peer membership that answers the clause above. */
+  const peerGroup: GroupMembership = {
+    group: { id: '00gFAKE2', type: 'OKTA_GROUP', profile: { name: 'Ops Handbook' } },
+    membershipType: 'DIRECT',
+    rules: [],
+    attribution: 'exact',
+  };
+
+  const renderPane = (memberships: GroupMembership[]) =>
+    render(<GroupMembershipsList {...base} user={user} memberships={memberships} />);
+
+  it('resolves a clause about a group the user is in, instead of declining to answer', async () => {
+    renderPane([gatedByPeerGroup, peerGroup]);
+    await openRow('Engineering');
+
+    const row = within(rowFor('00gFAKE1'));
+    expect(row.getByText('Pass')).toBeInTheDocument();
+    expect(row.getByText('Rule matches this user')).toBeInTheDocument();
+    expect(row.queryByText('Cannot be determined')).not.toBeInTheDocument();
+    expect(row.queryByText('Not evaluated')).not.toBeInTheDocument();
+  });
+
+  /**
+   * The other half of ADR-0021's two-valued contract: given the user's complete
+   * list, a group absent from it is a confident "they are not in it". Reporting
+   * that as `fail` is only correct *because* the list is complete.
+   */
+  it('reports a group the user is genuinely not in as a fail, not as unknown', async () => {
+    renderPane([
+      {
+        ...formattedRuleMembership,
+        rules: [
+          {
+            ...formattedRuleMembership.rules[0],
+            conditionExpression: 'isMemberOfAnyGroup("00gFAKEabsent")',
+          },
+        ],
+      },
+      peerGroup,
+    ]);
+    await openRow('Engineering');
+
+    const row = within(rowFor('00gFAKE1'));
+    expect(row.getByText('Fail')).toBeInTheDocument();
+    expect(row.getByText('Rule does not match')).toBeInTheDocument();
+  });
+
+  /**
+   * The hazard the wiring has to avoid. The context is built from `memberships`,
+   * never from the filtered `visible` list — a subset would report a group the
+   * user really is in as a clause they failed, which is worse than the "Cannot be
+   * determined" this whole item replaces.
+   */
+  it('does not narrow the context when a filter hides the group a clause asks about', async () => {
+    renderPane([gatedByPeerGroup, peerGroup]);
+
+    await userEvent.type(screen.getByLabelText('Filter group memberships'), 'engineering');
+    expect(screen.queryByRole('heading', { name: 'Ops Handbook' })).not.toBeInTheDocument();
+
+    await openRow('Engineering');
+
+    // Out of view is not out of the group.
+    expect(within(rowFor('00gFAKE1')).getByText('Pass')).toBeInTheDocument();
+  });
+
+  /** Same for a source-bucket pill, which narrows the list a different way. */
+  it('does not narrow the context when a bucket pill hides that group', async () => {
+    renderPane([gatedByPeerGroup, peerGroup]);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Rule' }));
+    expect(screen.queryByRole('heading', { name: 'Ops Handbook' })).not.toBeInTheDocument();
+
+    await openRow('Engineering');
+
+    expect(within(rowFor('00gFAKE1')).getByText('Pass')).toBeInTheDocument();
+  });
+
+  /**
+   * The fallback stays exactly as it was. A group list answers `isMemberOf*`; it
+   * does not answer a clause the evaluator refuses to run, so this one still
+   * declines — with the reason spelled out, and never as a failure.
+   */
+  it('still declines a clause no group list could answer', async () => {
+    renderPane([
+      {
+        ...formattedRuleMembership,
+        rules: [
+          {
+            ...formattedRuleMembership.rules[0],
+            conditionExpression: 'isMemberOfGroupNameRegex("^Ops.*")',
+          },
+        ],
+      },
+      peerGroup,
+    ]);
+    await openRow('Engineering');
+
+    const row = within(rowFor('00gFAKE1'));
+    expect(row.getByText('Not evaluated')).toBeInTheDocument();
+    expect(row.getByText('Cannot be determined')).toBeInTheDocument();
+    expect(row.queryByText('Fail')).not.toBeInTheDocument();
   });
 });
 

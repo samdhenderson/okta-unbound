@@ -57,6 +57,65 @@ describe('ClauseChecklist', () => {
     expect(screen.getByText(/1 needs group context/)).toBeInTheDocument();
   });
 
+  /**
+   * D-001. The neutral row above is what a caller with no group list gets, and it
+   * stays that way — the fix is a new *optional* prop, so every existing caller's
+   * rendering is byte-identical. Supplied, the same clause carries a real verdict.
+   */
+  it('leaves isMemberOf* unevaluated when no group context is supplied', () => {
+    render(<ClauseChecklist expression='isMemberOfAnyGroup("00gFAKE1")' user={user} />);
+
+    expect(
+      within(rowFor('isMemberOfAnyGroup("00gFAKE1")')).getByText('Not evaluated'),
+    ).toBeVisible();
+    expect(screen.getByText('Cannot be determined')).toBeInTheDocument();
+  });
+
+  it('resolves isMemberOf* once the user’s complete group list is supplied', () => {
+    render(
+      <ClauseChecklist
+        expression='isMemberOfAnyGroup("00gFAKE1")'
+        user={user}
+        groupContext={[{ id: '00gFAKE1', name: 'Engineering' }]}
+      />,
+    );
+
+    expect(within(rowFor('isMemberOfAnyGroup("00gFAKE1")')).getByText('Pass')).toBeInTheDocument();
+    expect(screen.getByText('Rule matches this user')).toBeInTheDocument();
+    expect(screen.queryByText(/needs group context/)).not.toBeInTheDocument();
+  });
+
+  /** A group absent from a *complete* list is a confident "not a member" (ADR-0021). */
+  it('fails an isMemberOf* clause naming a group the supplied list does not hold', () => {
+    render(
+      <ClauseChecklist
+        expression='isMemberOfAnyGroup("00gFAKE9")'
+        user={user}
+        groupContext={[{ id: '00gFAKE1', name: 'Engineering' }]}
+      />,
+    );
+
+    expect(within(rowFor('isMemberOfAnyGroup("00gFAKE9")')).getByText('Fail')).toBeInTheDocument();
+    expect(screen.getByText('Rule does not match')).toBeInTheDocument();
+  });
+
+  /** A group list cannot answer a pattern the evaluator declines to run. */
+  it('still declines isMemberOfGroupNameRegex even with a group context', () => {
+    render(
+      <ClauseChecklist
+        expression='isMemberOfGroupNameRegex("^Eng.*")'
+        user={user}
+        groupContext={[{ id: '00gFAKE1', name: 'Engineering' }]}
+      />,
+    );
+
+    const row = rowFor('isMemberOfGroupNameRegex("^Eng.*")');
+    expect(within(row).getByText('Not evaluated')).toBeInTheDocument();
+    expect(
+      within(row).getByText(/regular expression, which this panel does not run/),
+    ).toBeVisible();
+  });
+
   it('keeps evaluating sibling clauses around an unevaluable one', () => {
     render(
       <ClauseChecklist
