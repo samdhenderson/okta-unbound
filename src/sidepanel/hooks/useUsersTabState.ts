@@ -18,7 +18,9 @@
  * {@link App} hides the Users tab rather than unmounting it, so the tab must be
  * inert while hidden: `isActive` is threaded into the three things here that can
  * reach Okta without a click — live user-page detection, the user-search debounce
- * and the Add-to-Group type-ahead (ADR-0018).
+ * and the Add-to-Group type-ahead (ADR-0018). The user-search debounce is also
+ * gated on `nav.isRoot`, so a query typed just before pushing a rung cannot land
+ * after the push and clear the user that rung is showing.
  *
  * ## The detail rung's panes
  *
@@ -323,8 +325,19 @@ export function useUsersTabState({
     clearMemberships();
   }, [clearMemberships]);
 
+  // Gated on `nav.isRoot` as well as `isActive`: the search box is hidden (not
+  // unmounted) once a rung is pushed, but a keystroke typed just before the push
+  // still leaves the 600ms debounce armed. Left gated on `isActive` alone, that
+  // debounce fires `onSearchStart` after the push and silently clears the very
+  // user whose detail/comparison rung is now on screen. Mirrors the comparison
+  // rung's own `searchEnabled` gate below.
   const { searchQuery, setSearchQuery, searchResults, setSearchResults, isSearching } =
-    useUsersTabSearch({ targetTabId, onError: setError, onSearchStart, enabled: isActive });
+    useUsersTabSearch({
+      targetTabId,
+      onError: setError,
+      onSearchStart,
+      enabled: isActive && nav.isRoot,
+    });
 
   /**
    * Put the stack on `user`'s detail rung — **idempotently**.

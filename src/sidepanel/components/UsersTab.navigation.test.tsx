@@ -285,6 +285,26 @@ describe('UsersTab sub-navigation', () => {
     expect(screen.getByRole('button', { name: /Compare/ }).closest('div.hidden')).toBeNull();
   });
 
+  it('does not let a debounce armed before a push fire after it and clear the user the push opened', async () => {
+    const uev = userEvent.setup();
+    await renderWithAda(uev);
+
+    // Arm the tab search's 600ms debounce, then navigate away before it fires —
+    // `pushCompare` does not wait for it. Left ungated on `nav.isRoot`, the
+    // debounce's `onSearchStart` fires after the push and clears `selectedUser`,
+    // unmounting both the detail and comparison rungs out from under the reader.
+    await uev.type(tabSearchInput(), 'ada');
+    await pushCompare(uev);
+
+    // Real-time wait past the debounce — forces the race deterministically
+    // instead of leaving it to how loaded the machine happens to be.
+    await new Promise((resolve) => setTimeout(resolve, 900));
+
+    expect(screen.getByTestId('user-comparison-view')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back to user' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Compare users');
+  });
+
   it('moves focus into the pushed view and restores it to the Compare button on pop', async () => {
     const uev = userEvent.setup();
     await renderWithAda(uev);
