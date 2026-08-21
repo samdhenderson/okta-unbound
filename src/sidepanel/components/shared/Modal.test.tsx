@@ -27,9 +27,13 @@ function mountShell() {
  * contract (dialog role, `aria-modal`, Tab trap, Escape, focus restore, and the
  * `aria-hidden`/`inert` exit window) used to be asserted only against the fallback.
  *
- * The describes below are therefore parametrised over both configurations. Each one
- * also carries an `expectBranch` assertion so a regression that collapsed the two
- * branches into one could not make the portal configuration pass vacuously.
+ * The describes below are therefore parametrised over both configurations. Every
+ * case covering one of those six properties also carries an `expectBranch`
+ * assertion, so a regression that collapsed the two branches into one could not
+ * let the portal configuration keep passing vacuously. The remaining cases here
+ * pin exit *mechanics* rather than the a11y contract (which listener unmounts the
+ * panel, and when); they run on both branches but do not re-assert placement,
+ * because the cases above already pin it for the configuration they share.
  */
 interface MountResult {
   /** The node `render` mounted into — the shell's scroll root in the portal case. */
@@ -99,7 +103,8 @@ describe.each(configurations)('Modal accessibility ($name)', ({ mount, expectBra
 
   it('closes on Escape', async () => {
     const user = userEvent.setup();
-    const { onClose } = renderModal(mount);
+    const { onClose, container, layer } = renderModal(mount);
+    expectBranch(screen.getByRole('dialog'), { container, layer });
     await user.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -177,11 +182,12 @@ describe.each(configurations)('Modal exit transition ($name)', ({ mount, expectB
   });
 
   it('restores focus to the trigger as soon as isOpen flips false, before the exit resolves', () => {
-    const { rerender } = mount(<Harness isOpen={false} />);
+    const { rerender, container, layer } = mount(<Harness isOpen={false} />);
     const trigger = screen.getByTestId('trigger');
     trigger.focus();
 
     rerender(<Harness isOpen />);
+    expectBranch(screen.getByRole('dialog'), { container, layer });
     expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true);
 
     rerender(<Harness isOpen={false} />);
