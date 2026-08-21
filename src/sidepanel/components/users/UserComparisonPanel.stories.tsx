@@ -35,7 +35,10 @@ const meta = {
           'view with no reset would show the previous comparison on the next push.\n' +
           '- `searchEnabled` is false while popped **or** while the whole tab is hidden, so a ' +
           'mounted comparison never becomes a background caller of the user-search API ' +
-          '(ADR-0018).\n\n' +
+          '(ADR-0018). It also gates scroll preservation, because "pushed and the tab is ' +
+          'shown" is exactly "the comparison is the thing on screen": the panel keeps its ' +
+          'own offset on the app root scroller it shares with the detail rung, so a push ' +
+          'opens at the top and a return lands where you left it.\n\n' +
           'Because state lives in the hook, these stories render the search phase: the ' +
           'comparison phase is reached by picking a user, which needs a live Okta tab. See ' +
           '`Users/UserComparisonView` for prop-driven stories of every phase.\n\n' +
