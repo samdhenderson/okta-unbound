@@ -82,7 +82,7 @@ Format:
 - **Done when:** The catch logs via the shared `logger` (outcome only, no
   payload) matching the sibling catches' pattern in the same file.
 - **Risk:** Low.
-- **Status:** claimed:claude/stoic-gates-5sf7nc
+- **Status:** done:#70
 
 ### D-004 · useRuleLifecycle.ts has zero test coverage on a security-sensitive audit path
 
@@ -117,7 +117,7 @@ Format:
 - **Done when:** A test file covers both stale-capture guards (simulating a
   reopen-for-another-rule mid-flight) and the error path.
 - **Risk:** Low-medium.
-- **Status:** claimed:claude/stoic-gates-5sf7nc
+- **Status:** done:#70
 
 ### D-006 · Untested error/guard branches in three hooks
 
@@ -134,7 +134,7 @@ Format:
 - **Done when:** Each named branch has at least one test proving both sides
   of the condition.
 - **Risk:** Low.
-- **Status:** claimed:claude/stoic-gates-5sf7nc
+- **Status:** done:#70
 
 ### D-007 · No session-expiry / 401 handling anywhere in the API path
 
@@ -556,7 +556,7 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   at the boundary. `applyPushGroupMappings` branches on
   `response.data.label || response.data.name` straight off a raw
   `makeApiRequest` to `/api/v1/apps/{id}`, with no parse — while the sibling
-  list call *in the same function* validates through
+  list call _in the same function_ validates through
   `oktaAppGroupAssignmentSchema`, and `getAppById` resolves that identical
   endpoint through `parseOkta(oktaAppListItemSchema, …)`. The label is
   rendered as an app name in the UI, so it is end-user-influenced text
