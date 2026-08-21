@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import Button from './Button';
-import Modal from './Modal';
+import Modal, { MODAL_LAYER_ID } from './Modal';
 
 /** Accessible modal dialog — focus trap, Escape-to-close, focus restoration. */
 const meta = {
@@ -199,5 +199,87 @@ export const ExitInteraction: Story = {
     // restore is keyed on `isOpen`, not on the hold, so a keyboard user is never
     // stranded for the length of the exit.
     expect(document.activeElement).toBe(trigger);
+  },
+};
+
+/**
+ * Harness for the D-009 regression story: an app-shaped shell with a fixed bottom
+ * band standing in for the `ActivityBar`, plus the modal layer the overlay portals
+ * into.
+ *
+ * The modal opens only once the layer node is in the DOM — the order the real
+ * shell produces, since `App` mounts with every modal closed and the user opens
+ * one later. That is driven by the layer's own ref callback (which fires in the
+ * commit that inserts the node) rather than an effect. Keeping the layer inside
+ * the story canvas rather than on `document.body` means the canvas-scoped queries
+ * and the story's axe run still reach the dialog.
+ */
+const OverActivityBar: React.FC<React.ComponentProps<typeof Modal>> = (args) => {
+  const [open, setOpen] = useState(false);
+  const openOnceLayerExists = useCallback(() => setOpen(true), []);
+
+  return (
+    <div className="h-screen bg-canvas">
+      <Modal {...args} isOpen={open} onClose={() => setOpen(false)} />
+      <div
+        data-testid="activity-bar-stand-in"
+        className="fixed bottom-0 left-0 right-0 z-50 border-t border-neutral-200 bg-white px-5 py-2.5 text-xs text-neutral-700"
+      >
+        Idle · 0 queued — stands in for the fixed ActivityBar band
+      </div>
+      <div id={MODAL_LAYER_ID} ref={openOnceLayerExists} />
+    </div>
+  );
+};
+
+/**
+ * Regression story for D-009. The `ActivityBar` is a `fixed bottom-0 z-50` band and
+ * the overlay is `fixed inset-0 z-50` — the same rung of the ladder — so whichever
+ * comes later in the document paints on top. The bar used to, covering the bottom
+ * of any open modal including its footer actions; the overlay now portals into the
+ * shell's modal layer, which is mounted after the scroll root the bar lives in.
+ *
+ * The content is deliberately long so the panel reaches its `max-h` and its footer
+ * sits in the band the bar occupies — the overlap the bug was visible in.
+ */
+export const OverTheActivityBar: Story = {
+  args: {
+    title: 'Confirm removal',
+    children: (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {Array.from({ length: 12 }, (_, i) => (
+          <p key={i}>
+            Removing this group takes its {i + 1} members with it. Scroll to the end to confirm —
+            the footer actions must stay clickable over the activity bar.
+          </p>
+        ))}
+      </div>
+    ),
+    footer: (
+      <>
+        <Button variant="ghost">Cancel</Button>
+        <Button variant="danger">Confirm</Button>
+      </>
+    ),
+  },
+  render: (args) => <OverActivityBar {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const dialog = await canvas.findByRole('dialog');
+    const activityBar = canvas.getByTestId('activity-bar-stand-in');
+
+    // Later in the document at an equal z-index = painted on top.
+    await expect(
+      Boolean(
+        activityBar.compareDocumentPosition(dialog) & activityBar.DOCUMENT_POSITION_FOLLOWING,
+      ),
+    ).toBe(true);
+
+    // Real layout, real hit testing: whatever is under the footer's primary action
+    // has to be that button, not the bar.
+    const confirm = canvas.getByRole('button', { name: 'Confirm' });
+    const box = confirm.getBoundingClientRect();
+    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    await expect(confirm.contains(hit)).toBe(true);
   },
 };

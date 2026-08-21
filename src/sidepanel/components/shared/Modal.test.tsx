@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import Modal from './Modal';
+import Modal, { MODAL_LAYER_ID } from './Modal';
 
 function renderModal(overrides: Partial<React.ComponentProps<typeof Modal>> = {}) {
   const onClose = vi.fn();
@@ -159,5 +159,80 @@ describe('Modal exit transition', () => {
     // Gone in the same commit, with no exit hold scheduled.
     expect(rawPanel()).toBeNull();
     expect(vi.getTimerCount()).toBe(timersWhileOpen);
+  });
+});
+
+/**
+ * D-009. `ActivityBar` is a `fixed bottom-0 z-50` band and `Modal`'s overlay is
+ * `fixed inset-0 z-50` — the same rung of the ladder, so whichever comes later in
+ * the document paints on top. Every tab panel that hosts a modal sits *before* the
+ * bar inside the app's scroll root, so the bar covered open modals' footer actions.
+ *
+ * The property under test is therefore document position, not any class or style:
+ * the overlay must leave the scroll root for the shell's modal layer, which is
+ * mounted after it.
+ */
+describe('Modal stacking', () => {
+  const shellNodes: HTMLElement[] = [];
+
+  afterEach(() => {
+    shellNodes.splice(0).forEach((node) => node.remove());
+  });
+
+  /** A shell shaped like `App`: the scroll root, then the modal layer after it. */
+  function mountShell() {
+    const scrollRoot = document.body.appendChild(document.createElement('div'));
+    const layer = document.body.appendChild(document.createElement('div'));
+    layer.id = MODAL_LAYER_ID;
+    shellNodes.push(scrollRoot, layer);
+    return { scrollRoot, layer };
+  }
+
+  /** A modal followed by the activity bar — the order every tab panel produces. */
+  const shellContent = (
+    <>
+      <Modal isOpen title="Compare users" onClose={vi.fn()}>
+        <button>Inside action</button>
+      </Modal>
+      <div data-testid="activity-bar" />
+    </>
+  );
+
+  it('renders its overlay into the modal layer, outside the scrolling shell', () => {
+    const { scrollRoot, layer } = mountShell();
+
+    render(shellContent, { container: scrollRoot });
+
+    const dialog = screen.getByRole('dialog');
+    expect(scrollRoot.contains(dialog)).toBe(false);
+    expect(layer.contains(dialog)).toBe(true);
+  });
+
+  it('places its overlay after the activity bar in document order', () => {
+    const { scrollRoot } = mountShell();
+
+    render(shellContent, { container: scrollRoot });
+
+    const dialog = screen.getByRole('dialog');
+    const activityBar = screen.getByTestId('activity-bar');
+    // Later in the document at an equal z-index = painted on top.
+    expect(
+      Boolean(
+        activityBar.compareDocumentPosition(dialog) & activityBar.DOCUMENT_POSITION_FOLLOWING,
+      ),
+    ).toBe(true);
+  });
+
+  it('renders in place when no shell declares a modal layer', () => {
+    // Isolated component tests and Storybook stories have no app shell; the modal
+    // stays inside the render container so canvas-scoped queries (and the story
+    // axe run) still reach it.
+    const { container } = render(
+      <Modal isOpen title="Compare users" onClose={vi.fn()}>
+        <button>Inside action</button>
+      </Modal>,
+    );
+
+    expect(container.contains(screen.getByRole('dialog'))).toBe(true);
   });
 });

@@ -10,8 +10,35 @@
  * `isOpen` flips false, but is removed from the accessible tree (`aria-hidden` +
  * `inert`) for that whole window, so nothing can be queried, focused, or clicked
  * on a modal that is on its way out.
+ *
+ * ## Where the overlay renders, and the z-index ladder
+ *
+ * The panel's fixed bands stack in this order (all in the root stacking context):
+ *
+ * | Band                       | z-index |
+ * | -------------------------- | ------- |
+ * | `PageHeader` (sticky)      | `z-20`  |
+ * | `ActionBar` (sticky)       | `z-30`  |
+ * | `TabNavigation` rail       | `z-40`  |
+ * | `ActivityBar` / this modal | `z-50`  |
+ *
+ * The modal and the `ActivityBar` share the top band, so **DOM order decides**
+ * which of the two paints on top. The `ActivityBar` is a `fixed bottom-0 z-50`
+ * band, and every tab panel that hosts a modal used to precede it inside the app's
+ * scroll root — so the bar painted over the bottom of any open modal, footer
+ * action buttons included (D-009).
+ *
+ * The overlay therefore renders through a portal into the app shell's **modal
+ * layer** ({@link MODAL_LAYER_ID}) — a node the shell mounts *after* the scroll
+ * root. A modal is then never subject to an ancestor's DOM order, stacking
+ * context, `overflow` or `transform`, whichever tab it was opened from, so a
+ * fifteenth modal cannot reintroduce the bug. When no layer is declared — an
+ * isolated component test or a Storybook story, where the modal is the only thing
+ * on the page — the overlay renders in place, so canvas-scoped queries and the
+ * story's axe run still see it.
  */
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Icon from '../overview/shared/Icon';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -40,6 +67,14 @@ const sizeClasses = {
   lg: 'max-w-lg',
   xl: 'max-w-xl',
 };
+
+/**
+ * `id` of the app shell's modal layer: the node every {@link Modal} overlay is
+ * portalled into. Mounted by `App` as a sibling *after* the scroll root, so an
+ * overlay always paints above the equally-ranked `ActivityBar` (see the module
+ * header's z-index ladder). Nothing else may render into it.
+ */
+export const MODAL_LAYER_ID = 'okta-unbound-modal-layer';
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -195,7 +230,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer,
 
   if (!present) return null;
 
-  return (
+  const overlay = (
     <div
       className={`fixed inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center z-50 isolate ${
         closing ? 'animate-overlay-out pointer-events-none' : 'animate-overlay-in'
@@ -246,6 +281,15 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer,
       </div>
     </div>
   );
+
+  // Resolved here, on the render that actually shows the overlay, rather than
+  // latched when the component mounts: nearly every Modal instance mounts closed
+  // during the shell's first commit — before the layer node exists — and only
+  // reaches this line later, when the user opens it. A read-only lookup of a
+  // shell-owned node that lives for the life of the panel, so it is stable for as
+  // long as the overlay is on screen (no re-parenting mid-life).
+  const layer = document.getElementById(MODAL_LAYER_ID);
+  return layer ? createPortal(overlay, layer) : overlay;
 };
 
 export default Modal;
