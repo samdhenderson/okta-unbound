@@ -118,6 +118,28 @@ async function openTab(uev: ReturnType<typeof userEvent.setup>, label: string) {
   await uev.click(within(screen.getByRole('tablist')).getByRole('tab', { name: label }));
 }
 
+/**
+ * How long a wait that crosses a tab's **first** activation gets.
+ *
+ * Every tab in this file is lazy, which is the whole point of the suite — so the
+ * first `openTab` for a given tab pays a dynamic `import()` that later ones do
+ * not. Testing Library's default `findBy*` budget is 1s, which is under that
+ * cost whenever the module graph is cold or the machine is loaded. That is why
+ * this file passed inside a full-suite run (some earlier file had already warmed
+ * the chunk) and failed when run on its own. The budget below is the wait these
+ * call sites always meant; it matches the explicit budgets already used for
+ * multi-step loads in `UsersTab.test.tsx` and `UserComparisonModal.test.tsx`.
+ */
+const TAB_MOUNT_TIMEOUT = 5000;
+
+/** A group row, once the Groups tab's lazy chunk has mounted and its cache read has landed. */
+const groupRow = (name: string) =>
+  screen.findByLabelText(`Select ${name}`, {}, { timeout: TAB_MOUNT_TIMEOUT });
+
+/** A heading that exists only once its own lazy tab chunk has mounted. */
+const tabHeading = (name: string) =>
+  screen.findByRole('heading', { name }, { timeout: TAB_MOUNT_TIMEOUT });
+
 /** Drill into a group row: expand it, then open its detail view. */
 async function drillInto(uev: ReturnType<typeof userEvent.setup>, name: string) {
   const row = screen.getByLabelText(`Select ${name}`).closest('[data-group-id]') as HTMLElement;
@@ -194,7 +216,7 @@ describe('App tab lifetime', () => {
     ).not.toBeInTheDocument();
 
     await openTab(uev, 'Groups');
-    expect(await screen.findByLabelText('Select Engineering')).toBeInTheDocument();
+    expect(await groupRow('Engineering')).toBeInTheDocument();
   });
 
   it('keeps a visited tab mounted (hidden) after switching away', async () => {
@@ -202,10 +224,10 @@ describe('App tab lifetime', () => {
     renderApp();
 
     await openTab(uev, 'Groups');
-    const row = await screen.findByLabelText('Select Engineering');
+    const row = await groupRow('Engineering');
 
     await openTab(uev, 'Rules');
-    await screen.findByRole('heading', { name: 'Group Rules' });
+    await tabHeading('Group Rules');
 
     // Still in the document, just inside a hidden panel — not unmounted.
     expect(row).toBeInTheDocument();
@@ -217,7 +239,7 @@ describe('App tab lifetime', () => {
     renderApp();
 
     await openTab(uev, 'Groups');
-    await screen.findByLabelText('Select Engineering');
+    await groupRow('Engineering');
 
     // Accumulate the state the bug report says is lost: a search filter, a
     // selected row, and a pushed detail view.
@@ -231,7 +253,7 @@ describe('App tab lifetime', () => {
 
     // The trip that used to lose it all.
     await openTab(uev, 'Rules');
-    await screen.findByRole('heading', { name: 'Group Rules' });
+    await tabHeading('Group Rules');
     await openTab(uev, 'Groups');
 
     // Same detail view, still open, on the same group.
@@ -253,7 +275,7 @@ describe('App tab lifetime', () => {
     renderApp();
 
     await openTab(uev, 'Groups');
-    await screen.findByLabelText('Select Engineering');
+    await groupRow('Engineering');
     const cacheReads = storageGet.mock.calls.filter(
       ([keys]) => Array.isArray(keys) && keys.includes(GROUPS_CACHE_KEY),
     ).length;
@@ -275,7 +297,7 @@ describe('App tab lifetime', () => {
     renderApp();
 
     await openTab(uev, 'Groups');
-    await screen.findByLabelText('Select Engineering');
+    await groupRow('Engineering');
 
     // Every root-scrolling tab shares this one element, which is precisely why the
     // offset has to be banked per tab rather than read back off the container.
@@ -283,7 +305,7 @@ describe('App tab lifetime', () => {
     scrollTo(root, 240);
 
     await openTab(uev, 'Rules');
-    await screen.findByRole('heading', { name: 'Group Rules' });
+    await tabHeading('Group Rules');
     scrollTo(root, 90);
 
     await openTab(uev, 'Groups');
@@ -298,7 +320,7 @@ describe('App tab lifetime', () => {
     renderApp();
 
     await openTab(uev, 'Groups');
-    await screen.findByLabelText('Select Engineering');
+    await groupRow('Engineering');
     const root = scrollRoot();
     scrollTo(root, 320);
 
@@ -313,11 +335,11 @@ describe('App tab lifetime', () => {
     renderApp();
 
     await openTab(uev, 'Apps');
-    await screen.findByRole('heading', { name: 'Applications' });
+    await tabHeading('Applications');
     await waitFor(() => expect(appCalls()).toBeGreaterThan(0));
 
     await openTab(uev, 'Groups');
-    await screen.findByLabelText('Select Engineering');
+    await groupRow('Engineering');
     const before = appCalls();
 
     // Re-target the panel at a different Okta tab on the SAME org. That re-arms the
@@ -339,11 +361,11 @@ describe('App tab lifetime', () => {
     renderApp();
 
     await openTab(uev, 'Apps');
-    await screen.findByRole('heading', { name: 'Applications' });
+    await tabHeading('Applications');
     await waitFor(() => expect(appCalls()).toBeGreaterThan(0));
 
     await openTab(uev, 'Groups');
-    await screen.findByLabelText('Select Engineering');
+    await groupRow('Engineering');
     const before = appCalls();
 
     // A different org is a cache miss by construction — the inventory is keyed by
