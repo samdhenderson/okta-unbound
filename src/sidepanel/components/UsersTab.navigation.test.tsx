@@ -445,7 +445,15 @@ describe('UsersTab sub-navigation', () => {
     );
     // The deep link targets a profile, so it lands on that user's detail rung —
     // named in the header — rather than dropping the reader back at the search box.
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Ada Lovelace');
+    //
+    // Awaited, not asserted synchronously: the `waitFor` above is satisfied the
+    // instant `resetNav()` pops the comparison, which happens *before* the
+    // `loadUserById` it precedes has resolved. Reading the header on the very next
+    // line therefore raced the load and saw the root title `User Search` whenever
+    // the runner was slow enough to interleave there.
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Ada Lovelace'),
+    );
     expect(screen.getByRole('button', { name: /Compare/ }).closest('div.hidden')).toBeNull();
   });
 

@@ -207,9 +207,33 @@ const DETECTED_BANNER = 'Open in admin';
  * pill for every bucket (`Rule`, `Direct`, `App`, `Unresolved`), so an unscoped
  * query for a verdict finds the pill instead of the row's answer — and an
  * unscoped *negative* would fail against the pill for the wrong reason.
+ *
+ * **Async on purpose — do not make this a bare `getByRole` again.** Callers used to
+ * await `findByText(groupName)` first and then call a synchronous version of this
+ * helper. That wait did not wait: the fixtures give the user a `department` of
+ * `Engineering` *and* a group named `Engineering`, and the detail rung keeps all
+ * three panes mounted (ADR-0018), so `findByText('Engineering')` resolved against
+ * the Profile pane's department `<span>` the moment the user was selected — while
+ * the membership list was still loading and no `<h4>` existed at all. The row
+ * lookup then raced the membership load and lost whenever the runner was slow
+ * enough, which is why this passed locally and failed on CI. Waiting on the row's
+ * own heading is the wait the callers always meant.
+ *
+ * The explicit timeout matches the `findByText('Ada Lovelace', …, { timeout: 2000 })`
+ * the same tests already use to await the search results. Reaching a row costs a
+ * three-request chain — user search, then `/users/{id}/groups`, then the rules read
+ * the analysis needs — so RTL's 1000ms default is the wrong budget for it on a
+ * loaded runner. Every assertion the callers make is unchanged; only the patience
+ * of the wait is.
  */
-function membershipRow(groupName: string): HTMLElement {
-  const heading = screen.getByRole('heading', { level: 4, name: groupName });
+const MEMBERSHIP_ROW_TIMEOUT_MS = 5000;
+
+async function membershipRow(groupName: string): Promise<HTMLElement> {
+  const heading = await screen.findByRole(
+    'heading',
+    { level: 4, name: groupName },
+    { timeout: MEMBERSHIP_ROW_TIMEOUT_MS },
+  );
   const row = heading.closest('[data-group-id]');
   expect(row).not.toBeNull();
   return row as HTMLElement;
@@ -476,10 +500,9 @@ describe('membership classification (in-file heuristic)', () => {
     const card = await screen.findByText('Ada Lovelace', {}, { timeout: 2000 });
     fireEvent.click(card);
 
-    expect(await screen.findByText('Salesforce')).toBeInTheDocument();
     // An app-mastered group is still not reported as a manual add: `App` is the
     // RULE_BASED-with-no-rule branch of the classifier, named for what it is.
-    const salesforce = membershipRow('Salesforce');
+    const salesforce = await membershipRow('Salesforce');
     expect(within(salesforce).getByText('App')).toBeInTheDocument();
     expect(within(salesforce).queryByText(/^Direct/)).not.toBeInTheDocument();
   });
@@ -492,8 +515,7 @@ describe('membership classification (in-file heuristic)', () => {
     fireEvent.change(userSearchInput(), { target: { value: 'ada' } });
     fireEvent.click(await screen.findByText('Ada Lovelace', {}, { timeout: 2000 }));
 
-    expect(await screen.findByText('Engineering')).toBeInTheDocument();
-    expect(within(membershipRow('Engineering')).getByText('Rule')).toBeInTheDocument();
+    expect(within(await membershipRow('Engineering')).getByText('Rule')).toBeInTheDocument();
     // Named twice by design (ADR-0030's B2 row): once in the always-visible
     // answer chip, once as the navigable chip inside the evidence disclosure.
     expect(screen.getAllByText(/Eng auto-assign/).length).toBeGreaterThan(0);
@@ -507,8 +529,7 @@ describe('membership classification (in-file heuristic)', () => {
     fireEvent.change(userSearchInput(), { target: { value: 'ada' } });
     fireEvent.click(await screen.findByText('Ada Lovelace', {}, { timeout: 2000 }));
 
-    expect(await screen.findByText('Engineering')).toBeInTheDocument();
-    expect(within(membershipRow('Engineering')).getByText('Direct')).toBeInTheDocument();
+    expect(within(await membershipRow('Engineering')).getByText('Direct')).toBeInTheDocument();
     // The row now states this in the wording `membershipSourceLine` gives every
     // surface, rather than a sentence unique to this one. It also stops
     // overclaiming: a `DIRECT` the classifier only *inferred* reads "Likely
@@ -529,8 +550,7 @@ describe('membership classification (in-file heuristic)', () => {
     fireEvent.change(userSearchInput(), { target: { value: 'ada' } });
     fireEvent.click(await screen.findByText('Ada Lovelace', {}, { timeout: 2000 }));
 
-    expect(await screen.findByText('Engineering')).toBeInTheDocument();
-    expect(within(membershipRow('Engineering')).getByText('Direct')).toBeInTheDocument();
+    expect(within(await membershipRow('Engineering')).getByText('Direct')).toBeInTheDocument();
     expect(screen.queryByText('Eng auto-assign')).not.toBeInTheDocument();
   });
 
@@ -554,8 +574,7 @@ describe('membership classification (in-file heuristic)', () => {
     fireEvent.change(userSearchInput(), { target: { value: 'ada' } });
     fireEvent.click(await screen.findByText('Ada Lovelace', {}, { timeout: 2000 }));
 
-    expect(await screen.findByText('Engineering')).toBeInTheDocument();
-    const engineering = membershipRow('Engineering');
+    const engineering = await membershipRow('Engineering');
     expect(within(engineering).getByText('Unresolved')).toBeInTheDocument();
     // Scoped to the row on purpose: the pane header now offers a `Direct` filter
     // pill, so an unscoped negative would match the pill and fail for a reason
