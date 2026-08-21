@@ -247,6 +247,42 @@ export const OpenDisclosure: Story = {
   },
 };
 
+/**
+ * A condition that asks whether the user is in *another* group. The pane already
+ * holds their whole membership list, so it hands that list to the checklist and
+ * the clause resolves — where it used to read "Cannot be determined" on every
+ * row, while Compare Users answered the identical question for the same rule and
+ * user.
+ *
+ * The group named by the clause (`Ops Handbook`) is a row further down this same
+ * list, which is precisely why the answer is knowable here.
+ */
+export const GroupClauseResolvedFromMemberships: Story = {
+  args: {
+    memberships: [
+      {
+        ...ruleExact,
+        rules: [
+          rule(
+            '0prFAKErule00007',
+            'Handbook readers → Engineering',
+            'isMemberOfAnyGroup("00gFAKE00000000000004")',
+          ),
+        ],
+      },
+      direct,
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Show how Engineering Staff was granted' }),
+    );
+    await expect(canvas.getByText('Rule matches this user')).toBeInTheDocument();
+    await expect(canvas.queryByText('Cannot be determined')).not.toBeInTheDocument();
+  },
+};
+
 /** Skeleton rows while the memberships load, so nothing shifts when they land. */
 export const Loading: Story = {
   args: { memberships: [], isLoading: true },

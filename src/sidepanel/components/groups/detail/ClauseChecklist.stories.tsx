@@ -46,6 +46,10 @@ const meta = {
     },
     user: { description: 'The user the condition is explained against.' },
     maxClauses: { description: "Cap on clause rows; defaults to the explainer's 64." },
+    groupContext: {
+      description:
+        "The user's **complete** group list, which turns `isMemberOf*` from a neutral “Not evaluated” into a real verdict. Omit it rather than passing a subset — a group missing from the list is read as a confident “they are not in it”.",
+    },
   },
   args: { expression: 'user.department == "Engineering"', user },
 } satisfies Meta<typeof ClauseChecklist>;
@@ -62,11 +66,35 @@ export const Fail: Story = {
 };
 
 /**
- * A group-membership call the evaluator cannot resolve. It renders neutrally as
- * "Not evaluated" and is counted as needing group context — never as a failure.
+ * A group-membership call with **no `groupContext` supplied**, so the evaluator
+ * has nothing to resolve it against. It renders neutrally as "Not evaluated" and
+ * is counted as needing group context — never as a failure.
  */
 export const NotEvaluated: Story = {
   args: { expression: 'isMemberOfGroup("00gFAKE1")' },
+};
+
+/**
+ * The same clause once the caller supplies the user's complete group list: it
+ * resolves instead of declining. This is what the Users tab's Groups pane now
+ * shows, because that pane holds the whole list already.
+ */
+export const GroupClauseResolved: Story = {
+  args: {
+    expression: 'isMemberOfAnyGroup("00gFAKE1")',
+    groupContext: [{ id: '00gFAKE1', name: 'Engineering' }],
+  },
+};
+
+/**
+ * A group *absent* from that complete list is a confident "not a member", not an
+ * unknown — which is exactly why a partial list must never be passed.
+ */
+export const GroupClauseResolvedToFail: Story = {
+  args: {
+    expression: 'isMemberOfAnyGroup("00gFAKE9")',
+    groupContext: [{ id: '00gFAKE1', name: 'Engineering' }],
+  },
 };
 
 /** Pass, fail and not-evaluated side by side: an unevaluable sibling never taints the rest. */

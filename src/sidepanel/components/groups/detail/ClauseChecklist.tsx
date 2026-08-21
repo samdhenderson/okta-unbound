@@ -18,6 +18,11 @@
  * as "this person does not qualify" would be a worse bug than the one this view
  * exists to fix, because an administrator acts on the answer.
  *
+ * A caller that already holds the user's **complete** group list can pass it as
+ * {@link ClauseChecklistProps.groupContext}, and the `isMemberOf*` clauses then
+ * carry a real verdict instead of that neutral row. A *partial* list must never be
+ * passed: see the prop's own doc comment.
+ *
  * ## `undefined` and `null` are different facts
  *
  * {@link ClauseExplanation.resolvedValue} distinguishes "nothing was resolvable"
@@ -41,7 +46,7 @@ import {
   type ClauseStatus,
   type RuleExplanationSummary,
 } from '../../../../shared/rules/explainExpression';
-import type { RuleExprValue } from '../../../../shared/ruleEvaluator';
+import type { RuleExprValue, RuleGroupContext } from '../../../../shared/ruleEvaluator';
 import { UNEVALUABLE_REASON_TEXT } from '../../../../shared/rules/unevaluableReasonText';
 import type { OktaUser } from '../../../../shared/types';
 
@@ -63,6 +68,22 @@ interface ClauseChecklistProps {
    * rather than showing a silent partial list.
    */
   maxClauses?: number;
+  /**
+   * The user's **complete** group list, which turns every `isMemberOf*` clause
+   * from a neutral "Not evaluated" into a real `pass` or `fail`. Build it with
+   * `shared/membership/groupContext.groupContextOf`.
+   *
+   * **Omit it rather than passing a subset.** `isMemberOf*` is two-valued over
+   * the list it is given (ADR-0021): a group missing from here is not "unknown",
+   * it is a confident "they are not in it". A filtered or still-loading list
+   * would therefore report groups the user *is* in as clauses they failed —
+   * worse than the honest "Cannot be determined" this prop replaces.
+   *
+   * Absent, this view behaves exactly as it did before the prop existed.
+   * `isMemberOfGroupNameRegex` stays unevaluated either way, under its own
+   * `group-name-regex` reason.
+   */
+  groupContext?: RuleGroupContext;
 }
 
 /** Props for {@link ClauseRow}. */
@@ -210,10 +231,15 @@ const ChecklistSummary: React.FC<{ summary: RuleExplanationSummary }> = ({ summa
  * />
  * ```
  */
-const ClauseChecklist: React.FC<ClauseChecklistProps> = ({ expression, user, maxClauses }) => {
+const ClauseChecklist: React.FC<ClauseChecklistProps> = ({
+  expression,
+  user,
+  maxClauses,
+  groupContext,
+}) => {
   const { clauses, summary } = useMemo(
-    () => explainRuleExpression(expression, user, { maxClauses }),
-    [expression, user, maxClauses],
+    () => explainRuleExpression(expression, user, { maxClauses, groups: groupContext }),
+    [expression, user, maxClauses, groupContext],
   );
 
   if (clauses.length === 0) {

@@ -34,6 +34,7 @@ import MembershipRuleEvidence from './MembershipRuleEvidence';
 import MembershipProofAction, { type MembershipProofOutcome } from './GroupMembershipsListProof';
 import { membershipVerdict } from './membershipVerdict';
 import { membershipSourceLine } from '../../../shared/membership/sourceLine';
+import type { RuleGroupContext } from '../../../shared/ruleEvaluator';
 import type { GroupMembership, OktaUser } from '../../../shared/types';
 
 /** Props for {@link GroupMembershipRow}. */
@@ -46,6 +47,16 @@ export interface GroupMembershipRowProps {
    * condition is shown, since an explanation would have nothing to evaluate.
    */
   user?: OktaUser;
+  /**
+   * The same user's **complete** group list, built once by the pane and passed
+   * through unchanged, so an explained condition's `isMemberOf*` clauses resolve
+   * rather than reading "Cannot be determined".
+   *
+   * The row never derives this: it holds one membership, and a context built from
+   * one membership would report every *other* group the user is in as a clause
+   * they failed (ADR-0021).
+   */
+  groupContext?: RuleGroupContext;
   /** Whether this group is the one being browsed elsewhere in the panel. */
   isCurrentGroup: boolean;
   /** Whether the disclosure is open. Owned by the pane, so filtering cannot close a row. */
@@ -79,6 +90,7 @@ export interface GroupMembershipRowProps {
 const GroupMembershipRow: React.FC<GroupMembershipRowProps> = ({
   membership,
   user,
+  groupContext,
   isCurrentGroup,
   expanded,
   onToggle,
@@ -123,7 +135,12 @@ const GroupMembershipRow: React.FC<GroupMembershipRowProps> = ({
 
               {/* 2. The evidence: one card per attributed rule. */}
               {rules.map((rule) => (
-                <MembershipRuleEvidence key={rule.id} rule={rule} user={user} />
+                <MembershipRuleEvidence
+                  key={rule.id}
+                  rule={rule}
+                  user={user}
+                  groupContext={groupContext}
+                />
               ))}
 
               {/*

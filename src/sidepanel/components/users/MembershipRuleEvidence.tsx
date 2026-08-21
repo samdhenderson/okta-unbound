@@ -19,7 +19,7 @@ import React from 'react';
 import type jsep from 'jsep';
 import { Badge, EntityLink, Eyebrow } from '../shared';
 import ClauseChecklist from '../groups/detail/ClauseChecklist';
-import { parseRuleExpression } from '../../../shared/ruleEvaluator';
+import { parseRuleExpression, type RuleGroupContext } from '../../../shared/ruleEvaluator';
 import type { MembershipRule, OktaUser } from '../../../shared/types';
 
 /**
@@ -125,6 +125,18 @@ export interface RuleEvidenceProps {
   rule: MembershipRule;
   /** The user to explain the rule's condition against; omitted, the raw condition is shown. */
   user?: OktaUser;
+  /**
+   * The same user's **complete** group list, so the checklist can resolve
+   * `isMemberOfAnyGroup` / `isMemberOfGroup*` instead of reporting them as
+   * "Cannot be determined". Threaded down from the pane that already holds the
+   * memberships, never rebuilt here — see
+   * {@link sidepanel/components/users/GroupMembershipsList}.
+   *
+   * **Absent is not empty.** Omitted, those clauses stay honestly unevaluated;
+   * a partial list would report groups the user *is* in as clauses they failed
+   * (ADR-0021).
+   */
+  groupContext?: RuleGroupContext;
 }
 
 /**
@@ -132,7 +144,7 @@ export interface RuleEvidenceProps {
  *
  * @param props - See {@link RuleEvidenceProps}.
  */
-const MembershipRuleEvidence: React.FC<RuleEvidenceProps> = ({ rule, user }) => {
+const MembershipRuleEvidence: React.FC<RuleEvidenceProps> = ({ rule, user, groupContext }) => {
   const expression = conditionExpressionOf(rule);
   const attributes = conditionAttributes(expression);
 
@@ -156,7 +168,7 @@ const MembershipRuleEvidence: React.FC<RuleEvidenceProps> = ({ rule, user }) => 
       <div className="mt-2">
         <Eyebrow className="mb-1 block">Condition</Eyebrow>
         {user ? (
-          <ClauseChecklist expression={expression} user={user} />
+          <ClauseChecklist expression={expression} user={user} groupContext={groupContext} />
         ) : (
           <code className="block overflow-x-auto whitespace-pre-wrap break-words rounded-md border border-neutral-200 bg-white p-2 font-mono text-xs text-neutral-900">
             {expression || 'No condition expression'}

@@ -27,6 +27,16 @@
  * held here rather than in the row so that filtering a row out and back in does
  * not close it.
  *
+ * ## The pane is where the group context comes from
+ *
+ * This is the only node in the row → evidence → checklist chain that holds the
+ * user's **whole** membership list, so it is the only one allowed to build the
+ * {@link module:shared/ruleEvaluator.RuleGroupContext} those checklists evaluate
+ * `isMemberOf*` against. It is built once here and threaded down unchanged; the
+ * filtered `visible` list never feeds it, because `isMemberOf*` is two-valued over
+ * whatever list it is given (ADR-0021) and a subset would turn "Cannot be
+ * determined" into a confident wrong answer.
+ *
  * ## Every classification here is a deduction
  *
  * `GET /api/v1/users/{id}/groups` carries no attribution embed (ADR-0020), so
@@ -49,6 +59,7 @@ import {
   type MembershipBucketFilter,
 } from './membershipVerdict';
 import type { MemberRuleAttribution } from '../../../shared/membership/memberRuleAttribution';
+import { groupContextOf } from '../../../shared/membership/groupContext';
 import type { GroupMembership, OktaUser } from '../../../shared/types';
 
 /** The pills, in the order the summary line reads its terms. */
@@ -65,7 +76,11 @@ interface GroupMembershipsListProps {
    * evaluate against.
    */
   user?: OktaUser;
-  /** When true, shows row skeletons instead of the list. */
+  /**
+   * When true, shows row skeletons instead of the list — and withholds the group
+   * context built from `memberships`, which is only the user's complete set once
+   * the load has settled.
+   */
   isLoading: boolean;
   /** Group id to mark as the group being browsed elsewhere in the panel, if any. */
   currentGroupId?: string;
@@ -125,6 +140,24 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
   const visible = useMemo(
     () => filterMemberships(memberships, query, bucket),
     [memberships, query, bucket],
+  );
+
+  // Built once for the whole pane, from `memberships` — never from `visible`, and
+  // never per row. It is the same user's group list for every row, and rebuilding
+  // it per row would re-map it dozens of times (the reason
+  // `accessCause.classifyAccessCauses` builds it once too).
+  //
+  // Deliberately `undefined` while loading. `isMemberOf*` is two-valued over the
+  // list it is given (ADR-0021), so a partial list is not a smaller answer, it is
+  // a wrong one: groups the user really is in would be reported as clauses they
+  // failed. `memberships` is the complete, unfiltered set only once the load has
+  // settled — `useUserMemberships` assigns it in one `setMemberships` after
+  // `getUserGroupsRequest` has followed every `Link` page, and empties it on
+  // failure — so "not loaded yet" hands the checklist nothing and it keeps saying
+  // "Cannot be determined", which is the honest answer.
+  const groupContext = useMemo(
+    () => (isLoading ? undefined : groupContextOf(memberships)),
+    [isLoading, memberships],
   );
 
   const toggleRow = (groupId: string) =>
@@ -221,6 +254,7 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
               key={membership.group.id}
               membership={membership}
               user={user}
+              groupContext={groupContext}
               isCurrentGroup={membership.group.id === currentGroupId}
               expanded={openGroupIds.has(membership.group.id)}
               onToggle={toggleRow}
