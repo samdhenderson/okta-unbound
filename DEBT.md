@@ -49,7 +49,7 @@ Format:
   now resolving correctly — prove it fails without the fix first.
 - **Risk:** Low-medium — additive data threading through 4 files, no
   evaluator changes.
-- **Status:** claimed:claude/stoic-gates-v1ccfh
+- **Status:** done:#67
 
 ### D-002 · Dedupe the group-context builder duplicated in two files
 
@@ -66,7 +66,7 @@ Format:
   file; both existing call sites import it. Do this before or alongside
   D-001 so D-001 reuses the shared helper rather than adding a fourth copy.
 - **Risk:** Low.
-- **Status:** claimed:claude/stoic-gates-v1ccfh
+- **Status:** done:#67
 
 ### D-003 · Silent app-label resolution failures in pushGroupOps
 
@@ -102,7 +102,7 @@ Format:
   stays green.
 - **Risk:** Medium — touches audit logging; route through
   `security-logging-reviewer` before merge.
-- **Status:** claimed:claude/stoic-gates-v1ccfh
+- **Status:** done:#67
 
 ### D-005 · useRuleImpact.ts has zero test coverage on its race guards
 
@@ -303,7 +303,7 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
 - **Risk:** Low — test-only, and strictly strengthening: each wait is on the
   element its caller goes on to assert against, for longer. No assertion
   weakened or removed (ADR-0012).
-- **Status:** done:#PR
+- **Status:** done:#67
 
 ### D-012 · `conditionExpressionOf` is replicated in four files
 
