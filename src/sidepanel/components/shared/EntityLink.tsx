@@ -26,12 +26,25 @@
  * ({@link sidepanel/contexts/NavigationContext.EntityNavigation.canNavigateTo}),
  * so a link is never a control that does nothing.
  *
+ * ## Copying the raw id
+ *
+ * Set `copyId` and the chip gains a sibling ghost copy control for the raw Okta id —
+ * name badge, copy-id, and open-in-detail from one import, for the views that show a
+ * resolved name but still need the id itself to paste into a ticket or a search.
+ * The control is a *sibling* of the chip, never a child: the chip is a `<button>`, and
+ * a button inside a button is neither valid HTML nor reachable. It appears only when an
+ * `id` is present — with nothing to copy there is no half-working control, only the name.
+ * An id that exists but cannot be navigated to still copies: `copyId` follows the id,
+ * `open` follows navigability, and the two are independent.
+ *
  * Entity names are end-user-controllable Okta data: they are rendered as React
  * text (escaped) and truncate rather than overflow their row.
  */
 import React from 'react';
 import Icon, { type IconType } from '../overview/shared/Icon';
+import IconButton from './IconButton';
 import { useEntityNavigation, type EntityType } from '../../contexts/NavigationContext';
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 
 /** The glyph that identifies each entity kind, from the shared `Icon` registry. */
 const typeIcon: Record<EntityType, IconType> = {
@@ -69,6 +82,19 @@ export interface EntityLinkProps {
    * groups, a group that lives in another product).
    */
   unlinkableReason?: string;
+  /**
+   * Show a ghost copy-to-clipboard control for the raw `id` beside the chip. Ignored
+   * when no `id` is given — there would be nothing to copy, and an affordance that
+   * cannot work is worse than none. Independent of whether the chip itself is
+   * openable: an id this build cannot navigate to is still an id worth copying.
+   */
+  copyId?: boolean;
+  /**
+   * Accessible name for that copy control, e.g. `"Copy group id"`. Defaults to
+   * `"Copy <type> id for <name>"` — several of these can share a screen, so the name
+   * has to say copy *what*, the way {@link CopyableId}'s required `label` does.
+   */
+  copyIdLabel?: string;
   /** Extra classes merged after the chip classes. */
   className?: string;
   /** Optional test handle. */
@@ -80,11 +106,14 @@ const sharedClasses = 'inline-flex max-w-full items-center gap-1 text-xs font-me
 
 /**
  * A reference to another entity: a chip that opens it, or plain text when it
- * cannot be opened.
+ * cannot be opened — optionally beside a copy control for its raw id.
  *
  * @example
  * ```tsx
  * <EntityLink type="rule" id={rule.id} name={rule.name} />
+ *
+ * // Name badge + copy-id + open, from one import:
+ * <EntityLink type="group" id={group.id} name={group.profile.name} copyId />
  *
  * // A rule condition names a group but carries no id:
  * <EntityLink
@@ -99,29 +128,16 @@ const EntityLink: React.FC<EntityLinkProps> = ({
   id,
   name,
   unlinkableReason,
+  copyId = false,
+  copyIdLabel,
   className = '',
   testId,
 }) => {
   const { navigateTo, canNavigateTo } = useEntityNavigation();
+  const { copied, copy } = useCopyToClipboard();
   const linkable = Boolean(id) && canNavigateTo(type);
 
-  if (!linkable) {
-    return (
-      <span
-        className={`${sharedClasses} text-neutral-700 border-b border-dotted border-neutral-400 ${className}`}
-        title={
-          unlinkableReason ??
-          `${name} — no ${typeNoun[type]} id is available for this reference, so it cannot be opened.`
-        }
-        data-testid={testId}
-      >
-        <Icon type={typeIcon[type]} size="xs" className="shrink-0 text-neutral-500" />
-        <span className="truncate">{name}</span>
-      </span>
-    );
-  }
-
-  return (
+  const chip = linkable ? (
     <button
       type="button"
       onClick={() => navigateTo({ type, id: id as string })}
@@ -145,6 +161,42 @@ const EntityLink: React.FC<EntityLinkProps> = ({
       <span className="truncate">{name}</span>
       <Icon type="chevron-right" size="xs" className="shrink-0 opacity-60" />
     </button>
+  ) : (
+    <span
+      className={`${sharedClasses} text-neutral-700 border-b border-dotted border-neutral-400 ${className}`}
+      title={
+        unlinkableReason ??
+        `${name} — no ${typeNoun[type]} id is available for this reference, so it cannot be opened.`
+      }
+      data-testid={testId}
+    >
+      <Icon type={typeIcon[type]} size="xs" className="shrink-0 text-neutral-500" />
+      <span className="truncate">{name}</span>
+    </span>
+  );
+
+  // No id means nothing to copy, so the affordance is absent rather than inert.
+  if (!copyId || !id) return chip;
+
+  // Sibling, not child: the chip is a `<button>`, and nesting one inside it would
+  // be invalid HTML and unreachable for assistive tech.
+  return (
+    <span className="inline-flex min-w-0 max-w-full items-center gap-1">
+      {chip}
+      <IconButton
+        label={copied ? 'Copied!' : (copyIdLabel ?? `Copy ${typeNoun[type]} id for ${name}`)}
+        onClick={() => copy(id)}
+        variant="ghost"
+        size="sm"
+        className="shrink-0"
+      >
+        <Icon
+          type={copied ? 'clipboard-check' : 'clipboard'}
+          size="sm"
+          className={copied ? 'text-success-text' : ''}
+        />
+      </IconButton>
+    </span>
   );
 };
 
