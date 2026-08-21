@@ -17,6 +17,87 @@ Entry format:
 
 ---
 
+## 2026-08-21 (sixth run)
+
+**Baseline:** green — the whole ladder. type-check 0 errors, lint 0 errors /
+147 warnings, format clean, 213 test files / 2995 tests with thresholds met, 0
+cycles, control-chars clean over 839 files, cited-paths clean over 50,
+`test:storybook` 149 files / 1042 tests. GitHub's own run history shows the
+`CI` workflow `success` on `main`'s tip (`c2d0109`), so the local ladder and
+CI agree for once — worth stating, because the last two nights they did not.
+
+`node_modules` was absent again on this fresh container. `npm ci` first; the
+previous entry's note about that saved a false alarm.
+
+**Items worked:** `D-018`, `D-019`, `D-016`.
+
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/72
+
+**Backlog after:** 14 open / 33 total — 9 IMPROVEMENTS (6 open, 1 blocked, 2
+done), 24 DEBT (8 open, 3 blocked, 13 done). 4 blocked, unchanged (`I-008`
+needs-breakdown, `D-007` needs-breakdown, `D-008` needs-human, `D-013`
+needs-human). 3 closed tonight as `done:#72`; 2 new items filed (`D-023`,
+`D-024`), so the open count nets out flat at 14.
+
+**Notes:**
+
+**The branch is `claude/stoic-gates-w2uo22`, not `nightly/2026-08-21`.** This
+session's harness assigns it a branch and forbids pushing anywhere else, which
+overrides `SESSION.md`'s naming. No other step deviated. It also sidesteps a
+collision that `nightly/YYYY-MM-DD` would have hit anyway — this is the sixth
+run under one date.
+
+**`D-018` would have shipped hollow if the Done-when had been read literally.**
+Its text asks for the ledgers in `IN_SCOPE` and the gate green with them there.
+Doing exactly that passes — and catches nothing, because `SRC_PATH_RE`'s
+character class has no `:` and the ledgers cite `path.ts:311` almost
+everywhere. All three dead citations the item was filed about carried a `:NN`
+suffix, so the literal fix would have left the gate structurally unable to see
+its own motivating examples while reporting green over four more files. That is
+worse than not fixing it. **Read an item's Problem section for what the fix is
+_for_, and check the Done-when can actually be satisfied non-vacuously before
+handing it to a writer.** The probe that settles it is cheap: append a citation
+of a nonexistent path in the form the corpus really uses, and confirm the gate
+goes red.
+
+**`D-024` is the same gap one step out** and is filed rather than folded in:
+nothing outside `src/` is checked at all, including `D-018`'s own Files list.
+
+**Two commits ran while another writer agent was still live**, because the lead
+commits each item as its agent reports and the others keep working. `lint-staged`
+opens every run by stashing the whole unstaged working tree and restoring it
+afterwards, so those agents' edits were briefly off disk. Everything restored
+cleanly and nothing was lost, but it is a live race and the failure mode is
+silent. Filed as `D-023`. Until it lands: **don't commit while a writer agent is
+still running**, or accept that its file may be missing under it for the length
+of a `vitest related` run.
+
+`D-021`'s `pkill` trap was avoided by instructing every agent not to run `pkill`
+at all — three ran concurrently and a stray `pkill -f vitest` from any one would
+have killed the others' runs and its own shell. That worked; the item is still
+open and still worth fixing properly.
+
+**A push before the review step cost a commit.** `SESSION.md` step 5 says to fix
+review findings by amending the item's own commit. The `D-016` commit had
+already been pushed by then, so amending it would have needed a force-push,
+which `CLAUDE.md` forbids outright. The fix went in as a fourth commit with the
+deviation stated in its message and the PR body. **Don't push item commits
+before step 5 has run** — or accept the extra commit.
+
+On the work itself: every claim in this PR is backed by mutation, not
+inspection. `D-019`'s two log lines each go red only for their own test;
+`D-016`'s branch assertions were proved by disabling the portal lookup in
+`Modal.tsx` and confirming exactly the portal-configuration cases fail and zero
+fallback cases do. `D-016` also turned up something the item did not mention:
+the file had **no Tab-trap test at all**, despite the focus trap being part of
+the contract `CLAUDE.md` names. It has one now, in both configurations.
+
+`D-020` is the obvious next pick — it is the other half of `D-019` and the
+ledger says to take them in that order. `D-021` and `D-022` are both cheap. The
+`I-002`/`I-003` off-limits note from the previous entry still stands.
+
+---
+
 ## 2026-08-21 (fifth run)
 
 **Baseline:** green — the whole ladder, including `test:storybook` (149 files

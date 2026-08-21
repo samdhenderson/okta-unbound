@@ -422,7 +422,7 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   parametrising the existing describes over both configurations is the
   cheapest route. No existing assertion weakened or deleted (ADR-0012).
 - **Risk:** Low — test-only, strictly additive coverage.
-- **Status:** open
+- **Status:** done:#72
 
 ### D-017 · The `storybook` CI job is red on `main` — a story file dies on a mid-run dep re-optimization
 
@@ -512,7 +512,7 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   reason in the script's header comment either way.
 - **Risk:** Low — one predicate in a lint script, no product code. The only
   real work is whatever dead citations it surfaces on first run.
-- **Status:** open
+- **Status:** done:#72
 
 ### D-019 · The non-throwing half of app-label resolution is still silent
 
@@ -543,7 +543,7 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
 - **Risk:** Low — logging plus one outcome check, no change to the degrade
   behavior itself. Touches logging, so route through
   `security-logging-reviewer`.
-- **Status:** open
+- **Status:** done:#72
 
 ### D-020 · pushGroupOps reads an Okta app response unvalidated, one call away from a validated helper
 
@@ -633,4 +633,70 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   deliberately as a guard against a React downgrade. Do **not** delete the
   assertion outright: the surviving half is real, and ADR-0012 applies.
 - **Risk:** Low. Cosmetic in effect — no coverage changes either way.
+- **Status:** open
+
+### D-023 · `lint-staged` stashes the working tree mid-commit, racing concurrent writer agents
+
+- **Category:** standards
+- **Priority:** P2
+- **Size:** S
+- **Files:** `package.json` (the `lint-staged` config), `.husky/pre-commit`
+- **Problem:** Same family as `D-021`, found the same way — by it nearly
+  biting. `lint-staged` opens every run with "Backing up original state... in
+  git stash", which stashes **unstaged** changes across the whole working
+  tree, runs its tasks, then restores them. `SESSION.md` step 4 explicitly
+  permits running writer agents in parallel when their files are disjoint, and
+  the session lead commits each item as its agent reports. So a commit for
+  item A routinely runs while agent B still has uncommitted edits to its own
+  file — and for the duration of A's `vitest related` run (tens of seconds),
+  B's edits are not on disk. If B reads, writes, or runs a test against its
+  file inside that window it sees the pre-edit content, and a write lands on a
+  tree that is about to be overwritten by the stash pop.
+  Observed on 2026-08-21 (6th run): two commits ran while another agent was
+  live. Both restored cleanly and nothing was lost, so this is a latent race,
+  not a confirmed loss — but the failure mode is silent and would present as
+  "the agent's edit vanished", which is exactly the kind of thing that gets
+  misdiagnosed as the agent misbehaving.
+  Note this is **not** a reason to stop parallelising writers; it is a reason
+  the lead should not commit while a writer is live, or the hook should not
+  stash what it does not need.
+- **Done when:** Either the sequencing rule is written down where a nightly
+  session will read it (`SESSION.md` step 4, plus `CONVENTIONS.md` if the
+  agent files repeat it) — "do not commit while another writer agent is
+  live" — or `lint-staged` is configured not to stash the unrelated working
+  tree (`--no-stash`, weighing what that gives up on a failed hook run).
+  Whichever is chosen, the reasoning is recorded, because the two options
+  trade different things away.
+- **Risk:** Low to fix. The bug it prevents is rare but silent and would be
+  misattributed when it happens.
+- **Status:** open
+
+### D-024 · `check-cited-paths` still cannot see any path that is not under `src/`
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `scripts/check-cited-paths.mjs` (`SRC_PATH_RE`)
+- **Problem:** `D-018` widened the gate's _corpus_ to the nightly ledgers and
+  taught it to read line-suffixed citations. It did not widen what a citation
+  may point **at**: `SRC_PATH_RE` is rooted at `src/`, so every cited path
+  outside it is invisible. That is not hypothetical — `D-018`'s own **Files**
+  list cites `scripts/check-cited-paths.mjs:53-54`, `SESSION.md` and
+  `CONVENTIONS.md` cite each other and `docs/*.md`, and `CLAUDE.md`'s routing
+  table is almost entirely `docs/` paths. None of it is checked. The same
+  argument `D-018` makes applies with equal force: a session is routed by
+  these citations.
+  Raised by the `D-018` writer and deliberately left out of that item's diff,
+  because widening the root is a design decision rather than a one-line
+  predicate change.
+- **Done when:** Cited repo paths outside `src/` resolve or the gate fails,
+  and `npm run lint:cited-paths` is green with them in scope. The real work is
+  deciding the boundary first: `docs/adr/` is excluded as a _citing_ corpus
+  for immutability reasons, but that says nothing about whether an ADR may be
+  _cited_ — and a naive widening pulls in every cross-link in `docs/`, plus
+  `.github/`, `.storybook/` and `package.json` script names that look like
+  paths. Record the boundary and its reasoning in the script header the way
+  the existing exclusions are recorded.
+- **Risk:** Low to fix; the effort is in the boundary decision and whatever
+  dead citations first light-up surfaces.
 - **Status:** open

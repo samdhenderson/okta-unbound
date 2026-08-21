@@ -76,8 +76,11 @@ export function createPushGroupOperations(coreApi: CoreApi) {
    * @param onProgress - Called as each app's mappings resolve with `(processed, total)`.
    * @returns A new array where matched groups gain `pushMappings` and/or a resolved
    * `sourceAppName`; groups with no updates are returned unchanged (same reference).
-   * A label lookup that throws is logged (app id + error, no payload) and leaves
-   * that app's existing name in place.
+   * Every way a label lookup can fail leaves that app's existing name (its raw
+   * id) in place and is logged with identifiers and outcome codes only, never a
+   * payload: a thrown request, a resolved `success: false` (how a 401/429
+   * surfaces), a 200 with neither `label` nor `name`, and — at phase level — apps
+   * that never started because the run was cancelled or halted.
    * @remarks Resolves each unique app's label, then fetches its mappings — both
    * phases through {@link CoreApi.runOperation} (ADR-0009) with bounded
    * concurrency at `low` priority, activity-bar visible and cancellable (a
@@ -101,7 +104,7 @@ export function createPushGroupOperations(coreApi: CoreApi) {
     // Resolve app labels (one request per unique app) through the shared
     // operation runner (ADR-0009): bounded concurrency, live activity view, one
     // Cancel. A per-app failure keeps the existing name — logged, never thrown.
-    await coreApi.runOperation(
+    const labelOutcome = await coreApi.runOperation(
       'Resolve app names',
       Array.from(appIds.keys()),
       async (appId) => {
@@ -114,7 +117,28 @@ export function createPushGroupOperations(coreApi: CoreApi) {
           );
           if (response.success && response.data) {
             const label = response.data.label || response.data.name;
-            if (label) appIds.set(appId, label);
+            if (label) {
+              appIds.set(appId, label);
+            } else {
+              // A 200 carrying neither `label` nor `name` degrades exactly like a
+              // failure — the app keeps its raw id — so it gets its own line
+              // (D-019). The label is end-user-influenced Okta content and is
+              // never logged; identifier + outcome code only.
+              log.error('App name resolution returned no label', {
+                code: 'resolve_app_name_no_label',
+                appId,
+              });
+            }
+          } else {
+            // `success: false` is how a scheduler-level 401/429 surfaces: it
+            // resolves rather than throwing, so the likeliest systemic failure
+            // used to fall straight through the `if` unlogged (D-019). Numeric
+            // status only — never `response.error` or the body.
+            log.error('App name resolution request failed', {
+              code: 'resolve_app_name_request_failed',
+              appId,
+              status: response.status,
+            });
           }
         } catch (error) {
           // Keep existing name on failure — but never silently: a systemic
@@ -124,6 +148,19 @@ export function createPushGroupOperations(coreApi: CoreApi) {
       },
       { message: (p) => `Resolving app names (${p.completed}/${p.total})` },
     );
+
+    // Inspected rather than discarded, matching the mapping phase below. The
+    // per-app branches above cover every app whose task actually ran; apps that
+    // never started (a cancel, or an error halt) produce no line of their own, so
+    // the phase-level counts are the only trace that the run was partial (D-019).
+    if (labelOutcome.cancelled || labelOutcome.skipped > 0) {
+      log.warn('App name resolution did not complete', {
+        code: 'resolve_app_names_incomplete',
+        cancelled: labelOutcome.cancelled,
+        skipped: labelOutcome.skipped,
+        total: labelOutcome.total,
+      });
+    }
 
     // Fetch push mappings for all apps, again through the operation runner.
     const appEntries = Array.from(appIds.entries());
