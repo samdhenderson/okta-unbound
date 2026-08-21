@@ -20,11 +20,54 @@
  * - {@link UserComparisonPanelProps.searchEnabled} — false while popped *or* while
  *   the whole tab is hidden, so a mounted comparison never becomes a background
  *   caller of the Okta user-search API (ADR-0018).
+ *
+ * ## Scroll offset
+ *
+ * Staying mounted preserves React state but not DOM state, and scroll offset is DOM
+ * state. The comparison owns no scroll box: like the rest of the Users tab it scrolls
+ * the app root scroller, the one `overflow-y-auto` element every root-scrolling tab
+ * shares. So the rung you are *not* looking at is the one that last moved that
+ * element — pushing Compare from a scrolled-down detail page used to open the
+ * comparison part-way down, and returning to a comparison landed wherever the detail
+ * page had left the shared scroller.
+ *
+ * This panel therefore runs its own {@link sidepanel/hooks/useScrollPreservation}
+ * against that scroller, exactly as {@link TabPanel} does for a top-level tab: while
+ * the comparison is on screen the hook mirrors `scrollTop` on a passive listener, and
+ * on the way back it writes the comparison's own offset before paint. The hook's
+ * `capture()` escape hatch is deliberately unused (as in `TabPanel`) — the state
+ * update that hides this panel is the Users tab's `nav.pop()`, which this component
+ * neither owns nor is told about, and the passive mirror is the hook's answer for
+ * exactly that case. A first push has nothing banked, so it opens at the top.
  */
-import React from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import UserComparisonView from './UserComparisonView';
 import { useUserComparison } from '../../hooks/useUserComparison';
+import { useScrollPreservation } from '../../hooks/useScrollPreservation';
 import type { OktaUser, GroupMembership } from '../../../shared/types';
+
+/**
+ * The nearest ancestor that actually scrolls, or `null` when nothing above the node
+ * does.
+ *
+ * The scroller this panel lives in belongs to {@link sidepanel/App} and is several
+ * components above it, so it is found by walking up from a node this panel owns —
+ * the same "discover your scope from your own element" shape
+ * {@link sidepanel/hooks/usePublishedHeight} uses for sticky bands, rather than a
+ * hard-coded selector or a prop every host would have to thread through.
+ *
+ * @param node - The panel's own anchor element.
+ * @returns The first ancestor whose computed `overflow-y` scrolls, else `null` — in
+ * which case scroll preservation is simply inert (stories, jsdom without styles, a
+ * future host that constrains nothing).
+ */
+function findScrollContainer(node: HTMLElement | null): HTMLElement | null {
+  for (let el = node?.parentElement ?? null; el; el = el.parentElement) {
+    const { overflowY } = window.getComputedStyle(el);
+    if (overflowY === 'auto' || overflowY === 'scroll') return el;
+  }
+  return null;
+}
 
 /** Props for {@link UserComparisonPanel}. */
 export interface UserComparisonPanelProps {
@@ -36,6 +79,11 @@ export interface UserComparisonPanelProps {
   /**
    * Whether the debounced user search may reach Okta — i.e. the comparison is
    * pushed *and* the Users tab is the selected tab (ADR-0018).
+   *
+   * That predicate is also, exactly, "the comparison is the thing on screen", so it
+   * is what gates the scroll mirror as well: the app root scroller is shared with
+   * every other tab, and a mirror left attached while the tab is hidden would bank
+   * whichever *other* tab's offset the admin scrolled to in between.
    */
   searchEnabled: boolean;
   /** The "context" user being compared from (the tab's selected user). */
@@ -94,8 +142,29 @@ const UserComparisonPanel: React.FC<UserComparisonPanelProps> = ({
     onContextUserUpdated,
   });
 
+  // The anchor is a node this panel owns; the element whose offset is preserved is
+  // the scroller above it (see the module header).
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLElement | null>(null);
+  // Declared BEFORE `useScrollPreservation` so this layout effect runs first: the
+  // hook reads `scrollRef.current` in a layout effect of its own, and on the very
+  // first push that read is the one that restores. The scroller never changes for a
+  // given mount, so this resolves once.
+  useLayoutEffect(() => {
+    scrollRef.current = findScrollContainer(anchorRef.current);
+  }, []);
+  // On screen = pushed *and* the tab shown — the same composition the Groups tab
+  // uses for its list (`isActive && nav.isRoot`).
+  useScrollPreservation(scrollRef, isActive && searchEnabled);
+
   return (
-    <UserComparisonView contextUser={contextUser} comparison={comparison} oktaOrigin={oktaOrigin} />
+    <div ref={anchorRef}>
+      <UserComparisonView
+        contextUser={contextUser}
+        comparison={comparison}
+        oktaOrigin={oktaOrigin}
+      />
+    </div>
   );
 };
 

@@ -17,6 +17,72 @@ Entry format:
 
 ---
 
+## 2026-08-21 (third run)
+
+**Baseline:** green — full `CONVENTIONS.md` ladder clean on `main` @ `9ea42a3`
+(type-check 0 errors, lint 0 errors / 147 warnings, format clean, 207 test
+files passed with coverage thresholds met, 0 cycles, control-chars and
+cited-paths clean).
+
+**Items worked:** `D-009`, `I-005`, `I-001` — the top of the sorted list with
+disjoint **Files** (P1 first, then P2 with UX ahead of debt). `I-002` was
+skipped despite sorting above `I-005`: its files are under
+`src/sidepanel/components/groups/detail/`, still off-limits. `I-003` sorts in
+the same tie as `I-005` on every key `SESSION.md` defines; `I-005` was taken
+because `I-003` carries `Depends on: I-001` and shipping a dependent item in
+the same PR would mean one review objection invalidating two commits.
+
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/68
+
+**Backlog after:** 13 open / 25 total — 9 IMPROVEMENTS (6 open, 1 blocked,
+2 done), 16 DEBT (7 open, 3 blocked, 6 done). 4 blocked (`I-008`
+needs-breakdown, `D-007` needs-breakdown, `D-008` needs-human, `D-013`
+needs-human). 3 closed tonight as `done:#68`; 3 new items filed from the
+review (`D-015`, `D-016`, `I-009`).
+
+**Notes:**
+
+**The browser story suite does run in this sandbox — future sessions should
+run it.** Both writer agents reported `test:storybook` as impossible
+("Playwright's browser binary is absent"), and the previous two sessions
+skipped it as well. It is not absent: Chromium is pre-installed at
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, and `vitest.config.ts`
+already has the seam for it —
+`VITEST_BROWSER_EXECUTABLE=/opt/pw-browsers/chromium-1194/chrome-linux/chrome npm run test:storybook`
+runs the full suite (149 story files, 0 failures tonight). `npx playwright
+install` is the thing that fails, and reaching for it is what made this look
+unavailable. Set the env var instead; a hard CI gate should not be taken on
+faith three nights running.
+
+**`pkill -9 -f vitest` kills more than its own run.** `CONVENTIONS.md`'s test
+recipe ends with `pkill -9 -f vitest` "regardless of outcome". With a writer
+agent working while the session runs its own ladder, that pattern matches the
+_other_ run too — three full `test:coverage` runs died at `SIGKILL` mid-suite
+before the cause was clear, and the pattern also matches the invoking shell's
+own command line. Worth narrowing the recipe (a PID-scoped kill, or dropping
+it now that the `perl alarm` wrapper already bounds the run); filed here as a
+note rather than as a backlog item because it is a change to `CONVENTIONS.md`
+itself.
+
+**Branch name deviated again, same reason as the second run.** `SESSION.md`
+step 3 says `nightly/YYYY-MM-DD`; the execution environment pins this session
+to `claude/stoic-gates-apffyc` and forbids pushing anywhere else, so the
+`claimed:` markers named that branch. This is now two of three runs — worth
+either amending `SESSION.md` or fixing the launcher, rather than logging the
+same deviation every night.
+
+**D-014 is not actually pickable.** It sorts as an open P3, but its own body
+says "sequence it after `D-013`", and `D-013` is `blocked:needs-human`. A
+future run following the sort mechanically will pick it up and then have to
+put it back down; consider marking it `blocked:needs-D-013`.
+
+**Recommended next pick** (P-order, disjoint files, none under
+`groups/detail/`): `D-016` (P2, small, closes the coverage gap this PR
+opened), then `D-003` (P2, one-line logging fix in `pushGroupOps.ts`), then
+`I-003` — now unblocked, since `I-001` shipped tonight.
+
+---
+
 ## 2026-08-21 (second run)
 
 **Baseline:** green — full `CONVENTIONS.md` ladder clean on `main` @ `25f5e45`,

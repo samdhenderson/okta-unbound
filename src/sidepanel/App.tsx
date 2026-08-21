@@ -6,8 +6,9 @@
  * migration) and the highlighted rule id. Reads live Okta page context via
  * `useGroupContext`/`useOktaPageContext` and renders the {@link ContextBar} masthead
  * (app wordmark + entity identity + connection), {@link TabNavigation}, the per-tab
- * content, the fixed {@link ActivityBar} (the unified scheduler + progress bar), and
- * the ⌘K {@link TabJumpPalette}, all inside the SchedulerProvider.
+ * content, the fixed {@link ActivityBar} (the unified scheduler + progress bar), the
+ * ⌘K {@link TabJumpPalette}, and the modal layer every `Modal` overlay portals into
+ * ({@link MODAL_LAYER_ID}), all inside the SchedulerProvider.
  *
  * The shell is also the **single owner of app-wide keyboard shortcuts**
  * ({@link useCommandPalette}) — see the tab-lifetime note below for why a `window`
@@ -31,6 +32,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, lazy } from 'react';
 import ContextBar from './components/ContextBar';
 import PageHeader from './components/shared/PageHeader';
+import { MODAL_LAYER_ID } from './components/shared/Modal';
 import TabNavigation from './components/TabNavigation';
 import TabPanel from './components/TabPanel';
 import TabJumpPalette from './components/TabJumpPalette';
@@ -498,6 +500,15 @@ const App: React.FC = () => {
           activeTab={activeTab}
           onSelect={handleTabChange}
         />
+
+        {/* The modal layer: every `Modal` overlay in the panel portals in here.
+          It is deliberately the **last** node in the shell, after the scroll root
+          — the `ActivityBar` is a `fixed bottom-0 z-50` band inside that root and
+          shares the top of the z-index ladder with `Modal`, so at equal z-index
+          the later node wins and the bar can no longer paint over an open modal's
+          footer actions (D-009). The node itself has no box: the overlay it hosts
+          is `fixed`. See `components/shared/Modal.tsx` for the full ladder. */}
+        <div id={MODAL_LAYER_ID} />
       </NavigationProvider>
     </SchedulerProvider>
   );
