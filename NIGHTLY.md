@@ -32,12 +32,21 @@ session — no backlog items were selected or implemented.
 
 **Items worked:** none — baseline repair only.
 **PR:** https://github.com/samdhenderson/okta-unbound/pull/66
-**Backlog after:** 14 open / 17 total — 8 IMPROVEMENTS (7 ux, 1
-feature-completeness), 9 DEBT (6 correctness, 2 cleanup, 1 standards). 3
+**Backlog after:** 14 open / 18 total — 8 IMPROVEMENTS (7 ux, 1
+feature-completeness), 10 DEBT (6 correctness, 2 cleanup, 2 standards). 4
 blocked (`I-008` needs-breakdown, `D-007` needs-breakdown, `D-008`
-needs-human) — unchanged from the prior entry; nothing was claimed tonight.
+needs-human, `D-010` needs-breakdown) — `D-010` newly filed tonight (below),
+the other three unchanged from the prior entry.
 **Notes:** `test:coverage` is green on `main` again once PR #66 lands.
-Re-verify the baseline is still green at the start of the next session before
+Separately — PR #66's GitHub Actions `verify` check came back red even
+though the local ladder was green twice. Investigated rather than pushed
+blind fixes: confirmed via GitHub's own run history that `main`'s `verify`
+job has been failing identically on every push since at least 2026-08-15 (4
+commits), including on PR #66's own unmodified base commit — so this is
+pre-existing CI flakiness, not something PR #66 introduced. Filed as `D-010`
+rather than folded into PR #66's diff (per `CLAUDE.md`'s new-work-discovered
+rule); left PR #66's diff untouched and said so in a PR comment. Re-verify
+the baseline is still green at the start of the next session before
 picking up backlog items. The previous entry's recommended starting items
 (`D-001`, `D-009`, `I-005`) are still the reasonable next pick — none of
 tonight's diff touches their files.

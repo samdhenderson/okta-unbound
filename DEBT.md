@@ -200,3 +200,54 @@ Format:
 - **Risk:** Medium — shared `Modal` used everywhere; needs the story suite
   re-verified across call sites.
 - **Status:** open
+
+### D-010 · CI's `verify` job has been red on `main` since at least 2026-08-15, unrelated to any one PR
+
+- **Category:** standards
+- **Priority:** P1
+- **Size:** L
+- **Files:** `src/sidepanel/components/UsersTab.test.tsx` (`membershipRow` call
+  sites around lines 511, 533, 558), `src/sidepanel/components/UsersTab.navigation.test.tsx`
+  (`pops back to the profile when a cross-tab deep-link arrives`, line ~448),
+  `src/sidepanel/hooks/useRulesData.ts:181`, `src/sidepanel/components/RulesTab.test.tsx`
+  — the known instances; the underlying cause(s) may reach further.
+- **Problem:** Discovered while investigating why PR #66 (a same-night baseline
+  repair, unrelated to any of these files) came back with a red `verify` check
+  on GitHub Actions despite `npm run test:coverage` passing clean locally on 2
+  consecutive full runs. Checking GitHub Actions' history for `main` itself
+  shows the same job has been failing on every push for at least the last 4
+  commits back to 2026-08-15 (`114e676`, `74893fb`, `5ad0b8a`, `61075d8`,
+  `b1b0515`) — i.e. this is pre-existing on `main`, not something PR #66
+  introduced; confirmed directly by running `verify` against `b1b0515` (PR
+  #66's own base commit, zero diff) and seeing the identical failure. Two
+  distinct symptoms recur across runs:
+  1. `UsersTab.test.tsx`'s `membershipRow('Engineering')` helper intermittently
+     can't find the group heading — the DOM snapshot at failure time shows
+     `role="status"` "Loading group memberships..." still present, i.e. the
+     membership fetch that `fireEvent.change` + `findByText('Ada Lovelace',
+{timeout: 2000})` kicks off hadn't resolved by assertion time on GitHub's
+     runner (never reproduces locally, including on a 4-core sandbox matching
+     GitHub's `ubuntu-latest` core count — Node is forced to 24 in CI per its
+     own deprecation warning, which may be a factor).
+  2. A separate run additionally threw an **uncaught exception** — `TypeError:
+window is not defined` inside `resolveUpdatePriority` (React DOM),
+     originating from a `Timeout._onTimeout` in `useRulesData.ts:181` calling
+     into `ProgressContext.tsx:203` — i.e. a timer set during
+     `RulesTab.test.tsx` outlives that test's jsdom teardown and fires against
+     a torn-down `window`. This is a real leaked-timer bug in `useRulesData.ts`
+     independent of CI flakiness, and vitest's own warning is exactly right:
+     "this might cause false positive tests" in whatever test happens to be
+     running when the orphaned timer fires.
+- **Done when:** Not yet defined — needs scoping first: is (1) purely
+  CI-resource timing (raise the `findByText` timeout, or gate on a more
+  deterministic wait) or a real race in the search→select→load chain; (2) is
+  definitely a real bug (an uncancelled `setTimeout`/`setInterval` in
+  `useRulesData.ts` needs a cleanup return in its effect) and should probably
+  be split into its own `D-NNN` once confirmed. A real fix needs the failure
+  reproduced somewhere debuggable — GitHub Actions logs only, so far.
+- **Risk:** High to leave alone — a `verify` gate that's routinely red on
+  `main` itself stops meaning anything, and every PR now inherits an
+  unrelated red check it can't fix by itself. High to rush a fix — touches
+  shared test timing patterns (`fireEvent.change` + debounced search) used
+  across many files, and a real leaked-timer bug in a data-loading hook.
+- **Status:** blocked:needs-breakdown
