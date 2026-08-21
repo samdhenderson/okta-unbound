@@ -455,21 +455,28 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   `.storybook/main.ts` already documents this exact failure mode and already
   carries the remedy for `zod` — the fix is `react-dom` beside it.
 
-- **Done when:** `react-dom` is pre-bundled in `.storybook/main.ts`'s
-  `optimizeDeps.include` and the `storybook` job is green on `main`. A fix is
-  already written and pushed to branch `claude/stoic-gates-apffyc` (commit
-  `9512d41`); it needs a PR, or re-applying if that branch is gone. **It was
-  never proven locally red-then-green** — the suite passes locally without it,
-  and the faithful repro (CI's `build-storybook` then `test:storybook`) needs
-  more memory than the session had. CI is the proof; if it does not go green,
-  the diagnosis above is wrong and the next hypothesis is the run's tail
-  behaviour, since `ActionBar.stories.tsx` is the last file processed.
+- **Done when:** ~~Not yet defined~~ — **done.** `react-dom` is pre-bundled in
+  `.storybook/main.ts`'s `optimizeDeps.include`, beside the `zod` entry that
+  was already there for the same reason.
+- **Correction to the filing above:** `ActionBar.stories.tsx` is the **first**
+  file the run processes, not the last. Vitest orders test files largest-first
+  and it is the biggest story file in the tree — confirmed by reading the local
+  run's completion order, where it is file 1 of 149. That is precisely the slot
+  a dep-optimizer reload lands in, so the diagnosis is stronger than the filing
+  thought, and "the run's tail behaviour" is **not** the right fallback
+  hypothesis if this does not work.
+- **Proof:** CI only, as the filing predicted. The suite passes locally with
+  **and** without the fix (149 files / 1042 tests green both ways, run on the
+  fix branch before and after the change), so there is no local red-then-green
+  to show. `npm run build-storybook` was also re-run clean against the change.
+  If the `storybook` job does not go green on `main` after #69 lands, reopen
+  this item rather than patching further — the diagnosis is then wrong.
 - **Risk:** Low to fix (one line in a build config, no product code). High to
   leave: a red gate on `main` trains everyone to ignore the job, which is how
   D-010 went unnoticed for four commits.
-- **Note for whoever picks this up:** a nightly session may not catch this at
-  step 1. `CONVENTIONS.md` lists `test:storybook` as _conditional_ on what the
-  diff touches, and both prior sessions skipped it at baseline for browser
-  cost — so the red-baseline rule that should make this the whole session may
-  not trigger on its own. Claim this item by name.
-- **Status:** open
+- **Note for whoever picks this up:** ~~a nightly session may not catch this at
+  step 1~~ — addressed. `CONVENTIONS.md` now lists `test:storybook` as an
+  unconditional baseline gate with the sandbox invocation it needs, so the
+  red-baseline rule fires on its own. (It did, on 2026-08-21's 4th run: the
+  baseline check caught this without the item having to be claimed by name.)
+- **Status:** done:#69

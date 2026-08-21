@@ -17,6 +17,76 @@ Entry format:
 
 ---
 
+## 2026-08-21 (fourth run)
+
+**Baseline:** red — the `storybook` CI job on `main` @ `ceddca8`. Every other
+gate was clean locally (type-check 0 errors, lint 0 errors / 147 warnings,
+format clean, 209 test files / 2962 tests passed with thresholds met, 0
+cycles, control-chars clean over 835 files, cited-paths clean over 50). The
+red one was `D-017`, and it was caught **by running `test:storybook` at
+baseline** rather than by claiming the item by name as the filing suggested
+would be necessary — GitHub's own run history for `main` confirmed `storybook`
+failing on `808ab30` and `ceddca8` while `verify` passed on both.
+
+Per `SESSION.md` step 1 this repair was the entire session. **No backlog items
+were selected or implemented alongside it.** For the record, had the baseline
+been green the sort would have opened `D-017` (P1) → `I-003` (P2, ux; `I-002`
+still skipped, its files are under the off-limits `groups/detail/`) → `D-003`
+(P2) — three disjoint **Files** lists. That is the next run's starting pick.
+
+**Items worked:** `D-017` — baseline repair only.
+
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/69
+
+**Backlog after:** 13 open / 26 total — 9 IMPROVEMENTS (6 open, 1 blocked, 2
+done), 17 DEBT (7 open, 3 blocked, 7 done). 4 blocked, unchanged (`I-008`
+needs-breakdown, `D-007` needs-breakdown, `D-008` needs-human, `D-013`
+needs-human). 1 closed tonight as `done:#69`. Nothing new filed.
+
+**Notes:**
+
+`ActionBar.stories.tsx` is the **first** file the story run processes, not the
+last — the filing had it backwards, and it matters. Vitest orders test files
+largest-first and ActionBar is the biggest story file in the tree; the local
+run's completion order puts it at 1 of 149. So the file that dies is simply
+whatever is in flight when the dep optimizer reloads the page at startup, which
+is what makes a file that imports neither `react-dom` nor `Modal` the standing
+victim of a `react-dom` import added to `Modal.tsx` in #68. `D-017`'s named
+fallback hypothesis ("the run's tail behaviour") is therefore the wrong place
+to look if this fix does not take.
+
+**The fix is unprovable locally and was not proven locally.** The suite passes
+here with and without it — 149 files / 1042 tests green both ways, run on the
+branch before and after the change. That is the second time in four nights
+(`D-010` was the first) that the honest answer was "the variable is the
+runner." Both times the temptation was to call the gate environmental. It was
+not, either time.
+
+`test:storybook` is now an **unconditional** baseline gate in `CONVENTIONS.md`,
+with the `VITEST_BROWSER_EXECUTABLE=/opt/pw-browsers/chromium-1194/chrome-linux/chrome`
+pin it needs in this sandbox. It was previously listed as conditional on what
+the diff touched, and three consecutive sessions skipped it — which is how a red
+gate sat on `main` across two nights. The full-suite storybook run costs roughly
+2 minutes here, and `build-storybook` about 40 seconds; neither is expensive
+enough to justify the conditional.
+
+Still true from the last entry, and it bit again: `pkill -9 -f vitest` matches
+the shell running it, so a command that runs vitest and then pkills in the same
+line kills itself. Keep them in separate invocations.
+
+**Deviation from `SESSION.md`, for the record:** this session's branch is
+`claude/stoic-gates-3izrje`, not `nightly/2026-08-21`. The harness that starts
+these runs pins the branch name and forbids pushing anywhere else; the branch
+name is the only part of the sequence that differs.
+
+**Still unfiled, carried forward from the last entry** (it needs a look before
+it is worth an item number): `UserAppsList` (`UserDetailPanel.tsx:237`) takes
+the same `memberships` array as the Groups pane but gates on `isLoadingApps`
+rather than `isLoadingMemberships`, so it may render membership-derived content
+mid-load.
+
+---
+
 ## 2026-08-21 (third run)
 
 **Baseline:** green — full `CONVENTIONS.md` ladder clean on `main` @ `9ea42a3`

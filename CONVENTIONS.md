@@ -114,9 +114,40 @@ npm run test:coverage
 npm run knip:circular
 npm run lint:control-chars
 npm run lint:cited-paths
-npm run test:storybook       # anything touching components/shared, cache/, useOktaApi, or a zod schema
+npm run test:storybook       # ALWAYS — see below; it is a hard CI gate
 npm run build                # anything touching vite.config.ts, manifest.json, src/background, src/content
 ```
+
+### `test:storybook` is not optional at baseline
+
+It **runs in this sandbox**, and it is a hard CI gate (the `storybook` job),
+so a nightly session runs it at step 1 like every other gate above. It needs
+the pre-installed Chromium pinned explicitly — the default Playwright
+resolution looks for a build that is not installed:
+
+```
+VITEST_BROWSER_EXECUTABLE=/opt/pw-browsers/chromium-1194/chrome-linux/chrome \
+  npm run test:storybook
+```
+
+This entry exists because it was previously listed as _conditional on what the
+diff touches_, and three consecutive sessions skipped it at baseline for
+browser cost. `D-017` — a red `storybook` job — therefore sat on `main`
+undetected across two nights while `verify` stayed green. A gate nobody runs
+is a gate nobody trusts.
+
+Two traps worth knowing when a story-suite failure names a file the diff never
+touched:
+
+- **Vitest orders test files largest-first.** The first file processed is
+  whatever is biggest, currently `shared/ActionBar.stories.tsx`. A dep-optimizer
+  reload during startup kills whatever is in flight, so that file is the
+  standing bystander victim — its name in a failure is evidence about _ordering_,
+  not about the file.
+- **This class of failure does not reproduce locally.** The suite passes here
+  with and without the fix; only the runner differs. Same shape as `D-010`.
+  Treat "green here, red in CI" as a timing question, and let CI be the proof
+  rather than declaring the gate environmental.
 
 `npm run knip` / `npm run knip:production` are advisory only (CI runs them
 `continue-on-error: true`) — informative for `DEBT.md` triage, never a gate.
