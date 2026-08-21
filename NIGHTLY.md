@@ -17,6 +17,33 @@ Entry format:
 
 ---
 
+## 2026-08-21
+
+**Baseline:** red — `npm run test:coverage` failed intermittently in a full-suite
+run: `UsersTab.navigation.test.tsx > hides the profile body without unmounting
+it, so its state survives` (passed every time run in isolation; failed
+identically on 2 consecutive full-suite runs). Root cause: the tab-level user
+search debounce was gated only on `isActive`, not on `nav.isRoot` — a query
+typed just before navigating into a user's detail/comparison rung could still
+commit after the push and clear `selectedUser`, unmounting both rungs. Fixed
+by gating the debounce on `nav.isRoot && isActive`, mirroring the comparison
+rung's own `searchEnabled` gate. Per `SESSION.md`, this repair was the whole
+session — no backlog items were selected or implemented.
+
+**Items worked:** none — baseline repair only.
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/66
+**Backlog after:** 14 open / 17 total — 8 IMPROVEMENTS (7 ux, 1
+feature-completeness), 9 DEBT (6 correctness, 2 cleanup, 1 standards). 3
+blocked (`I-008` needs-breakdown, `D-007` needs-breakdown, `D-008`
+needs-human) — unchanged from the prior entry; nothing was claimed tonight.
+**Notes:** `test:coverage` is green on `main` again once PR #66 lands.
+Re-verify the baseline is still green at the start of the next session before
+picking up backlog items. The previous entry's recommended starting items
+(`D-001`, `D-009`, `I-005`) are still the reasonable next pick — none of
+tonight's diff touches their files.
+
+---
+
 ## 2026-08-20 — system setup, not a work session
 
 **Baseline:** green.
