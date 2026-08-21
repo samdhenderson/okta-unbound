@@ -200,3 +200,83 @@ Format:
 - **Risk:** Medium — shared `Modal` used everywhere; needs the story suite
   re-verified across call sites.
 - **Status:** open
+
+### D-010 · CI's `verify` job has been red on `main` since at least 2026-08-15, unrelated to any one PR
+
+- **Category:** standards
+- **Priority:** P1
+- **Size:** L
+- **Files:** `src/sidepanel/components/UsersTab.test.tsx` (the `membershipRow`
+  helper and its 5 call sites),
+  `src/sidepanel/components/UsersTab.navigation.test.tsx`
+  (`pops back to the profile when a cross-tab deep-link arrives`),
+  `src/sidepanel/hooks/useRulesData.ts` (the two `completeProgress` timers)
+- **Problem:** Discovered while investigating why PR #66 (a same-night baseline
+  repair, unrelated to any of these files) came back with a red `verify` check
+  on GitHub Actions despite `npm run test:coverage` passing clean locally on 2
+  consecutive full runs. Checking GitHub Actions' history for `main` itself
+  shows the same job has been failing on every push for at least the last 4
+  commits back to 2026-08-15 (`114e676`, `74893fb`, `5ad0b8a`, `61075d8`,
+  `b1b0515`) — i.e. this is pre-existing on `main`, not something PR #66
+  introduced; confirmed directly by running `verify` against `b1b0515` (PR
+  #66's own base commit, zero diff) and seeing the identical failure. Two
+  distinct symptoms recur across runs:
+  1. `UsersTab.test.tsx`'s `membershipRow('Engineering')` helper can't find the
+     group heading — the DOM snapshot at failure time shows `role="status"`
+     "Loading group memberships..." still present and the action strip's buttons
+     still `disabled`, i.e. the membership fetch had not resolved by assertion
+     time on GitHub's runner.
+  2. A separate run additionally threw an **uncaught exception** — `TypeError:
+window is not defined` inside `resolveUpdatePriority` (React DOM),
+     originating from a `Timeout._onTimeout` in `useRulesData.ts` calling into
+     `ProgressContext.tsx` — a timer set during `RulesTab.test.tsx` outliving
+     that test's jsdom teardown and firing against a torn-down `window`.
+- **Root cause (found — the "needs scoping" note below is now answered):** Both
+  symptoms were reproduced deterministically **locally**, which the original
+  filing thought impossible. The trick is that neither depends on GitHub at
+  all — they depend on the membership fetch being slow. Adding a delay to the
+  `/users/{id}/groups` route in a scratch copy of the suite reproduces the exact
+  same 5 failures, at the same helper, on the same line.
+  1. **The wait never waited.** `expect(await screen.findByText('Engineering'))
+.toBeInTheDocument()` preceded every `membershipRow('Engineering')` call.
+     It looks like it waits for the group row; it does not. The `oktaUser()`
+     fixture gives the user a **`department` of `Engineering`** and
+     `rawGroup()` names the group `Engineering`, and the detail rung keeps all
+     three panes mounted (ADR-0018) — so `findByText` resolved against the
+     Profile pane's department `<span>` the instant the user was selected. A
+     probe confirmed it: at the moment that wait resolved, the matched node was
+     `SPAN` inside a `<dd>`, there was exactly **one** `Engineering` node in the
+     DOM, and `queryAllByRole('heading', { level: 4 })` returned `[]`. The
+     assertion was also tautological (`findBy*` throws if it finds nothing, so
+     `.toBeInTheDocument()` can never fail). The row lookup then raced the
+     membership load with no wait of its own and lost on any runner slow
+     enough — hence green locally, red on GitHub.
+  2. **A real leaked timer.** `useRulesData.ts` closed its progress bar via a
+     bare `setTimeout(() => completeProgress(), …)` on both the cache-hit
+     (500ms) and fetch-success (1000ms) paths, fired from inside an async
+     callback with nothing cancelling it on unmount. When it outlived a test's
+     jsdom teardown it called into `ProgressContext` against a torn-down
+     `window` — a genuine production-code bug, not test flakiness, and exactly
+     the "may cause false positive tests" vitest warned about.
+- **Done when:** ~~Not yet defined~~ — **done.** (1) `membershipRow` is now
+  async and awaits `findByRole('heading', { level: 4, name })` — the wait the
+  callers always meant — with an explicit 5s budget matching the existing
+  `findByText('Ada Lovelace', …, { timeout: 2000 })` pattern, since reaching a
+  row costs a three-request chain. The bogus `findByText` preamble is deleted at
+  all 5 call sites; every real assertion is untouched. The same
+  under-specified-wait bug in `UsersTab.navigation.test.tsx`'s cross-tab
+  deep-link case (its `waitFor` was satisfied by `resetNav()`, before the
+  `loadUserById` it precedes resolved) is fixed by awaiting the header text
+  instead of reading it synchronously. (2) `useRulesData.ts` now holds the
+  pending completion in a ref, clears it on unmount and before re-arming, and
+  checks a `mountedRef` before calling `completeProgress()`.
+  **Proof it is not vacuous:** with a 1200ms delay injected into the membership
+  route, the pre-fix suite fails exactly the 5 CI tests; post-fix, the suite
+  passes 22/22 even at a 2500ms delay.
+- **Risk:** ~~High to leave alone~~ — resolved. The fix adds no behavior change
+  to shipped UI beyond the timer cleanup, and weakens no assertion (ADR-0012):
+  the deleted `findByText` lines were tautological waits on the wrong element,
+  which is ADR-0022's "the assertion pins something that is not what it claims"
+  carve-out, and each is replaced by a strictly stronger wait on the element the
+  caller actually goes on to assert against.
+- **Status:** done:#66

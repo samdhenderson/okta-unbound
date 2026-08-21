@@ -12,7 +12,7 @@
  * `chrome.tabs.sendMessage`.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormattedRule, RuleStats } from '../../shared/types';
 import { RulesCache } from '../../shared/rulesCache';
 import { useProgress } from '../contexts/ProgressContext';
@@ -99,6 +99,41 @@ export function useRulesData({
   // §8: own a useOktaApi slice so the rule fetch routes through the scheduler.
   const { makeApiRequest } = useOktaApi({ targetTabId: targetTabId ?? null });
 
+  // `loadRules` closes the success/cache-hit progress bar on a short delay so the
+  // "Loaded N rules" message has time to be read, via a raw `setTimeout` rather
+  // than an effect (it fires from inside an async callback, not in response to a
+  // render). Nothing cancelled that timer if the hook unmounted first — a `Timeout`
+  // firing after teardown called `completeProgress()` into a torn-down `window`.
+  // `mountedRef` + the pending-timer ref close both gaps: the ref lets a re-fetch
+  // clear a still-pending completion from the previous one, and the mounted check
+  // stops the callback from touching context state after unmount.
+  const mountedRef = useRef(true);
+  const completeProgressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (completeProgressTimerRef.current) {
+        clearTimeout(completeProgressTimerRef.current);
+        completeProgressTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const scheduleCompleteProgress = useCallback(
+    (delayMs: number) => {
+      if (completeProgressTimerRef.current) {
+        clearTimeout(completeProgressTimerRef.current);
+      }
+      completeProgressTimerRef.current = setTimeout(() => {
+        completeProgressTimerRef.current = null;
+        if (mountedRef.current) completeProgress();
+      }, delayMs);
+    },
+    [completeProgress],
+  );
+
   const hydrate = useCallback((snapshot: RulesDataSnapshot) => {
     if (snapshot.rules) setRules(snapshot.rules);
     if (snapshot.stats) setStats(snapshot.stats);
@@ -135,7 +170,7 @@ export function useRulesData({
             setLastFetchTime(new Date(cached.timestamp).toISOString());
             setApiCost(0); // No API calls needed
             updateProgress(1, 1, `Loaded ${cached.rules.length} rules from cache`);
-            setTimeout(() => completeProgress(), 500);
+            scheduleCompleteProgress(500);
             setIsLoading(false);
             return;
           }
@@ -177,9 +212,7 @@ export function useRulesData({
           });
 
           // Complete progress after a short delay to show success message
-          setTimeout(() => {
-            completeProgress();
-          }, 1000);
+          scheduleCompleteProgress(1000);
         } else {
           onError(response.error || 'Failed to fetch rules');
           log.error('Error fetching rules:', response.error);
@@ -201,6 +234,7 @@ export function useRulesData({
       startProgress,
       updateProgress,
       completeProgress,
+      scheduleCompleteProgress,
     ],
   );
 

@@ -17,6 +17,59 @@ Entry format:
 
 ---
 
+## 2026-08-21
+
+**Baseline:** red — `npm run test:coverage` failed intermittently in a full-suite
+run: `UsersTab.navigation.test.tsx > hides the profile body without unmounting
+it, so its state survives` (passed every time run in isolation; failed
+identically on 2 consecutive full-suite runs). Root cause: the tab-level user
+search debounce was gated only on `isActive`, not on `nav.isRoot` — a query
+typed just before navigating into a user's detail/comparison rung could still
+commit after the push and clear `selectedUser`, unmounting both rungs. Fixed
+by gating the debounce on `nav.isRoot && isActive`, mirroring the comparison
+rung's own `searchEnabled` gate. Per `SESSION.md`, this repair was the whole
+session — no backlog items were selected or implemented.
+
+**Items worked:** baseline repair, plus `D-010` (filed _and_ closed tonight —
+the pre-existing CI failure; picked up mid-session on Sam's instruction).
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/66
+**Backlog after:** 14 open / 18 total — 8 IMPROVEMENTS (7 ux, 1
+feature-completeness), 10 DEBT (6 correctness, 2 cleanup, 2 standards). 3
+blocked (`I-008` needs-breakdown, `D-007` needs-breakdown, `D-008`
+needs-human) — unchanged from the prior entry; `D-010` was filed tonight and
+closed the same night as `done:#66`.
+**Notes:** `test:coverage` is green on `main` again once PR #66 lands.
+Separately — PR #66's GitHub Actions `verify` check came back red even
+though the local ladder was green twice. Confirmed via GitHub's own run
+history that `main`'s `verify` job had been failing identically on every
+push since at least 2026-08-15 (4 commits), including on PR #66's own
+unmodified base commit — pre-existing, not introduced by PR #66. Filed as
+`D-010`, then (on Sam's instruction, mid-session) diagnosed and fixed it in
+the same PR rather than leaving it for a later night.
+
+The "only reproduces on GitHub" framing turned out to be wrong, and that
+mattered: the failures don't depend on GitHub at all, only on the membership
+fetch being slow. Injecting a delay into the `/users/{id}/groups` route
+reproduces the same 5 failures locally and deterministically. Root cause was
+a **wait that never waited** — `await findByText('Engineering')` resolved
+against the user's `department` (the fixture uses `Engineering` for both the
+department and the group name, and all three detail panes stay mounted per
+ADR-0018), so it returned while zero `<h4>`s existed and the row lookup
+raced the load. A probe pinned this exactly: matched node was a `SPAN` in a
+`<dd>`, one `Engineering` node total, `queryAllByRole('heading', {level: 4})`
+empty. The second symptom was a genuine production bug — two uncancelled
+`setTimeout`s in `useRulesData.ts` firing `completeProgress()` after unmount.
+**Lesson for future nights:** "passes locally, fails in CI" is a hypothesis,
+not a diagnosis — find the variable CI actually changes (here: speed) and
+reproduce on it locally before calling something environmental.
+
+Re-verify the baseline is still green at the start of the next session before
+picking up backlog items. The previous entry's recommended starting items
+(`D-001`, `D-009`, `I-005`) are still the reasonable next pick — none of
+tonight's diff touches their files.
+
+---
+
 ## 2026-08-20 — system setup, not a work session
 
 **Baseline:** green.
