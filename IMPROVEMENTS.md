@@ -68,6 +68,12 @@ Format:
   and unresolved cases tested.
 - **Status:** open
 - **Depends on:** I-001
+- **Also gated on:** `ClauseChecklist.tsx` sits under
+  `src/sidepanel/components/groups/detail/`, which `CLAUDE.md` puts off-limits
+  until Sam's Group Detail v2 lands. Skipped for that reason on
+  2026-08-21 (5th run) despite sorting to the top of the open list. Either
+  wait for that window to close, or have Sam explicitly permit this item by
+  name the way `D-001`/`D-002` were permitted.
 
 ### I-003 · Extend the id badge to RuleCard and push-mapping fallbacks
 
@@ -76,7 +82,10 @@ Format:
 - **Size:** M
 - **Files:** `src/sidepanel/components/RuleCard.tsx:98-99,259`,
   `src/sidepanel/components/groups/GroupListItemDetails.tsx:83`,
-  `src/sidepanel/components/groups/GroupPushSection.tsx:51`
+  `src/sidepanel/components/groups/detail/GroupPushSection.tsx:51`
+  (**path corrected 2026-08-21** — the original filing said
+  `groups/GroupPushSection.tsx`, which does not exist; the file is under
+  `groups/detail/`, and that relocation is what gates this item, see below)
 - **Problem:** Same class of bug as I-002. `RuleCard` shows a raw group id
   when `allGroupNamesMap` doesn't have it; the two push-mapping sites show
   `mapping.appId` as plain text when `mapping.appName` is missing.
@@ -86,6 +95,12 @@ Format:
 - **Risk:** Low.
 - **Status:** open
 - **Depends on:** I-001
+- **Also gated on:** one of the three call sites
+  (`groups/detail/GroupPushSection.tsx`) is under the off-limits Group Detail
+  v2 window (`CLAUDE.md`). Skipped whole on 2026-08-21 (5th run) rather than
+  shipped two-thirds done — a partial item reads as complete in the ledger.
+  The two non-`detail/` sites (`RuleCard.tsx`, `GroupListItemDetails.tsx`) are
+  implementable today if Sam would rather split this into two items.
 
 ### I-004 · Copy affordance on self-referencing ids that have none today
 
@@ -93,8 +108,11 @@ Format:
 - **Priority:** P3
 - **Size:** S
 - **Files:** `src/sidepanel/components/RuleCard.tsx:311`,
-  `src/sidepanel/components/PolicyCard.tsx:94`,
-  `src/sidepanel/components/AppListItem.tsx:133`
+  `src/sidepanel/components/policies/PolicyCard.tsx:94`,
+  `src/sidepanel/components/apps/AppListItem.tsx:133`
+  (**paths corrected 2026-08-21** — the filing cited both files directly under
+  `components/`; they live in the `policies/` and `apps/` subdirectories. Line
+  numbers are from the original filing and unverified against the moved files.)
 - **Problem:** Each row shows the entity's own id in its own expanded detail
   row as bare `<code>`, no copy button — unlike `UserIdentityCard` and
   `GroupListItemDetails`, which already pair id text with `CopyableId`/

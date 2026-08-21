@@ -17,6 +17,98 @@ Entry format:
 
 ---
 
+## 2026-08-21 (fifth run)
+
+**Baseline:** green — the whole ladder, including `test:storybook` (149 files
+/ 1042 tests). type-check 0 errors, lint 0 errors / 147 warnings, format
+clean, 209 test files / 2962 tests with thresholds met, 0 cycles,
+control-chars clean over 835 files, cited-paths clean over 50. GitHub's own
+run history for `main` shows CI green on `a7b72eb`, so **`D-017` stays
+closed** — its filing said to reopen it if `storybook` did not go green after
+#69 landed, and it did.
+
+One environment note that cost a false alarm: `node_modules` was absent on a
+fresh container, so the first `npm run lint` died with
+`Cannot find package '@eslint/js'` and the first `npm run type-check` exited
+without doing anything. That is not a red baseline, it is an uninstalled
+sandbox — `npm ci` first, then read the ladder. Worth checking before
+diagnosing anything at step 1.
+
+**Items worked:** `D-003`, `D-005`, `D-006`.
+
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/70
+
+**Backlog after:** 15 open / 31 total — 9 IMPROVEMENTS (6 open, 1 blocked, 2
+done), 22 DEBT (9 open, 3 blocked, 10 done). 4 blocked, unchanged (`I-008`
+needs-breakdown, `D-007` needs-breakdown, `D-008` needs-human, `D-013`
+needs-human). 3 closed tonight as `done:#70`. **5 new items filed**
+(`D-018`–`D-022`), which is why the open count went up despite closing three.
+
+**Notes:**
+
+**The previous entry's recommended pick was wrong, and the reason is the
+lesson.** It named `I-003` as the next run's second item. `I-003` cited
+`src/sidepanel/components/groups/GroupPushSection.tsx`, which does not exist —
+the file is at `groups/detail/GroupPushSection.tsx`. The missing `detail/`
+segment is the entire question, because it is what puts the item inside the
+off-limits Group Detail v2 window. A path typo in the ledger silently
+promoted an ineligible item to the top of the sort, and the previous session
+recommended it without ever resolving the path.
+
+That generalises past this one item. A nightly session selects work **by the
+item's Files list** — it is how disjointness is checked, how the off-limits
+rule is applied, and what the writer agent is handed as its scope. A stale
+path defeats all three at once. `lint:cited-paths` exists to catch exactly
+this and structurally cannot: its `IN_SCOPE` predicate admits `CLAUDE.md`,
+`AGENTS.md`, `docs/` and `.claude/`, and none of `DEBT.md`,
+`IMPROVEMENTS.md`, `SESSION.md`, `CONVENTIONS.md` or `NIGHTLY.md`. Filed as
+`D-018`; a sweep of all five ledgers found three dead citations, all in
+`IMPROVEMENTS.md` (`I-003`'s, plus `I-004`'s `PolicyCard.tsx` and
+`AppListItem.tsx`, which now live under `policies/` and `apps/`). All three
+corrected in place tonight. **Resolve an item's paths before trusting the
+sort.**
+
+`I-002` and `I-003` were therefore both skipped as off-limits and each now
+carries a note saying so, so the next run does not re-derive it. If Sam wants
+`I-003` sooner, its two non-`detail/` call sites are implementable today and
+the item says so.
+
+**`CONVENTIONS.md`'s own `pkill -9 -f vitest` instruction is booby-trapped**
+(`D-021`). `pkill -f` matches full command lines, so when it is chained after
+a vitest run in one shell invocation, the shell's own command line contains
+"vitest" and the pkill SIGKILLs its parent. Everything sequenced after it is
+skipped, and the only symptom is a bare non-zero exit with no output. It bit
+twice tonight, independently: the `D-005` writer had a mutation run truncated
+and briefly left a mutated `useRuleImpact.ts` on disk, and the session lead
+lost a `git commit` chained after it — discovered only because a follow-up
+`git status` still showed the file untracked. Until `D-021` lands: **make the
+`pkill` its own final command and check `git status` after any command you
+chained behind one.** It gets worse the moment a night runs writers in
+parallel, which `SESSION.md` step 4 permits and this one did.
+
+On the work itself: every guard closed tonight is proven non-vacuous by
+mutation, not by inspection — full table in #70. One honest limitation is
+recorded in the code rather than the log: React 19 drops a `setState` aimed at
+an unmounted tree silently, so the unmounted side of `useSearchWithDropdown`'s
+three `isMounted` guards has no state-visible consequence and cannot be made
+to go red by removing the guard. Those cases assert what is actually
+observable instead, and the suite header says so.
+
+`D-019`/`D-020` are the unfinished half of `D-003` and should be taken
+together, in that order — `D-020` swaps the raw request for `getAppById`,
+which changes what `D-019`'s failure paths look like, so doing them apart
+means writing the logging twice.
+
+**Recommended next pick** (P-order, disjoint Files, all outside
+`groups/detail/`): `D-018` (P2 — it protects the selection step itself, and is
+one predicate in a lint script), `D-021` (P2 — same argument, it protects the
+verification step), then `I-004` (P3, ux, and its paths are now correct). If a
+larger item is wanted instead of the two housekeeping ones, `D-016` (P2,
+Modal a11y on the portal branch) is the next real one, but note its file was
+touched by #68.
+
+---
+
 ## 2026-08-21 (fourth run)
 
 **Baseline:** red — the `storybook` CI job on `main` @ `ceddca8`. Every other

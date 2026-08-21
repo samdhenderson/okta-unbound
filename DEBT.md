@@ -82,7 +82,7 @@ Format:
 - **Done when:** The catch logs via the shared `logger` (outcome only, no
   payload) matching the sibling catches' pattern in the same file.
 - **Risk:** Low.
-- **Status:** open
+- **Status:** done:#70
 
 ### D-004 · useRuleLifecycle.ts has zero test coverage on a security-sensitive audit path
 
@@ -117,7 +117,7 @@ Format:
 - **Done when:** A test file covers both stale-capture guards (simulating a
   reopen-for-another-rule mid-flight) and the error path.
 - **Risk:** Low-medium.
-- **Status:** open
+- **Status:** done:#70
 
 ### D-006 · Untested error/guard branches in three hooks
 
@@ -134,7 +134,7 @@ Format:
 - **Done when:** Each named branch has at least one test proving both sides
   of the condition.
 - **Risk:** Low.
-- **Status:** open
+- **Status:** done:#70
 
 ### D-007 · No session-expiry / 401 handling anywhere in the API path
 
@@ -480,3 +480,157 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   red-baseline rule fires on its own. (It did, on 2026-08-21's 4th run: the
   baseline check caught this without the item having to be claimed by name.)
 - **Status:** done:#69
+
+### D-018 · `lint:cited-paths` cannot see the nightly ledgers, and three citations there are already dead
+
+- **Category:** standards
+- **Priority:** P2
+- **Size:** S
+- **Files:** `scripts/check-cited-paths.mjs:53-54` (the `IN_SCOPE` predicate)
+- **Problem:** `IN_SCOPE` admits `CLAUDE.md`, `AGENTS.md`, and anything under
+  `docs/` or `.claude/` — which excludes every file the nightly maintenance
+  system actually runs on: `DEBT.md`, `IMPROVEMENTS.md`, `SESSION.md`,
+  `CONVENTIONS.md`, `NIGHTLY.md`. The gate reported "All cited src/ paths
+  resolve, across 50 tracked docs/skill files" on a green baseline while three
+  citations in `IMPROVEMENTS.md` pointed at files that do not exist:
+  `groups/GroupPushSection.tsx` (I-003, really `groups/detail/GroupPushSection.tsx`),
+  `components/PolicyCard.tsx` and `components/AppListItem.tsx` (I-004, really
+  `components/policies/` and `components/apps/`). All three were corrected in
+  the ledger on 2026-08-21 (5th run); this item is the systemic half.
+  This is not cosmetic. A nightly session selects items by their **Files**
+  list — it is how disjointness is checked, how the `groups/detail/`
+  off-limits rule is applied, and what the writer agent is handed as its
+  scope. A stale path defeats all three: I-003's wrong path hid the fact that
+  the item reaches into the off-limits directory, which is exactly the check
+  that was supposed to catch it.
+- **Done when:** `check-cited-paths.mjs` also covers the tracked root ledger
+  files (`DEBT.md`, `IMPROVEMENTS.md`, `SESSION.md`, `CONVENTIONS.md`,
+  `NIGHTLY.md`), and `npm run lint:cited-paths` is green with them in scope.
+  Note that `NIGHTLY.md` is an append-only historical log, so a path that was
+  correct when written may since have moved — decide deliberately whether to
+  include it or exclude it the way `docs/adr/` already is, and record the
+  reason in the script's header comment either way.
+- **Risk:** Low — one predicate in a lint script, no product code. The only
+  real work is whatever dead citations it surfaces on first run.
+- **Status:** open
+
+### D-019 · The non-throwing half of app-label resolution is still silent
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts:103-125`
+  (the `Resolve app names` `runOperation` block)
+- **Problem:** D-003 fixed the `catch`. It did not fix the two ways the same
+  block fails without throwing, and those are the likelier ones:
+  `if (response.success && response.data)` falls straight through when the
+  request resolves with `success: false`, and the inner `if (label)` falls
+  through when a 200 carries neither `label` nor `name`. Either way the app
+  stays on its raw id with nothing logged — the exact symptom D-003 was filed
+  about. A scheduler-level 401 or 429 surfaces as `success: false`, not as a
+  throw, so the most likely systemic failure mode still leaves no trace.
+  Additionally, this phase's `runOperation` result is discarded (a bare
+  `await` with no assignment), unlike the mapping phase below it whose
+  outcome is inspected — so a wholly-failed or cancelled label phase is
+  indistinguishable from a clean one at the call site.
+  `appOperations.getAppById:110-119` shows the house pattern for the same
+  endpoint: `log.error('getAppById failed', { code, appId })`.
+- **Done when:** Both non-throwing paths log via the shared `logger`
+  (identifiers and outcomes only, no payload), and the label phase's
+  `runOperation` outcome is either inspected or has a comment saying why it
+  deliberately is not. Existing `pushGroupOps.test.ts` cases stay green; new
+  cases proven non-vacuous the same way D-003's was.
+- **Risk:** Low — logging plus one outcome check, no change to the degrade
+  behavior itself. Touches logging, so route through
+  `security-logging-reviewer`.
+- **Status:** open
+
+### D-020 · pushGroupOps reads an Okta app response unvalidated, one call away from a validated helper
+
+- **Category:** standards
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts:108-118`,
+  `src/sidepanel/hooks/useOktaApi/appOperations.ts:110-119` (`getAppById`)
+- **Problem:** ADR-0006 requires every Okta response to be validated with zod
+  at the boundary. `applyPushGroupMappings` branches on
+  `response.data.label || response.data.name` straight off a raw
+  `makeApiRequest` to `/api/v1/apps/{id}`, with no parse — while the sibling
+  list call _in the same function_ validates through
+  `oktaAppGroupAssignmentSchema`, and `getAppById` resolves that identical
+  endpoint through `parseOkta(oktaAppListItemSchema, …)`. The label is
+  rendered as an app name in the UI, so it is end-user-influenced text
+  reaching the DOM unvalidated. `getAppById` also `encodeURIComponent`s the
+  id, which the raw call here does not.
+- **Done when:** The label lookup goes through `getAppById` (preferred — it
+  already returns a validated `OktaAppListItem`, caches nothing, and logs its
+  own failure) or parses with the same schema inline. Behavior for a
+  resolvable app is unchanged. Sequence **after D-019**, or fold D-019 into
+  it: adopting `getAppById` changes what the failure paths look like, so
+  doing them in the other order means writing the logging twice.
+- **Risk:** Low-medium — swapping the call changes the failure surface
+  (`getAppById` returns `null` rather than throwing). Touches
+  Okta-response handling: route through `security-logging-reviewer`.
+- **Status:** open
+
+### D-021 · `CONVENTIONS.md`'s mandated `pkill -9 -f vitest` kills the shell that runs it
+
+- **Category:** standards
+- **Priority:** P2
+- **Size:** S
+- **Files:** `CONVENTIONS.md` (the "Test expectations" bullet on the external
+  timeout wrapper), and by inheritance every agent file that repeats it
+- **Problem:** The mandated cleanup is
+  `perl -e 'alarm 240; exec @ARGV' npx vitest run <file>`, then
+  `pkill -9 -f vitest`. But `pkill -f` matches against the **full command
+  line of every process**, and when the two are chained in one shell
+  invocation (`… vitest run x && … ; pkill -9 -f vitest`) the invoking
+  shell's own command line contains the string `vitest` — so the `pkill`
+  SIGKILLs its own parent shell along with the runner. Anything sequenced
+  after it in that command never runs, and the command reports a bare
+  non-zero exit with no output explaining why.
+  Observed twice on 2026-08-21 (5th run), independently: the D-005 writer
+  agent had a mutation-test run truncated mid-flight this way, briefly
+  leaving a mutated copy of `useRuleImpact.ts` on disk (it restored it), and
+  the session lead lost a `git commit` that was chained after the same
+  `pkill` — the commit silently did not happen and only a follow-up
+  `git status` revealed it. The failure mode is quiet and it can leave
+  mutated production files behind, which is the dangerous part.
+  Second-order: a stray `pkill -f vitest` from one agent also kills any other
+  agent's in-flight run, so this gets worse the moment a night runs writers
+  in parallel — which `SESSION.md` step 4 explicitly permits.
+- **Done when:** `CONVENTIONS.md` states that the `pkill` must be its own
+  final command, never chained after anything that still needs to run, and
+  narrows the pattern so it cannot match the invoking shell (e.g.
+  `pkill -9 -f 'node.*vitest'`, verified against a live run to confirm it
+  still reaps the runner). Any agent file repeating the recipe is updated to
+  match.
+- **Risk:** Low to fix. Non-trivial to leave: it silently truncates commands
+  and can strand a mutated source file in the working tree.
+- **Status:** open
+
+### D-022 · Half of a React-warning assertion cannot fire under React 19
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaTabContext.test.tsx:360-364`
+- **Problem:** The post-unmount case ends by asserting that no `console.error`
+  call matched `/not wrapped in act|unmounted component/i`. The alternation
+  has two halves and only one is live on React 19 (`^19.2.0` here): the
+  "Can't perform a React state update on an unmounted component" warning was
+  removed in React 18, so that half can never match and contributes nothing.
+  The `not wrapped in act` half **does** still fire under React 19, so the
+  assertion is half-dead, not dead — the original flag from the D-006 writer
+  called it wholly vacuous, which overstates it.
+  The load-bearing assertion in that test is the line above it
+  (`expect(sendCount()).toBe(afterFirstAttempt)` — no retry after unmount);
+  the warning check is a belt-and-braces addition. This is the only
+  occurrence of the pattern in `src/`.
+- **Done when:** Either the dead `unmounted component` alternand is dropped
+  (leaving the live `act` check, which is a narrowing, not a weakening — the
+  removed half could not fail), or a comment records that it is retained
+  deliberately as a guard against a React downgrade. Do **not** delete the
+  assertion outright: the surviving half is real, and ADR-0012 applies.
+- **Risk:** Low. Cosmetic in effect — no coverage changes either way.
+- **Status:** open

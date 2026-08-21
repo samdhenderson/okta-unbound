@@ -112,6 +112,39 @@ describe('applyPushGroupMappings', () => {
     expect(core.runOperation).not.toHaveBeenCalled();
   });
 
+  // D-003: a per-app label lookup that throws keeps the existing name (the raw
+  // app id), so the only way to diagnose a systemic resolution failure is the
+  // log line. Spying on `console.error` — the shared logger's sink — matches how
+  // logging is asserted elsewhere in the repo (`src/content/index.test.ts`).
+  it('logs the failed app id when app-label resolution throws, keeping the existing name', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const makeApiRequest = vi.fn(async (endpoint: string) => {
+      if (endpoint === '/api/v1/apps/0oaFAKE1') {
+        throw new Error('Request failed');
+      }
+      if (endpoint.startsWith('/api/v1/apps/0oaFAKE1/groups')) {
+        return { success: true, data: [], headers: {} };
+      }
+      throw new Error(`Unrouted test endpoint: ${endpoint}`);
+    });
+    const core = makeCore({ makeApiRequest });
+    const { applyPushGroupMappings } = createPushGroupOperations(core);
+
+    const result = await applyPushGroupMappings([appGroup()]);
+
+    // The name stays unresolved either way — that is the intended degrade.
+    expect(result[0].sourceAppName).toBeUndefined();
+
+    const logged = consoleError.mock.calls
+      .flat()
+      .map((arg) => (typeof arg === 'string' ? arg : String(arg)))
+      .join(' ');
+    expect(logged).toContain('Failed to resolve app name for app 0oaFAKE1');
+    // Identifiers and outcomes only — no response payload reaches the log.
+    expect(logged).not.toContain('Pushed Group');
+    consoleError.mockRestore();
+  });
+
   // ADR-0009 adoption: a cancel mid-run must not throw — the groups are
   // returned enriched with whatever resolved before the cancel (here: nothing).
   it('returns groups without enrichment when the run is cancelled before any app resolves', async () => {
