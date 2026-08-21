@@ -1,44 +1,140 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, act, fireEvent } from '@testing-library/react';
+import type { ComponentProps, ReactElement } from 'react';
+import { render, screen, act, fireEvent, type RenderResult } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Modal, { MODAL_LAYER_ID } from './Modal';
 
-function renderModal(overrides: Partial<React.ComponentProps<typeof Modal>> = {}) {
+/** Shell nodes mounted by {@link mountShell}, torn down after every test. */
+const shellNodes: HTMLElement[] = [];
+
+afterEach(() => {
+  shellNodes.splice(0).forEach((node) => node.remove());
+});
+
+/** A shell shaped like `App`: the scroll root, then the modal layer after it. */
+function mountShell() {
+  const scrollRoot = document.body.appendChild(document.createElement('div'));
+  const layer = document.body.appendChild(document.createElement('div'));
+  layer.id = MODAL_LAYER_ID;
+  shellNodes.push(scrollRoot, layer);
+  return { scrollRoot, layer };
+}
+
+/**
+ * D-016. `Modal` has two render branches: it portals its overlay into the shell's
+ * modal layer when one is declared, and renders in place when none is. `App` always
+ * mounts the layer, so the portal branch is the one that ships — yet the a11y
+ * contract (dialog role, `aria-modal`, Tab trap, Escape, focus restore, and the
+ * `aria-hidden`/`inert` exit window) used to be asserted only against the fallback.
+ *
+ * The describes below are therefore parametrised over both configurations. Each one
+ * also carries an `expectBranch` assertion so a regression that collapsed the two
+ * branches into one could not make the portal configuration pass vacuously.
+ */
+interface MountResult {
+  /** The node `render` mounted into — the shell's scroll root in the portal case. */
+  container: HTMLElement;
+  /** The mounted modal layer, or `null` when the configuration declares none. */
+  layer: HTMLElement | null;
+  rerender: RenderResult['rerender'];
+}
+
+interface RenderConfiguration {
+  /** Label interpolated into the parametrised describe titles. */
+  name: string;
+  /** Renders `ui` on this configuration's branch. */
+  mount: (ui: ReactElement) => MountResult;
+  /** Asserts `dialog` landed on the branch this configuration names. */
+  expectBranch: (dialog: HTMLElement, rendered: Omit<MountResult, 'rerender'>) => void;
+}
+
+const configurations: RenderConfiguration[] = [
+  {
+    name: 'no modal layer',
+    mount: (ui) => {
+      const { container, rerender } = render(ui);
+      return { container, rerender, layer: null };
+    },
+    expectBranch: (dialog, { container }) => {
+      expect(document.getElementById(MODAL_LAYER_ID)).toBeNull();
+      expect(container.contains(dialog)).toBe(true);
+    },
+  },
+  {
+    name: 'portalled into the modal layer',
+    mount: (ui) => {
+      const { scrollRoot, layer } = mountShell();
+      const { container, rerender } = render(ui, { container: scrollRoot });
+      return { container, rerender, layer };
+    },
+    expectBranch: (dialog, { container, layer }) => {
+      expect(layer).not.toBeNull();
+      expect(layer?.contains(dialog)).toBe(true);
+      expect(container.contains(dialog)).toBe(false);
+    },
+  },
+];
+
+function renderModal(
+  mount: RenderConfiguration['mount'],
+  overrides: Partial<ComponentProps<typeof Modal>> = {},
+) {
   const onClose = vi.fn();
-  render(
+  const rendered = mount(
     <Modal isOpen title="Compare users" onClose={onClose} {...overrides}>
       <button>Inside action</button>
     </Modal>,
   );
-  return { onClose };
+  return { onClose, ...rendered };
 }
 
-describe('Modal accessibility', () => {
+describe.each(configurations)('Modal accessibility ($name)', ({ mount, expectBranch }) => {
   it('exposes dialog semantics with an accessible name', () => {
-    renderModal();
+    const { container, layer } = renderModal(mount);
     const dialog = screen.getByRole('dialog');
+    expectBranch(dialog, { container, layer });
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(dialog).toHaveAccessibleName('Compare users');
   });
 
   it('closes on Escape', async () => {
     const user = userEvent.setup();
-    const { onClose } = renderModal();
+    const { onClose } = renderModal(mount);
     await user.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('renders nothing when closed', () => {
-    renderModal({ isOpen: false });
+    renderModal(mount, { isOpen: false });
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('moves focus into the dialog on open', () => {
-    renderModal();
+    renderModal(mount);
     const dialog = screen.getByRole('dialog');
     // Focus lands on the first focusable control inside the panel (the Close button).
     expect(dialog.contains(document.activeElement)).toBe(true);
     expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it('traps Tab focus inside the dialog', async () => {
+    const user = userEvent.setup();
+    const { container, layer } = renderModal(mount);
+    const dialog = screen.getByRole('dialog');
+    expectBranch(dialog, { container, layer });
+
+    const close = screen.getByRole('button', { name: 'Close modal' });
+    const inside = screen.getByRole('button', { name: 'Inside action' });
+
+    // Tabbing forward off the last control wraps to the first…
+    inside.focus();
+    await user.tab();
+    expect(document.activeElement).toBe(close);
+
+    // …and backward off the first wraps to the last. Focus never leaves the panel.
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(inside);
+    expect(dialog.contains(document.activeElement)).toBe(true);
   });
 });
 
@@ -57,15 +153,16 @@ function Harness({ isOpen }: { isOpen: boolean }) {
 /** The closing panel, found without going through the accessible tree. */
 const rawPanel = () => document.querySelector<HTMLElement>('[role="dialog"]');
 
-describe('Modal exit transition', () => {
+describe.each(configurations)('Modal exit transition ($name)', ({ mount, expectBranch }) => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
   it('holds the panel in the DOM but out of the accessible tree while it animates out', () => {
-    const { rerender } = render(<Harness isOpen />);
+    const { rerender, container, layer } = mount(<Harness isOpen />);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expectBranch(screen.getByRole('dialog'), { container, layer });
 
     rerender(<Harness isOpen={false} />);
 
@@ -80,7 +177,7 @@ describe('Modal exit transition', () => {
   });
 
   it('restores focus to the trigger as soon as isOpen flips false, before the exit resolves', () => {
-    const { rerender } = render(<Harness isOpen={false} />);
+    const { rerender } = mount(<Harness isOpen={false} />);
     const trigger = screen.getByTestId('trigger');
     trigger.focus();
 
@@ -95,7 +192,7 @@ describe('Modal exit transition', () => {
   });
 
   it('unmounts the panel on animationend', () => {
-    const { rerender } = render(<Harness isOpen />);
+    const { rerender } = mount(<Harness isOpen />);
     rerender(<Harness isOpen={false} />);
 
     const panel = rawPanel();
@@ -106,7 +203,7 @@ describe('Modal exit transition', () => {
   });
 
   it('ignores an animationend bubbling up from panel content', () => {
-    const { rerender } = render(<Harness isOpen />);
+    const { rerender } = mount(<Harness isOpen />);
     const inner = screen.getByRole('button', { name: 'Inside action' });
     rerender(<Harness isOpen={false} />);
 
@@ -117,7 +214,7 @@ describe('Modal exit transition', () => {
 
   it('unmounts the panel on the timeout fallback when no exit event arrives', () => {
     vi.useFakeTimers();
-    const { rerender } = render(<Harness isOpen />);
+    const { rerender } = mount(<Harness isOpen />);
     rerender(<Harness isOpen={false} />);
     expect(rawPanel()).not.toBeNull();
 
@@ -130,7 +227,7 @@ describe('Modal exit transition', () => {
 
   it('cancels the hold when the modal reopens mid-exit', () => {
     vi.useFakeTimers();
-    const { rerender } = render(<Harness isOpen />);
+    const { rerender } = mount(<Harness isOpen />);
     rerender(<Harness isOpen={false} />);
     rerender(<Harness isOpen />);
 
@@ -150,7 +247,7 @@ describe('Modal exit transition', () => {
       removeEventListener: vi.fn(),
     }));
 
-    const { rerender } = render(<Harness isOpen />);
+    const { rerender } = mount(<Harness isOpen />);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     const timersWhileOpen = vi.getTimerCount();
 
@@ -173,21 +270,6 @@ describe('Modal exit transition', () => {
  * mounted after it.
  */
 describe('Modal stacking', () => {
-  const shellNodes: HTMLElement[] = [];
-
-  afterEach(() => {
-    shellNodes.splice(0).forEach((node) => node.remove());
-  });
-
-  /** A shell shaped like `App`: the scroll root, then the modal layer after it. */
-  function mountShell() {
-    const scrollRoot = document.body.appendChild(document.createElement('div'));
-    const layer = document.body.appendChild(document.createElement('div'));
-    layer.id = MODAL_LAYER_ID;
-    shellNodes.push(scrollRoot, layer);
-    return { scrollRoot, layer };
-  }
-
   /** A modal followed by the activity bar — the order every tab panel produces. */
   const shellContent = (
     <>
