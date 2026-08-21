@@ -82,7 +82,7 @@ Format:
 - **Done when:** The catch logs via the shared `logger` (outcome only, no
   payload) matching the sibling catches' pattern in the same file.
 - **Risk:** Low.
-- **Status:** open
+- **Status:** claimed:claude/stoic-gates-jhvljx
 
 ### D-004 · useRuleLifecycle.ts has zero test coverage on a security-sensitive audit path
 
@@ -117,7 +117,7 @@ Format:
 - **Done when:** A test file covers both stale-capture guards (simulating a
   reopen-for-another-rule mid-flight) and the error path.
 - **Risk:** Low-medium.
-- **Status:** open
+- **Status:** claimed:claude/stoic-gates-jhvljx
 
 ### D-006 · Untested error/guard branches in three hooks
 
@@ -134,7 +134,7 @@ Format:
 - **Done when:** Each named branch has at least one test proving both sides
   of the condition.
 - **Risk:** Low.
-- **Status:** open
+- **Status:** claimed:claude/stoic-gates-jhvljx
 
 ### D-007 · No session-expiry / 401 handling anywhere in the API path
 
@@ -480,3 +480,35 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   red-baseline rule fires on its own. (It did, on 2026-08-21's 4th run: the
   baseline check caught this without the item having to be claimed by name.)
 - **Status:** done:#69
+
+### D-018 · `lint:cited-paths` does not cover the five files a nightly run acts on
+
+- **Category:** standards
+- **Priority:** P2
+- **Size:** S
+- **Files:** `scripts/check-cited-paths.mjs` (the `IN_SCOPE` predicate)
+- **Problem:** The gate's scope is `CLAUDE.md`, `AGENTS.md`, `docs/**`, and
+  `.claude/**` — so `IMPROVEMENTS.md`, `DEBT.md`, `CONVENTIONS.md`,
+  `SESSION.md`, and `NIGHTLY.md` are all outside it. Those are precisely the
+  files whose `src/…` citations are read as instructions rather than as prose:
+  an item's **Files** list is the scope contract a nightly writer agent is held
+  to, and `SESSION.md` step 2 selects items by it. A stale path there does not
+  just misdirect a reader, it mis-scopes a diff. Found the hard way on
+  2026-08-21's 5th run: `I-003` cited
+  `src/sidepanel/components/groups/GroupPushSection.tsx`, which has never
+  existed — the file is at `groups/detail/GroupPushSection.tsx`, i.e. inside
+  the off-limits window. The wrong path hid the fact that the item was not
+  selectable at all, and `lint:cited-paths` passed clean over it both before
+  and after the correction.
+- **Done when:** `IN_SCOPE` also covers the two ledgers plus `CONVENTIONS.md`,
+  `SESSION.md`, and `NIGHTLY.md`, and `npm run lint:cited-paths` is green
+  against them (fix, do not exempt, whatever it turns up on the first run).
+  `docs/adr/`'s exclusion stays exactly as it is and for the reason the script
+  already documents. Consider whether `NIGHTLY.md` belongs: it is an
+  append-only historical log, so it may deserve the same immutability argument
+  as an ADR — decide explicitly and record the reasoning in the script's
+  `IN_SCOPE` doc comment either way.
+- **Risk:** Low — build-script scope widening, no product code. The one real
+  risk is the first run turning up stale paths in items nobody is working on;
+  those get corrected in place, not exempted.
+- **Status:** open
