@@ -512,3 +512,79 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   risk is the first run turning up stale paths in items nobody is working on;
   those get corrected in place, not exempted.
 - **Status:** open
+
+### D-019 · App-label resolution is still silent on its two soft-failure paths
+
+- **Category:** correctness
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts:114-122`
+- **Problem:** D-003 made the label-resolution `catch` log, but the catch only
+  fires on a _thrown_ rejection. Two soft failures never enter it and remain
+  exactly as silent as the catch used to be: a `response.success === false`,
+  and a 200 whose `data` carries neither `label` nor `name`. Either one leaves
+  the app showing its raw id with no trace — the same symptom D-003 was filed
+  to end, reached by a different route. Noticed while fixing D-003 and
+  deliberately not folded into that diff, since D-003's **Done when** names the
+  catch specifically.
+- **Done when:** Both soft-failure paths log through the shared `logger` at the
+  same level and in the same payload-free shape as the catch beside them
+  (identifier + outcome, never the response body). Behaviour otherwise
+  unchanged: still keep the existing name, still never throw. A test per path,
+  proven non-vacuous the way D-003's was — assert the log fires, with the
+  keeps-the-name and never-throws assertions passing both before and after.
+- **Risk:** Low — additive logging on two branches that already do the right
+  thing behaviourally.
+- **Status:** open
+
+### D-020 · The app-label response is read without validation
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts:115`
+- **Problem:** `response.data.label || response.data.name` reads an Okta
+  response with no zod parse at the boundary, which ADR-0006 requires — every
+  Okta response is untrusted, and an app label is end-user-controllable data
+  that ends up rendered. The `response.success && response.data` guard in front
+  of it checks presence, not shape. Pre-existing; surfaced by the D-003 fix
+  reading the same lines and confirmed independently by
+  `security-logging-reviewer` on that diff, which classed it pre-existing and
+  out of scope for D-003.
+- **Done when:** The app-label read goes through a lenient zod schema at the
+  boundary like the other Okta reads in `useOktaApi/`, and a malformed response
+  degrades to "keep the existing name" rather than reaching the render path.
+  Check whether a suitable app schema already exists before adding one.
+- **Risk:** Low — the failure mode it closes is narrow, but it is the exact
+  shape ADR-0006 exists to prevent.
+- **Status:** open
+
+### D-021 · `CONVENTIONS.md`'s mandated `pkill -9 -f vitest` is unscoped
+
+- **Category:** standards
+- **Priority:** P2
+- **Size:** S
+- **Files:** `CONVENTIONS.md` (the "Test expectations" bullet on wrapping local
+  `vitest run` invocations)
+- **Problem:** The convention says to run `pkill -9 -f vitest` after every
+  local vitest invocation, regardless of outcome. That pattern matches **every**
+  process on the box whose command line contains `vitest` — including other
+  agents' test runs and, critically, the `vitest related --run` step inside the
+  `lint-staged` pre-commit hook. It also matches the issuing shell itself,
+  whose own command line contains the string, which silently truncates that
+  command's output. Both were hit on 2026-08-21's 5th run: a concurrent
+  writer agent's `pkill` SIGKILLed the session's pre-commit hook mid-commit
+  (lint-staged reverted cleanly and the retry succeeded, so nothing was lost —
+  but the failure looked like a test failure, not a kill), and two diagnostic
+  commands returned empty because they had killed their own shell. `SESSION.md`
+  step 4 explicitly allows disjoint items to run in parallel, so concurrent
+  vitest processes are a designed-for condition, not misuse.
+- **Done when:** The convention's kill is scoped so it cannot reap another
+  process's run or its own shell — e.g. kill by the recorded PID of the
+  wrapped run rather than by pattern, or drop the blanket `pkill` in favour of
+  the external `alarm` wrapper that already bounds the run. Whatever is
+  chosen, the reason the blanket form was wrong is recorded inline, so a later
+  session does not reintroduce it.
+- **Risk:** Low to fix. Left alone, it keeps producing failures that look like
+  something else, which is the expensive part.
+- **Status:** open
