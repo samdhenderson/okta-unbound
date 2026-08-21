@@ -9,15 +9,26 @@
  * a file that no longer exists is worse than no doc — it sends the next
  * reader hunting for something that was deliberately removed.
  *
- * Scope: tracked `.md` files under `docs/` and `.claude/`, plus the two root
- * pointer files. Citations are read in the two forms that actually occur in
- * this corpus — a backticked span (`` `src/foo/bar.ts` ``) or a markdown
- * link target (`[text](../src/foo/bar.ts)`) — resolved relative to the
- * citing file first (docs use `../src/…`), then re-tried from the repo root
- * (agent/skill files under `.claude/` cite bare `src/…`). Bare, unformatted
- * mentions in running prose are not scanned: nowhere in this corpus is a
- * real citation written that way, and inventing the form would just widen
- * the false-positive surface.
+ * Scope: tracked `.md` files under `docs/` and `.claude/`, the two root
+ * pointer files (`CLAUDE.md`, `AGENTS.md`), and the root ledgers the nightly
+ * maintenance system runs on — `DEBT.md`, `IMPROVEMENTS.md`, `SESSION.md`,
+ * `CONVENTIONS.md`. The ledgers matter most of all: a nightly session picks
+ * its work *by an item's Files list*, so a stale path there does not merely
+ * misinform a reader, it mis-routes the machinery — it is how disjointness
+ * is judged and how off-limits directories are recognised.
+ *
+ * Citations are read in the two forms that actually occur in this corpus — a
+ * backticked span (`` `src/foo/bar.ts` ``) or a markdown link target
+ * (`[text](../src/foo/bar.ts)`) — resolved relative to the citing file first
+ * (docs use `../src/…`), then re-tried from the repo root (agent/skill files
+ * under `.claude/` cite bare `src/…`). A citation may carry a line-number
+ * suffix (`` `src/foo/bar.ts:311` ``, `:103-125`, `:120,125,161-175`), which
+ * the ledgers use constantly to point at the exact block under discussion;
+ * the suffix is stripped and only the path is checked for existence. Bare,
+ * unformatted mentions in running prose are not scanned, and no suffix shape
+ * beyond that comma/range grammar is recognised: nowhere in this corpus is a
+ * real citation written otherwise, and inventing forms would just widen the
+ * false-positive surface.
  *
  * Three shapes are deliberately not citations of a concrete file, so they
  * are never checked for existence:
@@ -35,8 +46,18 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
+/** Root-level files in scope: the two pointer files plus the live nightly ledgers. */
+const ROOT_FILES = new Set([
+  'CLAUDE.md',
+  'AGENTS.md',
+  'DEBT.md',
+  'IMPROVEMENTS.md',
+  'SESSION.md',
+  'CONVENTIONS.md',
+]);
+
 /**
- * Docs/skills corpus this check actually owns.
+ * Docs, skills, and ledger corpus this check actually owns.
  *
  * **`docs/adr/` is deliberately excluded.** An ADR is a dated record of a
  * decision, and `docs/adr/README.md` states they are immutable once accepted —
@@ -48,13 +69,29 @@ import { dirname, resolve } from 'node:path';
  * not exist for months, which is precisely backwards. If an ADR's citation has
  * gone stale, that is a signal to write a superseding ADR, not to edit the old
  * one — and this gate must not create pressure to do the wrong thing.
+ *
+ * **`NIGHTLY.md` is deliberately excluded, for the same reason.** It is an
+ * append-only log of what each session found and did, so an entry's paths
+ * describe the repo *as it was that night*. It already contains one citation
+ * that does not resolve — `src/sidepanel/components/groups/GroupPushSection.tsx`
+ * — and that is the point of the entry: it records discovering that this exact
+ * path was wrong. "Fixing" it would erase the finding it documents. Same
+ * argument as `docs/adr/` above; the remedy for a stale path in the log is the
+ * next entry, never an edit to an old one. The other four root ledgers are
+ * live working documents and stay in scope.
  */
 const IN_SCOPE = (f) =>
   !f.startsWith('docs/adr/') &&
-  (f === 'CLAUDE.md' || f === 'AGENTS.md' || f.startsWith('docs/') || f.startsWith('.claude/'));
+  (ROOT_FILES.has(f) || f.startsWith('docs/') || f.startsWith('.claude/'));
 
 /** A bare or `../`-prefixed path rooted at `src/`, ending in a real segment. */
 const SRC_PATH_RE = /^(?:\.\.\/)+src\/[\w.-]+(?:\/[\w.-]+)*$|^src\/[\w.-]+(?:\/[\w.-]+)*$/;
+
+/**
+ * Trailing line reference on a citation — `:311`, `:103-125`, `:93,99-106`.
+ * Stripped before the path is tested; the line numbers are prose, not a file.
+ */
+const LINE_SUFFIX_RE = /:\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*$/;
 
 /** Trailing `.ext` — anything without one is a directory reference, not a file. */
 const HAS_EXTENSION_RE = /\.[A-Za-z0-9]+$/;
@@ -77,7 +114,13 @@ function resolveCitation(file, rawPath) {
   return existsSync(fallback);
 }
 
-/** Pull candidate `src/…` citations out of one line, honoring link vs. backtick form. */
+/**
+ * Pull candidate `src/…` citations out of one line, honoring link vs. backtick form.
+ *
+ * Returns `{ raw, path }` per hit: `raw` is the citation exactly as written, so an
+ * offender report names text the reader can find in the file; `path` is the same
+ * span with any line-number suffix removed, which is what gets resolved on disk.
+ */
 function citationsOnLine(line) {
   const candidates = [];
 
@@ -93,7 +136,9 @@ function citationsOnLine(line) {
     candidates.push(match[1].trim());
   }
 
-  return candidates.filter((c) => SRC_PATH_RE.test(c) && HAS_EXTENSION_RE.test(c));
+  return candidates
+    .map((raw) => ({ raw, path: raw.replace(LINE_SUFFIX_RE, '') }))
+    .filter(({ path }) => SRC_PATH_RE.test(path) && HAS_EXTENSION_RE.test(path));
 }
 
 const offenders = [];
@@ -110,9 +155,9 @@ for (const file of files) {
     }
     if (inFence) continue;
 
-    for (const rawPath of citationsOnLine(line)) {
-      if (!resolveCitation(file, rawPath)) {
-        offenders.push({ file, line: i + 1, rawPath });
+    for (const { raw, path } of citationsOnLine(line)) {
+      if (!resolveCitation(file, path)) {
+        offenders.push({ file, line: i + 1, rawPath: raw });
       }
     }
   }
@@ -128,4 +173,6 @@ if (offenders.length > 0) {
   process.exit(1);
 }
 
-console.log(`All cited src/ paths resolve, across ${files.length} tracked docs/skill files.`);
+console.log(
+  `All cited src/ paths resolve, across ${files.length} tracked docs, skill, and ledger files.`,
+);
