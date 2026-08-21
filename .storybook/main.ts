@@ -74,16 +74,26 @@ const config: StorybookConfig = {
       '@': path.resolve(configDir, '../src'),
     };
 
-    // Pre-bundle `zod` up front. It is the one non-storybook runtime dependency a
-    // story file imports DIRECTLY (EntityPicker.stories builds fake descriptor
-    // schemas with it). Under the browser test runner it would otherwise be
-    // discovered lazily when that story loads, triggering a mid-run dep
-    // re-optimization that invalidates already-served module URLs (notably the
-    // addon-docs react-dom-shim) and fails the story with "Failed to fetch
-    // dynamically imported module". Including it here settles the optimizer before
-    // the suite runs.
+    // Pre-bundle the non-storybook runtime dependencies the story graph reaches
+    // directly. Under the browser test runner each would otherwise be discovered
+    // lazily when the importing module first loads, triggering a mid-run dep
+    // re-optimization that invalidates already-served module URLs and fails
+    // whichever story file happened to be in flight — with an error that names
+    // that innocent file rather than the dependency ("Failed to fetch dynamically
+    // imported module", or "Vitest failed to find the current suite" when the
+    // reload lands during collection). Including them here settles the optimizer
+    // before the suite runs.
+    //
+    // - `zod` — EntityPicker.stories builds fake descriptor schemas with it.
+    // - `react-dom` — shared/Modal imports `createPortal` from it (D-009). The
+    //   bare specifier is distinct from the `react-dom/client` main.tsx uses, and
+    //   Vite optimizes each subpath separately, so this is not already covered.
     viteConfig.optimizeDeps = viteConfig.optimizeDeps ?? {};
-    viteConfig.optimizeDeps.include = [...(viteConfig.optimizeDeps.include ?? []), 'zod'];
+    viteConfig.optimizeDeps.include = [
+      ...(viteConfig.optimizeDeps.include ?? []),
+      'zod',
+      'react-dom',
+    ];
     return viteConfig;
   },
 };
