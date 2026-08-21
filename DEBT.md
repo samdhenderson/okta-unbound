@@ -513,3 +513,62 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
 - **Risk:** Low — one predicate in a lint script, no product code. The only
   real work is whatever dead citations it surfaces on first run.
 - **Status:** open
+
+### D-019 · The non-throwing half of app-label resolution is still silent
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts:103-125`
+  (the `Resolve app names` `runOperation` block)
+- **Problem:** D-003 fixed the `catch`. It did not fix the two ways the same
+  block fails without throwing, and those are the likelier ones:
+  `if (response.success && response.data)` falls straight through when the
+  request resolves with `success: false`, and the inner `if (label)` falls
+  through when a 200 carries neither `label` nor `name`. Either way the app
+  stays on its raw id with nothing logged — the exact symptom D-003 was filed
+  about. A scheduler-level 401 or 429 surfaces as `success: false`, not as a
+  throw, so the most likely systemic failure mode still leaves no trace.
+  Additionally, this phase's `runOperation` result is discarded (a bare
+  `await` with no assignment), unlike the mapping phase below it whose
+  outcome is inspected — so a wholly-failed or cancelled label phase is
+  indistinguishable from a clean one at the call site.
+  `appOperations.getAppById:110-119` shows the house pattern for the same
+  endpoint: `log.error('getAppById failed', { code, appId })`.
+- **Done when:** Both non-throwing paths log via the shared `logger`
+  (identifiers and outcomes only, no payload), and the label phase's
+  `runOperation` outcome is either inspected or has a comment saying why it
+  deliberately is not. Existing `pushGroupOps.test.ts` cases stay green; new
+  cases proven non-vacuous the same way D-003's was.
+- **Risk:** Low — logging plus one outcome check, no change to the degrade
+  behavior itself. Touches logging, so route through
+  `security-logging-reviewer`.
+- **Status:** open
+
+### D-020 · pushGroupOps reads an Okta app response unvalidated, one call away from a validated helper
+
+- **Category:** standards
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts:108-118`,
+  `src/sidepanel/hooks/useOktaApi/appOperations.ts:110-119` (`getAppById`)
+- **Problem:** ADR-0006 requires every Okta response to be validated with zod
+  at the boundary. `applyPushGroupMappings` branches on
+  `response.data.label || response.data.name` straight off a raw
+  `makeApiRequest` to `/api/v1/apps/{id}`, with no parse — while the sibling
+  list call *in the same function* validates through
+  `oktaAppGroupAssignmentSchema`, and `getAppById` resolves that identical
+  endpoint through `parseOkta(oktaAppListItemSchema, …)`. The label is
+  rendered as an app name in the UI, so it is end-user-influenced text
+  reaching the DOM unvalidated. `getAppById` also `encodeURIComponent`s the
+  id, which the raw call here does not.
+- **Done when:** The label lookup goes through `getAppById` (preferred — it
+  already returns a validated `OktaAppListItem`, caches nothing, and logs its
+  own failure) or parses with the same schema inline. Behavior for a
+  resolvable app is unchanged. Sequence **after D-019**, or fold D-019 into
+  it: adopting `getAppById` changes what the failure paths look like, so
+  doing them in the other order means writing the logging twice.
+- **Risk:** Low-medium — swapping the call changes the failure surface
+  (`getAppById` returns `null` rather than throwing). Touches
+  Okta-response handling: route through `security-logging-reviewer`.
+- **Status:** open
