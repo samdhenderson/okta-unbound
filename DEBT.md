@@ -423,3 +423,53 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   cheapest route. No existing assertion weakened or deleted (ADR-0012).
 - **Risk:** Low — test-only, strictly additive coverage.
 - **Status:** open
+
+### D-017 · The `storybook` CI job is red on `main` — a story file dies on a mid-run dep re-optimization
+
+- **Category:** standards
+- **Priority:** P1
+- **Size:** S
+- **Files:** `.storybook/main.ts` (the `viteFinal` `optimizeDeps.include` list),
+  `src/sidepanel/components/shared/Modal.tsx:41` (the `react-dom` import that
+  triggers it)
+- **Problem:** The `storybook` job has failed on every run since PR #68 merged
+  — on both of that PR's commits, on a re-run of the same head, and on the
+  merge commit itself (`808ab30`) — while `verify` stays green. It always
+  fails the same way:
+
+  ```
+  Failed to import test file .../shared/ActionBar.stories.tsx
+  Caused by: Vitest failed to find the current suite.
+  ```
+
+  `ActionBar.stories.tsx` is a bystander and was never touched. D-009's fix
+  added `import { createPortal } from 'react-dom'` to `Modal.tsx` — the only
+  new bare specifier in that PR, and distinct from the `react-dom/client`
+  `main.tsx` imports, which Vite optimizes as a separate entry. So `react-dom`
+  is discovered lazily when the browser runner first loads `Modal`, and the
+  resulting dep re-optimization reloads the page and invalidates
+  already-served module URLs; whichever story file is in flight dies, and when
+  the reload lands during collection the story's `test()` calls arrive with no
+  current suite, which is the second line above.
+
+  `.storybook/main.ts` already documents this exact failure mode and already
+  carries the remedy for `zod` — the fix is `react-dom` beside it.
+
+- **Done when:** `react-dom` is pre-bundled in `.storybook/main.ts`'s
+  `optimizeDeps.include` and the `storybook` job is green on `main`. A fix is
+  already written and pushed to branch `claude/stoic-gates-apffyc` (commit
+  `9512d41`); it needs a PR, or re-applying if that branch is gone. **It was
+  never proven locally red-then-green** — the suite passes locally without it,
+  and the faithful repro (CI's `build-storybook` then `test:storybook`) needs
+  more memory than the session had. CI is the proof; if it does not go green,
+  the diagnosis above is wrong and the next hypothesis is the run's tail
+  behaviour, since `ActionBar.stories.tsx` is the last file processed.
+- **Risk:** Low to fix (one line in a build config, no product code). High to
+  leave: a red gate on `main` trains everyone to ignore the job, which is how
+  D-010 went unnoticed for four commits.
+- **Note for whoever picks this up:** a nightly session may not catch this at
+  step 1. `CONVENTIONS.md` lists `test:storybook` as _conditional_ on what the
+  diff touches, and both prior sessions skipped it at baseline for browser
+  cost — so the red-baseline rule that should make this the whole session may
+  not trigger on its own. Claim this item by name.
+- **Status:** open
