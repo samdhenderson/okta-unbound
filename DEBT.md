@@ -82,7 +82,7 @@ Format:
 - **Done when:** The catch logs via the shared `logger` (outcome only, no
   payload) matching the sibling catches' pattern in the same file.
 - **Risk:** Low.
-- **Status:** claimed:claude/stoic-gates-jhvljx
+- **Status:** done:#71
 
 ### D-004 · useRuleLifecycle.ts has zero test coverage on a security-sensitive audit path
 
@@ -117,7 +117,7 @@ Format:
 - **Done when:** A test file covers both stale-capture guards (simulating a
   reopen-for-another-rule mid-flight) and the error path.
 - **Risk:** Low-medium.
-- **Status:** claimed:claude/stoic-gates-jhvljx
+- **Status:** done:#71
 
 ### D-006 · Untested error/guard branches in three hooks
 
@@ -134,7 +134,7 @@ Format:
 - **Done when:** Each named branch has at least one test proving both sides
   of the condition.
 - **Risk:** Low.
-- **Status:** claimed:claude/stoic-gates-jhvljx
+- **Status:** done:#71
 
 ### D-007 · No session-expiry / 401 handling anywhere in the API path
 
