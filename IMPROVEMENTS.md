@@ -76,7 +76,7 @@ Format:
 - **Size:** M
 - **Files:** `src/sidepanel/components/RuleCard.tsx:98-99,259`,
   `src/sidepanel/components/groups/GroupListItemDetails.tsx:83`,
-  `src/sidepanel/components/groups/GroupPushSection.tsx:51`
+  `src/sidepanel/components/groups/detail/GroupPushSection.tsx:51`
 - **Problem:** Same class of bug as I-002. `RuleCard` shows a raw group id
   when `allGroupNamesMap` doesn't have it; the two push-mapping sites show
   `mapping.appId` as plain text when `mapping.appName` is missing.
@@ -86,6 +86,13 @@ Format:
 - **Risk:** Low.
 - **Status:** open
 - **Depends on:** I-001
+- **Selection note (2026-08-21, 5th run):** the third call site was filed as
+  `groups/GroupPushSection.tsx`; it actually lives at
+  `groups/detail/GroupPushSection.tsx` — path corrected above. That puts one of
+  this item's three sites inside the `groups/detail/` off-limits window, so
+  `SESSION.md` step 2 skips the item until Sam's Group Detail v2 lands. The
+  other two sites are unaffected; whoever picks this up after the window closes
+  should take all three together rather than splitting the item.
 
 ### I-004 · Copy affordance on self-referencing ids that have none today
 

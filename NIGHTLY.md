@@ -17,6 +17,92 @@ Entry format:
 
 ---
 
+## 2026-08-21 (fifth run)
+
+**Baseline:** green — the full ladder on `main` @ `a7b72eb`, including both
+browser-cost gates. `test:storybook` 149 files / 1042 tests and
+`test:coverage` 209 files, plus `type-check`, `lint` (0 errors, 147 legacy
+warnings), `format:check`, `knip:circular`, `lint:control-chars`,
+`lint:cited-paths`. `#69`'s `react-dom` pre-bundle held: `D-017` has not
+recurred.
+
+**Items worked:** `D-003` (correctness, `bugfix`), `D-005` (test coverage,
+`test-writer`), `D-006` (test coverage, `test-writer`). Three disjoint files
+sets, run in parallel, one commit each.
+
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/71 — open, not
+merged.
+
+**Backlog after:** 14 open / 30 total — 9 IMPROVEMENTS (6 open, 1 blocked,
+2 done), 21 DEBT (8 open, 3 blocked, 10 done). 4 blocked overall
+(`I-008`, `D-007` needs-breakdown; `D-008`, `D-013` needs-human).
+
+**Notes:**
+
+_No UX item ran, and that is not drift._ Both P2 `ux` items that sort above
+tonight's picks (`I-002`, `I-003`) have a call site under
+`src/sidepanel/components/groups/detail/`. `I-003`'s was invisible: it was
+filed as `groups/GroupPushSection.tsx`, which has never existed — the file
+is at `groups/detail/GroupPushSection.tsx`. The wrong path hid that the item
+was not selectable at all. Path corrected in the ledger with a note. Expect
+the ux track to stay stalled at P2 until Group Detail v2 lands; the next
+runs will keep falling through to DEBT.
+
+_Verify the agents, don't just collect their reports._ Every non-vacuity
+claim was re-proven at the orchestrator level by mutating the source and
+checking that only the expected tests went red. All three held, and one
+report needed correcting on a different axis: `security-logging-reviewer`
+showed that D-003's new catch and the sibling it was modelled on are the
+same in shape but **not** in what they can carry — the sibling wraps
+`fetchAllPages` (which throws with Okta's `errorSummary` inside), the new
+one wraps a bare `makeApiRequest` (static-string and Chrome-messaging errors
+only). No leak either way, but the commit message's "matching exactly" was
+too strong and the PR records the correction.
+
+_Two process defects, both filed rather than fixed inline._ `D-018`:
+`lint:cited-paths` does not cover the two ledgers or the three system docs,
+which is how I-003's bad path survived — those files' `src/` citations are
+scope contracts for writer agents, not prose, so they are the _most_
+load-bearing citations in the repo and the only ones unchecked. `D-021`:
+`CONVENTIONS.md`'s mandated `pkill -9 -f vitest` matches every vitest
+process on the box plus the issuing shell, and tonight it SIGKILLed this
+session's own pre-commit hook from a concurrent agent and silently truncated
+two diagnostic commands. `SESSION.md` step 4 designs for parallel agents, so
+these collide by construction. Nothing was lost — `lint-staged` reverted
+cleanly — but a kill looks exactly like a test failure, which is what makes
+it expensive. **If a future run sees an inexplicable `[SIGKILL]` or an empty
+command result, suspect this before suspecting the code.**
+
+That second one is **the third night running** that this has been hit: the
+third run's entry noted it, the fourth's said "still true from the last
+entry, and it bit again," and tonight it escalated from truncating output to
+killing a commit. Three nights of notes-to-the-next-run did not fix it
+because a note is not a work item — nobody's sort order ever surfaced it.
+Hence `D-021`. If it bites a fourth time, the lesson is not about `pkill`.
+
+_One new pattern needs Sam's yes or no_ before it spreads: D-006's
+post-unmount tests `vi.mock('react')` to record `useState` dispatches, the
+only such mock in the repo. React 19 discards post-unmount state updates
+silently, so the honest alternative was a vacuous test. Rationale is in the
+test file header and called out in the PR; if he rejects it, those two cases
+need another route to the same assertion.
+
+**Recommended next pick** (P-order, disjoint, none touched tonight):
+`D-016` (P2, Modal a11y on the portal branch), then `D-012` or `D-015`
+(both P3 cleanup, both `EntityLink`/`CopyableId`-adjacent so take only one).
+`D-014` still sequences after `D-013`, which is still `blocked:needs-human`.
+
+**Deviation from `SESSION.md`, same as the fourth run's:** this session's
+branch is `claude/stoic-gates-jhvljx`, not `nightly/2026-08-21`. The harness
+pins the branch name and forbids pushing anywhere else, and the date-based
+name would collide anyway — this is the fifth run on 2026-08-21. Claims were
+written as `claimed:claude/stoic-gates-jhvljx` so the ledger names the branch
+that actually carries them. Now noted on two consecutive nights; if the
+harness pin is permanent, `SESSION.md` step 3 should say so rather than
+having each run record the same deviation.
+
+---
+
 ## 2026-08-21 (fourth run)
 
 **Baseline:** red — the `storybook` CI job on `main` @ `ceddca8`. Every other
