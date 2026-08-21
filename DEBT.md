@@ -608,3 +608,29 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
 - **Risk:** Low to fix. Non-trivial to leave: it silently truncates commands
   and can strand a mutated source file in the working tree.
 - **Status:** open
+
+### D-022 · Half of a React-warning assertion cannot fire under React 19
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaTabContext.test.tsx:360-364`
+- **Problem:** The post-unmount case ends by asserting that no `console.error`
+  call matched `/not wrapped in act|unmounted component/i`. The alternation
+  has two halves and only one is live on React 19 (`^19.2.0` here): the
+  "Can't perform a React state update on an unmounted component" warning was
+  removed in React 18, so that half can never match and contributes nothing.
+  The `not wrapped in act` half **does** still fire under React 19, so the
+  assertion is half-dead, not dead — the original flag from the D-006 writer
+  called it wholly vacuous, which overstates it.
+  The load-bearing assertion in that test is the line above it
+  (`expect(sendCount()).toBe(afterFirstAttempt)` — no retry after unmount);
+  the warning check is a belt-and-braces addition. This is the only
+  occurrence of the pattern in `src/`.
+- **Done when:** Either the dead `unmounted component` alternand is dropped
+  (leaving the live `act` check, which is a narrowing, not a weakening — the
+  removed half could not fail), or a comment records that it is retained
+  deliberately as a guard against a React downgrade. Do **not** delete the
+  assertion outright: the surviving half is real, and ADR-0012 applies.
+- **Risk:** Low. Cosmetic in effect — no coverage changes either way.
+- **Status:** open
