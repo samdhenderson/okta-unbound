@@ -82,7 +82,7 @@ Format:
 - **Done when:** The catch logs via the shared `logger` (outcome only, no
   payload) matching the sibling catches' pattern in the same file.
 - **Risk:** Low.
-- **Status:** open
+- **Status:** claimed:claude/stoic-gates-5sf7nc
 
 ### D-004 · useRuleLifecycle.ts has zero test coverage on a security-sensitive audit path
 
@@ -117,7 +117,7 @@ Format:
 - **Done when:** A test file covers both stale-capture guards (simulating a
   reopen-for-another-rule mid-flight) and the error path.
 - **Risk:** Low-medium.
-- **Status:** open
+- **Status:** claimed:claude/stoic-gates-5sf7nc
 
 ### D-006 · Untested error/guard branches in three hooks
 
@@ -134,7 +134,7 @@ Format:
 - **Done when:** Each named branch has at least one test proving both sides
   of the condition.
 - **Risk:** Low.
-- **Status:** open
+- **Status:** claimed:claude/stoic-gates-5sf7nc
 
 ### D-007 · No session-expiry / 401 handling anywhere in the API path
 
@@ -480,3 +480,36 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   red-baseline rule fires on its own. (It did, on 2026-08-21's 4th run: the
   baseline check caught this without the item having to be claimed by name.)
 - **Status:** done:#69
+
+### D-018 · `lint:cited-paths` cannot see the nightly ledgers, and three citations there are already dead
+
+- **Category:** standards
+- **Priority:** P2
+- **Size:** S
+- **Files:** `scripts/check-cited-paths.mjs:53-54` (the `IN_SCOPE` predicate)
+- **Problem:** `IN_SCOPE` admits `CLAUDE.md`, `AGENTS.md`, and anything under
+  `docs/` or `.claude/` — which excludes every file the nightly maintenance
+  system actually runs on: `DEBT.md`, `IMPROVEMENTS.md`, `SESSION.md`,
+  `CONVENTIONS.md`, `NIGHTLY.md`. The gate reported "All cited src/ paths
+  resolve, across 50 tracked docs/skill files" on a green baseline while three
+  citations in `IMPROVEMENTS.md` pointed at files that do not exist:
+  `groups/GroupPushSection.tsx` (I-003, really `groups/detail/GroupPushSection.tsx`),
+  `components/PolicyCard.tsx` and `components/AppListItem.tsx` (I-004, really
+  `components/policies/` and `components/apps/`). All three were corrected in
+  the ledger on 2026-08-21 (5th run); this item is the systemic half.
+  This is not cosmetic. A nightly session selects items by their **Files**
+  list — it is how disjointness is checked, how the `groups/detail/`
+  off-limits rule is applied, and what the writer agent is handed as its
+  scope. A stale path defeats all three: I-003's wrong path hid the fact that
+  the item reaches into the off-limits directory, which is exactly the check
+  that was supposed to catch it.
+- **Done when:** `check-cited-paths.mjs` also covers the tracked root ledger
+  files (`DEBT.md`, `IMPROVEMENTS.md`, `SESSION.md`, `CONVENTIONS.md`,
+  `NIGHTLY.md`), and `npm run lint:cited-paths` is green with them in scope.
+  Note that `NIGHTLY.md` is an append-only historical log, so a path that was
+  correct when written may since have moved — decide deliberately whether to
+  include it or exclude it the way `docs/adr/` already is, and record the
+  reason in the script's header comment either way.
+- **Risk:** Low — one predicate in a lint script, no product code. The only
+  real work is whatever dead citations it surfaces on first run.
+- **Status:** open
