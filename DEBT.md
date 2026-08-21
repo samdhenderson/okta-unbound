@@ -199,7 +199,7 @@ Format:
   since a 15th modal would reintroduce the bug otherwise.
 - **Risk:** Medium — shared `Modal` used everywhere; needs the story suite
   re-verified across call sites.
-- **Status:** open
+- **Status:** done:#68
 
 ### D-010 · CI's `verify` job has been red on `main` since at least 2026-08-15, unrelated to any one PR
 
@@ -373,4 +373,53 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
 - **Risk:** Low, but **sequence it after D-013** — that item may change what
   the fallback should be, and doing this first would move the decision into
   a shared helper used by other callers.
+- **Status:** open
+
+### D-015 · The ghost copy-id recipe is now duplicated in EntityLink and CopyableId
+
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/shared/CopyableId.tsx:45-62`,
+  `src/sidepanel/components/shared/EntityLink.tsx:183-199`
+- **Problem:** I-001 gave `EntityLink` a `copyId` control that re-implements
+  `CopyableId`'s `IconButton` + `Icon` (`clipboard`/`clipboard-check`) +
+  `useCopyToClipboard` + accessible-name-flips-to-`Copied!` recipe
+  byte-for-byte. `docs/components.md` is explicit that the two copy
+  primitives exist so nobody hand-rolls that pair again — this is a fresh
+  instance of exactly the drift that entry was written to prevent. Raised by
+  `ui-reviewer` on PR #68 as advisory; filed rather than folded into that
+  diff, per `CLAUDE.md`.
+- **Done when:** One implementation of the ghost copy-id button; both
+  `CopyableId` and `EntityLink` use it. `CopyableId`'s public props and
+  rendered output are unchanged (it is used in shipped views), and
+  `EntityLink`'s `copyId` behaviour — including the no-`id` and
+  not-navigable cases — is unchanged. Existing tests for both stay green
+  without being retargeted.
+- **Risk:** Low — behaviour-preserving extraction behind two stable APIs.
+- **Status:** open
+
+### D-016 · Modal's a11y contract is only regression-tested on the fallback render path
+
+- **Category:** standards
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/components/shared/Modal.test.tsx` (the
+  `Modal accessibility` and `Modal exit transition` describes, and the
+  `Modal stacking` describe's `mountShell()` harness)
+- **Problem:** D-009 made `Modal` portal into a shell-declared layer when one
+  exists, and render in place when none does. `App` always mounts the layer,
+  so **every modal in production takes the portal branch** — but the
+  `role="dialog"` / `aria-modal` / focus-trap / Escape / focus-restore
+  assertions all render `Modal` with no layer present, i.e. they only cover
+  the fallback. The three stacking tests that do mount a layer assert
+  document position only. The branch that ships is the one least covered for
+  the property `CLAUDE.md`'s modal rule actually cares about. Raised by
+  `ui-reviewer` on PR #68.
+- **Done when:** The modal a11y contract (dialog role, `aria-modal`, Tab
+  trap, Escape-to-close, focus restore, and the `aria-hidden`/`inert` exit
+  window) is asserted with a mounted modal layer as well as without —
+  parametrising the existing describes over both configurations is the
+  cheapest route. No existing assertion weakened or deleted (ADR-0012).
+- **Risk:** Low — test-only, strictly additive coverage.
 - **Status:** open

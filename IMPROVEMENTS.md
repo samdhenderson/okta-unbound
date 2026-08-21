@@ -45,7 +45,7 @@ Format:
   barrel; co-located `.stories.tsx`, axe-clean, TypeDoc header + prop
   comments.
 - **Risk:** Low — additive, no existing call site changes yet.
-- **Status:** open
+- **Status:** done:#68
 
 ### I-002 · Resolve group ids inside rule-condition expression text
 
@@ -121,7 +121,7 @@ Format:
   tab hide/show cycle the same way `GroupDetailView`'s does, verified with
   the same test pattern used for the working views.
 - **Risk:** Low — additive hook wiring, proven pattern.
-- **Status:** open
+- **Status:** done:#68
 
 ### I-006 · Lead the Compare view's diff-filter pills with "All"
 
@@ -174,3 +174,26 @@ Format:
 - **Risk:** High if implemented without scoping — touches a
   security-relevant expression evaluator.
 - **Status:** blocked:needs-breakdown
+
+### I-009 · EntityLink's default copy-id label collides when two entities share a name
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/shared/EntityLink.tsx:187`
+- **Problem:** `copyIdLabel` defaults to `Copy <type> id for <name>`, and
+  I-001's prop doc frames distinguishability as solved by folding the name
+  in. Two entities can legitimately share a display name — the same "one
+  name can match groups from more than one source" case `EntityLink`'s own
+  module header calls out — and then two copy controls on one screen carry
+  an identical accessible name with nothing to tell them apart, unless the
+  caller remembers to pass `copyIdLabel`. `CopyableId` sidesteps this by
+  making `label` required rather than derived. Raised by `ui-reviewer` on
+  PR #68 as advisory.
+- **Done when:** Two `EntityLink`s with `copyId`, the same `type` and the
+  same `name` but different ids expose distinguishable accessible names
+  without the caller passing `copyIdLabel` — or, if the derived default is
+  kept, its doc comment states plainly that a caller rendering same-named
+  entities must pass `copyIdLabel`, and a story shows the collision case.
+- **Risk:** Low.
+- **Status:** open
