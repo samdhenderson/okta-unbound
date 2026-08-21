@@ -158,6 +158,17 @@ It contradicts none of them and depends on all three.
   `groupContextOf` is replicated from `accessCause`'s module-private helper and
   pinned against it by test, so two surfaces cannot answer `isMemberOfGroup`
   differently about one person.
+
+  > **Amended (2026-08-21): the replication is gone; the invariant it protected is
+  > not.** `groupContextOf` now has one implementation —
+  > `src/shared/membership/groupContext.ts` — imported by `blastRadius.ts`,
+  > `src/sidepanel/components/users/comparison/accessCause.ts`, and
+  > `src/sidepanel/components/users/GroupMembershipsList.tsx`. The parity test that
+  > pinned the two copies against each other is retargeted rather than dropped: it
+  > now pins that `classifyAccessCauses` threads the context through to the
+  > evaluator. One answer to `isMemberOfGroup` per person, across every surface,
+  > is still the requirement — it is now structural instead of test-enforced.
+
 - **ADR-0031** is untouched and unreached: its per-membership proof is a
   user-initiated read against a different endpoint, and this engine issues no
   requests at all. Where a proof has been taken the engine sees it only through
@@ -181,6 +192,17 @@ It contradicts none of them and depends on all three.
   boundary, and pinned against the originals by test. Copying is normally the wrong
   answer; here the alternative was widening another module's seam for one caller,
   and the test makes the copies unable to drift.
+
+  > **Amended (2026-08-21): half of this held, half did not.** `groupContextOf` is
+  > no longer replicated — `src/shared/membership/groupContext.ts` is the single
+  > implementation both engines import. What retired the rationale was the "one
+  > caller" premise expiring: a third caller
+  > (`src/sidepanel/components/users/GroupMembershipsList.tsx`) needed the same
+  > mapping, at which point exporting it stopped being a seam widened for nobody.
+  > **The condition-expression accessor is still replicated** — four copies now,
+  > tracked as `DEBT.md` D-012 — so the reasoning above is still the live
+  > justification for that one, and still on the same clock.
+
 - **Residual.** ADR-0020's known evaluator gap is inherited: `shared/ruleEvaluator`
   resolves an absent profile attribute to `null`, which compares as a definitive
   no-match rather than `unevaluable`. A drafted user with a sparse profile can
