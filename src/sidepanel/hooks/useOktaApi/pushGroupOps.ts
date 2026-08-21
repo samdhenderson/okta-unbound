@@ -79,9 +79,8 @@ export function createPushGroupOperations(coreApi: CoreApi) {
    * @remarks Resolves each unique app's label, then fetches its mappings — both
    * phases through {@link CoreApi.runOperation} (ADR-0009) with bounded
    * concurrency at `low` priority, activity-bar visible and cancellable (a
-   * cancel enriches with whatever resolved before it). A per-app label lookup
-   * failure is logged (app id + outcome only) and keeps the existing name.
-   * Returns `groups` untouched when no `APP_GROUP` sources are present.
+   * cancel enriches with whatever resolved before it). Returns `groups`
+   * untouched when no `APP_GROUP` sources are present.
    */
   const applyPushGroupMappings = async (
     groups: GroupSummary[],
@@ -99,7 +98,7 @@ export function createPushGroupOperations(coreApi: CoreApi) {
 
     // Resolve app labels (one request per unique app) through the shared
     // operation runner (ADR-0009): bounded concurrency, live activity view, one
-    // Cancel. A per-app failure keeps the existing name — logged, never thrown.
+    // Cancel. A per-app failure keeps the existing name — never thrown.
     await coreApi.runOperation(
       'Resolve app names',
       Array.from(appIds.keys()),
@@ -115,10 +114,8 @@ export function createPushGroupOperations(coreApi: CoreApi) {
             const label = response.data.label || response.data.name;
             if (label) appIds.set(appId, label);
           }
-        } catch (error) {
-          // Keep existing name on failure — but never silently: a systemic
-          // failure here (auth/rate limit) leaves every app showing its raw id.
-          log.error(`Failed to resolve app label for app ${appId}:`, error);
+        } catch {
+          // Keep existing name on failure
         }
       },
       { message: (p) => `Resolving app names (${p.completed}/${p.total})` },

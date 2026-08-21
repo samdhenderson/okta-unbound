@@ -82,7 +82,7 @@ Format:
 - **Done when:** The catch logs via the shared `logger` (outcome only, no
   payload) matching the sibling catches' pattern in the same file.
 - **Risk:** Low.
-- **Status:** done:#71
+- **Status:** open
 
 ### D-004 · useRuleLifecycle.ts has zero test coverage on a security-sensitive audit path
 
@@ -117,7 +117,7 @@ Format:
 - **Done when:** A test file covers both stale-capture guards (simulating a
   reopen-for-another-rule mid-flight) and the error path.
 - **Risk:** Low-medium.
-- **Status:** done:#71
+- **Status:** open
 
 ### D-006 · Untested error/guard branches in three hooks
 
@@ -134,7 +134,7 @@ Format:
 - **Done when:** Each named branch has at least one test proving both sides
   of the condition.
 - **Risk:** Low.
-- **Status:** done:#71
+- **Status:** open
 
 ### D-007 · No session-expiry / 401 handling anywhere in the API path
 
@@ -480,111 +480,3 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   red-baseline rule fires on its own. (It did, on 2026-08-21's 4th run: the
   baseline check caught this without the item having to be claimed by name.)
 - **Status:** done:#69
-
-### D-018 · `lint:cited-paths` does not cover the five files a nightly run acts on
-
-- **Category:** standards
-- **Priority:** P2
-- **Size:** S
-- **Files:** `scripts/check-cited-paths.mjs` (the `IN_SCOPE` predicate)
-- **Problem:** The gate's scope is `CLAUDE.md`, `AGENTS.md`, `docs/**`, and
-  `.claude/**` — so `IMPROVEMENTS.md`, `DEBT.md`, `CONVENTIONS.md`,
-  `SESSION.md`, and `NIGHTLY.md` are all outside it. Those are precisely the
-  files whose `src/…` citations are read as instructions rather than as prose:
-  an item's **Files** list is the scope contract a nightly writer agent is held
-  to, and `SESSION.md` step 2 selects items by it. A stale path there does not
-  just misdirect a reader, it mis-scopes a diff. Found the hard way on
-  2026-08-21's 5th run: `I-003` cited
-  `src/sidepanel/components/groups/GroupPushSection.tsx`, which has never
-  existed — the file is at `groups/detail/GroupPushSection.tsx`, i.e. inside
-  the off-limits window. The wrong path hid the fact that the item was not
-  selectable at all, and `lint:cited-paths` passed clean over it both before
-  and after the correction.
-- **Done when:** `IN_SCOPE` also covers the two ledgers plus `CONVENTIONS.md`,
-  `SESSION.md`, and `NIGHTLY.md`, and `npm run lint:cited-paths` is green
-  against them (fix, do not exempt, whatever it turns up on the first run).
-  `docs/adr/`'s exclusion stays exactly as it is and for the reason the script
-  already documents. Consider whether `NIGHTLY.md` belongs: it is an
-  append-only historical log, so it may deserve the same immutability argument
-  as an ADR — decide explicitly and record the reasoning in the script's
-  `IN_SCOPE` doc comment either way.
-- **Risk:** Low — build-script scope widening, no product code. The one real
-  risk is the first run turning up stale paths in items nobody is working on;
-  those get corrected in place, not exempted.
-- **Status:** open
-
-### D-019 · App-label resolution is still silent on its two soft-failure paths
-
-- **Category:** correctness
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts:114-122`
-- **Problem:** D-003 made the label-resolution `catch` log, but the catch only
-  fires on a _thrown_ rejection. Two soft failures never enter it and remain
-  exactly as silent as the catch used to be: a `response.success === false`,
-  and a 200 whose `data` carries neither `label` nor `name`. Either one leaves
-  the app showing its raw id with no trace — the same symptom D-003 was filed
-  to end, reached by a different route. Noticed while fixing D-003 and
-  deliberately not folded into that diff, since D-003's **Done when** names the
-  catch specifically.
-- **Done when:** Both soft-failure paths log through the shared `logger` at the
-  same level and in the same payload-free shape as the catch beside them
-  (identifier + outcome, never the response body). Behaviour otherwise
-  unchanged: still keep the existing name, still never throw. A test per path,
-  proven non-vacuous the way D-003's was — assert the log fires, with the
-  keeps-the-name and never-throws assertions passing both before and after.
-- **Risk:** Low — additive logging on two branches that already do the right
-  thing behaviourally.
-- **Status:** open
-
-### D-020 · The app-label response is read without validation
-
-- **Category:** standards
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts:115`
-- **Problem:** `response.data.label || response.data.name` reads an Okta
-  response with no zod parse at the boundary, which ADR-0006 requires — every
-  Okta response is untrusted, and an app label is end-user-controllable data
-  that ends up rendered. The `response.success && response.data` guard in front
-  of it checks presence, not shape. Pre-existing; surfaced by the D-003 fix
-  reading the same lines and confirmed independently by
-  `security-logging-reviewer` on that diff, which classed it pre-existing and
-  out of scope for D-003.
-- **Done when:** The app-label read goes through a lenient zod schema at the
-  boundary like the other Okta reads in `useOktaApi/`, and a malformed response
-  degrades to "keep the existing name" rather than reaching the render path.
-  Check whether a suitable app schema already exists before adding one.
-- **Risk:** Low — the failure mode it closes is narrow, but it is the exact
-  shape ADR-0006 exists to prevent.
-- **Status:** open
-
-### D-021 · `CONVENTIONS.md`'s mandated `pkill -9 -f vitest` is unscoped
-
-- **Category:** standards
-- **Priority:** P2
-- **Size:** S
-- **Files:** `CONVENTIONS.md` (the "Test expectations" bullet on wrapping local
-  `vitest run` invocations)
-- **Problem:** The convention says to run `pkill -9 -f vitest` after every
-  local vitest invocation, regardless of outcome. That pattern matches **every**
-  process on the box whose command line contains `vitest` — including other
-  agents' test runs and, critically, the `vitest related --run` step inside the
-  `lint-staged` pre-commit hook. It also matches the issuing shell itself,
-  whose own command line contains the string, which silently truncates that
-  command's output. Both were hit on 2026-08-21's 5th run: a concurrent
-  writer agent's `pkill` SIGKILLed the session's pre-commit hook mid-commit
-  (lint-staged reverted cleanly and the retry succeeded, so nothing was lost —
-  but the failure looked like a test failure, not a kill), and two diagnostic
-  commands returned empty because they had killed their own shell. `SESSION.md`
-  step 4 explicitly allows disjoint items to run in parallel, so concurrent
-  vitest processes are a designed-for condition, not misuse.
-- **Done when:** The convention's kill is scoped so it cannot reap another
-  process's run or its own shell — e.g. kill by the recorded PID of the
-  wrapped run rather than by pattern, or drop the blanket `pkill` in favour of
-  the external `alarm` wrapper that already bounds the run. Whatever is
-  chosen, the reason the blanket form was wrong is recorded inline, so a later
-  session does not reintroduce it.
-- **Risk:** Low to fix. Left alone, it keeps producing failures that look like
-  something else, which is the expensive part.
-- **Status:** open
