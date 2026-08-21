@@ -572,3 +572,39 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   (`getAppById` returns `null` rather than throwing). Touches
   Okta-response handling: route through `security-logging-reviewer`.
 - **Status:** open
+
+### D-021 · `CONVENTIONS.md`'s mandated `pkill -9 -f vitest` kills the shell that runs it
+
+- **Category:** standards
+- **Priority:** P2
+- **Size:** S
+- **Files:** `CONVENTIONS.md` (the "Test expectations" bullet on the external
+  timeout wrapper), and by inheritance every agent file that repeats it
+- **Problem:** The mandated cleanup is
+  `perl -e 'alarm 240; exec @ARGV' npx vitest run <file>`, then
+  `pkill -9 -f vitest`. But `pkill -f` matches against the **full command
+  line of every process**, and when the two are chained in one shell
+  invocation (`… vitest run x && … ; pkill -9 -f vitest`) the invoking
+  shell's own command line contains the string `vitest` — so the `pkill`
+  SIGKILLs its own parent shell along with the runner. Anything sequenced
+  after it in that command never runs, and the command reports a bare
+  non-zero exit with no output explaining why.
+  Observed twice on 2026-08-21 (5th run), independently: the D-005 writer
+  agent had a mutation-test run truncated mid-flight this way, briefly
+  leaving a mutated copy of `useRuleImpact.ts` on disk (it restored it), and
+  the session lead lost a `git commit` that was chained after the same
+  `pkill` — the commit silently did not happen and only a follow-up
+  `git status` revealed it. The failure mode is quiet and it can leave
+  mutated production files behind, which is the dangerous part.
+  Second-order: a stray `pkill -f vitest` from one agent also kills any other
+  agent's in-flight run, so this gets worse the moment a night runs writers
+  in parallel — which `SESSION.md` step 4 explicitly permits.
+- **Done when:** `CONVENTIONS.md` states that the `pkill` must be its own
+  final command, never chained after anything that still needs to run, and
+  narrows the pattern so it cannot match the invoking shell (e.g.
+  `pkill -9 -f 'node.*vitest'`, verified against a live run to confirm it
+  still reaps the runner). Any agent file repeating the recipe is updated to
+  match.
+- **Risk:** Low to fix. Non-trivial to leave: it silently truncates commands
+  and can strand a mutated source file in the working tree.
+- **Status:** open
