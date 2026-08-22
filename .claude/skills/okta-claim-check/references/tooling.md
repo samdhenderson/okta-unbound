@@ -150,8 +150,14 @@ Green → the "pinned behaviour" is not pinned, and whatever you were protecting
 imaginary.
 
 The external timeout is mandatory for any local `vitest run`: `--testTimeout` does not
-stop a render loop, because an infinite loop starves the timer. `pkill -9 -f vitest`
-after. See `docs/testing.md`.
+stop a render loop, because an infinite loop starves the timer. Reap the runner after
+the run with `pkill -9 -f 'node_modules/(\.bin/)?vitest'`, as a **separate, final**
+command — never chained after the run and never chained before something that still
+needs to happen (such as the `git checkout --` that restores the source file you
+mutated). `pkill -f` matches the full command line of every process, so a chained
+`pkill`, or a broader pattern such as bare `vitest` or `node.*vitest`, SIGKILLs the
+invoking shell and silently drops the rest of the command — which is how a mutated
+file gets stranded in the working tree. See `docs/testing.md`.
 
 **Never** edit the assertion to see whether it matters. Rewriting an assertion to
 observe its behaviour is indistinguishable from weakening it, and ADR-0012 forbids it

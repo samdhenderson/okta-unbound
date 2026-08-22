@@ -571,7 +571,14 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
 - **Risk:** Low-medium — swapping the call changes the failure surface
   (`getAppById` returns `null` rather than throwing). Touches
   Okta-response handling: route through `security-logging-reviewer`.
-- **Status:** open
+- **Shipped as:** inline `parseOkta` rather than the preferred `getAppById`.
+  Two things the filing did not account for: `getAppById` takes no priority
+  argument, so adopting it would have dropped this bulk read from its
+  explicit `low` priority; and it collapses `success: false` and a
+  validation failure into one bare `null`, which would have erased both log
+  lines `D-019` added. A validation failure gets its own third code,
+  `resolve_app_name_invalid`.
+- **Status:** done:#73
 
 ### D-021 · `CONVENTIONS.md`'s mandated `pkill -9 -f vitest` kills the shell that runs it
 
@@ -607,7 +614,18 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   match.
 - **Risk:** Low to fix. Non-trivial to leave: it silently truncates commands
   and can strand a mutated source file in the working tree.
-- **Status:** open
+- **Correction to the Done-when above:** the pattern this item suggested,
+  `pkill -9 -f 'node.*vitest'`, **does not work** — it reproduces the exact
+  bug even when it is its own final command, because the pattern text itself
+  sits in the invoking shell's command line and self-matches (`node` … then
+  `vitest`, both inside `pkill -9 -f 'node.*vitest'`). Verified against
+  isolated probe processes: the chained bare pattern killed the shell, and so
+  did the unchained `node.*` narrowing. The pattern that passes both halves is
+  path-anchored, `pkill -9 -f 'node_modules/(\.bin/)?vitest'` — it cannot
+  self-match (the literal `(` follows `node_modules/` in the pattern text)
+  while still reaping the runner and its worker forks. Confirmed against a
+  live runner: sequenced command ran, shell survived, 0 matches left.
+- **Status:** done:#73
 
 ### D-022 · Half of a React-warning assertion cannot fire under React 19
 
@@ -669,7 +687,43 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   trade different things away.
 - **Risk:** Low to fix. The bug it prevents is rare but silent and would be
   misattributed when it happens.
-- **Status:** open
+- **Correction to the filing above:** the mechanism is wrong. Read against
+  the installed `lint-staged` (v16.2.6) with this repo's config, the backup
+  step does **not** clear the working tree. `lib/index.js:89-90` defaults
+  `hideUnstaged` to `false` (nothing in `.husky/pre-commit` or the
+  `package.json` config overrides it), so in `lib/gitWorkflow.js`
+  `prepare()` the `git stash push --keep-index` branch — the one that
+  clears the tree — is skipped; the branch taken is `git stash create` +
+  `git stash store`, commented "keeping all files as-is", which only
+  snapshots. The one `git checkout --force` in
+  `hidePartiallyStagedChanges()` is scoped to
+  `getUnstagedFiles({ onlyPartial: true })`, i.e. files partially staged in
+  _this_ commit, never a disjoint file another agent holds. So on the happy
+  path there is no window where a concurrent agent's file is off disk, and
+  "both restored cleanly" is not luck.
+  The real hazard is worse than the one filed. `restoreOriginalState()` in
+  the same file runs `git reset --hard HEAD` and _then_ applies the backup
+  stash, and `lib/state.js`'s `restoreOriginalStateEnabled` fires it on any
+  `TaskError` — an ordinary failing task. This repo runs
+  `vitest related --run` on every `*.{ts,tsx}` commit, so a red related
+  test triggers it routinely. The `reset --hard` discards every working-tree
+  modification repo-wide; the stash it restores was snapshotted at hook
+  start, so an edit a live writer agent wrote _after_ that point is gone
+  outright — not in any stash, not mentioned in the output. That is
+  unrecoverable loss on a routine path, not a transient race that restores
+  itself.
+  **Chosen:** the sequencing rule (`SESSION.md` step 4), not `--no-stash`.
+  `--no-stash` does remove the offending `git reset --hard`, but it also
+  removes the rollback net for every contributor's commit: a failed hook
+  would leave half-`eslint --fix`ed and half-`prettier --write`n files on
+  disk with nothing to restore from. That changes a shared developer
+  contract and edits hook wiring, which `CLAUDE.md`'s plan-and-approval gate
+  and its no-`package.json`-changes rule both put outside an unattended
+  session's authority. The rule is free, purely additive, and closes the
+  window completely — if the lead never commits while a writer is live, no
+  concurrent edit can be inside the failure window. `--no-stash` stays open
+  as a decision for Sam, with that trade-off named.
+- **Status:** done:#73
 
 ### D-024 · `check-cited-paths` still cannot see any path that is not under `src/`
 
@@ -699,4 +753,76 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   the existing exclusions are recorded.
 - **Risk:** Low to fix; the effort is in the boundary decision and whatever
   dead citations first light-up surfaces.
+- **Status:** open
+
+### D-025 · `getAppPushGroupMappings` interpolates `appId` into a path unencoded
+
+- **Category:** standards
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts:50`
+- **Problem:** `D-020` added `encodeURIComponent(appId)` to the label lookup
+  in this file. The sibling walk one function above still builds
+  `` `/api/v1/apps/${appId}/groups?limit=${OKTA_PAGE_SIZE}` `` raw, from the
+  same `appId` values (`group.sourceAppId`, which is Okta-controlled), while
+  every `appOperations.ts` sibling encodes. The content-script guard does
+  **not** cover this: `isSameOriginPath` and the background's
+  `isValidScheduleRequest` only check a single leading `/` and that the
+  resolved origin matches — there is deliberately no path allow-list
+  (`docs/security.md`), so an id carrying `/`, `?`, or a traversal sequence
+  still passes both guards and can resolve to a different same-origin path
+  than intended. Practical severity is low (GET only, real app ids are
+  `0oa`-prefixed alnum), but it is the same defect one line over from the one
+  just fixed. Raised by `security-logging-reviewer` on PR #73.
+- **Done when:** Every path in this file built from an id encodes it, matching
+  `appOperations.ts`. Check the whole file rather than only this line — the
+  review confirmed line 50 is the only other `appId` interpolation, but group
+  and user ids in the same file are worth the same pass.
+- **Risk:** Low — behavior-preserving for any real Okta id.
+- **Status:** open
+
+### D-026 · `pushGroupOps`' outer catch logs the raw error object
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts` (the
+  `catch (error)` closing the per-app label task)
+- **Problem:** `log.error('Failed to resolve app name for app ${appId}:', error)`
+  passes an unshaped caught value to the logger, while the three sibling
+  branches immediately above it — and `getAppById`, which handles the same
+  endpoint — log a fixed `{ code, appId }` and never the error. Traced by
+  `security-logging-reviewer` on PR #73: **this is not currently a leak**, as
+  the only things reaching this catch are `makeApiRequest`'s
+  no-target-tab error and `chrome.runtime.sendMessage` port errors, none of
+  which carry an Okta body, URL, or the XSRF token. It is filed because it is
+  the one site in the file that logs an unshaped value, so a future change to
+  what `makeApiRequest` throws could start leaking through it silently.
+- **Done when:** The catch logs a fixed outcome code plus `appId`, matching
+  the sibling branches and `getAppById`. Existing `pushGroupOps.test.ts`
+  cases stay green.
+- **Risk:** Low — logging shape only, no change to the degrade behavior.
+- **Status:** open
+
+### D-027 · `getAppById` swallows a `success: false` with nothing logged
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaApi/appOperations.ts:113`
+- **Problem:** `if (!response.success || !response.data) return null;` — the
+  same non-throwing failure `D-019` was filed about, in the helper that
+  resolves the identical endpoint, still returns `null` with no trace. A
+  scheduler-level 401 or 429 surfaces as `success: false` rather than a throw,
+  so the likeliest systemic failure leaves nothing to diagnose for every
+  caller of `getAppById`. Its `catch` logs `get_app_failed`; the
+  non-throwing half does not. This is why `D-020` parsed inline rather than
+  adopting `getAppById` — doing so would have erased `pushGroupOps`'
+  distinguishable codes. Fixing this is the precondition for a future
+  consolidation.
+- **Done when:** The `!success` path logs via the shared `logger`
+  (identifiers and outcome code only, no payload), distinguishable from the
+  validation-failure path. New cases proven non-vacuous the way `D-019`'s
+  were.
+- **Risk:** Low — logging only; no change to the `null` return contract.
 - **Status:** open

@@ -168,8 +168,26 @@ enforce it:
 
 ```
 perl -e 'alarm 240; exec @ARGV' npx vitest run <file>
-pkill -9 -f vitest
 ```
+
+Then reap the runner in a **separate command, always last** — never chained
+after the run and never chained before anything that still needs to happen:
+
+```
+pkill -9 -f 'node_modules/(\.bin/)?vitest'
+```
+
+`pkill -f` matches the full command line of _every_ process, so a shell
+invocation that both runs vitest and pkills it matches its own parent shell and
+SIGKILLs it: the rest of that command (a `git commit`, a `git checkout --`
+restoring a file you mutated) silently never runs and you get a bare non-zero
+exit with no output. Bare `vitest` and `node.*vitest` are both unsafe patterns —
+the latter matches the pattern text in the invoking shell's own command line.
+The path-anchored pattern above cannot self-match and still reaps the runner
+(`node_modules/.bin/vitest`) and its worker forks
+(`node_modules/vitest/dist/workers/forks.js`). It also reaps anyone else's
+concurrent run, so if another agent may be testing, check
+`pgrep -a -f 'node_modules/(\.bin/)?vitest'` first and kill only your own PIDs.
 
 A hanging test file also poisons unrelated commits: the husky pre-commit hook
 resolves `vitest related --run` against imports on disk. Never skip the

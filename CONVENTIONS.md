@@ -99,8 +99,33 @@ one-off try/catch in whatever file a nightly run happens to be touching.
   the test goes red, restore the fix, confirm green.
 - Wrap every local `vitest run` invocation with an external timeout — a
   render loop starves `--testTimeout`'s own clock:
-  `perl -e 'alarm 240; exec @ARGV' npx vitest run <file>`, then
-  `pkill -9 -f vitest` regardless of outcome.
+  `perl -e 'alarm 240; exec @ARGV' npx vitest run <file>`. Then reap the
+  runner regardless of outcome, as a **separate, final** command:
+
+  ```
+  pkill -9 -f 'node_modules/(\.bin/)?vitest'
+  ```
+
+  Two rules make that cleanup safe, and both are load-bearing (`D-021`):
+  - **The `pkill` is its own command, always last.** `pkill -f` matches the
+    _full command line of every process_, so a single shell invocation that
+    runs vitest and then pkills it matches — and SIGKILLs — its own parent
+    shell. Anything sequenced after the `pkill` (a `git commit`, a
+    `git checkout --` restoring a mutated source file) silently never runs
+    and you get a bare non-zero exit with no output saying why.
+  - **The pattern must not match the invoking shell.** Bare `vitest` does.
+    So does `node.*vitest`, because the pattern text sits in the shell's own
+    command line and `node` … `vitest` matches it there. The path-anchored
+    pattern above cannot self-match (the literal `(` follows `node_modules/`
+    in the pattern text) while still matching both the runner
+    (`node_modules/.bin/vitest`) and its worker forks
+    (`node_modules/vitest/dist/workers/forks.js`); the `npm exec` / `sh -c`
+    wrappers exit on their own once the node processes die.
+
+  It still reaps _every_ vitest on the machine, including another agent's
+  in-flight run, so when writers run in parallel check
+  `pgrep -a -f 'node_modules/(\.bin/)?vitest'` first and kill only your own
+  run's PIDs if someone else's is live.
 
 ## Verification commands that define green
 

@@ -6,7 +6,13 @@
 import type { CoreApi } from './core';
 import type { PushGroupMapping, GroupSummary } from '../../../shared/types';
 import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
-import { oktaAppGroupAssignmentSchema, type OktaAppGroupAssignment } from '@/shared/schemas/okta';
+import {
+  oktaAppGroupAssignmentSchema,
+  oktaAppListItemSchema,
+  parseOkta,
+  type OktaAppGroupAssignment,
+  type OktaAppListItem,
+} from '@/shared/schemas/okta';
 import { createLogger } from '../../../shared/utils/logger';
 
 const log = createLogger('pushGroupOps');
@@ -79,13 +85,17 @@ export function createPushGroupOperations(coreApi: CoreApi) {
    * Every way a label lookup can fail leaves that app's existing name (its raw
    * id) in place and is logged with identifiers and outcome codes only, never a
    * payload: a thrown request, a resolved `success: false` (how a 401/429
-   * surfaces), a 200 with neither `label` nor `name`, and — at phase level — apps
-   * that never started because the run was cancelled or halted.
+   * surfaces), a body that fails boundary validation, a 200 with neither `label`
+   * nor `name`, and — at phase level — apps that never started because the run
+   * was cancelled or halted.
    * @remarks Resolves each unique app's label, then fetches its mappings — both
    * phases through {@link CoreApi.runOperation} (ADR-0009) with bounded
    * concurrency at `low` priority, activity-bar visible and cancellable (a
-   * cancel enriches with whatever resolved before it). Returns `groups`
-   * untouched when no `APP_GROUP` sources are present.
+   * cancel enriches with whatever resolved before it). Each label response is
+   * validated at the boundary with {@link oktaAppListItemSchema} (ADR-0006), so
+   * a non-string `label`/`name` degrades to "not reported" rather than reaching
+   * the UI as an app name. Returns `groups` untouched when no `APP_GROUP`
+   * sources are present.
    */
   const applyPushGroupMappings = async (
     groups: GroupSummary[],
@@ -110,26 +120,12 @@ export function createPushGroupOperations(coreApi: CoreApi) {
       async (appId) => {
         try {
           const response = await coreApi.makeApiRequest(
-            `/api/v1/apps/${appId}`,
+            `/api/v1/apps/${encodeURIComponent(appId)}`,
             'GET',
             undefined,
             'low',
           );
-          if (response.success && response.data) {
-            const label = response.data.label || response.data.name;
-            if (label) {
-              appIds.set(appId, label);
-            } else {
-              // A 200 carrying neither `label` nor `name` degrades exactly like a
-              // failure — the app keeps its raw id — so it gets its own line
-              // (D-019). The label is end-user-influenced Okta content and is
-              // never logged; identifier + outcome code only.
-              log.error('App name resolution returned no label', {
-                code: 'resolve_app_name_no_label',
-                appId,
-              });
-            }
-          } else {
+          if (!response.success || !response.data) {
             // `success: false` is how a scheduler-level 401/429 surfaces: it
             // resolves rather than throwing, so the likeliest systemic failure
             // used to fall straight through the `if` unlogged (D-019). Numeric
@@ -138,6 +134,42 @@ export function createPushGroupOperations(coreApi: CoreApi) {
               code: 'resolve_app_name_request_failed',
               appId,
               status: response.status,
+            });
+            return;
+          }
+
+          // Validated at the response boundary (ADR-0006) with the same schema
+          // and context string `getAppById` uses for this endpoint, so the label
+          // rendered as an app name can only ever be a string Okta actually sent
+          // (D-020). Kept inline rather than delegating to `getAppById` so this
+          // bulk read keeps its explicit `low` priority and its three
+          // distinguishable failure codes.
+          let app: OktaAppListItem;
+          try {
+            app = parseOkta(oktaAppListItemSchema, response.data, 'GET /api/v1/apps/{id}');
+          } catch {
+            // A body that fails validation degrades exactly like a failed
+            // request — the app keeps its raw id — under its own outcome code so
+            // a log reader can still tell it apart from a 401/429. The thrown
+            // message is not logged: identifier + code only.
+            log.error('App name resolution returned an invalid app', {
+              code: 'resolve_app_name_invalid',
+              appId,
+            });
+            return;
+          }
+
+          const label = app.label || app.name;
+          if (label) {
+            appIds.set(appId, label);
+          } else {
+            // A 200 carrying neither `label` nor `name` degrades exactly like a
+            // failure — the app keeps its raw id — so it gets its own line
+            // (D-019). The label is end-user-influenced Okta content and is
+            // never logged; identifier + outcome code only.
+            log.error('App name resolution returned no label', {
+              code: 'resolve_app_name_no_label',
+              appId,
             });
           }
         } catch (error) {
