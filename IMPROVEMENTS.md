@@ -215,3 +215,33 @@ Format:
   entities must pass `copyIdLabel`, and a story shows the collision case.
 - **Risk:** Low.
 - **Status:** open
+
+### I-010 · The Groups-list "Pushed to" tooltip shows a raw app id with no affordance
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/groups/groupSourceSummary.ts:191-197`
+  (`groupRowFacts`), rendered at
+  `src/sidepanel/components/groups/GroupListItemSignal.tsx:74-77`
+- **Problem:** Same class as `I-003`, at a call site `I-003`'s **Files** list
+  does not name. When a push mapping has no resolved `appName`, the compact
+  Groups-list row's fact tooltip reads `Pushed to: 0oaFAKEapp` — a raw id
+  presented exactly like a name, with nothing saying the name is merely
+  unresolved. `groupSourceSummary.test.ts:136-150` already pins this as
+  current behavior.
+  Predates `D-020`, which added one more way to reach the unresolved state
+  (a response that fails boundary validation). Found by `ui-reviewer` tracing
+  every render site of `mapping.appName` on PR #73, and filed rather than
+  folded into that diff.
+- **Done when:** The unresolved case is visibly distinguishable from a
+  resolved name at this site, consistent with whatever `I-003` settles on for
+  the other three. Retarget `groupSourceSummary.test.ts:136-150`
+  assertion-by-assertion rather than deleting it. Render-time only — no new
+  fetch.
+- **Risk:** Low.
+- **Status:** open
+- **Related:** `I-003` (same treatment, three other call sites). Consider
+  folding this in as a fourth site rather than shipping separately — but note
+  `I-003` is currently gated on the `groups/detail/` off-limits window and
+  this site is not.

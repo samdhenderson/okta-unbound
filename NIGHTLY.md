@@ -17,6 +17,106 @@ Entry format:
 
 ---
 
+## 2026-08-22
+
+**Baseline:** green — the whole ladder. type-check 0 errors, lint 0 errors /
+146 warnings (legacy debt), format clean, 213 test files / 3013 tests with
+thresholds met, 0 cycles, control-chars clean over 839 files, cited-paths
+clean over 54, `test:storybook` 149 files / 1042 tests. GitHub's run history
+shows `CI` `success` on `main`'s tip (`de2ae3e`), so the local ladder and CI
+agree.
+
+`node_modules` was absent again on this fresh container — `npm ci` first.
+Third night running. Worth stopping to note that this is now the norm, not
+the exception.
+
+**Items worked:** `D-020`, `D-021`, `D-023`.
+
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/73
+
+**Backlog after:** 15 open / 37 total — 10 IMPROVEMENTS (7 open, 1 blocked,
+2 done), 27 DEBT (8 open, 3 blocked, 16 done). 4 blocked, unchanged
+(`I-008`, `D-007` needs-breakdown; `D-008`, `D-013` needs-human). 3 closed
+tonight as `done:#73`; 4 new items filed (`D-025`, `D-026`, `D-027`,
+`I-010`), so the open count nets up by one.
+
+**Notes:**
+
+**The branch is `claude/stoic-gates-sd14ng`, not `nightly/2026-08-22`** —
+same harness constraint as the last two nights. No other step deviated.
+
+**Selection went straight to the P2 tier and stayed there.** `I-002` and
+`I-003` still sort above everything on UX-first, and both are still skipped
+for the `groups/detail/` off-limits window — that is the third night running
+they have been passed over. If Sam's Group Detail v2 is not close, splitting
+`I-003` into its two non-`detail/` sites (as its own entry suggests) would
+unblock real UX work; otherwise the top of the ledger stays permanently
+unreachable and every night ships standards items instead.
+
+**A near-miss worth recording: `git checkout -B <branch>` reset the branch
+onto a stale local `main`.** The container's `origin/main` ref was four
+commits behind what the remote actually had, while the pre-existing branch
+pointer was current. Resetting off local `main` silently rolled the whole
+working tree back to `61075d8`. Caught immediately because the commit
+subject after checkout was not the expected one. **Check `git log -1` after
+any `checkout -B`, and `git fetch origin main` before branching** — the
+clone is not necessarily current even when `git status` says "up to date
+with 'origin/main'".
+
+**Both process items were about traps that eat work, and both filings were
+partly wrong.**
+
+`D-021`'s Done-when suggested `pkill -9 -f 'node.*vitest'` as the narrowed
+pattern. It does not work — it reproduces the exact bug even unchained,
+because the pattern text itself sits in the invoking shell's command line
+and self-matches. Only a path-anchored pattern
+(`node_modules/(\.bin/)?vitest`) survives. The writer established this
+against isolated probe processes rather than by reasoning, then confirmed it
+against a live runner. **The lesson from the sixth run held again: an
+item's Done-when is a hypothesis, not a spec.**
+
+`D-023`'s mechanism was wrong in a way that mattered. It said `lint-staged`
+stashes the whole unstaged working tree and restores it — a transient
+window. Reading the installed source shows `hideUnstaged` defaults false, so
+the tree-clearing branch is never taken; the backup is `git stash create` +
+`store`, which only snapshots. But `restoreOriginalState()` runs
+`git reset --hard HEAD` on **any** task error, and this repo runs
+`vitest related` on every `*.{ts,tsx}` commit — so a red related test
+discards every working-tree modification repo-wide, and the stash it
+restores predates anything a live agent wrote during the hook. Not a
+transient race: unrecoverable loss on a routine path. The rule shipped
+(`SESSION.md` step 4: never commit while a writer is live) rather than
+`--no-stash`, which would change a shared developer contract and needs Sam.
+
+**The new rule was followed the night it shipped, and it cost real time.**
+All three writers ran in parallel; the lead held every commit until the last
+one reported — about 14 minutes of doing nothing. That is the correct trade
+against silently losing an agent's work, but a future night should expect
+it: parallelism no longer buys wall-clock at the commit stage, only at the
+writing stage. The working tree was also backed up to the scratchpad before
+the first commit, which is cheap insurance and worth repeating.
+
+**`D-020` could not go green inside its own Files list.** Adding boundary
+validation made `GroupsTab.test.tsx` fail, because its `/api/v1/apps/app123`
+mock returned `{ label }` with no `id` — a shape Okta never sends, and `id`
+is the one field `oktaAppListItemSchema` requires. Ruled a fixture-realism
+update under ADR-0012 (no assertion touched) rather than a scope expansion
+that should have blocked the item. Recorded here because `SESSION.md` step 4
+says to mark an item `blocked` rather than ship red, and this was judged the
+narrow exception: the mock never matched reality, and blocking a correct
+ADR-0006 fix over it would have been the wrong trade. If Sam disagrees, the
+rule to tighten is step 4's, not this item's.
+
+**Both reviewers came back clean on hard rules** and produced four filed
+items between them (`D-025` unencoded `appId` one function above the call
+`D-020` just encoded; `D-026` an unshaped `error` in a log; `D-027` the
+`D-019` gap still open in `getAppById`; `I-010` a raw app id in a shipped
+tooltip that `I-003` does not cover). `D-025` and `D-027` are the natural
+next picks — both are small, both are the other half of something this PR
+touched, and neither is under `groups/detail/`.
+
+---
+
 ## 2026-08-21 (sixth run)
 
 **Baseline:** green — the whole ladder. type-check 0 errors, lint 0 errors /
