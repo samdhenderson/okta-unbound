@@ -80,7 +80,10 @@ describe('applyPushGroupMappings', () => {
     };
     const makeApiRequest = vi.fn(async (endpoint: string) => {
       if (endpoint === '/api/v1/apps/0oaFAKE1') {
-        return { success: true, data: { label: 'Fake App' } };
+        // `id` is present because Okta's real `/api/v1/apps/{id}` response always
+        // carries it and the boundary schema requires it (D-020); the label a
+        // resolvable app resolves to is unchanged.
+        return { success: true, data: { id: '0oaFAKE1', label: 'Fake App' } };
       }
       if (endpoint.startsWith('/api/v1/apps/0oaFAKE1/groups')) {
         return { success: true, data: [assignment], headers: {} };
@@ -211,6 +214,95 @@ describe('applyPushGroupMappings', () => {
     // No response body reaches the log.
     expect(JSON.stringify(consoleError.mock.calls)).not.toContain('ACTIVE');
     consoleError.mockRestore();
+  });
+
+  // D-020: the label lookup is validated at the boundary (ADR-0006) with the
+  // same schema `getAppById` uses, so a non-string `label` can no longer be
+  // stamped onto a group as its `sourceAppName` and rendered as an app name.
+  it('does not surface a non-string label from the app response as sourceAppName', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const makeApiRequest = vi.fn(async (endpoint: string) => {
+      if (endpoint === '/api/v1/apps/0oaFAKE1') {
+        // A 200 whose `label` is not a string: pre-validation this object was
+        // truthy and went straight into the group's `sourceAppName`.
+        return {
+          success: true,
+          data: { id: '0oaFAKE1', label: { toString: 'not-a-label' }, name: 42 },
+        };
+      }
+      if (endpoint.startsWith('/api/v1/apps/0oaFAKE1/groups')) {
+        return { success: true, data: [], headers: {} };
+      }
+      throw new Error(`Unrouted test endpoint: ${endpoint}`);
+    });
+    const core = makeCore({ makeApiRequest });
+    const { applyPushGroupMappings } = createPushGroupOperations(core);
+
+    const result = await applyPushGroupMappings([appGroup()]);
+
+    // The caught field degrades to "not reported": the app keeps its raw id,
+    // exactly like every other label-lookup failure.
+    expect(result[0].sourceAppName).toBeUndefined();
+    expect(consoleError).toHaveBeenCalledWith(
+      '[pushGroupOps]',
+      'App name resolution returned no label',
+      { code: 'resolve_app_name_no_label', appId: '0oaFAKE1' },
+    );
+    // No part of the rejected payload reaches the log.
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain('not-a-label');
+    consoleError.mockRestore();
+  });
+
+  it('logs a distinct code when the app response fails boundary validation', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const makeApiRequest = vi.fn(async (endpoint: string) => {
+      if (endpoint === '/api/v1/apps/0oaFAKE1') {
+        // No `id` — the one field the schema requires, so `parseOkta` throws.
+        return { success: true, data: { label: 'Fake App', signOnMode: 'SAML_2_0' } };
+      }
+      if (endpoint.startsWith('/api/v1/apps/0oaFAKE1/groups')) {
+        return { success: true, data: [], headers: {} };
+      }
+      throw new Error(`Unrouted test endpoint: ${endpoint}`);
+    });
+    const core = makeCore({ makeApiRequest });
+    const { applyPushGroupMappings } = createPushGroupOperations(core);
+
+    const result = await applyPushGroupMappings([appGroup()]);
+
+    expect(result[0].sourceAppName).toBeUndefined();
+    // Distinct from both D-019 lines, so a 401/429, a label-less app and an
+    // invalid body stay tellable apart in the log.
+    expect(consoleError).toHaveBeenCalledWith(
+      '[pushGroupOps]',
+      'App name resolution returned an invalid app',
+      { code: 'resolve_app_name_invalid', appId: '0oaFAKE1' },
+    );
+    // Neither the rejected label nor zod's issue detail reaches the log.
+    const serialized = JSON.stringify(consoleError.mock.calls);
+    expect(serialized).not.toContain('Fake App');
+    expect(serialized).not.toContain('invalid_type');
+    consoleError.mockRestore();
+  });
+
+  it('percent-encodes the app id in the label-lookup endpoint', async () => {
+    const makeApiRequest = vi.fn(async (endpoint: string) => {
+      if (endpoint.includes('/groups')) {
+        return { success: true, data: [], headers: {} };
+      }
+      return { success: true, data: { id: '0oaFAKE 1', label: 'Fake App' } };
+    });
+    const core = makeCore({ makeApiRequest });
+    const { applyPushGroupMappings } = createPushGroupOperations(core);
+
+    await applyPushGroupMappings([appGroup({ sourceAppId: '0oaFAKE 1' })]);
+
+    expect(makeApiRequest).toHaveBeenCalledWith(
+      '/api/v1/apps/0oaFAKE%201',
+      'GET',
+      undefined,
+      'low',
+    );
   });
 
   // ADR-0009 adoption: a cancel mid-run must not throw — the groups are

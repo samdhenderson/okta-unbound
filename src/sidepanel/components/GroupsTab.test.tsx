@@ -545,7 +545,10 @@ describe('loadAllGroups', () => {
     route(/^\/api\/v1\/apps\/app123$/, () => ({
       success: true,
       headers: {},
-      data: { label: 'Slack' },
+      // `id` is the one field `oktaAppListItemSchema` requires, and Okta's
+      // `/api/v1/apps/{id}` always sends it. The mock omitted it, which only
+      // went unnoticed while the label lookup read the body unvalidated (D-020).
+      data: { id: 'app123', label: 'Slack' },
     }));
     route(/^\/api\/v1\/apps\/app123\/groups\?limit=200$/, () => ({
       success: true,
