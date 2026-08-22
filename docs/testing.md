@@ -95,11 +95,17 @@ fake every `useOktaApi/*` suite builds on; pass per-suite defaults through its
   pure-render component that already has a story. Fixtures used by 3+ files live in
   `src/test/`.
 - **Always put a hard external timeout around any local `vitest run`** —
-  `perl -e 'alarm 180; exec @ARGV' npx vitest run <file>` and `pkill -9 -f vitest`
-  after. `--testTimeout` does **not** stop a render loop (an infinite loop starves
-  the timer). A hanging test file also poisons unrelated commits, since the husky
-  pre-commit resolves `vitest related --run` imports on disk. CI installs Chromium
-  for the browser project; local runs pin the sandbox binary via
+  `perl -e 'alarm 180; exec @ARGV' npx vitest run <file>`, then, as a **separate,
+  final** command, `pkill -9 -f 'node_modules/(\.bin/)?vitest'`. `--testTimeout` does
+  **not** stop a render loop (an infinite loop starves the timer). Never chain the
+  `pkill` after anything that still needs to run, and never widen the pattern to bare
+  `vitest` (or `node.*vitest`): `pkill -f` matches the full command line of every
+  process, including the shell that invokes it, so a chained or over-broad `pkill`
+  SIGKILLs its own parent — everything sequenced after it silently never runs. The
+  path-anchored pattern cannot match the invoking shell and still reaps both the
+  runner and its worker forks. A hanging test file also poisons unrelated commits,
+  since the husky pre-commit resolves `vitest related --run` imports on disk. CI
+  installs Chromium for the browser project; local runs pin the sandbox binary via
   `VITEST_BROWSER_EXECUTABLE` (the `unit` project is browser-free). In the dev
   container that is:
 
