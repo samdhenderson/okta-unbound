@@ -32,8 +32,8 @@ cycles, control-chars clean over 839 files, cited-paths clean over 54,
 
 **PR:** https://github.com/samdhenderson/okta-unbound/pull/74
 
-**Backlog after:** 15 open / 38 total — 10 IMPROVEMENTS (6 open, 1 blocked, 3
-done), 28 DEBT (9 open, 4 blocked, 15 done). 5 blocked (`I-008`, `D-007`,
+**Backlog after:** 14 open / 37 total — 10 IMPROVEMENTS (6 open, 1 blocked, 3
+done), 27 DEBT (8 open, 4 blocked, 15 done). 5 blocked (`I-008`, `D-007`,
 `D-027` needs-breakdown; `D-008`, `D-013` needs-human). 3 closed tonight as
 `done:#74`; 4 new items filed (`D-025`, `D-026`, `D-027`, `I-010`), so the
 open count nets up by one.
