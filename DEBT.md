@@ -571,7 +571,13 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
 - **Risk:** Low-medium — swapping the call changes the failure surface
   (`getAppById` returns `null` rather than throwing). Touches
   Okta-response handling: route through `security-logging-reviewer`.
-- **Status:** open
+- **Resolution note:** shipped with the **inline parse**, not `getAppById`.
+  That helper calls `makeApiRequest` at default priority (this phase runs at
+  `low`), and collapses every failure into `null`, discarding the HTTP
+  `status` that D-019's test asserts by value — adopting it would have meant
+  deleting a field from a live assertion. Recorded in the module's
+  `@remarks`. The consequence is filed as `D-027`.
+- **Status:** done:#74
 
 ### D-021 · `CONVENTIONS.md`'s mandated `pkill -9 -f vitest` kills the shell that runs it
 
@@ -607,7 +613,15 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   match.
 - **Risk:** Low to fix. Non-trivial to leave: it silently truncates commands
   and can strand a mutated source file in the working tree.
-- **Status:** open
+- **Resolution note:** the suggested `pkill -9 -f 'node.*vitest'` was tested
+  and **rejected** — the recipe's own `pkill` argument puts both words on the
+  invoking shell's command line, so it still matches itself; the `[n]ode`
+  bracket trick fails too, on any `node_modules/…vitest` path. Shipped
+  pattern is `^[^ ]*node[^ ]* .*vitest`, anchored to a command line that
+  _starts_ with a node binary, verified on both halves against live
+  processes. `docs/testing.md` was added to the scope: it repeats the recipe
+  and is the authority the three skill files cite as its source.
+- **Status:** done:#74
 
 ### D-022 · Half of a React-warning assertion cannot fire under React 19
 
@@ -700,3 +714,87 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
 - **Risk:** Low to fix; the effort is in the boundary decision and whatever
   dead citations first light-up surfaces.
 - **Status:** open
+
+### D-025 · The vitest timeout recipe carries two different `alarm` values
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `docs/testing.md` (`alarm 180`),
+  `.claude/skills/okta-claim-check/references/tooling.md` (`alarm 180`),
+  `CONVENTIONS.md` (`alarm 240`),
+  `.claude/skills/okta-test/SKILL.md` (`alarm 240`),
+  `.claude/skills/okta-verify/SKILL.md` (`alarm 240`)
+- **Problem:** `D-021` made the five copies of the external-timeout recipe
+  agree word-for-word on the `pkill` half, and deliberately left the `alarm`
+  half alone: two files say `180`, three say `240`. Which is right is a real
+  question, not a typo — a single-file run wants the short budget, a
+  `test:coverage` or `test:storybook` run needs far more than either (both
+  routinely exceed 240s in this sandbox, so an agent following the recipe
+  literally on a full run gets a truncated run and reads it as a failure).
+  Surfaced by the `D-021` writer and filed rather than folded in, because
+  picking a number is a decision, not a mechanical edit.
+- **Done when:** Either one value is chosen and applied to all five, or the
+  recipe states explicitly that the budget scales with the run (with a value
+  per run shape), and all five agree. Whichever is chosen, the reasoning is
+  recorded where the recipe lives.
+- **Risk:** Low. Left alone, an agent that follows the recipe verbatim on a
+  full-suite run gets a truncated run and may diagnose a red suite that is
+  really just the alarm firing.
+- **Status:** open
+
+### D-026 · `getAppPushGroupMappings` interpolates an unencoded app id
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts:64`
+- **Problem:** `` `/api/v1/apps/${appId}/groups?limit=${OKTA_PAGE_SIZE}` ``
+  interpolates `appId` raw, one function above the label lookup that `D-020`
+  just taught to `encodeURIComponent` it, and inconsistent with the sibling
+  `appOperations.getAppGroupAssignments`, which already encodes the same path
+  segment.
+  **Deliberately filed P3, not P2** (assessed by `security-logging-reviewer`
+  on PR #74): `appId` here is `group.sourceAppId`, which `groupSummary.ts:41-54`
+  sources from `group.source.id` (an Okta-assigned system id) or a
+  regex-extracted segment of `_links.apps.href` — not free-form
+  end-user-controllable text like a group name or rule expression. Even given
+  a crafted value containing `/`, `?` or `#`, the request stays `GET`-only and
+  both the background's `isValidScheduleRequest` and the content script's
+  independent `isSameOriginPath` guard re-parse the URL against the Okta
+  origin and enforce the method allow-list (`docs/security.md` §5), so an
+  altered path cannot leave the origin or escalate beyond a GET the admin's
+  own session already permits. Unlike `D-020`'s target, this value is never
+  rendered — it only shapes the outbound path. A hardening/consistency gap,
+  not an injection vector.
+- **Done when:** The path segment is encoded the way `getAppById` and
+  `getAppGroupAssignments` encode theirs; existing `pushGroupOps.test.ts`
+  cases stay green and one new case pins the encoding.
+- **Risk:** Low.
+- **Status:** open
+
+### D-027 · `getAppById` cannot express why it failed, so callers that need to know can't use it
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/sidepanel/hooks/useOktaApi/appOperations.ts:110-119`,
+  `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts` (the `Resolve app names`
+  block, as the motivating caller)
+- **Problem:** `getAppById` collapses request-failure, validation-failure and
+  a thrown request into one `null`, discards the HTTP `status`, calls
+  `makeApiRequest` at default priority with no way to ask for another, and
+  logs under its own `[useOktaApi]` prefix. That is exactly why `D-020` could
+  **not** adopt it for the push-group label lookup and parsed inline instead:
+  that call site runs at `low` priority on purpose, and `D-019`'s test asserts
+  the `status: 429` that distinguishes "we are rate-limited" from "this app
+  has no label". The result is a validated single-app read that the one caller
+  who most wants it cannot use — so the endpoint is now parsed in two places.
+- **Done when:** Not yet defined — needs a decision first. A richer return
+  type (a discriminated result rather than `null`) or a `priority` parameter
+  is a contract change on a shared facade with existing callers, i.e. the
+  plan-and-approval gate applies and it likely wants an ADR. Research-only
+  until Sam signs off on a proposal.
+- **Risk:** Medium if rushed — changes a shared API surface. Low to leave: the
+  duplicate parse is documented in `pushGroupOps.ts`'s `@remarks`.
+- **Status:** blocked:needs-breakdown

@@ -168,8 +168,24 @@ enforce it:
 
 ```
 perl -e 'alarm 240; exec @ARGV' npx vitest run <file>
-pkill -9 -f vitest
 ```
+
+If a runner survives the wrapper, reap it with:
+
+```
+pkill -9 -f '^[^ ]*node[^ ]* .*vitest'
+```
+
+That `pkill` must be **its own final command** — never chained ahead of anything
+that still needs to run (a commit, the `git checkout --` that restores a mutated
+file, the next run). `pkill -f` matches the full command line of every process,
+so the old bare `-f vitest` pattern also SIGKILLed the invoking shell and
+everything sequenced after it disappeared behind a bare non-zero exit. The
+`^[^ ]*node[^ ]* ` anchor matches only a process whose command line _starts_
+with a node binary, which a shell never does. It still matches every vitest
+runner on the machine, including another agent's — when writers run in parallel,
+`pgrep -a -f '^[^ ]*node[^ ]* .*vitest'` first and `kill -9 <pid>` only the run
+you started.
 
 A hanging test file also poisons unrelated commits: the husky pre-commit hook
 resolves `vitest related --run` against imports on disk. Never skip the

@@ -95,9 +95,19 @@ fake every `useOktaApi/*` suite builds on; pass per-suite defaults through its
   pure-render component that already has a story. Fixtures used by 3+ files live in
   `src/test/`.
 - **Always put a hard external timeout around any local `vitest run`** —
-  `perl -e 'alarm 180; exec @ARGV' npx vitest run <file>` and `pkill -9 -f vitest`
-  after. `--testTimeout` does **not** stop a render loop (an infinite loop starves
-  the timer). A hanging test file also poisons unrelated commits, since the husky
+  `perl -e 'alarm 180; exec @ARGV' npx vitest run <file>`. `--testTimeout` does
+  **not** stop a render loop (an infinite loop starves the timer). If a runner
+  survives the wrapper, reap it with `pkill -9 -f '^[^ ]*node[^ ]* .*vitest'`, and
+  make that `pkill` **its own final command** — never chain it ahead of anything
+  that still needs to run (a commit, the `git checkout --` that restores a mutated
+  file, the next run). `pkill -f` matches the full command line of every process,
+  so the old bare `-f vitest` pattern also SIGKILLed the shell that invoked it, and
+  everything sequenced after it silently vanished behind a bare non-zero exit. The
+  `^[^ ]*node[^ ]* ` anchor matches only a process whose command line _starts_ with
+  a node binary, which a shell never does. It does still match every vitest runner
+  on the machine, including another agent's — when writers run in parallel,
+  `pgrep -a -f '^[^ ]*node[^ ]* .*vitest'` first and `kill -9 <pid>` only the run
+  you started. A hanging test file also poisons unrelated commits, since the husky
   pre-commit resolves `vitest related --run` imports on disk. CI installs Chromium
   for the browser project; local runs pin the sandbox binary via
   `VITEST_BROWSER_EXECUTABLE` (the `unit` project is browser-free). In the dev

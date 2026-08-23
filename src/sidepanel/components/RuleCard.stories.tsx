@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { expect, fn, within } from 'storybook/test';
 import type { FormattedRule } from '../../shared/types';
 import RuleCard from './RuleCard';
 
@@ -77,9 +77,21 @@ type Story = StoryObj<typeof meta>;
 /** Collapsed, active rule with no conflicts. */
 export const Default: Story = {};
 
-/** Highlighted deep-link target — auto-expands, flashes on arrival, and shows all detail sections. */
+/**
+ * Highlighted deep-link target — auto-expands, flashes on arrival, and shows all
+ * detail sections, including the metadata row's copyable rule id. That copy control
+ * is named after the rule, since a list can have several cards expanded at once.
+ */
 export const Expanded: Story = {
   args: { isHighlighted: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByRole('button', {
+        name: `Copy rule id for ${baseRule.name}`,
+      }),
+    ).toBeInTheDocument();
+  },
 };
 
 /** Rule that assigns to the group currently being viewed — shows the "Current Group" badge. */

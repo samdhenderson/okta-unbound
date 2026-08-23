@@ -93,12 +93,18 @@ export const Inactive: Story = {
   },
 };
 
-/** Expanded, with the lazily-fetched rules rendered. */
+/**
+ * Expanded, with the lazily-fetched rules rendered and the policy's own id offered
+ * with a copy control named after the policy — several cards can be open at once.
+ */
 export const Expanded: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: 'Show rules for Any two factors' }));
     await waitFor(() => expect(canvas.getByText('Trusted device, no prompt')).toBeInTheDocument());
+    await expect(
+      canvas.getByRole('button', { name: 'Copy policy id for Any two factors' }),
+    ).toBeInTheDocument();
   },
 };
 

@@ -119,7 +119,12 @@ Format:
   `CopyButton`.
 - **Done when:** Each site uses `CopyableId` instead of bare `<code>`.
 - **Risk:** Low.
-- **Status:** open
+- **Resolution note:** only `AppListItem` actually used a bare `<code>`; the
+  other two used a `font-mono` `<span>`. The substance of the item was the
+  missing copy affordance, not the tag name. Labels fold the entity name in,
+  falling back to the id when the name is empty (both schemas accept
+  `name: ""`). The residual same-name collision is filed as `I-010`.
+- **Status:** done:#74
 
 ### I-005 · Compare Users view has no scroll preservation
 
@@ -215,3 +220,35 @@ Format:
   entities must pass `copyIdLabel`, and a story shows the collision case.
 - **Risk:** Low.
 - **Status:** open
+
+### I-010 · The `Copy <type> id for <name>` label still collides on duplicate names
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/RuleCard.tsx:317`,
+  `src/sidepanel/components/policies/PolicyCard.tsx:101`,
+  `src/sidepanel/components/apps/AppListItem.tsx:148`,
+  `src/sidepanel/components/apps/AppListItem.tsx` (the expand/collapse
+  `IconButton`, labelled bare `Expand`/`Collapse`)
+- **Problem:** `I-004` gave three id rows a copy control named
+  `Copy <type> id for <name>`, and handled the empty-name case by falling back
+  to the id. It does **not** handle two entities sharing a non-empty display
+  name — two rules named the same, two app instances both labelled
+  "Salesforce" — which is legitimate in Okta and is the same defect `I-009`
+  already pins on `EntityLink`. With both rows expanded, the two copy controls
+  carry an identical accessible name with nothing to tell them apart. Raised
+  by `ui-reviewer` on PR #74 as advisory, alongside a second instance one
+  control over: `AppListItem`'s disclosure button is labelled just
+  `Expand`/`Collapse` with no app name at all, where `PolicyCard` next door
+  does it correctly (`Show rules for ${name}`).
+- **Done when:** Two rows of the same type with the same non-empty name but
+  different ids expose distinguishable accessible names on both their copy and
+  their disclosure controls, with a story covering the duplicate-name case.
+  Decide alongside `I-009` whether the answer is a shared naming helper or a
+  per-call-site convention — they are the same problem and should not get two
+  different fixes.
+- **Risk:** Low.
+- **Status:** open
+- **Related:** `I-009` (same defect on `EntityLink`'s derived
+  `copyIdLabel` default), `I-004` (introduced these three call sites)

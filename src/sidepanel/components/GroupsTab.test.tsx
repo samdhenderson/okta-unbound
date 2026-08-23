@@ -545,7 +545,11 @@ describe('loadAllGroups', () => {
     route(/^\/api\/v1\/apps\/app123$/, () => ({
       success: true,
       headers: {},
-      data: { label: 'Slack' },
+      // `id` is required by oktaAppListItemSchema, which the label lookup now
+      // parses through (D-020). Okta's GET /api/v1/apps/{id} always returns it;
+      // omitting it here was fixture drift that only survived while the
+      // response went unvalidated. No assertion in this test changes.
+      data: { id: 'app123', label: 'Slack' },
     }));
     route(/^\/api\/v1\/apps\/app123\/groups\?limit=200$/, () => ({
       success: true,

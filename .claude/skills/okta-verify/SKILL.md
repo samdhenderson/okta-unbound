@@ -64,8 +64,16 @@ Always wrap the process from outside:
 perl -e 'alarm 240; exec @ARGV' npx vitest run <file>
 ```
 
-then `pkill -9 -f vitest` afterward regardless of whether it returned. This
-matters beyond the one command hanging: husky's pre-commit runs
+If a runner survives that, reap it with `pkill -9 -f '^[^ ]*node[^ ]* .*vitest'`
+as **its own final command** — never chained ahead of anything that still needs
+to run. `pkill -f` matches the full command line of every process, so the old
+bare `-f vitest` pattern also SIGKILLed the invoking shell and silently ate
+whatever came after it; the `^[^ ]*node[^ ]* ` anchor matches only a process
+whose command line _starts_ with a node binary, which a shell never does. It
+still matches other agents' runners, so with parallel writers,
+`pgrep -a -f '^[^ ]*node[^ ]* .*vitest'` first and `kill -9 <pid>` only your own.
+
+This matters beyond the one command hanging: husky's pre-commit runs
 `vitest related --run` against staged files, resolving imports on disk — a
 test file that hangs in isolation will also hang every future commit that
 happens to import it, until someone notices and kills it manually.
