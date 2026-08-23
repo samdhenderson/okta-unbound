@@ -119,7 +119,7 @@ Format:
   `CopyButton`.
 - **Done when:** Each site uses `CopyableId` instead of bare `<code>`.
 - **Risk:** Low.
-- **Status:** open
+- **Status:** claimed:claude/stoic-gates-a5t654
 
 ### I-005 · Compare Users view has no scroll preservation
 

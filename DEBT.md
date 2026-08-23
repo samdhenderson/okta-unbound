@@ -571,7 +571,7 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
 - **Risk:** Low-medium — swapping the call changes the failure surface
   (`getAppById` returns `null` rather than throwing). Touches
   Okta-response handling: route through `security-logging-reviewer`.
-- **Status:** open
+- **Status:** claimed:claude/stoic-gates-a5t654
 
 ### D-021 · `CONVENTIONS.md`'s mandated `pkill -9 -f vitest` kills the shell that runs it
 
@@ -607,7 +607,7 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   match.
 - **Risk:** Low to fix. Non-trivial to leave: it silently truncates commands
   and can strand a mutated source file in the working tree.
-- **Status:** open
+- **Status:** claimed:claude/stoic-gates-a5t654
 
 ### D-022 · Half of a React-warning assertion cannot fire under React 19
 
