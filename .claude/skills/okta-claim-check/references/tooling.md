@@ -150,8 +150,15 @@ Green → the "pinned behaviour" is not pinned, and whatever you were protecting
 imaginary.
 
 The external timeout is mandatory for any local `vitest run`: `--testTimeout` does not
-stop a render loop, because an infinite loop starves the timer. `pkill -9 -f vitest`
-after. See `docs/testing.md`.
+stop a render loop, because an infinite loop starves the timer. If a runner survives
+it, reap it with `pkill -9 -f '^[^ ]*node[^ ]* .*vitest'` as its **own final command** —
+never chained ahead of the `git checkout --` that restores the mutated file, because
+`pkill -f` matches full command lines and the old bare `-f vitest` pattern SIGKILLed
+the invoking shell, stranding the mutation on disk. The `^[^ ]*node[^ ]* ` anchor
+matches only a process whose command line _starts_ with a node binary, never a shell;
+it does match other agents' runners, so with parallel writers use
+`pgrep -a -f '^[^ ]*node[^ ]* .*vitest'` and `kill -9 <pid>` on your own run instead.
+See `docs/testing.md`.
 
 **Never** edit the assertion to see whether it matters. Rewriting an assertion to
 observe its behaviour is indistinguishable from weakening it, and ADR-0012 forbids it

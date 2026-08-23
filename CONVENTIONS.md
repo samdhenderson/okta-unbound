@@ -99,8 +99,19 @@ one-off try/catch in whatever file a nightly run happens to be touching.
   the test goes red, restore the fix, confirm green.
 - Wrap every local `vitest run` invocation with an external timeout — a
   render loop starves `--testTimeout`'s own clock:
-  `perl -e 'alarm 240; exec @ARGV' npx vitest run <file>`, then
-  `pkill -9 -f vitest` regardless of outcome.
+  `perl -e 'alarm 240; exec @ARGV' npx vitest run <file>`.
+- If a runner survives the wrapper, reap it with
+  `pkill -9 -f '^[^ ]*node[^ ]* .*vitest'`, and make that `pkill` **its own
+  final command** — never chain it ahead of anything that still needs to run
+  (a commit, the `git checkout --` that restores a mutated file, the next
+  run). `pkill -f` matches the full command line of every process, so the
+  old bare `-f vitest` pattern also SIGKILLed the shell that invoked it, and
+  everything sequenced after it silently vanished behind a bare non-zero
+  exit. The `^[^ ]*node[^ ]* ` anchor matches only a process whose command
+  line _starts_ with a node binary, which a shell never does. It does still
+  match every vitest runner on the machine, including another agent's — when
+  writers run in parallel, `pgrep -a -f '^[^ ]*node[^ ]* .*vitest'` first and
+  `kill -9 <pid>` only the run you started. (D-021)
 
 ## Verification commands that define green
 
