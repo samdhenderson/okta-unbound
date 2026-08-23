@@ -1,12 +1,32 @@
 /**
  * @module hooks/useOktaApi/pushGroupOps
  * @description Push group mapping operations for tracking which groups are pushed to external apps
+ *
+ * Both Okta responses read here are validated at the boundary (ADR-0006): the
+ * assignment list leniently through `parseOktaList`, and the single-app label
+ * lookup strictly through `parseOkta` + {@link oktaAppListItemSchema}.
+ *
+ * @remarks The label lookup deliberately parses **inline** rather than calling
+ * `appOperations.getAppById`, which resolves the same endpoint with the same
+ * schema. `getAppById` collapses every failure into `null` at default priority,
+ * and this phase needs the two things that collapse destroys: the request stays
+ * at `low` priority so a bulk enrichment never starves interactive work, and the
+ * three degrade paths stay individually logged with their own outcome codes
+ * (D-019) — a resolved `success: false` keeps its numeric status, which is the
+ * only signal distinguishing a rate-limited run from an app that simply has no
+ * label. Delegating would trade a diagnosable failure surface for four saved
+ * lines.
  */
 
 import type { CoreApi } from './core';
 import type { PushGroupMapping, GroupSummary } from '../../../shared/types';
 import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
-import { oktaAppGroupAssignmentSchema, type OktaAppGroupAssignment } from '@/shared/schemas/okta';
+import {
+  oktaAppGroupAssignmentSchema,
+  oktaAppListItemSchema,
+  parseOkta,
+  type OktaAppGroupAssignment,
+} from '@/shared/schemas/okta';
 import { createLogger } from '../../../shared/utils/logger';
 
 const log = createLogger('pushGroupOps');
@@ -78,11 +98,13 @@ export function createPushGroupOperations(coreApi: CoreApi) {
    * `sourceAppName`; groups with no updates are returned unchanged (same reference).
    * Every way a label lookup can fail leaves that app's existing name (its raw
    * id) in place and is logged with identifiers and outcome codes only, never a
-   * payload: a thrown request, a resolved `success: false` (how a 401/429
-   * surfaces), a 200 with neither `label` nor `name`, and — at phase level — apps
-   * that never started because the run was cancelled or halted.
-   * @remarks Resolves each unique app's label, then fetches its mappings — both
-   * phases through {@link CoreApi.runOperation} (ADR-0009) with bounded
+   * payload: a thrown request *or a response that fails validation*, a resolved
+   * `success: false` (how a 401/429 surfaces), a 200 with neither `label` nor
+   * `name` (including one whose `label` is not a string), and — at phase level —
+   * apps that never started because the run was cancelled or halted.
+   * @remarks Resolves each unique app's label — validated against
+   * {@link oktaAppListItemSchema} before it can be rendered — then fetches its
+   * mappings, both phases through {@link CoreApi.runOperation} (ADR-0009) with bounded
    * concurrency at `low` priority, activity-bar visible and cancellable (a
    * cancel enriches with whatever resolved before it). Returns `groups`
    * untouched when no `APP_GROUP` sources are present.
@@ -110,20 +132,31 @@ export function createPushGroupOperations(coreApi: CoreApi) {
       async (appId) => {
         try {
           const response = await coreApi.makeApiRequest(
-            `/api/v1/apps/${appId}`,
+            `/api/v1/apps/${encodeURIComponent(appId)}`,
             'GET',
             undefined,
             'low',
           );
           if (response.success && response.data) {
-            const label = response.data.label || response.data.name;
+            // ADR-0006: the label is rendered as an app name, so it is
+            // end-user-influenced Okta content and is validated before it can
+            // reach the DOM. Same endpoint, same schema, and same `parseOkta`
+            // context string as `appOperations.getAppById` — see the module
+            // remark above for why the parse is inlined rather than delegated.
+            // A validation failure throws and lands in the catch below, which is
+            // already the "could not resolve this app's name" degrade.
+            const app = parseOkta(oktaAppListItemSchema, response.data, 'GET /api/v1/apps/{id}');
+            const label = app.label || app.name;
             if (label) {
               appIds.set(appId, label);
             } else {
               // A 200 carrying neither `label` nor `name` degrades exactly like a
               // failure — the app keeps its raw id — so it gets its own line
-              // (D-019). The label is end-user-influenced Okta content and is
-              // never logged; identifier + outcome code only.
+              // (D-019). Post-D-020 this also covers a *malformed* label: the
+              // schema catches a non-string `label`/`name` to `undefined`, so a
+              // hostile value degrades to "no label" rather than rendering. The
+              // label is end-user-influenced Okta content and is never logged;
+              // identifier + outcome code only.
               log.error('App name resolution returned no label', {
                 code: 'resolve_app_name_no_label',
                 appId,
@@ -142,7 +175,9 @@ export function createPushGroupOperations(coreApi: CoreApi) {
           }
         } catch (error) {
           // Keep existing name on failure — but never silently: a systemic
-          // failure here leaves every app stuck on its raw id (D-003).
+          // failure here leaves every app stuck on its raw id (D-003). Also the
+          // landing point for a `parseOkta` rejection (D-020); its message
+          // carries issue paths and codes only, never received values.
           log.error(`Failed to resolve app name for app ${appId}:`, error);
         }
       },

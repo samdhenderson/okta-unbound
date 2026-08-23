@@ -2,7 +2,9 @@
  * Tests for the push-group mapping operations: zod validation at the response
  * boundary (ADR-0006) — malformed assignment rows are dropped leniently by
  * `parseOktaList`, never thrown on, while valid rows still map to
- * `PushGroupMapping` records.
+ * `PushGroupMapping` records; and the single-app label lookup parses strictly
+ * with `oktaAppListItemSchema` before its label can be rendered as an app name
+ * (D-020), degrading to the app's raw id when it cannot.
  *
  * Fixtures use only fake placeholders (`0oaFAKE…`, `00gFAKE…`,
  * `example.okta.com`) per CLAUDE.md.
@@ -80,7 +82,10 @@ describe('applyPushGroupMappings', () => {
     };
     const makeApiRequest = vi.fn(async (endpoint: string) => {
       if (endpoint === '/api/v1/apps/0oaFAKE1') {
-        return { success: true, data: { label: 'Fake App' } };
+        // `id` is what Okta actually returns and what the boundary schema
+        // requires (D-020); the fixture omitted it while the response went
+        // unvalidated. The assertions below are unchanged.
+        return { success: true, data: { id: '0oaFAKE1', label: 'Fake App' } };
       }
       if (endpoint.startsWith('/api/v1/apps/0oaFAKE1/groups')) {
         return { success: true, data: [assignment], headers: {} };
@@ -211,6 +216,61 @@ describe('applyPushGroupMappings', () => {
     // No response body reaches the log.
     expect(JSON.stringify(consoleError.mock.calls)).not.toContain('ACTIVE');
     consoleError.mockRestore();
+  });
+
+  // D-020 (pinning): the label lookup is an Okta response like any other, so it
+  // must be validated at the boundary (ADR-0006) before its `label` is rendered
+  // as an app name. `oktaAppListItemSchema` catches a non-string `label` to
+  // `undefined`, so a malformed one degrades to "no label" — the same degrade as
+  // a 200 with no label at all — instead of reaching the DOM.
+  it('drops a non-string label at the response boundary instead of rendering it', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const makeApiRequest = vi.fn(async (endpoint: string) => {
+      if (endpoint === '/api/v1/apps/0oaFAKE1') {
+        // Okta is untrusted: nothing guarantees `label` is a string.
+        return { success: true, data: { id: '0oaFAKE1', label: 12345 } };
+      }
+      if (endpoint.startsWith('/api/v1/apps/0oaFAKE1/groups')) {
+        return { success: true, data: [], headers: {} };
+      }
+      throw new Error(`Unrouted test endpoint: ${endpoint}`);
+    });
+    const core = makeCore({ makeApiRequest });
+    const { applyPushGroupMappings } = createPushGroupOperations(core);
+
+    const result = await applyPushGroupMappings([appGroup()]);
+
+    expect(result[0].sourceAppName).toBeUndefined();
+    expect(consoleError).toHaveBeenCalledWith(
+      '[pushGroupOps]',
+      'App name resolution returned no label',
+      { code: 'resolve_app_name_no_label', appId: '0oaFAKE1' },
+    );
+    consoleError.mockRestore();
+  });
+
+  // D-020 (pinning): the id is interpolated into a path, so it is encoded —
+  // matching `getAppById`, which resolves the identical endpoint.
+  it('encodes the app id in the label-lookup path', async () => {
+    const makeApiRequest = vi.fn(async (endpoint: string) => {
+      if (endpoint.includes('/groups')) {
+        return { success: true, data: [], headers: {} };
+      }
+      return { success: true, data: { id: '0oaFAKE 1', label: 'Fake App' } };
+    });
+    const core = makeCore({ makeApiRequest });
+    const { applyPushGroupMappings } = createPushGroupOperations(core);
+
+    const result = await applyPushGroupMappings([appGroup({ sourceAppId: '0oaFAKE 1' })]);
+
+    expect(makeApiRequest).toHaveBeenCalledWith(
+      '/api/v1/apps/0oaFAKE%201',
+      'GET',
+      undefined,
+      'low',
+    );
+    // The resolvable app still resolves — encoding changes the wire path only.
+    expect(result[0].sourceAppName).toBe('Fake App');
   });
 
   // ADR-0009 adoption: a cancel mid-run must not throw — the groups are
