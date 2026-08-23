@@ -17,6 +17,100 @@ Entry format:
 
 ---
 
+## 2026-08-23
+
+**Baseline:** green — the whole ladder. type-check 0 errors, lint 0 errors /
+146 warnings, format clean, 213 test files / 3010 tests with thresholds met, 0
+cycles, control-chars clean over 839 files, cited-paths clean over 54,
+`test:storybook` 149 files / 1042 tests. GitHub's run history shows `CI`
+`success` on `main`'s tip (`de2ae3e`), so the local ladder and CI agree.
+
+`node_modules` was absent again on this fresh container — third night running.
+`npm ci` first. This is now reliable enough to expect rather than diagnose.
+
+**Items worked:** `D-020`, `D-021`, `I-004`.
+
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/74
+
+**Backlog after:** 15 open / 38 total — 10 IMPROVEMENTS (6 open, 1 blocked, 3
+done), 28 DEBT (9 open, 4 blocked, 15 done). 5 blocked (`I-008`, `D-007`,
+`D-027` needs-breakdown; `D-008`, `D-013` needs-human). 3 closed tonight as
+`done:#74`; 4 new items filed (`D-025`, `D-026`, `D-027`, `I-010`), so the
+open count nets up by one.
+
+**Notes:**
+
+**The branch is `claude/stoic-gates-a5t654`, not `nightly/2026-08-23`** — the
+harness assigns it and forbids pushing elsewhere, same as the 6th run. No other
+step deviated.
+
+**Two items shipped wider than their own Files list, for opposite reasons —
+worth distinguishing, because the rule that governs them is not the same one.**
+`D-021` gained `docs/testing.md`: that file repeats the same `pkill` recipe and
+is the authority all three skill files cite as its source, so fixing four of
+five copies would have left the booby-trap in the canonical doc. Same single
+concern, so it belongs in that commit, not in a new item. `D-020` gained a
+one-line fixture fix in `GroupsTab.test.tsx`: validating the app response turned
+that suite red because its mock returned `{ label: 'Slack' }` with no `id`, a
+shape real Okta never sends. That is `CLAUDE.md`'s sanctioned fixture edit, not
+scope creep — but it is a test edit in a file the item never named, so it is
+called out in the PR body rather than buried.
+**The general lesson:** an item's **Files** list is a claim about where the
+concern lives, and it can be wrong in both directions. Check it against the
+Problem before handing it to a writer. (Mine was wrong here for a dumber
+reason: the grep that produced `D-021`'s file list was truncated by a
+`head -20`, which is how `docs/testing.md` went missing from it. Don't `head`
+a grep whose whole purpose is completeness.)
+
+**`D-020` declined its own Done-when's preferred route, and that was right.**
+The item says to adopt `getAppById`. Doing so would have dropped the `low`
+priority this bulk phase runs at, and discarded the HTTP `status` that
+`D-019`'s test asserts by value — i.e. it would have forced deleting a field
+from a live assertion, which is the ADR-0012 stop condition. The writer parsed
+inline instead and recorded why in the module's `@remarks`. The consequence —
+a validated single-app read the one caller who most wants it cannot use — is
+filed as `D-027` rather than papered over. **A Done-when is a proposal, not an
+order; when following it literally would require weakening a test, stop and say
+so.** Same family as the 6th run's `D-018` lesson.
+
+**`D-021`'s suggested pattern was wrong and only a live test caught it.** The
+item proposed `pkill -9 -f 'node.*vitest'`. It still matches the invoking
+shell, because the recipe's own `pkill` argument puts both words on that
+shell's command line. The `[n]ode` bracket trick fails too, on any
+`node_modules/…vitest` path. What works is anchoring to a command line that
+_starts_ with a node binary: `^[^ ]*node[^ ]* .*vitest`. Verified on both
+halves — a chained probe ran its trailing echo and exited 0, and `pgrep` found
+a real runner plus its fork workers, which the kill then reaped. **A pattern
+that looks obviously narrower is not evidence; run it against a live process
+list.**
+
+**`D-023` bit again, and its own mitigation held.** Three writers ran in
+parallel and nothing was committed until all three reported, so no agent's
+edits were stashed out from under it. That cost wall-clock — the lead sat idle
+through the longest writer — but it is the cheap half of the trade. Separately,
+the `D-021` writer's own live `pkill` verification fired one unscoped `pkill`
+while another agent's `pushGroupOps.test.ts` run may have been alive; it
+reported this unprompted rather than leaving a mystery `Killed` for someone to
+misdiagnose. Nothing was lost. **That is the behaviour to keep: an agent that
+reports its own possible collateral damage is worth more than one that reports
+only successes.**
+
+**`D-023` and `D-021` are two halves of one problem** (parallel writers
+stepping on each other) and are now the two cheapest open items. `D-023` was
+skipped tonight only because its Done-when reaches `CONVENTIONS.md`, which
+`D-021` was already rewriting; it should be the next pick, and its diff will be
+small now that `D-021` has laid down the parallel-writer wording.
+
+`D-026` and `D-025` are both trivial. `D-012`, `D-015` and `D-022` remain the
+cheap cleanup tail. The `I-002`/`I-003` off-limits note stands unchanged — both
+still sort to the top of the open ux list and both still reach into
+`groups/detail/`. That is now four consecutive nights they have been skipped
+for the same reason; if Group Detail v2 is not close, they are worth either
+splitting (I-003's two non-`detail/` sites are implementable today) or
+explicitly permitting by name.
+
+---
+
 ## 2026-08-21 (sixth run)
 
 **Baseline:** green — the whole ladder. type-check 0 errors, lint 0 errors /
