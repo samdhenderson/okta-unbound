@@ -16,7 +16,7 @@
 import React, { useState, useCallback, useEffect, useId, useRef, memo } from 'react';
 import type { FormattedRule } from '../../shared/types';
 import { timeAgo } from '../../shared/ruleUtils';
-import { Button, IconButton, ListRow } from './shared';
+import { Button, CopyableId, IconButton, ListRow } from './shared';
 
 /**
  * Upper bound on the arrival-flash hold, in milliseconds. Mirrors `--dur-tell`
@@ -306,9 +306,15 @@ const RuleCard: React.FC<RuleCardProps> = memo(
                 <span className="font-semibold">Last updated:</span>{' '}
                 <span>{timeAgo(rule.lastUpdated)}</span>
               </div>
-              <div>
-                <span className="font-semibold">Rule ID:</span>{' '}
-                <span className="font-mono text-neutral-500">{rule.id}</span>
+              {/*
+                The id is the one metadata value a user copies rather than reads,
+                so it goes through the shared `CopyableId`. The label names the
+                rule because several cards can be expanded at once, and a screen
+                of controls all called "Copy rule id" would not say copy *which*.
+              */}
+              <div className="flex min-w-0 items-center gap-1">
+                <span className="shrink-0 font-semibold">Rule ID:</span>
+                <CopyableId value={rule.id} label={`Copy rule id for ${rule.name || rule.id}`} />
               </div>
             </div>
 

@@ -12,7 +12,7 @@
  * (ADR-0029).
  */
 import React, { memo, useCallback, useId, useState } from 'react';
-import { IconButton, ListRow, LoadingSpinner, OpenInOktaLink } from '../shared';
+import { CopyableId, IconButton, ListRow, LoadingSpinner, OpenInOktaLink } from '../shared';
 import Icon from '../overview/shared/Icon';
 import { useEntityQuery } from '../../cache/useEntityQuery';
 import { cacheKeys } from '../../cache/keys';
@@ -130,7 +130,24 @@ const AppListItem: React.FC<AppListItemProps> = memo(
                     <div className="text-xs font-medium text-neutral-600 mb-0.5">
                       Application ID
                     </div>
-                    <code className="text-xs font-mono text-neutral-900 break-all">{app.id}</code>
+                    {/*
+                      The shared `CopyableId` owns the identifier recipe — the
+                      `font-mono text-xs text-neutral-500` contract plus a ghost
+                      copy control — replacing the `break-all` id text that had
+                      no copy affordance at all. `w-full` gives the wrapper the
+                      cell's full width rather than shrink-to-fit, so the
+                      20-character app id lays out on one line and its
+                      `truncate` never actually bites.
+
+                      The label names the app: several rows can be expanded at
+                      once, so a screenful of controls all called "Copy
+                      application id" would not say copy *which*.
+                    */}
+                    <CopyableId
+                      value={app.id}
+                      label={`Copy application id for ${label}`}
+                      className="w-full"
+                    />
                   </div>
 
                   {app.signOnMode && (
