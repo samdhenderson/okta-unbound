@@ -59,9 +59,9 @@ const AttributeHealthCard: React.FC<AttributeHealthCardProps> = ({
       {summary.populated.toLocaleString()} of {summary.total.toLocaleString()} members.
     </p>
     <div>
-      <h4 className="text-xs font-medium text-neutral-600">
+      <h3 className="text-xs font-medium text-neutral-600">
         Depended on by {rules.length} rule{rules.length === 1 ? '' : 's'}
-      </h4>
+      </h3>
       <ul className="mt-1.5 space-y-1.5">
         {rules.map((rule) => (
           <li key={rule.ruleId}>
