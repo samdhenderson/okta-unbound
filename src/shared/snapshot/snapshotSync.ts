@@ -1,0 +1,527 @@
+/**
+ * @module shared/snapshot/snapshotSync
+ * @description The full-walk sync that fills the org snapshot (ADR-0040).
+ *
+ * Walks an Okta collection page by page, writing each page into
+ * {@link orgSnapshotStore} as it lands rather than at the end — so the snapshot
+ * is durable against an MV3 worker suspension mid-walk, and the panel can paint
+ * per page instead of after the last one.
+ *
+ * Two things it deliberately does not do. It does **not** own a transport: the
+ * page request is injected, so the background wires it to the `ApiScheduler` and
+ * a test wires it to canned pages, and this module never touches `chrome.*`. And
+ * it does **not** conclude a deletion from anything but a walk it watched
+ * complete — see {@link runFullWalk}'s sweep.
+ *
+ * @see {@link module:shared/snapshot/syncMeta} for the freshness decisions.
+ * @see {@link module:shared/utils/oktaPagination} for the walk itself.
+ */
+
+import type { z } from 'zod';
+import {
+  oktaAppListItemSchema,
+  oktaGroupListItemSchema,
+  oktaGroupRuleSchema,
+} from '../schemas/okta';
+import { fetchAllPages, OKTA_PAGE_SIZE, type PaginatedPageResult } from '../utils/oktaPagination';
+import { createLogger } from '../utils/logger';
+import { orgSnapshotStore } from './orgSnapshotStore';
+import {
+  advanceWatermark,
+  driftVerdict,
+  nextSyncMode,
+  readTotalCount,
+  type SyncMode,
+} from './syncMeta';
+import type { SnapshotCollection, SyncMeta } from './types';
+
+const log = createLogger('SnapshotSync');
+
+/**
+ * Issues one page request. Injected so this module stays free of Chrome-runtime
+ * plumbing; the background supplies a scheduler-routed implementation at `low`
+ * priority, and tests supply canned pages.
+ */
+export type PageRequest = (url: string) => Promise<PaginatedPageResult>;
+
+/** What a collection needs in order to be walked. */
+export interface CollectionSpec<T = unknown> {
+  /** Which snapshot collection the rows land in. */
+  collection: SnapshotCollection;
+  /** Canonical first-page URL, including `limit` and any `expand`. */
+  firstUrl: string;
+  /** Per-row boundary schema; malformed rows drop leniently (ADR-0006). */
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>;
+  /** Query parameters Okta may drop from its `rel="next"` link. */
+  preserveParams?: string[];
+  /** Label used in validation and log messages. */
+  context: string;
+}
+
+/** Outcome of one collection walk. */
+export interface WalkOutcome {
+  /** Which collection was walked. */
+  collection: SnapshotCollection;
+  /** Whether the walk reached the last page. */
+  complete: boolean;
+  /** Rows written across every page. */
+  written: number;
+  /** Rows swept as no longer present in Okta; `0` for an incomplete walk. */
+  swept: number;
+  /** Failure message when `complete` is `false` and the walk threw. */
+  error?: string;
+  /** Which mode actually ran, after any escalation. */
+  mode?: SyncMode;
+}
+
+/**
+ * A row's identity and freshness, read defensively off a validated row.
+ *
+ * The schemas are `.passthrough()`, so `id` and `lastUpdated` are present at
+ * runtime but not in the narrow inferred types. Reading them here — rather than
+ * asking each spec for an accessor — keeps every collection on one rule.
+ *
+ * @param row - A validated Okta row.
+ * @returns The row's id, and its `lastUpdated` when it carries a string one.
+ */
+function identify(row: unknown): { id: string; lastUpdated?: string } | null {
+  if (typeof row !== 'object' || row === null) return null;
+  const record = row as { id?: unknown; lastUpdated?: unknown };
+  if (typeof record.id !== 'string' || record.id === '') return null;
+  return {
+    id: record.id,
+    lastUpdated: typeof record.lastUpdated === 'string' ? record.lastUpdated : undefined,
+  };
+}
+
+/** Called after each page lands, so a reader can repaint mid-walk. */
+export type PageSink = (collection: SnapshotCollection, totalSoFar: number) => void;
+
+/** Inputs to {@link runFullWalk}. */
+export interface FullWalkOptions {
+  /** Org origin the rows are scoped to. */
+  origin: string;
+  /** Page transport. */
+  request: PageRequest;
+  /** Epoch millis, injected so the walk's mark and timestamps stay testable. */
+  now: number;
+  /** Notified after each page with the running row count. */
+  onPage?: PageSink;
+  /**
+   * Skip the cheap modes and walk in full.
+   *
+   * What the Refresh button means. Without it a manual refresh moments after a
+   * load would resolve to `none` and appear to do nothing, and — more
+   * importantly — an admin who suspects the snapshot is wrong has no way to say
+   * so. A person asking for the expensive answer gets the expensive answer.
+   */
+  force?: boolean;
+}
+
+/**
+ * Walk one collection in full and reconcile the snapshot against it.
+ *
+ * Each page is validated, written with the walk's mark as its `syncedAt`, and
+ * announced through `onPage`. The walk's resume cursor and watermark are
+ * persisted per page, so an interruption loses at most the page in flight.
+ *
+ * **A deletion is only ever concluded from a walk that completed.** On success
+ * the sweep drops every row older than the walk's mark, because a full walk
+ * returns everything the org still has. On failure nothing is swept and
+ * `complete` stays `false`, so the collection is not served as the whole org and
+ * {@link nextSyncMode} will full-walk it again — a partial answer rendered as a
+ * complete one is the failure this ordering exists to prevent.
+ *
+ * @param spec - The collection to walk.
+ * @param options - See {@link FullWalkOptions}.
+ * @returns What the walk wrote, swept, and whether it finished. Never throws.
+ */
+export async function runFullWalk<T>(
+  spec: CollectionSpec<T>,
+  options: FullWalkOptions,
+): Promise<WalkOutcome> {
+  const { origin, request, now, onPage } = options;
+  const { collection } = spec;
+
+  // A resumed walk reuses the original mark, so the sweep still covers rows the
+  // interrupted pages had returned. A fresh walk stamps a new one.
+  const previous = await orgSnapshotStore.getMeta(collection, origin);
+  const resuming = previous.cursor !== null && previous.walkStartedAt !== null;
+  const mark = resuming ? (previous.walkStartedAt as number) : now;
+  const startUrl = resuming ? (previous.cursor as string) : spec.firstUrl;
+
+  await orgSnapshotStore.patchMeta(collection, origin, {
+    walkStartedAt: mark,
+    cursor: startUrl,
+    complete: false,
+  });
+
+  let watermark = previous.watermark;
+  let written = 0;
+
+  // `fetchAllPages` does not await its page callbacks — it cannot, without
+  // changing timing for every existing caller — so the store writes are chained
+  // here instead. Serialising them matters twice over: two `patchMeta` calls in
+  // flight are a read-modify-write race that can lose the cursor, and an unawaited
+  // final page would let the sweep below delete rows that were still being
+  // written. `drained` is awaited before anything reads the store back.
+  let drained: Promise<void> = Promise.resolve();
+  const enqueue = (work: () => Promise<unknown>): void => {
+    drained = drained.then(() => work()).then(() => undefined);
+  };
+
+  try {
+    await fetchAllPages<T>(request, startUrl, {
+      schema: spec.schema,
+      context: spec.context,
+      preserveParams: spec.preserveParams,
+      // On a resume the walk starts at a cursor, so the parameters to re-apply
+      // must come from the canonical URL rather than from the cursor.
+      paramSource: spec.firstUrl,
+      onPage: (rows, totalSoFar) => {
+        const identified: Array<{ id: string; entity: T; lastUpdated?: string }> = [];
+        for (const row of rows) {
+          const meta = identify(row);
+          // A row with no usable id cannot be keyed, so it is dropped rather
+          // than stored under a synthesised key that no later walk would match.
+          if (meta) identified.push({ id: meta.id, entity: row, lastUpdated: meta.lastUpdated });
+        }
+
+        watermark = advanceWatermark(
+          watermark,
+          identified.map((item) => item.lastUpdated),
+        );
+        written = totalSoFar;
+
+        enqueue(() => orgSnapshotStore.upsertMany(collection, origin, identified, mark));
+        onPage?.(collection, totalSoFar);
+      },
+      onCursor: (nextUrl) => {
+        const at = watermark;
+        enqueue(() =>
+          orgSnapshotStore.patchMeta(collection, origin, { cursor: nextUrl, watermark: at }),
+        );
+      },
+    });
+    await drained;
+  } catch (error) {
+    // Let the queued writes finish before reporting: the pages that did land are
+    // real rows, and abandoning their writes would leave the resume cursor
+    // pointing past data that was never stored.
+    await drained.catch(() => undefined);
+    // Identifiers and outcomes only — never a response body or an entity name.
+    const message = error instanceof Error ? error.message : 'Walk failed';
+    log.error('Full walk did not complete', { code: 'snapshot_walk_failed', collection });
+    // The cursor and `complete: false` are left exactly as the last page set
+    // them, which is what lets the next attempt resume rather than restart.
+    await orgSnapshotStore.patchMeta(collection, origin, { watermark });
+    return { collection, complete: false, written, swept: 0, error: message };
+  }
+
+  const swept = await orgSnapshotStore.sweepStale(collection, origin, mark);
+  const itemCount = await orgSnapshotStore.countCollection(collection, origin);
+
+  await orgSnapshotStore.patchMeta(collection, origin, {
+    complete: true,
+    lastFullWalkAt: now,
+    cursor: null,
+    walkStartedAt: null,
+    watermark,
+    itemCount,
+  });
+
+  log.debug('Full walk complete', { collection, written, swept, itemCount });
+  return { collection, complete: true, written, swept };
+}
+
+/**
+ * A watermark no real row can be newer than.
+ *
+ * The delta-support probe turns on this: `search=lastUpdated gt "<far future>"`
+ * must match nothing. An org that honours the filter answers `x-total-count: 0`;
+ * an org that silently ignores it answers with the collection's full size, and
+ * the two are impossible to confuse. The `.claude/skills/okta-api` reference
+ * warns that an unsupported `search` field may be **ignored with a 200** rather
+ * than rejected, which is exactly the failure that would otherwise make a delta
+ * look cheap while quietly skipping every real change.
+ */
+const UNREACHABLE_WATERMARK = '9999-01-01T00:00:00.000Z';
+
+/**
+ * Build a counting URL for a collection: one row, so the answer is the header.
+ *
+ * Deliberately built from the spec's **path**, dropping its `expand`s and page
+ * size — a probe wants the `x-total-count` header, and paying for embedded
+ * member counts on a row nobody reads is waste.
+ *
+ * @param spec - The collection.
+ * @param search - Optional `search` expression to count under.
+ * @returns A relative Okta path with `limit=1`.
+ */
+function countUrl(spec: CollectionSpec, search?: string): string {
+  const path = spec.firstUrl.split('?')[0];
+  const params = new URLSearchParams({ limit: '1' });
+  if (search) params.set('search', search);
+  return `${path}?${params.toString()}`;
+}
+
+/**
+ * Build the delta URL: the canonical first page, filtered to what changed.
+ *
+ * @param spec - The collection.
+ * @param watermark - Highest `lastUpdated` the snapshot has seen.
+ * @returns The spec's `firstUrl` with a `search` filter appended.
+ */
+function deltaUrl(spec: CollectionSpec, watermark: string): string {
+  const separator = spec.firstUrl.includes('?') ? '&' : '?';
+  const search = encodeURIComponent(`lastUpdated gt "${watermark}"`);
+  return `${spec.firstUrl}${separator}search=${search}`;
+}
+
+/**
+ * Ask whether this org honours `search=lastUpdated gt …` on this collection.
+ *
+ * @param spec - The collection to probe.
+ * @param request - Page transport.
+ * @returns `true` only when the org demonstrably filtered.
+ * @remarks Every uncertain answer is `false`. A failed request, an absent
+ * `x-total-count`, and a non-zero count all mean the same thing here — the
+ * filter was not *proven* to work — and trusting an unproven filter would let
+ * every later sync skip real changes while reporting success. Being wrong in
+ * this direction costs a full walk; being wrong in the other costs correctness.
+ */
+async function probeDeltaSupport(spec: CollectionSpec, request: PageRequest): Promise<boolean> {
+  const result = await request(countUrl(spec, `lastUpdated gt "${UNREACHABLE_WATERMARK}"`));
+  if (!result.success) return false;
+  return readTotalCount(result.headers) === 0;
+}
+
+/**
+ * Compare Okta's row count against the snapshot's, in one request.
+ *
+ * This is the half of ADR-0040's freshness argument that a delta cannot supply:
+ * **nothing is updated when a row is deleted**, so `lastUpdated` can never
+ * observe a deletion, and only a count comparison can.
+ *
+ * @param spec - The collection to check.
+ * @param options - See {@link FullWalkOptions}.
+ * @returns Whether the two agree — `unknown` when Okta did not say.
+ */
+async function runDriftCheck(
+  spec: CollectionSpec,
+  options: FullWalkOptions,
+): Promise<ReturnType<typeof driftVerdict>> {
+  const { origin, request } = options;
+  const result = await request(countUrl(spec));
+  if (!result.success) return 'unknown';
+  const stored = await orgSnapshotStore.countCollection(spec.collection, origin);
+  return driftVerdict(readTotalCount(result.headers), stored);
+}
+
+/**
+ * Fetch and store only what changed since the watermark.
+ *
+ * Usually zero or one request. **Nothing is swept**: a filtered listing is not
+ * evidence about the rows it excluded, so concluding a deletion from it would
+ * delete every row that simply had not changed. Deletions are the drift check's
+ * job, and only a completed full walk ever sweeps.
+ *
+ * @param spec - The collection.
+ * @param options - See {@link FullWalkOptions}.
+ * @param meta - The collection's bookkeeping as read by {@link syncCollection}.
+ * @returns What the delta wrote. Escalates to a full walk if the org turns out
+ * not to honour the filter.
+ */
+async function runDelta<T>(
+  spec: CollectionSpec<T>,
+  options: FullWalkOptions,
+  meta: SyncMeta,
+): Promise<WalkOutcome> {
+  const { origin, request, now, onPage } = options;
+  const { collection } = spec;
+
+  if (meta.deltaSupported === null) {
+    const supported = await probeDeltaSupport(spec, request);
+    await orgSnapshotStore.patchMeta(collection, origin, { deltaSupported: supported });
+    if (!supported) {
+      log.debug('Delta filter not honoured; falling back to a full walk', { collection });
+      return { ...(await runFullWalk(spec, options)), mode: 'full' };
+    }
+  }
+
+  // Nothing to measure changes from. Not an error — an org whose collection is
+  // empty has no watermark, and there is genuinely nothing to ask for.
+  if (meta.watermark === null) {
+    await orgSnapshotStore.patchMeta(collection, origin, { lastDeltaAt: now });
+    return { collection, complete: true, written: 0, swept: 0, mode: 'none' };
+  }
+
+  let watermark = meta.watermark;
+  let written = 0;
+  let drained: Promise<void> = Promise.resolve();
+  const enqueue = (work: () => Promise<unknown>): void => {
+    drained = drained.then(() => work()).then(() => undefined);
+  };
+
+  try {
+    await fetchAllPages<T>(request, deltaUrl(spec, watermark), {
+      schema: spec.schema,
+      context: `${spec.context} (delta)`,
+      preserveParams: spec.preserveParams ? [...spec.preserveParams, 'search'] : ['search'],
+      onPage: (rows, totalSoFar) => {
+        const identified: Array<{ id: string; entity: T; lastUpdated?: string }> = [];
+        for (const row of rows) {
+          const item = identify(row);
+          if (item) identified.push({ id: item.id, entity: row, lastUpdated: item.lastUpdated });
+        }
+        watermark = advanceWatermark(
+          watermark,
+          identified.map((item) => item.lastUpdated),
+        ) as string;
+        written = totalSoFar;
+        enqueue(() => orgSnapshotStore.upsertMany(collection, origin, identified, now));
+        onPage?.(collection, totalSoFar);
+      },
+    });
+    await drained;
+  } catch (error) {
+    await drained.catch(() => undefined);
+    const message = error instanceof Error ? error.message : 'Delta failed';
+    // Identifiers and outcomes only — never a response body or an entity name.
+    log.error('Delta sync did not complete', { code: 'snapshot_delta_failed', collection });
+    // `complete` is deliberately left alone: the snapshot is still whole as of
+    // its last full walk, it is merely no fresher than it already was. Leaving
+    // `lastDeltaAt` unmoved is what makes the next attempt retry.
+    return {
+      collection,
+      complete: meta.complete,
+      written,
+      swept: 0,
+      error: message,
+      mode: 'delta',
+    };
+  }
+
+  const itemCount = await orgSnapshotStore.countCollection(collection, origin);
+  await orgSnapshotStore.patchMeta(collection, origin, { watermark, lastDeltaAt: now, itemCount });
+  log.debug('Delta sync complete', { collection, written, itemCount });
+  return { collection, complete: true, written, swept: 0, mode: 'delta' };
+}
+
+/**
+ * Sync one collection by the cheapest mode that keeps the snapshot honest.
+ *
+ * The ladder is {@link nextSyncMode}'s, with one escalation this function owns:
+ * a drift check that does **not** come back `in-sync` becomes a full walk. Both
+ * `drifted` and `unknown` escalate — an org that did not answer the question has
+ * not answered it in the affirmative (ADR-0040 §7).
+ *
+ * @param spec - The collection.
+ * @param options - See {@link FullWalkOptions}; `force` skips straight to full.
+ * @returns The outcome, tagged with the mode that actually ran. Never throws.
+ */
+export async function syncCollection<T>(
+  spec: CollectionSpec<T>,
+  options: FullWalkOptions,
+): Promise<WalkOutcome> {
+  const meta = await orgSnapshotStore.getMeta(spec.collection, options.origin);
+  const mode: SyncMode = options.force ? 'full' : nextSyncMode(meta, options.now);
+
+  if (mode === 'full') return { ...(await runFullWalk(spec, options)), mode: 'full' };
+  if (mode === 'none')
+    return { collection: spec.collection, complete: true, written: 0, swept: 0, mode };
+
+  if (mode === 'drift-check') {
+    const verdict = await runDriftCheck(spec, options);
+    if (verdict !== 'in-sync') {
+      log.debug('Drift check escalating to a full walk', { collection: spec.collection, verdict });
+      return { ...(await runFullWalk(spec, options)), mode: 'full' };
+    }
+    // Counts agree, so nothing was deleted — but an *edit* moves no count, so
+    // the delta still has to run. The drift check answers one question only.
+    return runDelta(spec, options, meta);
+  }
+
+  return runDelta(spec, options, meta);
+}
+
+/**
+ * The groups collection.
+ *
+ * `expand=stats` gives the exact member count and `expand=app` the source app
+ * for `APP_GROUP` rows — the second of which replaces one `/api/v1/apps/{id}`
+ * request per unique source app, which was the single largest cost in the
+ * pre-ADR-0040 Groups load. Both are named in `preserveParams` because Okta
+ * echoes `expand=stats` into its `rel="next"` link but is not guaranteed to echo
+ * `expand=app`; re-appending one Okta already sent is a no-op, so naming both is
+ * cheaper than being wrong about either.
+ */
+export const GROUPS_SPEC: CollectionSpec = {
+  collection: 'groups',
+  firstUrl: `/api/v1/groups?limit=${OKTA_PAGE_SIZE}&expand=stats&expand=app`,
+  schema: oktaGroupListItemSchema,
+  preserveParams: ['expand'],
+  context: 'GET /api/v1/groups',
+};
+
+/**
+ * The org-wide group rules collection.
+ *
+ * One paginated listing for the whole org, never one request per group — the
+ * property `groupDiscovery.fetchAndCacheAllGroupRules` already relied on and
+ * which this inherits.
+ */
+export const RULES_SPEC: CollectionSpec = {
+  collection: 'rules',
+  firstUrl: `/api/v1/groups/rules?limit=${OKTA_PAGE_SIZE}`,
+  schema: oktaGroupRuleSchema,
+  context: 'GET /api/v1/groups/rules',
+};
+
+/**
+ * The org's application inventory.
+ *
+ * One paginated listing, exactly as `appOperations.getAllApps` walked it — the
+ * difference is where the result lands. It is here rather than left on the
+ * session-scoped `entityCache` because the Overview's questions are about the
+ * *join* between apps, groups and rules ("which app-sourced groups point at a
+ * deleted app?"), and a join is only cheap when both sides are local and both
+ * sides are as fresh as each other.
+ */
+export const APPS_SPEC: CollectionSpec = {
+  collection: 'apps',
+  firstUrl: `/api/v1/apps?limit=${OKTA_PAGE_SIZE}`,
+  schema: oktaAppListItemSchema,
+  context: 'GET /api/v1/apps',
+};
+
+/**
+ * Fill the snapshot for one org.
+ *
+ * Groups and rules are **independent collections against different endpoints**,
+ * so they are walked concurrently rather than one after the other. The
+ * pre-ADR-0040 loader awaited the rules listing after the group walk had
+ * finished, which spent a round trip of wall clock on a queue neither collection
+ * needed to be in.
+ *
+ * Each collection picks its own mode independently: groups may be due for a
+ * cheap delta while rules still need their first full walk, and neither should
+ * wait on the other's verdict.
+ *
+ * `force` deliberately applies to **all** of them. A person pressing Refresh is
+ * saying the snapshot is wrong, and "wrong" is rarely confined to the tab they
+ * happen to be looking at; the whole point of one store is one invalidation
+ * story. The extra cost is the apps and rules listings — two or three requests
+ * against the groups walk's five or more.
+ *
+ * @param specs - Collections to sync; defaults to groups, rules and apps.
+ * @param options - See {@link FullWalkOptions}.
+ * @returns One outcome per collection, in the order given. Never throws: a
+ * collection that failed reports `complete: false` and the others still land.
+ */
+export async function syncOrg(
+  options: FullWalkOptions,
+  specs: ReadonlyArray<CollectionSpec> = [GROUPS_SPEC, RULES_SPEC, APPS_SPEC],
+): Promise<WalkOutcome[]> {
+  return Promise.all(specs.map((spec) => syncCollection(spec, options)));
+}
