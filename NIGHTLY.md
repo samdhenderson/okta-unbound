@@ -17,6 +17,86 @@ Entry format:
 
 ---
 
+## 2026-08-24 — gate-clearing session, not a nightly run
+
+**Baseline:** **red** — `npm run lint:cited-paths` fails on
+`adr-0040/org-snapshot` with six dead citations, five of them naming
+`src/sidepanel/hooks/useOktaApi/pushGroupOps.ts`, which `f1e8def` deleted, and
+one naming `groups/groupsCache.ts`. Reproduced by stashing all uncommitted work
+and re-running on a clean head, so it is not this session's doing. Filed as
+`D-030` rather than fixed here — this session was Sam-directed, not an
+unattended run, and the red-baseline rule governs the latter.
+
+**Items worked:** none implemented. Decisions recorded against `D-007`, `D-008`,
+`D-013`, `D-027`, `D-029`, `I-002`, `I-003`, `I-008`, `I-012`.
+
+**PR:** branch `docs/unblock-gated-backlog`, not yet opened.
+
+**Backlog after:** the five manually-gated items are gone as a category. `D-008`
+and `D-027` are closed as refuted/overtaken; `D-007` split into `a`/`b`/`c`,
+`D-013` into `a`/`b`/`c`, `D-029` into `a`/`b`/`c`/`d`; `D-014` marked
+superseded; `I-008` and `I-012` converted to `research:awaiting-review`;
+`I-002` and `I-003` ungated. One new item (`D-030`). Nine items are now
+claimable by a nightly that previously had none of them.
+
+**Notes:**
+
+**Three of the five gated items had gone stale under moving code**, which is the
+finding that mattered most and the reason both ledgers now carry a `Verified:`
+date and a 14-day re-check rule. `D-008` claimed `useEntityQuery.ts` had zero
+production consumers; it has nine importers across eleven call sites and
+ADR-0026 affirms them. A night that had picked up that P3 "cleanup" would have
+deleted a hook nine surfaces depend on, and the ledger would have read as tidy
+housekeeping while it happened. The lesson is narrower than "verify things":
+**every one of the three was refuted by enumerating importers, and every one of
+them would have survived a grep for mentions** — `D-029` named seven consumers
+that only discuss `RulesCache` in prose, and one (`entityCache.ts`) that
+references it in a single doc comment while never importing it.
+
+**The Group Detail fence is lifted** (`CLAUDE.md`, `SESSION.md` step 3). No
+`groups/detail/` v2 branch exists, and the directory's last change was `9ea42a3`
+— a nightly, on 2026-08-20. The fence had cost `I-002` and `I-003` at least one
+run each and was pushing toward shipping `I-003` two-thirds done. If Sam starts
+v2, the rule goes back; it should not sit as a standing default.
+
+**Repeat work on already-open PRs has a mechanical cause, now fixed.** Sam
+reported nights redoing work that was already in an unopened-but-merged-pending
+PR. The reason is in the sequence itself: an item is marked
+`claimed:nightly/…` **inside the PR's own diff**, never pushed to `main`, so a
+session that branches off `main` and reads the ledger sees every unmerged
+night's work as `open` again. Nothing in the old step 2 said to look at the PR
+list. New step 2 does exactly that, treats any `I-NNN`/`D-NNN` named in an open
+PR as claimed, and **stops the session outright at three or more open nightly
+PRs** — past that point the queue is the problem, not the backlog. Step 7 now
+also requires every item to appear as a bare `I-NNN`/`D-NNN` token in the PR
+body, because that token is what the next session greps for.
+
+**The new step 2 was run once against reality and had to be tightened on the
+spot.** Three PRs were open (#77, #78, #79) — all `feat/*` or `refactor/*`
+branches naming **no backlog item at all**, so id-matching alone would have
+cleared every one of them. Two contend anyway: #78 is editing inside
+`src/sidepanel/components/groups/detail/` (the directory this same session
+unfenced), and #77 is editing `src/sidepanel/hooks/useGroupSource.ts`, a
+downstream consumer of the module `D-029d` exists to delete. So step 2 now
+collects each open PR's **changed files** and treats them as contended
+regardless of who opened the PR or whether it names an item. The stop rule was
+also split: file contention applies to every open PR including Sam's own, while
+the three-PR cap counts only PRs an unattended run would have opened.
+
+**`research:awaiting-review` is a new status and a nightly may claim it.** The
+deliverable is a Proposed ADR and the PR touches `docs/` only. `I-008`, `I-012`
+and the new `D-007b` are seeded there, with target filenames named in each item
+— `lint:cited-paths` cannot check a `docs/` path (`D-024`), so those filenames
+are load-bearing and unverified by any gate.
+
+**Next pick, and why:** `D-013a` and `D-029a` touch disjoint files
+(`useOktaApi/core.ts` + `auditStore.ts` vs `useOktaApi/ruleImpact.ts`) and
+neither has been touched by a recent nightly branch. `I-002` is the UX-first
+tiebreak and is now unfenced. But **fix `D-030` first if the red gate is still
+red** — the red-baseline rule makes that the whole session.
+
+---
+
 ## 2026-08-24
 
 **Baseline:** green — the whole ladder, run before anything was selected.

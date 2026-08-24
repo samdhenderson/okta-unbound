@@ -1038,7 +1038,8 @@ more expensive the day an audit viewer ships.
 - **Files:** ~~`pushGroupOps.ts`~~ (deleted), `appOperations.ts:88-98`
 - **Verified:** 2026-08-24 — **overtaken.** The motivating caller no longer exists.
 - **Problem:** The filing's whole argument rested on one caller:
-  `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts` needed a `low`-priority
+  the deleted push-group module (`useOktaApi/pushGroupOps.ts`, gone as of
+  `f1e8def`) needed a `low`-priority
   single-app read and needed to keep the numeric status that distinguishes "we
   are rate-limited" from "this app has no label", so it parsed the endpoint
   inline rather than adopt `getAppById` — leaving the endpoint parsed in two
@@ -1255,38 +1256,50 @@ origin)` imperatively rather than `useOrgSnapshot` —
 - **Status:** blocked:needs-human
 - **Depends on:** `D-029a`, `D-029b`, `D-029c`
 
-### D-030 · The ADR-0040 branch leaves six dead citations, and `lint:cited-paths` is red because of them
+### D-030 · `lint:cited-paths` is red on `main` right now
 
 - **Category:** standards
 - **Priority:** P1
 - **Size:** S
 - **Files:** `DEBT.md` (four `done:` items citing a deleted file),
   `docs/security.md:230`
-- **Verified:** 2026-08-24 — reproduced by stashing all uncommitted work and
-  re-running the gate on a clean `adr-0040/org-snapshot` head.
-- **Problem:** `npm run lint:cited-paths` is **red on
-  `adr-0040/org-snapshot`**, and was before any of 2026-08-24's ledger work
-  began. `f1e8def` deleted `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts` and
-  an earlier commit deleted `groups/groupsCache.ts`, but five citations of the
-  first and one of the second survived:
+- **Verified:** 2026-08-24 — reproduced on a clean head, then confirmed
+  against `origin/main` itself: `git ls-tree origin/main` shows the push-group
+  module absent, while `git show origin/main:DEBT.md` still cites it five
+  times.
+- **Problem:** `npm run lint:cited-paths` is **red on `main`** — not merely on
+  a working branch. `1fc6dd2` squash-merged ADR-0040 into `main` (PR #76) and
+  carried the deletions with it, but not the citations, so the gate has been
+  red on the default branch since that merge and no session has reported it.
+  It was red before any of 2026-08-24's ledger work began. `f1e8def` deleted the push-group module under
+  `src/sidepanel/hooks/useOktaApi/` and an earlier commit deleted the groups
+  cache under `src/sidepanel/components/groups/`; citations of both survived.
+  (Both are named without a filename here on purpose — spelling either path
+  out would make this item fail the very gate it is filed about.)
 
-  ```
-  DEBT.md — pushGroupOps.ts:117, :103-125, :108-118, :64, and one bare
-  docs/security.md:230 — ../src/sidepanel/components/groups/groupsCache.ts
-  ```
+  As of this filing, five citations remain: four in `DEBT.md` naming the
+  push-group module, and `docs/security.md:230` naming the groups cache. The
+  2026-08-24 ledger pass reworded two others rather than leave them.
 
-  All five `DEBT.md` hits are inside **`done:`** items (`D-003`, `D-019`,
-  `D-020`, `D-026`) — closed records of work against a file that no longer
-  exists. That is the interesting part: the gate's own header argues ADRs and
-  `NIGHTLY.md` are excluded because they are dated records, and a `done:` item
-  is arguably the same kind of thing. It is currently treated as live prose.
+  All four `DEBT.md` hits sit inside **`done:`** items — `D-003`, `D-019`,
+  `D-020`, `D-026` — closed records of work against a file that no longer
+  exists. That is the interesting part. The checker's own header argues that
+  `docs/adr/` and `NIGHTLY.md` are excluded because they are dated records
+  whose paths describe the repo as it was, and "correcting" them would
+  falsify the record. A `done:` item is the same kind of artifact and is
+  currently scanned as live prose.
 
-- **Done when:** The gate is green on this branch. Either the six citations are
-  updated/annotated, **or** — the better answer if it survives scrutiny — the
-  checker learns that a `done:`/`closed:` item is a dated record like an ADR
-  entry and stops scanning it, in which case only `docs/security.md:230` is a
-  real defect. Decide which, and say why in the commit; do not silence the gate.
-- **Risk:** Low to fix. The risk is leaving it: a red gate teaches everyone to
-  ignore the job, which is exactly how `D-010` and `D-017` happened.
+- **Done when:** The gate is green on this branch. Either the five citations
+  are updated or annotated, **or** — the better answer if it survives
+  scrutiny — the checker learns that a `done:`/`closed:` item is a dated
+  record like an ADR entry and stops scanning it, in which case only
+  `docs/security.md:230` is a live defect. Decide which, and say why in the
+  commit. Do not silence the gate.
+
+- **Risk:** Low to fix. The risk is leaving it: a red gate on `main` teaches
+  everyone to ignore the job, which is exactly how `D-010` and `D-017`
+  happened — both of those were also "red on `main`, unnoticed for weeks".
+  This is the third instance of the same pattern, which is itself worth a
+  look: nothing routinely runs the ladder against `main`.
 - **Status:** open
 - **Related:** `D-018`, `D-024` (the same checker's known blind spots)
