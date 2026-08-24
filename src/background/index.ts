@@ -44,6 +44,8 @@ import { createLogger } from '../shared/utils/logger';
 import { isOktaUrl } from '../shared/utils/oktaUrl';
 import { createThrottledRelay } from './throttledRelay';
 import { reinjectContentScripts } from './reinjectContentScripts';
+import { syncSnapshot } from './snapshotBridge';
+import { startSnapshotScheduler } from './snapshotScheduler';
 
 const log = createLogger('Background');
 
@@ -135,6 +137,25 @@ function isValidScheduleRequest(request: {
 }
 
 /**
+ * Validate a `syncSnapshot` message before it can drive a walk of the org.
+ *
+ * The origin must be a parsed Okta host, not a substring match
+ * (`shared/utils/oktaUrl`, `docs/security.md` §6): it scopes the IndexedDB rows,
+ * so accepting an arbitrary string would let one org's inventory be filed under
+ * another's key. `tabId` must be a real integer — it selects the content script
+ * whose authenticated session performs every fetch.
+ */
+function isValidSyncSnapshotRequest(request: {
+  origin?: unknown;
+  tabId?: unknown;
+  force?: unknown;
+}): boolean {
+  if (typeof request.origin !== 'string' || !isOktaUrl(request.origin)) return false;
+  if (request.force !== undefined && typeof request.force !== 'boolean') return false;
+  return typeof request.tabId === 'number' && Number.isInteger(request.tabId);
+}
+
+/**
  * Reject actions that must originate from an extension page (the side panel),
  * never from a tab / content-script context. Extension pages have no
  * `sender.tab`; a content script always does. Returns `true` (and answers via
@@ -200,6 +221,52 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             success: false,
             error: error.message || 'Request failed',
           });
+        });
+
+      return true; // Keep message channel open for async response
+
+    case 'syncSnapshot':
+      // Same sender posture as `scheduleApiRequest`, and for the same reason:
+      // this drives authenticated Okta traffic, so a content script running
+      // inside a web page must never be able to trigger it (ADR-0040 §2).
+      if (rejectIfFromTab(sender, 'syncSnapshot', sendResponse)) {
+        return true;
+      }
+
+      if (!isValidSyncSnapshotRequest(request)) {
+        sendResponse({ success: false, error: 'Invalid syncSnapshot message' });
+        return true;
+      }
+
+      syncSnapshot(
+        globalScheduler,
+        request.origin,
+        request.tabId,
+        Date.now(),
+        request.force === true,
+      )
+        .then((outcomes) => {
+          // A walk that failed mid-way resolves rather than throwing, so
+          // "did every collection finish" is the success verdict — otherwise a
+          // failed load would report success and banner nothing.
+          const failed = outcomes.find((outcome) => !outcome.complete);
+          sendResponse({
+            success: !failed,
+            // Okta's own error summary, the same string the pre-ADR-0040 loader
+            // surfaced to the admin. Shown, never logged (docs/security.md).
+            error: failed?.error,
+            // Counts and completion flags only — the rows themselves are read
+            // back from IndexedDB by the panel, never messaged.
+            outcomes: outcomes.map((outcome) => ({
+              collection: outcome.collection,
+              mode: outcome.mode,
+              complete: outcome.complete,
+              written: outcome.written,
+            })),
+          });
+        })
+        .catch((error) => {
+          sendResponse({ success: false, error: error?.message || 'Snapshot sync failed' });
         });
 
       return true; // Keep message channel open for async response
@@ -459,3 +526,12 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 // Initialize alarms on service worker start
 setupAuditRetentionAlarm();
 setupTabStateCleanupAlarm();
+
+// ============================================================================
+// Org Snapshot (ADR-0040)
+// ============================================================================
+// Opportunistic, never truly scheduled: the background cannot fetch Okta, so
+// this only notices when a live Okta tab makes a sync *possible*. It registers
+// its own `chrome.tabs.onUpdated` and `chrome.alarms` listeners; no new
+// permission and no manifest change.
+startSnapshotScheduler(globalScheduler);
