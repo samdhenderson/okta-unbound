@@ -43,6 +43,7 @@ export function emptySyncMeta(origin: string, collection: SnapshotCollection): S
     walkStartedAt: null,
     deltaSupported: null,
     complete: false,
+    completedShards: [],
   };
 }
 

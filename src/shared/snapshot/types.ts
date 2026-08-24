@@ -97,6 +97,19 @@ export interface SyncMeta {
    * the whole org (ADR-0040 §7), so readers check this rather than assuming.
    */
   complete: boolean;
+  /**
+   * For a **sharded** collection, the shard keys already walked under the
+   * current {@link walkStartedAt} mark.
+   *
+   * A sharded walk is N independent walks — one per app, for `appGroups` — so
+   * `cursor` cannot express its progress: there is no single next-page URL. This
+   * is the resume unit instead. An interruption costs at most the shards in
+   * flight rather than all N, and a resumed walk re-uses the same mark so its
+   * sweep still covers what the earlier shards wrote.
+   *
+   * Empty for every single-URL collection, which resume by `cursor`.
+   */
+  completedShards: string[];
 }
 
 /**

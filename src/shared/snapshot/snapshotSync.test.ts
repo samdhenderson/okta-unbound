@@ -81,12 +81,15 @@ const { fakeDB, tables, control } = vi.hoisted(() => {
 vi.mock('idb', () => ({ openDB: vi.fn(async () => fakeDB) }));
 
 import { orgSnapshotStore } from './orgSnapshotStore';
+import { z } from 'zod';
 import {
   GROUPS_SPEC,
   RULES_SPEC,
   runFullWalk,
+  runShardedWalk,
   syncCollection,
   syncOrg,
+  type CollectionSpec,
   type PageRequest,
 } from './snapshotSync';
 
@@ -675,5 +678,201 @@ describe('the freshness ladder', () => {
     // forever while every later check reported agreement.
     expect(outcome.mode).toBe('full');
     expect(outcome.complete).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sharded walks
+// ---------------------------------------------------------------------------
+// A fan-out collection: N listings that together are the collection, with no
+// endpoint returning them together. Modelled here on its own minimal spec rather
+// than on `APP_GROUPS_SPEC`, so these pin the *engine* and stay true whatever
+// shards a real collection ends up choosing.
+
+/** One assignment row, shaped like `/api/v1/apps/{id}/groups` returns it. */
+const assignmentSchema = z.object({ id: z.string() }).passthrough();
+
+/** A shard's listing URL, matching the shape a real fan-out spec would build. */
+const shardUrl = (appId: string): string => `/api/v1/apps/${appId}/groups?limit=200`;
+
+/**
+ * A fan-out spec over `apps`, keyed so two apps assigning the same group do not
+ * collide. `apps` is borrowed purely as a store to write into.
+ */
+function shardedSpec(appIds: string[]): CollectionSpec<{ id: string }> {
+  return {
+    collection: 'apps',
+    firstUrl: '/api/v1/apps?limit=200',
+    schema: assignmentSchema,
+    context: 'GET /api/v1/apps/{id}/groups',
+    shards: async () => appIds.map((key) => ({ key, firstUrl: shardUrl(key) })),
+    identify: (row, shard) => {
+      const id = (row as { id?: unknown }).id;
+      if (typeof id !== 'string' || !shard) return null;
+      return { id: `${shard.key}::${id}` };
+    },
+    refreshIntervalMs: 6 * 60 * 60 * 1000,
+  };
+}
+
+/** Every stored row key for the fan-out's collection, sorted. */
+async function storedShardKeys(): Promise<string[]> {
+  return [...(await orgSnapshotStore.getIds('apps', ORIGIN))].sort();
+}
+
+describe('a sharded walk', () => {
+  it('keys rows by shard, so one group assigned to two apps is not one row', async () => {
+    // The trap this exists for: Okta returns the assigned *group's* id as the
+    // assignment id, so without the shard prefix both apps write `[origin,
+    // 00g1]` and the second silently overwrites the first — an app's push
+    // mappings vanishing because another app happened to share a group.
+    const { request } = scriptedRequest({
+      [shardUrl('0oaA')]: { success: true, data: [{ id: '00g1' }], headers: {} },
+      [shardUrl('0oaB')]: { success: true, data: [{ id: '00g1' }], headers: {} },
+    });
+
+    const outcome = await runShardedWalk(shardedSpec(['0oaA', '0oaB']), {
+      origin: ORIGIN,
+      request,
+      now: NOW,
+    });
+
+    expect(outcome).toMatchObject({ complete: true, written: 2, swept: 0 });
+    await expect(storedShardKeys()).resolves.toEqual(['0oaA::00g1', '0oaB::00g1']);
+  });
+
+  it('sweeps nothing and stays incomplete when a shard fails', async () => {
+    const spec = shardedSpec(['0oaA', '0oaB']);
+    const first = scriptedRequest({
+      [shardUrl('0oaA')]: { success: true, data: [{ id: '00g1' }], headers: {} },
+      [shardUrl('0oaB')]: { success: true, data: [{ id: '00g2' }], headers: {} },
+    });
+    await runShardedWalk(spec, { origin: ORIGIN, request: first.request, now: NOW });
+
+    // Second walk: one listing fails. Its rows are still real, and a fan-out
+    // missing a leg is missing rows — not looking at deletions.
+    const second: PageRequest = async (url) => {
+      if (url === shardUrl('0oaB')) throw new Error('rate limited');
+      return { success: true, data: [{ id: '00g1' }], headers: {} };
+    };
+    const outcome = await runShardedWalk(spec, {
+      origin: ORIGIN,
+      request: second,
+      now: NOW + 1000,
+    });
+
+    expect(outcome).toMatchObject({ complete: false, swept: 0 });
+    // 0oaB's row survives: sweeping it would have deleted a live app's
+    // assignments because one request failed.
+    await expect(storedShardKeys()).resolves.toEqual(['0oaA::00g1', '0oaB::00g2']);
+    const meta = await orgSnapshotStore.getMeta('apps', ORIGIN);
+    expect(meta.complete).toBe(false);
+    // Only the shard that succeeded is recorded, so the retry is targeted.
+    expect(meta.completedShards).toEqual(['0oaA']);
+  });
+
+  it('resumes without re-requesting the shards it already finished', async () => {
+    const spec = shardedSpec(['0oaA', '0oaB']);
+    const failing: PageRequest = async (url) => {
+      if (url === shardUrl('0oaB')) throw new Error('suspended');
+      return { success: true, data: [{ id: '00g1' }], headers: {} };
+    };
+    await runShardedWalk(spec, { origin: ORIGIN, request: failing, now: NOW });
+
+    const retry = scriptedRequest({
+      [shardUrl('0oaB')]: { success: true, data: [{ id: '00g2' }], headers: {} },
+    });
+    const outcome = await runShardedWalk(spec, {
+      origin: ORIGIN,
+      request: retry.request,
+      now: NOW + 1000,
+    });
+
+    // 0oaA is not asked for again — that is the whole point of the resume unit.
+    expect(retry.urls).toEqual([shardUrl('0oaB')]);
+    expect(outcome).toMatchObject({ complete: true, swept: 0 });
+    await expect(storedShardKeys()).resolves.toEqual(['0oaA::00g1', '0oaB::00g2']);
+    // Finished: the resume record is cleared so the next walk starts fresh.
+    const meta = await orgSnapshotStore.getMeta('apps', ORIGIN);
+    expect(meta.completedShards).toEqual([]);
+    expect(meta.walkStartedAt).toBeNull();
+  });
+
+  it('sweeps an app that has dropped out of the org entirely', async () => {
+    const first = scriptedRequest({
+      [shardUrl('0oaA')]: { success: true, data: [{ id: '00g1' }], headers: {} },
+      [shardUrl('0oaB')]: { success: true, data: [{ id: '00g2' }], headers: {} },
+    });
+    await runShardedWalk(shardedSpec(['0oaA', '0oaB']), {
+      origin: ORIGIN,
+      request: first.request,
+      now: NOW,
+    });
+
+    // 0oaB is gone, so it is not in the shard list and never gets re-marked.
+    // The shared mark is what lets one sweep notice that.
+    const second = scriptedRequest({
+      [shardUrl('0oaA')]: { success: true, data: [{ id: '00g1' }], headers: {} },
+    });
+    const outcome = await runShardedWalk(shardedSpec(['0oaA']), {
+      origin: ORIGIN,
+      request: second.request,
+      now: NOW + 1000,
+    });
+
+    expect(outcome).toMatchObject({ complete: true, swept: 1 });
+    await expect(storedShardKeys()).resolves.toEqual(['0oaA::00g1']);
+  });
+
+  it('records that it has no cheap mode, so the ladder gates it on its interval', async () => {
+    const spec = shardedSpec(['0oaA']);
+    const { request } = scriptedRequest({
+      [shardUrl('0oaA')]: { success: true, data: [{ id: '00g1' }], headers: {} },
+    });
+    await runShardedWalk(spec, { origin: ORIGIN, request, now: NOW });
+
+    // There is no org-wide count to drift-check a fan-out against and no listing
+    // to filter by `lastUpdated`, so this is written rather than probed.
+    const meta = await orgSnapshotStore.getMeta('apps', ORIGIN);
+    expect(meta.deltaSupported).toBe(false);
+
+    // And `syncCollection` therefore leaves it alone until the spec's interval
+    // elapses, rather than re-walking every shard on every attempt.
+    const idle = scriptedRequest({});
+    const outcome = await syncCollection(spec, {
+      origin: ORIGIN,
+      request: idle.request,
+      now: NOW + 60_000,
+    });
+    expect(outcome.mode).toBe('none');
+    expect(idle.urls).toEqual([]);
+  });
+
+  it('reports a failure to discover its shards rather than sweeping the collection', async () => {
+    const first = scriptedRequest({
+      [shardUrl('0oaA')]: { success: true, data: [{ id: '00g1' }], headers: {} },
+    });
+    await runShardedWalk(shardedSpec(['0oaA']), {
+      origin: ORIGIN,
+      request: first.request,
+      now: NOW,
+    });
+
+    const spec: CollectionSpec<{ id: string }> = {
+      ...shardedSpec(['0oaA']),
+      shards: async () => {
+        throw new Error('inventory unreadable');
+      },
+    };
+    const outcome = await runShardedWalk(spec, {
+      origin: ORIGIN,
+      request: first.request,
+      now: NOW + 1000,
+    });
+
+    // An empty shard list must never be inferred from a failure to read one —
+    // that would sweep the entire collection.
+    expect(outcome).toMatchObject({ complete: false, written: 0, swept: 0 });
+    await expect(storedShardKeys()).resolves.toEqual(['0oaA::00g1']);
   });
 });

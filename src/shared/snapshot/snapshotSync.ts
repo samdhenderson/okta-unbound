@@ -44,11 +44,45 @@ const log = createLogger('SnapshotSync');
  */
 export type PageRequest = (url: string) => Promise<PaginatedPageResult>;
 
+/**
+ * One leg of a **sharded** collection: a walk that is only part of the answer.
+ *
+ * Most collections are a single paginated listing. Some are a fan-out — the
+ * org's app-group assignments live at `/api/v1/apps/{id}/groups`, one listing
+ * per app, with no endpoint that returns them together. A shard is one of those
+ * listings plus the key that says which one it was.
+ */
+export interface Shard {
+  /**
+   * Stable identifier for this leg (an app id). Used as the resume unit and, by
+   * convention, as the prefix that keeps rows from different shards from
+   * colliding — see {@link CollectionSpec.identify}.
+   */
+  key: string;
+  /** First-page URL for this shard's walk. */
+  firstUrl: string;
+}
+
+/**
+ * Produce the shards to walk for an org.
+ *
+ * Runs against the snapshot rather than the network wherever it can: the shard
+ * list for `appGroups` is derived from the already-stored app inventory, so
+ * discovering *what to walk* costs no request at all.
+ */
+export type ShardProvider = (origin: string) => Promise<Shard[]>;
+
 /** What a collection needs in order to be walked. */
 export interface CollectionSpec<T = unknown> {
   /** Which snapshot collection the rows land in. */
   collection: SnapshotCollection;
-  /** Canonical first-page URL, including `limit` and any `expand`. */
+  /**
+   * Canonical first-page URL, including `limit` and any `expand`.
+   *
+   * For a sharded collection this is the shape shards follow rather than a URL
+   * that is ever fetched; {@link countUrl} still derives the collection's path
+   * from it.
+   */
   firstUrl: string;
   /** Per-row boundary schema; malformed rows drop leniently (ADR-0006). */
   schema: z.ZodType<T, z.ZodTypeDef, unknown>;
@@ -56,7 +90,39 @@ export interface CollectionSpec<T = unknown> {
   preserveParams?: string[];
   /** Label used in validation and log messages. */
   context: string;
+  /**
+   * Present only on a **sharded** collection: what to walk, one leg at a time.
+   * Its presence is what routes {@link syncCollection} to the fan-out walk.
+   */
+  shards?: ShardProvider;
+  /**
+   * Override how a row's storage key is derived, for collections where Okta's
+   * `id` is not unique within the collection.
+   *
+   * The default reads `row.id`, which is right for groups, apps and rules. It is
+   * **wrong** for app-group assignments: Okta returns the assigned *group's* id
+   * there, so one group assigned to two apps would collide on a single
+   * `[origin, id]` key and the second app would silently overwrite the first.
+   * Such a spec composes the shard key into the id instead.
+   */
+  identify?: (row: unknown, shard: Shard | null) => { id: string; lastUpdated?: string } | null;
+  /**
+   * How long this collection may be served before a check is owed. Defaults to
+   * `DRIFT_CHECK_INTERVAL_MS`. A collection whose walk is expensive — a fan-out
+   * costs one walk per shard — is given a longer leash.
+   */
+  refreshIntervalMs?: number;
 }
+
+/**
+ * How many shards are walked at once.
+ *
+ * Matched to the scheduler's own `maxConcurrent` so the fan-out keeps its slots
+ * busy without queueing a hundred `low`-priority requests behind a user who is
+ * about to click something. Progress is recorded per completed batch, so an
+ * interruption costs at most this many shards.
+ */
+const SHARD_CONCURRENCY = 5;
 
 /** Outcome of one collection walk. */
 export interface WalkOutcome {
@@ -409,6 +475,171 @@ async function runDelta<T>(
 }
 
 /**
+ * Walk a **sharded** collection: N independent listings that together are the
+ * collection.
+ *
+ * The shape `runFullWalk` cannot express. `/api/v1/apps/{id}/groups` is one
+ * listing per app and Okta offers nothing that returns them together, so the
+ * collection is assembled from a fan-out. Three things follow, and each is the
+ * sharded analogue of a rule {@link runFullWalk} already keeps:
+ *
+ * - **The mark is shared across every shard.** All shards stamp the same
+ *   `walkStartedAt`, so one sweep at the end reconciles the whole collection —
+ *   including an app that has disappeared from the org entirely, whose rows
+ *   simply never get re-marked.
+ * - **The sweep runs only if every shard finished.** A fan-out that lost a leg
+ *   is missing rows, not looking at deletions; sweeping on it would delete a
+ *   live app's assignments because one request failed. Same reason a partial
+ *   page walk never sweeps.
+ * - **Progress is recorded per batch, in `completedShards`.** `cursor` cannot
+ *   describe "23 of 40 apps done", so the resume unit is the shard. A resumed
+ *   walk re-uses the original mark and skips what is already recorded.
+ *
+ * A sharded collection has no cheap mode — there is no org-wide count to compare
+ * and no listing to filter by `lastUpdated` — so `deltaSupported` is written
+ * `false` here rather than probed. Its refresh cadence is
+ * {@link CollectionSpec.refreshIntervalMs}.
+ *
+ * @param spec - The collection; must carry {@link CollectionSpec.shards}.
+ * @param options - See {@link FullWalkOptions}.
+ * @returns What the fan-out wrote, swept, and whether every shard finished.
+ * Never throws.
+ */
+export async function runShardedWalk<T>(
+  spec: CollectionSpec<T>,
+  options: FullWalkOptions,
+): Promise<WalkOutcome> {
+  const { origin, request, now, onPage } = options;
+  const { collection } = spec;
+  const shardsOf = spec.shards;
+  // Not reachable through `syncCollection`, which routes on this field; guarded
+  // so a direct caller degrades to the single-URL walk rather than crashing.
+  if (!shardsOf) return runFullWalk(spec, options);
+
+  const identifyRow = spec.identify ?? ((row: unknown) => identify(row));
+
+  const previous = await orgSnapshotStore.getMeta(collection, origin);
+  // A sharded walk resumes on `walkStartedAt` alone: it may well have been
+  // suspended *between* shards, when there is no cursor to have left behind.
+  const resuming = previous.walkStartedAt !== null && !previous.complete;
+  const mark = resuming ? (previous.walkStartedAt as number) : now;
+  const done = new Set<string>(resuming ? previous.completedShards : []);
+
+  let shards: Shard[];
+  try {
+    shards = await shardsOf(origin);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Shard discovery failed';
+    // Identifiers and outcomes only — never a response body or an entity name.
+    log.error('Sharded walk could not determine its shards', {
+      code: 'snapshot_shards_failed',
+      collection,
+    });
+    return { collection, complete: false, written: 0, swept: 0, error: message };
+  }
+
+  await orgSnapshotStore.patchMeta(collection, origin, {
+    walkStartedAt: mark,
+    complete: false,
+    deltaSupported: false,
+    completedShards: [...done],
+    // A fan-out's progress lives in `completedShards`; a stale cursor from some
+    // earlier single-URL walk of this collection must not be resumed into.
+    cursor: null,
+  });
+
+  const pending = shards.filter((shard) => !done.has(shard.key));
+  let written = 0;
+  let failed = 0;
+
+  for (let i = 0; i < pending.length; i += SHARD_CONCURRENCY) {
+    const batch = pending.slice(i, i + SHARD_CONCURRENCY);
+    const settled = await Promise.all(
+      batch.map(async (shard) => {
+        const rows: Array<{ id: string; entity: T; lastUpdated?: string }> = [];
+        try {
+          await fetchAllPages<T>(request, shard.firstUrl, {
+            schema: spec.schema,
+            context: `${spec.context} (${shard.key})`,
+            preserveParams: spec.preserveParams,
+            paramSource: shard.firstUrl,
+            onPage: (page) => {
+              for (const row of page) {
+                const item = identifyRow(row, shard);
+                // A row with no usable id cannot be keyed, so it is dropped
+                // rather than stored under a synthesised key no later walk
+                // would match.
+                if (item) rows.push({ id: item.id, entity: row, lastUpdated: item.lastUpdated });
+              }
+            },
+          });
+        } catch {
+          // One app's listing failing is not the collection failing. The shard
+          // is left out of `completedShards`, which both keeps its existing rows
+          // safe from the sweep below and has the next walk retry it. Logged at
+          // batch level rather than per shard so a broadly failing org does not
+          // write one line per app.
+          return { shard, rows, ok: false };
+        }
+        return { shard, rows, ok: true };
+      }),
+    );
+
+    // Written after the batch settles rather than inside `onPage`: a shard that
+    // throws mid-walk must not leave a partial listing marked as this walk's,
+    // because `completedShards` would then be the only thing standing between
+    // those rows and a sweep that believes them current.
+    for (const result of settled) {
+      if (!result.ok) {
+        failed += 1;
+        continue;
+      }
+      if (result.rows.length > 0) {
+        await orgSnapshotStore.upsertMany(collection, origin, result.rows, mark);
+      }
+      written += result.rows.length;
+      done.add(result.shard.key);
+    }
+
+    await orgSnapshotStore.patchMeta(collection, origin, { completedShards: [...done] });
+    onPage?.(collection, written);
+  }
+
+  if (failed > 0) {
+    log.warn('Sharded walk did not reach every shard', {
+      code: 'snapshot_shards_incomplete',
+      collection,
+      failed,
+      total: shards.length,
+    });
+    // No sweep, and `complete` stays false: the next attempt full-walks and
+    // retries only the shards still missing from `completedShards`.
+    return {
+      collection,
+      complete: false,
+      written,
+      swept: 0,
+      error: `${failed} of ${shards.length} listings failed`,
+    };
+  }
+
+  const swept = await orgSnapshotStore.sweepStale(collection, origin, mark);
+  const itemCount = await orgSnapshotStore.countCollection(collection, origin);
+
+  await orgSnapshotStore.patchMeta(collection, origin, {
+    complete: true,
+    lastFullWalkAt: now,
+    cursor: null,
+    walkStartedAt: null,
+    completedShards: [],
+    itemCount,
+  });
+
+  log.debug('Sharded walk complete', { collection, shards: shards.length, written, swept });
+  return { collection, complete: true, written, swept };
+}
+
+/**
  * Sync one collection by the cheapest mode that keeps the snapshot honest.
  *
  * The ladder is {@link nextSyncMode}'s, with one escalation this function owns:
@@ -425,7 +656,18 @@ export async function syncCollection<T>(
   options: FullWalkOptions,
 ): Promise<WalkOutcome> {
   const meta = await orgSnapshotStore.getMeta(spec.collection, options.origin);
-  const mode: SyncMode = options.force ? 'full' : nextSyncMode(meta, options.now);
+  const mode: SyncMode = options.force
+    ? 'full'
+    : nextSyncMode(meta, options.now, spec.refreshIntervalMs);
+
+  // A sharded collection has only two honest answers: walk the fan-out, or leave
+  // it alone. There is no org-wide count to drift-check it against and no
+  // listing to filter by `lastUpdated`, so the cheap rungs do not apply.
+  if (spec.shards) {
+    if (mode === 'none')
+      return { collection: spec.collection, complete: true, written: 0, swept: 0, mode };
+    return { ...(await runShardedWalk(spec, options)), mode: 'full' };
+  }
 
   if (mode === 'full') return { ...(await runFullWalk(spec, options)), mode: 'full' };
   if (mode === 'none')
