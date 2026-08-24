@@ -278,6 +278,31 @@ export const oktaAppGroupAssignmentSchema = z
 export type OktaAppGroupAssignment = z.infer<typeof oktaAppGroupAssignmentSchema>;
 
 /**
+ * One MFA factor as it appears in `GET /api/v1/users/{id}/factors`.
+ *
+ * Deliberately lenient, following the {@link oktaUserSchemaPropertySchema}
+ * precedent: every field is optional and unknown fields `.passthrough()`, since
+ * `id`/`factorType`/`provider`/`status` are not read as identifiers here — only
+ * summarized (see `mfaUtils.summarizeFactors`, which already falls back to `''`
+ * for an absent `factorType`/`provider`). A row that fails this shape (not an
+ * object at all — `null`, a string, a number) is dropped by {@link parseOktaList},
+ * never thrown on — a single malformed factor must not cost the caller the whole
+ * scan. Callers default the optional fields to `''` when narrowing to the domain
+ * `OktaFactor` type; see `userOperations.scanGroupMfa`.
+ */
+export const oktaFactorSchema = z
+  .object({
+    id: z.string().optional().catch(undefined),
+    factorType: z.string().optional().catch(undefined),
+    provider: z.string().optional().catch(undefined),
+    status: z.string().optional().catch(undefined),
+  })
+  .passthrough();
+
+/** Inferred type of a validated {@link oktaFactorSchema} row. */
+export type OktaFactorListItem = z.infer<typeof oktaFactorSchema>;
+
+/**
  * A user's assignment to an application, as returned by
  * `GET /api/v1/apps/{appId}/users`.
  *
