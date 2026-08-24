@@ -14,6 +14,8 @@ import {
   type OktaAppListItem,
   isProfileSourceApp,
   type AppAssignmentScope,
+  oktaFactorSchema,
+  parseOktaList,
 } from '@/shared/schemas/okta';
 import { createLogger } from '../../../shared/utils/logger';
 
@@ -246,7 +248,10 @@ export function createUserOperations(coreApi: CoreApi) {
    * @returns Map of userId → {@link MemberMfaResult} (summarized via {@link summarizeFactors}).
    * @remarks Costs one API call per user (`GET /api/v1/users/{id}/factors`). Runs
    * through the shared operation runner at `low` priority (like
-   * `batchGetUserDetails`) to avoid starving interactive requests.
+   * `batchGetUserDetails`) to avoid starving interactive requests. The response is
+   * validated with {@link oktaFactorSchema} via {@link parseOktaList} (ADR-0006): a
+   * malformed factor row is dropped, never thrown on, and a non-array response
+   * degrades to zero factors for that user — same as a fetch failure.
    */
   const scanGroupMfa = async (
     userIds: string[],
@@ -269,8 +274,23 @@ export function createUserOperations(coreApi: CoreApi) {
             undefined,
             'low',
           );
-          const factors: OktaFactor[] =
-            response.success && Array.isArray(response.data) ? response.data : [];
+          const rawFactors = response.success ? response.data : [];
+          const validated = parseOktaList(
+            oktaFactorSchema,
+            rawFactors,
+            `GET /api/v1/users/${userId}/factors`,
+          );
+          // Narrow the validated (optional-field) rows to the domain `OktaFactor`
+          // shape — defaulting an absent sub-field to `''` matches the `|| ''`
+          // fallbacks `isActiveMfaFactor`/`factorLabel` already apply, so a row
+          // missing `factorType`/`provider`/`status` still summarizes as an
+          // unrecognized factor rather than being dropped.
+          const factors: OktaFactor[] = validated.map((f) => ({
+            id: f.id ?? '',
+            factorType: f.factorType ?? '',
+            provider: f.provider ?? '',
+            status: f.status ?? '',
+          }));
           resultMap.set(userId, summarizeFactors(userId, factors));
         } catch (error) {
           log.error(`Failed to fetch factors for user ${userId}:`, error);
