@@ -186,9 +186,21 @@ const renderApp = () =>
     </ProgressProvider>,
   );
 
-/** Click a top-level tab in the ARIA tablist. */
+/**
+ * Click a top-level tab in the app's ARIA tablist.
+ *
+ * Scoped by its `aria-label` ("Main sections", `TabNavigation.tsx`) rather than
+ * the bare role: once a group is drilled into, `GroupDetailView`'s own
+ * Members/Access/Rules tab strip (`GroupDetailView.tsx`) is a second `tablist`
+ * on screen, and an unscoped `getByRole('tablist')` would ambiguously match
+ * both.
+ */
 async function openTab(uev: ReturnType<typeof userEvent.setup>, label: string) {
-  await uev.click(within(screen.getByRole('tablist')).getByRole('tab', { name: label }));
+  await uev.click(
+    within(screen.getByRole('tablist', { name: 'Main sections' })).getByRole('tab', {
+      name: label,
+    }),
+  );
 }
 
 /**

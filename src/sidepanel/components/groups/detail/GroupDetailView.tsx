@@ -3,9 +3,17 @@
  * @description The Group Detail view pushed onto the Groups tab's view stack.
  *
  * Purpose-built for the one question an admin drills in with — *where do this
- * group's members come from, and what depends on it?* — so the sections are
- * ordered by how often each settles a real question: membership source, members,
- * access, rules, app push, and last the group's own reference facts.
+ * group's members come from, and what depends on it?* Below the action bar, a
+ * `Tabs` shell (`variant="underline"`) splits the body into three panes, each
+ * one tap away — no pane gated behind another: **Members**
+ * ({@link GroupMembershipSourceSection} + {@link GroupMembersSection}, stacked),
+ * **Access** ({@link GroupAccessSection} + {@link GroupPushSection}, stacked)
+ * and **Rules** ({@link GroupRulesSection}). `activeTab` is owned here
+ * (`useState`, default `'members'`) — this is a page-local pane switch, not
+ * sub-navigation, so it does not warrant `useViewStack` or a lifted hook.
+ * {@link GroupMetadataSection} — the group's own reference facts — stays
+ * outside the tab card, below it in its original position; it is not yet
+ * folded into a tab (a later step of the Group Detail rework does that).
  *
  * It opens on membership source rather than on an identity card because the tab's
  * `PageHeader` now describes the group itself (ADR-0032) — name, type and member count
@@ -51,6 +59,7 @@ import GroupPushSection from './GroupPushSection';
 import GroupMetadataSection from './GroupMetadataSection';
 import GroupActionBar from './GroupActionBar';
 import AddGroupMemberModal from './AddGroupMemberModal';
+import { Tabs, type TabItem } from '../../shared';
 import { useGroupSource } from '../../../hooks/useGroupSource';
 import { useOwedLoad } from '../../../hooks/useOwedLoad';
 import { useGroupRuleReferences } from '../../../hooks/useGroupRuleReferences';
@@ -58,6 +67,16 @@ import { useGroupAccessGrants } from '../../../hooks/useGroupAccessGrants';
 import { useGroupMembersSection } from './useGroupMembersSection';
 import { useAddGroupMember } from '../../../hooks/useAddGroupMember';
 import type { GroupSummary } from '../../../../shared/types';
+
+/** Which tabbed pane of the body (below the action bar) is on screen. */
+type GroupDetailTab = 'members' | 'access' | 'rules';
+
+/** Tab strip for the body — every pane one tap away, none gated behind another. */
+const GROUP_DETAIL_TABS: TabItem[] = [
+  { key: 'members', label: 'Members' },
+  { key: 'access', label: 'Access' },
+  { key: 'rules', label: 'Rules' },
+];
 
 /** Props for {@link GroupDetailView}. */
 interface GroupDetailViewProps {
@@ -71,7 +90,9 @@ interface GroupDetailViewProps {
    * Runs the gated member-source analysis as soon as the view opens, once per
    * group. Set when the push came from a list row's "Analyze member source"
    * action — the user already asked for the analysis, so re-asking here would be
-   * a pointless second click. Never set by a plain drill-in.
+   * a pointless second click. Never set by a plain drill-in. The Members tab is
+   * already `activeTab`'s default, so the result lands where it's visible with
+   * no extra tab-switching logic tied to this prop.
    */
   autoAnalyze?: boolean;
   /**
@@ -91,11 +112,12 @@ interface GroupDetailViewProps {
 }
 
 /**
- * Detail view for one group: membership source, a member roster with add/remove,
- * what membership grants, the two rule relationships, app push, and the group's own
- * reference facts. Its identity is the header's job. Export and membership writes
- * (the action bar's Add-member modal, and per-member add/remove) are its only
- * mutations; everything else here still just reads.
+ * Detail view for one group: membership source and a member roster with
+ * add/remove (Members tab), what membership grants plus app push (Access tab),
+ * and the two rule relationships (Rules tab), with the group's own reference
+ * facts below the tab card. Its identity is the header's job. Export and
+ * membership writes (the action bar's Add-member modal, and per-member
+ * add/remove) are its only mutations; everything else here still just reads.
  */
 const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   group,
@@ -105,6 +127,11 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   isActive = true,
   onExportGroup,
 }) => {
+  // Page-local pane switch, not sub-navigation — no `useViewStack`, no lifted
+  // hook. Defaults to `'members'`, which is also where `autoAnalyze`'s result
+  // renders (see that prop's doc).
+  const [activeTab, setActiveTab] = useState<GroupDetailTab>('members');
+
   const source = useGroupSource(targetTabId ?? undefined);
   const references = useGroupRuleReferences(group.id, targetTabId ?? undefined, isActive);
   const accessGrants = useGroupAccessGrants(group.id, targetTabId ?? undefined, isActive);
@@ -181,51 +208,75 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
           onAddMember={openAddMemberModal}
         />
 
-        <GroupMembershipSourceSection
-          memberCount={group.memberCount}
-          breakdown={source.breakdown}
-          status={source.memberStatus}
-          error={source.error}
-          onAnalyze={source.analyzeMembers}
-          canAnalyze={targetTabId !== null}
-          onNavigateToRule={onNavigateToRule}
-        />
+        <div>
+          <Tabs
+            tabs={GROUP_DETAIL_TABS}
+            activeKey={activeTab}
+            onChange={(key) => setActiveTab(key as GroupDetailTab)}
+            variant="underline"
+            ariaLabel="Group detail sections"
+          />
 
-        <GroupMembersSection
-          groupType={group.type}
-          memberCount={group.memberCount}
-          members={membersSection.members}
-          status={source.memberStatus}
-          error={source.error}
-          onAnalyze={source.analyzeMembers}
-          canAnalyze={targetTabId !== null}
-          removeTarget={membersSection.removeTarget}
-          onRequestRemove={membersSection.requestRemove}
-          onCancelRemove={membersSection.cancelRemove}
-          onConfirmRemove={membersSection.confirmRemove}
-          removeStatus={membersSection.removeStatus}
-          removeError={membersSection.removeError}
-        />
+          <div className="mt-6">
+            {activeTab === 'members' && (
+              <div className="space-y-6" role="tabpanel" aria-label="Members">
+                <GroupMembershipSourceSection
+                  memberCount={group.memberCount}
+                  breakdown={source.breakdown}
+                  status={source.memberStatus}
+                  error={source.error}
+                  onAnalyze={source.analyzeMembers}
+                  canAnalyze={targetTabId !== null}
+                  onNavigateToRule={onNavigateToRule}
+                />
 
-        <GroupAccessSection
-          apps={accessGrants.apps}
-          appsStatus={accessGrants.appsStatus}
-          appsError={accessGrants.appsError}
-          roles={accessGrants.roles}
-          rolesStatus={accessGrants.rolesStatus}
-        />
+                <GroupMembersSection
+                  groupType={group.type}
+                  memberCount={group.memberCount}
+                  members={membersSection.members}
+                  status={source.memberStatus}
+                  error={source.error}
+                  onAnalyze={source.analyzeMembers}
+                  canAnalyze={targetTabId !== null}
+                  removeTarget={membersSection.removeTarget}
+                  onRequestRemove={membersSection.requestRemove}
+                  onCancelRemove={membersSection.cancelRemove}
+                  onConfirmRemove={membersSection.confirmRemove}
+                  removeStatus={membersSection.removeStatus}
+                  removeError={membersSection.removeError}
+                />
+              </div>
+            )}
 
-        <GroupRulesSection
-          assigningRules={source.feedingRules}
-          assigningStatus={source.rulesStatus}
-          assigningError={source.error}
-          referencingRules={references.rules}
-          referencingStatus={references.status}
-          referencingError={references.error}
-          onNavigateToRule={onNavigateToRule}
-        />
+            {activeTab === 'access' && (
+              <div className="space-y-6" role="tabpanel" aria-label="Access">
+                <GroupAccessSection
+                  apps={accessGrants.apps}
+                  appsStatus={accessGrants.appsStatus}
+                  appsError={accessGrants.appsError}
+                  roles={accessGrants.roles}
+                  rolesStatus={accessGrants.rolesStatus}
+                />
 
-        <GroupPushSection mappings={group.pushMappings} />
+                <GroupPushSection mappings={group.pushMappings} />
+              </div>
+            )}
+
+            {activeTab === 'rules' && (
+              <div role="tabpanel" aria-label="Rules">
+                <GroupRulesSection
+                  assigningRules={source.feedingRules}
+                  assigningStatus={source.rulesStatus}
+                  assigningError={source.error}
+                  referencingRules={references.rules}
+                  referencingStatus={references.status}
+                  referencingError={references.error}
+                  onNavigateToRule={onNavigateToRule}
+                />
+              </div>
+            )}
+          </div>
+        </div>
 
         <GroupMetadataSection
           groupId={group.id}

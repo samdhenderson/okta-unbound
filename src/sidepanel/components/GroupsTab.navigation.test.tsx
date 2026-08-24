@@ -370,8 +370,20 @@ describe('GroupsTab sub-navigation', () => {
     // An unscoped query would match both and is itself proof the list stayed mounted.
     const detail = within(screen.getByTestId('group-detail-view'));
 
+    // `GroupMetadataSection` sits below the tab card, so it renders on the
+    // default Members tab too — no tab switch needed for the group id.
     expect(detail.getByText('g1')).toBeInTheDocument();
     expect(detail.getByRole('button', { name: 'Copy ID' })).toBeInTheDocument();
+
+    // RETARGETED (Group Detail tab shell): push state lives in `GroupPushSection`,
+    // stacked under the Access tab (`GroupDetailView.tsx`) rather than the old flat
+    // scroll — switch there before asserting on it. Scoped to the detail view's own
+    // tablist, since the app's top-level tab strip is also `role="tablist"`.
+    await uev.click(
+      within(detail.getByRole('tablist', { name: 'Group detail sections' })).getByRole('tab', {
+        name: 'Access',
+      }),
+    );
 
     // Awaited, where the rest of this case is synchronous: push mappings are a
     // separate snapshot collection (ADR-0040), so they land on their own read
