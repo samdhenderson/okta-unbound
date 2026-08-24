@@ -177,11 +177,44 @@ joins _across_ apps, groups and rules, and a join is only trustworthy when both
 sides were walked by the same sync.
 
 **Status.** `groupsCache` and the `entityCache`-backed app inventory are retired;
-`getAllApps` went with the latter. `shared/rulesCache` is still standing — it has
-around two dozen consumers across the Rules, Users and comparison surfaces, and
-unpicking it is its own change rather than a footnote to this one. Until it goes,
-rules exist in two places: authoritative in the snapshot, and cached separately
-for the rule-impact and membership-analysis readers.
+`getAllApps` went with the latter. `pushGroupOps` is gone too — app-group
+assignments became the `appGroups` collection, so the panel reads push mappings
+rather than deriving them, and `useGroupsLoader` no longer takes an API surface
+at all. `shared/rulesCache` is still standing — it has around two dozen consumers
+across the Rules, Users and comparison surfaces, and unpicking it is its own
+change rather than a footnote to this one. Until it goes, rules exist in two
+places: authoritative in the snapshot, and cached separately for the rule-impact
+and membership-analysis readers.
+
+**A collection is not always one listing.** `appGroups` has no collection
+endpoint — Okta exposes app-group assignments only per app — so `CollectionSpec`
+grew a shard provider, and a sharded walk assembles the collection from one
+listing per app. Three consequences are worth stating because a plausible
+implementation gets each of them wrong: every shard shares one mark, so a single
+sweep still reconciles the whole collection (including an app that has left the
+org); the sweep runs only when _every_ shard finished, because a fan-out that
+lost a leg is missing rows rather than observing deletions; and resume is
+per-shard rather than per-cursor, since "23 of 40 apps done" is not a next-page
+URL. Which apps to walk is itself read from the snapshot — apps whose `features`
+include `GROUP_PUSH` — so discovering the work costs no request, and the set is
+wider than the pre-ADR-0040 pass's, which only ever saw apps that _import_
+groups.
+
+**Depth is not yet a decision.** The four collections here are the ones that
+happened to be needed, not a considered answer to how much of an org the
+snapshot should hold. Naming that — tiered levels an admin can opt into, and the
+reporting each level unlocks — is filed as `I-012` and stays research-only until
+reviewed, because it commits the storage schema and the sync budget to a shape
+later levels have to live inside.
+
+**None of this has run against real Okta.** Every claim above is supported by
+unit tests over canned pages and a faked IndexedDB, several checked by mutation.
+The probe results this ADR set out to resolve by runtime observation — whether
+the delta filter is honoured, whether `x-total-count` is returned, whether
+`expand=app` survives the next link, whether `features` rides the app list — are
+still arguments rather than observations. `D-028` is the independent audit that
+turns them into one or the other; until it is done, read the cost tables here as
+intent.
 
 ### 7. What it refuses to do
 
