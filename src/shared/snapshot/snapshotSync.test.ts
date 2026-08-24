@@ -83,6 +83,7 @@ vi.mock('idb', () => ({ openDB: vi.fn(async () => fakeDB) }));
 import { orgSnapshotStore } from './orgSnapshotStore';
 import { z } from 'zod';
 import {
+  APPS_SPEC,
   GROUPS_SPEC,
   RULES_SPEC,
   runFullWalk,
@@ -415,8 +416,62 @@ describe('syncOrg', () => {
       ['groups', true],
       ['rules', true],
       ['apps', true],
+      ['appGroups', true],
     ]);
     await expect(orgSnapshotStore.countCollection('rules', ORIGIN)).resolves.toBe(1);
+  });
+
+  it('waits for the app inventory before deriving which apps to walk', async () => {
+    // `appGroups` decides *what to walk* by reading the apps collection, so
+    // running it alongside the walk that fills that collection would have it ask
+    // a cold store, find nothing, and record an empty fan-out as a success — with
+    // nothing to re-derive it until the refresh interval elapsed.
+    const order: string[] = [];
+    const request: PageRequest = async (url) => {
+      order.push(url);
+      if (url === APPS_SPEC.firstUrl) {
+        return {
+          success: true,
+          data: [{ id: '0oaA', label: 'Payroll', features: ['GROUP_PUSH'] }],
+          headers: {},
+        };
+      }
+      if (url.startsWith('/api/v1/apps/0oaA/groups')) {
+        return { success: true, data: [{ id: '00g1' }], headers: {} };
+      }
+      return { success: true, data: [], headers: {} };
+    };
+
+    const outcomes = await syncOrg({ origin: ORIGIN, request, now: NOW });
+
+    // The fan-out was derived from the inventory this same pass had just written.
+    expect(order.indexOf('/api/v1/apps/0oaA/groups?limit=200')).toBeGreaterThan(
+      order.indexOf(APPS_SPEC.firstUrl),
+    );
+    expect(outcomes.find((o) => o.collection === 'appGroups')).toMatchObject({
+      complete: true,
+      written: 1,
+    });
+    await expect(orgSnapshotStore.getIds('appGroups', ORIGIN)).resolves.toEqual(
+      new Set(['0oaA::00g1']),
+    );
+  });
+
+  it('retries rather than recording an empty fan-out when the inventory is cold', async () => {
+    // A failed apps walk leaves nothing to derive shards from. Concluding "no app
+    // pushes groups" from that would satisfy the collection for its whole refresh
+    // interval on the strength of a request that failed.
+    const request: PageRequest = async (url) => {
+      if (url === APPS_SPEC.firstUrl) return { success: false, error: 'apps unavailable' };
+      return { success: true, data: [], headers: {} };
+    };
+
+    const outcomes = await syncOrg({ origin: ORIGIN, request, now: NOW });
+
+    expect(outcomes.find((o) => o.collection === 'appGroups')).toMatchObject({ complete: false });
+    const meta = await orgSnapshotStore.getMeta('appGroups', ORIGIN);
+    expect(meta.complete).toBe(false);
+    expect(meta.lastFullWalkAt).toBeNull();
   });
 
   it('lands the collections that succeeded when one of them fails', async () => {

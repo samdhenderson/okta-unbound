@@ -19,9 +19,11 @@
 
 import type { z } from 'zod';
 import {
+  oktaAppGroupAssignmentSchema,
   oktaAppListItemSchema,
   oktaGroupListItemSchema,
   oktaGroupRuleSchema,
+  type OktaAppListItem,
 } from '../schemas/okta';
 import { fetchAllPages, OKTA_PAGE_SIZE, type PaginatedPageResult } from '../utils/oktaPagination';
 import { createLogger } from '../utils/logger';
@@ -737,6 +739,108 @@ export const APPS_SPEC: CollectionSpec = {
   context: 'GET /api/v1/apps',
 };
 
+/** Okta's name for the provisioning feature that pushes groups out to an app. */
+const GROUP_PUSH_FEATURE = 'GROUP_PUSH';
+
+/** How long app-group assignments may be served before the fan-out re-runs. */
+const APP_GROUPS_REFRESH_MS = 6 * 60 * 60 * 1000;
+
+/** Minimum shape this module reads off a stored group row. */
+interface StoredGroupSource {
+  type?: unknown;
+  source?: { id?: unknown };
+}
+
+/**
+ * Which apps to walk for group assignments — answered from the snapshot, at no
+ * request cost.
+ *
+ * The app inventory already records each app's provisioning `features`, so the
+ * apps that push groups can simply be read off it. That is also **wider** than
+ * the pre-ADR-0040 pass, which derived its app set from groups of type
+ * `APP_GROUP` and therefore only ever saw apps that *import* groups: an app that
+ * pushes to Okta groups without importing any was invisible to it, and to both
+ * push filters downstream.
+ *
+ * The fallback is the ADR-0040 probe discipline applied to a field instead of a
+ * filter: an absent `features` array is not evidence of an absent feature, so an
+ * inventory that reports the feature on no app at all falls back to the old
+ * source-app derivation rather than concluding the org pushes nothing.
+ *
+ * @param origin - Org origin.
+ * @returns One shard per app worth asking about.
+ * @throws When neither source collection has been walked yet — an empty shard
+ * list would otherwise be recorded as a successful empty walk, and nothing would
+ * re-derive it until the refresh interval elapsed.
+ */
+async function pushEnabledAppShards(origin: string): Promise<Shard[]> {
+  const [apps, appsMeta] = await Promise.all([
+    orgSnapshotStore.getCollection<OktaAppListItem>('apps', origin),
+    orgSnapshotStore.getMeta('apps', origin),
+  ]);
+
+  const appIds = new Set<string>();
+  for (const app of apps) {
+    if (app.features?.includes(GROUP_PUSH_FEATURE) && app.id) appIds.add(app.id);
+  }
+
+  if (appIds.size === 0) {
+    const groups = await orgSnapshotStore.getCollection<StoredGroupSource>('groups', origin);
+    for (const group of groups) {
+      const sourceId = group.source?.id;
+      if (group.type === 'APP_GROUP' && typeof sourceId === 'string' && sourceId !== '') {
+        appIds.add(sourceId);
+      }
+    }
+    // Nothing found, and no walked inventory to have found it in. "No apps push
+    // groups" and "we have not looked yet" are different facts, and recording
+    // the second as the first would leave the collection empty and satisfied.
+    if (appIds.size === 0 && !appsMeta.complete) {
+      throw new Error('app inventory not yet walked');
+    }
+  }
+
+  return [...appIds].sort().map((id) => ({
+    key: id,
+    firstUrl: `/api/v1/apps/${encodeURIComponent(id)}/groups?limit=${OKTA_PAGE_SIZE}`,
+  }));
+}
+
+/**
+ * The org's app-group assignments — which groups each app pushes or sources.
+ *
+ * A fan-out: Okta exposes these only per app, so this is one listing per
+ * push-enabled app rather than a collection listing. It was the last thing the
+ * panel re-derived on every open, roughly one request per app each time,
+ * re-asking a question whose answer had been on screen minutes earlier.
+ *
+ * **`identify` is not optional decoration here.** Okta returns the assigned
+ * *group's* id as the assignment's `id`, so two apps assigning the same group
+ * both key to `[origin, <groupId>]` and the second would overwrite the first,
+ * silently deleting an app's mappings because it shared a group with another.
+ * The shard key — the app id — is composed in to keep them distinct.
+ */
+export const APP_GROUPS_SPEC: CollectionSpec = {
+  collection: 'appGroups',
+  // Never fetched: the shards supply the real URLs. Kept accurate because
+  // `countUrl` derives a path from it, and because it documents the shape.
+  firstUrl: `/api/v1/apps/{appId}/groups?limit=${OKTA_PAGE_SIZE}`,
+  schema: oktaAppGroupAssignmentSchema,
+  context: 'GET /api/v1/apps/{appId}/groups',
+  shards: pushEnabledAppShards,
+  identify: (row, shard) => {
+    if (!shard || typeof row !== 'object' || row === null) return null;
+    const assignment = row as { id?: unknown };
+    const groupId = typeof assignment.id === 'string' ? assignment.id : '';
+    if (groupId === '') return null;
+    // No `lastUpdated`: this endpoint does not report one, and inventing a
+    // watermark for a collection that can never delta would be a lie the
+    // freshness ladder would then act on.
+    return { id: `${shard.key}::${groupId}` };
+  },
+  refreshIntervalMs: APP_GROUPS_REFRESH_MS,
+};
+
 /**
  * Fill the snapshot for one org.
  *
@@ -756,14 +860,27 @@ export const APPS_SPEC: CollectionSpec = {
  * story. The extra cost is the apps and rules listings — two or three requests
  * against the groups walk's five or more.
  *
- * @param specs - Collections to sync; defaults to groups, rules and apps.
+ * **Derived collections wait.** `appGroups` decides *what to walk* by reading the
+ * app inventory, so running it alongside the walk that fills that inventory would
+ * have it ask a cold store and find nothing. It runs in a second pass, after the
+ * independent collections have settled. This is the one ordering constraint in
+ * the snapshot, and it is a data dependency rather than a preference.
+ *
  * @param options - See {@link FullWalkOptions}.
- * @returns One outcome per collection, in the order given. Never throws: a
- * collection that failed reports `complete: false` and the others still land.
+ * @param specs - Independent collections, walked concurrently; defaults to
+ * groups, rules and apps.
+ * @param derivedSpecs - Collections whose shards are computed from the ones
+ * above, walked after them; defaults to app-group assignments.
+ * @returns One outcome per collection, independent collections first. Never
+ * throws: a collection that failed reports `complete: false` and the others
+ * still land.
  */
 export async function syncOrg(
   options: FullWalkOptions,
   specs: ReadonlyArray<CollectionSpec> = [GROUPS_SPEC, RULES_SPEC, APPS_SPEC],
+  derivedSpecs: ReadonlyArray<CollectionSpec> = [APP_GROUPS_SPEC],
 ): Promise<WalkOutcome[]> {
-  return Promise.all(specs.map((spec) => syncCollection(spec, options)));
+  const independent = await Promise.all(specs.map((spec) => syncCollection(spec, options)));
+  const derived = await Promise.all(derivedSpecs.map((spec) => syncCollection(spec, options)));
+  return [...independent, ...derived];
 }
