@@ -59,6 +59,13 @@ Details: `docs/architecture.md`.
 - **Never hand-roll a list-row container** — use shared `ListRow` (`density`,
   `state`, `as`). Row interiors follow the typography contract in
   `docs/design-system.md`. (ADR-0029)
+- **Never call the shared `ActionBar` directly from a detail page** — wrap it in
+  an `<Entity>ActionBar` component (`UserActionBar` is the reference shape), even
+  for a single action. A verb defaults to the row if reversible or read-only, and
+  to the tier behind **More** — with a confirm `Modal` and the consequence stated
+  in plain language — if it changes entity state with no symmetric undo. Never
+  declare an `ActionDescriptor` with no wired handler: an unimplemented verb is
+  omitted, not shipped `disabled` forever. (ADR-0039)
 - **The header describes the entity; the body must not repeat it.** A detail rung
   passes `identity`/`identityKey` to `PageHeader`, fed by a pure per-entity
   descriptor builder (`groupIdentity`, `userIdentity`) — never a second identity

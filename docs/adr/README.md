@@ -45,6 +45,7 @@ convention; the specs in [`../`](../README.md) describe the _what_.
 | [0036](./0036-a-predicted-access-change-is-never-asserted.md)      | A predicted access change is hedged, withheld, or silent — never asserted         | Accepted | Zero-cost blast radius; six gates before a removal; an unevaluable rule withholds; one pass, never a fixed point.            |
 | [0037](./0037-the-profile-source-is-a-fact-about-the-user.md)      | A user's profile source is on the app row, not in the schema                      | Accepted | `master.priority` exists only for `OVERRIDE`; `features: PROFILE_MASTERING` names the source; no source attached ⇒ editable. |
 | [0038](./0038-a-strip-that-knows-what-it-holds.md)                 | A strip that knows what it holds — and a merge that never ran                     | Accepted | Amends 0030 §2 / 0032 §3a. Descriptor API + measured overflow; the named timeline is hoisted so the merge finally runs.      |
+| [0039](./0039-wrap-the-strip-and-ship-no-verb-without-a-wire.md)   | Wrap the strip, and ship no verb without a wire                                   | Accepted | Amends 0030 §2 / 0038. Every detail page wraps `ActionBar`; row-vs-tier is a consequence test; no action ships unwired.      |
 
 ## Adding an ADR
 

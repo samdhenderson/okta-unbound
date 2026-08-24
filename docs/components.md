@@ -179,6 +179,21 @@ one to be the first to disappear.
   its `aria-controls` target, and renders the control only when the tier has content.
   Leave the tier uncontrolled unless the page has to collapse it on a rung change.
 
+**A detail page never calls `<ActionBar>` directly — it wraps it in its own
+`<Entity>ActionBar`** (`UserActionBar` is the reference shape), even for a single
+action; the wrapper is where the page's second verb goes, and retrofitting one onto
+an inline call site later means finding and migrating it. The wrapper decides where
+each verb starts with one question, not by feel: reversible or read-only defaults to
+the row (`flex`, or `pinned` for the page's one primary verb); a change to the
+entity's state with **no symmetric undo** — suspend, delete, deactivate — defaults
+to `tier`, behind a confirm `Modal` that states the consequence in plain language
+next to the control ("Blocks sign-in until reversed," not just "Suspend").
+**An `ActionDescriptor` is never declared for a handler that isn't wired yet** — an
+unimplemented verb is omitted, the same "absent is not zero" discipline ADR-0032
+applies to identity facts, not rendered `disabled` forever with a tooltip standing
+in for an explanation. A permission-gated verb may still render `disabled` with a
+`title` naming the real reason. See ADR-0039 for the incident this closes.
+
 **A detail rung that answers several questions about one entity uses tabbed panes of
 one card**, not a stack of sections — `UserDetailPanel` is the pattern (Groups / Apps /
 Profile, through shared `Tabs`). Stacking made the page a scroll where the reader
