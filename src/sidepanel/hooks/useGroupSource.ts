@@ -41,6 +41,16 @@ export interface FeedingRule {
   id: string;
   name: string;
   status: string;
+  /**
+   * The `user.<attr>` references the rule's condition mentions, extracted by
+   * `extractUserAttributes` ({@link module:shared/ruleUtils}). Feeds the
+   * attribute→rules reverse index built by
+   * {@link module:shared/rules/groupAttributeIndex}. Absent when the source
+   * rule carried none.
+   */
+  userAttributes?: string[];
+  /** The rule's raw condition expression, when the source rule carried one. */
+  conditionExpression?: string;
 }
 
 /** Return shape of {@link useGroupSource}. */
@@ -118,7 +128,15 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
       getGroupRulesForGroup(nextGroup.id)
         .then((rules) => {
           if (runId !== runIdRef.current) return;
-          setFeedingRules(rules.map((r) => ({ id: r.id, name: r.name, status: r.status })));
+          setFeedingRules(
+            rules.map((r) => ({
+              id: r.id,
+              name: r.name,
+              status: r.status,
+              userAttributes: r.userAttributes,
+              conditionExpression: r.conditionExpression,
+            })),
+          );
           setRulesStatus('done');
         })
         .catch((err) => {
