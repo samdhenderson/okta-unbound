@@ -369,9 +369,24 @@ describe('GroupsTab sub-navigation', () => {
     // unmounted, so its expanded row still carries a group id and a Copy ID button.
     // An unscoped query would match both and is itself proof the list stayed mounted.
     const detail = within(screen.getByTestId('group-detail-view'));
+    // Scoped to the detail view's own tablist, since the app's top-level tab
+    // strip is also `role="tablist"`.
+    const tablist = within(detail.getByRole('tablist', { name: 'Group detail sections' }));
 
+    // RETARGETED (Group Health pane, step 8 of the Group Detail rework):
+    // `GroupMetadataSection` is no longer a standalone section below the tab
+    // card — it is folded into the Health tab's "About this group"
+    // `CollapsibleSection` (`GroupHealthPane.tsx`). Switch there before
+    // asserting on the group id; the section stays mounted (though visually
+    // collapsed) once its tab is active, so no extra "expand" click is needed.
+    await uev.click(tablist.getByRole('tab', { name: 'Health' }));
     expect(detail.getByText('g1')).toBeInTheDocument();
     expect(detail.getByRole('button', { name: 'Copy ID' })).toBeInTheDocument();
+
+    // RETARGETED (Group Detail tab shell): push state lives in `GroupPushSection`,
+    // stacked under the Access tab (`GroupDetailView.tsx`) rather than the old flat
+    // scroll — switch there before asserting on it.
+    await uev.click(tablist.getByRole('tab', { name: 'Access' }));
 
     // Awaited, where the rest of this case is synchronous: push mappings are a
     // separate snapshot collection (ADR-0040), so they land on their own read
@@ -414,6 +429,17 @@ describe('GroupsTab sub-navigation', () => {
     await drillInto(uev, 'Engineering');
 
     const detail = within(screen.getByTestId('group-detail-view'));
+
+    // RETARGETED (Group Detail Overview tab): a plain drill-in now lands on
+    // the Overview tab's verdict tiles rather than the Membership-source
+    // gate directly — switch to Members before asserting the gate is
+    // present-but-idle, unasked.
+    await uev.click(
+      within(detail.getByRole('tablist', { name: 'Group detail sections' })).getByRole('tab', {
+        name: 'Members',
+      }),
+    );
+
     expect(detail.getByRole('button', { name: 'Analyze' })).toBeInTheDocument();
   });
 });

@@ -3,9 +3,20 @@
  * @description The Group Detail view pushed onto the Groups tab's view stack.
  *
  * Purpose-built for the one question an admin drills in with — *where do this
- * group's members come from, and what depends on it?* — so the sections are
- * ordered by how often each settles a real question: membership source, members,
- * access, rules, app push, and last the group's own reference facts.
+ * group's members come from, and what depends on it?* Below the action bar, a
+ * `Tabs` shell (`variant="underline"`) splits the body into five panes, each
+ * one tap away — no pane gated behind another: **Overview**
+ * ({@link GroupOverviewPane}, verdict tiles that drill into the pane below
+ * answering each), **Members** ({@link GroupMembershipSourceSection} +
+ * {@link GroupMembersSection}, stacked), **Access**
+ * ({@link GroupAccessSection} + {@link GroupPushSection}, stacked),
+ * **Rules** ({@link GroupRulesSection}), and **Health**
+ * ({@link GroupHealthPane} — attribute blank-rate/rule-dependency cards, a
+ * gated MFA-coverage scan, and the group's own reference facts folded into a
+ * closed `CollapsibleSection`). `activeTab` is owned here (`useState`,
+ * default `'overview'` — `'members'` when `autoAnalyze` is set; see that
+ * prop's doc) — this is a page-local pane switch, not sub-navigation, so it
+ * does not warrant `useViewStack` or a lifted hook.
  *
  * It opens on membership source rather than on an identity card because the tab's
  * `PageHeader` now describes the group itself (ADR-0032) — name, type and member count
@@ -20,32 +31,61 @@
  * {@link sidepanel/hooks/useGroupSource.useGroupSource} for the rules that assign
  * into the group plus the gated member split,
  * {@link sidepanel/hooks/useGroupRuleReferences.useGroupRuleReferences} for the
- * rules that merely reference it, and
+ * rules that merely reference it,
  * {@link sidepanel/hooks/useGroupAccessGrants.useGroupAccessGrants} for what
- * membership actually grants (assigned apps, admin roles) — and hands their state
- * to pure sections.
+ * membership actually grants (assigned apps, admin roles), and
+ * {@link sidepanel/hooks/useMemberMfaScan.useMemberMfaScan} for the Health tab's
+ * opt-in MFA-coverage scan (scoped to the same roster the Members tab's gate
+ * loads) — and hands their state to pure sections/panes.
  *
- * It also owns the view's two mutating surfaces: a page-level "Export members"
- * action in the sticky `ActionBar` (ADR-0030), and per-member add/remove in
- * {@link GroupMembersSection}, whose state lives in
- * {@link module:sidepanel/components/groups/detail/useGroupMembersSection.useGroupMembersSection}.
+ * It also owns the view's mutating surfaces: a page-level "Export members"
+ * action and an "Add" action in {@link GroupActionBar} (ADR-0030, ADR-0039),
+ * and per-member add/remove in {@link GroupMembersSection}, whose state lives
+ * in {@link module:sidepanel/components/groups/detail/useGroupMembersSection.useGroupMembersSection}.
  * The members section piggybacks on `useGroupSource`'s gated member read rather
  * than fetching a second time — see that hook's module doc.
+ *
+ * The action bar's "Add" button opens {@link AddGroupMemberModal}, backed by
+ * its own {@link module:sidepanel/hooks/useAddGroupMember.useAddGroupMember}
+ * instance — the only add path now that `GroupMembersSection`'s inline add
+ * field has been removed (step 3 of the Group Detail rework). This view's
+ * `onAdded` is wired straight to `membersSection.onMemberAdded`, the
+ * write-back callback `useGroupMembersSection` exposes for exactly this
+ * purpose, so there is only ever one copy of the cache-write/`resummarize`
+ * logic even though the modal's mutation state lives in a separate hook
+ * instance from the roster it writes into.
  */
-import React from 'react';
+import React, { useState } from 'react';
+import GroupOverviewPane from './GroupOverviewPane';
 import GroupMembershipSourceSection from './GroupMembershipSourceSection';
 import GroupMembersSection from './GroupMembersSection';
 import GroupAccessSection from './GroupAccessSection';
 import GroupRulesSection from './GroupRulesSection';
 import GroupPushSection from './GroupPushSection';
-import GroupMetadataSection from './GroupMetadataSection';
+import GroupHealthPane from './GroupHealthPane';
+import GroupActionBar from './GroupActionBar';
+import AddGroupMemberModal from './AddGroupMemberModal';
+import { Tabs, type TabItem } from '../../shared';
 import { useGroupSource } from '../../../hooks/useGroupSource';
 import { useOwedLoad } from '../../../hooks/useOwedLoad';
 import { useGroupRuleReferences } from '../../../hooks/useGroupRuleReferences';
 import { useGroupAccessGrants } from '../../../hooks/useGroupAccessGrants';
+import { useMemberMfaScan } from '../../../hooks/useMemberMfaScan';
 import { useGroupMembersSection } from './useGroupMembersSection';
-import { ActionBar, type ActionDescriptor } from '../../shared';
+import { useAddGroupMember } from '../../../hooks/useAddGroupMember';
 import type { GroupSummary } from '../../../../shared/types';
+
+/** Which tabbed pane of the body (below the action bar) is on screen. */
+type GroupDetailTab = 'overview' | 'members' | 'access' | 'rules' | 'health';
+
+/** Tab strip for the body — every pane one tap away, none gated behind another. */
+const GROUP_DETAIL_TABS: TabItem[] = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'members', label: 'Members' },
+  { key: 'access', label: 'Access' },
+  { key: 'rules', label: 'Rules' },
+  { key: 'health', label: 'Health' },
+];
 
 /** Props for {@link GroupDetailView}. */
 interface GroupDetailViewProps {
@@ -60,6 +100,11 @@ interface GroupDetailViewProps {
    * group. Set when the push came from a list row's "Analyze member source"
    * action — the user already asked for the analysis, so re-asking here would be
    * a pointless second click. Never set by a plain drill-in.
+   *
+   * Also picks the tab shell's initial pane: a plain drill-in opens on
+   * `'overview'` (the landing tab), but `autoAnalyze` opens straight on
+   * `'members'` instead, so the analysis this prop just triggered lands where
+   * its result is actually visible rather than one tap away.
    */
   autoAnalyze?: boolean;
   /**
@@ -71,17 +116,21 @@ interface GroupDetailViewProps {
   /**
    * Opens the Export tab pre-scoped to this group's members (the page-level
    * "Export members" action). Optional and forwarded as-is from `GroupsTab`;
-   * omitting it disables the action rather than breaking the view — `App.tsx`
-   * does not wire this through to the Groups tab yet.
+   * per ADR-0039, omitting it **omits the action from {@link GroupActionBar}
+   * entirely** rather than shipping it disabled — `App.tsx` does not wire this
+   * through to the Groups tab yet.
    */
   onExportGroup?: (groupId: string, groupName: string) => void;
 }
 
 /**
- * Detail view for one group: membership source, a member roster with add/remove,
- * what membership grants, the two rule relationships, app push, and the group's own
- * reference facts. Its identity is the header's job. Export and per-member membership
- * writes are its only mutations; everything else here still just reads.
+ * Detail view for one group: a landing Overview of verdict tiles, membership
+ * source and a member roster with add/remove (Members tab), what membership
+ * grants plus app push (Access tab), the two rule relationships (Rules tab),
+ * and attribute health, a gated MFA scan, and the group's own reference facts
+ * (Health tab). Its identity is the header's job. Export and membership
+ * writes (the action bar's Add-member modal, and per-member add/remove) are
+ * its only mutations; everything else here still just reads.
  */
 const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   group,
@@ -91,6 +140,13 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   isActive = true,
   onExportGroup,
 }) => {
+  // Page-local pane switch, not sub-navigation — no `useViewStack`, no lifted
+  // hook. A plain drill-in lands on the Overview tiles; `autoAnalyze` skips
+  // straight to Members, where the analysis it triggers actually renders (see
+  // that prop's doc). The initializer runs once, so a later prop change does
+  // not retroactively move a reader who is already looking at a tab.
+  const [activeTab, setActiveTab] = useState<GroupDetailTab>(autoAnalyze ? 'members' : 'overview');
+
   const source = useGroupSource(targetTabId ?? undefined);
   const references = useGroupRuleReferences(group.id, targetTabId ?? undefined, isActive);
   const accessGrants = useGroupAccessGrants(group.id, targetTabId ?? undefined, isActive);
@@ -104,6 +160,41 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
     source.memberStatus,
     source.resummarize,
   );
+
+  // The Health tab's opt-in MFA-coverage scan. Scoped to the exact roster the
+  // Members tab's gate loads (`membersSection.members`) rather than fetching its
+  // own — `[]` before that roster exists is inert, since `GroupHealthPane` only
+  // ever wires its trigger once the roster has loaded (see that component's
+  // `rosterReady` gate). Owned here, not inside the pane, so it stays a sibling
+  // of every other read-only load this container composes.
+  const mfaScan = useMemberMfaScan({
+    groupId: group.id,
+    members: membersSection.members ?? [],
+    targetTabId: targetTabId ?? undefined,
+  });
+
+  // The action bar's Add-member modal — a second, independent `useAddGroupMember`
+  // instance from the one `useGroupMembersSection` composes internally for its
+  // own inline field. `onAdded` routes through `membersSection.onMemberAdded` so
+  // both instances write into the exact same cache entry/`cacheTick` rather than
+  // this view holding a second copy of that logic — see the module doc.
+  const [addMemberError, setAddMemberError] = useState<string | null>(null);
+  const addMember = useAddGroupMember({
+    targetTabId,
+    group,
+    members: membersSection.members,
+    onResult: (result) => setAddMemberError(result.text),
+    onAdded: membersSection.onMemberAdded,
+    enabled: isActive,
+  });
+  const openAddMemberModal = (): void => {
+    setAddMemberError(null);
+    addMember.openModal();
+  };
+  const closeAddMemberModal = (): void => {
+    setAddMemberError(null);
+    addMember.closeModal();
+  };
 
   // `open` is memoized on the (stable) API operation, so this runs once per group.
   // While the Groups tab is hidden the open is *owed* rather than run: it reaches
@@ -124,91 +215,155 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
     analyzeMembers();
   });
 
-  // One verb, no tier: `ActionBar` renders no **More** control and nothing to
-  // disclose, so this strip is the button and the chrome it grows as it docks.
-  const actions: ActionDescriptor[] = [
-    {
-      id: 'export-members',
-      label: 'Export members',
-      icon: 'download',
-      variant: 'primary',
-      onClick: () => onExportGroup?.(group.id, group.name),
-      disabled: !onExportGroup,
-      title: "Export this group's members (opens the Export tab with column picker + presets)",
-    },
-  ];
-
   return (
-    /*
-      `space-y-6`, the same step the Users detail rung uses. It was `space-y-3`,
-      which is the card-to-card gap and not the rung's step — the strip is a card
-      the width of the column like every section under it, so it takes the same
-      rhythm as the rest of the rung rather than a tighter one of its own.
-    */
-    <div className="space-y-6" data-testid="group-detail-view">
-      <ActionBar ariaLabel={`Actions for ${group.name}`} actions={actions} />
+    // A fragment, not just the stack `div`: the Add-member modal below is a
+    // page-level overlay, mounted once and controlled by `addMember.isOpen`
+    // (the pattern `UsersTab.tsx` uses for `AddToGroupModal`) rather than a
+    // child of the `space-y-6` rhythm it has nothing to do with.
+    <>
+      {/*
+        `space-y-6`, the same step the Users detail rung uses. It was `space-y-3`,
+        which is the card-to-card gap and not the rung's step — the strip is a card
+        the width of the column like every section under it, so it takes the same
+        rhythm as the rest of the rung rather than a tighter one of its own.
+      */}
+      <div className="space-y-6" data-testid="group-detail-view">
+        <GroupActionBar
+          group={group}
+          targetTabId={targetTabId}
+          onExportGroup={onExportGroup}
+          onAddMember={openAddMemberModal}
+        />
 
-      <GroupMembershipSourceSection
-        memberCount={group.memberCount}
-        breakdown={source.breakdown}
-        status={source.memberStatus}
-        error={source.error}
-        onAnalyze={source.analyzeMembers}
-        canAnalyze={targetTabId !== null}
-        onNavigateToRule={onNavigateToRule}
+        <div>
+          <Tabs
+            tabs={GROUP_DETAIL_TABS}
+            activeKey={activeTab}
+            onChange={(key) => setActiveTab(key as GroupDetailTab)}
+            variant="underline"
+            ariaLabel="Group detail sections"
+          />
+
+          <div className="mt-6">
+            {activeTab === 'overview' && (
+              <GroupOverviewPane
+                group={group}
+                breakdown={source.breakdown}
+                memberStatus={source.memberStatus}
+                feedingRulesCount={source.feedingRules.length}
+                rulesStatus={source.rulesStatus}
+                appsCount={accessGrants.apps.length}
+                appsStatus={accessGrants.appsStatus}
+                rolesCount={accessGrants.roles.length}
+                rolesStatus={accessGrants.rolesStatus}
+                referencingRulesCount={references.rules.length}
+                referencingStatus={references.status}
+                onNavigate={setActiveTab}
+              />
+            )}
+
+            {activeTab === 'members' && (
+              <div className="space-y-6" role="tabpanel" aria-label="Members">
+                <GroupMembershipSourceSection
+                  memberCount={group.memberCount}
+                  breakdown={source.breakdown}
+                  status={source.memberStatus}
+                  error={source.error}
+                  onAnalyze={source.analyzeMembers}
+                  canAnalyze={targetTabId !== null}
+                  onNavigateToRule={onNavigateToRule}
+                />
+
+                <GroupMembersSection
+                  groupType={group.type}
+                  memberCount={group.memberCount}
+                  members={membersSection.members}
+                  status={source.memberStatus}
+                  error={source.error}
+                  onAnalyze={source.analyzeMembers}
+                  canAnalyze={targetTabId !== null}
+                  removeTarget={membersSection.removeTarget}
+                  onRequestRemove={membersSection.requestRemove}
+                  onCancelRemove={membersSection.cancelRemove}
+                  onConfirmRemove={membersSection.confirmRemove}
+                  removeStatus={membersSection.removeStatus}
+                  removeError={membersSection.removeError}
+                />
+              </div>
+            )}
+
+            {activeTab === 'access' && (
+              <div className="space-y-6" role="tabpanel" aria-label="Access">
+                <GroupAccessSection
+                  apps={accessGrants.apps}
+                  appsStatus={accessGrants.appsStatus}
+                  appsError={accessGrants.appsError}
+                  roles={accessGrants.roles}
+                  rolesStatus={accessGrants.rolesStatus}
+                />
+
+                <GroupPushSection mappings={group.pushMappings} />
+              </div>
+            )}
+
+            {activeTab === 'rules' && (
+              <div role="tabpanel" aria-label="Rules">
+                <GroupRulesSection
+                  assigningRules={source.feedingRules}
+                  assigningStatus={source.rulesStatus}
+                  assigningError={source.error}
+                  referencingRules={references.rules}
+                  referencingStatus={references.status}
+                  referencingError={references.error}
+                  onNavigateToRule={onNavigateToRule}
+                />
+              </div>
+            )}
+
+            {activeTab === 'health' && (
+              <div role="tabpanel" aria-label="Health">
+                <GroupHealthPane
+                  groupId={group.id}
+                  memberCount={group.memberCount}
+                  members={membersSection.members}
+                  memberStatus={source.memberStatus}
+                  error={source.error}
+                  onAnalyzeMembers={source.analyzeMembers}
+                  canAnalyze={targetTabId !== null}
+                  feedingRules={source.feedingRules}
+                  onNavigateToRule={onNavigateToRule}
+                  mfaResults={mfaScan.mfaResults}
+                  scanStatus={mfaScan.scanStatus}
+                  onRunScan={mfaScan.runScan}
+                  onRequestConfirm={mfaScan.requestConfirm}
+                  onCancelConfirm={mfaScan.cancelConfirm}
+                  description={group.description}
+                  created={group.created}
+                  lastUpdated={group.lastUpdated}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <AddGroupMemberModal
+        isOpen={addMember.isOpen}
+        groupName={group.name}
+        addQuery={addMember.addQuery}
+        onAddQueryChange={addMember.setAddQuery}
+        addResults={addMember.addResults}
+        isSearchingToAdd={addMember.isSearchingToAdd}
+        addSearchError={addMember.addSearchError}
+        selectedUser={addMember.selectedUser}
+        onSelectUser={addMember.selectUser}
+        onClearSelectedUser={addMember.clearSelectedUser}
+        isAddingMember={addMember.isAddingMember}
+        onClose={closeAddMemberModal}
+        onConfirm={addMember.confirmAddMember}
+        addMemberError={addMemberError}
       />
-
-      <GroupMembersSection
-        groupType={group.type}
-        memberCount={group.memberCount}
-        members={membersSection.members}
-        status={source.memberStatus}
-        error={source.error}
-        onAnalyze={source.analyzeMembers}
-        canAnalyze={targetTabId !== null}
-        removeTarget={membersSection.removeTarget}
-        onRequestRemove={membersSection.requestRemove}
-        onCancelRemove={membersSection.cancelRemove}
-        onConfirmRemove={membersSection.confirmRemove}
-        removeStatus={membersSection.removeStatus}
-        removeError={membersSection.removeError}
-        addQuery={membersSection.addQuery}
-        onAddQueryChange={membersSection.setAddQuery}
-        addResults={membersSection.addResults}
-        isSearchingToAdd={membersSection.isSearchingToAdd}
-        addSearchError={membersSection.addSearchError}
-        onSelectToAdd={membersSection.selectToAdd}
-        addStatus={membersSection.addStatus}
-        addError={membersSection.addError}
-      />
-
-      <GroupAccessSection
-        apps={accessGrants.apps}
-        appsStatus={accessGrants.appsStatus}
-        appsError={accessGrants.appsError}
-        roles={accessGrants.roles}
-        rolesStatus={accessGrants.rolesStatus}
-      />
-
-      <GroupRulesSection
-        assigningRules={source.feedingRules}
-        assigningStatus={source.rulesStatus}
-        assigningError={source.error}
-        referencingRules={references.rules}
-        referencingStatus={references.status}
-        referencingError={references.error}
-        onNavigateToRule={onNavigateToRule}
-      />
-
-      <GroupPushSection mappings={group.pushMappings} />
-
-      <GroupMetadataSection
-        groupId={group.id}
-        description={group.description}
-        created={group.created}
-        lastUpdated={group.lastUpdated}
-      />
-    </div>
+    </>
   );
 };
 

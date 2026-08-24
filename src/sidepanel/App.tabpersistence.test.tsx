@@ -186,9 +186,21 @@ const renderApp = () =>
     </ProgressProvider>,
   );
 
-/** Click a top-level tab in the ARIA tablist. */
+/**
+ * Click a top-level tab in the app's ARIA tablist.
+ *
+ * Scoped by its `aria-label` ("Main sections", `TabNavigation.tsx`) rather than
+ * the bare role: once a group is drilled into, `GroupDetailView`'s own
+ * Members/Access/Rules tab strip (`GroupDetailView.tsx`) is a second `tablist`
+ * on screen, and an unscoped `getByRole('tablist')` would ambiguously match
+ * both.
+ */
 async function openTab(uev: ReturnType<typeof userEvent.setup>, label: string) {
-  await uev.click(within(screen.getByRole('tablist')).getByRole('tab', { name: label }));
+  await uev.click(
+    within(screen.getByRole('tablist', { name: 'Main sections' })).getByRole('tab', {
+      name: label,
+    }),
+  );
 }
 
 /**
@@ -340,9 +352,17 @@ describe('App tab lifetime', () => {
     await tabHeading('Group Rules');
     await openTab(uev, 'Groups');
 
-    // Same detail view, still open, on the same group.
+    // Same detail view, still open, on the same group. The group id itself now
+    // lives in the Health tab's folded "About this group" section
+    // (`GroupHealthPane.tsx`, step 8 of the Group Detail rework) rather than
+    // always-visible below the tab card — switch there before asserting on it.
     const detail = screen.getByTestId('group-detail-view');
     expect(detail).toBeVisible();
+    await uev.click(
+      within(detail).getByRole('tab', {
+        name: 'Health',
+      }),
+    );
     expect(within(detail).getByText('g1')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Back to groups' })).toBeVisible();
 

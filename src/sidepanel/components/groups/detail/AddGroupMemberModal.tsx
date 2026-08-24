@@ -8,7 +8,11 @@
  * confirm/cancel footer built from the shared `Button` and `Modal` primitives.
  * All state (the query, the debounced search, the add-in-flight flag) lives in
  * the hook; this component only renders it and forwards user intent through
- * callbacks.
+ * callbacks. A failed *search* ({@link AddGroupMemberModalProps.addSearchError})
+ * and a failed *add* ({@link AddGroupMemberModalProps.addMemberError}) render as
+ * two distinct inline alerts — the hook's `onResult` only ever reports the
+ * latter, so the caller passes it straight through rather than this component
+ * inferring one from the other.
  */
 import React from 'react';
 import { AlertMessage, Button, Modal, Input, LoadingSpinner } from '../../shared';
@@ -43,6 +47,13 @@ interface AddGroupMemberModalProps {
   onClose: () => void;
   /** Confirm the add of the selected user. */
   onConfirm: () => void;
+  /**
+   * Error from a failed add attempt (the mutation, not the search) — distinct
+   * from {@link AddGroupMemberModalProps.addSearchError}, which reports a
+   * failed type-ahead. `null`/omitted when the last attempt succeeded or none
+   * has run yet.
+   */
+  addMemberError?: string | null;
 }
 
 /**
@@ -64,6 +75,7 @@ const AddGroupMemberModal: React.FC<AddGroupMemberModalProps> = ({
   isAddingMember,
   onClose,
   onConfirm,
+  addMemberError,
 }) => {
   const showDropdown = addResults.length > 0 && !selectedUser;
 
@@ -144,6 +156,8 @@ const AddGroupMemberModal: React.FC<AddGroupMemberModalProps> = ({
             </Button>
           </div>
         )}
+
+        {addMemberError && <AlertMessage message={{ text: addMemberError, type: 'danger' }} />}
       </div>
     </Modal>
   );
