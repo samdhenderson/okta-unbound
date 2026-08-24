@@ -3,14 +3,14 @@
  * @description Tests for the Group Detail view's tab shell.
  *
  * Pins the container's own job — composing the read-only loads, the action bar,
- * and (new as of the tab-shell restructure) which of the three tabbed panes is
- * on screen — not the sections' own rendering, which each already has its own
- * suite (`GroupMembershipSourceSection.test.tsx`, `GroupMembersSection.test.tsx`,
- * `GroupRulesSection.test.tsx`; `GroupAccessSection` and `GroupPushSection` are
- * pure-render leaves with only a story, per ADR-0023). Every section, the
- * action bar's modal, and `GroupMetadataSection` are stubbed test doubles here
- * so a tab switch reads as "which stub is mounted" — the same pattern
- * `GroupsTab.test.tsx` uses for its feature children.
+ * and which of the four tabbed panes is on screen — not the panes' own
+ * rendering, which each already has its own suite
+ * (`GroupMembershipSourceSection.test.tsx`, `GroupMembersSection.test.tsx`,
+ * `GroupRulesSection.test.tsx`; `GroupOverviewPane`, `GroupAccessSection` and
+ * `GroupPushSection` are pure-render leaves with only a story, per ADR-0023).
+ * Every pane, the action bar's modal, and `GroupMetadataSection` are stubbed
+ * test doubles here so a tab switch reads as "which stub is mounted" — the
+ * same pattern `GroupsTab.test.tsx` uses for its feature children.
  *
  * `GroupActionBar` is rendered for real: it is a pure-render leaf with no
  * hooks of its own, and "Export omitted/present, Add wired" is exactly the
@@ -114,6 +114,9 @@ vi.mock('../../../hooks/useAddGroupMember', () => ({
 // Section test doubles — each renders one identifiable node so a tab switch
 // reads as "which stub is mounted", not a rendered section's own internals.
 // ---------------------------------------------------------------------------
+vi.mock('./GroupOverviewPane', () => ({
+  default: () => <div data-testid="stub-overview" />,
+}));
 vi.mock('./GroupMembershipSourceSection', () => ({
   default: () => <div data-testid="stub-membership-source" />,
 }));
@@ -159,12 +162,13 @@ describe('GroupDetailView', () => {
     groupSource.memberStatus = 'idle';
   });
 
-  it('defaults to the Members tab, rendering its two sections and hiding Access/Rules', () => {
+  it('defaults to the Overview tab, rendering the overview pane and hiding every other pane', () => {
     render(<GroupDetailView group={makeGroup()} targetTabId={1} />);
 
-    expect(screen.getByRole('tab', { name: 'Members' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('stub-membership-source')).toBeInTheDocument();
-    expect(screen.getByTestId('stub-members')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('stub-overview')).toBeInTheDocument();
+    expect(screen.queryByTestId('stub-membership-source')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('stub-members')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-access')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-push')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-rules')).not.toBeInTheDocument();
@@ -173,7 +177,23 @@ describe('GroupDetailView', () => {
     expect(screen.getByTestId('stub-metadata')).toBeInTheDocument();
   });
 
-  it('switches to the Access tab, rendering Access + Push and unmounting Members', async () => {
+  it('switches to the Members tab, rendering its two sections and unmounting Overview', async () => {
+    const user = userEvent.setup();
+    render(<GroupDetailView group={makeGroup()} targetTabId={1} />);
+
+    await user.click(screen.getByRole('tab', { name: 'Members' }));
+
+    expect(screen.getByRole('tab', { name: 'Members' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('stub-membership-source')).toBeInTheDocument();
+    expect(screen.getByTestId('stub-members')).toBeInTheDocument();
+    expect(screen.queryByTestId('stub-overview')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('stub-access')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('stub-push')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('stub-rules')).not.toBeInTheDocument();
+    expect(screen.getByTestId('stub-metadata')).toBeInTheDocument();
+  });
+
+  it('switches to the Access tab, rendering Access + Push and unmounting Overview/Members', async () => {
     const user = userEvent.setup();
     render(<GroupDetailView group={makeGroup()} targetTabId={1} />);
 
@@ -182,6 +202,7 @@ describe('GroupDetailView', () => {
     expect(screen.getByRole('tab', { name: 'Access' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('stub-access')).toBeInTheDocument();
     expect(screen.getByTestId('stub-push')).toBeInTheDocument();
+    expect(screen.queryByTestId('stub-overview')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-membership-source')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-members')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-rules')).not.toBeInTheDocument();
@@ -196,15 +217,17 @@ describe('GroupDetailView', () => {
 
     expect(screen.getByRole('tab', { name: 'Rules' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('stub-rules')).toBeInTheDocument();
+    expect(screen.queryByTestId('stub-overview')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-membership-source')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-members')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-access')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-push')).not.toBeInTheDocument();
   });
 
-  it('exposes exactly the three tabs, in order', () => {
+  it('exposes exactly the four tabs, in order', () => {
     render(<GroupDetailView group={makeGroup()} targetTabId={1} />);
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'Overview',
       'Members',
       'Access',
       'Rules',
@@ -249,14 +272,17 @@ describe('GroupDetailView', () => {
     rerender(<GroupDetailView group={group} targetTabId={1} autoAnalyze isActive />);
     expect(groupSource.analyzeMembers).toHaveBeenCalledTimes(1);
 
-    // It lands where the result is visible: the default tab is already Members.
+    // It lands where the result is visible: `autoAnalyze` picks Members as the
+    // initial tab instead of the plain-drill-in default of Overview (see that
+    // prop's doc on `GroupDetailView`).
     expect(screen.getByRole('tab', { name: 'Members' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('never auto-analyzes when autoAnalyze is unset (a plain drill-in)', () => {
+  it('never auto-analyzes when autoAnalyze is unset (a plain drill-in), and lands on Overview', () => {
     const group = makeGroup();
     groupSource.group = { id: group.id };
     render(<GroupDetailView group={group} targetTabId={1} />);
     expect(groupSource.analyzeMembers).not.toHaveBeenCalled();
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
   });
 });

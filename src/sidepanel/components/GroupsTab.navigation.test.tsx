@@ -426,6 +426,17 @@ describe('GroupsTab sub-navigation', () => {
     await drillInto(uev, 'Engineering');
 
     const detail = within(screen.getByTestId('group-detail-view'));
+
+    // RETARGETED (Group Detail Overview tab): a plain drill-in now lands on
+    // the Overview tab's verdict tiles rather than the Membership-source
+    // gate directly — switch to Members before asserting the gate is
+    // present-but-idle, unasked.
+    await uev.click(
+      within(detail.getByRole('tablist', { name: 'Group detail sections' })).getByRole('tab', {
+        name: 'Members',
+      }),
+    );
+
     expect(detail.getByRole('button', { name: 'Analyze' })).toBeInTheDocument();
   });
 });
