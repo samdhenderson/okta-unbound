@@ -25,26 +25,38 @@
  * membership actually grants (assigned apps, admin roles) — and hands their state
  * to pure sections.
  *
- * It also owns the view's two mutating surfaces: a page-level "Export members"
- * action in the sticky `ActionBar` (ADR-0030), and per-member add/remove in
- * {@link GroupMembersSection}, whose state lives in
- * {@link module:sidepanel/components/groups/detail/useGroupMembersSection.useGroupMembersSection}.
+ * It also owns the view's mutating surfaces: a page-level "Export members"
+ * action and an "Add" action in {@link GroupActionBar} (ADR-0030, ADR-0039),
+ * and per-member add/remove in {@link GroupMembersSection}, whose state lives
+ * in {@link module:sidepanel/components/groups/detail/useGroupMembersSection.useGroupMembersSection}.
  * The members section piggybacks on `useGroupSource`'s gated member read rather
  * than fetching a second time — see that hook's module doc.
+ *
+ * The action bar's "Add" button opens {@link AddGroupMemberModal}, backed by
+ * its own {@link module:sidepanel/hooks/useAddGroupMember.useAddGroupMember}
+ * instance — independent of the search/selection state `useGroupMembersSection`
+ * keeps for its inline add field (step 3 of the Group Detail rework removes
+ * that inline field; both coexist until then). The two instances still land in
+ * the exact same roster: this view's `onAdded` is wired straight to
+ * `membersSection.onMemberAdded`, the write-back callback
+ * `useGroupMembersSection` already exposes for exactly this purpose, so there
+ * is only ever one copy of the cache-write/`resummarize` logic.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import GroupMembershipSourceSection from './GroupMembershipSourceSection';
 import GroupMembersSection from './GroupMembersSection';
 import GroupAccessSection from './GroupAccessSection';
 import GroupRulesSection from './GroupRulesSection';
 import GroupPushSection from './GroupPushSection';
 import GroupMetadataSection from './GroupMetadataSection';
+import GroupActionBar from './GroupActionBar';
+import AddGroupMemberModal from './AddGroupMemberModal';
 import { useGroupSource } from '../../../hooks/useGroupSource';
 import { useOwedLoad } from '../../../hooks/useOwedLoad';
 import { useGroupRuleReferences } from '../../../hooks/useGroupRuleReferences';
 import { useGroupAccessGrants } from '../../../hooks/useGroupAccessGrants';
 import { useGroupMembersSection } from './useGroupMembersSection';
-import { ActionBar, type ActionDescriptor } from '../../shared';
+import { useAddGroupMember } from '../../../hooks/useAddGroupMember';
 import type { GroupSummary } from '../../../../shared/types';
 
 /** Props for {@link GroupDetailView}. */
@@ -71,8 +83,9 @@ interface GroupDetailViewProps {
   /**
    * Opens the Export tab pre-scoped to this group's members (the page-level
    * "Export members" action). Optional and forwarded as-is from `GroupsTab`;
-   * omitting it disables the action rather than breaking the view — `App.tsx`
-   * does not wire this through to the Groups tab yet.
+   * per ADR-0039, omitting it **omits the action from {@link GroupActionBar}
+   * entirely** rather than shipping it disabled — `App.tsx` does not wire this
+   * through to the Groups tab yet.
    */
   onExportGroup?: (groupId: string, groupName: string) => void;
 }
@@ -80,8 +93,9 @@ interface GroupDetailViewProps {
 /**
  * Detail view for one group: membership source, a member roster with add/remove,
  * what membership grants, the two rule relationships, app push, and the group's own
- * reference facts. Its identity is the header's job. Export and per-member membership
- * writes are its only mutations; everything else here still just reads.
+ * reference facts. Its identity is the header's job. Export and membership writes
+ * (the action bar's Add-member modal, and per-member add/remove) are its only
+ * mutations; everything else here still just reads.
  */
 const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   group,
@@ -105,6 +119,29 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
     source.resummarize,
   );
 
+  // The action bar's Add-member modal — a second, independent `useAddGroupMember`
+  // instance from the one `useGroupMembersSection` composes internally for its
+  // own inline field. `onAdded` routes through `membersSection.onMemberAdded` so
+  // both instances write into the exact same cache entry/`cacheTick` rather than
+  // this view holding a second copy of that logic — see the module doc.
+  const [addMemberError, setAddMemberError] = useState<string | null>(null);
+  const addMember = useAddGroupMember({
+    targetTabId,
+    group,
+    members: membersSection.members,
+    onResult: (result) => setAddMemberError(result.text),
+    onAdded: membersSection.onMemberAdded,
+    enabled: isActive,
+  });
+  const openAddMemberModal = (): void => {
+    setAddMemberError(null);
+    addMember.openModal();
+  };
+  const closeAddMemberModal = (): void => {
+    setAddMemberError(null);
+    addMember.closeModal();
+  };
+
   // `open` is memoized on the (stable) API operation, so this runs once per group.
   // While the Groups tab is hidden the open is *owed* rather than run: it reaches
   // Okta, and re-running it on every return to the tab would also discard a member
@@ -124,91 +161,105 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
     analyzeMembers();
   });
 
-  // One verb, no tier: `ActionBar` renders no **More** control and nothing to
-  // disclose, so this strip is the button and the chrome it grows as it docks.
-  const actions: ActionDescriptor[] = [
-    {
-      id: 'export-members',
-      label: 'Export members',
-      icon: 'download',
-      variant: 'primary',
-      onClick: () => onExportGroup?.(group.id, group.name),
-      disabled: !onExportGroup,
-      title: "Export this group's members (opens the Export tab with column picker + presets)",
-    },
-  ];
-
   return (
-    /*
-      `space-y-6`, the same step the Users detail rung uses. It was `space-y-3`,
-      which is the card-to-card gap and not the rung's step — the strip is a card
-      the width of the column like every section under it, so it takes the same
-      rhythm as the rest of the rung rather than a tighter one of its own.
-    */
-    <div className="space-y-6" data-testid="group-detail-view">
-      <ActionBar ariaLabel={`Actions for ${group.name}`} actions={actions} />
+    // A fragment, not just the stack `div`: the Add-member modal below is a
+    // page-level overlay, mounted once and controlled by `addMember.isOpen`
+    // (the pattern `UsersTab.tsx` uses for `AddToGroupModal`) rather than a
+    // child of the `space-y-6` rhythm it has nothing to do with.
+    <>
+      {/*
+        `space-y-6`, the same step the Users detail rung uses. It was `space-y-3`,
+        which is the card-to-card gap and not the rung's step — the strip is a card
+        the width of the column like every section under it, so it takes the same
+        rhythm as the rest of the rung rather than a tighter one of its own.
+      */}
+      <div className="space-y-6" data-testid="group-detail-view">
+        <GroupActionBar
+          group={group}
+          targetTabId={targetTabId}
+          onExportGroup={onExportGroup}
+          onAddMember={openAddMemberModal}
+        />
 
-      <GroupMembershipSourceSection
-        memberCount={group.memberCount}
-        breakdown={source.breakdown}
-        status={source.memberStatus}
-        error={source.error}
-        onAnalyze={source.analyzeMembers}
-        canAnalyze={targetTabId !== null}
-        onNavigateToRule={onNavigateToRule}
+        <GroupMembershipSourceSection
+          memberCount={group.memberCount}
+          breakdown={source.breakdown}
+          status={source.memberStatus}
+          error={source.error}
+          onAnalyze={source.analyzeMembers}
+          canAnalyze={targetTabId !== null}
+          onNavigateToRule={onNavigateToRule}
+        />
+
+        <GroupMembersSection
+          groupType={group.type}
+          memberCount={group.memberCount}
+          members={membersSection.members}
+          status={source.memberStatus}
+          error={source.error}
+          onAnalyze={source.analyzeMembers}
+          canAnalyze={targetTabId !== null}
+          removeTarget={membersSection.removeTarget}
+          onRequestRemove={membersSection.requestRemove}
+          onCancelRemove={membersSection.cancelRemove}
+          onConfirmRemove={membersSection.confirmRemove}
+          removeStatus={membersSection.removeStatus}
+          removeError={membersSection.removeError}
+          addQuery={membersSection.addQuery}
+          onAddQueryChange={membersSection.setAddQuery}
+          addResults={membersSection.addResults}
+          isSearchingToAdd={membersSection.isSearchingToAdd}
+          addSearchError={membersSection.addSearchError}
+          onSelectToAdd={membersSection.selectToAdd}
+          addStatus={membersSection.addStatus}
+          addError={membersSection.addError}
+        />
+
+        <GroupAccessSection
+          apps={accessGrants.apps}
+          appsStatus={accessGrants.appsStatus}
+          appsError={accessGrants.appsError}
+          roles={accessGrants.roles}
+          rolesStatus={accessGrants.rolesStatus}
+        />
+
+        <GroupRulesSection
+          assigningRules={source.feedingRules}
+          assigningStatus={source.rulesStatus}
+          assigningError={source.error}
+          referencingRules={references.rules}
+          referencingStatus={references.status}
+          referencingError={references.error}
+          onNavigateToRule={onNavigateToRule}
+        />
+
+        <GroupPushSection mappings={group.pushMappings} />
+
+        <GroupMetadataSection
+          groupId={group.id}
+          description={group.description}
+          created={group.created}
+          lastUpdated={group.lastUpdated}
+        />
+      </div>
+
+      <AddGroupMemberModal
+        isOpen={addMember.isOpen}
+        groupName={group.name}
+        addQuery={addMember.addQuery}
+        onAddQueryChange={addMember.setAddQuery}
+        addResults={addMember.addResults}
+        isSearchingToAdd={addMember.isSearchingToAdd}
+        addSearchError={addMember.addSearchError}
+        selectedUser={addMember.selectedUser}
+        onSelectUser={addMember.selectUser}
+        onClearSelectedUser={addMember.clearSelectedUser}
+        isAddingMember={addMember.isAddingMember}
+        onClose={closeAddMemberModal}
+        onConfirm={addMember.confirmAddMember}
+        addMemberError={addMemberError}
       />
-
-      <GroupMembersSection
-        groupType={group.type}
-        memberCount={group.memberCount}
-        members={membersSection.members}
-        status={source.memberStatus}
-        error={source.error}
-        onAnalyze={source.analyzeMembers}
-        canAnalyze={targetTabId !== null}
-        removeTarget={membersSection.removeTarget}
-        onRequestRemove={membersSection.requestRemove}
-        onCancelRemove={membersSection.cancelRemove}
-        onConfirmRemove={membersSection.confirmRemove}
-        removeStatus={membersSection.removeStatus}
-        removeError={membersSection.removeError}
-        addQuery={membersSection.addQuery}
-        onAddQueryChange={membersSection.setAddQuery}
-        addResults={membersSection.addResults}
-        isSearchingToAdd={membersSection.isSearchingToAdd}
-        addSearchError={membersSection.addSearchError}
-        onSelectToAdd={membersSection.selectToAdd}
-        addStatus={membersSection.addStatus}
-        addError={membersSection.addError}
-      />
-
-      <GroupAccessSection
-        apps={accessGrants.apps}
-        appsStatus={accessGrants.appsStatus}
-        appsError={accessGrants.appsError}
-        roles={accessGrants.roles}
-        rolesStatus={accessGrants.rolesStatus}
-      />
-
-      <GroupRulesSection
-        assigningRules={source.feedingRules}
-        assigningStatus={source.rulesStatus}
-        assigningError={source.error}
-        referencingRules={references.rules}
-        referencingStatus={references.status}
-        referencingError={references.error}
-        onNavigateToRule={onNavigateToRule}
-      />
-
-      <GroupPushSection mappings={group.pushMappings} />
-
-      <GroupMetadataSection
-        groupId={group.id}
-        description={group.description}
-        created={group.created}
-        lastUpdated={group.lastUpdated}
-      />
-    </div>
+    </>
   );
 };
 
