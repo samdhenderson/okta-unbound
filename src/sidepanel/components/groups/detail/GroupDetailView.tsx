@@ -4,19 +4,19 @@
  *
  * Purpose-built for the one question an admin drills in with — *where do this
  * group's members come from, and what depends on it?* Below the action bar, a
- * `Tabs` shell (`variant="underline"`) splits the body into four panes, each
+ * `Tabs` shell (`variant="underline"`) splits the body into five panes, each
  * one tap away — no pane gated behind another: **Overview**
  * ({@link GroupOverviewPane}, verdict tiles that drill into the pane below
  * answering each), **Members** ({@link GroupMembershipSourceSection} +
  * {@link GroupMembersSection}, stacked), **Access**
- * ({@link GroupAccessSection} + {@link GroupPushSection}, stacked) and
- * **Rules** ({@link GroupRulesSection}). `activeTab` is owned here
- * (`useState`, default `'overview'` — `'members'` when `autoAnalyze` is set;
- * see that prop's doc) — this is a page-local pane switch, not
- * sub-navigation, so it does not warrant `useViewStack` or a lifted hook.
- * {@link GroupMetadataSection} — the group's own reference facts — stays
- * outside the tab card, below it in its original position; it is not yet
- * folded into a tab (a later step of the Group Detail rework does that).
+ * ({@link GroupAccessSection} + {@link GroupPushSection}, stacked),
+ * **Rules** ({@link GroupRulesSection}), and **Health**
+ * ({@link GroupHealthPane} — attribute blank-rate/rule-dependency cards, a
+ * gated MFA-coverage scan, and the group's own reference facts folded into a
+ * closed `CollapsibleSection`). `activeTab` is owned here (`useState`,
+ * default `'overview'` — `'members'` when `autoAnalyze` is set; see that
+ * prop's doc) — this is a page-local pane switch, not sub-navigation, so it
+ * does not warrant `useViewStack` or a lifted hook.
  *
  * It opens on membership source rather than on an identity card because the tab's
  * `PageHeader` now describes the group itself (ADR-0032) — name, type and member count
@@ -31,10 +31,12 @@
  * {@link sidepanel/hooks/useGroupSource.useGroupSource} for the rules that assign
  * into the group plus the gated member split,
  * {@link sidepanel/hooks/useGroupRuleReferences.useGroupRuleReferences} for the
- * rules that merely reference it, and
+ * rules that merely reference it,
  * {@link sidepanel/hooks/useGroupAccessGrants.useGroupAccessGrants} for what
- * membership actually grants (assigned apps, admin roles) — and hands their state
- * to pure sections.
+ * membership actually grants (assigned apps, admin roles), and
+ * {@link sidepanel/hooks/useMemberMfaScan.useMemberMfaScan} for the Health tab's
+ * opt-in MFA-coverage scan (scoped to the same roster the Members tab's gate
+ * loads) — and hands their state to pure sections/panes.
  *
  * It also owns the view's mutating surfaces: a page-level "Export members"
  * action and an "Add" action in {@link GroupActionBar} (ADR-0030, ADR-0039),
@@ -60,7 +62,7 @@ import GroupMembersSection from './GroupMembersSection';
 import GroupAccessSection from './GroupAccessSection';
 import GroupRulesSection from './GroupRulesSection';
 import GroupPushSection from './GroupPushSection';
-import GroupMetadataSection from './GroupMetadataSection';
+import GroupHealthPane from './GroupHealthPane';
 import GroupActionBar from './GroupActionBar';
 import AddGroupMemberModal from './AddGroupMemberModal';
 import { Tabs, type TabItem } from '../../shared';
@@ -68,12 +70,13 @@ import { useGroupSource } from '../../../hooks/useGroupSource';
 import { useOwedLoad } from '../../../hooks/useOwedLoad';
 import { useGroupRuleReferences } from '../../../hooks/useGroupRuleReferences';
 import { useGroupAccessGrants } from '../../../hooks/useGroupAccessGrants';
+import { useMemberMfaScan } from '../../../hooks/useMemberMfaScan';
 import { useGroupMembersSection } from './useGroupMembersSection';
 import { useAddGroupMember } from '../../../hooks/useAddGroupMember';
 import type { GroupSummary } from '../../../../shared/types';
 
 /** Which tabbed pane of the body (below the action bar) is on screen. */
-type GroupDetailTab = 'overview' | 'members' | 'access' | 'rules';
+type GroupDetailTab = 'overview' | 'members' | 'access' | 'rules' | 'health';
 
 /** Tab strip for the body — every pane one tap away, none gated behind another. */
 const GROUP_DETAIL_TABS: TabItem[] = [
@@ -81,6 +84,7 @@ const GROUP_DETAIL_TABS: TabItem[] = [
   { key: 'members', label: 'Members' },
   { key: 'access', label: 'Access' },
   { key: 'rules', label: 'Rules' },
+  { key: 'health', label: 'Health' },
 ];
 
 /** Props for {@link GroupDetailView}. */
@@ -122,11 +126,11 @@ interface GroupDetailViewProps {
 /**
  * Detail view for one group: a landing Overview of verdict tiles, membership
  * source and a member roster with add/remove (Members tab), what membership
- * grants plus app push (Access tab), and the two rule relationships (Rules
- * tab), with the group's own reference facts below the tab card. Its identity
- * is the header's job. Export and membership writes (the action bar's
- * Add-member modal, and per-member add/remove) are its only mutations;
- * everything else here still just reads.
+ * grants plus app push (Access tab), the two rule relationships (Rules tab),
+ * and attribute health, a gated MFA scan, and the group's own reference facts
+ * (Health tab). Its identity is the header's job. Export and membership
+ * writes (the action bar's Add-member modal, and per-member add/remove) are
+ * its only mutations; everything else here still just reads.
  */
 const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   group,
@@ -156,6 +160,18 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
     source.memberStatus,
     source.resummarize,
   );
+
+  // The Health tab's opt-in MFA-coverage scan. Scoped to the exact roster the
+  // Members tab's gate loads (`membersSection.members`) rather than fetching its
+  // own — `[]` before that roster exists is inert, since `GroupHealthPane` only
+  // ever wires its trigger once the roster has loaded (see that component's
+  // `rosterReady` gate). Owned here, not inside the pane, so it stays a sibling
+  // of every other read-only load this container composes.
+  const mfaScan = useMemberMfaScan({
+    groupId: group.id,
+    members: membersSection.members ?? [],
+    targetTabId: targetTabId ?? undefined,
+  });
 
   // The action bar's Add-member modal — a second, independent `useAddGroupMember`
   // instance from the one `useGroupMembersSection` composes internally for its
@@ -303,15 +319,32 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                 />
               </div>
             )}
+
+            {activeTab === 'health' && (
+              <div role="tabpanel" aria-label="Health">
+                <GroupHealthPane
+                  groupId={group.id}
+                  memberCount={group.memberCount}
+                  members={membersSection.members}
+                  memberStatus={source.memberStatus}
+                  error={source.error}
+                  onAnalyzeMembers={source.analyzeMembers}
+                  canAnalyze={targetTabId !== null}
+                  feedingRules={source.feedingRules}
+                  onNavigateToRule={onNavigateToRule}
+                  mfaResults={mfaScan.mfaResults}
+                  scanStatus={mfaScan.scanStatus}
+                  onRunScan={mfaScan.runScan}
+                  onRequestConfirm={mfaScan.requestConfirm}
+                  onCancelConfirm={mfaScan.cancelConfirm}
+                  description={group.description}
+                  created={group.created}
+                  lastUpdated={group.lastUpdated}
+                />
+              </div>
+            )}
           </div>
         </div>
-
-        <GroupMetadataSection
-          groupId={group.id}
-          description={group.description}
-          created={group.created}
-          lastUpdated={group.lastUpdated}
-        />
       </div>
 
       <AddGroupMemberModal
