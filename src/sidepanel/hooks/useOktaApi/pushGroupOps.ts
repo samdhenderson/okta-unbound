@@ -123,72 +123,92 @@ export function createPushGroupOperations(coreApi: CoreApi) {
 
     if (appIds.size === 0) return groups;
 
-    // Resolve app labels (one request per unique app) through the shared
-    // operation runner (ADR-0009): bounded concurrency, live activity view, one
-    // Cancel. A per-app failure keeps the existing name — logged, never thrown.
-    const labelOutcome = await coreApi.runOperation(
-      'Resolve app names',
-      Array.from(appIds.keys()),
-      async (appId) => {
-        try {
-          const response = await coreApi.makeApiRequest(
-            `/api/v1/apps/${encodeURIComponent(appId)}`,
-            'GET',
-            undefined,
-            'low',
+    // Ask only about the apps whose name is still unknown.
+    //
+    // The org's group walk requests `expand=app` (ADR-0040), so Okta embeds the
+    // source app alongside each `APP_GROUP` and `toGroupSummary` has already
+    // read the name off it. Re-requesting those names cost one round trip per
+    // unique source app — in a large org roughly half this pass's entire
+    // request budget — to learn something the list already knew. An id left as
+    // its own "name" above is the marker for genuinely unresolved: either the
+    // embed was absent or it echoed the id.
+    const unresolvedAppIds = Array.from(appIds.keys()).filter((id) => appIds.get(id) === id);
+
+    // Resolve the remaining app labels (one request per unique unresolved app)
+    // through the shared operation runner (ADR-0009): bounded concurrency, live
+    // activity view, one Cancel. A per-app failure keeps the existing name —
+    // logged, never thrown. Skipped entirely when the embed answered for every
+    // app, so the activity bar shows no phase that would issue no requests.
+    const labelOutcome =
+      unresolvedAppIds.length === 0
+        ? null
+        : await coreApi.runOperation(
+            'Resolve app names',
+            unresolvedAppIds,
+            async (appId) => {
+              try {
+                const response = await coreApi.makeApiRequest(
+                  `/api/v1/apps/${encodeURIComponent(appId)}`,
+                  'GET',
+                  undefined,
+                  'low',
+                );
+                if (response.success && response.data) {
+                  // ADR-0006: the label is rendered as an app name, so it is
+                  // end-user-influenced Okta content and is validated before it can
+                  // reach the DOM. Same endpoint, same schema, and same `parseOkta`
+                  // context string as `appOperations.getAppById` — see the module
+                  // remark above for why the parse is inlined rather than delegated.
+                  // A validation failure throws and lands in the catch below, which is
+                  // already the "could not resolve this app's name" degrade.
+                  const app = parseOkta(
+                    oktaAppListItemSchema,
+                    response.data,
+                    'GET /api/v1/apps/{id}',
+                  );
+                  const label = app.label || app.name;
+                  if (label) {
+                    appIds.set(appId, label);
+                  } else {
+                    // A 200 carrying neither `label` nor `name` degrades exactly like a
+                    // failure — the app keeps its raw id — so it gets its own line
+                    // (D-019). Post-D-020 this also covers a *malformed* label: the
+                    // schema catches a non-string `label`/`name` to `undefined`, so a
+                    // hostile value degrades to "no label" rather than rendering. The
+                    // label is end-user-influenced Okta content and is never logged;
+                    // identifier + outcome code only.
+                    log.error('App name resolution returned no label', {
+                      code: 'resolve_app_name_no_label',
+                      appId,
+                    });
+                  }
+                } else {
+                  // `success: false` is how a scheduler-level 401/429 surfaces: it
+                  // resolves rather than throwing, so the likeliest systemic failure
+                  // used to fall straight through the `if` unlogged (D-019). Numeric
+                  // status only — never `response.error` or the body.
+                  log.error('App name resolution request failed', {
+                    code: 'resolve_app_name_request_failed',
+                    appId,
+                    status: response.status,
+                  });
+                }
+              } catch (error) {
+                // Keep existing name on failure — but never silently: a systemic
+                // failure here leaves every app stuck on its raw id (D-003). Also the
+                // landing point for a `parseOkta` rejection (D-020); its message
+                // carries issue paths and codes only, never received values.
+                log.error(`Failed to resolve app name for app ${appId}:`, error);
+              }
+            },
+            { message: (p) => `Resolving app names (${p.completed}/${p.total})` },
           );
-          if (response.success && response.data) {
-            // ADR-0006: the label is rendered as an app name, so it is
-            // end-user-influenced Okta content and is validated before it can
-            // reach the DOM. Same endpoint, same schema, and same `parseOkta`
-            // context string as `appOperations.getAppById` — see the module
-            // remark above for why the parse is inlined rather than delegated.
-            // A validation failure throws and lands in the catch below, which is
-            // already the "could not resolve this app's name" degrade.
-            const app = parseOkta(oktaAppListItemSchema, response.data, 'GET /api/v1/apps/{id}');
-            const label = app.label || app.name;
-            if (label) {
-              appIds.set(appId, label);
-            } else {
-              // A 200 carrying neither `label` nor `name` degrades exactly like a
-              // failure — the app keeps its raw id — so it gets its own line
-              // (D-019). Post-D-020 this also covers a *malformed* label: the
-              // schema catches a non-string `label`/`name` to `undefined`, so a
-              // hostile value degrades to "no label" rather than rendering. The
-              // label is end-user-influenced Okta content and is never logged;
-              // identifier + outcome code only.
-              log.error('App name resolution returned no label', {
-                code: 'resolve_app_name_no_label',
-                appId,
-              });
-            }
-          } else {
-            // `success: false` is how a scheduler-level 401/429 surfaces: it
-            // resolves rather than throwing, so the likeliest systemic failure
-            // used to fall straight through the `if` unlogged (D-019). Numeric
-            // status only — never `response.error` or the body.
-            log.error('App name resolution request failed', {
-              code: 'resolve_app_name_request_failed',
-              appId,
-              status: response.status,
-            });
-          }
-        } catch (error) {
-          // Keep existing name on failure — but never silently: a systemic
-          // failure here leaves every app stuck on its raw id (D-003). Also the
-          // landing point for a `parseOkta` rejection (D-020); its message
-          // carries issue paths and codes only, never received values.
-          log.error(`Failed to resolve app name for app ${appId}:`, error);
-        }
-      },
-      { message: (p) => `Resolving app names (${p.completed}/${p.total})` },
-    );
 
     // Inspected rather than discarded, matching the mapping phase below. The
     // per-app branches above cover every app whose task actually ran; apps that
     // never started (a cancel, or an error halt) produce no line of their own, so
     // the phase-level counts are the only trace that the run was partial (D-019).
-    if (labelOutcome.cancelled || labelOutcome.skipped > 0) {
+    if (labelOutcome && (labelOutcome.cancelled || labelOutcome.skipped > 0)) {
       log.warn('App name resolution did not complete', {
         code: 'resolve_app_names_incomplete',
         cancelled: labelOutcome.cancelled,

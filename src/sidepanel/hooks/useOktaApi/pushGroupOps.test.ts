@@ -106,6 +106,45 @@ describe('applyPushGroupMappings', () => {
     expect(onProgress).toHaveBeenCalledWith(1, 1);
   });
 
+  it('skips the label lookup for an app the groups walk already named', async () => {
+    // ADR-0040 puts `expand=app` on the org's group walk, so Okta embeds the
+    // source app and `toGroupSummary` reads the name off it before this pass
+    // ever runs. Asking again cost one round trip per unique source app — about
+    // half this pass's request budget in a large org — to re-learn a name the
+    // list was already displaying.
+    const assignment = {
+      id: '00gFAKE1',
+      priority: 0,
+      profile: { name: 'Pushed Group' },
+      _links: { group: { href: 'https://example.okta.com/api/v1/groups/00gFAKE1' } },
+    };
+    const makeApiRequest = vi.fn(async (endpoint: string) => {
+      if (endpoint.startsWith('/api/v1/apps/0oaFAKE1/groups')) {
+        return { success: true, data: [assignment], headers: {} };
+      }
+      // Reaching `/api/v1/apps/0oaFAKE1` is the regression this pins.
+      throw new Error(`Unrouted test endpoint: ${endpoint}`);
+    });
+    const core = makeCore({ makeApiRequest });
+    const { applyPushGroupMappings } = createPushGroupOperations(core);
+
+    const result = await applyPushGroupMappings([appGroup({ sourceAppName: 'Fake App' })]);
+
+    // Only the mapping phase runs; the name phase has nothing left to ask.
+    expect(core.runOperation).toHaveBeenCalledTimes(1);
+    expect(makeApiRequest).not.toHaveBeenCalledWith(
+      '/api/v1/apps/0oaFAKE1',
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+    // The embed's name still reaches the mappings it labels.
+    expect(result[0].sourceAppName).toBe('Fake App');
+    expect(result[0].pushMappings).toEqual([
+      expect.objectContaining({ sourceUserGroupId: '00gFAKE1', appName: 'Fake App' }),
+    ]);
+  });
+
   it('returns the input untouched when no APP_GROUP sources are present', async () => {
     const core = makeCore();
     const { applyPushGroupMappings } = createPushGroupOperations(core);
