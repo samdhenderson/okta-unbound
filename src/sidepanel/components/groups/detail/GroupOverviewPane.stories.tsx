@@ -110,7 +110,12 @@ type Story = StoryObj<typeof meta>;
 /**
  * Nothing has loaded yet: the membership-source tile shows its call-to-action
  * (never a fake number), and the Access/Rules tiles are simply absent while
- * their automatic reads are still in flight.
+ * their automatic reads are still in flight. The membership-source tile's
+ * `idle` state is the minority case in practice — `GroupDetailView`
+ * auto-runs that analysis for any group at or under `AUTO_LOAD_MEMBER_CAP`
+ * (1,000 members) on open with no click; `idle` only persists for a larger
+ * group or a disconnected Okta tab. The other tiles' loading states here are
+ * unaffected by that cap since they never gated on it.
  */
 export const NotAnalyzed: Story = {};
 

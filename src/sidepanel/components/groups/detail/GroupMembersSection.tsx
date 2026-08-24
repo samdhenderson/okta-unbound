@@ -47,9 +47,8 @@ import {
   EmptyState,
   IconButton,
   ListRow,
-  LoadingSpinner,
   Modal,
-  ScrollableList,
+  Skeleton,
 } from '../../shared';
 import Icon from '../../overview/shared/Icon';
 import type { GroupSummary, OktaUser } from '../../../../shared/types';
@@ -175,7 +174,7 @@ const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
           here costs nothing extra once that analysis has already run.
         </p>
       ) : status === 'loading' ? (
-        <LoadingSpinner size="sm" message="Loading members…" centered />
+        <Skeleton variant="row" size="md" count={4} label="Loading members…" />
       ) : status === 'error' ? (
         <AlertMessage
           message={{ text: error || 'Failed to load members.', type: 'danger' }}
@@ -191,18 +190,16 @@ const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
             />
           ) : (
             <>
-              <ScrollableList maxHeight="320px" fillAvailable={false}>
-                <ul className="space-y-1.5">
-                  {visibleMembers.map((user) => (
-                    <MemberListRow
-                      key={user.id}
-                      user={user}
-                      readOnly={readOnly}
-                      onRequestRemove={onRequestRemove}
-                    />
-                  ))}
-                </ul>
-              </ScrollableList>
+              <ul className="space-y-1.5">
+                {visibleMembers.map((user) => (
+                  <MemberListRow
+                    key={user.id}
+                    user={user}
+                    readOnly={readOnly}
+                    onRequestRemove={onRequestRemove}
+                  />
+                ))}
+              </ul>
               {truncated && (
                 <p className="text-xs text-neutral-500">
                   Showing the first {DISPLAY_CAP} of {members?.length.toLocaleString()} members. Use

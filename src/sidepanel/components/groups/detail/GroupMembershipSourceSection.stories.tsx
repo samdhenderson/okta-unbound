@@ -99,7 +99,13 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Not analyzed yet: the gate states what running it costs. */
+/**
+ * Not analyzed yet: the gate states what running it costs. This is the
+ * minority case in practice — `GroupDetailView` auto-runs this analysis for
+ * any group at or under `AUTO_LOAD_MEMBER_CAP` (1,000 members) on open with
+ * no click; `idle` only persists for a larger group or a disconnected Okta
+ * tab.
+ */
 export const Default: Story = {};
 
 /** No Okta tab connected, so the analysis cannot run. */

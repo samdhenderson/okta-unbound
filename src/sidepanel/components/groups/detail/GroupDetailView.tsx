@@ -73,10 +73,21 @@ import { useGroupAccessGrants } from '../../../hooks/useGroupAccessGrants';
 import { useMemberMfaScan } from '../../../hooks/useMemberMfaScan';
 import { useGroupMembersSection } from './useGroupMembersSection';
 import { useAddGroupMember } from '../../../hooks/useAddGroupMember';
+import { OKTA_PAGE_SIZE } from '../../../../shared/utils/oktaPagination';
 import type { GroupSummary } from '../../../../shared/types';
 
 /** Which tabbed pane of the body (below the action bar) is on screen. */
 type GroupDetailTab = 'overview' | 'members' | 'access' | 'rules' | 'health';
+
+/**
+ * 5 pages of the group-members walk — the auto-load/manual-gate boundary for
+ * the Members roster and its source-split analysis. A group at or under this
+ * auto-populates on open, matching how Access and Rules already load for
+ * free; a larger group keeps the explicit Analyze/Load button, since its walk
+ * would cost more than the "cheap, 1-5 request" budget the rest of the page
+ * auto-loads within.
+ */
+const AUTO_LOAD_MEMBER_CAP = OKTA_PAGE_SIZE * 5;
 
 /** Tab strip for the body — every pane one tap away, none gated behind another. */
 const GROUP_DETAIL_TABS: TabItem[] = [
@@ -210,8 +221,18 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   // the hook holds the group), and latch on the id so it fires exactly once.
   // Same latch, a different readiness condition: not "is the tab visible" but "has
   // `open` landed" — `analyzeMembers` no-ops until the hook holds the group.
+  //
+  // Fires whenever the group's roster is cheap enough to auto-load
+  // (`AUTO_LOAD_MEMBER_CAP`), not just when a list row explicitly asked for it
+  // (`autoAnalyze`) — the same "populate what's cheap, gate what isn't"
+  // tiering `useGroupAccessGrants`/`useGroupRuleReferences` already apply.
+  // Not gated on `isActive` directly: `openedGroupId` only becomes truthy
+  // once `open()` has actually run, and `open()`'s own owed-load already
+  // carries the `isActive` gate above — so this is transitively
+  // tab-visibility-safe (ADR-0018) without repeating that check here.
   const openedGroupId = source.group?.id;
-  useOwedLoad(group.id, autoAnalyze && openedGroupId === group.id, () => {
+  const withinAutoLoadBudget = group.memberCount <= AUTO_LOAD_MEMBER_CAP;
+  useOwedLoad(group.id, (autoAnalyze || withinAutoLoadBudget) && openedGroupId === group.id, () => {
     analyzeMembers();
   });
 

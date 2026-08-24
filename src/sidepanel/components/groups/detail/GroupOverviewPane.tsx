@@ -18,15 +18,18 @@
  *   headline is a *derived* claim ("83% of members come from 4 rules"), never
  *   a bare count already on the header.
  * - **A fact that hasn't loaded is omitted, never rendered as a zero or a
- *   dash.** Membership source is a user-gated analysis (see
- *   {@link GroupMembershipSourceSection}), so its tile renders a
- *   call-to-action state — never a number — until `memberStatus` is `'done'`.
- *   Access grants and rule counts load automatically (not user-gated), so
- *   their tiles are simply absent until each status resolves — there is
- *   nothing for a reader to press before then, so a call-to-action would be
- *   false invitation. The app-push tile follows the same "never a zero-card"
- *   rule as {@link GroupPushSection}: rendered only when the group carries at
- *   least one mapping.
+ *   dash.** Membership source (see {@link GroupMembershipSourceSection}) may
+ *   still be genuinely `'idle'` — a group over `GroupDetailView`'s
+ *   `AUTO_LOAD_MEMBER_CAP`, or no Okta tab connected — in which case its tile
+ *   is the one call-to-action on this pane, never a number. Once the analysis
+ *   is under way (`'loading'`) or has failed (`'error'`), the tile renders
+ *   nothing rather than inviting a click on work that's already running or
+ *   already failed. Access grants and rule counts load automatically (not
+ *   user-gated) and follow the same "absent until resolved" rule for the same
+ *   reason — there is nothing for a reader to press before then, so a
+ *   call-to-action would be false invitation. The app-push tile follows the
+ *   same "never a zero-card" rule as {@link GroupPushSection}: rendered only
+ *   when the group carries at least one mapping.
  *
  * Every tile is a real `<button>` — the whole tile is the drill-in target,
  * not a card with a link buried inside — routing through `onNavigate` to the
@@ -118,16 +121,22 @@ const VerdictTile: React.FC<VerdictTileProps> = ({ label, icon, headline, detail
 );
 
 /**
- * The "where membership comes from" tile: a call-to-action while the gated
- * analysis hasn't run, a derived split once it has. Never renders a
- * percentage or count it does not actually have.
+ * The "where membership comes from" tile: a call-to-action while genuinely
+ * `'idle'`, absent while `'loading'`/`'error'`, a derived split once `'done'`.
+ * Never renders a percentage or count it does not actually have.
  */
 const MembershipSourceTile: React.FC<{
   breakdown: MemberSourceBreakdown | null;
   memberStatus: SourceStatus;
   onClick: () => void;
 }> = ({ breakdown, memberStatus, onClick }) => {
-  if (memberStatus !== 'done' || !breakdown || breakdown.total === 0) {
+  // `idle` is the only status genuinely inviting a click — an over-cap group,
+  // or no Okta tab connected. `loading`/`error` render nothing, exactly like
+  // `AccessGrantsTile`/`RuleRelationshipsTile` below: a typical group's
+  // analysis now auto-fires on open (see `GroupDetailView`'s
+  // `AUTO_LOAD_MEMBER_CAP`), so showing this CTA for `loading` would invite a
+  // click on an analysis already running in the background.
+  if (memberStatus === 'idle') {
     return (
       <VerdictTile
         label="Where membership comes from"
@@ -138,6 +147,7 @@ const MembershipSourceTile: React.FC<{
       />
     );
   }
+  if (memberStatus !== 'done' || !breakdown || breakdown.total === 0) return null;
 
   const ruleCount = breakdown.byRule.length;
   const pct = Math.round((breakdown.ruleBased / breakdown.total) * 100);

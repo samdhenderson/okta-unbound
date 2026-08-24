@@ -72,7 +72,13 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Not loaded yet: the gate states what loading costs (shared with the analysis above). */
+/**
+ * Not loaded yet: the gate states what loading costs (shared with the
+ * analysis above). This is the minority case in practice — `GroupDetailView`
+ * auto-loads any group at or under `AUTO_LOAD_MEMBER_CAP` (1,000 members) on
+ * open with no click; `idle` only persists for a larger group or a
+ * disconnected Okta tab.
+ */
 export const Default: Story = {};
 
 /** Loading the roster (or waiting on the shared analysis). */
