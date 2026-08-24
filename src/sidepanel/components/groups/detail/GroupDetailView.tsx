@@ -4,12 +4,15 @@
  *
  * Purpose-built for the one question an admin drills in with — *where do this
  * group's members come from, and what depends on it?* Below the action bar, a
- * `Tabs` shell (`variant="underline"`) splits the body into three panes, each
- * one tap away — no pane gated behind another: **Members**
- * ({@link GroupMembershipSourceSection} + {@link GroupMembersSection}, stacked),
- * **Access** ({@link GroupAccessSection} + {@link GroupPushSection}, stacked)
- * and **Rules** ({@link GroupRulesSection}). `activeTab` is owned here
- * (`useState`, default `'members'`) — this is a page-local pane switch, not
+ * `Tabs` shell (`variant="underline"`) splits the body into four panes, each
+ * one tap away — no pane gated behind another: **Overview**
+ * ({@link GroupOverviewPane}, verdict tiles that drill into the pane below
+ * answering each), **Members** ({@link GroupMembershipSourceSection} +
+ * {@link GroupMembersSection}, stacked), **Access**
+ * ({@link GroupAccessSection} + {@link GroupPushSection}, stacked) and
+ * **Rules** ({@link GroupRulesSection}). `activeTab` is owned here
+ * (`useState`, default `'overview'` — `'members'` when `autoAnalyze` is set;
+ * see that prop's doc) — this is a page-local pane switch, not
  * sub-navigation, so it does not warrant `useViewStack` or a lifted hook.
  * {@link GroupMetadataSection} — the group's own reference facts — stays
  * outside the tab card, below it in its original position; it is not yet
@@ -51,6 +54,7 @@
  * instance from the roster it writes into.
  */
 import React, { useState } from 'react';
+import GroupOverviewPane from './GroupOverviewPane';
 import GroupMembershipSourceSection from './GroupMembershipSourceSection';
 import GroupMembersSection from './GroupMembersSection';
 import GroupAccessSection from './GroupAccessSection';
@@ -69,10 +73,11 @@ import { useAddGroupMember } from '../../../hooks/useAddGroupMember';
 import type { GroupSummary } from '../../../../shared/types';
 
 /** Which tabbed pane of the body (below the action bar) is on screen. */
-type GroupDetailTab = 'members' | 'access' | 'rules';
+type GroupDetailTab = 'overview' | 'members' | 'access' | 'rules';
 
 /** Tab strip for the body — every pane one tap away, none gated behind another. */
 const GROUP_DETAIL_TABS: TabItem[] = [
+  { key: 'overview', label: 'Overview' },
   { key: 'members', label: 'Members' },
   { key: 'access', label: 'Access' },
   { key: 'rules', label: 'Rules' },
@@ -90,9 +95,12 @@ interface GroupDetailViewProps {
    * Runs the gated member-source analysis as soon as the view opens, once per
    * group. Set when the push came from a list row's "Analyze member source"
    * action — the user already asked for the analysis, so re-asking here would be
-   * a pointless second click. Never set by a plain drill-in. The Members tab is
-   * already `activeTab`'s default, so the result lands where it's visible with
-   * no extra tab-switching logic tied to this prop.
+   * a pointless second click. Never set by a plain drill-in.
+   *
+   * Also picks the tab shell's initial pane: a plain drill-in opens on
+   * `'overview'` (the landing tab), but `autoAnalyze` opens straight on
+   * `'members'` instead, so the analysis this prop just triggered lands where
+   * its result is actually visible rather than one tap away.
    */
   autoAnalyze?: boolean;
   /**
@@ -112,12 +120,13 @@ interface GroupDetailViewProps {
 }
 
 /**
- * Detail view for one group: membership source and a member roster with
- * add/remove (Members tab), what membership grants plus app push (Access tab),
- * and the two rule relationships (Rules tab), with the group's own reference
- * facts below the tab card. Its identity is the header's job. Export and
- * membership writes (the action bar's Add-member modal, and per-member
- * add/remove) are its only mutations; everything else here still just reads.
+ * Detail view for one group: a landing Overview of verdict tiles, membership
+ * source and a member roster with add/remove (Members tab), what membership
+ * grants plus app push (Access tab), and the two rule relationships (Rules
+ * tab), with the group's own reference facts below the tab card. Its identity
+ * is the header's job. Export and membership writes (the action bar's
+ * Add-member modal, and per-member add/remove) are its only mutations;
+ * everything else here still just reads.
  */
 const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   group,
@@ -128,9 +137,11 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   onExportGroup,
 }) => {
   // Page-local pane switch, not sub-navigation — no `useViewStack`, no lifted
-  // hook. Defaults to `'members'`, which is also where `autoAnalyze`'s result
-  // renders (see that prop's doc).
-  const [activeTab, setActiveTab] = useState<GroupDetailTab>('members');
+  // hook. A plain drill-in lands on the Overview tiles; `autoAnalyze` skips
+  // straight to Members, where the analysis it triggers actually renders (see
+  // that prop's doc). The initializer runs once, so a later prop change does
+  // not retroactively move a reader who is already looking at a tab.
+  const [activeTab, setActiveTab] = useState<GroupDetailTab>(autoAnalyze ? 'members' : 'overview');
 
   const source = useGroupSource(targetTabId ?? undefined);
   const references = useGroupRuleReferences(group.id, targetTabId ?? undefined, isActive);
@@ -218,6 +229,23 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
           />
 
           <div className="mt-6">
+            {activeTab === 'overview' && (
+              <GroupOverviewPane
+                group={group}
+                breakdown={source.breakdown}
+                memberStatus={source.memberStatus}
+                feedingRulesCount={source.feedingRules.length}
+                rulesStatus={source.rulesStatus}
+                appsCount={accessGrants.apps.length}
+                appsStatus={accessGrants.appsStatus}
+                rolesCount={accessGrants.roles.length}
+                rolesStatus={accessGrants.rolesStatus}
+                referencingRulesCount={references.rules.length}
+                referencingStatus={references.status}
+                onNavigate={setActiveTab}
+              />
+            )}
+
             {activeTab === 'members' && (
               <div className="space-y-6" role="tabpanel" aria-label="Members">
                 <GroupMembershipSourceSection
