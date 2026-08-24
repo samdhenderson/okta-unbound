@@ -21,11 +21,15 @@ package, so `node_modules/okta-unbound` does not exist for the converter to reso
 
 ## Scope
 
-Deliberately limited to the 30 `Shared/*` design-system primitives — the parts a
-design agent actually composes with. The other 96 storied components (Groups, Users,
-Overview, Export, Rules, Policies, Apps, tab shells) are page-level compositions with
-heavy data dependencies; they are excluded via `titleMap: {<Name>: null}`.
+Deliberately limited to the `Shared/*` design-system primitives — the parts a design
+agent actually composes with. **31 as of 2026-08-24** (`Eyebrow` joined that sync).
+The other storied components (Groups, Users, Overview, Export, Rules, Policies, Apps,
+tab shells) are page-level compositions with heavy data dependencies; they are
+excluded via `titleMap: {<Name>: null}`.
 **To widen scope, delete entries from `titleMap`** — nothing else needs to change.
+A new `Shared/*` component is picked up automatically (it is not in `titleMap`), so
+the count moves on its own — don't treat a changed number as a defect. What a new
+one may still need is a card-layout override; `Eyebrow` needed `cardMode: "column"`.
 
 ## Fixes and why
 
@@ -104,8 +108,10 @@ heavy data dependencies; they are excluded via `titleMap: {<Name>: null}`.
   - `Modal` → `cardMode: "single"`, `primaryStory: "WithFooter"`. Modal content is
     `position: fixed`, so in a grid card it escapes its cell and paints over
     siblings (`[GRID_OVERFLOW] … escape`).
-  - `ActionBar`, `CopyableId`, `Tabs` → `cardMode: "column"`. Their stories render
-    wider than a grid cell and the cell clip crops them (`[GRID_OVERFLOW] … wide`).
+  - `ActionBar`, `CopyableId`, `Tabs`, `Eyebrow` → `cardMode: "column"`. Their stories
+    render wider than a grid cell and the cell clip crops them
+    (`[GRID_OVERFLOW] … wide`). `Eyebrow` joined this list when it was added — its
+    `SectionHeader` story is the wide one.
 
 - **[GENERAL] `storybook-addon-pseudo-states` stories can never match — 7 skipped.**
   `Button`, `FilterPill`, `IconButton` and `StretchedButton` each carry `Hover` /
@@ -121,6 +127,26 @@ heavy data dependencies; they are excluded via `titleMap: {<Name>: null}`.
   are visually identical to `default` at rest — their colour lives entirely in the
   hover/focus states these skipped stories covered. The resting render is still
   verified on both panels; the hover appearance is simply not verified by this sync.
+
+- **[GENERAL] `play`-driven stories can never match — 3 `ActionBar` stories skipped.**
+  Storybook runs a story's `play` function before it is screenshotted; the compiled
+  preview never runs `play`. So any story whose _visible_ state is produced by the
+  interaction shows the driven state in storybook and the resting state in the
+  preview — a guaranteed mismatch that is not a component defect. Exactly the same
+  class as the `pseudo:` addon stories above.
+  `ActionBar`'s `With Expansion`, `Overflows` and `Tier Holds Overflow And Custom
+Content` all end their `play` with `aria-expanded: 'true'`, so storybook shows the
+  open second tier and the preview shows the closed strip. All three are in
+  `cfg.overrides.ActionBar.skip`.
+  **Any new story whose `play` leaves the component in a non-resting state must be
+  skipped too.** Find the candidates with:
+  `grep -n "aria-expanded', 'true'\|userEvent.click" src/sidepanel/components/shared/*.stories.tsx`
+  Checked and NOT skipped: `ActionBar.PinnedNeverOverflows` and
+  `Modal.OverTheActivityBar` both have `play` functions that only _assert_ — they end
+  in the resting state, so both panels agree.
+  Consequence worth knowing: the expansion tier's _appearance_ — the second rung of
+  overflowed buttons — is now verified nowhere in this sync. Same blind-spot class as
+  the hover/focus states below.
 
 - **`EntityIdentity` — `Empty` story skipped** (`shared-entityidentity--empty`).
   The component renders _nothing_ when every row is empty; that is its documented
@@ -184,14 +210,22 @@ done; this section is what the _next_ run should distrust.
   story rather than anything in the sync.
 
 - **Story caps — captured but not individually graded.** The compare cap is 6 stories
-  per component. Tails not individually graded: `Input` 6/18 (the ungraded tail holds
-  the `icon`/`trailing` adornment slots and the sm/md/lg size scale — **the most
-  worthwhile cap to raise**), `IconButton` 6/11, `ScrollableList` 6/9, `Button` 6/8,
-  `CopyButton` 6/8, `ListRow` 6/7, `AlertMessage` 6/7, `Checkbox` 6/7, `Select` 6/7,
-  `SelectionChips` 6/7, `EmptyState` 6/7, `SearchDropdown` 6/8, `Modal` 6/9,
-  `PageHeader` 6/15. Raise with `compare.mjs --max-stories <n>`; existing verdicts
-  survive. Note these components are _verified-by-upload in full_ on future syncs even
-  though their tails were never graded — that trust is inherited, not re-earned.
+  per component. Current tails (recomputed from the reference index minus `skip`s on
+  2026-08-24), most worthwhile first:
+  `Input` 6/18 (the tail holds the `icon`/`trailing` adornment slots and the sm/md/lg
+  size scale — **still the most worthwhile cap to raise**), `PageHeader` 6/15 (the tail
+  holds every identity-region variant — back button, breadcrumbs, `identity`,
+  `identityNarrow`, `withoutIdentity` — i.e. most of ADR-0032's surface; **the second
+  most worthwhile**), `IconButton` 6/11, `LoadingSpinner` 6/11, `EntityLink` 6/10 (tail
+  is the whole copy-id feature added in #68), `Modal` 6/10, `Button` 6/9,
+  `ScrollableList` 6/9, `CopyButton` 6/8, `SearchDropdown` 6/8, `ActionBar` 6/7,
+  `AlertMessage` 6/7, `Checkbox` 6/7, `EmptyState` 6/7, `ListRow` 6/7, `Select` 6/7,
+  `SelectionChips` 6/7.
+  Raise with `compare.mjs --max-stories <n>`; existing verdicts survive. Note these
+  components are _verified-by-upload in full_ on future syncs even though their tails
+  were never graded — that trust is inherited, not re-earned.
+  Recompute this list rather than trusting it: it shifts whenever stories are added or
+  a `skip` changes which 6 fall inside the cap.
 
 - **Hover and focus appearance is unverified by construction.** The 7 pseudo-state
   stories are skipped, so `IconButton`'s `danger`/`subtle`/`active` variants — whose
@@ -209,6 +243,16 @@ done; this section is what the _next_ run should distrust.
   `sb-error "?"` cells; a plain re-run captured all six cleanly. **Never skip a story
   on the strength of a single failed capture** — re-run first, and only treat a
   failure as real when it survives a clean run.
+
+- **The conventions header names classes that must exist in the STATIC sheet.**
+  Validated this run against the fresh build; one drift found and fixed: the header
+  claimed the status families are all the same shape, but `info` is thinner than
+  `danger`/`success`/`warning` — only `bg-info-light` and `text-info` compile
+  (there is no `bg-info`, `text-info-text` or `border-info`). A design agent following
+  the old text would have written `bg-info` and silently got nothing.
+  Re-validate every enumerated class on each sync — the header is prose and the sheet
+  is generated, so they drift in one direction only. Same mechanism as the
+  `[overflow-anchor:none]` risk below.
 
 - **The reference storybook and the vendored fonts must move together.** `sb-reference`
   is gitignored and must be rebuilt whenever `src/` or the stories change; the fonts

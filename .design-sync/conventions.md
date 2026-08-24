@@ -35,15 +35,15 @@ Omit a handler for a kind to demonstrate the plain-text fallback. Use fake Okta 
 Style with utility classes. **Never write a hex colour** — every colour is a token.
 The families, with their real names:
 
-| Purpose                                                   | Classes                                                                                                                             |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Brand                                                     | `bg-primary`, `bg-primary-light`, `bg-primary-highlight`, `text-primary-text`, `border-primary`                                     |
-| Status (the vocabulary is **`danger`**, never `error`)    | `bg-danger`/`-light`, `text-danger-text`; same shape for `success`, `warning`, `info`                                               |
-| Accent (user-context surfaces only)                       | no utility is compiled — use `style={{ background: 'var(--color-accent)' }}`                                                        |
-| Surfaces                                                  | `bg-canvas` (the gray page backdrop), `bg-white` (cards)                                                                            |
-| Neutrals — 50/100/200/300/400/500/600/700/900, **no 800** | `text-neutral-900` headings, `text-neutral-700` body, `text-neutral-600` labels, `text-neutral-400` disabled, `border-neutral-200`  |
-| Type                                                      | `text-xs` meta · `text-sm` body · `text-base` emphasis · `text-lg` titles; `font-medium`, `font-semibold`; `font-mono` for Okta ids |
-| Shape & space                                             | `rounded-md`; padding `p-3` / `px-4 py-2`; gaps `gap-2` / `gap-3`                                                                   |
+| Purpose                                                   | Classes                                                                                                                                                                                                                      |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Brand                                                     | `bg-primary`, `bg-primary-light`, `bg-primary-highlight`, `text-primary-text`, `border-primary`                                                                                                                              |
+| Status (the vocabulary is **`danger`**, never `error`)    | `bg-danger`/`-light`, `text-danger-text`, `border-danger`; same shape for `success` and `warning`. **`info` is thinner** — only `bg-info-light` and `text-info` are compiled (no `bg-info`, `text-info-text`, `border-info`) |
+| Accent (user-context surfaces only)                       | no utility is compiled — use `style={{ background: 'var(--color-accent)' }}`                                                                                                                                                 |
+| Surfaces                                                  | `bg-canvas` (the gray page backdrop), `bg-white` (cards)                                                                                                                                                                     |
+| Neutrals — 50/100/200/300/400/500/600/700/900, **no 800** | `text-neutral-900` headings, `text-neutral-700` body, `text-neutral-600` labels, `text-neutral-400` disabled, `border-neutral-200`                                                                                           |
+| Type                                                      | `text-xs` meta · `text-sm` body · `text-base` emphasis · `text-lg` titles; `font-medium`, `font-semibold`; `font-mono` for Okta ids                                                                                          |
+| Shape & space                                             | `rounded-md`; padding `p-3` / `px-4 py-2`; gaps `gap-2` / `gap-3`                                                                                                                                                            |
 
 **Surfaces follow a strict rule:** a gray `bg-canvas` page with white cards floating
 on it. A card is `bg-white` + a 1px `border-neutral-200` — **elevation comes from the
@@ -73,6 +73,15 @@ Compose pages from `PageHeader` (title, subtitle, badge, identity region), `Acti
 (sticky bulk actions), `DetailSection` / `CollapsibleSection` (labelled panels),
 `Breadcrumbs`, `Tabs`, and state components `EmptyState`, `AlertMessage`,
 `LoadingSpinner`, `Skeleton`.
+
+Section labels are `Eyebrow` — the small uppercase label that titles a region
+("MEMBERSHIP SOURCE", "GROUP TYPE"). Never hand-roll it: the recipe
+(`text-xs font-semibold uppercase tracking-wide text-neutral-600`) lives in that one
+component precisely because eighteen hand-rolled copies had drifted to four
+different recipes. It takes no colour, size or tracking prop — that is deliberate,
+and `className` is for layout and spacing only. Use `as="h3"` when the label is a
+real section heading that should join the document outline; the default `span`
+keeps a decorative label out of heading order.
 
 ### Icons are props, not a component
 

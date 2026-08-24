@@ -106,12 +106,20 @@
   },
   "overrides": {
     "ActionBar": {
-      "cardMode": "column"
+      "cardMode": "column",
+      "skip": [
+        "shared-actionbar--with-expansion",
+        "shared-actionbar--overflows",
+        "shared-actionbar--tier-holds-overflow-and-custom-content"
+      ]
     },
     "CopyableId": {
       "cardMode": "column"
     },
     "Tabs": {
+      "cardMode": "column"
+    },
+    "Eyebrow": {
       "cardMode": "column"
     },
     "Modal": {

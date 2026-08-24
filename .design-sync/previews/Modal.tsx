@@ -88,3 +88,4 @@ export const WithLongContent = frame(compose(S, 'WithLongContent'));
 export const Closed = frame(compose(S, 'Closed'));
 export const MotionShowcase = frame(compose(S, 'MotionShowcase'));
 export const ExitInteraction = frame(compose(S, 'ExitInteraction'));
+export const OverTheActivityBar = frame(compose(S, 'OverTheActivityBar'));
