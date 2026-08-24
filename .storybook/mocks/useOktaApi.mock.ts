@@ -148,8 +148,6 @@ export function makeUseOktaApiValue(overrides: UseOktaApiValue = {}): UseOktaApi
     runExport: asyncFn(),
 
     // Push group operations
-    getAppPushGroupMappings: asyncFn([]),
-    applyPushGroupMappings: asyncFn(),
 
     // Group analysis operations
     compareGroups: asyncFn(null),

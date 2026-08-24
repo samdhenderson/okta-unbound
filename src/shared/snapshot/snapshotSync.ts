@@ -35,7 +35,7 @@ import {
   readTotalCount,
   type SyncMode,
 } from './syncMeta';
-import type { SnapshotCollection, SyncMeta } from './types';
+import { SHARD_KEY_SEPARATOR, type SnapshotCollection, type SyncMeta } from './types';
 
 const log = createLogger('SnapshotSync');
 
@@ -749,6 +749,29 @@ const APP_GROUPS_REFRESH_MS = 6 * 60 * 60 * 1000;
 interface StoredGroupSource {
   type?: unknown;
   source?: { id?: unknown };
+  _links?: { apps?: { href?: unknown } };
+}
+
+/**
+ * The app an `APP_GROUP` is sourced from, by the same rule the panel's
+ * `toGroupSummary` uses: `source.id` wins, and the id embedded in the
+ * `_links.apps` href is the fallback.
+ *
+ * Deriving it differently here would make the fan-out walk a set of apps that
+ * does not match the set of groups the list attributes to them — some rows would
+ * show a source app that was never asked about.
+ *
+ * @param group - A stored group row.
+ * @returns The source app id, or `null` when the group has none.
+ */
+function sourceAppIdOf(group: StoredGroupSource): string | null {
+  if (group.type !== 'APP_GROUP') return null;
+  const sourceId = group.source?.id;
+  if (typeof sourceId === 'string' && sourceId !== '') return sourceId;
+  const href = group._links?.apps?.href;
+  if (typeof href !== 'string') return null;
+  const match = href.match(/\/apps\/([^/]+)/);
+  return match ? match[1] : null;
 }
 
 /**
@@ -787,10 +810,8 @@ async function pushEnabledAppShards(origin: string): Promise<Shard[]> {
   if (appIds.size === 0) {
     const groups = await orgSnapshotStore.getCollection<StoredGroupSource>('groups', origin);
     for (const group of groups) {
-      const sourceId = group.source?.id;
-      if (group.type === 'APP_GROUP' && typeof sourceId === 'string' && sourceId !== '') {
-        appIds.add(sourceId);
-      }
+      const sourceId = sourceAppIdOf(group);
+      if (sourceId) appIds.add(sourceId);
     }
     // Nothing found, and no walked inventory to have found it in. "No apps push
     // groups" and "we have not looked yet" are different facts, and recording
@@ -836,7 +857,7 @@ export const APP_GROUPS_SPEC: CollectionSpec = {
     // No `lastUpdated`: this endpoint does not report one, and inventing a
     // watermark for a collection that can never delta would be a lie the
     // freshness ladder would then act on.
-    return { id: `${shard.key}::${groupId}` };
+    return { id: `${shard.key}${SHARD_KEY_SEPARATOR}${groupId}` };
   },
   refreshIntervalMs: APP_GROUPS_REFRESH_MS,
 };

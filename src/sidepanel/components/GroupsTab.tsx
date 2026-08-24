@@ -149,7 +149,6 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
 
   const liveSearch = useGroupLiveSearch({ targetTabId, searchMode, setError, enabled: isActive });
   const loader = useGroupsLoader({
-    api,
     targetTabId,
     oktaOrigin,
     setError,

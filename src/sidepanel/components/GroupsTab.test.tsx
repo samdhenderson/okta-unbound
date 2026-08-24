@@ -102,36 +102,14 @@ vi.mock('../../shared/undoManager', () => ({
 // ---------------------------------------------------------------------------
 // Push mappings are no longer a stored field. Before ADR-0040 a fixture could
 // declare `pushMappings` because the whole `GroupSummary` was serialized into
-// `chrome.storage.local`; the snapshot stores raw Okta rows, and the mappings
-// are *derived* afterwards by a separately-owned pass over
-// `/api/v1/apps/{id}/groups`.
+// `chrome.storage.local`; the snapshot stores raw Okta rows, and the mappings are
+// *derived* from the `appGroups` collection the background walks (ADR-0040).
 //
-// So the filter/export cases below seed that pass's ANSWER rather than replaying
-// its ~45 requests — the same reason the feature children above are doubled.
-// The double is opt-in: `impl` stays `null` unless a fixture declares mappings,
-// so every other case (notably 'on applyPushGroupMappings failure') still drives
-// the real module end-to-end. The pass itself is pinned in
+// So the filter/export cases below seed that collection directly rather than
+// replaying the fan-out. They render without loading, so nothing walks and
+// nothing sweeps what they seeded. The fan-out itself is pinned in
+// `shared/snapshot/snapshotSync.test.ts`, and the derivation in
 // `hooks/useGroupsLoader.test.tsx`.
-const pushDouble = vi.hoisted(() => ({
-  impl: null as null | ((groups: any[]) => Promise<any[]>),
-}));
-
-vi.mock('../hooks/useOktaApi/pushGroupOps', async (importOriginal) => {
-  const actual = await importOriginal<any>();
-  return {
-    ...actual,
-    createPushGroupOperations: (coreApi: any) => {
-      const real = actual.createPushGroupOperations(coreApi);
-      return {
-        ...real,
-        applyPushGroupMappings: (groups: any[], onProgress?: any) =>
-          pushDouble.impl
-            ? pushDouble.impl(groups)
-            : real.applyPushGroupMappings(groups, onProgress),
-      };
-    },
-  };
-});
 
 // ---------------------------------------------------------------------------
 // IndexedDB fake
@@ -369,30 +347,52 @@ async function renderCached(groups: Record<string, any>[], props: Record<string,
 }
 
 /**
- * Make the deferred push pass return what the fixtures declare.
+ * Seed the collections a fixture's `pushMappings` / `sourceAppName` are derived
+ * from.
  *
- * A fixture's `pushMappings` cannot round-trip through `summaryToRaw` — Okta
- * never returns them on a group row — so they are handed back through the
- * enrichment double instead. No-op when no fixture asks for any, which leaves
- * the real module in play.
+ * Neither field can round-trip through `summaryToRaw` — Okta returns neither on
+ * a group row — so they are written where the panel actually reads them: the
+ * `appGroups` collection for the mappings, and `apps` for the labels.
+ *
+ * `appGroups` is keyed `${appId}::${groupId}`, because Okta returns the assigned
+ * group's id on an assignment and the app it belongs to exists only in the key.
  */
 function seedPushEnrichment(groups: Record<string, any>[]) {
-  const declared = new Map(
-    groups.filter((g) => g.pushMappings || g.sourceAppName).map((g) => [g.id, g]),
-  );
-  pushDouble.impl =
-    declared.size === 0
-      ? null
-      : async (rows: any[]) =>
-          rows.map((row) => {
-            const fixture = declared.get(row.id);
-            if (!fixture) return row;
-            return {
-              ...row,
-              pushMappings: fixture.pushMappings ?? row.pushMappings,
-              sourceAppName: fixture.sourceAppName ?? row.sourceAppName,
-            };
-          });
+  const assignments = new Map<string, any>();
+  const apps = new Map<string, any>();
+
+  const rememberApp = (appId: string, appName?: string) => {
+    if (!appId || !appName) return;
+    apps.set(`${ORIGIN}::${appId}`, {
+      origin: ORIGIN,
+      id: appId,
+      entity: { id: appId, label: appName, features: ['GROUP_PUSH'] },
+      syncedAt: 1,
+    });
+  };
+
+  for (const group of groups) {
+    rememberApp(group.sourceAppId, group.sourceAppName);
+    for (const mapping of group.pushMappings ?? []) {
+      const appId = mapping.appId ?? 'appFixture';
+      const id = `${appId}::${group.id}`;
+      assignments.set(`${ORIGIN}::${id}`, {
+        origin: ORIGIN,
+        id,
+        entity: {
+          id: group.id,
+          priority: mapping.priority,
+          profile: { name: mapping.targetGroupName ?? group.name },
+          _links: { group: { href: `${ORIGIN}/api/v1/groups/${group.id}` } },
+        },
+        syncedAt: 1,
+      });
+      rememberApp(appId, mapping.appName);
+    }
+  }
+
+  if (assignments.size > 0) idbTables.set('appGroups', assignments);
+  if (apps.size > 0) idbTables.set('apps', apps);
 }
 
 /**
@@ -484,7 +484,6 @@ beforeEach(() => {
   captured.props = {};
   idbTables.clear();
   runtimeListeners.clear();
-  pushDouble.impl = null;
   storageGet.mockImplementation((_keys: string[], cb: (r: any) => void) => cb({}));
   tabsGet.mockImplementation(async (id: number) => ({ id, url: `${ORIGIN}/admin/groups` }));
   runtimeSendMessage.mockImplementation(async (msg: any) => {
@@ -772,7 +771,9 @@ describe('live search: error paths', () => {
 describe('loadAllGroups', () => {
   it('maps, enriches with push mappings, caches, and flips to cached mode', async () => {
     const uev = userEvent.setup();
-    routeSiblingCollections();
+    // The app is in the org's inventory, which is where its label now comes from:
+    // the walk stores every app, so naming one costs no request of its own.
+    routeSiblingCollections([], [{ id: 'app123', label: 'Slack', features: ['GROUP_PUSH'] }]);
     route(/^\/api\/v1\/groups\?limit=200&expand=stats&expand=app$/, () => ({
       success: true,
       headers: {},
@@ -786,15 +787,6 @@ describe('loadAllGroups', () => {
           _embedded: { stats: { usersCount: 3 } },
         }),
       ],
-    }));
-    route(/^\/api\/v1\/apps\/app123$/, () => ({
-      success: true,
-      headers: {},
-      // `id` is required by oktaAppListItemSchema, which the label lookup now
-      // parses through (D-020). Okta's GET /api/v1/apps/{id} always returns it;
-      // omitting it here was fixture drift that only survived while the
-      // response went unvalidated. No assertion in this test changes.
-      data: { id: 'app123', label: 'Slack' },
     }));
     route(/^\/api\/v1\/apps\/app123\/groups\?limit=200$/, () => ({
       success: true,
@@ -873,20 +865,16 @@ describe('loadAllGroups', () => {
     await uev.click(screen.getByRole('button', { name: 'Load All Groups' }));
     await waitFor(() => expect(renderedGroupNames()).toEqual(['Slack Users']));
 
-    // RETARGETED: this case is about *which id* wins — `source.id` over the id
-    // parsed out of the `_links.apps` href — and it used to read that off the
-    // app-label lookup. That lookup is now skipped whenever the walk's
-    // `expand=app` embed already named the app, which is exactly this fixture.
-    // The precedence is unchanged and still observable one endpoint along: the
-    // push-mapping walk is keyed on the same `sourceAppId`.
-    // Not every scheduler message carries an endpoint (`syncSnapshot` does not).
-    const endpoints = schedulerCalls()
-      .map((m) => m.endpoint)
-      .filter((e: unknown): e is string => typeof e === 'string');
-    expect(endpoints).toContain('/api/v1/apps/fromSource/groups?limit=200');
-    expect(endpoints.some((e) => e.includes('fromLinks'))).toBe(false);
-    // And the name it came with is used rather than re-fetched.
-    expect(endpoints).not.toContain('/api/v1/apps/fromSource');
+    // RETARGETED TWICE, same subject throughout: *which id* wins — `source.id`
+    // over the id parsed out of the `_links.apps` href. It first read that off
+    // the app-label lookup, which the walk's `expand=app` embed now answers; it
+    // now reads it off the app-group fan-out, which is keyed on the same
+    // `sourceAppId`. That fan-out is issued by the *background*, so it lands in
+    // `walkCalls` rather than in the panel's own scheduler messages.
+    expect(walkCalls).toContain('/api/v1/apps/fromSource/groups?limit=200');
+    expect(walkCalls.some((e) => e.includes('fromLinks'))).toBe(false);
+    // And the name the embed carried is used rather than re-fetched.
+    expect(walkCalls).not.toContain('/api/v1/apps/fromSource');
     // group.source.name !== group.source.id, so it is used as the app name.
     expect(screen.getByText('Slack Prod')).toBeInTheDocument();
   });
@@ -936,7 +924,13 @@ describe('loadAllGroups', () => {
 
   // Still true, and now structurally rather than by a nested try/catch: the push
   // pass runs *after* the list is on screen (ADR-0040), so it cannot fail the load.
-  it('on applyPushGroupMappings failure: no banner, groups still render, snapshot still written', async () => {
+  // RETARGETED (ADR-0040). The subject is unchanged — a push-mapping failure must
+  // not take the group list down with it — but the thing that can fail moved. It
+  // used to be the panel's per-app label lookup; it is now the background's
+  // app-group fan-out, so the failure is injected there. Still structural rather
+  // than a nested try/catch: the fan-out is a separate collection, and a
+  // collection that fails leaves the ones that succeeded standing.
+  it('on a failed push-mapping walk: no banner, groups still render, snapshot still written', async () => {
     const uev = userEvent.setup();
     routeSiblingCollections();
     route(/^\/api\/v1\/groups\?limit=200&expand=stats&expand=app$/, () => ({
@@ -951,14 +945,9 @@ describe('loadAllGroups', () => {
         }),
       ],
     }));
-    route(/^\/api\/v1\/apps\/app123$/, () => {
+    route(/^\/api\/v1\/apps\/app123\/groups\?limit=200$/, () => {
       throw new Error('push mapping exploded');
     });
-    route(/^\/api\/v1\/apps\/app123\/groups\?limit=200$/, () => ({
-      success: true,
-      headers: {},
-      data: [],
-    }));
 
     render(<GroupsTab targetTabId={1} oktaOrigin={ORIGIN} />);
     await uev.click(screen.getByRole('button', { name: 'Load All Groups' }));
@@ -967,8 +956,11 @@ describe('loadAllGroups', () => {
     expect(screen.queryByText('push mapping exploded')).not.toBeInTheDocument();
     // The single row still rendered fully — its type badge is present.
     expect(screen.getAllByText('APP')).toHaveLength(1);
-    // RETARGETED: the walk's rows are durable regardless of the enrichment.
+    // The groups walk's rows are durable regardless of the fan-out's verdict.
     expect(idbTables.get('groups')!.size).toBe(1);
+    // And the failed fan-out is not recorded as a complete one, so it retries
+    // rather than presenting an empty collection as the org's push mappings.
+    expect(idbTables.get('syncMeta')!.get(`${ORIGIN}::appGroups`).complete).toBe(false);
   });
 
   it('clears live search state when a load succeeds', async () => {

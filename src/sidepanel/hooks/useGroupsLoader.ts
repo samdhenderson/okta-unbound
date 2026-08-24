@@ -14,48 +14,32 @@
  * `GroupSummary`s and repaints as more arrives. A returning visit paints from
  * the store with no request at all.
  *
- * Two things changed shape rather than being deleted:
- * - Rule attribution still happens here, but against snapshot rules rather than
- *   a second cache with its own TTL of its own.
- * - Push-group mappings moved **off the critical path**, not out of the product.
- *   They were roughly half the old request budget and they answer a question
- *   only two filters ask, so they now run after the list is on screen and patch
- *   rows in as they resolve.
+ * Everything it shows is now a join over stored collections, computed here and
+ * cached nowhere:
+ * - **Rule attribution** — `usedInRuleCount` and `hasRules`, from snapshot rules.
+ * - **Push-group mappings** — from the `appGroups` collection. These were the
+ *   last thing the panel re-fetched on every open, roughly one request per
+ *   push-enabled app; the background walks them now, so a returning visit shows
+ *   them with no request at all.
+ * - **Source app names** — from the `expand=app` embed on the group walk, and
+ *   from the app inventory when the embed did not carry one.
+ *
+ * Each of those is a function of collections that change on their own schedules,
+ * so caching the join would only be a fourth thing to invalidate.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { GroupSummary, OktaGroupRule, PushGroupMapping } from '../../shared/types';
 import { detectConflicts, formatRuleForDisplay } from '../../shared/ruleUtils';
 import { annotateGroupsWithRuleCounts } from '../../shared/rules/groupRuleIndex';
 import { toGroupSummary, type RawOktaGroup } from '../components/groups/groupSummary';
 import { useOrgSnapshot } from '../cache/useOrgSnapshot';
-import { createLogger } from '../../shared/utils/logger';
-import type { useOktaApi } from './useOktaApi';
-
-/** The API facade shape, for the one operation this hook still needs from it. */
-type OktaApiSurface = ReturnType<typeof useOktaApi>;
-
-const log = createLogger('useGroupsLoader');
-
-/** What the deferred push-mapping pass contributes back to a row. */
-interface PushEnrichment {
-  /** `sourceAppId` → the app's resolved label. */
-  appNames: Map<string, string>;
-  /** Group id → the push mappings targeting it. */
-  mappingsByGroup: Map<string, PushGroupMapping[]>;
-}
-
-/** Nothing enriched yet — a stable identity, so it never re-triggers the memo. */
-const NO_ENRICHMENT: PushEnrichment = { appNames: new Map(), mappingsByGroup: new Map() };
+import { splitShardedId } from '../../shared/snapshot/types';
+import type { OktaAppGroupAssignment, OktaAppListItem } from '../../shared/schemas/okta';
 
 /** Inputs to {@link useGroupsLoader}. */
 interface UseGroupsLoaderOptions {
-  /**
-   * The Okta API surface, used **only** for the deferred push-mapping pass —
-   * the list itself no longer comes from here.
-   */
-  api: Pick<OktaApiSurface, 'applyPushGroupMappings'>;
   /** Connected Okta tab id; syncing is disabled while it is `null`. */
   targetTabId: number | null;
   /** Connected org origin — what the snapshot is scoped by. */
@@ -105,7 +89,6 @@ export interface UseGroupsLoaderResult {
  * @returns See {@link UseGroupsLoaderResult}.
  */
 export function useGroupsLoader({
-  api,
   targetTabId,
   oktaOrigin,
   setError,
@@ -119,18 +102,68 @@ export function useGroupsLoader({
   const ruleSnapshot = useOrgSnapshot<OktaGroupRule>('rules', oktaOrigin, targetTabId, {
     enabled,
   });
+  const appSnapshot = useOrgSnapshot<OktaAppListItem>('apps', oktaOrigin, targetTabId, {
+    enabled,
+  });
+  const appGroupSnapshot = useOrgSnapshot<OktaAppGroupAssignment>(
+    'appGroups',
+    oktaOrigin,
+    targetTabId,
+    { enabled },
+  );
 
   const { rows: rawGroups } = groupSnapshot;
   const { rows: rawRules } = ruleSnapshot;
+  const { rows: rawApps } = appSnapshot;
+  // Records, not rows: which app an assignment belongs to lives in the storage
+  // key. Okta returns only the assigned group's id on an assignment, so the app
+  // is not recoverable from the entity alone (ADR-0040, `APP_GROUPS_SPEC`).
+  const { records: assignmentRecords } = appGroupSnapshot;
 
-  // Rule attribution, derived rather than stored: `usedInRuleCount` and
-  // `hasRules` are a function of two collections that each change on their own
-  // schedule, so caching the join would just be a third thing to invalidate.
-  // `formatRuleForDisplay` is passed no `currentGroupId` for the same reason
-  // `groupDiscovery` did not: the rules are org-wide, so baking one group's
-  // `affectsCurrentGroup` flag into them would be wrong for every other row.
-  const [enrichment, setEnrichment] = useState<PushEnrichment>(NO_ENRICHMENT);
+  /** App id → the label to show for it. */
+  const appNames = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const app of rawApps) {
+      const label = app.label || app.name;
+      if (app.id && label) byId.set(app.id, label);
+    }
+    return byId;
+  }, [rawApps]);
 
+  /** Group id → the push mappings targeting it. */
+  const mappingsByGroup = useMemo(() => {
+    const byGroup = new Map<string, PushGroupMapping[]>();
+    for (const record of assignmentRecords) {
+      const key = splitShardedId(record.id);
+      if (!key) continue;
+      const appId = key.shardKey;
+      const assignment = record.entity;
+      // The `_links` href is the authoritative group reference; the key's half is
+      // the fallback, and the two agree in every response Okta actually sends.
+      const linked = assignment._links?.group?.href?.split('/').pop();
+      const groupId = linked || key.entityId;
+      if (!groupId) continue;
+
+      const mappings = byGroup.get(groupId) ?? [];
+      mappings.push({
+        mappingId: assignment.id || `${appId}_${groupId}`,
+        sourceUserGroupId: groupId,
+        targetGroupName: assignment.profile?.name || assignment.profile?.groupName || '',
+        priority: assignment.priority,
+        appId,
+        appName: appNames.get(appId),
+      });
+      byGroup.set(groupId, mappings);
+    }
+    return byGroup;
+  }, [appNames, assignmentRecords]);
+
+  // Every derived field is computed here rather than stored: each is a function
+  // of collections that change on their own schedules, so caching the join would
+  // only be another thing to invalidate. `formatRuleForDisplay` is passed no
+  // `currentGroupId` for the reason `groupDiscovery` did not: the rules are
+  // org-wide, so baking one group's `affectsCurrentGroup` flag into them would be
+  // wrong for every other row.
   const groups = useMemo(() => {
     let summaries = rawGroups.map(toGroupSummary);
     if (rawRules.length > 0) {
@@ -138,20 +171,21 @@ export function useGroupsLoader({
       const rules = rawRules.map((rule) => formatRuleForDisplay(rule, undefined, conflicts));
       summaries = annotateGroupsWithRuleCounts(summaries, rules);
     }
-    if (enrichment === NO_ENRICHMENT) return summaries;
+    if (mappingsByGroup.size === 0 && appNames.size === 0) return summaries;
 
-    // The deferred pass's answers are folded in here rather than written back to
-    // the snapshot: they are a client-side join over two collections, not
-    // something Okta returned about a group, and the store holds the latter.
     return summaries.map((group) => {
-      const mappings = enrichment.mappingsByGroup.get(group.id);
-      const appName = group.sourceAppId ? enrichment.appNames.get(group.sourceAppId) : undefined;
+      const mappings = mappingsByGroup.get(group.id);
       const updates: Partial<GroupSummary> = {};
       if (mappings && mappings.length > 0) updates.pushMappings = mappings;
-      if (appName && appName !== group.sourceAppId) updates.sourceAppName = appName;
+      // The group walk's `expand=app` embed usually names the source app already;
+      // the inventory answers for the rows where it did not, at no request cost.
+      if (!group.sourceAppName && group.sourceAppId) {
+        const appName = appNames.get(group.sourceAppId);
+        if (appName && appName !== group.sourceAppId) updates.sourceAppName = appName;
+      }
       return Object.keys(updates).length > 0 ? { ...group, ...updates } : group;
     });
-  }, [enrichment, rawGroups, rawRules]);
+  }, [appNames, mappingsByGroup, rawGroups, rawRules]);
 
   const { sync: syncGroups } = groupSnapshot;
 
@@ -186,84 +220,6 @@ export function useGroupsLoader({
   useEffect(() => {
     if (hasRows) setSearchMode('cached');
   }, [hasRows, setSearchMode]);
-
-  // ---------------------------------------------------------------------------
-  // Deferred push-mapping enrichment
-  // ---------------------------------------------------------------------------
-  // This is the ~45 requests that used to sit on the critical path, blocking the
-  // first paint of every row in the org. It answers a question only two filters
-  // ask, so it now runs *after* the list is on screen and patches rows in as it
-  // resolves. `applyPushGroupMappings` already runs at `low` priority through the
-  // operation runner, so it is visible in the activity bar and cancellable.
-  const applyPushGroupMappings = api.applyPushGroupMappings;
-  // Latched per (org, set of source apps): re-running it on every render, or on
-  // every repaint during a walk, would spend the org's rate limit re-deriving an
-  // answer that has not changed.
-  const enrichedFor = useRef<string | null>(null);
-
-  const enrichmentKey = useMemo(() => {
-    if (rawGroups.length === 0) return null;
-    // Keyed on *which* source apps are present, not on how many groups there
-    // are, so a walk's twenty repaints re-run this once. The key stays a stable
-    // `origin::` for an org with no app-sourced groups at all — which is a real
-    // answer ("nothing to resolve"), not a reason to skip the pass: deciding
-    // there is no work is `applyPushGroupMappings`'s own job, and it returns its
-    // input having issued zero requests. Duplicating that guard here only made
-    // the deferred pass unobservable in the one case it is cheapest to run.
-    const ids = new Set<string>();
-    for (const group of rawGroups) {
-      if (group.type === 'APP_GROUP' && (group.source?.id || group._links?.apps?.href)) {
-        ids.add(group.source?.id ?? (group._links?.apps?.href as string));
-      }
-    }
-    return `${oktaOrigin ?? ''}::${[...ids].sort().join(',')}`;
-  }, [oktaOrigin, rawGroups]);
-
-  useEffect(() => {
-    // Gated on visibility (ADR-0018): a hidden tab must not spend an admin's
-    // rate limit on a pane nobody is looking at.
-    if (!enabled || enrichmentKey === null || targetTabId === null) return;
-    if (enrichedFor.current === enrichmentKey) return;
-    enrichedFor.current = enrichmentKey;
-    // The previous org's — or the previous app set's — answers are dropped
-    // before the new ones are asked for, so a stale mapping can never outlive
-    // the rows it described.
-    setEnrichment(NO_ENRICHMENT);
-
-    let cancelled = false;
-    const summaries = rawGroups.map(toGroupSummary);
-    void applyPushGroupMappings(summaries)
-      .then((enriched) => {
-        if (cancelled) return;
-        const appNames = new Map<string, string>();
-        const mappingsByGroup = new Map<string, PushGroupMapping[]>();
-        for (const group of enriched) {
-          if (group.sourceAppId && group.sourceAppName) {
-            appNames.set(group.sourceAppId, group.sourceAppName);
-          }
-          if (group.pushMappings?.length) mappingsByGroup.set(group.id, group.pushMappings);
-        }
-        // Nothing resolved — leave the sentinel in place rather than swapping in
-        // an equivalent empty pair, which would re-run the join for no change.
-        if (appNames.size === 0 && mappingsByGroup.size === 0) return;
-        setEnrichment({ appNames, mappingsByGroup });
-      })
-      .catch(() => {
-        // Non-fatal, exactly as before: the list is already on screen and
-        // complete, and push mappings are an embellishment on two filters.
-        // Re-armed so a later load can retry. Outcome code only.
-        if (!cancelled) enrichedFor.current = null;
-        log.warn('Push-group mapping enrichment failed', { code: 'push_enrichment_failed' });
-      });
-
-    return () => {
-      cancelled = true;
-    };
-    // `rawGroups` is deliberately not a dependency: it changes on every page of a
-    // walk, and the latch key already captures the only thing this pass depends
-    // on — which source apps are present.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [applyPushGroupMappings, enabled, enrichmentKey, targetTabId]);
 
   return {
     groups,

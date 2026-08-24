@@ -122,6 +122,40 @@ class OrgSnapshotStore {
   }
 
   /**
+   * Every stored **record** of one collection for one org, envelope included.
+   *
+   * The counterpart to {@link getCollection}, for the one case where the
+   * envelope carries meaning: a collection whose key is composed rather than
+   * copied from `row.id`. `appGroups` keys rows `${appId}::${groupId}` because
+   * Okta returns only the group's id on an assignment, so the app the assignment
+   * belongs to exists *in the key* and nowhere in the entity.
+   *
+   * Prefer {@link getCollection} everywhere else — callers want the org's
+   * groups, not the storage bookkeeping.
+   *
+   * @param collection - Which collection to read.
+   * @param origin - Org origin.
+   * @returns The stored records; `[]` on any failure (logged, never thrown).
+   */
+  async getRecords<T>(
+    collection: SnapshotCollection,
+    origin: string,
+  ): Promise<SnapshotRecord<T>[]> {
+    try {
+      const db = await this.getDB();
+      const rows = await db.getAllFromIndex(collection, 'origin', origin);
+      return rows as SnapshotRecord<T>[];
+    } catch (error) {
+      log.error('Failed to read collection records', {
+        code: 'snapshot_read_failed',
+        collection,
+      });
+      log.debug('Snapshot read error detail', { reason: errorReason(error) });
+      return [];
+    }
+  }
+
+  /**
    * How many rows one org has stored for a collection.
    *
    * @param collection - Which collection to size.

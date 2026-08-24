@@ -120,3 +120,32 @@ export interface SyncMeta {
  * that has silently diverged go unchecked forever.
  */
 export type DriftVerdict = 'in-sync' | 'drifted' | 'unknown';
+
+/**
+ * Separator between a shard key and an entity id in a sharded collection's
+ * storage key.
+ *
+ * Defined here rather than at either end because both the sync engine (which
+ * composes the key) and the panel read path (which takes it apart to recover
+ * which app an assignment belongs to) depend on the same grammar. Two copies of
+ * a key format is one copy too many.
+ *
+ * `::` cannot occur inside an Okta id — they are alphanumeric — so the split is
+ * unambiguous.
+ */
+export const SHARD_KEY_SEPARATOR = '::';
+
+/**
+ * Recover the shard and entity halves of a sharded collection's storage key.
+ *
+ * @param id - A stored record's id.
+ * @returns The two halves, or `null` when the id is not a sharded key — which
+ * is the honest answer for every single-URL collection's rows.
+ */
+export function splitShardedId(id: string): { shardKey: string; entityId: string } | null {
+  const at = id.indexOf(SHARD_KEY_SEPARATOR);
+  if (at <= 0) return null;
+  const entityId = id.slice(at + SHARD_KEY_SEPARATOR.length);
+  if (entityId === '') return null;
+  return { shardKey: id.slice(0, at), entityId };
+}

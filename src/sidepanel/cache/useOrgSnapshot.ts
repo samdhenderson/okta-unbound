@@ -22,9 +22,9 @@
  * per-entity reads like a group's members.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { orgSnapshotStore } from '../../shared/snapshot/orgSnapshotStore';
-import type { SnapshotCollection } from '../../shared/snapshot/types';
+import type { SnapshotCollection, SnapshotRecord } from '../../shared/snapshot/types';
 import { createLogger } from '../../shared/utils/logger';
 
 const log = createLogger('useOrgSnapshot');
@@ -33,6 +33,15 @@ const log = createLogger('useOrgSnapshot');
 export interface UseOrgSnapshotResult<T> {
   /** The stored rows for this org and collection; `[]` before the first read. */
   rows: T[];
+  /**
+   * The same rows with their storage envelope, for the one collection whose key
+   * carries meaning the entity does not.
+   *
+   * `appGroups` is keyed `${appId}::${groupId}` because Okta returns only the
+   * group's id on an assignment — so which app an assignment belongs to exists
+   * in the key alone. Every other caller wants {@link rows}.
+   */
+  records: SnapshotRecord<T>[];
   /** `true` until the first IndexedDB read for the current org resolves. */
   isReading: boolean;
   /** Whether the last walk for this collection finished (ADR-0040 §7). */
@@ -94,7 +103,9 @@ export function useOrgSnapshot<T>(
 ): UseOrgSnapshotResult<T> {
   const { enabled = true } = options;
 
-  const [rows, setRows] = useState<T[]>([]);
+  // Records are what is held; `rows` is derived from them. Keeping both in state
+  // would be two copies of the org that could disagree by a render.
+  const [records, setRecords] = useState<SnapshotRecord<T>[]>([]);
   const [isReading, setIsReading] = useState(false);
   const [complete, setComplete] = useState(false);
   const [lastFullWalkAt, setLastFullWalkAt] = useState<number | null>(null);
@@ -109,17 +120,17 @@ export function useOrgSnapshot<T>(
 
   const readSnapshot = useCallback(async () => {
     if (!origin) {
-      setRows([]);
+      setRecords([]);
       setComplete(false);
       setLastFullWalkAt(null);
       return;
     }
     const [stored, meta] = await Promise.all([
-      orgSnapshotStore.getCollection<T>(collection, origin),
+      orgSnapshotStore.getRecords<T>(collection, origin),
       orgSnapshotStore.getMeta(collection, origin),
     ]);
     if (originRef.current !== origin) return;
-    setRows(stored);
+    setRecords(stored);
     setComplete(meta.complete);
     setLastFullWalkAt(meta.lastFullWalkAt);
   }, [collection, origin]);
@@ -131,7 +142,7 @@ export function useOrgSnapshot<T>(
     setIsReading(true);
     // Blank the previous org's rows immediately rather than after the read: they
     // must not linger on screen under the new org's identity.
-    setRows([]);
+    setRecords([]);
     void readSnapshot().finally(() => {
       if (!cancelled) setIsReading(false);
     });
@@ -186,5 +197,7 @@ export function useOrgSnapshot<T>(
     [collection, enabled, origin, readSnapshot, tabId],
   );
 
-  return { rows, isReading, complete, lastFullWalkAt, isSyncing, error, sync };
+  const rows = useMemo(() => records.map((record) => record.entity), [records]);
+
+  return { rows, records, isReading, complete, lastFullWalkAt, isSyncing, error, sync };
 }

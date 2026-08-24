@@ -67,31 +67,6 @@ const { fakeDB, idbTables } = vi.hoisted(() => {
 
 vi.mock('idb', () => ({ openDB: vi.fn(async () => fakeDB) }));
 
-// Push mappings are derived after paint rather than stored (ADR-0040), so the
-// one case below that needs them seeds the pass's answer. Opt-in: `impl` stays
-// `null` everywhere else, leaving the real module in play. See the longer note
-// in `GroupsTab.test.tsx`.
-const pushDouble = vi.hoisted(() => ({
-  impl: null as null | ((groups: any[]) => Promise<any[]>),
-}));
-
-vi.mock('../hooks/useOktaApi/pushGroupOps', async (importOriginal) => {
-  const actual = await importOriginal<any>();
-  return {
-    ...actual,
-    createPushGroupOperations: (coreApi: any) => {
-      const real = actual.createPushGroupOperations(coreApi);
-      return {
-        ...real,
-        applyPushGroupMappings: (groups: any[], onProgress?: any) =>
-          pushDouble.impl
-            ? pushDouble.impl(groups)
-            : real.applyPushGroupMappings(groups, onProgress),
-      };
-    },
-  };
-});
-
 // ---------------------------------------------------------------------------
 // chrome mocks
 // ---------------------------------------------------------------------------
@@ -172,16 +147,42 @@ function seedCache(groups: Record<string, any>[]) {
     ]),
   );
 
-  const declared = new Map(groups.filter((g) => g.pushMappings).map((g) => [g.id, g]));
-  pushDouble.impl =
-    declared.size === 0
-      ? null
-      : async (rows: any[]) =>
-          rows.map((row) =>
-            declared.has(row.id)
-              ? { ...row, pushMappings: declared.get(row.id)!.pushMappings }
-              : row,
-          );
+  // Push mappings live in the `appGroups` collection now (ADR-0040), keyed
+  // `${appId}::${groupId}` — Okta returns the assigned group's id on an
+  // assignment, so the app it belongs to exists only in the key. Seeded here
+  // rather than replayed: these cases render without loading, so nothing walks.
+  //
+  // The app's *label* comes from the `apps` collection: the walk stores every
+  // app, so naming one costs no request of its own.
+  const assignments = new Map<string, any>();
+  const apps = new Map<string, any>();
+  for (const group of groups) {
+    for (const mapping of group.pushMappings ?? []) {
+      const appId = mapping.appId ?? 'appFixture';
+      if (mapping.appName) {
+        apps.set(`${ORIGIN}::${appId}`, {
+          origin: ORIGIN,
+          id: appId,
+          entity: { id: appId, label: mapping.appName, features: ['GROUP_PUSH'] },
+          syncedAt: 1,
+        });
+      }
+      const id = `${appId}::${group.id}`;
+      assignments.set(`${ORIGIN}::${id}`, {
+        origin: ORIGIN,
+        id,
+        entity: {
+          id: group.id,
+          priority: mapping.priority,
+          profile: { name: mapping.targetGroupName ?? group.name },
+          _links: { group: { href: `${ORIGIN}/api/v1/groups/${group.id}` } },
+        },
+        syncedAt: 1,
+      });
+    }
+  }
+  if (assignments.size > 0) idbTables.set('appGroups', assignments);
+  if (apps.size > 0) idbTables.set('apps', apps);
 }
 
 /**
@@ -199,7 +200,6 @@ async function renderCached(groups: Record<string, any>[], props: Record<string,
 beforeEach(() => {
   vi.clearAllMocks();
   idbTables.clear();
-  pushDouble.impl = null;
   storageGet.mockImplementation((_keys: any, cb?: (r: any) => void) =>
     typeof cb === 'function' ? cb({}) : Promise.resolve({}),
   );
@@ -372,7 +372,16 @@ describe('GroupsTab sub-navigation', () => {
 
     expect(detail.getByText('g1')).toBeInTheDocument();
     expect(detail.getByRole('button', { name: 'Copy ID' })).toBeInTheDocument();
-    expect(detail.getByText('Slack')).toBeInTheDocument();
+
+    // Awaited, where the rest of this case is synchronous: push mappings are a
+    // separate snapshot collection (ADR-0040), so they land on their own read
+    // rather than riding the group row. Re-queried inside `waitFor` because the
+    // detail view re-renders when they arrive.
+    await waitFor(() =>
+      expect(
+        within(screen.getByTestId('group-detail-view')).getByText('Slack'),
+      ).toBeInTheDocument(),
+    );
     expect(detail.getByText('Target group: Engineering (Slack)')).toBeInTheDocument();
     // Okta returns no activation status for an app-group assignment — priority only.
     expect(detail.getByText('Priority 2')).toBeInTheDocument();

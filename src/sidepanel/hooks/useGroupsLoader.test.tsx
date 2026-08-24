@@ -18,7 +18,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useGroupsLoader } from './useGroupsLoader';
-import type { GroupSummary } from '../../shared/types';
 
 // ---------------------------------------------------------------------------
 // IndexedDB fake
@@ -118,9 +117,7 @@ function seed(collection: string, rows: Record<string, any>[], origin = ORIGIN, 
 
 /** The hook's inputs, with the shell's callbacks captured as spies. */
 function harness(over: Record<string, any> = {}) {
-  const applyPushGroupMappings = vi.fn(async (groups: GroupSummary[]) => groups);
   const options = {
-    api: { applyPushGroupMappings },
     targetTabId: 1 as number | null,
     oktaOrigin: ORIGIN as string | null,
     setError: vi.fn(),
@@ -128,7 +125,36 @@ function harness(over: Record<string, any> = {}) {
     onLoaded: vi.fn(),
     ...over,
   };
-  return { options, applyPushGroupMappings };
+  return { options };
+}
+
+/**
+ * Seed app-group assignments, as a completed fan-out walk leaves them.
+ *
+ * Keyed `${appId}::${groupId}` rather than by the row's own id, because Okta
+ * returns the assigned *group's* id on an assignment — the app it belongs to
+ * exists only in the key (ADR-0040, `APP_GROUPS_SPEC`).
+ */
+function seedAssignments(
+  entries: Array<{ appId: string; groupId: string; name?: string }>,
+  origin = ORIGIN,
+) {
+  const table = idbTables.get('appGroups') ?? new Map();
+  for (const { appId, groupId, name } of entries) {
+    const id = `${appId}::${groupId}`;
+    table.set(`${origin}::${id}`, {
+      origin,
+      id,
+      entity: {
+        id: groupId,
+        priority: 0,
+        profile: { name: name ?? 'Pushed Group' },
+        _links: { group: { href: `${origin}/api/v1/groups/${groupId}` } },
+      },
+      syncedAt: 1,
+    });
+  }
+  idbTables.set('appGroups', table);
 }
 
 beforeEach(() => {
@@ -212,35 +238,63 @@ describe('useGroupsLoader', () => {
     expect(result.current.groups[0]?.hasRules).toBe(true);
   });
 
-  it('patches push mappings in after the list is already on screen', async () => {
+  // RETARGETED. This used to pin "the row lands first, unenriched, and mappings
+  // patch in afterwards" — the deferred pass, which cost ~40 requests on every
+  // panel open. The background walks app-group assignments now, so there is no
+  // second phase to arrive late; the property worth pinning is the stronger one
+  // that replaced it.
+  it('shows push mappings from the snapshot without asking Okta for anything', async () => {
     seed('groups', [rawGroup({ id: 'g1', type: 'APP_GROUP', source: { id: 'app1' } })]);
-    const mappings = [{ mappingId: 'm1', appId: 'app1', appName: 'Slack' }];
-    const { options, applyPushGroupMappings } = harness();
-    applyPushGroupMappings.mockImplementation(async (groups: GroupSummary[]) =>
-      groups.map((g) => ({ ...g, sourceAppName: 'Slack', pushMappings: mappings as any })),
-    );
+    seed('apps', [{ id: 'app1', label: 'Slack' }]);
+    seedAssignments([{ appId: 'app1', groupId: 'g1' }]);
+    const { options } = harness();
 
     const { result } = renderHook(() => useGroupsLoader(options as any));
 
-    // The row lands first, unenriched — the ~45 requests are off the critical path.
     await waitFor(() => expect(result.current.groups).toHaveLength(1));
-    await waitFor(() => expect(result.current.groups[0]?.pushMappings).toEqual(mappings));
-    expect(result.current.groups[0]?.sourceAppName).toBe('Slack');
+    await waitFor(() =>
+      expect(result.current.groups[0]?.pushMappings).toEqual([
+        expect.objectContaining({ appId: 'app1', appName: 'Slack', sourceUserGroupId: 'g1' }),
+      ]),
+    );
+    // The whole point: a warm org pays nothing for the answer.
+    expect(runtimeSendMessage).not.toHaveBeenCalled();
   });
 
-  it('runs the push pass once per org rather than once per repaint', async () => {
-    seed('groups', [rawGroup()]);
-    const { options, applyPushGroupMappings } = harness();
+  it('names a source app from the inventory when the group walk did not embed one', async () => {
+    // `expand=app` usually carries the name; when it does not, the app inventory
+    // is already on disk and answers for free rather than costing a lookup.
+    seed('groups', [rawGroup({ id: 'g1', type: 'APP_GROUP', source: { id: 'app1' } })]);
+    seed('apps', [{ id: 'app1', label: 'Slack' }]);
+    const { options } = harness();
+
     const { result } = renderHook(() => useGroupsLoader(options as any));
-    await waitFor(() => expect(result.current.groups).toHaveLength(1));
 
-    seed('groups', [rawGroup(), rawGroup({ id: 'g2', profile: { name: 'Design' } })]);
-    await act(async () => broadcastPage());
-    await waitFor(() => expect(result.current.groups).toHaveLength(2));
+    await waitFor(() => expect(result.current.groups[0]?.sourceAppName).toBe('Slack'));
+    expect(runtimeSendMessage).not.toHaveBeenCalled();
+  });
 
-    // Latched on which source apps are present, not on the row count, so a
-    // twenty-page walk does not re-derive the same answer twenty times.
-    expect(applyPushGroupMappings).toHaveBeenCalledTimes(1);
+  it("keeps one app's mappings when another app assigns the same group", async () => {
+    // The storage-key collision `APP_GROUPS_SPEC.identify` exists to prevent,
+    // asserted where a user would notice it: both apps must reach the row.
+    seed('groups', [rawGroup({ id: 'g1', type: 'APP_GROUP', source: { id: 'app1' } })]);
+    seed('apps', [
+      { id: 'app1', label: 'Slack' },
+      { id: 'app2', label: 'Zoom' },
+    ]);
+    seedAssignments([
+      { appId: 'app1', groupId: 'g1' },
+      { appId: 'app2', groupId: 'g1' },
+    ]);
+    const { options } = harness();
+
+    const { result } = renderHook(() => useGroupsLoader(options as any));
+
+    await waitFor(() => expect(result.current.groups[0]?.pushMappings).toHaveLength(2));
+    expect(result.current.groups[0]?.pushMappings?.map((m) => m.appName).sort()).toEqual([
+      'Slack',
+      'Zoom',
+    ]);
   });
 
   it('asks for the cheapest honest mode, and forces a full walk only on Refresh', async () => {
