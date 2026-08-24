@@ -160,7 +160,12 @@ Format:
   about pill order, not which filter opens active; don't change the default
   without checking with Sam first.
 - **Risk:** Low.
-- **Status:** open
+- **Resolution note:** pill order only. The default stayed `'differences'` in
+  both views — there was no one to check with on an unattended run, so the
+  item's own instruction to leave it alone was taken literally. One added
+  assertion per file reads the row in DOM order and pins each whole label, so
+  a later reorder cannot carry a count onto the wrong pill.
+- **Status:** done:#75
 
 ### I-007 · Normalize verdict-badge placement in GroupMembershipRow
 
@@ -177,7 +182,15 @@ Format:
   the current layout, in which case record it as a comment instead of moving
   the badge.
 - **Risk:** Low.
-- **Status:** open
+- **Resolution note:** no deliberate reason found, and the evidence ran the
+  other way — the file's module header already describes the row as "name,
+  verdict, source line", and `membershipVerdict.ts`'s short-label rule
+  presumes the badge sits _beside_ the name. Badge moved. The name line gained
+  `flex-wrap`, because it now carries two `shrink-0` badges and at the 360px
+  floor they no longer share a line with a long name; the `<h4>` keeps
+  `truncate` and a `LongGroupName` story pins that case. The residual — a
+  clipped name has no way to reveal itself — is filed as `I-011`.
+- **Status:** done:#75
 
 ### I-008 · Propose Okta Expression Language function coverage
 
@@ -252,3 +265,29 @@ Format:
 - **Status:** open
 - **Related:** `I-009` (same defect on `EntityLink`'s derived
   `copyIdLabel` default), `I-004` (introduced these three call sites)
+
+### I-011 · A truncated list-row name has no way to reveal itself
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/users/GroupMembershipRow.tsx:195`
+  (the `<h4>`), `src/sidepanel/components/groups/GroupListItem.tsx:208`
+  (the `<h3>`)
+- **Problem:** Both primary row names carry `truncate` and no `title`, so a
+  name long enough to clip is simply lost — no tooltip, no accessible-name
+  fallback, and no way to read the rest without opening the row. The side
+  panel's 360px floor makes this reachable with ordinary Okta group names,
+  and the two rows are the ones an admin scans most. Raised by `ui-reviewer`
+  on the `I-007` diff as advisory and filed rather than folded in
+  (`CLAUDE.md`): it is pre-existing on both files, `I-007` did not introduce
+  it, and it spans a file that item never named.
+- **Done when:** A name that clips can be read in full — a `title` carrying
+  the untruncated name is the cheap route; if a shared treatment is wanted
+  instead, apply the same one to both rows rather than two different ones. A
+  story renders a name long enough to clip and asserts the full text is
+  reachable.
+- **Risk:** Low. Note `title` is a hover/focus affordance, not a substitute
+  for an accessible name — the name text is already in the accessibility
+  tree, so this is about the visual reader.
+- **Status:** open

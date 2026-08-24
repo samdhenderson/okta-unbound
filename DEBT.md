@@ -683,7 +683,17 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   trade different things away.
 - **Risk:** Low to fix. The bug it prevents is rare but silent and would be
   misattributed when it happens.
-- **Status:** open
+- **Resolution note:** shipped the **sequencing rule**, not `--no-stash`, and
+  the reasoning is recorded in `CONVENTIONS.md` as the item requires.
+  `--no-stash` is the worse trade: the tasks would then run against a tree
+  still holding other agents' unstaged edits, and `lint-staged` `git add`s
+  whatever its tasks modify — so a formatter touching a file with unstaged
+  edits sweeps those unrelated edits into the commit. That turns a latent read
+  race into a guaranteed wrong-commit-contents bug, and gives up the automatic
+  restore when a hook run dies part-way through. Note the diff touches neither
+  file in the **Files** list above: the rule went to `SESSION.md` step 4 and
+  `CONVENTIONS.md`, which is the item's own first "Done when" option.
+- **Status:** done:#75
 
 ### D-024 · `check-cited-paths` still cannot see any path that is not under `src/`
 
