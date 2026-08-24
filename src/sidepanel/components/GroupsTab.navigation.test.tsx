@@ -10,7 +10,7 @@
  * messaging surface is mocked exactly as `GroupsTab.test.tsx` does.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render as rtlRender, screen, waitFor, within } from '@testing-library/react';
+import { render as rtlRender, screen, act, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement, ReactNode } from 'react';
 import GroupsTab from './GroupsTab';
@@ -24,13 +24,83 @@ const render = (ui: ReactElement) =>
   });
 
 // ---------------------------------------------------------------------------
+// IndexedDB fake
+// ---------------------------------------------------------------------------
+// The list comes from the background-owned org snapshot (ADR-0040), which is
+// IndexedDB-backed. jsdom has no IndexedDB and `fake-indexeddb` is not a
+// dependency, so `idb` is faked with a Map, as `GroupsTab.test.tsx` does.
+const { fakeDB, idbTables } = vi.hoisted(() => {
+  const idbTables = new Map<string, Map<string, any>>();
+  const keyOf = (key: unknown) => (Array.isArray(key) ? key.join('::') : String(key));
+  const table = (name: string) => {
+    if (!idbTables.has(name)) idbTables.set(name, new Map());
+    return idbTables.get(name)!;
+  };
+  const pk = (name: string, value: any) =>
+    name === 'syncMeta' ? [value.origin, value.collection] : [value.origin, value.id];
+  const fakeDB = {
+    get: async (name: string, key: unknown) => table(name).get(keyOf(key)),
+    put: async (name: string, value: any) => {
+      table(name).set(keyOf(pk(name, value)), value);
+    },
+    delete: async (name: string, key: unknown) => {
+      table(name).delete(keyOf(key));
+    },
+    getAllFromIndex: async (name: string, _i: string, origin: string) =>
+      [...table(name).values()].filter((v) => v.origin === origin),
+    getAllKeysFromIndex: async (name: string, _i: string, origin: string) =>
+      [...table(name).values()].filter((v) => v.origin === origin).map((v) => pk(name, v)),
+    transaction: (name: string) => ({
+      store: {
+        put: async (value: any) => {
+          table(name).set(keyOf(pk(name, value)), value);
+        },
+        delete: async (key: unknown) => {
+          table(name).delete(keyOf(key));
+        },
+      },
+      done: Promise.resolve(),
+    }),
+  };
+  return { fakeDB, idbTables };
+});
+
+vi.mock('idb', () => ({ openDB: vi.fn(async () => fakeDB) }));
+
+// Push mappings are derived after paint rather than stored (ADR-0040), so the
+// one case below that needs them seeds the pass's answer. Opt-in: `impl` stays
+// `null` everywhere else, leaving the real module in play. See the longer note
+// in `GroupsTab.test.tsx`.
+const pushDouble = vi.hoisted(() => ({
+  impl: null as null | ((groups: any[]) => Promise<any[]>),
+}));
+
+vi.mock('../hooks/useOktaApi/pushGroupOps', async (importOriginal) => {
+  const actual = await importOriginal<any>();
+  return {
+    ...actual,
+    createPushGroupOperations: (coreApi: any) => {
+      const real = actual.createPushGroupOperations(coreApi);
+      return {
+        ...real,
+        applyPushGroupMappings: (groups: any[], onProgress?: any) =>
+          pushDouble.impl
+            ? pushDouble.impl(groups)
+            : real.applyPushGroupMappings(groups, onProgress),
+      };
+    },
+  };
+});
+
+// ---------------------------------------------------------------------------
 // chrome mocks
 // ---------------------------------------------------------------------------
 const runtimeSendMessage = vi.fn();
 const storageGet = vi.fn();
 const storageSet = vi.fn();
 
-const GROUPS_CACHE_KEY = 'okta_unbound_groups_cache';
+/** The org every test renders against; the snapshot is scoped by origin. */
+const ORIGIN = 'https://x.okta.com';
 
 globalThis.chrome = {
   runtime: {
@@ -38,7 +108,7 @@ globalThis.chrome = {
     getURL: (p: string) => p,
     onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
   },
-  tabs: { sendMessage: vi.fn() },
+  tabs: { sendMessage: vi.fn(), get: vi.fn() },
   storage: { local: { get: storageGet, set: storageSet, remove: vi.fn() } },
 } as any;
 
@@ -60,26 +130,76 @@ function cachedGroup(over: Record<string, any> = {}) {
 }
 
 /**
- * Serves the groups cache to the callback-style read and everything else (the
- * promise-style `RulesCache` read) to the promise form, so both callers work.
+ * The inverse of `toGroupSummary`: the snapshot stores raw Okta rows, so the
+ * `cachedGroup()` fixtures are converted rather than rewritten.
  */
-function seedCache(groups: Record<string, any>[]) {
-  const payload = { [GROUPS_CACHE_KEY]: JSON.stringify({ groups, timestamp: Date.now() }) };
-  storageGet.mockImplementation((keys: any, cb?: (r: any) => void) => {
-    const wantsGroups = Array.isArray(keys) ? keys.includes(GROUPS_CACHE_KEY) : false;
-    const result = wantsGroups ? payload : {};
-    if (typeof cb === 'function') return cb(result);
-    return Promise.resolve(result);
-  });
+function summaryToRaw(summary: Record<string, any>): Record<string, any> {
+  return {
+    id: summary.id,
+    type: summary.type ?? 'OKTA_GROUP',
+    profile: { name: summary.name, description: summary.description ?? null },
+    lastUpdated: summary.lastUpdated,
+    created: summary.created,
+    _embedded: { stats: { usersCount: summary.memberCount ?? 0 } },
+  };
 }
 
-function renderCached(groups: Record<string, any>[], props: Record<string, any> = {}) {
+/** Write `cachedGroup()`-shaped fixtures straight into the snapshot store. */
+function seedCache(groups: Record<string, any>[]) {
+  const table = new Map<string, any>();
+  for (const entity of groups.map(summaryToRaw)) {
+    table.set(`${ORIGIN}::${entity.id}`, { origin: ORIGIN, id: entity.id, entity, syncedAt: 1 });
+  }
+  idbTables.set('groups', table);
+  idbTables.set(
+    'syncMeta',
+    new Map([
+      [
+        `${ORIGIN}::groups`,
+        {
+          origin: ORIGIN,
+          collection: 'groups',
+          complete: true,
+          lastFullWalkAt: 1,
+          lastDeltaAt: null,
+          watermark: null,
+          itemCount: groups.length,
+          cursor: null,
+          walkStartedAt: null,
+          deltaSupported: null,
+        },
+      ],
+    ]),
+  );
+
+  const declared = new Map(groups.filter((g) => g.pushMappings).map((g) => [g.id, g]));
+  pushDouble.impl =
+    declared.size === 0
+      ? null
+      : async (rows: any[]) =>
+          rows.map((row) =>
+            declared.has(row.id)
+              ? { ...row, pushMappings: declared.get(row.id)!.pushMappings }
+              : row,
+          );
+}
+
+/**
+ * Seed the snapshot and render. Async where the storage-backed helper was
+ * synchronous — the snapshot read is a promise, so the first paint lands a
+ * microtask later.
+ */
+async function renderCached(groups: Record<string, any>[], props: Record<string, any> = {}) {
   seedCache(groups);
-  return render(<GroupsTab targetTabId={1} {...props} />);
+  const result = render(<GroupsTab targetTabId={1} oktaOrigin={ORIGIN} {...props} />);
+  await act(async () => {});
+  return result;
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  idbTables.clear();
+  pushDouble.impl = null;
   storageGet.mockImplementation((_keys: any, cb?: (r: any) => void) =>
     typeof cb === 'function' ? cb({}) : Promise.resolve({}),
   );
@@ -107,7 +227,7 @@ async function drillInto(uev: ReturnType<typeof userEvent.setup>, name: string) 
 describe('GroupsTab sub-navigation', () => {
   it('pushes a detail view and swaps the single header in place', async () => {
     const uev = userEvent.setup();
-    renderCached([cachedGroup()]);
+    await renderCached([cachedGroup()]);
 
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Groups');
 
@@ -121,7 +241,7 @@ describe('GroupsTab sub-navigation', () => {
 
   it('renders a breadcrumb trail back to the list', async () => {
     const uev = userEvent.setup();
-    renderCached([cachedGroup()]);
+    await renderCached([cachedGroup()]);
     await drillInto(uev, 'Engineering');
 
     const trail = within(screen.getByRole('navigation', { name: 'Breadcrumb' }));
@@ -134,7 +254,7 @@ describe('GroupsTab sub-navigation', () => {
 
   it('hides the list without unmounting it, so its state survives', async () => {
     const uev = userEvent.setup();
-    renderCached([cachedGroup()]);
+    await renderCached([cachedGroup()]);
 
     // Accumulate list state: select the row and expand it.
     await uev.click(screen.getByLabelText('Select Engineering'));
@@ -154,7 +274,7 @@ describe('GroupsTab sub-navigation', () => {
 
   it('keeps the filter query and its result set across a push/pop round trip', async () => {
     const uev = userEvent.setup();
-    renderCached([cachedGroup(), cachedGroup({ id: 'g2', name: 'Design' })]);
+    await renderCached([cachedGroup(), cachedGroup({ id: 'g2', name: 'Design' })]);
 
     const search = screen.getByPlaceholderText('Search by name, description, ID — or /regex/');
     await uev.type(search, 'Engin');
@@ -171,7 +291,7 @@ describe('GroupsTab sub-navigation', () => {
 
   it('moves focus into the pushed view and restores it to the row that opened it', async () => {
     const uev = userEvent.setup();
-    renderCached([cachedGroup()]);
+    await renderCached([cachedGroup()]);
 
     const trigger = await drillInto(uev, 'Engineering');
 
@@ -184,7 +304,7 @@ describe('GroupsTab sub-navigation', () => {
 
   it('restores the list scroll offset that display:none destroyed', async () => {
     const uev = userEvent.setup();
-    const { container } = renderCached([cachedGroup()]);
+    const { container } = await renderCached([cachedGroup()]);
 
     // jsdom has no layout, so give the scroll box a real, writable scrollTop.
     const scrollBox = container.querySelector('.scrollable-list') as HTMLElement;
@@ -202,7 +322,10 @@ describe('GroupsTab sub-navigation', () => {
     const uev = userEvent.setup();
     seedCache([cachedGroup()]);
     const onGroupSelected = vi.fn();
-    const { rerender } = render(<GroupsTab targetTabId={1} onGroupSelected={onGroupSelected} />);
+    const { rerender } = render(
+      <GroupsTab targetTabId={1} oktaOrigin={ORIGIN} onGroupSelected={onGroupSelected} />,
+    );
+    await act(async () => {});
 
     await drillInto(uev, 'Engineering');
     expect(screen.getByTestId('group-detail-view')).toBeInTheDocument();
@@ -210,7 +333,14 @@ describe('GroupsTab sub-navigation', () => {
     // RTL re-applies the render wrapper on rerender, so passing ProgressProvider
     // again would nest it — changing the element type tree, remounting GroupsTab
     // and losing the loaded list to an async cache rehydrate.
-    rerender(<GroupsTab targetTabId={1} selectedGroupId="g1" onGroupSelected={onGroupSelected} />);
+    rerender(
+      <GroupsTab
+        targetTabId={1}
+        oktaOrigin={ORIGIN}
+        selectedGroupId="g1"
+        onGroupSelected={onGroupSelected}
+      />,
+    );
 
     expect(screen.queryByTestId('group-detail-view')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Select Engineering').closest('div.hidden')).toBeNull();
@@ -218,7 +348,7 @@ describe('GroupsTab sub-navigation', () => {
 
   it('shows the group id, dates and push state in the detail view', async () => {
     const uev = userEvent.setup();
-    renderCached([
+    await renderCached([
       cachedGroup({
         pushMappings: [
           {
@@ -251,7 +381,7 @@ describe('GroupsTab sub-navigation', () => {
 
   it("runs the analysis straight away when the push came from a row's analyze action", async () => {
     const uev = userEvent.setup();
-    renderCached([cachedGroup()]);
+    await renderCached([cachedGroup()]);
 
     // The row never analyzes in place — it hands the job to the detail view, which
     // is the surface that can show the cost, the progress and a failure.
@@ -270,7 +400,7 @@ describe('GroupsTab sub-navigation', () => {
 
   it('does not analyze on a plain drill-in', async () => {
     const uev = userEvent.setup();
-    renderCached([cachedGroup()]);
+    await renderCached([cachedGroup()]);
 
     await drillInto(uev, 'Engineering');
 
