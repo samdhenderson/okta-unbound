@@ -46,6 +46,38 @@ Side panel (useOktaApi)  →  Background (ApiScheduler: rate limit, retry, backo
   reports `total/completed/active/failed` to the activity bar, and is cancellable.
   Prefer it over hand-rolled `for await` / `Promise.all` loops.
 
+## The org snapshot: background-owned inventory (ADR-0040)
+
+The pipeline above is a **request** path — the panel asks, the answer arrives, the
+panel forgets. Org-wide collections (groups, rules) run on a second path, where
+the background owns the data and the panel reads it:
+
+```
+Okta tab settles ─► snapshotScheduler ─► snapshotSync ─► ApiScheduler ('low') ─► content script ─► Okta
+                                              │
+                                              ▼
+                                     orgSnapshotStore (IndexedDB, keyed by origin)
+                                              │  snapshotUpdated broadcast (counts only)
+      Side panel (useOrgSnapshot) ◄────────────┘  reads rows back from IndexedDB
+```
+
+- **The background cannot fetch Okta.** Every request still exits through a
+  content script in a live Okta tab, so sync is _opportunistic_ — triggered by a
+  tab being available — never truly scheduled. `chrome.alarms` can only re-arm an
+  attempt; the attempt no-ops with no Okta tab open.
+- **Two message surfaces**, both validated exactly like `scheduleApiRequest`:
+  `syncSnapshot` (panel → background; rejected from tabs, and the claimed origin
+  is checked against the tab's live URL) and the `snapshotUpdated` broadcast,
+  which carries **counts only** — rows are always re-read from IndexedDB.
+- **Three sync modes** (`shared/snapshot/syncMeta.ts`): a full walk, a delta via
+  `search=lastUpdated gt`, and a one-request drift check comparing
+  `x-total-count` against the stored count. The pairing is the correctness
+  argument — a delta can never observe a _deletion_, so only the count
+  comparison catches one. A user-pressed Refresh always forces a full walk.
+- `useOrgSnapshot` is **not** built on `sidepanel/cache/entityCache`: that cache
+  is in-memory, session-scoped and panel-owned, which is the ownership this
+  replaces. The two coexist — `entityCache` still serves per-entity reads.
+
 ## The API client: `useOktaApi/`
 
 `src/sidepanel/hooks/useOktaApi/` is a factory decomposed into one module per concern
@@ -96,9 +128,12 @@ levels:
   has exactly one write and no reader; do not build on it without deciding sync
   semantics first (ADR-0033).
 - IndexedDB via `idb` — audit log (`shared/storage/auditStore.ts`), export presets
-  (`presetStore.ts`), and the per-org profile display config (`profileDisplayStore.ts`,
-  ADR-0033). All three follow one shape: a lazily-opened reused connection, a typed
+  (`presetStore.ts`), the per-org profile display config (`profileDisplayStore.ts`,
+  ADR-0033), and the org snapshot (`shared/snapshot/orgSnapshotStore.ts`,
+  ADR-0040). All follow one shape: a lazily-opened reused connection, a typed
   `DBSchema`, and a singleton export whose methods never throw at the caller.
+  The snapshot holds group/app/rule **metadata** only — no member lists, so the
+  largest and most personal collection in the org is deliberately absent.
 - Both are **plaintext**. No credentials or session material, minimal PII, TTL'd — see
   [security.md](./security.md).
 

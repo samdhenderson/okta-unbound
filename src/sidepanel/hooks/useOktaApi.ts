@@ -27,7 +27,6 @@ import { createProfileOperations } from './useOktaApi/profileOperations';
 import { createAppOperations } from './useOktaApi/appOperations';
 import { createPolicyOperations } from './useOktaApi/policyOperations';
 import { createExportEngineOperations } from './useOktaApi/exportEngine';
-import { createPushGroupOperations } from './useOktaApi/pushGroupOps';
 import { createGroupAnalysisOperations } from './useOktaApi/groupAnalysis';
 import { createRuleImpactOperations } from './useOktaApi/ruleImpact';
 import { createRuleWriteOperations } from './useOktaApi/ruleWrites';
@@ -173,7 +172,6 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
   const appOps = useMemo(() => createAppOperations(coreApi), [coreApi]);
   const policyOps = useMemo(() => createPolicyOperations(coreApi), [coreApi]);
   const exportEngineOps = useMemo(() => createExportEngineOperations(coreApi), [coreApi]);
-  const pushGroupOps = useMemo(() => createPushGroupOperations(coreApi), [coreApi]);
   const groupAnalysisOps = useMemo(
     () => createGroupAnalysisOperations(groupMemberOps.getAllGroupMembers),
     [groupMemberOps],
@@ -260,7 +258,6 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       resetPassword: userOps.resetPassword,
 
       // App operations (read-only: Applications tab)
-      getAllApps: appOps.getAllApps,
       getAppById: appOps.getAppById,
       getAppAssignmentCounts: appOps.getAppAssignmentCounts,
       // Fallback for naming an app's granting group when the
@@ -279,8 +276,6 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       runExport: exportEngineOps.runExport,
 
       // Push group operations
-      getAppPushGroupMappings: pushGroupOps.getAppPushGroupMappings,
-      applyPushGroupMappings: pushGroupOps.applyPushGroupMappings,
 
       // Group analysis operations
       compareGroups: groupAnalysisOps.compareGroups,
@@ -309,7 +304,6 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       appOps,
       policyOps,
       exportEngineOps,
-      pushGroupOps,
       groupAnalysisOps,
       ruleImpactOps,
       ruleWriteOps,

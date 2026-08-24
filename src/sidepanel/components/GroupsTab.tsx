@@ -149,10 +149,12 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
 
   const liveSearch = useGroupLiveSearch({ targetTabId, searchMode, setError, enabled: isActive });
   const loader = useGroupsLoader({
-    api,
+    targetTabId,
+    oktaOrigin,
     setError,
     setSearchMode,
     onLoaded: liveSearch.resetLiveSearch,
+    enabled: isActive,
   });
   const filters = useGroupFilters({
     groups: loader.groups,
@@ -335,14 +337,19 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
           ) : searchMode === 'live' ? (
             <Button
               variant="primary"
-              onClick={loadAllGroups}
+              onClick={() => void loadAllGroups()}
               disabled={loading || !targetTabId}
               loading={loading}
             >
               Load All Groups
             </Button>
           ) : (
-            <Button variant="secondary" icon="refresh" onClick={loadAllGroups} loading={loading}>
+            <Button
+              variant="secondary"
+              icon="refresh"
+              onClick={() => void loadAllGroups(true)}
+              loading={loading}
+            >
               Refresh
             </Button>
           )
@@ -472,6 +479,23 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
                 onDismiss={() => setError(null)}
               />
             )}
+
+            {/*
+              A walk that did not reach its last page leaves a genuine prefix of
+              the org in the snapshot, and those rows are real and worth showing —
+              but a prefix rendered with no caveat reads as the whole org, which
+              is the failure ADR-0040 §7 forbids. Shown whenever the snapshot has
+              rows it cannot vouch for as complete, and it clears itself when a
+              later walk finishes.
+            */}
+            {!loader.complete && groups.length > 0 && !loading && (
+              <AlertMessage
+                message={{
+                  text: `Showing ${groups.length} groups — the last load did not finish, so this is part of the org, not all of it. Refresh to complete it.`,
+                  type: 'warning',
+                }}
+              />
+            )}
           </div>
 
           {/* Scrollable Group List */}
@@ -486,7 +510,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
             selectedGroupIds={selectedGroupIds}
             onToggleSelect={selection.toggleSelect}
             oktaOrigin={oktaOrigin}
-            onLoadAllGroups={loadAllGroups}
+            onLoadAllGroups={() => void loadAllGroups()}
             onClearFilters={filters.clearFilters}
             onOpenDetail={handleOpenDetail}
             onAnalyzeSource={handleAnalyzeSource}

@@ -186,6 +186,8 @@ export interface UseUsersTabProfileEditOptions {
   memberships: GroupMembership[];
   /** The org's rule inventory, three-state. `unresolved` predicts nothing at all. */
   rules: RuleInventoryState;
+  /** Connected org origin, so the blast-radius report can label group ids. */
+  oktaOrigin?: string | null;
   /**
    * Which profile sources are attached to the user, as `useUserDetailPanes`
    * resolved them. Decides whether an org-wide `PROFILE_MASTER` attribute is
@@ -244,9 +246,10 @@ export function useUsersTabProfileEdit({
   enabled,
   onUserUpdated,
   onResult,
+  oktaOrigin,
 }: UseUsersTabProfileEditOptions): UserProfileEditing {
   const edit = useProfileEdit({ user, attributes, targetTabId, onUserUpdated, enabled, mastering });
-  const blast = useBlastRadius({ user, memberships, rules });
+  const blast = useBlastRadius({ user, memberships, rules, oktaOrigin });
   const { undo } = useUndoAction({ targetTabId });
   const { getUserRaw } = useOktaApi({ targetTabId: targetTabId ?? null });
 

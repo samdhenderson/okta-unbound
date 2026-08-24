@@ -41,6 +41,29 @@ export function isOktaUrl(url: string | null | undefined): boolean {
   return OKTA_DOMAINS.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
 }
 
+/**
+ * The Okta org origin a URL belongs to.
+ *
+ * The counterpart to {@link isOktaUrl} for callers that need the origin itself —
+ * the key the org snapshot is scoped by (ADR-0040). Same parsing rules, so a
+ * caller never has to slice an origin out of a URL string by hand.
+ *
+ * @param url - The URL to read, or nullish.
+ * @returns The `https://host` origin when the URL is an Okta org, else `null`.
+ *
+ * @example
+ * oktaOriginOf('https://acme.okta.com/admin/groups'); // => 'https://acme.okta.com'
+ * oktaOriginOf('https://okta.com.evil.com/'); // => null
+ */
+export function oktaOriginOf(url: string | null | undefined): string | null {
+  if (!isOktaUrl(url)) return null;
+  try {
+    return new URL(url as string).origin;
+  } catch {
+    return null;
+  }
+}
+
 /** Entity kinds that have an Okta Admin Console deep link. */
 export type OktaAdminEntityType = 'group' | 'user' | 'app';
 

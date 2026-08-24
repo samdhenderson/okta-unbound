@@ -193,6 +193,8 @@ export interface UseComparisonProfileEditOptions {
   readonly onComparedUserUpdated: (user: OktaUser) => void;
   /** The org rule inventory, three-state, shared by both columns' predictions. */
   readonly rules: RuleInventoryState;
+  /** Connected org origin, so the blast-radius report can label group ids. */
+  readonly oktaOrigin?: string | null;
   /** Tab whose scheduler runs the writes. */
   readonly targetTabId: number | undefined;
   /**
@@ -222,6 +224,7 @@ interface SideOptions {
   readonly memberships: readonly GroupMembership[];
   readonly onUserUpdated?: (user: OktaUser) => void;
   readonly rules: RuleInventoryState;
+  readonly oktaOrigin?: string | null;
   readonly targetTabId: number | undefined;
   readonly enabled: boolean;
 }
@@ -253,6 +256,7 @@ function useComparisonEditSide({
   memberships,
   onUserUpdated,
   rules,
+  oktaOrigin,
   targetTabId,
   enabled,
 }: SideOptions): SideResult {
@@ -271,7 +275,7 @@ function useComparisonEditSide({
     enabled: enabled && canPublish,
   });
 
-  const blast = useBlastRadius({ user, memberships, rules });
+  const blast = useBlastRadius({ user, memberships, rules, oktaOrigin });
 
   const { draftPatch, requestSave, dismissSave, confirmSave, begin, cancel } = edit;
   const { analyze, reset: resetBlast } = blast;
@@ -447,6 +451,7 @@ export function useComparisonProfileEdit({
   comparedMemberships,
   onComparedUserUpdated,
   rules,
+  oktaOrigin,
   targetTabId,
   enabled,
 }: UseComparisonProfileEditOptions): UseComparisonProfileEditReturn {
@@ -459,6 +464,7 @@ export function useComparisonProfileEdit({
     memberships: contextMemberships,
     ...(onContextUserUpdated === undefined ? {} : { onUserUpdated: onContextUserUpdated }),
     rules,
+    oktaOrigin,
     targetTabId,
     enabled,
   });
@@ -472,6 +478,7 @@ export function useComparisonProfileEdit({
     memberships: comparedMemberships,
     onUserUpdated: onComparedUserUpdated,
     rules,
+    oktaOrigin,
     targetTabId,
     enabled,
   });

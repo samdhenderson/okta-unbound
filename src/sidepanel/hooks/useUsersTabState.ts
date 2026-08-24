@@ -569,6 +569,7 @@ export function useUsersTabState({
     attributes: panes.attributes,
     memberships,
     rules,
+    oktaOrigin,
     mastering: panes.mastering,
     targetTabId,
     enabled: isActive && panes.pane === 'profile',

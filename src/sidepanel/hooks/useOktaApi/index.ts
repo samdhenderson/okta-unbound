@@ -22,7 +22,6 @@ export { createProfileOperations } from './profileOperations';
 export { createAppOperations } from './appOperations';
 export { createPolicyOperations, OKTA_POLICY_TYPES, type OktaPolicyType } from './policyOperations';
 export { createExportEngineOperations } from './exportEngine';
-export { createPushGroupOperations } from './pushGroupOps';
 export { createGroupAnalysisOperations } from './groupAnalysis';
 export { createRuleImpactOperations } from './ruleImpact';
 export { createRuleWriteOperations } from './ruleWrites';

@@ -116,6 +116,9 @@ beforeEach(async () => {
     action: { onClicked: { addListener: vi.fn() } },
     contextMenus: { create: vi.fn(), onClicked: { addListener: vi.fn() } },
     alarms: { create: vi.fn(), onAlarm: { addListener: vi.fn() } },
+    // The org snapshot's trigger policy registers a tab listener at module load
+    // (ADR-0040); its behaviour is pinned in `snapshotScheduler.test.ts`.
+    tabs: { onUpdated: { addListener: vi.fn() }, query: vi.fn(async () => []) },
     storage: { sync: { set: vi.fn() } },
     notifications: { create: vi.fn() },
     sidePanel: { open: vi.fn() },

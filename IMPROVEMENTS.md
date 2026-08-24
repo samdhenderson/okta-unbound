@@ -291,3 +291,42 @@ Format:
   for an accessible name — the name text is already in the accessibility
   tree, so this is about the visual reader.
 - **Status:** open
+
+### I-012 · Tiered snapshot depth, and the reporting it unlocks
+
+- **Category:** feature-completeness
+- **Priority:** P2
+- **Size:** L
+- **Files:** `docs/adr/0040-the-background-owns-the-org.md`,
+  `src/shared/snapshot/snapshotSync.ts` (the `CollectionSpec` /
+  `ShardProvider` model), `src/shared/snapshot/types.ts`,
+  `src/sidepanel/components/OverviewTab.tsx`
+- **Problem:** ADR-0040 gave the org one background-owned store, and the
+  collection model has since grown from "one paginated listing" to "a
+  fan-out derived from another collection" (`appGroups`). Nothing yet says
+  **how far** an org's snapshot should go, or lets an admin choose. Depth is
+  currently an implicit constant — the four collections that happen to be
+  wired — so every richer question ("which groups have no rule feeding
+  them?", "which app-sourced groups point at a deleted app?", "which rules
+  can never match?") is either free or impossible, with nothing in between
+  and no way to opt into more.
+
+  The point of naming depth is what it unlocks: with the right collections
+  local and fresh, the Overview stops being a set of buttons that each cost
+  a walk and becomes a report that is already computed — including
+  **recommended org actions**, which need breadth (several collections
+  joined) far more than they need any single expensive call.
+
+- **Done when:** A written, reviewed proposal exists (an ADR-0040 amendment
+  or its own ADR) defining named depth levels, what each level walks, what
+  each level makes answerable, and how an admin moves between them. It must
+  state the cost of each level in requests and in stored rows, and how a
+  level interacts with `refreshIntervalMs` and the retention rules in
+  `docs/security.md` — depth is the axis along which a snapshot stops being
+  "org metadata" and starts being a copy of the directory. No code lands
+  under this item until Sam signs the proposal off (plan-and-approval gate,
+  ADR-0024).
+- **Risk:** Medium — the design commits the storage schema and the sync
+  budget to a shape that later levels have to live inside. Deliberately
+  research-only until reviewed.
+- **Status:** open

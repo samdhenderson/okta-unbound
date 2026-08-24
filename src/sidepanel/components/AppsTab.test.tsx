@@ -5,6 +5,12 @@
  * these assertions target AppsTab's own orchestration — the auto-load, the search
  * and status filtering, the error banner, and the two empty states — rather than
  * the scheduler transport, which `useOktaApi/appOperations.test.ts` already covers.
+ *
+ * RETARGETED for ADR-0040: the inventory now arrives from the background-owned
+ * org snapshot rather than from `getAllApps`, so the seam these drive is the
+ * `syncSnapshot` message and the IndexedDB store. Every assertion about what the
+ * tab *does* with an inventory — filter it, empty-state it, banner a failure —
+ * is unchanged.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -14,7 +20,6 @@ import AppsTab from './AppsTab';
 import type { OktaAppListItem } from '../../shared/schemas/okta';
 
 const api = vi.hoisted(() => ({
-  getAllApps: vi.fn(),
   getAppAssignmentCounts: vi.fn(),
   isLoading: false,
 }));
@@ -22,6 +27,83 @@ const api = vi.hoisted(() => ({
 vi.mock('../hooks/useOktaApi', () => ({
   useOktaApi: () => api,
 }));
+
+// ---------------------------------------------------------------------------
+// IndexedDB fake
+// ---------------------------------------------------------------------------
+// jsdom has no IndexedDB and `fake-indexeddb` is not a dependency, so `idb` is
+// faked with a Map, as `shared/snapshot/orgSnapshotStore.test.ts` does.
+const { fakeDB, idbTables } = vi.hoisted(() => {
+  const idbTables = new Map<string, Map<string, any>>();
+  const keyOf = (key: unknown) => (Array.isArray(key) ? key.join('::') : String(key));
+  const table = (name: string) => {
+    if (!idbTables.has(name)) idbTables.set(name, new Map());
+    return idbTables.get(name)!;
+  };
+  const fakeDB = {
+    get: async (name: string, key: unknown) => table(name).get(keyOf(key)),
+    put: async () => {},
+    delete: async () => {},
+    getAllFromIndex: async (name: string, _i: string, origin: string) =>
+      [...table(name).values()].filter((v) => v.origin === origin),
+    getAllKeysFromIndex: async () => [],
+    transaction: () => ({
+      store: { put: async () => {}, delete: async () => {} },
+      done: Promise.resolve(),
+    }),
+  };
+  return { fakeDB, idbTables };
+});
+
+vi.mock('idb', () => ({ openDB: vi.fn(async () => fakeDB) }));
+
+/** The org every render targets; the snapshot is scoped by origin. */
+const ORIGIN = 'https://example.okta.com';
+
+const sendMessage = vi.fn();
+
+globalThis.chrome = {
+  runtime: {
+    sendMessage,
+    onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+  },
+} as unknown as typeof chrome;
+
+/** Write app rows into the snapshot, as a completed background walk would. */
+function seedApps(apps: OktaAppListItem[], origin = ORIGIN) {
+  const table = new Map<string, any>();
+  for (const entity of apps) {
+    table.set(`${origin}::${entity.id}`, { origin, id: entity.id, entity, syncedAt: 1 });
+  }
+  idbTables.set('apps', table);
+  idbTables.set(
+    'syncMeta',
+    new Map([
+      [
+        `${origin}::apps`,
+        {
+          origin,
+          collection: 'apps',
+          complete: true,
+          lastFullWalkAt: 1,
+          lastDeltaAt: null,
+          watermark: null,
+          itemCount: apps.length,
+          cursor: null,
+          walkStartedAt: null,
+          deltaSupported: null,
+        },
+      ],
+    ]),
+  );
+}
+
+/** The `syncSnapshot` messages the panel sent to the background. */
+function syncCalls() {
+  return sendMessage.mock.calls
+    .map((call) => call[0])
+    .filter((msg) => msg?.action === 'syncSnapshot');
+}
 
 const SAMPLE_APPS: OktaAppListItem[] = [
   {
@@ -44,8 +126,14 @@ const SAMPLE_APPS: OktaAppListItem[] = [
 
 beforeEach(() => {
   vi.clearAllMocks();
-  api.getAllApps.mockResolvedValue(SAMPLE_APPS);
+  idbTables.clear();
   api.getAppAssignmentCounts.mockResolvedValue({ users: 12, groups: 3 });
+  // The background's default: a walk that succeeds and fills the store.
+  sendMessage.mockImplementation(async (msg: { action?: string; origin?: string }) => {
+    if (msg?.action !== 'syncSnapshot') return undefined;
+    seedApps(SAMPLE_APPS, msg.origin);
+    return { success: true };
+  });
 });
 
 /** Resolve a never-settling promise on demand, to observe the loading state. */
@@ -59,23 +147,24 @@ function deferred<T>() {
 
 describe('AppsTab', () => {
   it('shows the loading state, then renders the loaded apps', async () => {
-    const gate = deferred<OktaAppListItem[]>();
-    api.getAllApps.mockReturnValue(gate.promise);
+    const gate = deferred<{ success: boolean }>();
+    sendMessage.mockReturnValue(gate.promise);
 
-    render(<AppsTab targetTabId={1} oktaOrigin="https://example.okta.com" />);
+    render(<AppsTab targetTabId={1} oktaOrigin={ORIGIN} />);
 
     expect(await screen.findByText('Loading applications from Okta...')).toBeInTheDocument();
 
-    gate.resolve(SAMPLE_APPS);
+    seedApps(SAMPLE_APPS);
+    gate.resolve({ success: true });
 
     expect(await screen.findByText('Salesforce')).toBeInTheDocument();
     expect(screen.getByText('Workday HR')).toBeInTheDocument();
-    expect(api.getAllApps).toHaveBeenCalledTimes(1);
+    expect(syncCalls()).toHaveLength(1);
   });
 
   it('filters the list by the search query', async () => {
     const user = userEvent.setup();
-    render(<AppsTab targetTabId={1} />);
+    render(<AppsTab targetTabId={1} oktaOrigin={ORIGIN} />);
 
     expect(await screen.findByText('Salesforce')).toBeInTheDocument();
 
@@ -87,7 +176,7 @@ describe('AppsTab', () => {
 
   it('filters the list by the status bucket', async () => {
     const user = userEvent.setup();
-    render(<AppsTab targetTabId={1} />);
+    render(<AppsTab targetTabId={1} oktaOrigin={ORIGIN} />);
 
     expect(await screen.findByText('Salesforce')).toBeInTheDocument();
 
@@ -100,7 +189,7 @@ describe('AppsTab', () => {
 
   it('shows the no-matches empty state and clears the filters', async () => {
     const user = userEvent.setup();
-    render(<AppsTab targetTabId={1} />);
+    render(<AppsTab targetTabId={1} oktaOrigin={ORIGIN} />);
 
     expect(await screen.findByText('Salesforce')).toBeInTheDocument();
 
@@ -114,9 +203,9 @@ describe('AppsTab', () => {
   });
 
   it('shows the nothing-loaded empty state for an org with no apps', async () => {
-    api.getAllApps.mockResolvedValue([]);
+    sendMessage.mockResolvedValue({ success: true });
 
-    render(<AppsTab targetTabId={1} />);
+    render(<AppsTab targetTabId={1} oktaOrigin={ORIGIN} />);
 
     expect(await screen.findByText('No applications loaded')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Load applications' })).toBeInTheDocument();
@@ -124,9 +213,9 @@ describe('AppsTab', () => {
 
   it('banners a load failure as a dismissible danger alert', async () => {
     const user = userEvent.setup();
-    api.getAllApps.mockRejectedValue(new Error('Failed to fetch apps'));
+    sendMessage.mockResolvedValue({ success: false, error: 'Failed to fetch apps' });
 
-    render(<AppsTab targetTabId={1} />);
+    render(<AppsTab targetTabId={1} oktaOrigin={ORIGIN} />);
 
     const alert = await screen.findByRole('alert');
     expect(within(alert).getByText('Failed to fetch apps')).toBeInTheDocument();
@@ -137,10 +226,10 @@ describe('AppsTab', () => {
   });
 
   it('does not load when no Okta tab is connected', async () => {
-    render(<AppsTab targetTabId={null} />);
+    render(<AppsTab targetTabId={null} oktaOrigin={ORIGIN} />);
 
     expect(await screen.findByText('No applications loaded')).toBeInTheDocument();
-    expect(api.getAllApps).not.toHaveBeenCalled();
+    expect(syncCalls()).toHaveLength(0);
     expect(screen.getByRole('button', { name: /Refresh/ })).toBeDisabled();
   });
 
@@ -148,12 +237,12 @@ describe('AppsTab', () => {
     // App keeps every visited tab mounted and hides the inactive ones. Paging the
     // whole app inventory from a tab nobody is looking at is exactly the
     // background traffic that must not happen.
-    const { rerender } = render(<AppsTab targetTabId={1} isActive={false} />);
+    const { rerender } = render(<AppsTab targetTabId={1} oktaOrigin={ORIGIN} isActive={false} />);
 
-    await waitFor(() => expect(api.getAllApps).not.toHaveBeenCalled());
+    await waitFor(() => expect(syncCalls()).toHaveLength(0));
 
-    rerender(<AppsTab targetTabId={1} isActive />);
+    rerender(<AppsTab targetTabId={1} oktaOrigin={ORIGIN} isActive />);
     expect(await screen.findByText('Salesforce')).toBeInTheDocument();
-    expect(api.getAllApps).toHaveBeenCalledTimes(1);
+    expect(syncCalls()).toHaveLength(1);
   });
 });

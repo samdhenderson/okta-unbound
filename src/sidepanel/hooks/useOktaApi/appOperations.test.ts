@@ -5,9 +5,9 @@
  * Drives `searchApps` through a fully-mocked `CoreApi`, asserting the request
  * shape, the `label || name || id` fallback, the short-query and error
  * short-circuits, and that malformed rows are dropped by boundary validation.
- * Also covers the Applications-tab reads: `getAllApps` (pagination + lenient
- * validation), `getAppById`, `getAppAssignmentCounts`, and the
- * `getAppGroupAssignments` fallback (pagination, `[]` vs `null`, lenient rows).
+ * Also covers the Applications-tab reads: `getAppById` (lenient validation),
+ * `getAppAssignmentCounts`, and the `getAppGroupAssignments` fallback
+ * (pagination, `[]` vs `null`, lenient rows).
  * Fixtures use fake placeholders (`0oaFAKE…`) per CLAUDE.md.
  */
 import { describe, it, expect, vi } from 'vitest';
@@ -86,59 +86,13 @@ describe('searchApps', () => {
   });
 });
 
-describe('getAllApps', () => {
-  it('walks every page via the Link header and returns all validated apps', async () => {
-    const makeApiRequest = vi
-      .fn()
-      .mockResolvedValueOnce({
-        success: true,
-        data: [{ id: '0oaFAKE1', label: 'Salesforce', status: 'ACTIVE' }],
-        headers: { link: '<https://example.okta.com/api/v1/apps?after=1&limit=200>; rel="next"' },
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        data: [{ id: '0oaFAKE2', label: 'Zoom' }],
-        headers: {},
-      });
-    const core = makeCore({ makeApiRequest });
-    const { getAllApps } = createAppOperations(core);
-
-    const apps = await getAllApps();
-
-    expect(makeApiRequest.mock.calls[0][0]).toBe('/api/v1/apps?limit=200');
-    expect(makeApiRequest.mock.calls[1][0]).toBe('/api/v1/apps?after=1&limit=200');
-    expect(apps.map((a) => a.id)).toEqual(['0oaFAKE1', '0oaFAKE2']);
-  });
-
-  it('drops a malformed row (missing id) but keeps the rest of the page', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const core = makeCore({
-      makeApiRequest: vi.fn().mockResolvedValue({
-        success: true,
-        data: [{ label: 'no id' }, { id: '0oaFAKE9', label: 'Good', orgExtra: 'kept' }],
-        headers: {},
-      }),
-    });
-    const { getAllApps } = createAppOperations(core);
-
-    const apps = await getAllApps();
-
-    expect(apps).toHaveLength(1);
-    expect(apps[0].id).toBe('0oaFAKE9');
-    // passthrough keeps org-specific extras rather than stripping them.
-    expect((apps[0] as Record<string, unknown>).orgExtra).toBe('kept');
-    vi.restoreAllMocks();
-  });
-
-  it('throws on a failed page (mirrors getAllGroups — a truncated inventory must not look complete)', async () => {
-    const core = makeCore({
-      makeApiRequest: vi.fn().mockResolvedValue({ success: false, error: 'boom' }),
-    });
-    const { getAllApps } = createAppOperations(core);
-
-    await expect(getAllApps()).rejects.toThrow('boom');
-  });
-});
+// REMOVED (ADR-0022, "the subject was deleted"): the three `getAllApps` cases —
+// Link-header pagination, lenient row dropping, and throwing on a failed page —
+// went with the operation itself. ADR-0040 moved the app inventory to the
+// background-owned snapshot, and `shared/snapshot/snapshotSync.test.ts` pins the
+// same three properties on the walk that replaced it: pages accumulate, malformed
+// rows drop rather than fail the walk, and a failed page leaves the collection
+// marked incomplete instead of passing a prefix off as the org.
 
 describe('getAppById', () => {
   it('fetches one app and returns the validated entity', async () => {

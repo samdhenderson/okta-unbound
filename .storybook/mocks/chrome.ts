@@ -106,13 +106,40 @@ function respondToTabAction(message?: { action?: string }): unknown {
   }
 }
 
+/**
+ * How the fake answers `syncSnapshot` (ADR-0040).
+ *
+ * Snapshot-backed tabs read their rows from IndexedDB — which a story seeds
+ * directly through `orgSnapshotStore` — but they still *ask* the background to
+ * sync, and the answer decides whether the tab shows its content, its spinner or
+ * its error banner. A story overrides this to stage the latter two; everything
+ * else gets a plain success.
+ */
+let syncSnapshotResponder: () => Promise<unknown> = async () => ({ success: true });
+
+/**
+ * Stage the background's answer to the next `syncSnapshot` requests.
+ *
+ * @param responder - Returns the response; a never-settling promise stages the
+ * loading state, and `{ success: false, error }` stages the banner.
+ */
+export function setSyncSnapshotResponder(responder: () => Promise<unknown>): void {
+  syncSnapshotResponder = responder;
+}
+
+/** Restore the default "the walk succeeded" answer. */
+export function resetSyncSnapshotResponder(): void {
+  syncSnapshotResponder = async () => ({ success: true });
+}
+
 const chromeFake = {
   runtime: {
     // Scheduler/provider round-trips resolve to a benign, well-formed payload.
     // (Reads that route through the scheduler are answered by the mocked
     // `useOktaApi` facade — see mocks/useOktaApi.mock.ts — not this fake, because
     // Storybook aliases the facade module.)
-    sendMessage: (_message?: any) => Promise.resolve({ ok: true }),
+    sendMessage: (message?: any) =>
+      message?.action === 'syncSnapshot' ? syncSnapshotResponder() : Promise.resolve({ ok: true }),
     onMessage: listenerSlot,
     getURL: (path: string) => `chrome-extension://storybook-mock/${path}`,
     lastError: undefined as unknown,

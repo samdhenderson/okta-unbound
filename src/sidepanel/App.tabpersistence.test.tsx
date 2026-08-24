@@ -21,11 +21,62 @@ import userEvent from '@testing-library/user-event';
 import App from './App';
 import { ProgressProvider } from './contexts/ProgressContext';
 
-const GROUPS_CACHE_KEY = 'okta_unbound_groups_cache';
+/** The org the panel resolves; the snapshot is scoped by it. */
+const ORIGIN = 'https://example.okta.com';
+
+// ---------------------------------------------------------------------------
+// IndexedDB fake
+// ---------------------------------------------------------------------------
+// The Groups list comes from the background-owned org snapshot (ADR-0040), which
+// is IndexedDB-backed. jsdom has no IndexedDB and `fake-indexeddb` is not a
+// dependency, so `idb` is faked with a Map, as `GroupsTab.test.tsx` does.
+// `collectionReads` is what replaces the `chrome.storage.local` read counter the
+// "does not re-run the cache read on return" case used to assert against.
+const { fakeDB, idbTables, collectionReads } = vi.hoisted(() => {
+  const idbTables = new Map<string, Map<string, any>>();
+  const collectionReads: string[] = [];
+  const keyOf = (key: unknown) => (Array.isArray(key) ? key.join('::') : String(key));
+  const table = (name: string) => {
+    if (!idbTables.has(name)) idbTables.set(name, new Map());
+    return idbTables.get(name)!;
+  };
+  const pk = (name: string, value: any) =>
+    name === 'syncMeta' ? [value.origin, value.collection] : [value.origin, value.id];
+  const fakeDB = {
+    get: async (name: string, key: unknown) => table(name).get(keyOf(key)),
+    put: async (name: string, value: any) => {
+      table(name).set(keyOf(pk(name, value)), value);
+    },
+    delete: async (name: string, key: unknown) => {
+      table(name).delete(keyOf(key));
+    },
+    getAllFromIndex: async (name: string, _i: string, origin: string) => {
+      collectionReads.push(name);
+      return [...table(name).values()].filter((v) => v.origin === origin);
+    },
+    getAllKeysFromIndex: async (name: string, _i: string, origin: string) =>
+      [...table(name).values()].filter((v) => v.origin === origin).map((v) => pk(name, v)),
+    transaction: (name: string) => ({
+      store: {
+        put: async (value: any) => {
+          table(name).set(keyOf(pk(name, value)), value);
+        },
+        delete: async (key: unknown) => {
+          table(name).delete(keyOf(key));
+        },
+      },
+      done: Promise.resolve(),
+    }),
+  };
+  return { fakeDB, idbTables, collectionReads };
+});
+
+vi.mock('idb', () => ({ openDB: vi.fn(async () => fakeDB) }));
+
 const OKTA_TAB = {
   id: 1,
   active: true,
-  url: 'https://example.okta.com/admin/groups',
+  url: `${ORIGIN}/admin/groups`,
   windowId: 1,
 };
 
@@ -51,25 +102,47 @@ function cachedGroup(over: Record<string, unknown> = {}) {
   };
 }
 
-/**
- * Serve the groups cache to the callback-style read and `{}` to everything else
- * (the persisted tab id, the pinned context, the promise-style RulesCache read),
- * so both calling conventions work.
- */
-function seedGroupsCache(groups: Record<string, unknown>[]) {
-  const payload = {
-    [GROUPS_CACHE_KEY]: JSON.stringify({ groups, timestamp: Date.now() }),
-  };
-  storageGet.mockImplementation((keys: unknown, cb?: (r: unknown) => void) => {
-    const wantsGroups = Array.isArray(keys) && keys.includes(GROUPS_CACHE_KEY);
-    const result = wantsGroups ? payload : {};
-    if (typeof cb === 'function') return cb(result);
-    return Promise.resolve(result);
-  });
+/** Write `cachedGroup()`-shaped fixtures into the snapshot the Groups tab reads. */
+function seedGroupsCache(groups: Record<string, any>[]) {
+  const table = new Map<string, unknown>();
+  for (const summary of groups) {
+    const entity = {
+      id: summary.id,
+      type: summary.type ?? 'OKTA_GROUP',
+      profile: { name: summary.name, description: summary.description ?? null },
+      lastUpdated: summary.lastUpdated,
+      created: summary.created,
+      _embedded: { stats: { usersCount: summary.memberCount ?? 0 } },
+    };
+    table.set(`${ORIGIN}::${entity.id}`, { origin: ORIGIN, id: entity.id, entity, syncedAt: 1 });
+  }
+  idbTables.set('groups', table);
+  idbTables.set(
+    'syncMeta',
+    new Map([
+      [
+        `${ORIGIN}::groups`,
+        {
+          origin: ORIGIN,
+          collection: 'groups',
+          complete: true,
+          lastFullWalkAt: 1,
+          lastDeltaAt: null,
+          watermark: null,
+          itemCount: groups.length,
+          cursor: null,
+          walkStartedAt: null,
+          deltaSupported: null,
+        },
+      ],
+    ]),
+  );
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  idbTables.clear();
+  collectionReads.length = 0;
 
   globalThis.chrome = {
     runtime: {
@@ -99,7 +172,7 @@ beforeEach(() => {
   // The side panel is on an Okta *group* page, so the panel resolves an origin
   // and a target tab id without any of the tabs having to ask for one.
   tabsSendMessage.mockImplementation(async (_tabId: number, msg: { action: string }) => {
-    if (msg.action === 'getOktaOrigin') return { success: true, data: 'https://example.okta.com' };
+    if (msg.action === 'getOktaOrigin') return { success: true, data: ORIGIN };
     return { success: false };
   });
 
@@ -170,8 +243,19 @@ function scrollTo(node: HTMLElement, top: number) {
 }
 
 /** How many `/api/v1/apps` reads the panel has issued through the scheduler. */
-const appCalls = () =>
-  runtimeSendMessage.mock.calls.filter(([m]) => String(m?.endpoint ?? '').includes('/apps')).length;
+/**
+ * The `syncSnapshot` requests the panel made, newest last.
+ *
+ * RETARGETED for ADR-0040: the Applications inventory is no longer paged by the
+ * panel, so there is no `/apps` scheduler message to count. What the panel still
+ * decides — and what these cases are about — is *whether it asks at all*.
+ */
+const syncMessages = () =>
+  runtimeSendMessage.mock.calls
+    .map(([m]) => m)
+    .filter((m) => m?.action === 'syncSnapshot') as Array<{ origin?: string }>;
+
+const appCalls = () => syncMessages().length;
 
 /**
  * Point the panel at a different Okta tab, optionally on a different org, and wait
@@ -276,20 +360,16 @@ describe('App tab lifetime', () => {
 
     await openTab(uev, 'Groups');
     await groupRow('Engineering');
-    const cacheReads = storageGet.mock.calls.filter(
-      ([keys]) => Array.isArray(keys) && keys.includes(GROUPS_CACHE_KEY),
-    ).length;
+    // RETARGETED (ADR-0040): the rehydrate now reads the snapshot rather than
+    // `chrome.storage.local`, so the read being counted is the IndexedDB one.
+    const cacheReads = collectionReads.filter((name) => name === 'groups').length;
     expect(cacheReads).toBe(1);
 
     await openTab(uev, 'Apps');
     await openTab(uev, 'Groups');
 
-    // A remount would rehydrate from storage all over again; a hidden tab does not.
-    expect(
-      storageGet.mock.calls.filter(
-        ([keys]) => Array.isArray(keys) && keys.includes(GROUPS_CACHE_KEY),
-      ),
-    ).toHaveLength(cacheReads);
+    // A remount would rehydrate all over again; a hidden tab does not.
+    expect(collectionReads.filter((name) => name === 'groups')).toHaveLength(cacheReads);
   });
 
   it("restores each tab's own scroll offset on return, not the offset it was left at", async () => {
@@ -348,12 +428,15 @@ describe('App tab lifetime', () => {
     await retargetTo({ id: 2 });
     expect(appCalls()).toBe(before);
 
-    // Showing the tab pays the owed load — and it is served from the entity cache,
-    // because the inventory is keyed by org origin and this is the same org. The
-    // re-target changed which Chrome tab the panel talks to, not what it would find.
+    // Showing the tab pays the owed load. RETARGETED (ADR-0040): it used to be
+    // asserted as "costs no request", because the panel owned the cache and could
+    // see the hit. The panel now always asks and the background's freshness
+    // ladder decides — for this same-org re-target, a drift check or nothing at
+    // all. That the ask is cheap is `shared/snapshot/snapshotSync.test.ts`'s to
+    // pin; that it is the SAME org being asked about is this one's.
     await openTab(uev, 'Apps');
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    expect(appCalls()).toBe(before);
+    await waitFor(() => expect(appCalls()).toBe(before + 1));
+    expect(syncMessages().at(-1)?.origin).toBe(ORIGIN);
   });
 
   it('re-fetches the inventory when the connected tab moves to a different org', async () => {
@@ -368,15 +451,16 @@ describe('App tab lifetime', () => {
     await groupRow('Engineering');
     const before = appCalls();
 
-    // A different org is a cache miss by construction — the inventory is keyed by
-    // origin precisely so one org's apps can never be served for another's.
+    // A different org is a different snapshot by construction — rows are scoped
+    // by origin precisely so one org's apps can never be served for another's.
     await retargetTo({ id: 2, origin: 'https://other.okta.com' });
 
     // Still inert while hidden: deferred, not dropped.
     expect(appCalls()).toBe(before);
 
-    // …and paid on the next show, this time with a real request.
+    // …and paid on the next show, against the new org.
     await openTab(uev, 'Apps');
     await waitFor(() => expect(appCalls()).toBe(before + 1));
+    expect(syncMessages().at(-1)?.origin).toBe('https://other.okta.com');
   });
 });
