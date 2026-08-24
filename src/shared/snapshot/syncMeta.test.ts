@@ -134,8 +134,39 @@ describe('nextSyncMode', () => {
     expect(nextSyncMode(complete(NOW, { complete: false }), NOW)).toBe('full');
   });
 
-  it('full-walks an org probed as not honouring the delta filter', () => {
-    expect(nextSyncMode(complete(NOW, { deltaSupported: false }), NOW)).toBe('full');
+  // RETARGETED, not relaxed. The subject is unchanged — an org with no cheap mode
+  // can only refresh by walking again — but it used to be asserted at `NOW`, which
+  // pinned the defect: the short-circuit fired before any interval was consulted,
+  // so such a collection re-walked in full on every single sync attempt. The
+  // property now reads on the clock, which is what makes it a ladder rung rather
+  // than a bypass.
+  it('full-walks an org probed as not honouring the delta filter, once it is due', () => {
+    const meta = complete(NOW, { deltaSupported: false });
+    expect(nextSyncMode(meta, NOW + DRIFT_CHECK_INTERVAL_MS)).toBe('full');
+  });
+
+  it('leaves a no-cheap-mode collection alone until its interval elapses', () => {
+    const meta = complete(NOW, { deltaSupported: false });
+    // There is no drift check to run and no delta to send, so the honest answer
+    // before the interval is to do nothing — not to re-walk the whole org.
+    expect(nextSyncMode(meta, NOW)).toBe('none');
+    expect(nextSyncMode(meta, NOW + DRIFT_CHECK_INTERVAL_MS - 1)).toBe('none');
+  });
+
+  it('honours a collection-specific interval over the default', () => {
+    // A sharded fan-out costs one walk per shard, so it is given a longer leash
+    // than a single paginated collection; the rung is the same, the clock differs.
+    const SIX_HOURS = 6 * 60 * 60 * 1000;
+    const meta = complete(NOW, { deltaSupported: false });
+    expect(nextSyncMode(meta, NOW + DRIFT_CHECK_INTERVAL_MS, SIX_HOURS)).toBe('none');
+    expect(nextSyncMode(meta, NOW + SIX_HOURS, SIX_HOURS)).toBe('full');
+  });
+
+  it('applies a collection-specific interval to the drift check too', () => {
+    const SIX_HOURS = 6 * 60 * 60 * 1000;
+    const meta = complete(NOW, { deltaSupported: true });
+    expect(nextSyncMode(meta, NOW + DRIFT_CHECK_INTERVAL_MS, SIX_HOURS)).toBe('delta');
+    expect(nextSyncMode(meta, NOW + SIX_HOURS, SIX_HOURS)).toBe('drift-check');
   });
 
   it('deltas a complete, recently checked snapshot', () => {
