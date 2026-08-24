@@ -225,10 +225,14 @@ notifications, sidePanel, alarms`, each mapped to a real consumer (`activeTab` b
   stored.
 - **TTL'd / bounded storage.** Cached entity data carries a TTL —
   [`sidepanel/cache/entityCache.ts`](../src/sidepanel/cache/entityCache.ts) (in-memory,
-  5-minute default), [`shared/rulesCache.ts`](../src/shared/rulesCache.ts)
-  (`chrome.storage.local`, 5 minutes) and
-  [`components/groups/groupsCache.ts`](../src/sidepanel/components/groups/groupsCache.ts)
-  (`chrome.storage.local`, 24 hours). `entityCache` treats TTL as a freshness verdict
+  5-minute default) and [`shared/rulesCache.ts`](../src/shared/rulesCache.ts)
+  (`chrome.storage.local`, 5 minutes). A third, `groupsCache`, was retired by
+  ADR-0040 along with the `entityCache`-backed app inventory; `rulesCache` is
+  the last hand-rolled cache and `D-029` retires it. The background-owned org
+  snapshot that replaced them is IndexedDB-backed and **not** TTL'd the same
+  way — it is reconciled by walk-and-sweep rather than expiry, and whether it
+  needs a TTL or a clear-on-sign-out is an open question tracked as `D-028`
+  item 7. `entityCache` treats TTL as a freshness verdict
   rather than a deletion, so it is **separately bounded** at `MAX_ENTRIES` (500) with
   eviction on write — expired entries first, then least-recently-read, and never a key
   with a live subscriber or an in-flight fetch, since dropping those would force the

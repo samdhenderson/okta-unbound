@@ -180,9 +180,14 @@ sides were walked by the same sync.
 `getAllApps` went with the latter. `pushGroupOps` is gone too — app-group
 assignments became the `appGroups` collection, so the panel reads push mappings
 rather than deriving them, and `useGroupsLoader` no longer takes an API surface
-at all. `shared/rulesCache` is still standing — it has twelve non-test consumers across
-the Rules, Users and comparison surfaces, and two of them _write_ to it, so
-unpicking it is its own change rather than a footnote to this one. Until it goes,
+at all. `shared/rulesCache` is still standing — it has **four** non-test importers
+(`groupDiscovery.ts` and `useRulesData.ts`, which both read _and_ write;
+`ruleImpact.ts` and `useUserMemberships.ts`, which only read), so unpicking it is
+its own change rather than a footnote to this one. An earlier revision of this
+paragraph said twelve consumers, two of them writing through `entityCache`; that
+count was corrected on 2026-08-24 by enumerating importers rather than grepping
+mentions — seven of the twelve named `RulesCache` only in prose, and
+`entityCache` never imports it at all. Until it goes,
 **"one store, one invalidation story" is an intention, not a fact**: rules exist
 in two places, authoritative in the snapshot and cached separately for the
 rule-impact and membership-analysis readers, and nothing detects the two

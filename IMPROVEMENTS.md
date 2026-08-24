@@ -18,11 +18,17 @@ Format:
 - **Priority:** P0 security/data-loss · P1 correctness · P2 perf/UX friction · P3 polish
 - **Size:** S <1hr · M half-day · L needs breaking down
 - **Files:**
+- **Verified:** YYYY-MM-DD — <who or what confirmed the Problem still holds>
 - **Problem:**
 - **Done when:** <checkable without asking Sam>
 - **Risk:**
-- **Status:** open | claimed:<branch> | blocked:<reason> | done:<PR#>
+- **Status:** open | claimed:<branch> | research:awaiting-review
+  | blocked:<reason> | done:<PR#> | closed:refuted-<date>
+  | closed:overtaken-by-<sha>
 ```
+
+The status words and the `Verified` line mean exactly what `DEBT.md`'s format
+block says they mean — same vocabulary, one definition, defined there.
 
 ---
 
@@ -54,11 +60,13 @@ Format:
 - **Size:** M
 - **Files:** `src/sidepanel/components/groups/detail/ClauseChecklist.tsx:154`,
   `src/sidepanel/components/users/comparison/CauseWorklistRow.tsx:198`
+- **Verified:** 2026-08-24 — both call sites still render raw ids.
 - **Problem:** The flagship example from Sam's dump. `explainRuleExpression`'s
   reconstructed source text (e.g. `isMemberOfAnyGroup("00g1abc…")`) renders
   as opaque `<code>` with raw group ids, even though the sibling
   `ClauseGroupList` component in the same view already resolves and links
-  the same ids via a `resolveGroupName` prop.
+  the same ids via a `resolveGroupName` prop. An admin reading why a rule
+  matched has to go look the id up somewhere else.
 - **Done when:** Both call sites render group-id literals inside the
   expression text using I-001's badge wherever the id is resolvable from
   whatever data the view already has in hand (no new fetch); falls back to
@@ -68,12 +76,9 @@ Format:
   and unresolved cases tested.
 - **Status:** open
 - **Depends on:** I-001
-- **Also gated on:** `ClauseChecklist.tsx` sits under
-  `src/sidepanel/components/groups/detail/`, which `CLAUDE.md` puts off-limits
-  until Sam's Group Detail v2 lands. Skipped for that reason on
-  2026-08-21 (5th run) despite sorting to the top of the open list. Either
-  wait for that window to close, or have Sam explicitly permit this item by
-  name the way `D-001`/`D-002` were permitted.
+- **Ungated 2026-08-24:** the `groups/detail/` off-limits window was lifted
+  (`CLAUDE.md`, `NIGHTLY.md` 2026-08-24). This item is implementable whole; it
+  had been skipped on 2026-08-21 despite sorting to the top of the open list.
 
 ### I-003 · Extend the id badge to RuleCard and push-mapping fallbacks
 
@@ -84,8 +89,8 @@ Format:
   `src/sidepanel/components/groups/GroupListItemDetails.tsx:83`,
   `src/sidepanel/components/groups/detail/GroupPushSection.tsx:51`
   (**path corrected 2026-08-21** — the original filing said
-  `groups/GroupPushSection.tsx`, which does not exist; the file is under
-  `groups/detail/`, and that relocation is what gates this item, see below)
+  `groups/GroupPushSection.tsx`, which does not exist)
+- **Verified:** 2026-08-24 — three call sites, all still raw.
 - **Problem:** Same class of bug as I-002. `RuleCard` shows a raw group id
   when `allGroupNamesMap` doesn't have it; the two push-mapping sites show
   `mapping.appId` as plain text when `mapping.appName` is missing.
@@ -95,12 +100,10 @@ Format:
 - **Risk:** Low.
 - **Status:** open
 - **Depends on:** I-001
-- **Also gated on:** one of the three call sites
-  (`groups/detail/GroupPushSection.tsx`) is under the off-limits Group Detail
-  v2 window (`CLAUDE.md`). Skipped whole on 2026-08-21 (5th run) rather than
-  shipped two-thirds done — a partial item reads as complete in the ledger.
-  The two non-`detail/` sites (`RuleCard.tsx`, `GroupListItemDetails.tsx`) are
-  implementable today if Sam would rather split this into two items.
+- **Ungated 2026-08-24:** the `groups/detail/` window was lifted, so all three
+  sites ship together. Do **not** split this into "the two easy ones" — a
+  two-thirds-done item reads as complete in the ledger, which is why it was
+  skipped whole rather than partially on 2026-08-21.
 
 ### I-004 · Copy affordance on self-referencing ids that have none today
 
@@ -197,19 +200,39 @@ Format:
 - **Category:** feature-completeness
 - **Priority:** P2
 - **Size:** L
-- **Files:** `src/shared/ruleEvaluator.ts:308-320` (`SUPPORTED_FUNCTIONS`)
-- **Problem:** No `toString`/`DateTime`/`Instant` support; `String.*` is
-  limited to `toUpperCase`/`toLowerCase`/`len`/`stringContains`/`startsWith`/
-  `endsWith`/`append`. Sam wants broader coverage both for rule-display
-  fidelity and because it's shared groundwork for future policy evaluation.
-- **Done when:** Not yet defined — **this is research-only per Sam's Step 1
-  answer.** The deliverable is a written proposal (function list, arity/type
-  handling for Okta's date/time semantics, security considerations given
-  ADR-0017 exists specifically because ad hoc expression evaluation is a
-  known risk, a test plan) — not code.
-- **Risk:** High if implemented without scoping — touches a
-  security-relevant expression evaluator.
-- **Status:** blocked:needs-breakdown
+- **Files:** `docs/adr/0042-what-the-evaluator-refuses-to-guess.md` (to be
+  created), `src/shared/ruleEvaluator.ts:298-320` (read-only, for reference)
+- **Verified:** 2026-08-24 — `SUPPORTED_FUNCTIONS` still holds seven entries.
+- **Problem:** The evaluator implements seven `String.*` functions and nothing
+  else — no `toString`, no `DateTime`, no `Instant`. A group rule whose
+  condition uses any of those is reported as unevaluable, so the admin asking
+  "why is this person in this group" gets no answer for exactly the rules that
+  are hardest to reason about by hand. Sam wants broader coverage both for
+  rule-display fidelity and as groundwork for future policy evaluation.
+- **Done when:** `docs/adr/0042-what-the-evaluator-refuses-to-guess.md` exists
+  at Status: Proposed. **This item ships no code** — its PR touches `docs/`
+  only. The proposal must:
+  1. Enumerate the OEL functions reachable inside a **group-rule condition**
+     specifically, not the whole language surface — `SUPPORTED_FUNCTIONS`'
+     doc comment already notes that `Arrays.*` helpers are unavailable there
+     and deliberately absent.
+  2. Classify each candidate as unambiguous / ambiguous / unsupported-by-design,
+     and **carry forward the existing principle rather than quietly dropping
+     it**: a function is implemented only when its Okta semantics are
+     unambiguous, because an approximation that produces a confidently wrong
+     answer is strictly worse than reporting the expression unevaluable. Say
+     which candidates that rules out and why — a proposal that adds everything
+     has not done the work.
+  3. Propose arity and type handling for date/time semantics (`Instant`,
+     `DateTime`), including timezone and the `UNRESOLVED` propagation the
+     evaluator already uses.
+  4. State the ADR-0017 security argument for every addition. That ADR exists
+     precisely because ad hoc expression evaluation is a known risk, and rule
+     expressions are end-user-controllable input (ADR-0006).
+  5. Give a test plan, including the malformed and hostile inputs.
+- **Risk:** None to write. High if implemented without this scoping — it is a
+  security-relevant evaluator.
+- **Status:** research:awaiting-review
 
 ### I-009 · EntityLink's default copy-id label collides when two entities share a name
 
@@ -297,36 +320,50 @@ Format:
 - **Category:** feature-completeness
 - **Priority:** P2
 - **Size:** L
-- **Files:** `docs/adr/0040-the-background-owns-the-org.md`,
-  `src/shared/snapshot/snapshotSync.ts` (the `CollectionSpec` /
-  `ShardProvider` model), `src/shared/snapshot/types.ts`,
+- **Files:** `docs/adr/0043-how-deep-the-snapshot-goes.md` (to be created);
+  read-only for reference: `docs/adr/0040-the-background-owns-the-org.md`,
+  `src/shared/snapshot/snapshotSync.ts` (the `CollectionSpec` / `ShardProvider`
+  model), `src/shared/snapshot/types.ts:9-25`,
   `src/sidepanel/components/OverviewTab.tsx`
+- **Verified:** 2026-08-24 — four collections wired (`groups`, `apps`, `rules`,
+  `appGroups`); no depth control exists.
 - **Problem:** ADR-0040 gave the org one background-owned store, and the
-  collection model has since grown from "one paginated listing" to "a
-  fan-out derived from another collection" (`appGroups`). Nothing yet says
-  **how far** an org's snapshot should go, or lets an admin choose. Depth is
-  currently an implicit constant — the four collections that happen to be
-  wired — so every richer question ("which groups have no rule feeding
-  them?", "which app-sourced groups point at a deleted app?", "which rules
-  can never match?") is either free or impossible, with nothing in between
-  and no way to opt into more.
+  collection model has since grown from "one paginated listing" to "a fan-out
+  derived from another collection" (`appGroups`). Nothing yet says **how far**
+  an org's snapshot should go, or lets an admin choose. Depth is currently an
+  implicit constant — the four collections that happen to be wired — so every
+  richer question ("which groups have no rule feeding them?", "which
+  app-sourced groups point at a deleted app?", "which rules can never match?")
+  is either free or impossible, with nothing in between and no way to opt into
+  more.
 
   The point of naming depth is what it unlocks: with the right collections
-  local and fresh, the Overview stops being a set of buttons that each cost
-  a walk and becomes a report that is already computed — including
-  **recommended org actions**, which need breadth (several collections
-  joined) far more than they need any single expensive call.
+  local and fresh, the Overview stops being a set of buttons that each cost a
+  walk and becomes a report that is already computed — including **recommended
+  org actions**, which need breadth (several collections joined) far more than
+  they need any single expensive call.
 
-- **Done when:** A written, reviewed proposal exists (an ADR-0040 amendment
-  or its own ADR) defining named depth levels, what each level walks, what
-  each level makes answerable, and how an admin moves between them. It must
-  state the cost of each level in requests and in stored rows, and how a
-  level interacts with `refreshIntervalMs` and the retention rules in
-  `docs/security.md` — depth is the axis along which a snapshot stops being
-  "org metadata" and starts being a copy of the directory. No code lands
-  under this item until Sam signs the proposal off (plan-and-approval gate,
-  ADR-0024).
-- **Risk:** Medium — the design commits the storage schema and the sync
-  budget to a shape that later levels have to live inside. Deliberately
-  research-only until reviewed.
-- **Status:** open
+- **Done when:** `docs/adr/0043-how-deep-the-snapshot-goes.md` exists at
+  Status: Proposed. **This item ships no code** — its PR touches `docs/` only.
+  It must define named depth levels, what each level walks, what each level
+  makes answerable, and how an admin moves between them, plus two hard
+  constraints stated up front:
+  1. **Every level is priced in both currencies** — requests to reach it, and
+     rows stored to hold it — checked against `docs/security.md`'s "store no
+     more than needed". Depth is the axis along which a snapshot stops being
+     org metadata and starts being a copy of the directory, and the ADR has to
+     say where that line is rather than leaving it to whoever wires the next
+     collection.
+  2. **No level includes group membership without its own retention
+     argument.** `src/shared/snapshot/types.ts:9-16` already commits to this —
+     membership is the largest and most personal collection in an org, and
+     ADR-0040's questions are served by `expand=stats` counts instead. A depth
+     proposal is exactly where that commitment would get eroded by accident.
+
+  It must also say how a level interacts with `refreshIntervalMs`, and what
+  happens to stored rows when an admin moves **down** a level — a level change
+  that only ever adds is a one-way ratchet on disk.
+
+- **Risk:** None to write. Medium once implemented — the design commits the
+  storage schema and the sync budget to a shape later levels must live inside.
+- **Status:** research:awaiting-review

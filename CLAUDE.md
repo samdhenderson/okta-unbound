@@ -200,17 +200,37 @@ that can't drift out of sync with itself:
   on branch `nightly/YYYY-MM-DD`. Prefer items that touch disjoint files, and
   prefer files untouched by the last 3 nightly branches, so failures stay
   isolated and reviewable.
-- **`src/sidepanel/components/groups/detail/` is off-limits** beyond what a
-  specific claimed `DEBT.md`/`IMPROVEMENTS.md` item requires, until Sam
-  merges his own Group Detail v2 to `main`. Remove this rule once that
-  lands.
+- **Read the open PRs before reading the backlog.** An item is marked
+  `claimed:` **inside the PR that implements it**, never on `main` — so a
+  session that reads `main`'s ledger sees every unmerged night's work as
+  `open` again and will happily redo it. Before selecting anything, list the
+  open PRs **and their changed files**, then treat both as claimed: every
+  `I-NNN`/`D-NNN` named in an open PR, and every file any open PR touches,
+  whoever opened it. Ids alone miss the common case — a human's feature
+  branch already editing the file an item names, under no item id at all.
+  **If three or more PRs from unattended runs are already open, the night
+  stops** — append a `NIGHTLY.md` entry saying so and open nothing. Work is
+  being produced faster than it is being reviewed, and a fourth PR makes that
+  worse, not better.
 - **New work discovered mid-session** (a bug noticed while fixing something
   else, a UX inconsistency spotted in passing) gets filed as a new
   `IMPROVEMENTS.md`/`DEBT.md` item, never folded into the current item's
   diff — one concern per commit applies here exactly as it does to any PR.
 - **Architecturally significant items stay research-only** until Sam signs
-  off on a proposal — same bar as the plan-and-approval gate above
-  (`I-008`/`D-007` are seeded in that state already).
+  off on a proposal — same bar as the plan-and-approval gate above. Such an
+  item is marked `research:awaiting-review`, and a session **may** claim it:
+  the deliverable is a Proposed-status ADR under `docs/adr/`, and its PR
+  touches `docs/` only — **zero files under `src/`**. The item moves to
+  `open` when Sam accepts the ADR, never by the session that wrote it.
+  (`I-008`, `I-012` and `D-007b` are seeded in that state.)
+- **Re-verify a stale item before claiming it.** Every backlog item carries
+  a `Verified:` date. If it is more than 14 days old, re-check the
+  **Problem** with the `okta-claim-check` skill first — enumerate, don't
+  sample. If it no longer holds, close it `closed:refuted-<date>` with the
+  finding and take the next candidate; **a refuted item is a finished item,
+  not a skipped one.** Three of the five items gated as of 2026-08-24 had
+  gone stale under code that moved, one of them badly enough that acting on
+  it would have deleted a hook nine surfaces depend on.
 
 ## Working agreement
 
