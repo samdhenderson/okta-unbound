@@ -113,6 +113,32 @@ one-off try/catch in whatever file a nightly run happens to be touching.
   writers run in parallel, `pgrep -a -f '^[^ ]*node[^ ]* .*vitest'` first and
   `kill -9 <pid>` only the run you started. (D-021)
 
+## Committing while writers are live
+
+**The lead does not commit while a writer agent is still working.**
+`lint-staged` opens every run with "Backing up original state... in git
+stash", and what it stashes is the **unstaged** changes across the whole
+working tree, not just the files being committed; it restores them when the
+tasks finish. So a commit for item A takes item B's in-flight edits off disk
+for the length of A's hook run — tens of seconds, most of it
+`vitest related`. A read inside that window sees pre-edit content, and a
+write inside it lands on a tree the stash pop is about to overwrite. This
+costs almost no parallelism to avoid: writer agents may still run
+concurrently on disjoint files (`SESSION.md` step 4 permits it explicitly),
+it is only the _commits_ that serialize — commit an item once every writer
+has finished, not as each one reports while others are still going.
+
+Configuring the hook with `lint-staged --no-stash` would also stop the
+stash, and is the worse trade. The tasks would then run against a working
+tree that still holds the other agents' unstaged edits, and lint-staged
+`git add`s whatever its tasks modify — so a formatter touching a file with
+unstaged edits sweeps those unrelated edits into the commit. That converts a
+latent read race into a guaranteed wrong-commit-contents bug, and gives up
+the automatic restore when a hook run dies part-way through. Observed
+2026-08-21 (6th run): two commits ran while another writer was live and both
+restored cleanly, so this is a latent race rather than a confirmed loss —
+but it is silent, and would present as "the agent's edit vanished". (D-023)
+
 ## Verification commands that define green
 
 Run in this order; stop at the first red result:
