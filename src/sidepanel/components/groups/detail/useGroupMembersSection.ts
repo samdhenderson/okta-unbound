@@ -26,6 +26,14 @@
  * ({@link sidepanel/components/groups/detail/AddGroupMemberModal.AddGroupMemberModal}),
  * so the Okta write and the member-exclusion filter live in exactly one place
  * shared by both this section's inline field and the modal.
+ *
+ * {@link UseGroupMembersSectionReturn.onMemberAdded} exposes the exact
+ * roster/cache write-back this hook wires as its own inline add's `onAdded`, so
+ * {@link module:sidepanel/components/groups/detail/GroupActionBar}'s modal — a
+ * *second*, independent `useAddGroupMember` instance, owned by
+ * {@link module:sidepanel/components/groups/detail/GroupDetailView} — folds a
+ * member it adds into this exact cache entry and `cacheTick` rather than the
+ * view holding a second copy of the peek/setEntry/bump-tick logic below.
  */
 import { useCallback, useMemo, useState } from 'react';
 import type { GroupSummary, OktaUser } from '../../../../shared/types';
@@ -67,6 +75,13 @@ export interface UseGroupMembersSectionReturn {
   selectToAdd: (user: OktaUser) => void;
   addStatus: MemberWriteStatus;
   addError: string | null;
+
+  /**
+   * Folds a member added through some *other* `useAddGroupMember` instance
+   * (the action bar's modal) into this hook's roster/cache state — see the
+   * module doc. Wire it as that instance's `onAdded`.
+   */
+  onMemberAdded: (user: OktaUser) => void;
 }
 
 /**
@@ -234,5 +249,6 @@ export function useGroupMembersSection(
     selectToAdd,
     addStatus,
     addError,
+    onMemberAdded: handleMemberAdded,
   };
 }
