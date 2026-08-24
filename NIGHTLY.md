@@ -53,6 +53,29 @@ be small. It was — a paragraph in each of two files. **A closing note that
 names the next pick and says why is worth more than one that lists what is
 left.**
 
+**`D-023`'s filed mechanism was wrong, and it was caught only after the PR
+was open.** The item says `lint-staged` stashes unstaged changes off disk for
+the length of a hook run. It does not: the tree-clearing
+`stash push --keep-index` branch is gated on `hideUnstaged`, which defaults
+false and is not set here, so the branch that runs is `stash create` +
+`stash store` — a snapshot that leaves the tree alone. The real hazard is the
+failure path, `git reset --hard HEAD` in `restoreOriginalState`, which fires
+on any task error and destroys an edit a live writer made after the snapshot.
+The rule the item asks for is right; its reasoning was not, and `D-023`
+explicitly requires the reasoning be recorded — so a wrong one is a defective
+deliverable, not a cosmetic slip. Corrected in a follow-up commit rather than
+by amending, since `CLAUDE.md` forbids force-pushing.
+**The lesson is about what triggered the check.** The prompt was a CI-activity
+wake that showed the branch's run history, which included PR #73 from
+2026-08-22 — an earlier, unmerged nightly branch that had worked `D-023` and
+recorded this same finding in its commit message. That PR never landed, so the
+ledger never received it, and tonight's session re-derived the item from a
+filing whose premise had already been disproved. **An unmerged nightly branch
+is a place findings go to die. Before implementing an item, it is worth
+checking whether a previous branch already attempted it** — `git log --all
+--grep=<item-id>` is the cheap version. Nothing in `SESSION.md` step 2 says to
+do this today.
+
 **`D-023` is now self-enforcing, and tonight ran under it.** Writers were
 serialized rather than parallelised, so the rule was never actually tested
 against a live collision — but the wall-clock cost was real and the trade is
