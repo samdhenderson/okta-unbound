@@ -3,25 +3,28 @@
  * @description Tests for the Group Detail view's tab shell.
  *
  * Pins the container's own job — composing the read-only loads, the action bar,
- * and which of the four tabbed panes is on screen — not the panes' own
+ * and which of the five tabbed panes is on screen — not the panes' own
  * rendering, which each already has its own suite
  * (`GroupMembershipSourceSection.test.tsx`, `GroupMembersSection.test.tsx`,
- * `GroupRulesSection.test.tsx`; `GroupOverviewPane`, `GroupAccessSection` and
- * `GroupPushSection` are pure-render leaves with only a story, per ADR-0023).
- * Every pane, the action bar's modal, and `GroupMetadataSection` are stubbed
- * test doubles here so a tab switch reads as "which stub is mounted" — the
- * same pattern `GroupsTab.test.tsx` uses for its feature children.
+ * `GroupRulesSection.test.tsx`; `GroupOverviewPane`, `GroupAccessSection`,
+ * `GroupPushSection` and `GroupHealthPane` are pure-render leaves with only a
+ * story, per ADR-0023). Every pane (including `GroupHealthPane`, which now
+ * owns the folded `GroupMetadataSection` internally — see that pane's own
+ * module doc) and the action bar's modal are stubbed test doubles here so a
+ * tab switch reads as "which stub is mounted" — the same pattern
+ * `GroupsTab.test.tsx` uses for its feature children.
  *
  * `GroupActionBar` is rendered for real: it is a pure-render leaf with no
  * hooks of its own, and "Export omitted/present, Add wired" is exactly the
  * kind of user-visible behavior a mock would hide.
  *
- * The five loading hooks (`useGroupSource`, `useGroupRuleReferences`,
- * `useGroupAccessGrants`, `useGroupMembersSection`, `useAddGroupMember`) are
- * mocked at the hook boundary — the established pattern for a container test,
- * e.g. `UserComparisonPanel.scroll.test.tsx`'s `useUserComparison` mock. The one
- * exception is `useOwedLoad`, left real, because the `autoAnalyze` coverage
- * below is exactly about the gating it provides.
+ * The six loading hooks (`useGroupSource`, `useGroupRuleReferences`,
+ * `useGroupAccessGrants`, `useMemberMfaScan`, `useGroupMembersSection`,
+ * `useAddGroupMember`) are mocked at the hook boundary — the established
+ * pattern for a container test, e.g. `UserComparisonPanel.scroll.test.tsx`'s
+ * `useUserComparison` mock. The one exception is `useOwedLoad`, left real,
+ * because the `autoAnalyze` coverage below is exactly about the gating it
+ * provides.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -64,6 +67,18 @@ vi.mock('../../../hooks/useGroupAccessGrants', () => ({
     roles: [],
     rolesStatus: 'available',
   }),
+}));
+
+const mfaScan = vi.hoisted(() => ({
+  mfaResults: null as unknown,
+  scanStatus: 'idle' as const,
+  runScan: vi.fn(),
+  requestConfirm: vi.fn(),
+  cancelConfirm: vi.fn(),
+}));
+
+vi.mock('../../../hooks/useMemberMfaScan', () => ({
+  useMemberMfaScan: () => mfaScan,
 }));
 
 const membersSectionState = vi.hoisted(() => ({
@@ -132,8 +147,8 @@ vi.mock('./GroupRulesSection', () => ({
 vi.mock('./GroupPushSection', () => ({
   default: () => <div data-testid="stub-push" />,
 }));
-vi.mock('./GroupMetadataSection', () => ({
-  default: () => <div data-testid="stub-metadata" />,
+vi.mock('./GroupHealthPane', () => ({
+  default: () => <div data-testid="stub-health" />,
 }));
 vi.mock('./AddGroupMemberModal', () => ({
   default: () => <div data-testid="stub-add-modal" />,
@@ -172,9 +187,7 @@ describe('GroupDetailView', () => {
     expect(screen.queryByTestId('stub-access')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-push')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-rules')).not.toBeInTheDocument();
-    // Outside the tab card — GroupMetadataSection's position is unchanged by
-    // this step, so it renders regardless of which pane is active.
-    expect(screen.getByTestId('stub-metadata')).toBeInTheDocument();
+    expect(screen.queryByTestId('stub-health')).not.toBeInTheDocument();
   });
 
   it('switches to the Members tab, rendering its two sections and unmounting Overview', async () => {
@@ -190,7 +203,7 @@ describe('GroupDetailView', () => {
     expect(screen.queryByTestId('stub-access')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-push')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-rules')).not.toBeInTheDocument();
-    expect(screen.getByTestId('stub-metadata')).toBeInTheDocument();
+    expect(screen.queryByTestId('stub-health')).not.toBeInTheDocument();
   });
 
   it('switches to the Access tab, rendering Access + Push and unmounting Overview/Members', async () => {
@@ -206,7 +219,7 @@ describe('GroupDetailView', () => {
     expect(screen.queryByTestId('stub-membership-source')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-members')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-rules')).not.toBeInTheDocument();
-    expect(screen.getByTestId('stub-metadata')).toBeInTheDocument();
+    expect(screen.queryByTestId('stub-health')).not.toBeInTheDocument();
   });
 
   it('switches to the Rules tab, rendering Rules and unmounting everything else', async () => {
@@ -222,15 +235,33 @@ describe('GroupDetailView', () => {
     expect(screen.queryByTestId('stub-members')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-access')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-push')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('stub-health')).not.toBeInTheDocument();
   });
 
-  it('exposes exactly the four tabs, in order', () => {
+  it('switches to the Health tab, rendering GroupHealthPane and unmounting everything else', async () => {
+    const user = userEvent.setup();
+    render(<GroupDetailView group={makeGroup()} targetTabId={1} />);
+
+    await user.click(screen.getByRole('tab', { name: 'Health' }));
+
+    expect(screen.getByRole('tab', { name: 'Health' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('stub-health')).toBeInTheDocument();
+    expect(screen.queryByTestId('stub-overview')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('stub-membership-source')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('stub-members')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('stub-access')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('stub-push')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('stub-rules')).not.toBeInTheDocument();
+  });
+
+  it('exposes exactly the five tabs, in order', () => {
     render(<GroupDetailView group={makeGroup()} targetTabId={1} />);
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
       'Overview',
       'Members',
       'Access',
       'Rules',
+      'Health',
     ]);
   });
 

@@ -176,4 +176,17 @@ export const cacheKeys = {
    * rather than in the cache.
    */
   userDetails: (userId: string): EntityKey => ['userDetails', userId],
+
+  /**
+   * One group's cached MFA-enrollment scan (`Map<userId, MemberMfaResult>`),
+   * keyed so navigating away and back restores it without rescanning (one API
+   * call per member).
+   *
+   * Written and read by `useMemberMfaScan`; invalidated by the Overview tab's
+   * "Remove Deprovisioned" flow, since a membership change can make a cached
+   * scan describe users no longer in the group.
+   *
+   * @param groupId - The Okta group id.
+   */
+  mfaScan: (groupId: string): EntityKey => ['mfaScan', groupId],
 } as const;
