@@ -49,7 +49,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Freshly opened: the unfiltered list of all eight sections. */
+/** Freshly opened: the unfiltered list of all nine sections. */
 export const Default: Story = {};
 
 /** Opened from a different section, so a different row carries the "Current" marker. */

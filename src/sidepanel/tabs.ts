@@ -12,7 +12,15 @@ import type { IconType } from './components/overview/shared/Icon';
 
 /** Identifier for each top-level side-panel tab. */
 export type TabType =
-  'overview' | 'rules' | 'users' | 'groups' | 'apps' | 'policies' | 'export' | 'history';
+  | 'overview'
+  | 'rules'
+  | 'users'
+  | 'groups'
+  | 'apps'
+  | 'policies'
+  | 'export'
+  | 'explorer'
+  | 'history';
 
 /** One top-level tab: its stable id, its visible label, and its rail glyph. */
 export interface TabDef {
@@ -48,6 +56,7 @@ export const TAB_DEFS: ReadonlyArray<TabDef> = [
   { id: 'rules', label: 'Rules', icon: 'bolt' },
   { id: 'policies', label: 'Policies', icon: 'shield' },
   { id: 'export', label: 'Export', icon: 'download' },
+  { id: 'explorer', label: 'Explorer', icon: 'terminal' },
   { id: 'history', label: 'History', icon: 'clipboard' },
 ];
 

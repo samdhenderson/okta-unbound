@@ -40,6 +40,8 @@ export { default as ListRow } from './ListRow';
 export { default as ScrollableList } from './ScrollableList';
 export { default as SearchDropdown } from './SearchDropdown';
 export { default as SelectionChips } from './SelectionChips';
+export { default as JsonViewer } from './JsonViewer';
+export { default as JsonNode } from './JsonNode';
 
 // Re-export commonly used types
 export type { ButtonVariant, ButtonSize } from './Button';

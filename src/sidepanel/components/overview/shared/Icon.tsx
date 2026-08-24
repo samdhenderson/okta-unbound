@@ -45,7 +45,8 @@ export type IconType =
   | 'chevron-right'
   | 'chevron-down'
   | 'close'
-  | 'clock';
+  | 'clock'
+  | 'terminal';
 
 /** Props for {@link Icon}. */
 interface IconProps {
@@ -372,6 +373,16 @@ const Icon: React.FC<IconProps> = ({ type, className = '', size = 'md' }) => {
           strokeLinejoin="round"
           strokeWidth={2}
           d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+    ),
+    terminal: (
+      <svg className={baseClasses} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3M3.375 3h17.25a1.125 1.125 0 011.125 1.125v15.75a1.125 1.125 0 01-1.125 1.125H3.375A1.125 1.125 0 012.25 20.25V4.125A1.125 1.125 0 013.375 3z"
         />
       </svg>
     ),
