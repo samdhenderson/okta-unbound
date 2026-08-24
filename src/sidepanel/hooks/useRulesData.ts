@@ -62,6 +62,12 @@ interface UseRulesDataOptions {
    * (`affectsCurrentGroup`). Mirrors the page-URL group the content script derived.
    */
   currentGroupId?: string;
+  /**
+   * The connected org's origin. Rules reference group ids, and the names that
+   * label them come from the org snapshot, which is scoped by origin (ADR-0040).
+   * Absent, every referenced id renders as an id.
+   */
+  oktaOrigin?: string | null;
 }
 
 /** Return shape of {@link useRulesData}. */
@@ -88,6 +94,7 @@ export function useRulesData({
   targetTabId,
   onError,
   currentGroupId,
+  oktaOrigin,
 }: UseRulesDataOptions): UseRulesDataReturn {
   const [rules, setRules] = useState<FormattedRule[]>([]);
   const [stats, setStats] = useState<RuleStats>(EMPTY_STATS);
@@ -176,7 +183,9 @@ export function useRulesData({
           }
         }
 
-        const response = await fetchGroupRulesRequest(makeApiRequest, currentGroupId);
+        const response = await fetchGroupRulesRequest(makeApiRequest, currentGroupId, {
+          origin: oktaOrigin,
+        });
 
         log.debug('Received response:', { success: response.success });
 
@@ -230,6 +239,7 @@ export function useRulesData({
       targetTabId,
       onError,
       currentGroupId,
+      oktaOrigin,
       makeApiRequest,
       startProgress,
       updateProgress,

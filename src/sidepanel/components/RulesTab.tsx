@@ -136,7 +136,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
 
   const api = useOktaApi({ targetTabId: targetTabId ?? null, onResult: handleResult });
   const impact = useRuleImpact(api.captureRuleImpact);
-  const data = useRulesData({ targetTabId, onError: handleError, currentGroupId });
+  const data = useRulesData({ targetTabId, onError: handleError, currentGroupId, oktaOrigin });
   const { rules, stats, loadRules } = data;
   const lifecycle = useRuleLifecycle({
     targetTabId,
