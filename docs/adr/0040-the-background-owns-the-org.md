@@ -180,11 +180,14 @@ sides were walked by the same sync.
 `getAllApps` went with the latter. `pushGroupOps` is gone too — app-group
 assignments became the `appGroups` collection, so the panel reads push mappings
 rather than deriving them, and `useGroupsLoader` no longer takes an API surface
-at all. `shared/rulesCache` is still standing — it has around two dozen consumers
-across the Rules, Users and comparison surfaces, and unpicking it is its own
-change rather than a footnote to this one. Until it goes, rules exist in two
-places: authoritative in the snapshot, and cached separately for the rule-impact
-and membership-analysis readers.
+at all. `shared/rulesCache` is still standing — it has twelve non-test consumers across
+the Rules, Users and comparison surfaces, and two of them _write_ to it, so
+unpicking it is its own change rather than a footnote to this one. Until it goes,
+**"one store, one invalidation story" is an intention, not a fact**: rules exist
+in two places, authoritative in the snapshot and cached separately for the
+rule-impact and membership-analysis readers, and nothing detects the two
+disagreeing. Tracked as `D-029`, deliberately held for a human rather than an
+unattended run.
 
 **A collection is not always one listing.** `appGroups` has no collection
 endpoint — Okta exposes app-group assignments only per app — so `CollectionSpec`

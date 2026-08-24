@@ -902,3 +902,59 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   doing it: every item above is currently an argument rather than an
   observation.
 - **Status:** open
+
+### D-029 · Retire `shared/rulesCache` — the last hand-rolled cache
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** L
+- **Files:** `src/shared/rulesCache.ts` (the cache itself),
+  `src/sidepanel/cache/entityCache.ts` and
+  `src/sidepanel/hooks/useOktaApi/groupDiscovery.ts` (**writers** — not just
+  readers), `src/sidepanel/hooks/useRulesData.ts`,
+  `src/sidepanel/components/RulesTab.tsx`,
+  `src/sidepanel/hooks/fetchGroupRulesRequest.ts`,
+  `src/sidepanel/hooks/useGroupRuleReferences.ts`,
+  `src/sidepanel/hooks/useGroupSource.ts`,
+  `src/sidepanel/hooks/useUserMemberships.ts`,
+  `src/sidepanel/hooks/useUserComparison.ts`,
+  `src/sidepanel/hooks/useOktaApi/ruleImpact.ts`,
+  `src/shared/utils/membershipAnalysis.ts`,
+  `src/shared/rules/groupRuleIndex.ts` (12 non-test consumers; 25 files
+  including tests)
+- **Problem:** ADR-0040 claims "one store, one invalidation story". That is
+  not true yet. Group rules live in **two** places: authoritative in the org
+  snapshot's `rules` collection, and separately in a `chrome.storage.local`
+  slot with its own 5-minute TTL, read by the rule-impact and
+  membership-analysis surfaces. The two can disagree, and nothing detects it
+  — a view can show rule attribution from the snapshot beside a blast-radius
+  answer computed from a cache up to five minutes staler. `D-028` item 10
+  asks the auditor to look for exactly that; this item is the fix.
+
+  This is **not** a request-count win — `RulesCache` already avoids
+  refetching within its TTL — so it was deliberately ranked below the
+  `appGroups` work. It is a correctness and single-source-of-truth item.
+
+  Two things make it larger than a read-site swap:
+
+  1. **`entityCache` and `groupDiscovery` write to it**, so the write paths
+     have to go somewhere or go away — the snapshot's walk is already the
+     writer, so these are duplicate producers, not just consumers.
+  2. **The cached value is a bundle**, not raw rules: formatted rules, raw
+     rules, aggregate `stats`, and detected `conflicts`. The snapshot stores
+     raw `OktaGroupRule` rows. Consumers currently getting `stats` and
+     `conflicts` for free need them derived at read time — the shape
+     `useGroupsLoader` now uses for its own joins, and the precedent to
+     follow.
+
+- **Done when:** `src/shared/rulesCache.ts` is deleted, no module reads or
+  writes a rules cache outside `orgSnapshotStore`, and every surface that
+  used it derives what it needs from the snapshot's `rules` collection. A
+  test pins that two surfaces reading rules in one view cannot disagree.
+  Anything removed carries an ADR-0022 note naming what still covers it.
+  ADR-0040 §6's Status paragraph is updated to say the retirement is complete.
+- **Risk:** Medium — touches membership analysis and blast radius, which are
+  correctness-critical reads that several surfaces render verdicts from. Land
+  it tests-first, one consumer at a time, not as one sweep.
+- **Status:** blocked:needs-human — Sam wants this done deliberately rather
+  than picked up by an unattended run. Do not claim it in a nightly session.
