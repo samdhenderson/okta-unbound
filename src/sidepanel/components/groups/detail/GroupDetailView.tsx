@@ -34,13 +34,13 @@
  *
  * The action bar's "Add" button opens {@link AddGroupMemberModal}, backed by
  * its own {@link module:sidepanel/hooks/useAddGroupMember.useAddGroupMember}
- * instance — independent of the search/selection state `useGroupMembersSection`
- * keeps for its inline add field (step 3 of the Group Detail rework removes
- * that inline field; both coexist until then). The two instances still land in
- * the exact same roster: this view's `onAdded` is wired straight to
- * `membersSection.onMemberAdded`, the write-back callback
- * `useGroupMembersSection` already exposes for exactly this purpose, so there
- * is only ever one copy of the cache-write/`resummarize` logic.
+ * instance — the only add path now that `GroupMembersSection`'s inline add
+ * field has been removed (step 3 of the Group Detail rework). This view's
+ * `onAdded` is wired straight to `membersSection.onMemberAdded`, the
+ * write-back callback `useGroupMembersSection` exposes for exactly this
+ * purpose, so there is only ever one copy of the cache-write/`resummarize`
+ * logic even though the modal's mutation state lives in a separate hook
+ * instance from the roster it writes into.
  */
 import React, { useState } from 'react';
 import GroupMembershipSourceSection from './GroupMembershipSourceSection';
@@ -205,14 +205,6 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
           onConfirmRemove={membersSection.confirmRemove}
           removeStatus={membersSection.removeStatus}
           removeError={membersSection.removeError}
-          addQuery={membersSection.addQuery}
-          onAddQueryChange={membersSection.setAddQuery}
-          addResults={membersSection.addResults}
-          isSearchingToAdd={membersSection.isSearchingToAdd}
-          addSearchError={membersSection.addSearchError}
-          onSelectToAdd={membersSection.selectToAdd}
-          addStatus={membersSection.addStatus}
-          addError={membersSection.addError}
         />
 
         <GroupAccessSection

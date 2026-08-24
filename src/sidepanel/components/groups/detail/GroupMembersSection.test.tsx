@@ -33,14 +33,6 @@ const base = {
   onConfirmRemove: () => {},
   removeStatus: 'idle' as const,
   removeError: null,
-  addQuery: '',
-  onAddQueryChange: () => {},
-  addResults: [] as OktaUser[],
-  isSearchingToAdd: false,
-  addSearchError: null,
-  onSelectToAdd: () => {},
-  addStatus: 'idle' as const,
-  addError: null,
 };
 
 describe('GroupMembersSection', () => {
@@ -97,36 +89,24 @@ describe('GroupMembersSection', () => {
     ).toBeInTheDocument();
   });
 
-  it('offers the add-member search field once loaded', () => {
-    render(<GroupMembersSection {...base} status="done" members={members} />);
-    expect(screen.getByText('Add a member')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Search by email, name, or login...')).toBeInTheDocument();
-  });
-
   describe('read-only for group types Okta rejects membership writes on', () => {
-    it('hides remove controls and the add-member search for APP_GROUP, with a one-line reason', () => {
+    it('hides the remove control for APP_GROUP, with a one-line reason', () => {
       render(
         <GroupMembersSection {...base} groupType="APP_GROUP" status="done" members={members} />,
       );
 
       expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
       expect(
-        screen.queryByPlaceholderText('Search by email, name, or login...'),
-      ).not.toBeInTheDocument();
-      expect(
         screen.queryByRole('button', { name: 'Remove Ada Lovelace from this group' }),
       ).not.toBeInTheDocument();
       expect(screen.getByText(/imported from the app that owns this group/)).toBeInTheDocument();
     });
 
-    it('hides remove controls and the add-member search for BUILT_IN, with a one-line reason', () => {
+    it('hides the remove control for BUILT_IN, with a one-line reason', () => {
       render(
         <GroupMembersSection {...base} groupType="BUILT_IN" status="done" members={members} />,
       );
 
-      expect(
-        screen.queryByPlaceholderText('Search by email, name, or login...'),
-      ).not.toBeInTheDocument();
       expect(
         screen.queryByRole('button', { name: 'Remove Ada Lovelace from this group' }),
       ).not.toBeInTheDocument();
