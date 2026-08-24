@@ -422,18 +422,42 @@ describe('GroupsTab sub-navigation', () => {
     expect(detail.getByText('No members to attribute.')).toBeInTheDocument();
   });
 
-  it('does not analyze on a plain drill-in', async () => {
+  it('auto-analyzes a plain drill-in when the group is within the auto-load budget', async () => {
     const uev = userEvent.setup();
+    // memberCount: 10 (the fixture default) is well under `GroupDetailView`'s
+    // `AUTO_LOAD_MEMBER_CAP` (1,000), so the gated analysis now fires on open
+    // with no click — matching Access/Rules, which already auto-populate.
     await renderCached([cachedGroup()]);
 
     await drillInto(uev, 'Engineering');
 
     const detail = within(screen.getByTestId('group-detail-view'));
 
-    // RETARGETED (Group Detail Overview tab): a plain drill-in now lands on
-    // the Overview tab's verdict tiles rather than the Membership-source
-    // gate directly — switch to Members before asserting the gate is
-    // present-but-idle, unasked.
+    // RETARGETED (Group Detail Overview tab): a plain drill-in still lands on
+    // the Overview tab's verdict tiles rather than the Members tab directly —
+    // switch there before asserting the analysis has already run, unasked.
+    await uev.click(
+      within(detail.getByRole('tablist', { name: 'Group detail sections' })).getByRole('tab', {
+        name: 'Members',
+      }),
+    );
+
+    // Already past the gate: the idle "Analyze" button never appears, and the
+    // (empty, per the mock above) analyzed result renders directly.
+    await waitFor(() =>
+      expect(detail.queryByRole('button', { name: 'Analyze' })).not.toBeInTheDocument(),
+    );
+    expect(detail.getByText('No members to attribute.')).toBeInTheDocument();
+  });
+
+  it('does not analyze on a plain drill-in when the group is over the auto-load budget', async () => {
+    const uev = userEvent.setup();
+    await renderCached([cachedGroup({ memberCount: 5000 })]);
+
+    await drillInto(uev, 'Engineering');
+
+    const detail = within(screen.getByTestId('group-detail-view'));
+
     await uev.click(
       within(detail.getByRole('tablist', { name: 'Group detail sections' })).getByRole('tab', {
         name: 'Members',

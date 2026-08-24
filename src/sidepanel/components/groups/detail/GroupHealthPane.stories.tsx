@@ -109,7 +109,14 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Roster not yet loaded — the attribute gate offers "Analyze"; the MFA section nudges to load members first. */
+/**
+ * Roster not yet loaded — the attribute gate offers "Analyze"; the MFA
+ * section nudges to load members first. This is the minority case in
+ * practice — `GroupDetailView` auto-loads the roster (and this pane with it)
+ * for any group at or under `AUTO_LOAD_MEMBER_CAP` (1,000 members) on open
+ * with no click; this state only persists for a larger group or a
+ * disconnected Okta tab.
+ */
 export const RosterNotLoaded: Story = {};
 
 /** Reading and classifying every member. */
