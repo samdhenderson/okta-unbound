@@ -8,8 +8,8 @@
  * verbatim from the content script's `ruleHandlers.ts` (since deleted — this module
  * is the sole implementation):
  *   1. paginate `/api/v1/groups/rules?limit=200` (follow `Link` rel="next");
- *   2. label referenced group ids with names from the Groups-tab cache (no API
- *      calls; unknown ids fall back to the id in the display);
+ *   2. label referenced group ids with names from the org snapshot (no API calls;
+ *      unknown ids fall back to the id in the display — ADR-0040);
  *   3. detect attribute/target conflicts between active rules (O(n²));
  *   4. format each rule for display (names, `allGroupNamesMap`, conflicts).
  * The `{ success, rules, stats, conflicts }` **top-level** result shape (not under
@@ -20,7 +20,8 @@ import type { OktaGroupRule, FormattedRule, RuleConflict, RuleStats } from '../.
 import type { CoreApi } from './useOktaApi/core';
 import { detectConflicts, formatRuleForDisplay } from '../../shared/ruleUtils';
 import { nextPageUrl } from './useOktaApi/utilities';
-import { GROUPS_CACHE_KEY, parseGroupsCache } from '../components/groups/groupsCache';
+import { orgSnapshotStore } from '../../shared/snapshot/orgSnapshotStore';
+import type { RawOktaGroup } from '../components/groups/groupSummary';
 import { createLogger } from '../../shared/utils/logger';
 
 const log = createLogger('fetchGroupRulesRequest');
@@ -58,28 +59,35 @@ function groupIdsReferencedBy(rule: OktaGroupRule): string[] {
 }
 
 /**
- * Build an id→name map from the Groups tab's `chrome.storage.local` cache — the
- * same list the Groups tab renders. Reuses names already loaded there instead of
- * issuing a `GET /api/v1/groups/{id}` per referenced group. Returns an empty map
- * when the cache is absent, aged out, or unparseable; callers then fall back to
- * showing the group id.
+ * Build an id→name map for the org's groups, from the snapshot (ADR-0040).
  *
- * Exported because it is the cheapest id→name source in the extension — one
- * storage read, no API traffic — and the user comparison needs the same labels
- * the Rules tab shows for group ids embedded in a rule condition.
+ * Reuses names the background already walked instead of issuing a
+ * `GET /api/v1/groups/{id}` per referenced group. Exported because it is the
+ * cheapest id→name source in the extension — one local read, no API traffic —
+ * and the Rules tab, the blast-radius report and the user comparison all need
+ * the same labels for group ids embedded in a rule condition.
+ *
+ * @param origin - The connected org's origin, which the snapshot is scoped by.
+ * A missing origin returns an empty map rather than reading some other org's
+ * names; callers then fall back to showing the raw group id.
+ * @returns Group id → display name for every group the snapshot holds.
+ * @remarks Was the Groups tab's `chrome.storage.local` cache until ADR-0040
+ * moved the group list into the background-owned snapshot. It reads the same
+ * rows the Groups tab renders, so the two can no longer disagree — and unlike
+ * the old cache it has no TTL of its own to age out from under the rules.
+ * {@link orgSnapshotStore.getCollection} logs and swallows its own failures, so
+ * there is nothing to catch here: a store that cannot be read yields no names,
+ * which is the same degrade as an org with none.
  */
-export async function loadCachedGroupNames(): Promise<Map<string, string>> {
+export async function loadCachedGroupNames(
+  origin: string | null | undefined,
+): Promise<Map<string, string>> {
   const nameById = new Map<string, string>();
-  try {
-    const stored = await chrome.storage.local.get(GROUPS_CACHE_KEY);
-    const raw = stored?.[GROUPS_CACHE_KEY];
-    if (typeof raw !== 'string') return nameById;
-    const groups = parseGroupsCache(raw, Date.now());
-    groups?.forEach((group) => {
-      if (group.id && group.name) nameById.set(group.id, group.name);
-    });
-  } catch (err) {
-    log.warn('Failed to read cached group names', err);
+  if (!origin) return nameById;
+  const groups = await orgSnapshotStore.getCollection<RawOktaGroup>('groups', origin);
+  for (const group of groups) {
+    const name = group.profile?.name;
+    if (group.id && name) nameById.set(group.id, name);
   }
   return nameById;
 }
@@ -95,17 +103,18 @@ export async function loadCachedGroupNames(): Promise<Map<string, string>> {
  *   mirrors the page-URL group the content script used to derive.
  * @param options - `resolveGroupNames` (default `true`) controls step 2. Set it to
  *   `false` for callers that only need raw rule ids/expressions (e.g. membership
- *   analysis, which never reads a resolved name): it skips the Groups-cache read
- *   and leaves `groupNames`/`allGroupNamesMap` falling back to ids.
+ *   analysis, which never reads a resolved name): it skips the snapshot read and
+ *   leaves `groupNames`/`allGroupNamesMap` falling back to ids. `origin` is the
+ *   connected org, required for step 2 to resolve anything at all.
  * @returns `{ success: true, rules, stats, conflicts }`; a failed rules page is
  *   returned verbatim, and a thrown error becomes `{ success: false, error }`.
  */
 export async function fetchGroupRulesRequest(
   makeApiRequest: MakeApiRequest,
   currentGroupId?: string,
-  options: { resolveGroupNames?: boolean } = {},
+  options: { resolveGroupNames?: boolean; origin?: string | null } = {},
 ): Promise<FetchGroupRulesResult> {
-  const { resolveGroupNames = true } = options;
+  const { resolveGroupNames = true, origin } = options;
   try {
     // 1. Fetch all rules with pagination.
     let rules: OktaGroupRule[] = [];
@@ -123,12 +132,12 @@ export async function fetchGroupRulesRequest(
 
     log.debug('Fetched rules (total across all pages)', { count: rules.length });
 
-    // 2. Label referenced group ids with names from the Groups-tab cache — no API
-    //    calls. Loading rules costs only the page fetches above; the Groups tab is
-    //    the single source of id→name. Ids absent from that cache fall back to the
-    //    id in the display. Skipped when the caller only needs ids/expressions.
+    // 2. Label referenced group ids with names from the org snapshot — no API
+    //    calls. Loading rules costs only the page fetches above; the snapshot is
+    //    the single source of id→name. Ids absent from it fall back to the id in
+    //    the display. Skipped when the caller only needs ids/expressions.
     const groupNameMap = resolveGroupNames
-      ? await loadCachedGroupNames()
+      ? await loadCachedGroupNames(origin)
       : new Map<string, string>();
 
     // 3. Detect conflicts between active rules (O(n²), active-only).

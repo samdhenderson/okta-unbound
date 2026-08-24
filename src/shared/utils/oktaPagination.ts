@@ -70,29 +70,34 @@ export function nextPageUrl(
 }
 
 /**
- * Read a query parameter off an origin-relative URL **without decoding it**.
+ * Every raw value a query parameter carries, in order, **without decoding it**.
  *
- * Deliberately a hand-rolled scan rather than `URLSearchParams`: the value is
- * returned as the exact bytes it appears as, so re-appending it elsewhere can
+ * Deliberately a hand-rolled scan rather than `URLSearchParams`: values are
+ * returned as the exact bytes they appear as, so re-appending one elsewhere can
  * never re-encode an opaque Okta cursor (a `+` in a base64-ish `after` token
  * would decode to a space and round-trip wrong).
  *
- * @param url - Origin-relative URL (`/path?a=1&b=2`).
+ * Returns every occurrence, not the first: a parameter may legitimately repeat
+ * (`/api/v1/groups?expand=stats&expand=app` asks for two embeds), and reading
+ * only the first would let the second be silently dropped.
+ *
+ * @param url - Origin-relative URL (`/path?a=1&a=2&b=3`).
  * @param name - Parameter name to look for.
- * @returns The raw (still percent-encoded) value, `''` for a valueless param,
- * or `null` when the parameter is absent.
+ * @returns The raw (still percent-encoded) values, `''` for a valueless
+ * occurrence; `[]` when the parameter is absent.
  */
-function rawQueryParam(url: string, name: string): string | null {
+function rawQueryParamAll(url: string, name: string): string[] {
   const queryStart = url.indexOf('?');
-  if (queryStart === -1) return null;
+  if (queryStart === -1) return [];
 
+  const values: string[] = [];
   for (const pair of url.slice(queryStart + 1).split('&')) {
     if (!pair) continue;
     const eq = pair.indexOf('=');
     const key = eq === -1 ? pair : pair.slice(0, eq);
-    if (key === name) return eq === -1 ? '' : pair.slice(eq + 1);
+    if (key === name) values.push(eq === -1 ? '' : pair.slice(eq + 1));
   }
-  return null;
+  return values;
 }
 
 /**
@@ -104,23 +109,31 @@ function rawQueryParam(url: string, name: string): string | null {
  * private `expand=group-rules` on the group-members listing is silently dropped,
  * so page 2+ would come back without the embed — a silently split answer.
  *
- * Purely additive: a parameter already present on `nextUrl` is left exactly as
- * Okta wrote it (no duplicate, no re-encode), and a parameter absent from
- * `firstUrl` is not invented. When nothing needs re-applying the input string is
- * returned unchanged, byte for byte.
+ * Purely additive: a value already present on `nextUrl` is left exactly as Okta
+ * wrote it (no duplicate, no re-encode), and a value absent from `firstUrl` is
+ * not invented. When nothing needs re-applying the input string is returned
+ * unchanged, byte for byte.
+ *
+ * **Repeats are handled per value, not per name.** `expand=stats&expand=app`
+ * asks for two embeds, and Okta may echo one and drop the other — as it does on
+ * `/api/v1/groups`, where `stats` survives the `rel="next"` link. Comparing by
+ * name alone would see `expand` present, conclude nothing was dropped, and lose
+ * the second embed on every page after the first.
  *
  * @param nextUrl - The next-page URL parsed out of the `Link` header.
- * @param firstUrl - The URL of the first page, the source of truth for the params.
+ * @param firstUrl - The URL whose parameters are the source of truth.
  * @param names - Parameter names to preserve.
- * @returns `nextUrl`, with any missing named parameter appended.
+ * @returns `nextUrl`, with any missing value of a named parameter appended.
  */
 function preserveQueryParams(nextUrl: string, firstUrl: string, names: string[]): string {
   let result = nextUrl;
   for (const name of names) {
-    if (rawQueryParam(result, name) !== null) continue;
-    const value = rawQueryParam(firstUrl, name);
-    if (value === null) continue;
-    result += `${result.includes('?') ? '&' : '?'}${name}=${value}`;
+    const present = rawQueryParamAll(result, name);
+    for (const value of rawQueryParamAll(firstUrl, name)) {
+      if (present.includes(value)) continue;
+      result += `${result.includes('?') ? '&' : '?'}${name}=${value}`;
+      present.push(value);
+    }
   }
   return result;
 }
@@ -167,6 +180,26 @@ export interface FetchAllPagesOptions<T> {
    * URLs are byte-for-byte the ones Okta handed back, exactly as before.
    */
   preserveParams?: string[];
+  /**
+   * Called after each page with the URL the walk will fetch next, or `null` when
+   * the page just handled was the last one.
+   *
+   * Exists so a caller that persists progress can record a resume point without
+   * re-implementing the walk. The background org snapshot uses it to survive an
+   * MV3 worker suspension mid-walk; every other caller omits it and is unaffected.
+   */
+  onCursor?: (nextUrl: string | null, pageNumber: number) => void;
+  /**
+   * Where {@link preserveParams} reads its values from, when that is not
+   * `firstUrl`.
+   *
+   * A **resumed** walk starts at a cursor URL rather than at the collection's
+   * canonical first URL, so the parameters to re-apply must come from the
+   * canonical URL — reading them from the cursor would re-apply only whatever
+   * Okta had already echoed, which is exactly the set that does not need
+   * re-applying. Defaults to `firstUrl`, so a normal walk is unchanged.
+   */
+  paramSource?: string;
   /** Hard cap on the number of pages fetched; unlimited when omitted. */
   maxPages?: number;
   /** Label for validation/log messages; defaults to the first URL's path (query stripped). */
@@ -197,7 +230,9 @@ export async function fetchAllPages<T = unknown>(
   firstUrl: string,
   options: FetchAllPagesOptions<T> = {},
 ): Promise<T[]> {
-  const { onPage, onBeforePage, schema, maxPages, errorMessage, preserveParams } = options;
+  const { onPage, onBeforePage, onCursor, schema, maxPages, errorMessage, preserveParams } =
+    options;
+  const paramSource = options.paramSource ?? firstUrl;
   const context = options.context ?? firstUrl.split('?')[0];
   const all: T[] = [];
   let url: string | null = firstUrl;
@@ -219,12 +254,17 @@ export async function fetchAllPages<T = unknown>(
     all.push(...items);
     onPage?.(items, all.length);
 
-    if (maxPages !== undefined && pageCount >= maxPages) break;
+    if (maxPages !== undefined && pageCount >= maxPages) {
+      // A capped walk stopped early by choice, not by exhaustion. Report no
+      // cursor: the caller asked for N pages and got them.
+      onCursor?.(null, pageCount);
+      break;
+    }
 
     const rawNext = nextPageUrl(url, response.headers?.link, rawPageSize);
     const next =
       rawNext !== null && preserveParams?.length
-        ? preserveQueryParams(rawNext, firstUrl, preserveParams)
+        ? preserveQueryParams(rawNext, paramSource, preserveParams)
         : rawNext;
     // Re-run the non-advancing-cursor guard against the *preserved* URL. Once a
     // parameter is re-appended, a self-referential next link no longer equals
@@ -232,6 +272,10 @@ export async function fetchAllPages<T = unknown>(
     // opt-in caller could page forever. A no-op when preserveParams is omitted:
     // nextPageUrl already proved `next !== url`.
     url = next === url ? null : next;
+    // Reported after the guards, so the cursor a caller persists is the one the
+    // walk will actually fetch — never a self-referential link it is about to
+    // reject, which on resume would page against itself forever.
+    onCursor?.(url, pageCount);
   }
 
   return all;

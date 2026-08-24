@@ -830,3 +830,131 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
 - **Risk:** Medium if rushed — changes a shared API surface. Low to leave: the
   duplicate parse is documented in `pushGroupOps.ts`'s `@remarks`.
 - **Status:** blocked:needs-breakdown
+
+### D-028 · Independently audit the ADR-0040 org snapshot against a real org
+
+- **Category:** correctness
+- **Priority:** P1
+- **Size:** L
+- **Files:** `src/shared/snapshot/snapshotSync.ts`,
+  `src/shared/snapshot/syncMeta.ts`,
+  `src/shared/snapshot/orgSnapshotStore.ts`,
+  `src/background/snapshotScheduler.ts`, `src/background/snapshotBridge.ts`,
+  `docs/adr/0040-the-background-owns-the-org.md`
+- **Problem:** The snapshot was built and tested entirely against canned
+  pages and a `Map`-backed `idb` fake. Every unit test passes, and several
+  were checked by mutation — but **no part of it has run against real Okta.**
+  The failure mode that matters here is not a crash: it is a walk that
+  succeeds, stores a plausible-looking inventory, and is quietly wrong, which
+  no amount of green suite proves against. This item is the independent pass,
+  and it should be done by someone who did not write the code.
+
+  Audit these, in roughly descending order of "silently wrong if untrue":
+
+  1. **The delta probe actually discriminates.** `probeDeltaSupport` counts
+     rows newer than a far-future watermark and reads `0` as support. Confirm
+     against a live org that (a) the filtered count really is `0`, and (b)
+     the request is not rejected outright — a 400 reads as unsupported and
+     would condemn the org to permanent full walks without ever saying so.
+  2. **`x-total-count` is actually returned** by `/api/v1/groups?limit=1`.
+     The drift check is the only thing that can observe a deletion; a missing
+     header reads as `unknown`, escalates to a full walk every time, and
+     looks exactly like a working system that is merely slow.
+  3. **`expand=app` survives the `rel="next"` link.** `preserveParams`
+     re-appends it, but confirm on an org with >200 groups that page 2 rows
+     still carry `source` — if they do not and the re-append is also wrong,
+     every group after the first page silently loses its source app.
+  4. **`features` is really on app list rows.** The `appGroups` shard list is
+     derived from `GROUP_PUSH` in `/api/v1/apps`. If Okta omits `features`
+     there, the fallback quietly takes over and the pre-existing blind spot
+     (apps that push without importing) is still present while appearing
+     fixed. Verify a known push-enabled app appears in the shard list.
+  5. **The composite key holds.** Find or create a group assigned to two
+     apps and confirm both mappings survive. Unit-tested, but this is the
+     defect that would delete real data from a real admin's view.
+  6. **A genuinely interrupted walk resumes.** Suspend the MV3 worker
+     mid-walk (or force-reload the extension) and confirm the next attempt
+     resumes from the cursor and that the eventual sweep does **not** delete
+     rows the interrupted pages had returned.
+  7. **Storage volume and retention.** Measure the IndexedDB footprint for
+     the largest org available. Group and app profiles are plaintext on disk
+     and can carry descriptions with personal data; check the result against
+     `docs/security.md`'s "store no more than needed", and decide whether
+     anything needs a TTL or a clear-on-sign-out that it does not have.
+  8. **Rate-limit headroom.** Watch `X-Rate-Limit-Remaining` during a cold
+     sync while actively using the admin console. Walks run at `low` and
+     typed search at `interactive`, but the pairing has never been observed
+     under real limits.
+  9. **The intervals are defensible.** `DRIFT_CHECK_INTERVAL_MS` (15 min)
+     bounds how long a deleted group stays listed; `appGroups` refreshes at 6
+     hours. Both were chosen by argument, not measurement.
+  10. **Rules still live in two places.** `shared/rulesCache` was not
+      retired, so the snapshot's `rules` collection and that cache can
+      disagree. Confirm no surface reads one while another reads the other
+      within a single view.
+
+- **Done when:** Each numbered item above has a recorded verdict against a
+  real org — confirmed, refuted, or not-reachable — with any refuted item
+  filed as its own `DEBT.md` entry. Assumptions that turn out to be wrong are
+  corrected in ADR-0040 rather than only in code, since the ADR is what the
+  next change will be read against.
+- **Risk:** None to ship — this is a read-only audit. The risk is in _not_
+  doing it: every item above is currently an argument rather than an
+  observation.
+- **Status:** open
+
+### D-029 · Retire `shared/rulesCache` — the last hand-rolled cache
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** L
+- **Files:** `src/shared/rulesCache.ts` (the cache itself),
+  `src/sidepanel/cache/entityCache.ts` and
+  `src/sidepanel/hooks/useOktaApi/groupDiscovery.ts` (**writers** — not just
+  readers), `src/sidepanel/hooks/useRulesData.ts`,
+  `src/sidepanel/components/RulesTab.tsx`,
+  `src/sidepanel/hooks/fetchGroupRulesRequest.ts`,
+  `src/sidepanel/hooks/useGroupRuleReferences.ts`,
+  `src/sidepanel/hooks/useGroupSource.ts`,
+  `src/sidepanel/hooks/useUserMemberships.ts`,
+  `src/sidepanel/hooks/useUserComparison.ts`,
+  `src/sidepanel/hooks/useOktaApi/ruleImpact.ts`,
+  `src/shared/utils/membershipAnalysis.ts`,
+  `src/shared/rules/groupRuleIndex.ts` (12 non-test consumers; 25 files
+  including tests)
+- **Problem:** ADR-0040 claims "one store, one invalidation story". That is
+  not true yet. Group rules live in **two** places: authoritative in the org
+  snapshot's `rules` collection, and separately in a `chrome.storage.local`
+  slot with its own 5-minute TTL, read by the rule-impact and
+  membership-analysis surfaces. The two can disagree, and nothing detects it
+  — a view can show rule attribution from the snapshot beside a blast-radius
+  answer computed from a cache up to five minutes staler. `D-028` item 10
+  asks the auditor to look for exactly that; this item is the fix.
+
+  This is **not** a request-count win — `RulesCache` already avoids
+  refetching within its TTL — so it was deliberately ranked below the
+  `appGroups` work. It is a correctness and single-source-of-truth item.
+
+  Two things make it larger than a read-site swap:
+
+  1. **`entityCache` and `groupDiscovery` write to it**, so the write paths
+     have to go somewhere or go away — the snapshot's walk is already the
+     writer, so these are duplicate producers, not just consumers.
+  2. **The cached value is a bundle**, not raw rules: formatted rules, raw
+     rules, aggregate `stats`, and detected `conflicts`. The snapshot stores
+     raw `OktaGroupRule` rows. Consumers currently getting `stats` and
+     `conflicts` for free need them derived at read time — the shape
+     `useGroupsLoader` now uses for its own joins, and the precedent to
+     follow.
+
+- **Done when:** `src/shared/rulesCache.ts` is deleted, no module reads or
+  writes a rules cache outside `orgSnapshotStore`, and every surface that
+  used it derives what it needs from the snapshot's `rules` collection. A
+  test pins that two surfaces reading rules in one view cannot disagree.
+  Anything removed carries an ADR-0022 note naming what still covers it.
+  ADR-0040 §6's Status paragraph is updated to say the retirement is complete.
+- **Risk:** Medium — touches membership analysis and blast radius, which are
+  correctness-critical reads that several surfaces render verdicts from. Land
+  it tests-first, one consumer at a time, not as one sweep.
+- **Status:** blocked:needs-human — Sam wants this done deliberately rather
+  than picked up by an unattended run. Do not claim it in a nightly session.

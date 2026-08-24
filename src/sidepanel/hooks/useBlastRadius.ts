@@ -29,10 +29,10 @@
  *
  * ## Cost
  *
- * The only I/O is one `chrome.storage.local` read of the Groups tab's cache
- * (`loadCachedGroupNames`), memoised for the life of the hook. No Okta request
- * is issued, so this never touches the scheduler. A cache miss degrades a label
- * to a group id and nothing else.
+ * The only I/O is one read of the org snapshot's group rows
+ * (`loadCachedGroupNames`, ADR-0040), memoised for the life of the hook. No Okta
+ * request is issued, so this never touches the scheduler. A miss degrades a
+ * label to a group id and nothing else.
  *
  * ## Security
  *
@@ -104,6 +104,12 @@ export interface UseBlastRadiusOptions {
    * `unavailable` yields an `unavailable` one, which is itself a finding.
    */
   rules: RuleInventoryState;
+  /**
+   * The connected org's origin, which the snapshot's group names are scoped by
+   * (ADR-0040). Absent, every group label falls back to its id — a degrade, not
+   * a failure, and never another org's names.
+   */
+  oktaOrigin?: string | null;
 }
 
 /** The report, and the two controls that decide when it exists. */
@@ -162,14 +168,21 @@ export function useBlastRadius({
   user,
   memberships,
   rules,
+  oktaOrigin,
 }: UseBlastRadiusOptions): UseBlastRadiusReturn {
   const [state, setState] = useState<ReportState>(IDLE);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // One storage read for the life of the hook. The Groups cache does not change
-  // under us often enough to be worth re-reading per analysis, and a miss costs
-  // a label, not a verdict.
-  const groupNamesRef = useRef<ReadonlyMap<string, string> | null>(null);
+  // One snapshot read for the life of the hook. The org's group names do not
+  // change under us often enough to be worth re-reading per analysis, and a miss
+  // costs a label, not a verdict.
+  // Keyed by the origin it was read for: a memo that outlived an org change
+  // would label this org's ids with the previous org's names, which is worse
+  // than no label at all (it is confident and wrong).
+  const groupNamesRef = useRef<{
+    origin: string | null | undefined;
+    names: ReadonlyMap<string, string>;
+  } | null>(null);
   const mountedRef = useRef(true);
   // Monotonic run token: a run whose token has been superseded never commits.
   const runIdRef = useRef(0);
@@ -207,10 +220,11 @@ export function useBlastRadius({
       setIsAnalyzing(true);
 
       void (async () => {
-        let groupNames = groupNamesRef.current;
+        const memo = groupNamesRef.current;
+        let groupNames = memo && memo.origin === oktaOrigin ? memo.names : undefined;
         if (!groupNames) {
-          groupNames = await loadCachedGroupNames();
-          groupNamesRef.current = groupNames;
+          groupNames = await loadCachedGroupNames(oktaOrigin);
+          groupNamesRef.current = { origin: oktaOrigin, names: groupNames };
         }
         if (!mountedRef.current || runIdRef.current !== runId) return;
 
@@ -222,7 +236,7 @@ export function useBlastRadius({
         log.debug('Analyzed', next.status, next.counts);
       })();
     },
-    [user, memberships, rules, reset],
+    [user, memberships, rules, oktaOrigin, reset],
   );
 
   return { report, analyze, reset, isAnalyzing };

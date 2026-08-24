@@ -131,7 +131,6 @@ export function makeUseOktaApiValue(overrides: UseOktaApiValue = {}): UseOktaApi
     resetPassword: asyncFn(),
 
     // App inventory operations (read-only: Apps tab + app Overview enrichment)
-    getAllApps: asyncFn([]),
     getAppById: asyncFn(null),
     getAppAssignmentCounts: asyncFn(null),
 
@@ -149,8 +148,6 @@ export function makeUseOktaApiValue(overrides: UseOktaApiValue = {}): UseOktaApi
     runExport: asyncFn(),
 
     // Push group operations
-    getAppPushGroupMappings: asyncFn([]),
-    applyPushGroupMappings: asyncFn(),
 
     // Group analysis operations
     compareGroups: asyncFn(null),

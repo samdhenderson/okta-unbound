@@ -433,6 +433,7 @@ export function useUserComparison({
     comparedMemberships: comparedGroups,
     onComparedUserUpdated: setComparedUser,
     rules: ruleInventory,
+    oktaOrigin,
     targetTabId,
     enabled: isActive && comparedUser !== null,
   });
@@ -485,6 +486,8 @@ export function useUserComparison({
   // `RuleCard` does. Deliberately NOT solved by flipping `resolveGroupNames` in
   // `useUserMemberships`: that path keeps ids-as-names out of the shared
   // `RulesCache`, and this map also works when the Groups tab was never opened.
+  // Re-read on an org change: names are scoped by origin (ADR-0040), so keeping
+  // the previous org's would label these ids confidently and wrongly.
   const [cachedGroupNames, setCachedGroupNames] = useState<ReadonlyMap<string, string>>(
     () => new Map(),
   );
@@ -492,13 +495,13 @@ export function useUserComparison({
   useEffect(() => {
     if (!isActive) return;
     let cancelled = false;
-    void loadCachedGroupNames().then((names) => {
+    void loadCachedGroupNames(oktaOrigin).then((names) => {
       if (!cancelled) setCachedGroupNames(names);
     });
     return () => {
       cancelled = true;
     };
-  }, [isActive]);
+  }, [isActive, oktaOrigin]);
 
   const resolveGroupName = useMemo(() => {
     const byId = new Map(cachedGroupNames);
