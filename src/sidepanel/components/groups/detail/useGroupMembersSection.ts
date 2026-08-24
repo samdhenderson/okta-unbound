@@ -1,6 +1,7 @@
 /**
  * @module sidepanel/components/groups/detail/useGroupMembersSection
- * @description Container state for the Group Detail view's Members section: add/remove.
+ * @description Container state for the Group Detail view's Members section: remove,
+ * plus the write-back an add lands through.
  *
  * Reads the group's already-analyzed roster straight out of the shared entity
  * cache (`cacheKeys.groupMembers`) instead of issuing a second fetch:
@@ -9,36 +10,30 @@
  * hook only *reads* it, once the analysis has finished (`memberStatus === 'done'`).
  * Nothing here calls `getAllGroupMembers` itself.
  *
- * Owns the two membership writes
- * ({@link module:hooks/useOktaApi/groupMembers.createGroupMemberOperations}):
- * remove (behind a confirm, `skipUndoLog` left at its default so the per-user
- * undo entry is written) and add (via a debounced user search — additive, so no
- * confirm). Both mutate the local roster and re-write the shared cache entry
+ * Owns the remove write
+ * ({@link module:hooks/useOktaApi/groupMembers.createGroupMemberOperations}) behind
+ * a confirm (`skipUndoLog` left at its default so the per-user undo entry is
+ * written). It mutates the local roster and re-writes the shared cache entry
  * directly rather than invalidating-and-refetching, so every other reader of the
  * same `groupMembers` key (the compact source meter, `GroupOverview`) sees the
  * change with no extra request, and a single-user write never pays for
  * re-walking the whole group.
  *
- * The add mutation and its debounced search are not implemented here — both are
- * owned by {@link sidepanel/hooks/useAddGroupMember.useAddGroupMember}, composed
- * below via its `addMemberDirect` escape hatch (add-on-select, no modal/selection
- * state). That hook also backs the Add-member modal
- * ({@link sidepanel/components/groups/detail/AddGroupMemberModal.AddGroupMemberModal}),
- * so the Okta write and the member-exclusion filter live in exactly one place
- * shared by both this section's inline field and the modal.
- *
+ * Adding a member is not implemented here — it's owned by
+ * {@link module:sidepanel/components/groups/detail/GroupActionBar}'s modal, an
+ * independent {@link sidepanel/hooks/useAddGroupMember.useAddGroupMember} instance
+ * owned by {@link module:sidepanel/components/groups/detail/GroupDetailView}.
  * {@link UseGroupMembersSectionReturn.onMemberAdded} exposes the exact
- * roster/cache write-back this hook wires as its own inline add's `onAdded`, so
- * {@link module:sidepanel/components/groups/detail/GroupActionBar}'s modal — a
- * *second*, independent `useAddGroupMember` instance, owned by
- * {@link module:sidepanel/components/groups/detail/GroupDetailView} — folds a
- * member it adds into this exact cache entry and `cacheTick` rather than the
- * view holding a second copy of the peek/setEntry/bump-tick logic below.
+ * roster/cache write-back that modal's `onAdded` folds a newly-added member
+ * through, so that member lands in this exact cache entry and `cacheTick` rather
+ * than the view holding a second copy of the peek/setEntry/bump-tick logic below.
+ * This hook used to also compose `useAddGroupMember` itself, to back its own now-
+ * removed inline add-on-select field — that composition is gone along with the
+ * field; the write's only home is the modal's instance now.
  */
 import { useCallback, useMemo, useState } from 'react';
 import type { GroupSummary, OktaUser } from '../../../../shared/types';
 import { useOktaApi } from '../../../hooks/useOktaApi';
-import { useAddGroupMember } from '../../../hooks/useAddGroupMember';
 import { peek, setEntry } from '../../../cache/entityCache';
 import { cacheKeys } from '../../../cache/keys';
 import type { SourceStatus } from '../../../hooks/useGroupSource';
@@ -46,7 +41,7 @@ import { createLogger } from '../../../../shared/utils/logger';
 
 const log = createLogger('useGroupMembersSection');
 
-/** Async status of a single-member add/remove write. */
+/** Async status of a single-member remove write. */
 export type MemberWriteStatus = 'idle' | 'loading' | 'error';
 
 /** Return shape of {@link useGroupMembersSection}. */
@@ -65,27 +60,18 @@ export interface UseGroupMembersSectionReturn {
   removeStatus: MemberWriteStatus;
   removeError: string | null;
 
-  /** Debounced add-member search (already excludes current members from `addResults`). */
-  addQuery: string;
-  setAddQuery: (query: string) => void;
-  addResults: OktaUser[];
-  isSearchingToAdd: boolean;
-  addSearchError: string | null;
-  /** Add the chosen user immediately — additive, so no confirm step. */
-  selectToAdd: (user: OktaUser) => void;
-  addStatus: MemberWriteStatus;
-  addError: string | null;
-
   /**
-   * Folds a member added through some *other* `useAddGroupMember` instance
-   * (the action bar's modal) into this hook's roster/cache state — see the
+   * Folds a member added through the action bar's Add-member modal (a separate
+   * `useAddGroupMember` instance) into this hook's roster/cache state — see the
    * module doc. Wire it as that instance's `onAdded`.
    */
   onMemberAdded: (user: OktaUser) => void;
 }
 
 /**
- * Owns the Members section's add/remove state for one group.
+ * Owns the Members section's remove state for one group, plus the write-back
+ * an add (made elsewhere, via the action bar's modal) folds into the same
+ * roster/cache entry.
  *
  * @param group - The group whose roster is managed.
  * @param targetTabId - Connected Okta tab id; writes and search no-op without one.
@@ -93,7 +79,8 @@ export interface UseGroupMembersSectionReturn {
  *   gates when the cached roster is read (see module doc). Passing anything but
  *   `'done'` clears `members` back to `null`.
  * @param onRosterChanged - Called with the post-write roster after a successful
- *   add or remove. Wired to `useGroupSource.resummarize`, because restoring the
+ *   remove (or an add folded in via {@link UseGroupMembersSectionReturn.onMemberAdded}).
+ *   Wired to `useGroupSource.resummarize`, because restoring the
  *   cache entry alone does not correct the manual-vs-rule meter rendered directly
  *   above this section: that split is React state, so it would otherwise keep
  *   showing pre-mutation counts for as long as the view stayed mounted.
@@ -144,7 +131,7 @@ export function useGroupMembersSection(
     [group.id, onRosterChanged],
   );
 
-  // --- Remove ---------------------------------------------------------------
+  // --- Remove ------------------------------------------------------------
   const [removeTarget, setRemoveTarget] = useState<OktaUser | null>(null);
   const [removeStatus, setRemoveStatus] = useState<MemberWriteStatus>('idle');
   const [removeError, setRemoveError] = useState<string | null>(null);
@@ -186,51 +173,18 @@ export function useGroupMembersSection(
       });
   }, [removeTarget, members, removeUserFromGroup, group.id, group.name, writeBack]);
 
-  // --- Add --------------------------------------------------------------------
-  // The mutation and its debounced search live in `useAddGroupMember` (shared
-  // with the Add-member modal); this section only supplies the roster it's
-  // scoped to and adapts that hook's boolean/callback surface back onto this
-  // hook's own tri-state `addStatus`/`addError` shape, which
-  // `GroupMembersSection` already consumes.
-  const [addError, setAddError] = useState<string | null>(null);
-
-  const handleMemberAdded = useCallback(
+  // --- Add write-back -----------------------------------------------------
+  // The add mutation and its debounced search live entirely in the action
+  // bar's own `useAddGroupMember` instance (the modal) — see the module doc.
+  // This is only the fold-in: appending a member that instance already added
+  // into this hook's roster/cache, so the rest of the page (the source meter,
+  // this section's own list) reflects it with no second write or fetch.
+  const onMemberAdded = useCallback(
     (user: OktaUser) => {
       if (!members) return;
       writeBack([...members, user]);
     },
     [members, writeBack],
-  );
-
-  const handleAddResult = useCallback((result: { text: string; type: 'danger' }) => {
-    setAddError(result.text);
-  }, []);
-
-  const {
-    addQuery,
-    setAddQuery,
-    addResults,
-    isSearchingToAdd,
-    addSearchError,
-    isAddingMember,
-    addMemberDirect,
-  } = useAddGroupMember({
-    targetTabId,
-    group,
-    members,
-    onResult: handleAddResult,
-    onAdded: handleMemberAdded,
-  });
-
-  const addStatus: MemberWriteStatus = isAddingMember ? 'loading' : addError ? 'error' : 'idle';
-
-  const selectToAdd = useCallback(
-    (user: OktaUser) => {
-      if (!members) return;
-      setAddError(null);
-      void addMemberDirect(user);
-    },
-    [members, addMemberDirect],
   );
 
   return {
@@ -241,14 +195,6 @@ export function useGroupMembersSection(
     confirmRemove,
     removeStatus,
     removeError,
-    addQuery,
-    setAddQuery,
-    addResults,
-    isSearchingToAdd,
-    addSearchError,
-    selectToAdd,
-    addStatus,
-    addError,
-    onMemberAdded: handleMemberAdded,
+    onMemberAdded,
   };
 }

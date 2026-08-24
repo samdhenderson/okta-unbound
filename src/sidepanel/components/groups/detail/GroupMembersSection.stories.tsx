@@ -32,19 +32,20 @@ const meta = {
     docs: {
       description: {
         component:
-          "The Group Detail view's first mutating section: add/remove members directly.\n\n" +
+          "The Group Detail view's roster: displays members and, per row, a confirm-gated remove.\n\n" +
           'It piggybacks on the same gated read `GroupMembershipSourceSection` already offers — the roster ' +
           'here is the exact list the member-source analysis fetches, so this section costs nothing beyond ' +
           'that one opt-in paginated read. Before that analysis has run it shows a gated prompt, never an ' +
           'empty list: an empty list would read as "this group has no members," a different fact.\n\n' +
-          '`APP_GROUP` and `BUILT_IN` groups reject membership writes at the Okta API, so the add/remove ' +
-          'controls are hidden entirely and replaced with a one-line explanation — see `AppGroupReadOnly` ' +
+          "Adding a member lives in the action bar's Add-member modal, not here — see `AddGroupMemberModal`.\n\n" +
+          '`APP_GROUP` and `BUILT_IN` groups reject membership writes at the Okta API, so the per-row remove ' +
+          'control is hidden entirely and replaced with a one-line explanation — see `AppGroupReadOnly` ' +
           'and `BuiltInReadOnly` below.',
       },
     },
   },
   argTypes: {
-    groupType: { description: 'Determines whether add/remove controls render at all.' },
+    groupType: { description: 'Determines whether the per-row remove control renders at all.' },
     memberCount: { description: "The group's member count, used for the pre-load cost estimate." },
     members: { description: 'The roster, once the shared member analysis has populated it.' },
     status: {
@@ -65,14 +66,6 @@ const meta = {
     onConfirmRemove: fn(),
     removeStatus: 'idle',
     removeError: null,
-    addQuery: '',
-    onAddQueryChange: fn(),
-    addResults: [],
-    isSearchingToAdd: false,
-    addSearchError: null,
-    onSelectToAdd: fn(),
-    addStatus: 'idle',
-    addError: null,
   },
 } satisfies Meta<typeof GroupMembersSection>;
 
@@ -93,18 +86,8 @@ export const ErrorState: Story = {
 /** An empty group: nothing to add or remove, and no gate on offer. */
 export const Empty: Story = { args: { memberCount: 0 } };
 
-/** Loaded: the roster with per-member remove and the add-member search field. */
+/** Loaded: the roster with per-member remove. */
 export const Loaded: Story = { args: { status: 'done', members } };
-
-/** Typing into the add-member search, with live results excluding current members. */
-export const AddingSearch: Story = {
-  args: {
-    status: 'done',
-    members,
-    addQuery: 'sam',
-    addResults: [makeUser('00uFAKE9', 'Samantha', 'Carter')],
-  },
-};
 
 /** A remove is armed: the confirm modal is open. */
 export const RemoveConfirm: Story = {

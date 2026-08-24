@@ -1,6 +1,7 @@
 /**
  * @module sidepanel/components/groups/detail/GroupMembersSection
- * @description The Group Detail view's first mutating section: add/remove members directly.
+ * @description The Group Detail view's roster: displays members and, per row, a
+ * confirm-gated remove.
  *
  * Piggybacks on the same gated read {@link GroupMembershipSourceSection} already
  * offers — the roster this section lists is the exact `OktaUser[]` the member-source
@@ -10,21 +11,29 @@
  * empty list would read as "this group has no members," which is not the same
  * unresolved fact as "not read yet."
  *
+ * Adding a member does not live here — it's the action bar's
+ * {@link module:sidepanel/components/groups/detail/GroupActionBar}
+ * "Add" button, which opens
+ * {@link module:sidepanel/components/groups/detail/AddGroupMemberModal.AddGroupMemberModal}
+ * (ADR-0039). This section used to carry its own inline add search field; it was
+ * removed once the modal shipped, so there is exactly one add affordance rather
+ * than two.
+ *
  * Presentational: the caller owns
  * {@link sidepanel/components/groups/detail/useGroupMembersSection.useGroupMembersSection}
- * and passes its state through, so every mutation state (the remove confirm, the
- * add search, in-flight/error flags) lives outside this component.
+ * and passes its state through, so every mutation state (the remove confirm,
+ * in-flight/error flags) lives outside this component.
  *
  * ## Why `APP_GROUP` and `BUILT_IN` are read-only here
  *
  * Okta rejects a direct membership write on both — `APP_GROUP` membership is
  * imported from the app that owns the group (`useOktaApi/groupCleanup.ts` already
  * refuses to touch one), and `BUILT_IN` groups (e.g. Everyone) are managed by Okta
- * itself. Rather than let a write fail at the API and surface a raw error, the
- * add/remove controls are hidden entirely and replaced with a one-line explanation
- * of why — that sentence is the actual value here, since "why can't I edit this
- * group?" is the question a reader would otherwise have to guess at from a
- * disabled button with no tooltip.
+ * itself. Rather than let a write fail at the API and surface a raw error, this
+ * section's per-row remove control is hidden entirely and replaced with a
+ * one-line explanation of why — that sentence is the actual value here, since
+ * "why can't I edit this group?" is the question a reader would otherwise have
+ * to guess at from a disabled button with no tooltip.
  *
  * Deliberately silent on whether a rule re-adds a removed member: the API
  * reference's claim that it does is unverified, and the Admin Console reportedly
@@ -41,7 +50,6 @@ import {
   LoadingSpinner,
   Modal,
   ScrollableList,
-  SearchDropdown,
 } from '../../shared';
 import Icon from '../../overview/shared/Icon';
 import type { GroupSummary, OktaUser } from '../../../../shared/types';
@@ -83,16 +91,6 @@ export interface GroupMembersSectionProps {
   onConfirmRemove: () => void;
   removeStatus: MemberWriteStatus;
   removeError: string | null;
-
-  /** Debounced add-member search. */
-  addQuery: string;
-  onAddQueryChange: (query: string) => void;
-  addResults: OktaUser[];
-  isSearchingToAdd: boolean;
-  addSearchError: string | null;
-  onSelectToAdd: (user: OktaUser) => void;
-  addStatus: MemberWriteStatus;
-  addError: string | null;
 }
 
 /** One member row: name/email/login, plus a remove button unless the section is read-only. */
@@ -124,8 +122,8 @@ const MemberListRow: React.FC<{
 );
 
 /**
- * Renders the group's roster with inline add/remove, gated behind the same
- * member-source analysis {@link GroupMembershipSourceSection} offers.
+ * Renders the group's roster with a per-row, confirm-gated remove, gated behind
+ * the same member-source analysis {@link GroupMembershipSourceSection} offers.
  */
 const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
   groupType,
@@ -141,14 +139,6 @@ const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
   onConfirmRemove,
   removeStatus,
   removeError,
-  addQuery,
-  onAddQueryChange,
-  addResults,
-  isSearchingToAdd,
-  addSearchError,
-  onSelectToAdd,
-  addStatus,
-  addError,
 }) => {
   const hasMembers = memberCount > 0;
   const readOnlyReason = READ_ONLY_REASON[groupType];
@@ -193,33 +183,6 @@ const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
         />
       ) : (
         <div className="space-y-3">
-          {!readOnly && (
-            <SearchDropdown
-              label="Add a member"
-              placeholder="Search by email, name, or login..."
-              query={addQuery}
-              onQueryChange={onAddQueryChange}
-              isSearching={isSearchingToAdd}
-              results={addResults}
-              showDropdown={addResults.length > 0}
-              onSelect={onSelectToAdd}
-              disabled={addStatus === 'loading'}
-              hint={addSearchError ?? undefined}
-              renderResult={(user) => (
-                <div>
-                  <div className="text-sm font-medium text-neutral-900">
-                    {userDisplayName(user)}
-                  </div>
-                  <div className="text-xs text-neutral-500">{user.profile.email}</div>
-                </div>
-              )}
-            />
-          )}
-
-          {addError && (
-            <AlertMessage message={{ text: addError, type: 'danger' }} className="mt-1" />
-          )}
-
           {visibleMembers.length === 0 ? (
             <EmptyState
               icon="users"
