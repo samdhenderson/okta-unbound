@@ -3,7 +3,7 @@
  *
  * Two contracts are pinned here:
  *
- * 1. **The palette navigates.** It filters the eight top-level sections by
+ * 1. **The palette navigates.** It filters the nine top-level sections by
  *    label, tells you which one you are already on, and hands the chosen id back
  *    through the same `onTabChange` path the icon rail uses before closing.
  * 2. **The keyboard model is roving focus, not a combobox.** The shared `Input`
@@ -70,13 +70,14 @@ describe('TabJumpPalette', () => {
     it('filters to a case-insensitive substring match on the label', async () => {
       renderPalette();
 
-      // Uppercase query, and "or" appears mid-label in both matches — so this
-      // pins case-insensitivity and substring (not prefix) matching at once.
+      // Uppercase query, and "or" appears mid-label in all three matches — so
+      // this pins case-insensitivity and substring (not prefix) matching at once.
       await userEvent.type(field(), 'OR');
 
       expect(row('Export')).toBeInTheDocument();
+      expect(row('Explorer')).toBeInTheDocument();
       expect(row('History')).toBeInTheDocument();
-      expect(rows()).toHaveLength(2);
+      expect(rows()).toHaveLength(3);
       expect(screen.queryByRole('button', { name: /^Overview/ })).toBeNull();
     });
 
@@ -225,7 +226,7 @@ describe('TabJumpPalette', () => {
     it('announces the number of matching sections', async () => {
       renderPalette();
 
-      expect(screen.getByRole('status')).toHaveTextContent('8 sections available');
+      expect(screen.getByRole('status')).toHaveTextContent('9 sections available');
 
       await userEvent.type(field(), 'export');
 

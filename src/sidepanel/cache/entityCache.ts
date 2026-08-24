@@ -195,7 +195,7 @@ export function setEntry<T>(key: EntityKey, data: T, options: EntityCacheOptions
  *
  * - **Subscribed keys.** A live subscriber means a mounted component is rendering
  *   that entry; evicting it fires the subscription and sends the component
- *   straight back to Okta. With up to eight tabs mounted at once (ADR-0018) that
+ *   straight back to Okta. With up to nine tabs mounted at once (ADR-0018) that
  *   is the common case, not a corner one.
  * - **In-flight keys.** A fetch is already paying for that entry.
  *
