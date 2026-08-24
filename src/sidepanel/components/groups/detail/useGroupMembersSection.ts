@@ -18,11 +18,19 @@
  * same `groupMembers` key (the compact source meter, `GroupOverview`) sees the
  * change with no extra request, and a single-user write never pays for
  * re-walking the whole group.
+ *
+ * The add mutation and its debounced search are not implemented here — both are
+ * owned by {@link sidepanel/hooks/useAddGroupMember.useAddGroupMember}, composed
+ * below via its `addMemberDirect` escape hatch (add-on-select, no modal/selection
+ * state). That hook also backs the Add-member modal
+ * ({@link sidepanel/components/groups/detail/AddGroupMemberModal.AddGroupMemberModal}),
+ * so the Okta write and the member-exclusion filter live in exactly one place
+ * shared by both this section's inline field and the modal.
  */
 import { useCallback, useMemo, useState } from 'react';
 import type { GroupSummary, OktaUser } from '../../../../shared/types';
 import { useOktaApi } from '../../../hooks/useOktaApi';
-import { useDebouncedUserSearch } from '../../../hooks/useDebouncedUserSearch';
+import { useAddGroupMember } from '../../../hooks/useAddGroupMember';
 import { peek, setEntry } from '../../../cache/entityCache';
 import { cacheKeys } from '../../../cache/keys';
 import type { SourceStatus } from '../../../hooks/useGroupSource';
@@ -83,7 +91,7 @@ export function useGroupMembersSection(
   onRosterChanged?: (members: OktaUser[]) => void,
 ): UseGroupMembersSectionReturn {
   const api = useOktaApi({ targetTabId });
-  const { addUserToGroup, removeUserFromGroup } = api;
+  const { removeUserFromGroup } = api;
 
   // Bumped by `writeBack` so the `useMemo` below re-reads the cache after a
   // local write. Not a mirror of the cache's own value — just a "read it again"
@@ -164,56 +172,50 @@ export function useGroupMembersSection(
   }, [removeTarget, members, removeUserFromGroup, group.id, group.name, writeBack]);
 
   // --- Add --------------------------------------------------------------------
-  const [addStatus, setAddStatus] = useState<MemberWriteStatus>('idle');
+  // The mutation and its debounced search live in `useAddGroupMember` (shared
+  // with the Add-member modal); this section only supplies the roster it's
+  // scoped to and adapts that hook's boolean/callback surface back onto this
+  // hook's own tri-state `addStatus`/`addError` shape, which
+  // `GroupMembersSection` already consumes.
   const [addError, setAddError] = useState<string | null>(null);
-  const [addSearchError, setAddSearchError] = useState<string | null>(null);
+
+  const handleMemberAdded = useCallback(
+    (user: OktaUser) => {
+      if (!members) return;
+      writeBack([...members, user]);
+    },
+    [members, writeBack],
+  );
+
+  const handleAddResult = useCallback((result: { text: string; type: 'danger' }) => {
+    setAddError(result.text);
+  }, []);
 
   const {
-    searchQuery: addQuery,
-    setSearchQuery: setAddQuery,
-    searchResults,
-    setSearchResults,
-    isSearching: isSearchingToAdd,
-  } = useDebouncedUserSearch({
-    targetTabId: targetTabId ?? undefined,
-    onError: setAddSearchError,
-    debounceMs: 400,
-    minQueryLength: 2,
-    log,
+    addQuery,
+    setAddQuery,
+    addResults,
+    isSearchingToAdd,
+    addSearchError,
+    isAddingMember,
+    addMemberDirect,
+  } = useAddGroupMember({
+    targetTabId,
+    group,
+    members,
+    onResult: handleAddResult,
+    onAdded: handleMemberAdded,
   });
 
-  // A member already in the group is never a valid "add" result.
-  const memberIds = useMemo(() => new Set((members ?? []).map((m) => m.id)), [members]);
-  const addResults = useMemo(
-    () => searchResults.filter((u) => !memberIds.has(u.id)),
-    [searchResults, memberIds],
-  );
+  const addStatus: MemberWriteStatus = isAddingMember ? 'loading' : addError ? 'error' : 'idle';
 
   const selectToAdd = useCallback(
     (user: OktaUser) => {
       if (!members) return;
-      setAddStatus('loading');
       setAddError(null);
-
-      addUserToGroup(group.id, group.name, user)
-        .then((result) => {
-          if (!result.success) {
-            setAddStatus('error');
-            setAddError(result.error || 'Failed to add member.');
-            return;
-          }
-          writeBack([...members, user]);
-          setAddQuery('');
-          setSearchResults([]);
-          setAddStatus('idle');
-        })
-        .catch((err: unknown) => {
-          log.error('Failed to add member:', err);
-          setAddStatus('error');
-          setAddError(err instanceof Error ? err.message : 'Failed to add member.');
-        });
+      void addMemberDirect(user);
     },
-    [members, addUserToGroup, group.id, group.name, writeBack, setAddQuery, setSearchResults],
+    [members, addMemberDirect],
   );
 
   return {
