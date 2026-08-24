@@ -45,7 +45,7 @@ export interface AppSummary {
  * Build app-scoped operations bound to a {@link CoreApi} transport.
  *
  * @param coreApi - Shared transport surface.
- * @returns `{ searchApps, getAllApps, getAppById, getAppAssignmentCounts,
+ * @returns `{ searchApps, getAppById, getAppAssignmentCounts,
  * getAppGroupAssignments }`.
  */
 export function createAppOperations(coreApi: CoreApi) {
@@ -74,28 +74,6 @@ export function createAppOperations(coreApi: CoreApi) {
       return [];
     }
   };
-
-  /**
-   * List every app in the org, following `Link` pagination (200 per page).
-   *
-   * @returns All validated apps across all pages.
-   * @throws Error on the first failed page — deliberately mirroring
-   * `getAllGroups` (`groupDiscovery`), the precedent for a full-collection read:
-   * a truncated inventory silently rendered as complete is worse than a banner,
-   * so the caller (a loader hook) decides how to surface it.
-   * @remarks Malformed rows are dropped leniently by boundary validation
-   * ({@link oktaAppListItemSchema}, ADR-0006) rather than failing the walk.
-   */
-  const getAllApps = async (): Promise<OktaAppListItem[]> =>
-    fetchAllPages<OktaAppListItem>(
-      (url) => coreApi.makeApiRequest(url),
-      `/api/v1/apps?limit=${OKTA_PAGE_SIZE}`,
-      {
-        schema: oktaAppListItemSchema,
-        context: 'GET /api/v1/apps',
-        errorMessage: 'Failed to fetch apps',
-      },
-    );
 
   /**
    * Fetch one app by id.
@@ -204,7 +182,6 @@ export function createAppOperations(coreApi: CoreApi) {
 
   return {
     searchApps,
-    getAllApps,
     getAppById,
     getAppAssignmentCounts,
     getAppGroupAssignments,

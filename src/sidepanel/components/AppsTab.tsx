@@ -6,7 +6,7 @@
  * and the error banner) and composes {@link useAppsData} with the presentational
  * {@link AppsToolbar} and {@link AppsListPanel}. There are no writes anywhere in
  * this tab — every operation it reaches for is a read
- * (`getAllApps`, `getAppAssignmentCounts`).
+ * (`getAppAssignmentCounts`); the inventory itself comes from the org snapshot.
  */
 import React, { useCallback, useMemo, useState } from 'react';
 import { AlertMessage, Button, PageHeader } from './shared';
@@ -62,7 +62,6 @@ const AppsTab: React.FC<AppsTabProps> = ({ targetTabId, oktaOrigin, isActive = t
   }, []);
 
   const { apps, isLoading, loadApps } = useAppsData({
-    api,
     onError: handleError,
     targetTabId,
     oktaOrigin,

@@ -260,7 +260,6 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       resetPassword: userOps.resetPassword,
 
       // App operations (read-only: Applications tab)
-      getAllApps: appOps.getAllApps,
       getAppById: appOps.getAppById,
       getAppAssignmentCounts: appOps.getAppAssignmentCounts,
       // Fallback for naming an app's granting group when the
