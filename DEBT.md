@@ -15,11 +15,32 @@ Format:
 - **Priority:** P0 security/data-loss · P1 correctness · P2 perf/UX friction · P3 polish
 - **Size:** S <1hr · M half-day · L needs breaking down
 - **Files:**
+- **Verified:** YYYY-MM-DD — <who or what confirmed the Problem still holds>
 - **Problem:**
 - **Done when:** <checkable without asking Sam>
 - **Risk:**
-- **Status:** open | claimed:<branch> | blocked:<reason> | done:<PR#>
+- **Status:** open | claimed:<branch> | research:awaiting-review
+  | blocked:<reason> | done:<PR#> | closed:refuted-<date>
+  | closed:overtaken-by-<sha>
 ```
+
+Four gate words, deliberately distinct — they were one word until 2026-08-24
+and three items rotted behind it:
+
+- `blocked:needs-human` — a product or judgment call only Sam can make. A
+  nightly must not improvise one.
+- `research:awaiting-review` — scoped by a nightly as a Proposed ADR. Its PR
+  touches `docs/` only, zero files under `src/`. Sam moves it to `open` by
+  accepting the ADR; the session that wrote it never does.
+- `closed:refuted-<date>` — the Problem was investigated and does not hold.
+  A refuted item is a **finished** item, not a skipped one.
+- `closed:overtaken-by-<sha>` — the code moved and dissolved the Problem.
+
+**Every item carries a `Verified` date.** Three of the five items gated on
+2026-08-24 had drifted out from under their own filings — `D-008` named a
+consumer count that was wrong by nine, `D-027` named a file that had been
+deleted, `D-029` named a writer that was only a doc comment. A filing is a
+claim about code, and code moves.
 
 ---
 
@@ -138,23 +159,102 @@ Format:
 
 ### D-007 · No session-expiry / 401 handling anywhere in the API path
 
+**Scoped 2026-08-24 and split.** The original filing was `blocked:needs-breakdown`
+and sized `L` on the assumption that the transport layer had to learn about
+401s. It already has. `src/content/apiRequest.ts:150-160` puts
+`status: response.status` on the failure result, `RequestResult`
+(`src/shared/scheduler/types.ts:82-91`) carries it across the message boundary
+unchanged, and `core.ts:229` hands it to the panel. **The number arrives intact
+and nothing reads it** — zero non-test occurrences of `401` in `src/`. What was
+missing was a decision, not plumbing. Scoping also turned up an unrelated defect,
+filed below as `D-007c`.
+
+**The decision (Sam, 2026-08-24):** in this extension a 401 means the session is
+gone, full stop. The panel only ever calls endpoints the signed-in admin is
+already browsing, using that page's own session cookie — Okta answers a genuine
+"you may not do this" with a 403, not a 401. So `401 ⇒ expired` needs no
+heuristic and no allow-list of endpoints.
+
+### D-007a · A failure result that can say what failed
+
 - **Category:** correctness
 - **Priority:** P2
-- **Size:** L
-- **Files:** `src/content/apiRequest.ts`,
-  `src/shared/scheduler/apiScheduler.ts`,
-  `src/sidepanel/hooks/useOktaApi/core.ts`
-- **Problem:** Zero handling anywhere of an expired-session 401 as distinct
-  from any other failed request (see `CONVENTIONS.md`'s Session-expiry
-  section for the decision record). A mid-session Okta logout currently
-  surfaces as an ordinary failed-request error, with no path to a "your
-  session expired, please refresh" UI state.
-- **Done when:** Not yet defined — needs scoping first (what counts as
-  "expired" vs a genuine 401 authorization error; whether the signal surfaces
-  at the scheduler or content-script layer).
-- **Risk:** High if rushed — touches the security-relevant request path;
-  scope through `security-logging-reviewer` before implementation.
-- **Status:** blocked:needs-breakdown
+- **Size:** S
+- **Files:** `src/shared/scheduler/types.ts:82-91`,
+  `src/sidepanel/hooks/useOktaApi/core.ts:200-229`,
+  `src/sidepanel/hooks/useOktaApi/appOperations.ts:88-98`
+- **Verified:** 2026-08-24 — read end to end during the D-007 scoping pass.
+- **Problem:** `RequestResult` is one non-discriminated interface with
+  `success: boolean` and an optional `status`, so a caller that checks
+  `!result.success` still gets `status` typed as possibly-absent and has no
+  reason to look at it. Every failure mode reads the same at the type level:
+  expired session, rate limit, deleted entity, malformed response.
+- **Done when:** `RequestResult` is a discriminated union whose failure arm
+  carries a non-optional `status` (transport throws, which have no HTTP status,
+  get an explicit sentinel rather than an absent field — see
+  `apiRequest.ts:171-179`); a single `isSessionExpired(result)` predicate lives
+  in `src/shared/scheduler/` and matches 401 only; `getAppById` uses it to stop
+  collapsing rate-limited into missing. No behavior change beyond `getAppById`'s
+  return — this slice is types plus one caller.
+- **Risk:** Low. Touches the shape every API caller reads, so it is wide, but the
+  compiler finds every site. Route through `security-logging-reviewer` anyway:
+  it is the request path.
+- **Status:** open
+- **Related:** absorbs what `D-027` wanted before that item was overtaken.
+
+### D-007b · One expired session, not thirty failed requests
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** M
+- **Files:** `docs/adr/0041-a-401-is-a-session-not-a-request.md` (to be created),
+  `src/shared/scheduler/apiScheduler.ts`, `src/sidepanel/App.tsx`
+- **Verified:** 2026-08-24 — `CONVENTIONS.md`'s Session-expiry section still
+  describes the live behavior correctly.
+- **Problem:** When the admin's Okta session ends mid-use — signed out in
+  another tab, or simply timed out — the panel does not notice. Every queued
+  request fails with an ordinary "request failed" error, so a user sees a dozen
+  unrelated surfaces break at once and concludes the extension is broken rather
+  than that they need to sign in again. There is also nothing to stop the
+  scheduler draining a full queue into the same 401 thirty times over.
+- **Done when:** `docs/adr/0041-a-401-is-a-session-not-a-request.md` exists at
+  Status: Proposed and answers, at minimum: **where** the signal surfaces (the
+  scheduler sees every request and is the only layer that can pause the queue —
+  that is the argument for it over the content script); **what** the panel
+  renders and whether it is global or per-surface; whether in-flight and queued
+  work is paused or drained; how the state clears (does the panel re-probe, or
+  does the admin refresh); and what it costs a user who was mid-operation. It
+  must also say what happens to an audit entry for an operation interrupted this
+  way — the `D-013` policy and this one meet there.
+- **Risk:** None to write. Medium to implement, which is why the ADR comes first.
+- **Status:** research:awaiting-review
+
+### D-007c · A 429 is never retried, because it is not an error
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/shared/scheduler/apiScheduler.ts:373,392,406-408,454-479`
+- **Verified:** 2026-08-24 — found while scoping `D-007`; read directly.
+- **Problem:** `makeApiCall` resolves with the content script's failure object
+  rather than throwing, so a 429 takes the **success** path at `:373`,
+  increments `metrics.successfulRequests` at `:392`, and never reaches the
+  `catch` at `:406-408` that is the only thing wired to `retryRequest`. Retry
+  and exponential backoff therefore cover transport throws and timeouts and
+  nothing else. Rate limiting is handled purely preventively — `rateLimitDetector`
+  plus the cooldown at `:375-383` — so a 429 that gets through anyway is simply
+  a lost request, reported to the user as a generic failure, and counted as a
+  success in the metrics.
+- **Done when:** A resolved failure whose status is retryable (429, and 503 if
+  the ADR in `D-007a` agrees) is routed into the existing `retryRequest` path
+  with its existing backoff, honoring `cancelGeneration` (`:470-475`) the same
+  way; `metrics.successfulRequests` no longer counts a resolved failure. A test
+  pins that a 429 is retried and that a 401 is **not** — retrying an expired
+  session is just a slower way to fail.
+- **Risk:** Medium — changes retry behavior against a live rate limiter. Land it
+  after `D-007a`, which gives it the typed status to branch on.
+- **Status:** open
+- **Depends on:** `D-007a`
 
 ### D-008 · Confirm useEntityQuery.ts's abandoned-abstraction status
 
@@ -162,16 +262,33 @@ Format:
 - **Priority:** P3
 - **Size:** S
 - **Files:** `src/sidepanel/cache/useEntityQuery.ts`
-- **Problem:** Zero production consumers found — every real consumer
-  hand-rolls its own effect around `entityCache` directly, and at least one
-  (`useAppsData.ts:189-192`) documents why it can't use `useEntityQuery`
-  (ADR-0026: cache key ≠ latch identity). Unclear whether this is a
-  deliberately-kept seam for future consumers or dead code.
-- **Done when:** Not checkable without Sam — keep-as-seam vs. delete is a
-  judgment call about intent, not a code question.
-- **Risk:** Low to investigate; removing a public cache abstraction without
-  sign-off could surprise him.
-- **Status:** blocked:needs-human
+- **Verified:** 2026-08-24 — **refuted.** Every importer enumerated, not sampled.
+- **Problem:** ~~Zero production consumers found~~ — **this was wrong.** The
+  filing claimed no production consumer used the hook and that every real
+  consumer hand-rolled an effect around `entityCache`. There are **9 production
+  importers across 11 call sites**: `PolicyCard.tsx:52`, `UserOverview.tsx:60`,
+  `AuthPolicyOverview.tsx:82`, `GroupOverview.tsx:133`, `AppListItem.tsx:55`,
+  `useUserApps.ts:157`, `useUserDetailPanes.ts:207,215`,
+  `useAppOverviewData.ts:69,76`, `useUserComparison.ts:329`. The only test
+  importer is its own co-located suite.
+
+  `docs/adr/0026-visibility-gating-patterns.md:100` affirms those consumers as
+  correct as written, and `CLAUDE.md:157` names the hook as part of the panel's
+  caching layer. It is live infrastructure, not a seam kept for a future caller.
+
+  The evidence the filing rested on had also moved: the cited
+  `useAppsData.ts:189-192` comment explaining why that hook cannot use
+  `useEntityQuery` was rewritten by `b2ab617` when `useAppsData` moved onto
+  `useOrgSnapshot`. The live restatement of the same point — latch identity is
+  the (tab, origin) pair, not the cache key — is now
+  `src/sidepanel/hooks/useOwedLoad.ts:14-21`.
+
+- **Done when:** Closed. Nothing to build. **A nightly that had acted on the
+  original filing would have deleted a hook nine surfaces depend on**, and the
+  ledger would have read as a tidy P3 cleanup while it happened — which is why
+  the `Verified` line now exists in the format above.
+- **Risk:** n/a.
+- **Status:** closed:refuted-2026-08-24
 
 ### D-009 · Modal content can render underneath ActivityBar
 
@@ -331,30 +448,138 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
 
 ### D-013 · An audit entry can misattribute who changed a rule, silently
 
+**Decided 2026-08-24 and split.** The item was `blocked:needs-human` because
+"what should the audit trail say when we do not know who acted" is a product
+call. It has been made.
+
+**The policy:** the extension never writes an actor it did not resolve. An
+unresolved actor is represented **explicitly**, so no reader can mistake it for
+a real person; the operation still goes ahead, because refusing a legitimate
+admin action over a failed metadata lookup is a worse failure than a labelled
+gap — and `/users/me` failing is exactly what an expiring session looks like
+(`D-007`); and the user is told once, non-blockingly, so the gap is not a
+surprise discovered months later in an export.
+
+**The surface is wider than this item's original filing said**, in two ways the
+implementer must not lose:
+
+1. **Four independent implementations**, not one. `useRuleLifecycle.ts:93,102`,
+   `useRuleConsolidation.ts:213,217`, `useGroupMerge.ts:131,135` each hand-roll
+   the same `/api/v1/users/me` call with the same three silent paths, and
+   `CoreApi.getCurrentUser` (`core.ts:250,258,261`) does it a fourth time behind
+   the facade, serving group cleanup and every CSV export. A fix scoped to
+   `useRuleLifecycle` would leave three surfaces contradicting the new policy.
+2. **Three paths reach the placeholder**, and only one of them is a thrown
+   error: the `catch` (the lookup threw), a resolved `success: false`, and a
+   200 whose profile carries no `email`. From the hook's side that third case is
+   a **successful** call — a fix that asks "did the lookup fail?" misses it. It
+   is also the one that gets **cached** for five minutes (`core.ts:250` feeding
+   `:253-255`), so a single empty profile can mislabel every audited operation
+   on that tab until the TTL turns over.
+
+**Why the representation change is nearly free right now:** nothing in the
+shipping UI renders `performedBy` — `grep -rn "performedBy"
+src/sidepanel/components/` is empty. The component named like the audit viewer,
+`AuditLogViewer.tsx` (the History tab, mounted at `App.tsx:486`), reads
+`undoManager` via `chrome.storage`, a different store with a different shape.
+The IndexedDB audit trail is **write-only in the shipping product**: its only
+production callers are `logOperation` and the background retention sweep. So
+changing what an actor is breaks zero rendering code today, and gets materially
+more expensive the day an audit viewer ships.
+
+### D-013a · The facade resolves an actor, or says it could not
+
 - **Category:** correctness
 - **Priority:** P1
 - **Size:** M
-- **Files:** `src/sidepanel/hooks/useRuleLifecycle.ts:93,99-106`
-- **Problem:** The underlying defect D-004 pinned but deliberately did not
-  fix. When the current-user lookup does not yield an email, the hook writes
-  the audit entry anyway, attributed to the literal `unknown@unknown.com`,
-  and surfaces nothing to the user — so the trail records a rule change with
-  a placeholder actor and reads exactly like a real entry. **The surface is
-  wider than D-004's filing said:** three distinct paths reach the
-  placeholder — the lookup throwing (the catch), a `success: false`
-  response, and a 200 whose profile carries no `email`. A fix that only
-  handles the throw would leave two paths misattributing. All three are
-  pinned by `useRuleLifecycle.test.ts` as `CURRENT BEHAVIOUR`, so a fix has
-  something to move.
-- **Done when:** Not yet defined — needs a decision first: refuse the
-  mutation, write the entry with an explicit "actor unknown" marker
-  distinguishable from a real address, or surface a warning. That is a
-  product call about an audit trail, not a code question. Whatever is
-  chosen, retarget the three `CURRENT BEHAVIOUR` tests assertion-by-
-  assertion rather than deleting them.
-- **Risk:** Medium — audit-trail semantics; route through
+- **Files:** `src/sidepanel/hooks/useOktaApi/core.ts:239-263`,
+  `src/sidepanel/hooks/useOktaApi/currentUserCache.ts:19,45`,
+  `src/shared/types.ts:445-461`, `src/shared/storage/auditStore.ts:186-201`,
+  `src/sidepanel/hooks/useOktaApi/groupCleanup.ts:110,240`,
+  `src/sidepanel/hooks/useOktaApi/exportEngine.ts:190,196`,
+  `src/sidepanel/hooks/useOktaApi/core.getCurrentUser.test.ts:83`
+- **Verified:** 2026-08-24 — all paths and all callers read directly.
+- **Problem:** `getCurrentUser()` returns `{ email, id }` with
+  `unknown@unknown.com` / `unknown` substituted on all three failure paths, so
+  its callers are handed a string that is indistinguishable in type and in
+  shape from a real identity. `AuditLogEntry.performedBy` is a bare `string`
+  with no discriminant, so there is nowhere for "we could not tell" to live even
+  if a caller wanted to record it.
+- **Done when:** `getCurrentUser()` returns a discriminated
+  `Actor = { kind: 'resolved'; email: string; id: string } | { kind: 'unavailable'; reason: 'threw' | 'failed' | 'no-email' }`;
+  `AuditLogEntry` carries `performedBy: string | null` plus
+  `actorResolution: 'resolved' | 'unavailable'`; the literal
+  `unknown@unknown.com` no longer appears anywhere in `src/`, including
+  `currentUserCache.ts:19`'s doc comment; **only `kind: 'resolved'` is ever
+  cached** (today the no-email placeholder is); `exportAuditLog`'s
+  "Performed By" column renders `(actor unavailable)` for a null actor, through
+  `csvUtils.escapeCSV` like every other cell; `groupCleanup` and `exportEngine`
+  are updated at both their lookup and their `performedBy` sites; and
+  `core.getCurrentUser.test.ts:83` is retargeted assertion-by-assertion with an
+  ADR-0022 note.
+
+  **Check, do not assume:** `auditStore.ts:73-79` declares an index on
+  `performedBy`. IndexedDB does not index null keys, so unavailable-actor
+  entries fall out of a `performedBy`-filtered `getHistory` query. That is the
+  correct outcome — they have no actor to filter by — but confirm it and record
+  the confirmation in the PR. No DB version bump: the store and its indexes are
+  unchanged, only a value becomes nullable.
+
+- **Risk:** Medium — audit-trail semantics and a shared facade. Route through
   `security-logging-reviewer`.
-- **Status:** blocked:needs-human
+- **Status:** open
+
+### D-013b · The three hand-rolled copies use the facade
+
+- **Category:** correctness
+- **Priority:** P1
+- **Size:** M
+- **Files:** `src/sidepanel/hooks/useRuleLifecycle.ts:93,98-107,131,160,192`,
+  `src/sidepanel/hooks/useRuleConsolidation.ts:213,217,300`,
+  `src/sidepanel/hooks/useGroupMerge.ts:131,135,240,241`,
+  `src/sidepanel/hooks/useRuleLifecycle.test.ts:105,123,135,285`,
+  `src/sidepanel/hooks/useRuleConsolidation.test.ts:106`,
+  `src/sidepanel/hooks/useGroupMerge.test.ts:106`
+- **Verified:** 2026-08-24 — all three copies and all six tests read directly.
+- **Problem:** Three hooks re-implement the identical `/api/v1/users/me` lookup
+  the facade already performs and caches per tab, each with its own copy of the
+  three silent paths. Beyond the duplication, it means the `D-013a` policy would
+  apply to exports and group cleanup but not to the three operations most likely
+  to need an audit trail.
+- **Done when:** All three hooks take their actor from `getCurrentUser()`; the
+  hand-rolled requests are deleted; `useGroupMerge`'s two entries (`:240,241`)
+  both carry the resolved actor; and **six** tests are retargeted
+  assertion-by-assertion, each with an ADR-0022 note naming what still covers
+  the case. Four are the `CURRENT BEHAVIOUR` cases in `useRuleLifecycle.test.ts`
+  — note there are **four**, at `:105`, `:123`, `:135` and `:285`; the original
+  filing said three and missed the failure-path one. The other two,
+  `useRuleConsolidation.test.ts:106` and `useGroupMerge.test.ts:106`, assert the
+  placeholder as _expected_ behaviour with no marker at all, so they will pass
+  silently until someone reads them.
+- **Risk:** Medium. Behavior change on an audit path, deliberately.
+- **Status:** open
+- **Depends on:** `D-013a`
+- **Closes:** `D-014` — the per-tab TTL cache comes along with the facade.
+
+### D-013c · Tell the admin their identity could not be confirmed
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/components/` (the existing notification surface —
+  find it, do not add one), plus the three hooks from `D-013b`
+- **Verified:** 2026-08-24.
+- **Problem:** Under `D-013a`/`D-013b` the trail stops lying, but the admin
+  still learns nothing at the time. The gap would first be noticed in a CSV
+  export, long after the context that would explain it is gone.
+- **Done when:** An operation whose actor resolved `unavailable` shows one
+  non-blocking notice — "Couldn't confirm your signed-in identity. This action
+  will be recorded without an actor." — and the operation proceeds regardless.
+  Reuse what is already in `components/shared`; a new surface for this needs a
+  reason. Ships with a story, axe-clean (ADR-0010/ADR-0014).
+- **Risk:** Low.
+- **Status:** open
+- **Depends on:** `D-013b`
 
 ### D-014 · useRuleLifecycle re-implements CoreApi.getCurrentUser
 
@@ -363,17 +588,17 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
 - **Size:** S
 - **Files:** `src/sidepanel/hooks/useRuleLifecycle.ts:99-106`,
   `src/sidepanel/hooks/useOktaApi/core.ts:239-263`
+- **Verified:** 2026-08-24 — still true, and now subsumed.
 - **Problem:** `CoreApi.getCurrentUser()` already does exactly what the hook
-  hand-rolls — the same `/api/v1/users/me` call with the same
-  `unknown@unknown.com` fallback — plus a per-tab TTL cache. The hook
-  bypasses it and re-hits the endpoint on every activate/deactivate.
-- **Done when:** The hook calls `getCurrentUser()` from the facade; the
-  hand-rolled request is gone; `useRuleLifecycle.test.ts` still passes (it
-  mocks the facade, so the seam is already there).
-- **Risk:** Low, but **sequence it after D-013** — that item may change what
-  the fallback should be, and doing this first would move the decision into
-  a shared helper used by other callers.
-- **Status:** open
+  hand-rolls — the same `/api/v1/users/me` call with the same fallback — plus a
+  per-tab TTL cache. The hook bypasses it and re-hits the endpoint on every
+  activate/deactivate.
+- **Done when:** Nothing to do separately. `D-013b` moves this hook and two
+  others onto the facade, which is this item's entire content; doing it first
+  would bake the old fallback into the shared helper, which is what the original
+  "sequence it after D-013" note was protecting against.
+- **Risk:** n/a.
+- **Status:** blocked:superseded-by-D-013b
 
 ### D-015 · The ghost copy-id recipe is now duplicated in EntityLink and CopyableId
 
@@ -810,26 +1035,31 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
 - **Category:** standards
 - **Priority:** P3
 - **Size:** M
-- **Files:** `src/sidepanel/hooks/useOktaApi/appOperations.ts:110-119`,
-  `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts` (the `Resolve app names`
-  block, as the motivating caller)
-- **Problem:** `getAppById` collapses request-failure, validation-failure and
-  a thrown request into one `null`, discards the HTTP `status`, calls
-  `makeApiRequest` at default priority with no way to ask for another, and
-  logs under its own `[useOktaApi]` prefix. That is exactly why `D-020` could
-  **not** adopt it for the push-group label lookup and parsed inline instead:
-  that call site runs at `low` priority on purpose, and `D-019`'s test asserts
-  the `status: 429` that distinguishes "we are rate-limited" from "this app
-  has no label". The result is a validated single-app read that the one caller
-  who most wants it cannot use — so the endpoint is now parsed in two places.
-- **Done when:** Not yet defined — needs a decision first. A richer return
-  type (a discriminated result rather than `null`) or a `priority` parameter
-  is a contract change on a shared facade with existing callers, i.e. the
-  plan-and-approval gate applies and it likely wants an ADR. Research-only
-  until Sam signs off on a proposal.
-- **Risk:** Medium if rushed — changes a shared API surface. Low to leave: the
-  duplicate parse is documented in `pushGroupOps.ts`'s `@remarks`.
-- **Status:** blocked:needs-breakdown
+- **Files:** ~~`pushGroupOps.ts`~~ (deleted), `appOperations.ts:88-98`
+- **Verified:** 2026-08-24 — **overtaken.** The motivating caller no longer exists.
+- **Problem:** The filing's whole argument rested on one caller:
+  `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts` needed a `low`-priority
+  single-app read and needed to keep the numeric status that distinguishes "we
+  are rate-limited" from "this app has no label", so it parsed the endpoint
+  inline rather than adopt `getAppById` — leaving the endpoint parsed in two
+  places. **`f1e8def` deleted `pushGroupOps.ts` entirely**, along with
+  `applyPushGroupMappings` and the `Resolve app names` block, when app-group
+  assignments became the `appGroups` collection and `useGroupsLoader` became a
+  pure reader. The duplicate parse is gone; one parse site remains.
+
+  What is left of the complaint is true but unmotivated. `getAppById` (now
+  `appOperations.ts:88-98`; the filing's `:110-119` is stale) still collapses
+  request failure, validation failure and a thrown request into one `null` and
+  discards `response.status`. Its only production caller is now
+  `useAppOverviewData.ts:63,71`, rendering one app's overview, which has no need
+  to tell 429 from 404.
+
+- **Done when:** Closed. The contract change it asked for is the same one
+  `D-007a` needs for session detection, and `getAppById` is named there as its
+  first consumer — one change, motivated by a caller that actually exists.
+- **Risk:** n/a.
+- **Status:** closed:overtaken-by-f1e8def
+- **Related:** `D-007a`
 
 ### D-028 · Independently audit the ADR-0040 org snapshot against a real org
 
@@ -905,56 +1135,158 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
 
 ### D-029 · Retire `shared/rulesCache` — the last hand-rolled cache
 
+**Re-scoped 2026-08-24, and the file list was wrong.** The item is real and the
+decision to do it deliberately stands, but nobody should scope from the original
+**Files** list: it named twelve non-test consumers, and seven of them
+(`RulesTab.tsx`, `fetchGroupRulesRequest.ts`, `useGroupRuleReferences.ts`,
+`useGroupSource.ts`, `useUserComparison.ts`, `membershipAnalysis.ts`,
+`groupRuleIndex.ts`) mention `RulesCache` **only in prose comments** and do not
+import it. Worse, it named `src/sidepanel/cache/entityCache.ts` as a **writer**;
+`entityCache.ts` does not reference `RulesCache` outside a cross-reference in a
+doc comment at `:17`. `docs/adr/0040-the-background-owns-the-org.md:183` repeats
+the same wrong count and is corrected alongside this.
+
+**There are four real importers**, and the split below follows them. Do not land
+this as a sweep — one consumer per PR, tests first.
+
+**Why it matters to an admin, not just to the architecture:** group rules live
+in two places that can disagree by up to five minutes — authoritative in the
+snapshot's `rules` collection, and separately in a `chrome.storage.local` slot
+with its own TTL. A single screen can show rule attribution derived from one and
+a blast-radius answer ("what breaks if I deactivate this rule?") derived from
+the other. Nothing detects the disagreement and nothing shows it. This is not a
+request-count win — `RulesCache` already avoids refetching inside its TTL — it is
+a single-source-of-truth fix.
+
+**The precedent to follow** is `useGroupsLoader.ts:161-188`: take raw rows from
+the snapshot and derive the joins at read time (`detectConflicts(rawRules)`,
+then `formatRuleForDisplay(rule, undefined, conflicts)` — note the `undefined`
+second argument, for the reason `groupDiscovery.ts:75-77` gives), with the
+rationale that caching a join is only one more thing to invalidate.
+
+### D-029a · Rule impact reads the snapshot
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaApi/ruleImpact.ts:14,77,83-97`
+- **Verified:** 2026-08-24 — sole read, confirmed by enumerating importers.
+- **Problem:** Reads `RulesCache.get()` for `rawRules` only — which is exactly
+  what the snapshot's `rules` collection stores (`RULES_SPEC`,
+  `snapshotSync.ts:718-723`, zod-parsed `OktaGroupRule` rows). Nothing here needs
+  the cache's formatted/stats/conflicts bundle.
+- **Done when:** It reads the snapshot instead. Note it lives in an operation
+  factory, not a React hook, so it takes `orgSnapshotStore.getRecords('rules',
+origin)` imperatively rather than `useOrgSnapshot` —
+  `createRuleImpactOperations` does not currently take an `origin` and needs one
+  threaded from its caller. Its existing paginated fallback at `:83-97` stays,
+  unchanged, covering a cold snapshot.
+- **Risk:** Low — one read site, one shape, and the fallback already handles an
+  empty result.
+- **Status:** open
+
+### D-029b · User memberships derive their rules
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** M
+- **Files:** `src/sidepanel/hooks/useUserMemberships.ts:38,212,234,249-250`
+- **Verified:** 2026-08-24.
+- **Problem:** Two reads of `RulesCache.get()` for `cached.rules` — the
+  _formatted_ shape, which the snapshot does not store. This is the surface that
+  answers "why is this user in this group", so it is one half of the
+  disagreement described above.
+- **Done when:** It derives formatted rules from the snapshot's raw rows the way
+  `useGroupsLoader.ts:167-188` does. It already republishes through
+  `entityCache`'s `RULE_INVENTORY_KEY`, so the derive happens once per key rather
+  than per consumer. The deliberate no-write-back at `:249-250` (rules there
+  carry ids in place of names) stops being a concern and its comment goes.
+- **Risk:** Low-medium — correctness-critical read that surfaces render verdicts
+  from. Pin the derived output against the current cached output first.
+- **Status:** open
+
+### D-029c · The Rules tab stops owning a cache
+
 - **Category:** correctness
 - **Priority:** P2
 - **Size:** L
-- **Files:** `src/shared/rulesCache.ts` (the cache itself),
-  `src/sidepanel/cache/entityCache.ts` and
-  `src/sidepanel/hooks/useOktaApi/groupDiscovery.ts` (**writers** — not just
-  readers), `src/sidepanel/hooks/useRulesData.ts`,
-  `src/sidepanel/components/RulesTab.tsx`,
-  `src/sidepanel/hooks/fetchGroupRulesRequest.ts`,
-  `src/sidepanel/hooks/useGroupRuleReferences.ts`,
-  `src/sidepanel/hooks/useGroupSource.ts`,
-  `src/sidepanel/hooks/useUserMemberships.ts`,
-  `src/sidepanel/hooks/useUserComparison.ts`,
-  `src/sidepanel/hooks/useOktaApi/ruleImpact.ts`,
-  `src/shared/utils/membershipAnalysis.ts`,
-  `src/shared/rules/groupRuleIndex.ts` (12 non-test consumers; 25 files
-  including tests)
-- **Problem:** ADR-0040 claims "one store, one invalidation story". That is
-  not true yet. Group rules live in **two** places: authoritative in the org
-  snapshot's `rules` collection, and separately in a `chrome.storage.local`
-  slot with its own 5-minute TTL, read by the rule-impact and
-  membership-analysis surfaces. The two can disagree, and nothing detects it
-  — a view can show rule attribution from the snapshot beside a blast-radius
-  answer computed from a cache up to five minutes staler. `D-028` item 10
-  asks the auditor to look for exactly that; this item is the fix.
+- **Files:** `src/sidepanel/hooks/useRulesData.ts:17,172-178,205,214-215`
+- **Verified:** 2026-08-24.
+- **Problem:** The only consumer that needs the **whole** bundle: `stats`
+  (`:176`, drives the tab header), `timestamp` (`:177` → `lastFetchTime`), and
+  `conflicts`. It is also a **writer** (`:205`). Each piece is derivable —
+  `stats` is a four-line reduce whose shape already exists inline at
+  `groupDiscovery.ts:94-99`, `conflicts` is `detectConflicts(rawRules)`,
+  `timestamp` maps to `useOrgSnapshot`'s `lastFullWalkAt` — but the hook also
+  owns progress reporting, `apiCost` accounting (`:178,214-215`) and `force`
+  refresh semantics, all of which mean "I fetch on demand" and have to be
+  re-expressed against a store that syncs in the background. Four test files
+  mock `RulesCache` for this path.
+- **Done when:** Not checkable yet — needs Sam on what `force` and the API-cost
+  readout should mean once the panel no longer initiates the walk.
+- **Risk:** Medium. This is the slice that changes what the Rules tab _is_.
+- **Status:** blocked:needs-human
 
-  This is **not** a request-count win — `RulesCache` already avoids
-  refetching within its TTL — so it was deliberately ranked below the
-  `appGroups` work. It is a correctness and single-source-of-truth item.
+### D-029d · Delete the duplicate walk, then the cache
 
-  Two things make it larger than a read-site swap:
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** L
+- **Files:** `src/sidepanel/hooks/useOktaApi/groupDiscovery.ts:8,91,121,145-156`,
+  `src/shared/rulesCache.ts` (deleted here, and only here),
+  `docs/adr/0040-the-background-owns-the-org.md` §6
+- **Verified:** 2026-08-24.
+- **Problem:** `fetchAndCacheAllGroupRules` is a **duplicate producer** of
+  `RULES_SPEC`'s walk — the snapshot already fetches every group rule in the org
+  — so this should be removed rather than ported. But `ensureGroupRulesLoaded`
+  and `getGroupRulesForGroup` are called from an imperative operation factory
+  with no origin and no React context, and `getGroupRulesForGroup`'s two paths
+  are documented at `:145-150` as having to return the _formatted_ shape, a
+  subtlety that has already caused one real bug (`inferBestMatchRule` degrading
+  to a positional guess). Its downstream callers (`useGroupSource`,
+  `useGroupRuleReferences`) assume a warm cache costs nothing, which the
+  snapshot preserves.
+- **Done when:** `src/shared/rulesCache.ts` is deleted, no module outside
+  `orgSnapshotStore` reads or writes a rules cache, and a test pins that two
+  surfaces reading rules within one view cannot disagree. Anything removed
+  carries an ADR-0022 note. ADR-0040 §6's Status paragraph is updated to say the
+  retirement is complete — and not before.
+- **Risk:** Medium. Land last, after `D-029a`–`c`.
+- **Status:** blocked:needs-human
+- **Depends on:** `D-029a`, `D-029b`, `D-029c`
 
-  1. **`entityCache` and `groupDiscovery` write to it**, so the write paths
-     have to go somewhere or go away — the snapshot's walk is already the
-     writer, so these are duplicate producers, not just consumers.
-  2. **The cached value is a bundle**, not raw rules: formatted rules, raw
-     rules, aggregate `stats`, and detected `conflicts`. The snapshot stores
-     raw `OktaGroupRule` rows. Consumers currently getting `stats` and
-     `conflicts` for free need them derived at read time — the shape
-     `useGroupsLoader` now uses for its own joins, and the precedent to
-     follow.
+### D-030 · The ADR-0040 branch leaves six dead citations, and `lint:cited-paths` is red because of them
 
-- **Done when:** `src/shared/rulesCache.ts` is deleted, no module reads or
-  writes a rules cache outside `orgSnapshotStore`, and every surface that
-  used it derives what it needs from the snapshot's `rules` collection. A
-  test pins that two surfaces reading rules in one view cannot disagree.
-  Anything removed carries an ADR-0022 note naming what still covers it.
-  ADR-0040 §6's Status paragraph is updated to say the retirement is complete.
-- **Risk:** Medium — touches membership analysis and blast radius, which are
-  correctness-critical reads that several surfaces render verdicts from. Land
-  it tests-first, one consumer at a time, not as one sweep.
-- **Status:** blocked:needs-human — Sam wants this done deliberately rather
-  than picked up by an unattended run. Do not claim it in a nightly session.
+- **Category:** standards
+- **Priority:** P1
+- **Size:** S
+- **Files:** `DEBT.md` (four `done:` items citing a deleted file),
+  `docs/security.md:230`
+- **Verified:** 2026-08-24 — reproduced by stashing all uncommitted work and
+  re-running the gate on a clean `adr-0040/org-snapshot` head.
+- **Problem:** `npm run lint:cited-paths` is **red on
+  `adr-0040/org-snapshot`**, and was before any of 2026-08-24's ledger work
+  began. `f1e8def` deleted `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts` and
+  an earlier commit deleted `groups/groupsCache.ts`, but five citations of the
+  first and one of the second survived:
+
+  ```
+  DEBT.md — pushGroupOps.ts:117, :103-125, :108-118, :64, and one bare
+  docs/security.md:230 — ../src/sidepanel/components/groups/groupsCache.ts
+  ```
+
+  All five `DEBT.md` hits are inside **`done:`** items (`D-003`, `D-019`,
+  `D-020`, `D-026`) — closed records of work against a file that no longer
+  exists. That is the interesting part: the gate's own header argues ADRs and
+  `NIGHTLY.md` are excluded because they are dated records, and a `done:` item
+  is arguably the same kind of thing. It is currently treated as live prose.
+
+- **Done when:** The gate is green on this branch. Either the six citations are
+  updated/annotated, **or** — the better answer if it survives scrutiny — the
+  checker learns that a `done:`/`closed:` item is a dated record like an ADR
+  entry and stops scanning it, in which case only `docs/security.md:230` is a
+  real defect. Decide which, and say why in the commit; do not silence the gate.
+- **Risk:** Low to fix. The risk is leaving it: a red gate teaches everyone to
+  ignore the job, which is exactly how `D-010` and `D-017` happened.
+- **Status:** open
+- **Related:** `D-018`, `D-024` (the same checker's known blind spots)
