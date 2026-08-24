@@ -48,7 +48,12 @@ per the roster above. An item's agent may only touch what that item's
 **Files** and **Done when** specify; new work noticed in passing gets filed
 as a fresh backlog item, never folded in (`CLAUDE.md`). Items with
 genuinely disjoint files may run in parallel (their writer agents don't
-share state); anything else serializes. After each item's commit, run
+share state); anything else serializes. **Commit an item only once every
+writer agent has finished** — never as one reports while another is still
+working. When a pre-commit task fails, the hook runs `git reset --hard HEAD`
+and restores a snapshot taken before the commit started, which destroys any
+edit a live writer made in between — silently (`CONVENTIONS.md`, `D-023`).
+After each item's commit, run
 `CONVENTIONS.md`'s ladder scoped to what changed — always type-check/lint/
 format/test:coverage; add `test:storybook` if UI files changed; add `build`
 if `manifest.json`/`vite.config.ts`/`src/background/**`/`src/content/**`

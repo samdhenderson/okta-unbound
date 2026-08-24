@@ -683,7 +683,39 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
   trade different things away.
 - **Risk:** Low to fix. The bug it prevents is rare but silent and would be
   misattributed when it happens.
-- **Status:** open
+- **Correction to the filing above:** the stated mechanism is wrong, checked
+  against the installed `lint-staged` (16.2.6). It does not stash unstaged
+  changes off disk here. The tree-clearing
+  `git stash push --keep-index` branch runs only under `hideUnstaged`, which
+  defaults false and is not set in `package.json`; the branch that runs is
+  `git stash create` + `git stash store`, a snapshot that leaves every file in
+  place. There is therefore no window in which a concurrent agent's file is
+  missing from disk, and the "reads see pre-edit content" half of the filing
+  does not happen. **The real hazard is the failure path, and it is worse:**
+  on any task error `restoreOriginalState` runs `git reset --hard HEAD` and
+  re-applies the hook-start snapshot, discarding every working-tree
+  modification repo-wide — and an edit a live writer made after that snapshot
+  is in neither the stash nor the tree afterwards. `vitest related --run` runs
+  on every `*.{ts,tsx}` commit here, so a red related test reaches that path
+  routinely. The rule the item asks for is right; only its reasoning needed
+  replacing.
+- **Resolution note:** shipped the **sequencing rule**, not `--no-stash`, with
+  the corrected reasoning recorded in `CONVENTIONS.md` as the item requires.
+  `--no-stash` would genuinely close the hole — it implies `--no-revert`, so
+  the destructive reset can never fire — but it removes the rollback net for
+  every contributor's commit (a failed hook leaves half-`eslint --fix`ed files
+  on disk), which is a shared-contract change, and it edits hook wiring, which
+  `CLAUDE.md` puts outside an unattended session's authority. It stays a
+  decision for Sam. Note the diff touches neither file in the **Files** list
+  above: the rule went to `SESSION.md` step 4 and `CONVENTIONS.md`, which is
+  the item's own first "Done when" option.
+- **Prior art:** PR #73 (2026-08-22, branch `claude/stoic-gates-sd14ng`)
+  reached the same conclusion about the mechanism and never landed on `main`,
+  which is why this item was still `open`. That analysis was not consulted
+  while implementing — it surfaced afterwards in the branch's CI history, and
+  the source read above was done independently. Worth knowing that an
+  unmerged nightly branch can carry findings the ledger never received.
+- **Status:** done:#75
 
 ### D-024 · `check-cited-paths` still cannot see any path that is not under `src/`
 

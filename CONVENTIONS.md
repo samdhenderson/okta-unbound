@@ -113,6 +113,49 @@ one-off try/catch in whatever file a nightly run happens to be touching.
   writers run in parallel, `pgrep -a -f '^[^ ]*node[^ ]* .*vitest'` first and
   `kill -9 <pid>` only the run you started. (D-021)
 
+## Committing while writers are live
+
+**The lead does not commit while a writer agent is still working.** Not for
+the reason `D-023` was filed on — read the installed `lint-staged` (16.2.6)
+before repeating that one. Its "Backing up original state... in git stash"
+line does **not** clear the working tree here. The tree-clearing
+`git stash push --keep-index` branch runs only under `hideUnstaged`, which
+defaults false and is not set in `package.json`; the branch that does run is
+`git stash create` + `git stash store`, which snapshots and leaves every file
+on disk. So nothing is taken off disk for the length of a hook run, and a
+concurrent read inside that window sees current content.
+
+The hazard is the **failure** path. On any task error, `restoreOriginalState`
+runs `git reset --hard HEAD` and then re-applies the snapshot taken at hook
+start. The reset discards every working-tree modification repo-wide, and an
+edit a live writer wrote _after_ that snapshot is not in it — so the edit is
+gone outright: not in the stash, not on disk, and not named in the output.
+This repo runs `vitest related --run` on every `*.{ts,tsx}` commit, so a red
+related test reaches that path routinely. That is the loss the rule prevents,
+and it is worse than the one the filing described.
+
+Avoiding it costs almost no parallelism: writer agents may still run
+concurrently on disjoint files (`SESSION.md` step 4 permits it explicitly),
+it is only the _commits_ that serialize — commit an item once every writer
+has finished, not as each one reports while others are still going.
+
+Configuring the hook with `lint-staged --no-stash` would genuinely close the
+hole — it implies `--no-revert`, so the destructive reset can never fire —
+and it is still not this session's call. It removes the rollback net for
+every contributor's commit, leaving half-`eslint --fix`ed files on disk when
+a hook fails, which is a change to a shared developer contract; and it edits
+hook wiring, which `CLAUDE.md` puts outside an unattended session's authority.
+It stays a decision for Sam. Note also that `--no-stash` would **not** sweep
+unrelated unstaged edits into the commit, which an earlier draft of this
+section claimed: tasks only ever run on staged files, a wholly-unstaged file
+is never in that list, and partially-staged files have their unstaged hunks
+hidden and restored independently of the backup stash.
+
+Observed 2026-08-21 (6th run): two commits ran while another writer was live
+and both restored cleanly, so this remains a latent race rather than a
+confirmed loss — but it is silent, and would present as "the agent's edit
+vanished". (D-023)
+
 ## Verification commands that define green
 
 Run in this order; stop at the first red result:

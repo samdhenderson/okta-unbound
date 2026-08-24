@@ -17,6 +17,112 @@ Entry format:
 
 ---
 
+## 2026-08-24
+
+**Baseline:** green — the whole ladder, run before anything was selected.
+type-check 0 errors, lint 0 errors / 146 warnings, format clean, 213 test
+files / 3010 tests with thresholds met, 0 cycles, control-chars clean over 839
+files, cited-paths clean over 54, `test:storybook` 149 files / 1042 tests.
+
+`node_modules` was absent again on this fresh container — fourth night
+running. `npm ci` first, no diagnosis needed.
+
+**Items worked:** `D-023`, `I-006`, `I-007`.
+
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/75
+
+**Backlog after:** 11 open / 38 total — 11 IMPROVEMENTS (5 open, 1 blocked, 5
+done), 27 DEBT (6 open, 4 blocked, 17 done). 5 blocked (`I-008`, `D-007`,
+`D-027` needs-breakdown; `D-008`, `D-013` needs-human). 3 closed tonight as
+`done:#75`; 1 new item filed (`I-011`), so the open count nets down by two —
+the first night it has fallen.
+
+**Notes:**
+
+**The branch is `claude/stoic-gates-ejqkew`, not `nightly/2026-08-24`** — the
+harness assigns it and forbids pushing elsewhere, same as the 6th and 7th
+runs. No other step deviated. This has now held for three consecutive nights;
+`SESSION.md` step 3 still says `nightly/YYYY-MM-DD` and is worth either
+amending or annotating, because a session that follows it literally is
+choosing between two instructions that cannot both be obeyed.
+
+**The 7th run's closing note picked tonight's first item, and it was right.**
+It nominated `D-023` as the next pick on the grounds that `D-021` had already
+laid down the parallel-writer wording in `CONVENTIONS.md`, so the diff would
+be small. It was — a paragraph in each of two files. **A closing note that
+names the next pick and says why is worth more than one that lists what is
+left.**
+
+**`D-023`'s filed mechanism was wrong, and it was caught only after the PR
+was open.** The item says `lint-staged` stashes unstaged changes off disk for
+the length of a hook run. It does not: the tree-clearing
+`stash push --keep-index` branch is gated on `hideUnstaged`, which defaults
+false and is not set here, so the branch that runs is `stash create` +
+`stash store` — a snapshot that leaves the tree alone. The real hazard is the
+failure path, `git reset --hard HEAD` in `restoreOriginalState`, which fires
+on any task error and destroys an edit a live writer made after the snapshot.
+The rule the item asks for is right; its reasoning was not, and `D-023`
+explicitly requires the reasoning be recorded — so a wrong one is a defective
+deliverable, not a cosmetic slip. Corrected in a follow-up commit rather than
+by amending, since `CLAUDE.md` forbids force-pushing.
+**The lesson is about what triggered the check.** The prompt was a CI-activity
+wake that showed the branch's run history, which included PR #73 from
+2026-08-22 — an earlier, unmerged nightly branch that had worked `D-023` and
+recorded this same finding in its commit message. That PR never landed, so the
+ledger never received it, and tonight's session re-derived the item from a
+filing whose premise had already been disproved. **An unmerged nightly branch
+is a place findings go to die. Before implementing an item, it is worth
+checking whether a previous branch already attempted it** — `git log --all
+--grep=<item-id>` is the cheap version. Nothing in `SESSION.md` step 2 says to
+do this today.
+
+**`D-023` is now self-enforcing, and tonight ran under it.** Writers were
+serialized rather than parallelised, so the rule was never actually tested
+against a live collision — but the wall-clock cost was real and the trade is
+now written down where the next session reads it. Worth saying plainly: with
+three small items there is nothing to parallelise anyway, and serial writers
+also keep each item's vitest run off the others' heels (`D-021`'s
+second-order concern). The parallel case is the one that still wants the rule.
+
+**Routing `D-023` was the one judgment call.** `SESSION.md`'s roster sends a
+`standards`-category `DEBT.md` item to `architecture-refactor`, but that row
+is qualified "(dedupe, extraction)" — it describes code. `D-023`'s deliverable
+was prose in `SESSION.md` and `CONVENTIONS.md`, so it went to
+`docs-maintainer`. If that reading is wrong, the roster is the thing to fix:
+as written it has no row for a `DEBT.md` item whose whole fix is documentation,
+and there will be more of them (`D-025` is the next one).
+
+**`I-007`'s Done-when had an escape hatch and it was worth checking.** The item
+allowed "there is a deliberate reason for the current layout, so record it as a
+comment instead". Three sources were checked — the module header, the two
+commits touching the region, and `docs/` — and the evidence ran the other way:
+the header already describes the row as "name, verdict, source line", and
+`membershipVerdict.ts`'s short-label rule argues from the badge sitting beside
+the name. **An escape hatch is a question, not a hint about the answer.**
+
+**`I-006`'s constraint was the interesting part of a two-line change.** The item
+says the default filter must stay `differences` and to check with Sam before
+changing it. There is nobody to check with on an unattended run, so the rule is
+simply "don't" — and the pre-existing tests that assert the default are what
+proves it held. **When an item's guard rail says "ask Sam", an unattended
+session reads it as a prohibition, not a deferral.**
+
+**`I-002`/`I-003` skipped for a fifth consecutive night**, both still top of
+the open ux list, both still reaching into `groups/detail/`. The 7th run's
+suggestion stands unchanged and is now more pressing: either split `I-003`
+(its two non-`detail/` sites are implementable today) or permit them by name.
+Five nights is long enough that the off-limits window is now the single
+biggest thing shaping what gets picked.
+
+**What is left is genuinely cheap.** `D-012`, `D-015`, `D-022`, `D-024`,
+`D-025`, `D-026` are all P3 and all small. `I-009` and `I-010` are the same
+defect and the ledger says so — they should be picked **together** by one
+writer, because whichever is done first silently decides the other's answer
+(shared naming helper vs per-call-site convention). That is the one pairing in
+the backlog a future session should not split across nights.
+
+---
+
 ## 2026-08-23
 
 **Baseline:** green — the whole ladder. type-check 0 errors, lint 0 errors /

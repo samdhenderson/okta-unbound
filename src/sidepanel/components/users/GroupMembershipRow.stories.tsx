@@ -87,6 +87,19 @@ const unresolved: GroupMembership = {
   rules: [],
 };
 
+/**
+ * A group name long enough to lose an argument with the badges beside it — the
+ * case the name line's `flex-wrap` exists for.
+ */
+const longName: GroupMembership = {
+  ...ruleAmbiguous,
+  group: {
+    id: '00gFAKE00000000000008',
+    type: 'OKTA_GROUP',
+    profile: { name: 'EMEA Engineering — Platform Infrastructure On-Call Escalation' },
+  },
+};
+
 /** The same ambiguous membership after Okta answered — the hedge is gone (ADR-0031). */
 const proven: GroupMembership = {
   ...ruleAmbiguous,
@@ -345,11 +358,27 @@ export const OpeningTheDisclosure: Story = {
 };
 
 /**
- * The 360px floor, where the group name, the "On page" badge, the verdict and the
- * chevron all compete for one line. This is why the verdict labels are two words
- * at most and the candidate count lives in the disclosure.
+ * The 360px floor, where the group name, the verdict and the "On page" badge
+ * share one line and the chevron holds its own column. This is why the verdict
+ * labels are two words at most and the candidate count lives in the disclosure.
  */
 export const Compact: Story = {
   args: { membership: ruleAmbiguous, isCurrentGroup: true },
   parameters: { viewport: { value: 'sidepanelCompact' } },
+};
+
+/**
+ * The worst case for the name line: a long group name, both badges, and the
+ * narrow floor. The badges wrap under the name rather than squeezing it to a few
+ * characters, and neither of them is dropped or clipped.
+ */
+export const LongGroupName: Story = {
+  args: { membership: longName, isCurrentGroup: true },
+  parameters: { viewport: { value: 'sidepanelCompact' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText(longName.group.profile.name)).toBeInTheDocument();
+    await expect(canvas.getByText('Rule · 2?')).toBeInTheDocument();
+    await expect(canvas.getByText('On page')).toBeInTheDocument();
+  },
 };

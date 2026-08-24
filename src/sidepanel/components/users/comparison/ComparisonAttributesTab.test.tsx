@@ -122,6 +122,16 @@ describe('ComparisonAttributesTab', () => {
     expect(screen.getByText('Nickname')).toBeInTheDocument();
   });
 
+  it('leads the filter pills with All, then Differences, then Shared', () => {
+    renderTab();
+
+    // DOM order, so the whole labels also pin each count to its own pill. The
+    // lead pill is not the default one — `differences` still opens active
+    // (asserted above), and pill order does not decide that.
+    const pills = screen.getAllByRole('button', { name: /^(All|Differences|Shared) \d+$/ });
+    expect(pills.map((pill) => pill.textContent)).toEqual(['All 4', 'Differences 2', 'Shared 2']);
+  });
+
   it('names both users on a one-sided row rather than leaving the gap to inference', () => {
     renderTab();
     expect(screen.getByRole('img', { name: 'Only Ada Context has a value' })).toBeInTheDocument();

@@ -177,8 +177,25 @@ const GroupMembershipRow: React.FC<GroupMembershipRowProps> = ({
     >
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
+          {/*
+            Name, then verdict, then "On page" — the same order the other two
+            rows of this shape use (`GroupListItem`, `BlastRadiusGroupRow`): the
+            classification badge is what the row is *about*, so it reads as part
+            of the name line rather than as trailing chrome beside the chevron.
+            "On page" follows it because it describes where the reader is, not
+            what the membership is.
+
+            `flex-wrap` because this is a side panel: at the 360px floor a long
+            name plus two `shrink-0` badges no longer fit one line, and wrapping
+            the badges under a full-width name beats squeezing the name to a few
+            characters. The `<h4>` keeps `truncate` so a single unbroken token
+            still clips instead of overflowing the card.
+          */}
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h4 className="truncate text-sm font-semibold text-neutral-900">{groupName}</h4>
+            <Badge variant={verdict.variant} title={verdict.title} className="shrink-0">
+              {verdict.label}
+            </Badge>
             {isCurrentGroup && (
               <Badge variant="primary" className="shrink-0">
                 On page
@@ -196,10 +213,6 @@ const GroupMembershipRow: React.FC<GroupMembershipRowProps> = ({
             {line.detail && <span> {line.detail}</span>}
           </p>
         </div>
-
-        <Badge variant={verdict.variant} title={verdict.title} className="shrink-0">
-          {verdict.label}
-        </Badge>
 
         <IconButton
           label={`${expanded ? 'Hide' : 'Show'} how ${groupName} was granted`}

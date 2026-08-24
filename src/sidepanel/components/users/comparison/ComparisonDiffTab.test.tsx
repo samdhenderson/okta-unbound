@@ -166,6 +166,17 @@ describe('filtering and search', () => {
     expect(screen.getByRole('button', { name: /All 3/ })).toBeInTheDocument();
   });
 
+  it('leads with All, then Differences, then Shared — widest selection first', () => {
+    render(<ComparisonDiffTab {...baseProps} rows={rows} />);
+
+    // Read in DOM order, which is both the reading order and the tab order.
+    // Pinned as whole labels so a reorder cannot carry a count onto the wrong
+    // pill. Note the LEAD pill is not the DEFAULT pill: `differences` still
+    // opens active (asserted above), and this order does not change that.
+    const pills = screen.getAllByRole('button', { name: /^(All|Differences|Shared) \d+$/ });
+    expect(pills.map((pill) => pill.textContent)).toEqual(['All 3', 'Differences 1', 'Shared 2']);
+  });
+
   it('shows the shared rows on demand', async () => {
     render(<ComparisonDiffTab {...baseProps} rows={rows} />);
 
