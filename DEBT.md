@@ -94,7 +94,9 @@ claim about code, and code moves.
 - **Category:** correctness
 - **Priority:** P2
 - **Size:** S
-- **Files:** `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts:117`
+- **Files:** `pushGroupOps.ts:117`, then under
+  `src/sidepanel/hooks/useOktaApi/` — the module was deleted by `f1e8def`
+  after this item closed.
 - **Problem:** The catch around per-app label resolution
   (`catch { // Keep existing name on failure }`) has no logging at all,
   unlike every sibling catch in this file. A systemic label-resolution
@@ -744,8 +746,9 @@ more expensive the day an audit viewer ships.
 - **Category:** correctness
 - **Priority:** P2
 - **Size:** S
-- **Files:** `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts:103-125`
-  (the `Resolve app names` `runOperation` block)
+- **Files:** `pushGroupOps.ts:103-125` (the `Resolve app names`
+  `runOperation` block), then under `src/sidepanel/hooks/useOktaApi/` — the
+  module was deleted by `f1e8def` after this item closed.
 - **Problem:** D-003 fixed the `catch`. It did not fix the two ways the same
   block fails without throwing, and those are the likelier ones:
   `if (response.success && response.data)` falls straight through when the
@@ -775,8 +778,10 @@ more expensive the day an audit viewer ships.
 - **Category:** standards
 - **Priority:** P2
 - **Size:** S
-- **Files:** `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts:108-118`,
-  `src/sidepanel/hooks/useOktaApi/appOperations.ts:110-119` (`getAppById`)
+- **Files:** `pushGroupOps.ts:108-118` (then under
+  `src/sidepanel/hooks/useOktaApi/`; deleted by `f1e8def` after this item
+  closed), `src/sidepanel/hooks/useOktaApi/appOperations.ts` (`getAppById`,
+  then at `:110-119`, now `:88-98`)
 - **Problem:** ADR-0006 requires every Okta response to be validated with zod
   at the boundary. `applyPushGroupMappings` branches on
   `response.data.label || response.data.name` straight off a raw
@@ -1005,7 +1010,9 @@ more expensive the day an audit viewer ships.
 - **Category:** standards
 - **Priority:** P3
 - **Size:** S
-- **Files:** `src/sidepanel/hooks/useOktaApi/pushGroupOps.ts:64`
+- **Files:** `pushGroupOps.ts:64`, then under
+  `src/sidepanel/hooks/useOktaApi/` — the module was deleted by `f1e8def`
+  after this item closed.
 - **Problem:** `` `/api/v1/apps/${appId}/groups?limit=${OKTA_PAGE_SIZE}` ``
   interpolates `appId` raw, one function above the label lookup that `D-020`
   just taught to `encodeURIComponent` it, and inconsistent with the sibling
@@ -1289,17 +1296,66 @@ origin)` imperatively rather than `useOrgSnapshot` —
   falsify the record. A `done:` item is the same kind of artifact and is
   currently scanned as live prose.
 
-- **Done when:** The gate is green on this branch. Either the five citations
-  are updated or annotated, **or** — the better answer if it survives
-  scrutiny — the checker learns that a `done:`/`closed:` item is a dated
-  record like an ADR entry and stops scanning it, in which case only
-  `docs/security.md:230` is a live defect. Decide which, and say why in the
-  commit. Do not silence the gate.
+- **Done when:** Done. Fixed in the same PR that filed it, because
+  `lint:cited-paths` is a **hard gate** in `ci.yml`'s `verify` job (no
+  `continue-on-error`), so the PR could not merge green while it stood — and
+  merging past it with `--admin` is the exact behaviour `D-010` and `D-017`
+  were about. Folding it in beat both alternatives; the five citations live in
+  the same two files this PR already rewrites.
+
+  **Chosen: annotate, don't restructure.** The four `DEBT.md` sites now name
+  the file without a resolvable `src/` path and say where it used to live and
+  which commit removed it, so the closed record still points a reader at the
+  right place. `docs/security.md`'s TTL bullet was **factually** stale, not
+  just a broken link — it listed a cache ADR-0040 retired — so it was rewritten
+  rather than annotated.
+
+  **Not chosen:** teaching the checker that a `done:`/`closed:` item is a dated
+  record. That is the better structural answer and it is filed separately as
+  `D-031`; making that call inside a merge would have been a design decision
+  taken for the wrong reason.
 
 - **Risk:** Low to fix. The risk is leaving it: a red gate on `main` teaches
   everyone to ignore the job, which is exactly how `D-010` and `D-017`
   happened — both of those were also "red on `main`, unnoticed for weeks".
   This is the third instance of the same pattern, which is itself worth a
   look: nothing routinely runs the ladder against `main`.
+- **Status:** done:#82
+- **Related:** `D-018`, `D-024` (the same checker's known blind spots), `D-031`
+
+### D-031 · `check-cited-paths` scans closed ledger items as if they were live prose
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `scripts/check-cited-paths.mjs`, `DEBT.md`, `IMPROVEMENTS.md`
+- **Verified:** 2026-08-24 — the question surfaced while fixing `D-030`.
+- **Problem:** `D-030` was four dead citations in `done:` items — closed records
+  of work against a file that has since been deleted. The checker's own header
+  argues at length that `docs/adr/` and `NIGHTLY.md` are excluded **because they
+  are dated records**: a path in them describes the repo as it was, so
+  "correcting" it falsifies the record rather than repairing it. A `done:` or
+  `closed:` ledger item is the same kind of artifact by the same argument, and
+  is currently scanned as live prose.
+
+  This will recur. Every item that closes against a file someone later deletes
+  becomes a future gate failure, and the only remedies available are to annotate
+  a historical record or to weaken it — `D-030` chose the former four times in
+  one sitting, which is the smell.
+
+  The counter-argument is real and should be weighed rather than assumed away:
+  the checker's header says the ledgers matter **most** of all, because a
+  nightly picks work _by an item's Files list_, so a stale path there mis-routes
+  machinery rather than merely misinforming a reader. But that argument applies
+  to items a session can still claim. It does not apply to `done:`/`closed:`
+  ones, which step 3 filters out before Files is ever read.
+
+- **Done when:** Either the checker skips `Files:` citations inside an item
+  whose `Status:` is `done:*` or `closed:*` (and says so in its header, next to
+  the ADR and `NIGHTLY.md` exclusions it already explains), or a written
+  decision records why the ledgers should be treated differently from every
+  other dated record in the repo. Not a silent config tweak either way.
+- **Risk:** Low. Narrowing a gate needs care, but the narrowing is precisely
+  scoped by a status field the file already parses.
 - **Status:** open
-- **Related:** `D-018`, `D-024` (the same checker's known blind spots)
+- **Related:** `D-030`, `D-018`, `D-024`
