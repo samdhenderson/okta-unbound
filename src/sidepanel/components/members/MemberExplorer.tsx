@@ -36,6 +36,9 @@ import CompositionReports from './CompositionReports';
 import BreakdownDetailsModal from './BreakdownDetailsModal';
 import MemberList from './MemberList';
 import MemberSourceFilterBar from './MemberSourceFilterBar';
+import { useMembershipProofs } from '../users/GroupMembershipsListProof';
+import type { MemberRuleAttribution } from '../../../shared/membership/memberRuleAttribution';
+import type { GroupMembership } from '../../../shared/types';
 import type { MemberSourceIndex } from '../../../shared/membership/memberSourceIndex';
 import type { MemberSourceBucket } from '../groups/memberSourceBuckets';
 import {
@@ -108,6 +111,19 @@ interface MemberExplorerProps {
    * control (ADR-0039: an unimplemented verb is omitted, not shipped `disabled`).
    */
   onRemoveMember?: (user: OktaUser) => void;
+  /**
+   * Asks Okta which rules manage one member's membership (ADR-0031). Absent ⇒ no
+   * row offers the action.
+   *
+   * **One API call per member**, so it is invoked from a click on an already-open
+   * row only — never for the list, and never on mount. Rows whose roster embed
+   * already carried Okta's answer never offer it at all; see
+   * {@link MemberRow}.
+   */
+  onProveMemberSource?: (
+    membership: GroupMembership,
+    userId: string,
+  ) => Promise<MemberRuleAttribution>;
 }
 
 /** Number of member rows revealed per page / "Load more". */
@@ -128,6 +144,7 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
   oktaOrigin,
   memberSource,
   onRemoveMember,
+  onProveMemberSource,
 }) => {
   const [query, setQuery] = useState('');
   const [filters, setFilters] = useState<MemberFilter[]>([]);
@@ -170,6 +187,10 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
     if (tail.size > 0) merged.set('otherRules', tail);
     return merged;
   }, [memberSource]);
+
+  // Rows key their own answers by user id — see `useMembershipProofs` on why a
+  // roster cannot use the default group key.
+  const proofs = useMembershipProofs(onProveMemberSource);
 
   const activeSourceKeys = useMemo(
     () => new Set(filters.filter((f) => f.dimension === SOURCE_DIMENSION).map((f) => f.value)),
@@ -407,6 +428,8 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
           onLoadMore={loadMore}
           oktaOrigin={oktaOrigin}
           onRemoveMember={onRemoveMember}
+          memberSourceIndex={memberSource?.index}
+          proofs={proofs}
         />
       </div>
 

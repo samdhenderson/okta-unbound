@@ -65,6 +65,7 @@ import { AlertMessage, Button, DetailSection, EmptyState, Modal, Skeleton } from
 import MemberExplorer, { type MemberSourceContext } from '../../members/MemberExplorer';
 import { toMemberSourceSegments } from '../memberSourceBuckets';
 import type {
+  GroupMembership,
   GroupSummary,
   MemberMfaResult,
   MfaScanStatus,
@@ -72,6 +73,7 @@ import type {
 } from '../../../../shared/types';
 import type { MemberSourceBreakdown } from '../../../../shared/membership/groupSource';
 import type { MemberSourceIndex } from '../../../../shared/membership/memberSourceIndex';
+import type { MemberRuleAttribution } from '../../../../shared/membership/memberRuleAttribution';
 import type { SourceStatus } from '../../../hooks/useGroupSource';
 import type { MemberWriteStatus } from './useGroupMembersSection';
 import { userDisplayName } from '../../../../shared/utils/userDisplay';
@@ -108,6 +110,16 @@ export interface GroupMembersSectionProps {
   breakdown: MemberSourceBreakdown | null;
   /** Per-member source classification, from the same analysis. */
   memberSourceIndex: MemberSourceIndex | null;
+  /**
+   * Asks Okta which rules manage one member's membership (ADR-0031) — one API
+   * call, from a click on an already-open row only. Absent (no live Okta tab) ⇒
+   * no row offers the action.
+   *
+   * Most rows never need it here: `expand=group-rules` hands Okta's own
+   * attribution back with the roster for free (ADR-0020), so only members whose
+   * embed left the answer unknown are offered the request.
+   */
+  onProveMemberSource?: (userId: string) => Promise<MemberRuleAttribution>;
 
   /** Per-member MFA scan results, or null before a scan has run. */
   mfaResults: Map<string, MemberMfaResult> | null;
@@ -144,6 +156,7 @@ const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
   canAnalyze = true,
   breakdown,
   memberSourceIndex,
+  onProveMemberSource,
   mfaResults,
   scanStatus,
   onRunScan,
@@ -168,6 +181,18 @@ const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
     if (!breakdown || !memberSourceIndex) return undefined;
     return { index: memberSourceIndex, segments: toMemberSourceSegments(breakdown) };
   }, [breakdown, memberSourceIndex]);
+
+  /*
+    The explorer's resolver is handed the membership and the row key; here only
+    the row key — the member — varies, because the group is this whole page.
+  */
+  const proveMemberSource = useMemo(
+    () =>
+      onProveMemberSource
+        ? (_membership: GroupMembership, userId: string) => onProveMemberSource(userId)
+        : undefined,
+    [onProveMemberSource],
+  );
 
   return (
     <DetailSection
@@ -215,6 +240,7 @@ const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
           onRequestConfirm={onRequestConfirm}
           onCancelConfirm={onCancelConfirm}
           memberSource={memberSource}
+          onProveMemberSource={proveMemberSource}
           /* Withheld, not disabled, on the read-only group types (ADR-0039). */
           onRemoveMember={readOnlyReason ? undefined : onRequestRemove}
         />

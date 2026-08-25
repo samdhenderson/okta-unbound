@@ -55,7 +55,7 @@
  * logic even though the modal's mutation state lives in a separate hook
  * instance from the roster it writes into.
  */
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import GroupOverviewPane from './GroupOverviewPane';
 import GroupMembershipSourceSection from './GroupMembershipSourceSection';
 import GroupMembersSection from './GroupMembersSection';
@@ -67,6 +67,7 @@ import GroupActionBar from './GroupActionBar';
 import AddGroupMemberModal from './AddGroupMemberModal';
 import { Tabs, type TabItem } from '../../shared';
 import { useGroupSource } from '../../../hooks/useGroupSource';
+import { useOktaApi } from '../../../hooks/useOktaApi';
 import { useOwedLoad } from '../../../hooks/useOwedLoad';
 import { useGroupRuleReferences } from '../../../hooks/useGroupRuleReferences';
 import { useGroupAccessGrants } from '../../../hooks/useGroupAccessGrants';
@@ -185,6 +186,23 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
     members: membersSection.members ?? [],
     targetTabId: targetTabId ?? undefined,
   });
+
+  // The Members tab's per-row ADR-0031 proof: one call about one membership, from
+  // a click on an already-open row. This view holds no other `useOktaApi`
+  // instance, and this one issues nothing on mount — `useOktaApi` only hands back
+  // operations, and every operation here is behind a click.
+  //
+  // Most rows never offer it: the roster read already carries Okta's own
+  // attribution via `expand=group-rules` (ADR-0020), so the action appears only
+  // where that embed left the answer unknown.
+  const { getMembershipRuleProof } = useOktaApi({ targetTabId: targetTabId ?? null });
+  const proveMemberSource = useMemo(
+    () =>
+      targetTabId !== null
+        ? (userId: string) => getMembershipRuleProof(group.id, userId)
+        : undefined,
+    [targetTabId, group.id, getMembershipRuleProof],
+  );
 
   // The action bar's Add-member modal — a second, independent `useAddGroupMember`
   // instance from the one `useGroupMembersSection` composes internally for its
@@ -307,6 +325,7 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                   canAnalyze={targetTabId !== null}
                   breakdown={source.breakdown}
                   memberSourceIndex={source.memberSourceIndex}
+                  onProveMemberSource={proveMemberSource}
                   mfaResults={mfaScan.mfaResults}
                   scanStatus={mfaScan.scanStatus}
                   onRunScan={mfaScan.runScan}

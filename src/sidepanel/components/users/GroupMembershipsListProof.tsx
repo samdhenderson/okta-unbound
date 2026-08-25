@@ -55,47 +55,63 @@ export type MembershipProofOutcome =
 
 /** What {@link useMembershipProofs} hands back to the list. */
 export interface MembershipProofs {
-  /** The outcome for one group's row, or `undefined` when it was never asked about. */
-  outcomeFor: (groupId: string) => MembershipProofOutcome | undefined;
-  /** Ask Okta about one membership. A row already in flight is not re-sent. */
-  prove: (membership: GroupMembership) => void;
+  /** The outcome for one row, or `undefined` when it was never asked about. */
+  outcomeFor: (rowKey: string) => MembershipProofOutcome | undefined;
+  /**
+   * Ask Okta about one membership. A row already in flight is not re-sent.
+   *
+   * `rowKey` identifies the row the answer belongs to, defaulting to the group —
+   * see the hook's note on why a roster must override it.
+   */
+  prove: (membership: GroupMembership, rowKey?: string) => void;
   /** Whether the surface can prove anything at all (a resolver was supplied). */
   enabled: boolean;
 }
 
 /**
- * Per-row proof state for the memberships list.
+ * Per-row proof state for a list of memberships.
  *
- * Keyed by group id, because that is what identifies a row on this surface — the
- * user is fixed for the whole list, and the resolver closes over them.
+ * **The row key is the caller's**, because the two surfaces that need this vary
+ * along opposite axes. The user-detail memberships list holds one user's many
+ * groups, so the group identifies the row and the default is right. A group's
+ * roster holds one group's many *users*: every row there carries the same group
+ * id, so the default would collapse them onto one entry and one member's answer
+ * would light up every row. That surface passes the member's id instead.
  *
- * @param onProve - Asks Okta about one group, resolving to its three-state
- * answer. Omitted, the feature is off and no row renders an action.
+ * A `GroupMembership` deliberately does not name the member it belongs to — it
+ * describes a group and how it was granted — which is why the key is an argument
+ * at call time rather than a function of the membership.
+ *
+ * @param onProve - Asks Okta about one membership, resolving to its three-state
+ * answer. Receives the row key alongside it, since that is the only place the
+ * varying half of the membership is named — a roster's resolver needs the member
+ * and the membership cannot supply one. Omitted, the feature is off and no row
+ * renders an action.
  * @returns The {@link MembershipProofs} handle.
  */
 export function useMembershipProofs(
-  onProve?: (groupId: string) => Promise<MemberRuleAttribution>,
+  onProve?: (membership: GroupMembership, rowKey: string) => Promise<MemberRuleAttribution>,
 ): MembershipProofs {
   const [outcomes, setOutcomes] = useState<Record<string, MembershipProofOutcome>>({});
 
   const prove = useCallback(
-    (membership: GroupMembership) => {
+    (membership: GroupMembership, key?: string) => {
       if (!onProve) return;
-      const groupId = membership.group.id;
+      const rowKey = key ?? membership.group.id;
 
       setOutcomes((current) => {
-        if (current[groupId]?.status === 'pending') return current;
-        return { ...current, [groupId]: { status: 'pending' } };
+        if (current[rowKey]?.status === 'pending') return current;
+        return { ...current, [rowKey]: { status: 'pending' } };
       });
 
-      void onProve(groupId)
+      void onProve(membership, rowKey)
         // A rejected request is an absent answer, never a manual add.
         .catch((): MemberRuleAttribution => ({ state: 'unknown' }))
         .then((answer) => {
           const proven = withMembershipProvenance(membership, answer);
           setOutcomes((current) => ({
             ...current,
-            [groupId]: proven.provenance
+            [rowKey]: proven.provenance
               ? { status: 'proven', membership: proven }
               : { status: 'unanswered' },
           }));
@@ -104,7 +120,7 @@ export function useMembershipProofs(
     [onProve],
   );
 
-  const outcomeFor = useCallback((groupId: string) => outcomes[groupId], [outcomes]);
+  const outcomeFor = useCallback((rowKey: string) => outcomes[rowKey], [outcomes]);
 
   return { outcomeFor, prove, enabled: Boolean(onProve) };
 }

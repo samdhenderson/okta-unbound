@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import type { MemberMfaResult } from '../../../shared/types';
+import type { GroupMembership, MemberMfaResult } from '../../../shared/types';
 import MemberRow from './MemberRow';
 import { mockUsers } from '../../../test/mocks/fixtures';
 
@@ -24,6 +24,41 @@ const noFactorsMfa: MemberMfaResult = {
   factorLabels: [],
 };
 
+/*
+  Obviously-fake attribution fixtures. `provenance` is what separates the two:
+  Okta's own answer, which the roster read carries for free via
+  `expand=group-rules` — so a row that has it never offers "Ask Okta".
+*/
+const engineeringGroup = {
+  id: '00gFAKE1',
+  type: 'OKTA_GROUP' as const,
+  profile: { name: 'Engineering' },
+};
+
+const feedingRule = {
+  id: '0prFAKE1',
+  name: 'Engineering department',
+  status: 'ACTIVE' as const,
+  conditionExpression: 'user.department == "Engineering"',
+};
+
+/** Okta itself named the rule — a fact, not a deduction. */
+const provenMembership: GroupMembership = {
+  group: engineeringGroup,
+  membershipType: 'RULE_BASED',
+  rules: [feedingRule],
+  attribution: 'exact',
+  provenance: { source: 'okta', rules: [{ id: '0prFAKE1', name: 'Engineering department' }] },
+};
+
+/** No embed came back for this member, so the classification is the classifier's. */
+const deducedMembership: GroupMembership = {
+  group: engineeringGroup,
+  membershipType: 'RULE_BASED',
+  rules: [feedingRule],
+  attribution: 'inferred',
+};
+
 /** Single member card: name, email, login, status badge, and (once scanned) MFA factor tags. */
 const meta = {
   title: 'Members/MemberRow',
@@ -44,7 +79,17 @@ const meta = {
           '`nested-interactive`. The deep link now lives inside the disclosure, where ' +
           '`GroupMembershipRow` and `UserAppRow` already put it.\n\n' +
           '`expanded` is owned by the **list**, not the row, so filtering a row out and ' +
-          'back in does not close it.',
+          'back in does not close it.\n\n' +
+          'Pass a `membership` and the row also explains **why** this person is in the group: a ' +
+          'verdict badge and one source line collapsed, and the full caveat plus one evidence ' +
+          'card per attributed rule — its condition checked clause by clause against *this* ' +
+          'member — expanded. Those come from the same components ' +
+          '`users/GroupMembershipRow` uses for the mirror-image case, so the two surfaces cannot ' +
+          'drift into two vocabularies for one fact.\n\n' +
+          "**No `groupContext` is passed here.** This surface holds one group's roster, not each " +
+          'member\'s complete group list, so `isMemberOf*` clauses read "Cannot be determined" — ' +
+          'which is true. A context built from the one group in hand would instead report every ' +
+          'other group a member belongs to as a clause they failed (ADR-0021).',
       },
     },
   },
@@ -61,6 +106,12 @@ const meta = {
     expanded: { description: "Whether this row's disclosure is open. Owned by the list." },
     onToggle: {
       description: "Called with the member's id when the disclosure control is pressed.",
+    },
+    membership: {
+      description: 'Why this member is in the group. Absent ⇒ the row says nothing about source.',
+    },
+    onRemove: {
+      description: 'Request removal. Omitted ⇒ no control renders — never a disabled one.',
     },
   },
   args: {
@@ -144,5 +195,51 @@ export const TogglesFromTheChevronOnly: Story = {
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(toggle);
     await expect(args.onToggle).toHaveBeenCalledWith(activeUser.id);
+  },
+};
+
+/**
+ * Okta's own attribution, which the roster read carries for free via
+ * `expand=group-rules` — so the row states the rule as a fact and never offers
+ * "Ask Okta". Spending a request to re-learn a fact already in hand is exactly
+ * what ADR-0031 gates against.
+ */
+export const ExplainedByOkta: Story = {
+  args: { membership: provenMembership, expanded: true, oktaOrigin: 'https://example.okta.com' },
+};
+
+/**
+ * No embed came back for this member, so the classification is a deduction and
+ * the disclosure offers the one call that settles it (ADR-0031). The condition is
+ * checked clause by clause against this member; `isMemberOf*` clauses would read
+ * "Cannot be determined" here, since a roster does not know each member's other
+ * groups.
+ */
+export const DeducedWithProofOnOffer: Story = {
+  args: {
+    membership: deducedMembership,
+    expanded: true,
+    proofEnabled: true,
+    onProve: fn(),
+    oktaOrigin: 'https://example.okta.com',
+  },
+  play: async ({ args, canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Ask Okta' }));
+    await expect(args.onProve).toHaveBeenCalledWith(deducedMembership, activeUser.id);
+  },
+};
+
+/**
+ * The remove control sits in the header beside the chevron, not inside the
+ * disclosure: a destructive verb a reader has to expand a row to find is worse UX
+ * than one in plain sight. Omitting `onRemove` renders no control at all rather
+ * than a permanently disabled one (ADR-0039).
+ */
+export const WithRemove: Story = {
+  args: { onRemove: fn() },
+  play: async ({ args, canvas }) => {
+    const remove = canvas.getByRole('button', { name: /^Remove .* from this group$/ });
+    await userEvent.click(remove);
+    await expect(args.onRemove).toHaveBeenCalledWith(activeUser);
   },
 };

@@ -134,7 +134,21 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
   const [query, setQuery] = useState('');
   const [bucket, setBucket] = useState<MembershipBucketFilter>('all');
   const [openGroupIds, setOpenGroupIds] = useState<ReadonlySet<string>>(() => new Set());
-  const proofs = useMembershipProofs(onProveMembershipSource);
+  /*
+    This pane's contract stays "tell me a group id" — the user is fixed for the
+    whole list, so the group is the only thing that varies and the caller has
+    nothing else to supply. The hook itself takes the whole membership, because a
+    group's roster varies along the opposite axis; the adapter is the seam between
+    the two, memoised so `prove` keeps a stable identity across renders.
+  */
+  const resolveProof = useMemo(
+    () =>
+      onProveMembershipSource
+        ? (membership: GroupMembership) => onProveMembershipSource(membership.group.id)
+        : undefined,
+    [onProveMembershipSource],
+  );
+  const proofs = useMembershipProofs(resolveProof);
 
   const summary = useMemo(() => membershipSummaryLine(memberships), [memberships]);
   const visible = useMemo(

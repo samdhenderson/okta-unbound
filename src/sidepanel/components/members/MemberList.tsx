@@ -17,6 +17,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useStaggerReveal } from '../../hooks/useStaggerReveal';
 import type { OktaUser, MemberMfaResult } from '../../../shared/types';
+import type { MemberSourceIndex } from '../../../shared/membership/memberSourceIndex';
+import type { MembershipProofs } from '../users/GroupMembershipsListProof';
 import ScrollableList from '../shared/ScrollableList';
 import { Button, Skeleton } from '../shared';
 import MemberRow from './MemberRow';
@@ -45,6 +47,14 @@ interface MemberListProps {
    * {@link MemberRow.onRemove} — omitted means no row renders a remove control.
    */
   onRemoveMember?: (user: OktaUser) => void;
+  /**
+   * Per-member membership source, so each row's disclosure can explain why that
+   * member is in the group. Absent ⇒ rows carry the profile and the deep link
+   * only.
+   */
+  memberSourceIndex?: MemberSourceIndex;
+  /** Per-row ADR-0031 proof state, keyed by user id. Absent ⇒ no row offers the action. */
+  proofs?: MembershipProofs;
 }
 
 /** Number of additional rows revealed per "Load more". */
@@ -64,6 +74,8 @@ const MemberList: React.FC<MemberListProps> = ({
   onLoadMore,
   oktaOrigin,
   onRemoveMember,
+  memberSourceIndex,
+  proofs,
 }) => {
   const setStaggerRef = useStaggerReveal();
 
@@ -136,6 +148,10 @@ const MemberList: React.FC<MemberListProps> = ({
               expanded={openUserIds.has(user.id)}
               onToggle={toggleRow}
               onRemove={onRemoveMember}
+              membership={memberSourceIndex?.byUserId.get(user.id)?.membership}
+              proofEnabled={proofs?.enabled ?? false}
+              proofOutcome={proofs?.outcomeFor(user.id)}
+              onProve={proofs?.prove}
             />
           ))}
         </div>

@@ -25,6 +25,24 @@
  * `relative z-10`, so a row carrying both a chevron and a remove button would owe
  * two escape hatches for an activation the chevron already owns.
  *
+ * ## Why it borrows from `users/`
+ *
+ * The disclosure explains *this membership* — the source line, the attributed
+ * rules, the clause-by-clause condition, and ADR-0031's "Ask Okta". Those are the
+ * same four things `users/GroupMembershipRow` says about the mirror-image case
+ * (one user's many groups vs one group's many users), so this row composes that
+ * surface's components rather than growing a second vocabulary for the same
+ * facts — which is the failure `shared/membership/sourceLine` was written to fix.
+ * `users/MembershipRuleEvidence` already reaches the other way for
+ * `groups/detail/ClauseChecklist`, so the direction is not new.
+ *
+ * **No `groupContext` is passed**, and that is deliberate. This surface holds one
+ * group's roster, not each member's complete group list, so an `isMemberOf*`
+ * clause has nothing here to resolve against. `ClauseChecklist` reports those as
+ * "Cannot be determined", which is true; a context built from the one group in
+ * hand would instead report every *other* group a member belongs to as a clause
+ * they failed (ADR-0021).
+ *
  * ## Who owns `expanded`
  *
  * The **list**, not the row — the same arrangement as
@@ -33,8 +51,9 @@
  * click re-filters the list under the reader.
  */
 import React, { useId } from 'react';
-import type { OktaUser, MemberMfaResult } from '../../../shared/types';
+import type { GroupMembership, OktaUser, MemberMfaResult } from '../../../shared/types';
 import {
+  Badge,
   IconButton,
   ListRow,
   OpenInOktaLink,
@@ -42,6 +61,12 @@ import {
   type UserStatusVariant,
 } from '../shared';
 import Icon from '../overview/shared/Icon';
+import MembershipRuleEvidence from '../users/MembershipRuleEvidence';
+import MembershipProofAction, {
+  type MembershipProofOutcome,
+} from '../users/GroupMembershipsListProof';
+import { membershipVerdict } from '../users/membershipVerdict';
+import { membershipSourceLine } from '../../../shared/membership/sourceLine';
 import { userDisplayName } from '../../../shared/utils/userDisplay';
 import { EXCLUDED_ATTRIBUTES, dimensionTitle } from './memberAnalytics';
 
@@ -66,6 +91,23 @@ interface MemberRowProps {
    * it out and explain why once, above the list, rather than per row.
    */
   onRemove?: (user: OktaUser) => void;
+  /**
+   * Why this member is in the group, as the classifier produced it. Absent ⇒ the
+   * disclosure carries the profile and the deep link only — the row says nothing
+   * about source rather than guessing at one.
+   */
+  membership?: GroupMembership;
+  /** Whether the surface can prove a membership at all (a resolver was supplied). */
+  proofEnabled?: boolean;
+  /** Where this row's proof request has got to, or `undefined` before anyone asked. */
+  proofOutcome?: MembershipProofOutcome;
+  /**
+   * Asks Okta about this one membership (ADR-0031) — one API call, from a click
+   * only. Called with this member's id as the row key: a `GroupMembership`
+   * describes a group, not the person it was granted to, and every row on this
+   * surface shares one group.
+   */
+  onProve?: (membership: GroupMembership, rowKey: string) => void;
 }
 
 /** Per-variant badge color classes (token palette, keyed by the shared variant map). */
@@ -110,6 +152,10 @@ const MemberRow: React.FC<MemberRowProps> = ({
   expanded,
   onToggle,
   onRemove,
+  membership,
+  proofEnabled = false,
+  proofOutcome,
+  onProve,
 }) => {
   const badgeClass = VARIANT_CLASSES[userStatusVariant(user.status)];
   // The shared helper, not a local `first + last || login`: the remove control's
@@ -121,6 +167,8 @@ const MemberRow: React.FC<MemberRowProps> = ({
   // in a DOM id (the same reasoning as `users/GroupMembershipRow`).
   const disclosureId = useId();
   const attributes = browseableAttributes(user);
+  const line = membership ? membershipSourceLine(membership) : null;
+  const verdict = membership ? membershipVerdict(membership) : null;
 
   return (
     <ListRow
@@ -139,6 +187,15 @@ const MemberRow: React.FC<MemberRowProps> = ({
         >
           <div>
             <div className="space-y-3 border-t border-neutral-200 px-3 pb-3 pt-2">
+              {/* 1. The caveat in full — the header line only had room for its first clause. */}
+              {line && <p className="text-xs text-pretty text-neutral-600">{line.description}</p>}
+
+              {/* 2. The evidence: one card per attributed rule, its condition
+                     evaluated against *this* member. */}
+              {membership?.rules.map((rule) => (
+                <MembershipRuleEvidence key={rule.id} rule={rule} user={user} />
+              ))}
+
               {attributes.length > 0 && (
                 <div>
                   <div className="mb-1 text-xs font-medium text-neutral-600">Profile</div>
@@ -155,6 +212,21 @@ const MemberRow: React.FC<MemberRowProps> = ({
                 </div>
               )}
 
+              {/*
+                3. The way out of a deduction. On this surface most rows never need
+                it: `expand=group-rules` hands Okta's own attribution back with the
+                roster, for free (ADR-0020), so the action is offered only where
+                that embed left the answer unknown — spending a request to re-learn
+                a fact already in hand is exactly what ADR-0031 gates against.
+              */}
+              {membership && onProve && proofEnabled && !membership.provenance && (
+                <MembershipProofAction
+                  membership={membership}
+                  outcome={proofOutcome}
+                  onProve={(target) => onProve(target, user.id)}
+                />
+              )}
+
               <OpenInOktaLink oktaOrigin={oktaOrigin} entityType="user" entityId={user.id} />
             </div>
           </div>
@@ -166,6 +238,18 @@ const MemberRow: React.FC<MemberRowProps> = ({
           <div className="truncate text-sm font-semibold text-neutral-900">{fullName}</div>
           <div className="truncate text-xs text-neutral-600">{user.profile.email}</div>
           <div className="truncate font-mono text-xs text-neutral-500">{user.profile.login}</div>
+          {/*
+            One source line, not three. The caption stays its own node so it is
+            findable as a phrase and so a label expecting a value ("Added by
+            rule:") is not glued to the rule names that follow it — the same
+            shape `users/GroupMembershipRow` uses for the mirror-image case.
+          */}
+          {line && (
+            <p className="mt-0.5 truncate text-xs text-neutral-600">
+              <span>{line.caption}</span>
+              {line.detail && <span> {line.detail}</span>}
+            </p>
+          )}
           {mfaScanned && (
             <div className="mt-1.5 flex flex-wrap gap-1">
               {mfa && mfa.factorLabels.length > 0 ? (
@@ -185,7 +269,17 @@ const MemberRow: React.FC<MemberRowProps> = ({
             </div>
           )}
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+          {/*
+            `flex-wrap` because this is a side panel: at the 360px floor the
+            verdict and the status no longer fit one line beside a long name, and
+            wrapping beats squeezing the name to a few characters.
+          */}
+          {verdict && (
+            <Badge variant={verdict.variant} title={verdict.title}>
+              {verdict.label}
+            </Badge>
+          )}
           <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
             {user.status}
           </span>
