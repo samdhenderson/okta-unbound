@@ -407,7 +407,7 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Files:** `docs/features-plan.md` item C (the full inventory of what exists
   and what remains lives there, not duplicated here);
   `docs/adr/0044-the-first-many-user-write.md` (to be created);
-  `src/shared/storage/undoManager.ts`;
+  `src/shared/undoManager.ts`;
   `src/sidepanel/hooks/useOktaApi/profileOperations.ts`
 - **Verified:** 2026-08-24 — the Members tab's filter and the Insights tab's
   attribute spread both shipped on `feat/group-detail-parity`; no bulk write
