@@ -54,7 +54,9 @@ describe('getRawGroupRule', () => {
 
     const rule = await getRawGroupRule('0prFAKERULE');
 
-    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/groups/rules/0prFAKERULE');
+    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/groups/rules/0prFAKERULE', {
+      reason: 'Fetch raw group rule for consolidation',
+    });
     expect(rule).toMatchObject({ id: '0prFAKERULE', name: 'Contractors', status: 'INACTIVE' });
   });
 
@@ -97,7 +99,11 @@ describe('createGroupRule', () => {
 
     const result = await createGroupRule(payload);
 
-    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/groups/rules', 'POST', payload);
+    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/groups/rules', {
+      method: 'POST',
+      body: payload,
+      reason: 'Create consolidated group rule',
+    });
     expect(result.success).toBe(true);
     expect(result.rule).toMatchObject({ id: '0prFAKERULE', name: 'Contractors' });
   });
@@ -149,7 +155,10 @@ describe('deleteGroupRule', () => {
 
     const result = await deleteGroupRule('0prFAKERULE');
 
-    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/groups/rules/0prFAKERULE', 'DELETE');
+    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/groups/rules/0prFAKERULE', {
+      method: 'DELETE',
+      reason: 'Delete group rule',
+    });
     expect(result).toEqual({ success: true, error: undefined });
   });
 
@@ -177,7 +186,7 @@ describe('activateGroupRule', () => {
 
     expect(core.makeApiRequest).toHaveBeenCalledWith(
       '/api/v1/groups/rules/0prFAKERULE/lifecycle/activate',
-      'POST',
+      { method: 'POST', reason: 'Activate group rule' },
     );
     expect(result).toEqual({ success: true, error: undefined });
   });
@@ -203,7 +212,7 @@ describe('deactivateGroupRule', () => {
 
     expect(core.makeApiRequest).toHaveBeenCalledWith(
       '/api/v1/groups/rules/0prFAKERULE/lifecycle/deactivate',
-      'POST',
+      { method: 'POST', reason: 'Deactivate group rule' },
     );
     expect(result).toEqual({ success: true, error: undefined });
   });

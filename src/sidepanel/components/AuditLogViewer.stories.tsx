@@ -8,6 +8,7 @@ import type {
   UndoActionMetadata,
   UndoHistory,
 } from '../../shared/undoTypes';
+import type { RequestLogEntry, RequestLogHistory } from '../../shared/requestLogTypes';
 
 /** Five minutes ago, so every entry's relative time reads the same on every run. */
 const recently = Date.now() - 5 * 60 * 1000;
@@ -95,20 +96,48 @@ const mixedHistory: UndoAction[] = [
 ];
 
 /**
- * Seeds `chrome.storage.local` with a given history before a story mounts and
- * restores the real getter on cleanup, so `getUndoHistory` (called on mount)
- * resolves to the desired state without a service mock. Runs in `beforeEach`,
+ * Seeds `chrome.storage.local` with a given undo-action history and request
+ * log before a story mounts, and restores the real getter on cleanup, so the
+ * viewer's parallel `getUndoHistory()`/`getRequestLog()` reads (on mount)
+ * resolve to the desired state without a service mock. Runs in `beforeEach`,
  * so the override is in place before the first render.
  */
-const seedHistory = (actions: UndoAction[]) => async () => {
-  const previous = chrome.storage.local.get;
-  const history: UndoHistory = { actions, maxSize: 50 };
-  chrome.storage.local.get = (() =>
-    Promise.resolve({ undoHistory: history })) as typeof chrome.storage.local.get;
-  return () => {
-    chrome.storage.local.get = previous;
+const seedAll =
+  (actions: UndoAction[], requestEntries: RequestLogEntry[] = []) =>
+  async () => {
+    const previous = chrome.storage.local.get;
+    const undoHistory: UndoHistory = { actions, maxSize: 50 };
+    const apiRequestLog: RequestLogHistory = { entries: requestEntries, maxSize: 50 };
+    chrome.storage.local.get = ((keys: string[]) => {
+      const result: Record<string, unknown> = {};
+      if (keys.includes('undoHistory')) result.undoHistory = undoHistory;
+      if (keys.includes('apiRequestLog')) result.apiRequestLog = apiRequestLog;
+      return Promise.resolve(result);
+    }) as typeof chrome.storage.local.get;
+    return () => {
+      chrome.storage.local.get = previous;
+    };
   };
-};
+
+/** Seeds only the undo-action history, with an empty request log. */
+const seedHistory = (actions: UndoAction[]) => seedAll(actions, []);
+
+/** A request-log batch entry, for the Verbose-mode story. */
+const requestBatch = (
+  id: string,
+  reason: string,
+  requestCount: number,
+  endpoint: string,
+): RequestLogEntry => ({
+  id,
+  timestamp: recently,
+  reason,
+  requestCount,
+  endpoints: [{ method: 'GET', endpoint }],
+  endpointsTruncated: false,
+  durationMs: 800,
+  outcome: 'all',
+});
 
 /** The History tab: what the extension has done, and the way back where there is one. */
 const meta = {
@@ -160,6 +189,39 @@ export const Populated: Story = {
     await expect(canvas.getAllByRole('button', { name: 'Undo' })).toHaveLength(1);
     await expect(canvas.getByText('Undone')).toBeVisible();
     await expect(canvas.getByText('Outcome unknown')).toBeVisible();
+  },
+};
+
+/**
+ * Verbose mode off by default: a request log is recorded, but stays hidden
+ * until the admin opts in — the count strip and list show only actions.
+ */
+export const VerboseModeOff: Story = {
+  beforeEach: seedAll(
+    [profileUpdate],
+    [requestBatch('req_log_1', 'Populate Groups page', 42, '/api/v1/groups?limit=200')],
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText('1 action logged')).toBeVisible();
+    await expect(canvas.queryByText(/Populate Groups page/)).toBeNull();
+  },
+};
+
+/**
+ * Toggling Verbose merges the request log into the same chronological list —
+ * a large batch collapses to one row rather than one per request.
+ */
+export const VerboseModeOn: Story = {
+  beforeEach: seedAll(
+    [profileUpdate],
+    [requestBatch('req_log_1', 'Populate Groups page', 42, '/api/v1/groups?limit=200')],
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('checkbox', { name: /Verbose/ }));
+    await expect(await canvas.findByText('1 action, 1 request batch logged')).toBeVisible();
+    await expect(canvas.getByText('42 requests — Populate Groups page')).toBeVisible();
   },
 };
 

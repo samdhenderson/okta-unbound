@@ -121,7 +121,7 @@ export async function fetchGroupRulesRequest(
     let nextUrl: string | null = '/api/v1/groups/rules?limit=200';
 
     while (nextUrl) {
-      const response = await makeApiRequest(nextUrl);
+      const response = await makeApiRequest(nextUrl, { reason: 'Load group rules' });
       if (!response.success) {
         return response;
       }

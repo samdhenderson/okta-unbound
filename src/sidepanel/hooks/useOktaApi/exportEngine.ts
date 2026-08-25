@@ -95,7 +95,11 @@ export function createExportEngineOperations(coreApi: CoreApi) {
 
     while (nextUrl) {
       coreApi.checkCancelled();
-      const response = await coreApi.makeApiRequest(nextUrl, 'GET', undefined, 'low');
+      const response = await coreApi.makeApiRequest(nextUrl, {
+        method: 'GET',
+        priority: 'low',
+        reason: `Export: ${descriptor.displayName}`,
+      });
       if (!response.success) {
         throw new Error(response.error || `Export fetch failed (${descriptor.id})`);
       }
@@ -135,7 +139,11 @@ export function createExportEngineOperations(coreApi: CoreApi) {
     descriptor: EntityExport<Row>,
     resolvedEndpoint: string,
   ): Promise<CountResult> => {
-    const response = await coreApi.makeApiRequest(resolvedEndpoint, 'GET', undefined, 'low');
+    const response = await coreApi.makeApiRequest(resolvedEndpoint, {
+      method: 'GET',
+      priority: 'low',
+      reason: `Count matches: ${descriptor.displayName}`,
+    });
     if (!response.success) {
       throw new Error(response.error || `Count failed (${descriptor.id})`);
     }

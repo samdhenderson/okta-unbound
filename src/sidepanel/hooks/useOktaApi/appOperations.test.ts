@@ -47,7 +47,9 @@ describe('searchApps', () => {
 
     const result = await searchApps('sales force');
 
-    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/apps?q=sales%20force&limit=20');
+    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/apps?q=sales%20force&limit=20', {
+      reason: 'Search apps by name',
+    });
     expect(result).toEqual([
       { id: '0oaFAKE1', label: 'Salesforce', status: 'ACTIVE' },
       { id: '0oaFAKE2', label: 'okta_org2org', status: 'INACTIVE' },
@@ -106,7 +108,9 @@ describe('getAppById', () => {
 
     const app = await getAppById('0oaFAKE1');
 
-    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/apps/0oaFAKE1');
+    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/apps/0oaFAKE1', {
+      reason: 'Load app details',
+    });
     expect(app?.label).toBe('Salesforce');
     expect(app?.signOnMode).toBe('SAML_2_0');
   });
@@ -163,7 +167,7 @@ describe('getAppAssignmentCounts', () => {
     expect(await getAppAssignmentCounts('0oaFAKE1')).toEqual({ users: 3, groups: 1 });
     // Bulk walks yield to interactive work.
     for (const call of makeApiRequest.mock.calls) {
-      expect(call[3]).toBe('low');
+      expect(call[1]).toMatchObject({ priority: 'low', reason: 'Count app assignments' });
     }
   });
 
@@ -243,7 +247,7 @@ describe('getAppGroupAssignments', () => {
     expect(makeApiRequest.mock.calls[1][0]).toBe('/api/v1/apps/0oaFAKEapp000001/groups?after=2');
     // A bulk walk must yield to interactive work.
     for (const call of makeApiRequest.mock.calls) {
-      expect(call[3]).toBe('low');
+      expect(call[1]).toMatchObject({ priority: 'low', reason: 'Load app group assignments' });
     }
   });
 

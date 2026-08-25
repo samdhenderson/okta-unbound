@@ -74,7 +74,9 @@ describe('getUserRaw', () => {
 
     const user = await getUserRaw('00uFAKE1');
 
-    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/users/00uFAKE1');
+    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/users/00uFAKE1', {
+      reason: 'Fetch user profile for editing',
+    });
     expect(user?.id).toBe('00uFAKE1');
     expect(user?.profile.department).toBe('Support');
   });
@@ -134,8 +136,10 @@ describe('updateUserProfile', () => {
     const result = await updateUserProfile('00uFAKE1', { department: 'Support' });
 
     expect(makeApiRequest).toHaveBeenCalledTimes(1);
-    expect(makeApiRequest).toHaveBeenCalledWith('/api/v1/users/00uFAKE1', 'POST', {
-      profile: { department: 'Support' },
+    expect(makeApiRequest).toHaveBeenCalledWith('/api/v1/users/00uFAKE1', {
+      method: 'POST',
+      body: { profile: { department: 'Support' } },
+      reason: 'Update user profile attributes',
     });
     expect(result.kind).toBe('saved');
     expect(result.kind === 'saved' && result.user.id).toBe('00uFAKE1');
@@ -237,7 +241,9 @@ describe('getUserProfileSchema', () => {
 
     const result = await getUserProfileSchema();
 
-    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/meta/schemas/user/default');
+    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/meta/schemas/user/default', {
+      reason: 'Fetch user profile schema',
+    });
     expect(result?.definitions?.base?.properties?.login).toMatchObject({
       title: 'Username',
       type: 'string',

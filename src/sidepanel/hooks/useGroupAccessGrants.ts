@@ -176,7 +176,7 @@ export function useGroupAccessGrants(
     const runId = ++runIdRef.current;
 
     fetchAllPages(
-      (url) => makeApiRequest(url),
+      (url) => makeApiRequest(url, { reason: 'Load group app assignments' }),
       `/api/v1/groups/${groupId}/apps?limit=${OKTA_PAGE_SIZE}`,
       {
         schema: oktaAppListItemSchema,
@@ -195,10 +195,14 @@ export function useGroupAccessGrants(
         setAppsStatus('error');
       });
 
-    fetchAllPages((url) => makeApiRequest(url), `/api/v1/groups/${groupId}/roles`, {
-      schema: oktaGroupRoleRowSchema,
-      context: 'GET /api/v1/groups/{id}/roles',
-    })
+    fetchAllPages(
+      (url) => makeApiRequest(url, { reason: 'Load group admin roles' }),
+      `/api/v1/groups/${groupId}/roles`,
+      {
+        schema: oktaGroupRoleRowSchema,
+        context: 'GET /api/v1/groups/{id}/roles',
+      },
+    )
       .then((items) => {
         if (runId !== runIdRef.current) return;
         setRoles(items.map(toRoleGrant));

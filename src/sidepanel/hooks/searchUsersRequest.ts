@@ -48,24 +48,22 @@ export async function searchUsersRequest(
 
     // Strategy 1: flexible `q=` search (multi-field, good for partial matches).
     const qParam = encodeURIComponent(trimmedQuery);
-    let response = await makeApiRequest(
-      `/api/v1/users?q=${qParam}&limit=20`,
-      'GET',
-      undefined,
-      'interactive',
-    );
+    let response = await makeApiRequest(`/api/v1/users?q=${qParam}&limit=20`, {
+      method: 'GET',
+      priority: 'interactive',
+      reason: 'Search users',
+    });
 
     if (response.success && response.data && response.data.length > 0) {
       users = response.data;
     } else {
       // Strategy 2: `search=` prefix search.
       const searchParam = encodeURIComponent(trimmedQuery);
-      response = await makeApiRequest(
-        `/api/v1/users?search=${searchParam}&limit=20`,
-        'GET',
-        undefined,
-        'interactive',
-      );
+      response = await makeApiRequest(`/api/v1/users?search=${searchParam}&limit=20`, {
+        method: 'GET',
+        priority: 'interactive',
+        reason: 'Search users',
+      });
       if (response.success && response.data) {
         users = response.data;
       }
@@ -75,9 +73,11 @@ export async function searchUsersRequest(
     if (users.length === 0 && trimmedQuery.includes('@')) {
       response = await makeApiRequest(
         `/api/v1/users?filter=profile.email eq "${trimmedQuery}"&limit=20`,
-        'GET',
-        undefined,
-        'interactive',
+        {
+          method: 'GET',
+          priority: 'interactive',
+          reason: 'Search users',
+        },
       );
       if (response.success && response.data) {
         users = response.data;

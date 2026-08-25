@@ -70,10 +70,13 @@ describe('getAllGroups', () => {
 
     expect(groups.map((g) => g.id)).toEqual(['g1', 'g2', 'g3']);
     // First page uses the seed URL; second uses the parsed relative next URL.
-    expect(makeApiRequest).toHaveBeenNthCalledWith(1, '/api/v1/groups?limit=200&expand=stats');
+    expect(makeApiRequest).toHaveBeenNthCalledWith(1, '/api/v1/groups?limit=200&expand=stats', {
+      reason: 'List all groups',
+    });
     expect(makeApiRequest).toHaveBeenNthCalledWith(
       2,
       '/api/v1/groups?after=CURSOR2&limit=200&expand=stats',
+      { reason: 'List all groups' },
     );
     expect(onProgress).toHaveBeenNthCalledWith(1, 2, 2);
     expect(onProgress).toHaveBeenNthCalledWith(2, 3, 3);
@@ -130,7 +133,9 @@ describe('getGroupMemberCount', () => {
     const count = await createGroupDiscoveryOperations(core).getGroupMemberCount('g1');
 
     expect(count).toBe(200);
-    expect(makeApiRequest).toHaveBeenCalledWith('/api/v1/groups/g1/users?limit=200');
+    expect(makeApiRequest).toHaveBeenCalledWith('/api/v1/groups/g1/users?limit=200', {
+      reason: 'Get group member count',
+    });
   });
 
   it('returns the first-page count when there is only one page (capital-L header)', async () => {
@@ -202,7 +207,9 @@ describe('getGroupRulesForGroup', () => {
     const rules = await createGroupDiscoveryOperations(core).getGroupRulesForGroup('g1');
 
     expect(rules.map((r) => (r as { id: string }).id)).toEqual(['r1']);
-    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/groups/rules?limit=200');
+    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/groups/rules?limit=200', {
+      reason: 'Load org-wide group rules',
+    });
   });
 
   it('populates userAttributes on the cache-miss path', async () => {
@@ -355,10 +362,13 @@ describe('getGroupRulesForGroup pagination + cache write-back', () => {
 
     // Matching rules from BOTH pages are returned (no >200-rule truncation).
     expect(rules.map((r) => (r as { id: string }).id)).toEqual(['r1', 'r3']);
-    expect(makeApiRequest).toHaveBeenNthCalledWith(1, '/api/v1/groups/rules?limit=200');
+    expect(makeApiRequest).toHaveBeenNthCalledWith(1, '/api/v1/groups/rules?limit=200', {
+      reason: 'Load org-wide group rules',
+    });
     expect(makeApiRequest).toHaveBeenNthCalledWith(
       2,
       '/api/v1/groups/rules?after=CURSOR2&limit=200',
+      { reason: 'Load org-wide group rules' },
     );
   });
 
@@ -455,10 +465,13 @@ describe('ensureGroupRulesLoaded', () => {
 
     expect(rules?.map((r) => r.id)).toEqual(['r1', 'r2']);
     // One org-wide listing (paged), never one request per group.
-    expect(makeApiRequest).toHaveBeenNthCalledWith(1, '/api/v1/groups/rules?limit=200');
+    expect(makeApiRequest).toHaveBeenNthCalledWith(1, '/api/v1/groups/rules?limit=200', {
+      reason: 'Load org-wide group rules',
+    });
     expect(makeApiRequest).toHaveBeenNthCalledWith(
       2,
       '/api/v1/groups/rules?after=CURSOR2&limit=200',
+      { reason: 'Load org-wide group rules' },
     );
     expect(makeApiRequest).toHaveBeenCalledTimes(2);
     expect(setMock).toHaveBeenCalledTimes(1);
@@ -503,7 +516,9 @@ describe('searchGroups', () => {
       { id: 'g1', name: 'Admins', description: 'desc', type: 'APP_GROUP' },
       { id: 'g2', name: 'g2', description: '', type: 'OKTA_GROUP' },
     ]);
-    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/groups?q=adm&limit=20');
+    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/groups?q=adm&limit=20', {
+      reason: 'Search groups by name',
+    });
   });
 
   it('encodes the query in the request URL', async () => {
@@ -513,7 +528,9 @@ describe('searchGroups', () => {
 
     await createGroupDiscoveryOperations(core).searchGroups('a b&c');
 
-    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/groups?q=a%20b%26c&limit=20');
+    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/groups?q=a%20b%26c&limit=20', {
+      reason: 'Search groups by name',
+    });
   });
 
   it('returns [] when the response is unsuccessful', async () => {
@@ -545,7 +562,9 @@ describe('getGroupById', () => {
     const group = await createGroupDiscoveryOperations(core).getGroupById('g1');
 
     expect(group).toEqual({ id: 'g1', name: 'Eng', description: 'team', type: 'OKTA_GROUP' });
-    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/groups/g1');
+    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/groups/g1', {
+      reason: 'Fetch group by ID',
+    });
   });
 
   it('applies fallbacks when profile fields and type are missing', async () => {

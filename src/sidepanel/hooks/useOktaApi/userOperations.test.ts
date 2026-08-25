@@ -40,7 +40,9 @@ describe('getUserLastLogin', () => {
 
     const result = await getUserLastLogin('00uFAKE1');
 
-    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/users/00uFAKE1');
+    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/users/00uFAKE1', {
+      reason: 'Load user last login',
+    });
     expect(result).toEqual(new Date('2026-01-02T03:04:05.000Z'));
   });
 
@@ -154,7 +156,11 @@ describe('batchGetUserDetails', () => {
     // 1 and 3 loaded; 2 (null data) and 4 (threw) omitted.
     expect([...map.keys()].sort()).toEqual(['00uFAKE1', '00uFAKE3']);
     // low priority passed through.
-    expect(makeApiRequest).toHaveBeenCalledWith('/api/v1/users/00uFAKE1', 'GET', undefined, 'low');
+    expect(makeApiRequest).toHaveBeenCalledWith('/api/v1/users/00uFAKE1', {
+      method: 'GET',
+      priority: 'low',
+      reason: 'Load user details',
+    });
     // Two batches (3 + 1) → progress capped at total.
     expect(onProgress).toHaveBeenNthCalledWith(1, 3, 4);
     expect(onProgress).toHaveBeenNthCalledWith(2, 4, 4);
@@ -219,12 +225,11 @@ describe('scanGroupMfa', () => {
 
     expect(core.runOperation).toHaveBeenCalled();
     expect([...map.keys()].sort()).toEqual(['00uFAKE1', '00uFAKE2', '00uFAKE3']);
-    expect(makeApiRequest).toHaveBeenCalledWith(
-      '/api/v1/users/00uFAKE1/factors',
-      'GET',
-      undefined,
-      'low',
-    );
+    expect(makeApiRequest).toHaveBeenCalledWith('/api/v1/users/00uFAKE1/factors', {
+      method: 'GET',
+      priority: 'low',
+      reason: 'MFA scan',
+    });
     // The enrolled user reports at least one factor; the others summarize as none.
     expect(map.get('00uFAKE1')?.enrolled).toBe(true);
     expect(map.get('00uFAKE1')?.factorCount).toBe(1);
@@ -245,7 +250,9 @@ describe('getUserGroupMemberships', () => {
 
     const count = await getUserGroupMemberships('00uFAKE1');
 
-    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/users/00uFAKE1/groups?limit=1');
+    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/users/00uFAKE1/groups?limit=1', {
+      reason: 'Count user group memberships',
+    });
     expect(count).toBe(42);
   });
 
@@ -297,7 +304,9 @@ describe('searchUsers', () => {
 
     const results = await searchUsers('jane doe');
 
-    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/users?q=jane%20doe&limit=20');
+    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/users?q=jane%20doe&limit=20', {
+      reason: 'Search users',
+    });
     expect(results[0]).toEqual({
       id: '00uFAKE1',
       email: 'jane@example.com',
@@ -373,10 +382,10 @@ describe('lifecycle actions', () => {
 
     const result = await suspendUser('00uFAKE1');
 
-    expect(core.makeApiRequest).toHaveBeenCalledWith(
-      '/api/v1/users/00uFAKE1/lifecycle/suspend',
-      'POST',
-    );
+    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/users/00uFAKE1/lifecycle/suspend', {
+      method: 'POST',
+      reason: 'Suspend user',
+    });
     expect(result).toEqual({ success: false, error: 'not active' });
   });
 
@@ -386,10 +395,10 @@ describe('lifecycle actions', () => {
 
     const result = await unsuspendUser('00uFAKE1');
 
-    expect(core.makeApiRequest).toHaveBeenCalledWith(
-      '/api/v1/users/00uFAKE1/lifecycle/unsuspend',
-      'POST',
-    );
+    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/users/00uFAKE1/lifecycle/unsuspend', {
+      method: 'POST',
+      reason: 'Unsuspend user',
+    });
     expect(result).toEqual({ success: true, error: undefined });
   });
 
@@ -401,7 +410,7 @@ describe('lifecycle actions', () => {
 
     expect(core.makeApiRequest).toHaveBeenCalledWith(
       '/api/v1/users/00uFAKE1/lifecycle/reset_password?sendEmail=true',
-      'POST',
+      { method: 'POST', reason: 'Reset user password' },
     );
     expect(result).toEqual({ success: true, error: undefined });
   });

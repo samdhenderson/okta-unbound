@@ -84,12 +84,11 @@ export function useGroupLiveSearch({
 
       try {
         const q = encodeURIComponent(query.trim());
-        const response = await makeApiRequest(
-          `/api/v1/groups?q=${q}&limit=20&expand=stats`,
-          'GET',
-          undefined,
-          'interactive',
-        );
+        const response = await makeApiRequest(`/api/v1/groups?q=${q}&limit=20&expand=stats`, {
+          method: 'GET',
+          priority: 'interactive',
+          reason: 'Live group search',
+        });
 
         if (response.success) {
           const results = (response.data || []).map(liveSearchToGroupSummary);

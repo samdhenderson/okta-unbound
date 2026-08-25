@@ -31,7 +31,7 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
     onProgress?: (loaded: number, total: number) => void,
   ): Promise<OktaGroup[]> =>
     fetchAllPages<OktaGroup>(
-      (url) => coreApi.makeApiRequest(url),
+      (url) => coreApi.makeApiRequest(url, { reason: 'List all groups' }),
       `/api/v1/groups?limit=${OKTA_PAGE_SIZE}&expand=stats`,
       {
         errorMessage: 'Failed to fetch groups',
@@ -51,6 +51,7 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
     try {
       const usersResponse = await coreApi.makeApiRequest(
         `/api/v1/groups/${groupId}/users?limit=${OKTA_PAGE_SIZE}`,
+        { reason: 'Get group member count' },
       );
       if (usersResponse.success && usersResponse.data) {
         return usersResponse.data.length;
@@ -82,7 +83,7 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
     rawRules: OktaGroupRule[];
   }> => {
     const rawRules = await fetchAllPages<OktaGroupRule>(
-      (url) => coreApi.makeApiRequest(url),
+      (url) => coreApi.makeApiRequest(url, { reason: 'Load org-wide group rules' }),
       `/api/v1/groups/rules?limit=${OKTA_PAGE_SIZE}`,
     );
 
@@ -190,6 +191,7 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
     try {
       const response = await coreApi.makeApiRequest(
         `/api/v1/groups?q=${encodeURIComponent(query)}&limit=20`,
+        { reason: 'Search groups by name' },
       );
 
       if (response.success && response.data) {
@@ -218,7 +220,9 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
     groupId: string,
   ): Promise<{ id: string; name: string; description: string; type: string } | null> => {
     try {
-      const response = await coreApi.makeApiRequest(`/api/v1/groups/${groupId}`);
+      const response = await coreApi.makeApiRequest(`/api/v1/groups/${groupId}`, {
+        reason: 'Fetch group by ID',
+      });
       if (response.success && response.data) {
         const group = response.data;
         return {

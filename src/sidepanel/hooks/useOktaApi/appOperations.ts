@@ -60,6 +60,7 @@ export function createAppOperations(coreApi: CoreApi) {
     try {
       const response = await coreApi.makeApiRequest(
         `/api/v1/apps?q=${encodeURIComponent(query)}&limit=20`,
+        { reason: 'Search apps by name' },
       );
       if (!response.success) return [];
       const apps = parseOktaList(oktaAppListItemSchema, response.data, 'GET /api/v1/apps?q');
@@ -87,7 +88,9 @@ export function createAppOperations(coreApi: CoreApi) {
    */
   const getAppById = async (appId: string): Promise<OktaAppListItem | null> => {
     try {
-      const response = await coreApi.makeApiRequest(`/api/v1/apps/${encodeURIComponent(appId)}`);
+      const response = await coreApi.makeApiRequest(`/api/v1/apps/${encodeURIComponent(appId)}`, {
+        reason: 'Load app details',
+      });
       if (!response.success || !response.data) return null;
       return parseOkta(oktaAppListItemSchema, response.data, 'GET /api/v1/apps/{id}');
     } catch {
@@ -114,12 +117,22 @@ export function createAppOperations(coreApi: CoreApi) {
     try {
       const [users, groups] = await Promise.all([
         fetchAllPages(
-          (url) => coreApi.makeApiRequest(url, 'GET', undefined, 'low'),
+          (url) =>
+            coreApi.makeApiRequest(url, {
+              method: 'GET',
+              priority: 'low',
+              reason: 'Count app assignments',
+            }),
           `/api/v1/apps/${encodedId}/users?limit=${OKTA_PAGE_SIZE}`,
           { schema: oktaAppUserSchema, context: 'GET /api/v1/apps/{id}/users' },
         ),
         fetchAllPages(
-          (url) => coreApi.makeApiRequest(url, 'GET', undefined, 'low'),
+          (url) =>
+            coreApi.makeApiRequest(url, {
+              method: 'GET',
+              priority: 'low',
+              reason: 'Count app assignments',
+            }),
           `/api/v1/apps/${encodedId}/groups?limit=${OKTA_PAGE_SIZE}`,
           { schema: oktaAppGroupSchema, context: 'GET /api/v1/apps/{id}/groups' },
         ),
@@ -165,7 +178,12 @@ export function createAppOperations(coreApi: CoreApi) {
   const getAppGroupAssignments = async (appId: string): Promise<string[] | null> => {
     try {
       const groups = await fetchAllPages(
-        (url) => coreApi.makeApiRequest(url, 'GET', undefined, 'low'),
+        (url) =>
+          coreApi.makeApiRequest(url, {
+            method: 'GET',
+            priority: 'low',
+            reason: 'Load app group assignments',
+          }),
         `/api/v1/apps/${encodeURIComponent(appId)}/groups?limit=${OKTA_PAGE_SIZE}`,
         {
           schema: oktaAppGroupAssignmentSchema,

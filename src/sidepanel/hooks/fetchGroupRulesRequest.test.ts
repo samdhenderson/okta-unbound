@@ -205,7 +205,9 @@ describe('fetchGroupRulesRequest', () => {
 
     const result = await fetchGroupRulesRequest(makeApiRequest);
 
-    expect(makeApiRequest).toHaveBeenNthCalledWith(2, '/api/v1/groups/rules?after=CUR&limit=200');
+    expect(makeApiRequest).toHaveBeenNthCalledWith(2, '/api/v1/groups/rules?after=CUR&limit=200', {
+      reason: 'Load group rules',
+    });
     expect(result.stats).toEqual({ total: 2, active: 1, inactive: 1, conflicts: 0 });
   });
 

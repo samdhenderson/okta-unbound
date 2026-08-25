@@ -212,7 +212,9 @@ export function useRuleConsolidation({
     // `/api/v1/users/me` lookup fails.
     let currentUserEmail = 'unknown@unknown.com';
     try {
-      const userResponse = await makeApiRequest('/api/v1/users/me');
+      const userResponse = await makeApiRequest('/api/v1/users/me', {
+        reason: 'Resolve current admin for consolidation audit attribution',
+      });
       if (userResponse.success && userResponse.data) {
         currentUserEmail = userResponse.data.profile?.email || 'unknown@unknown.com';
       }

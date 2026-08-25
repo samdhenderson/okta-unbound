@@ -81,7 +81,11 @@ export function createRuleImpactOperations(
     }
 
     const rules = await fetchAllPages<OktaGroupRuleResponse>(
-      (url) => coreApi.makeApiRequest(url, 'GET', undefined, 'low'),
+      (url) =>
+        coreApi.makeApiRequest(url, {
+          priority: 'low',
+          reason: 'List group rules for rule impact preview',
+        }),
       `/api/v1/groups/rules?limit=${OKTA_PAGE_SIZE}`,
       {
         // Validated at the response boundary (ADR-0006): malformed rows are
@@ -103,12 +107,10 @@ export function createRuleImpactOperations(
     fallbackName: string,
   ): Promise<{ name: string; type?: GroupType }> => {
     try {
-      const response = await coreApi.makeApiRequest(
-        `/api/v1/groups/${groupId}`,
-        'GET',
-        undefined,
-        'low',
-      );
+      const response = await coreApi.makeApiRequest(`/api/v1/groups/${groupId}`, {
+        priority: 'low',
+        reason: 'Rule impact preview',
+      });
       if (response.success && response.data) {
         return {
           name: response.data.profile?.name || fallbackName,

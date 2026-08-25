@@ -24,12 +24,11 @@ describe('searchUsersRequest', () => {
 
     expect(result).toEqual({ success: true, data: [user('u1')], count: 1 });
     expect(makeApiRequest).toHaveBeenCalledTimes(1);
-    expect(makeApiRequest).toHaveBeenCalledWith(
-      '/api/v1/users?q=ada&limit=20',
-      'GET',
-      undefined,
-      'interactive',
-    );
+    expect(makeApiRequest).toHaveBeenCalledWith('/api/v1/users?q=ada&limit=20', {
+      method: 'GET',
+      priority: 'interactive',
+      reason: 'Search users',
+    });
   });
 
   it('falls back to search= when q= returns no rows', async () => {
@@ -42,13 +41,11 @@ describe('searchUsersRequest', () => {
 
     expect(result.data).toEqual([user('u2')]);
     expect(makeApiRequest).toHaveBeenCalledTimes(2);
-    expect(makeApiRequest).toHaveBeenNthCalledWith(
-      2,
-      '/api/v1/users?search=ada&limit=20',
-      'GET',
-      undefined,
-      'interactive',
-    );
+    expect(makeApiRequest).toHaveBeenNthCalledWith(2, '/api/v1/users?search=ada&limit=20', {
+      method: 'GET',
+      priority: 'interactive',
+      reason: 'Search users',
+    });
   });
 
   it('tries the email filter only when the query has @ and nothing matched yet', async () => {
@@ -65,9 +62,11 @@ describe('searchUsersRequest', () => {
     expect(makeApiRequest).toHaveBeenNthCalledWith(
       3,
       '/api/v1/users?filter=profile.email eq "ada@x.com"&limit=20',
-      'GET',
-      undefined,
-      'interactive',
+      {
+        method: 'GET',
+        priority: 'interactive',
+        reason: 'Search users',
+      },
     );
   });
 
@@ -85,12 +84,11 @@ describe('searchUsersRequest', () => {
 
     await searchUsersRequest(makeApiRequest, '  a b  ');
 
-    expect(makeApiRequest).toHaveBeenCalledWith(
-      '/api/v1/users?q=a%20b&limit=20',
-      'GET',
-      undefined,
-      'interactive',
-    );
+    expect(makeApiRequest).toHaveBeenCalledWith('/api/v1/users?q=a%20b&limit=20', {
+      method: 'GET',
+      priority: 'interactive',
+      reason: 'Search users',
+    });
   });
 
   it('reports a failure (does not throw) when a request rejects', async () => {

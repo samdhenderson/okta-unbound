@@ -33,6 +33,12 @@ export interface QueuedRequest {
   priority: RequestPriority;
   tabId: number;
   timestamp: number;
+  /**
+   * Human-readable "why" for the verbose request audit log (`shared/requestLog`).
+   * Absent falls back to a generic label there rather than being required here,
+   * so a caller that forgets one still gets logged instead of silently dropped.
+   */
+  reason?: string;
   resolve: (response: RequestResult) => void;
   reject: (error: Error) => void;
   retryCount: number;

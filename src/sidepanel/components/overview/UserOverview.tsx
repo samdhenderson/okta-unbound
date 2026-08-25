@@ -60,7 +60,9 @@ const UserOverview: React.FC<UserOverviewProps> = ({
   } = useEntityQuery<OktaUser>(
     cacheKeys.userDetails(userId),
     async () => {
-      const userResponse = await makeApiRequest(`/api/v1/users/${userId}`);
+      const userResponse = await makeApiRequest(`/api/v1/users/${userId}`, {
+        reason: 'Load user overview',
+      });
       if (!userResponse.success || !userResponse.data) {
         throw new Error(userResponse.error || 'Failed to load user details');
       }

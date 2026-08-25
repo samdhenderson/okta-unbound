@@ -74,7 +74,11 @@ export function useApiExplorer({
     setIsLoading(true);
     void (async () => {
       try {
-        const outcome = await api.makeApiRequest(trimmed, 'GET', undefined, 'interactive');
+        const outcome = await api.makeApiRequest(trimmed, {
+          method: 'GET',
+          priority: 'interactive',
+          reason: 'Manual API Explorer request',
+        });
         if (outcome.success) {
           setResponse({ data: outcome.data, status: outcome.status });
         } else {

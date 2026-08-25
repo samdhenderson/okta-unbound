@@ -93,7 +93,7 @@ describe('useOktaApi', () => {
       );
 
       const response = await act(async () => {
-        return result.current.makeApiRequest('/api/v1/test');
+        return result.current.makeApiRequest('/api/v1/test', { reason: 'Test request' });
       });
 
       expect(mockRuntimeSendMessage).toHaveBeenCalledWith({
@@ -103,6 +103,7 @@ describe('useOktaApi', () => {
         body: undefined,
         tabId: targetTabId,
         priority: 'normal',
+        reason: 'Test request',
       });
       expect(response).toEqual(mockResponse);
     });
@@ -113,7 +114,7 @@ describe('useOktaApi', () => {
       );
 
       await expect(async () => {
-        await result.current.makeApiRequest('/api/v1/test');
+        await result.current.makeApiRequest('/api/v1/test', { reason: 'Test request' });
       }).rejects.toThrow('No target tab ID - not connected to Okta page');
     });
   });
@@ -313,6 +314,7 @@ describe('useOktaApi', () => {
         body: undefined,
         tabId: targetTabId,
         priority: 'normal',
+        reason: 'Load all group members',
       });
     });
 
@@ -391,6 +393,7 @@ describe('useOktaApi', () => {
         body: undefined,
         tabId: targetTabId,
         priority: 'low',
+        reason: 'MFA scan',
       });
       expect(map.get('alice')).toMatchObject({
         enrolled: true,
@@ -669,7 +672,7 @@ describe('useOktaApi', () => {
       );
 
       await expect(async () => {
-        await result.current.makeApiRequest('/api/v1/test');
+        await result.current.makeApiRequest('/api/v1/test', { reason: 'Test request' });
       }).rejects.toThrow('Network error');
     });
 
@@ -685,7 +688,7 @@ describe('useOktaApi', () => {
       );
 
       const response = await act(async () => {
-        return result.current.makeApiRequest('/api/v1/nonexistent');
+        return result.current.makeApiRequest('/api/v1/nonexistent', { reason: 'Test request' });
       });
 
       expect(response.success).toBe(false);
@@ -704,7 +707,7 @@ describe('useOktaApi', () => {
       );
 
       const response = await act(async () => {
-        return result.current.makeApiRequest('/api/v1/test');
+        return result.current.makeApiRequest('/api/v1/test', { reason: 'Test request' });
       });
 
       expect(response.success).toBe(false);

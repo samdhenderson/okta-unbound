@@ -48,7 +48,9 @@ export function createRuleWriteOperations(coreApi: CoreApi): RuleWriteOperations
    * copy preserves the exact expression and people include/exclude lists.
    */
   const getRawGroupRule = async (ruleId: string): Promise<OktaGroupRule | null> => {
-    const response = await coreApi.makeApiRequest(`/api/v1/groups/rules/${ruleId}`);
+    const response = await coreApi.makeApiRequest(`/api/v1/groups/rules/${ruleId}`, {
+      reason: 'Fetch raw group rule for consolidation',
+    });
     if (!response.success || !response.data) return null;
     try {
       return parseOkta(
@@ -64,7 +66,11 @@ export function createRuleWriteOperations(coreApi: CoreApi): RuleWriteOperations
 
   /** Create a group rule; the rule is created `INACTIVE`. */
   const createGroupRule = async (payload: CreateRulePayload): Promise<CreateRuleResult> => {
-    const response = await coreApi.makeApiRequest('/api/v1/groups/rules', 'POST', payload);
+    const response = await coreApi.makeApiRequest('/api/v1/groups/rules', {
+      method: 'POST',
+      body: payload,
+      reason: 'Create consolidated group rule',
+    });
     if (!response.success) {
       return { success: false, error: response.error || 'Failed to create rule' };
     }
@@ -83,7 +89,10 @@ export function createRuleWriteOperations(coreApi: CoreApi): RuleWriteOperations
 
   /** Delete a group rule (Okta requires it to be `INACTIVE`). */
   const deleteGroupRule = async (ruleId: string): Promise<RuleWriteResult> => {
-    const response = await coreApi.makeApiRequest(`/api/v1/groups/rules/${ruleId}`, 'DELETE');
+    const response = await coreApi.makeApiRequest(`/api/v1/groups/rules/${ruleId}`, {
+      method: 'DELETE',
+      reason: 'Delete group rule',
+    });
     return { success: response.success, error: response.error };
   };
 
@@ -91,7 +100,7 @@ export function createRuleWriteOperations(coreApi: CoreApi): RuleWriteOperations
   const activateGroupRule = async (ruleId: string): Promise<RuleWriteResult> => {
     const response = await coreApi.makeApiRequest(
       `/api/v1/groups/rules/${ruleId}/lifecycle/activate`,
-      'POST',
+      { method: 'POST', reason: 'Activate group rule' },
     );
     return { success: response.success, error: response.error };
   };
@@ -100,7 +109,7 @@ export function createRuleWriteOperations(coreApi: CoreApi): RuleWriteOperations
   const deactivateGroupRule = async (ruleId: string): Promise<RuleWriteResult> => {
     const response = await coreApi.makeApiRequest(
       `/api/v1/groups/rules/${ruleId}/lifecycle/deactivate`,
-      'POST',
+      { method: 'POST', reason: 'Deactivate group rule' },
     );
     return { success: response.success, error: response.error };
   };

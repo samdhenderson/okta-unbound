@@ -78,7 +78,7 @@ export async function getUserGroupsRequest(
 
     // Fetch all groups with pagination.
     while (nextUrl) {
-      const response = await makeApiRequest(nextUrl);
+      const response = await makeApiRequest(nextUrl, { reason: "Load user's groups" });
 
       if (!response.success) {
         return response;

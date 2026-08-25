@@ -232,3 +232,80 @@ describe('accepts side-panel (no sender.tab) calls', () => {
     expect(sendResponse).toHaveBeenCalledWith({ success: true });
   });
 });
+
+// ============================================================================
+// scheduleApiRequest's optional `reason` (verbose request audit log)
+// ============================================================================
+
+describe('scheduleApiRequest reason validation', () => {
+  it('forwards a valid reason through to the scheduler', () => {
+    send(
+      {
+        action: 'scheduleApiRequest',
+        endpoint: '/api/v1/groups',
+        tabId: 1,
+        reason: 'Load groups',
+      },
+      SIDE_PANEL,
+    );
+
+    expect(schedulerMethods.scheduleRequest).toHaveBeenCalledWith(
+      '/api/v1/groups',
+      'GET',
+      undefined,
+      1,
+      'normal',
+      'Load groups',
+    );
+  });
+
+  it('still succeeds when reason is omitted', () => {
+    const { sendResponse } = send(
+      { action: 'scheduleApiRequest', endpoint: '/api/v1/groups', tabId: 1 },
+      SIDE_PANEL,
+    );
+
+    expect(schedulerMethods.scheduleRequest).toHaveBeenCalledWith(
+      '/api/v1/groups',
+      'GET',
+      undefined,
+      1,
+      'normal',
+      undefined,
+    );
+    expect(sendResponse).not.toHaveBeenCalledWith(
+      expect.objectContaining({ error: 'Invalid scheduleApiRequest message' }),
+    );
+  });
+
+  it('rejects a reason longer than the 80-char cap and never schedules', () => {
+    const { sendResponse } = send(
+      {
+        action: 'scheduleApiRequest',
+        endpoint: '/api/v1/groups',
+        tabId: 1,
+        reason: 'x'.repeat(81),
+      },
+      SIDE_PANEL,
+    );
+
+    expect(sendResponse).toHaveBeenCalledWith({
+      success: false,
+      error: 'Invalid scheduleApiRequest message',
+    });
+    expect(schedulerMethods.scheduleRequest).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-string reason and never schedules', () => {
+    const { sendResponse } = send(
+      { action: 'scheduleApiRequest', endpoint: '/api/v1/groups', tabId: 1, reason: 12345 },
+      SIDE_PANEL,
+    );
+
+    expect(sendResponse).toHaveBeenCalledWith({
+      success: false,
+      error: 'Invalid scheduleApiRequest message',
+    });
+    expect(schedulerMethods.scheduleRequest).not.toHaveBeenCalled();
+  });
+});
