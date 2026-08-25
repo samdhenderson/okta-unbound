@@ -1,11 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import CopyMembersModal from './CopyMembersModal';
-import { mockUsers } from '../../../../test/mocks/fixtures';
+import { mockUsers } from '../../../test/mocks/fixtures';
 
 /** Modal that copies the current member list as name / email / username, one per line. */
 const meta = {
-  title: 'Overview/Members/CopyMembersModal',
+  title: 'Members/CopyMembersModal',
   component: CopyMembersModal,
   tags: ['autodocs'],
   parameters: {

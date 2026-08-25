@@ -1,5 +1,5 @@
 /**
- * @module sidepanel/components/overview/members/MemberExplorer
+ * @module sidepanel/components/members/MemberExplorer
  * @description Orchestrator for in-group member search, faceting, composition, MFA, and listing.
  *
  * Owns the explorer's client-side state — debounced search, the active
@@ -10,10 +10,10 @@
  * are owned by the parent overview and passed in.
  */
 import React, { useState, useMemo, useCallback } from 'react';
-import type { OktaUser, MemberMfaResult, MfaScanStatus } from '../../../../shared/types';
-import { useDebouncedValue } from '../../../hooks/useDebouncedValue';
-import Button from '../../shared/Button';
-import Modal from '../../shared/Modal';
+import type { OktaUser, MemberMfaResult, MfaScanStatus } from '../../../shared/types';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import Button from '../shared/Button';
+import Modal from '../shared/Modal';
 import MemberSearchBar from './MemberSearchBar';
 import MemberFilterPanel from './MemberFilterPanel';
 import CopyMembersModal from './CopyMembersModal';

@@ -36,7 +36,7 @@ decomposing, and `knip:production` finds what only tests keep alive.
 2. Extract logic into `use*` hooks (mirror the `useOktaApi/` module split).
 3. Move pure helpers to `src/shared/utils/` (dedupe as you go — check the util exists
    before writing it).
-4. Split UI into subcomponents, one concern each (like `overview/members/`).
+4. Split UI into subcomponents, one concern each (like `components/members/`).
 5. Re-run tests + `type-check` after each step. One component per PR.
 
 ## Guardrails

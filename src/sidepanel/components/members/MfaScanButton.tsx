@@ -1,5 +1,5 @@
 /**
- * @module sidepanel/components/overview/members/MfaScanButton
+ * @module sidepanel/components/members/MfaScanButton
  * @description Shared trigger button for the group MFA factor scan.
  *
  * Renders the scan/rescan button with the right label, loading, and disabled
@@ -9,8 +9,8 @@
  * confirmation gate is owned by the caller via `onScanClick`.
  */
 import React from 'react';
-import type { MemberMfaResult, MfaScanStatus } from '../../../../shared/types';
-import Button from '../../shared/Button';
+import type { MemberMfaResult, MfaScanStatus } from '../../../shared/types';
+import Button from '../shared/Button';
 
 /** Props for {@link MfaScanButton}. */
 interface MfaScanButtonProps {

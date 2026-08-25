@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import AttributeHealthCard from './AttributeHealthCard';
-import type { AttributeSummary } from '../../overview/members/memberAnalytics';
+import type { AttributeSummary } from '../../members/memberAnalytics';
 import type { AttributeRuleRef } from '../../../../shared/rules/groupAttributeIndex';
 
 const summary: AttributeSummary = {

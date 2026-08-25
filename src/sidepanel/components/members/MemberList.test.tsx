@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import type { OktaUser } from '../../../../shared/types';
+import type { OktaUser } from '../../../shared/types';
 import MemberList from './MemberList';
 
 // jsdom ships no IntersectionObserver; the auto-paging sentinel constructs one on

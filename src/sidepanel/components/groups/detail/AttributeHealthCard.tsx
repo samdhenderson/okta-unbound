@@ -6,12 +6,12 @@
  *
  * Purely presentational — the precomputed distribution and dependent-rule list
  * both come from the caller, which intersects
- * {@link module:sidepanel/components/overview/members/memberAnalytics.discoverAttributeBreakdowns}
+ * {@link module:sidepanel/components/members/memberAnalytics.discoverAttributeBreakdowns}
  * with {@link module:shared/rules/groupAttributeIndex.indexRulesByAttribute}.
  */
 import React from 'react';
 import RuleLinkRow from './RuleLinkRow';
-import type { AttributeSummary } from '../../overview/members/memberAnalytics';
+import type { AttributeSummary } from '../../members/memberAnalytics';
 import type { AttributeRuleRef } from '../../../../shared/rules/groupAttributeIndex';
 
 /** Props for {@link AttributeHealthCard}. */

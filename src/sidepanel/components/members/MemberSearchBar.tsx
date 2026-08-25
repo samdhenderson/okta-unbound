@@ -1,14 +1,14 @@
 /**
- * @module sidepanel/components/overview/members/MemberSearchBar
+ * @module sidepanel/components/members/MemberSearchBar
  * @description Search input for the member list, with a leading icon and a clear button.
  *
  * A thin controlled wrapper over the shared Input; the parent
  * (`MemberExplorer`) owns the value and debounces it before filtering.
  */
 import React from 'react';
-import Input from '../../shared/Input';
-import { IconButton } from '../../shared';
-import Icon from '../shared/Icon';
+import Input from '../shared/Input';
+import { IconButton } from '../shared';
+import Icon from '../overview/shared/Icon';
 
 /** Props for {@link MemberSearchBar}. */
 interface MemberSearchBarProps {

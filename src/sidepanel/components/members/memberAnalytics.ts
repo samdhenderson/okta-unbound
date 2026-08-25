@@ -1,11 +1,11 @@
 /**
- * @module sidepanel/components/overview/members/memberAnalytics
+ * @module sidepanel/components/members/memberAnalytics
  * @description Pure, memoizable helpers for the group Member Explorer: composition
  * breakdowns, MFA facet breakdowns, and member filtering. Kept free of React so the
  * heavy work over large groups (up to ~64k members) is easy to test and reason about.
  */
 
-import type { OktaUser, MemberMfaResult } from '../../../../shared/types';
+import type { OktaUser, MemberMfaResult } from '../../../shared/types';
 
 /**
  * A member facet: the special 'mfa' or 'status' dimensions, or any profile

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { MemberMfaResult } from '../../../../shared/types';
+import type { MemberMfaResult } from '../../../shared/types';
 import MemberRow from './MemberRow';
-import { mockUsers } from '../../../../test/mocks/fixtures';
+import { mockUsers } from '../../../test/mocks/fixtures';
 
 const activeUser = mockUsers.find((u) => u.status === 'ACTIVE')!;
 const suspendedUser = mockUsers.find((u) => u.status === 'SUSPENDED')!;
@@ -25,7 +25,7 @@ const noFactorsMfa: MemberMfaResult = {
 
 /** Single member card: name, email, login, status badge, and (once scanned) MFA factor tags. */
 const meta = {
-  title: 'Overview/Members/MemberRow',
+  title: 'Members/MemberRow',
   component: MemberRow,
   tags: ['autodocs'],
   parameters: {

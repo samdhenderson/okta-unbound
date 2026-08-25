@@ -15,7 +15,7 @@ const sampleRows: BreakdownRow[] = [
 
 /** Modal showing the full value distribution for one composition dimension. */
 const meta = {
-  title: 'Overview/Members/BreakdownDetailsModal',
+  title: 'Members/BreakdownDetailsModal',
   component: BreakdownDetailsModal,
   tags: ['autodocs'],
   parameters: {

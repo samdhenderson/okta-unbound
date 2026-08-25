@@ -3,7 +3,7 @@ import { fn } from 'storybook/test';
 import AttributeFacet from './AttributeFacet';
 import { discoverAttributeBreakdowns, NONE_VALUE, OTHER_VALUE } from './memberAnalytics';
 import type { AttributeSummary } from './memberAnalytics';
-import { mockUsers } from '../../../../test/mocks/fixtures';
+import { mockUsers } from '../../../test/mocks/fixtures';
 
 // Real distribution discovered from the fixture members (all share one department/title).
 const discovered = discoverAttributeBreakdowns(mockUsers);
@@ -29,7 +29,7 @@ const manyValuesSummary: AttributeSummary = {
 
 /** Compact card visualizing one profile attribute's value distribution as clickable filters. */
 const meta = {
-  title: 'Overview/Members/AttributeFacet',
+  title: 'Members/AttributeFacet',
   component: AttributeFacet,
   tags: ['autodocs'],
   parameters: {

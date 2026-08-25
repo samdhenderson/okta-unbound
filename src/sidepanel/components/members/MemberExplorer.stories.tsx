@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
-import type { MemberMfaResult } from '../../../../shared/types';
+import type { MemberMfaResult } from '../../../shared/types';
 import MemberExplorer from './MemberExplorer';
-import { mockUsers } from '../../../../test/mocks/fixtures';
+import { mockUsers } from '../../../test/mocks/fixtures';
 
 const mfaResults = new Map<string, MemberMfaResult>(
   mockUsers.map((user, i) => [
@@ -19,7 +19,7 @@ const mfaResults = new Map<string, MemberMfaResult>(
 
 /** Orchestrator for in-group member search, faceting, MFA scanning, and listing. */
 const meta = {
-  title: 'Overview/Members/MemberExplorer',
+  title: 'Members/MemberExplorer',
   component: MemberExplorer,
   tags: ['autodocs'],
   parameters: {

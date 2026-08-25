@@ -1,5 +1,5 @@
 /**
- * @module sidepanel/components/overview/members/MemberFilterPanel
+ * @module sidepanel/components/members/MemberFilterPanel
  * @description Expandable panel of status, MFA-factor, and sort controls for the member list.
  *
  * Presentational: it reflects the active {@link MemberFilter} set into pressed
@@ -9,9 +9,9 @@
  * enables — and the factor controls stay hidden until scan results are supplied.
  */
 import React from 'react';
-import type { MemberMfaResult, MfaScanStatus } from '../../../../shared/types';
-import FilterPill from '../../shared/FilterPill';
-import SortPill from '../../shared/SortPill';
+import type { MemberMfaResult, MfaScanStatus } from '../../../shared/types';
+import FilterPill from '../shared/FilterPill';
+import SortPill from '../shared/SortPill';
 import ActiveFilterChips from './ActiveFilterChips';
 import MfaScanButton from './MfaScanButton';
 import { type BreakdownRow, type MemberFilter, type SortField } from './memberAnalytics';

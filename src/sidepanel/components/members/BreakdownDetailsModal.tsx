@@ -1,5 +1,5 @@
 /**
- * @module sidepanel/components/overview/members/BreakdownDetailsModal
+ * @module sidepanel/components/members/BreakdownDetailsModal
  * @description Modal showing the full value distribution for one composition dimension.
  *
  * Displays every value (including those collapsed into "Other" in the summary) as
@@ -7,10 +7,10 @@
  * Each row toggles a member-list filter.
  */
 import React from 'react';
-import Modal from '../../shared/Modal';
-import Button from '../../shared/Button';
-import CopyButton from '../../shared/CopyButton';
-import ScrollableList from '../../shared/ScrollableList';
+import Modal from '../shared/Modal';
+import Button from '../shared/Button';
+import CopyButton from '../shared/CopyButton';
+import ScrollableList from '../shared/ScrollableList';
 import BreakdownReport from './BreakdownReport';
 import { type BreakdownRow, NONE_VALUE, OTHER_VALUE } from './memberAnalytics';
 

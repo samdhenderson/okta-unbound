@@ -1,5 +1,5 @@
 /**
- * @module sidepanel/components/overview/members/MemberList
+ * @module sidepanel/components/members/MemberList
  * @description Windowed, auto-paging scrollable list of member rows.
  *
  * Mounts only the first `visibleCount` rows and grows via a "Load more" footer and
@@ -15,10 +15,10 @@
  * for a spinner to explain — and the hook re-arms on the container that comes back.
  */
 import React, { useEffect, useRef } from 'react';
-import { useStaggerReveal } from '../../../hooks/useStaggerReveal';
-import type { OktaUser, MemberMfaResult } from '../../../../shared/types';
-import ScrollableList from '../../shared/ScrollableList';
-import { Button, Skeleton } from '../../shared';
+import { useStaggerReveal } from '../../hooks/useStaggerReveal';
+import type { OktaUser, MemberMfaResult } from '../../../shared/types';
+import ScrollableList from '../shared/ScrollableList';
+import { Button, Skeleton } from '../shared';
 import MemberRow from './MemberRow';
 
 /** Props for {@link MemberList}. */

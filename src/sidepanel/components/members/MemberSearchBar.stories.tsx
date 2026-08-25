@@ -4,7 +4,7 @@ import MemberSearchBar from './MemberSearchBar';
 
 /** Search input for the member list, with a leading search icon and a clear button. */
 const meta = {
-  title: 'Overview/Members/MemberSearchBar',
+  title: 'Members/MemberSearchBar',
   component: MemberSearchBar,
   tags: ['autodocs'],
   parameters: {

@@ -11,8 +11,8 @@
  */
 import React, { useMemo } from 'react';
 import { AlertMessage, Button, Modal } from '../../shared';
-import MfaScanButton from '../../overview/members/MfaScanButton';
-import { computeMfaBreakdown } from '../../overview/members/memberAnalytics';
+import MfaScanButton from '../../members/MfaScanButton';
+import { computeMfaBreakdown } from '../../members/memberAnalytics';
 import type { OktaUser, MemberMfaResult, MfaScanStatus } from '../../../../shared/types';
 
 /**

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
-import type { MemberMfaResult } from '../../../../shared/types';
+import type { MemberMfaResult } from '../../../shared/types';
 import MfaScanButton from './MfaScanButton';
 
 const mfaResults = new Map<string, MemberMfaResult>([
@@ -9,7 +9,7 @@ const mfaResults = new Map<string, MemberMfaResult>([
 
 /** Shared trigger button for the group MFA factor scan. */
 const meta = {
-  title: 'Overview/Members/MfaScanButton',
+  title: 'Members/MfaScanButton',
   component: MfaScanButton,
   tags: ['autodocs'],
   parameters: {

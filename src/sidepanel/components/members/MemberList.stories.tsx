@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
-import type { MemberMfaResult } from '../../../../shared/types';
+import type { MemberMfaResult } from '../../../shared/types';
 import MemberList from './MemberList';
-import { mockUsers } from '../../../../test/mocks/fixtures';
+import { mockUsers } from '../../../test/mocks/fixtures';
 
 const mfaResults = new Map<string, MemberMfaResult>(
   mockUsers.slice(0, 50).map((user, i) => [
@@ -20,7 +20,7 @@ const mfaResults = new Map<string, MemberMfaResult>(
 
 /** Windowed, auto-paging scrollable list of member rows with a "Load more" footer. */
 const meta = {
-  title: 'Overview/Members/MemberList',
+  title: 'Members/MemberList',
   component: MemberList,
   tags: ['autodocs'],
   parameters: {

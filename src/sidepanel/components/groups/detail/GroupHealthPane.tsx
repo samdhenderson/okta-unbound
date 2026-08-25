@@ -37,10 +37,7 @@ import {
 import GroupMetadataSection from './GroupMetadataSection';
 import AttributeHealthCard from './AttributeHealthCard';
 import GroupMfaCoverageSection from './GroupMfaCoverageSection';
-import {
-  discoverAttributeBreakdowns,
-  type AttributeSummary,
-} from '../../overview/members/memberAnalytics';
+import { discoverAttributeBreakdowns, type AttributeSummary } from '../../members/memberAnalytics';
 import {
   indexRulesByAttribute,
   type AttributeReferencingRule,

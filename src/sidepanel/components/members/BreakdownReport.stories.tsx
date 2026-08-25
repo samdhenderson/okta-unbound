@@ -14,7 +14,7 @@ const sampleRows: BreakdownRow[] = [
 
 /** Dependency-free list of horizontal proportion bars for a value distribution. */
 const meta = {
-  title: 'Overview/Members/BreakdownReport',
+  title: 'Members/BreakdownReport',
   component: BreakdownReport,
   tags: ['autodocs'],
   parameters: {

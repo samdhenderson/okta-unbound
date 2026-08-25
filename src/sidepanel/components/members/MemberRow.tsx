@@ -1,5 +1,5 @@
 /**
- * @module sidepanel/components/overview/members/MemberRow
+ * @module sidepanel/components/members/MemberRow
  * @description Single member card: name, email, login, status badge, and MFA factor tags.
  *
  * Memoized (large lists). When an org origin is provided the whole row becomes a
@@ -13,9 +13,9 @@
  * on the factor tags and the status badge).
  */
 import React from 'react';
-import type { OktaUser, MemberMfaResult } from '../../../../shared/types';
-import { ListRow, userStatusVariant, type UserStatusVariant } from '../../shared';
-import { oktaAdminEntityUrl } from '../../../../shared/utils/oktaUrl';
+import type { OktaUser, MemberMfaResult } from '../../../shared/types';
+import { ListRow, userStatusVariant, type UserStatusVariant } from '../shared';
+import { oktaAdminEntityUrl } from '../../../shared/utils/oktaUrl';
 
 /** Props for {@link MemberRow}. */
 interface MemberRowProps {

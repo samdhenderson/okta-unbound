@@ -1,5 +1,5 @@
 /**
- * @module sidepanel/components/overview/members/CompositionReports
+ * @module sidepanel/components/members/CompositionReports
  * @description Collapsible "Composition" panel: attribute distribution + MFA factor breakdown.
  *
  * One section with a segmented toggle between **Attributes** (one
@@ -9,10 +9,10 @@
  * "View all" requests the full-distribution modal for an attribute.
  */
 import React, { useMemo, useState } from 'react';
-import type { MemberMfaResult, MfaScanStatus } from '../../../../shared/types';
-import CollapsibleSection from '../../shared/CollapsibleSection';
-import { Input, Tabs, type TabItem } from '../../shared';
-import Icon from '../shared/Icon';
+import type { MemberMfaResult, MfaScanStatus } from '../../../shared/types';
+import CollapsibleSection from '../shared/CollapsibleSection';
+import { Input, Tabs, type TabItem } from '../shared';
+import Icon from '../overview/shared/Icon';
 import AttributeFacet from './AttributeFacet';
 import BreakdownReport from './BreakdownReport';
 import MfaScanButton from './MfaScanButton';

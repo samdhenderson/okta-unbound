@@ -1,5 +1,5 @@
 /**
- * @module sidepanel/components/overview/members/AttributeFacet
+ * @module sidepanel/components/members/AttributeFacet
  * @description Compact card visualizing one profile attribute's value distribution as clickable filters.
  *
  * Shows a segmented "spread bar" plus a short legend of the leading values; every
@@ -9,7 +9,7 @@
 import React from 'react';
 import type { AttributeSummary, BreakdownRow } from './memberAnalytics';
 import { NONE_VALUE, OTHER_VALUE } from './memberAnalytics';
-import { INDIGO_RAMP, CHART_NONE_COLOR, CHART_OTHER_COLOR } from '../../../theme/chartPalette';
+import { INDIGO_RAMP, CHART_NONE_COLOR, CHART_OTHER_COLOR } from '../../theme/chartPalette';
 
 /** Props for {@link AttributeFacet}. */
 interface AttributeFacetProps {

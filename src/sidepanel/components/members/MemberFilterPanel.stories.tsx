@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
-import type { MemberMfaResult } from '../../../../shared/types';
+import type { MemberMfaResult } from '../../../shared/types';
 import MemberFilterPanel from './MemberFilterPanel';
 import type { BreakdownRow, MemberFilter } from './memberAnalytics';
 
@@ -31,7 +31,7 @@ const activeFilters: MemberFilter[] = [
 
 /** Expandable panel of status, MFA-factor, and sort controls for the member list. */
 const meta = {
-  title: 'Overview/Members/MemberFilterPanel',
+  title: 'Members/MemberFilterPanel',
   component: MemberFilterPanel,
   tags: ['autodocs'],
   parameters: {

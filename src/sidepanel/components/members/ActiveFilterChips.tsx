@@ -1,13 +1,13 @@
 /**
- * @module sidepanel/components/overview/members/ActiveFilterChips
+ * @module sidepanel/components/members/ActiveFilterChips
  * @description Removable chips summarizing the member explorer's active facet filters.
  *
  * Renders one chip per active {@link MemberFilter} (each with a remove button)
  * plus a "Clear all" action. Renders nothing when no filters are active.
  */
 import React from 'react';
-import { IconButton } from '../../shared';
-import Icon from '../shared/Icon';
+import { IconButton } from '../shared';
+import Icon from '../overview/shared/Icon';
 import type { MemberFilter } from './memberAnalytics';
 
 /** Props for {@link ActiveFilterChips}. */

@@ -10,7 +10,7 @@ const sampleFilters: MemberFilter[] = [
 
 /** Removable chips summarizing the member explorer's active facet filters. */
 const meta = {
-  title: 'Overview/Members/ActiveFilterChips',
+  title: 'Members/ActiveFilterChips',
   component: ActiveFilterChips,
   tags: ['autodocs'],
   parameters: {

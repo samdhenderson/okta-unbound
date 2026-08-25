@@ -1,5 +1,5 @@
 /**
- * @module sidepanel/components/overview/members/BreakdownReport
+ * @module sidepanel/components/members/BreakdownReport
  * @description Dependency-free list of horizontal proportion bars for a value distribution.
  *
  * Each row is a clickable filter toggle (except the aggregated "Other" row, which

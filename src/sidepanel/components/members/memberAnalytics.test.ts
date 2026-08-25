@@ -15,8 +15,8 @@ import {
   OTHER_VALUE,
   type MemberFilter,
 } from './memberAnalytics';
-import type { OktaUser, MemberMfaResult } from '../../../../shared/types';
-import { summarizeFactors } from '../../../../shared/utils/mfaUtils';
+import type { OktaUser, MemberMfaResult } from '../../../shared/types';
+import { summarizeFactors } from '../../../shared/utils/mfaUtils';
 
 const user = (
   id: string,

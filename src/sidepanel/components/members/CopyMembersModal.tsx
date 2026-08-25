@@ -1,5 +1,5 @@
 /**
- * @module sidepanel/components/overview/members/CopyMembersModal
+ * @module sidepanel/components/members/CopyMembersModal
  * @description Modal for copying the current member list as a chosen identifier, one per line.
  *
  * The user picks a format (full name, email, username, or "name &lt;email&gt;"); the
@@ -7,10 +7,10 @@
  * Blank identifiers are dropped so the count reflects only copyable lines.
  */
 import React, { useMemo, useState } from 'react';
-import type { OktaUser } from '../../../../shared/types';
-import Modal from '../../shared/Modal';
-import Button from '../../shared/Button';
-import CopyButton from '../../shared/CopyButton';
+import type { OktaUser } from '../../../shared/types';
+import Modal from '../shared/Modal';
+import Button from '../shared/Button';
+import CopyButton from '../shared/CopyButton';
 import { memberFullName } from './memberAnalytics';
 
 /** Props for {@link CopyMembersModal}. */
