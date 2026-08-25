@@ -17,6 +17,89 @@ Entry format:
 
 ---
 
+## 2026-08-25 — stopped: red baseline whose only repair sites belong to an open PR
+
+**Baseline:** **red** — `npm run test:storybook`: 2 test files failed of 158,
+2 tests of 1089. `RequestLogRow.stories.tsx > Expanded Batch` and
+`TabJumpPalette.stories.tsx > Filtered`. Every other gate green:
+`type-check`, `lint` (0 errors / 155 warnings, the legacy baseline),
+`format:check`, `test:coverage`, `knip:circular`, `lint:control-chars`,
+`lint:cited-paths` (54 tracked files).
+
+**Items worked:** none — see below. Nothing was implemented and no ledger
+item was claimed.
+
+**PR:** none, deliberately.
+
+**Backlog after:** 20 open / 50 total — 5 IMPROVEMENTS open (of 12), 15 DEBT
+open (of 38), 6 gated (3 `blocked:`, 3 `research:awaiting-review`).
+Unchanged from 2026-08-24; this session claimed nothing.
+
+**Why the session stopped rather than repairing the baseline.**
+`SESSION.md` step 1 makes a red baseline the whole night's work. Step 2's
+contention filter then removes the only two files that repair could touch,
+and its third hard stop ("no candidate survives the contention filter →
+stop, open nothing") governs the collision. Both failing story files —
+`src/sidepanel/components/RequestLogRow.stories.tsx` and
+`src/sidepanel/components/TabJumpPalette.stories.tsx` — are changed by open
+PR #92 (`feat/group-detail-parity`, Sam's own branch, 95 files), **and #92
+already carries the correct fix for both**, reached independently and with
+the same diagnosis. Repairing them here would have duplicated that commit
+and guaranteed a merge conflict in two files Sam is actively editing, which
+is exactly the harm the contention filter exists to prevent.
+
+**The failures are real, not the known bystander flake.** `CONVENTIONS.md`
+warns that a story-suite failure naming an untouched file is usually
+`ActionBar.stories.tsx` dying on a mid-run dep-optimizer reload. That is not
+this. Both were re-run **in isolation**, two files on their own, and failed
+deterministically at the same two assertions — so ordering plays no part.
+Both were introduced by #91 (`9c1d59c`, the current head of `main`):
+
+- `TabJumpPalette > Filtered` asserts `'2 sections'` match the query `or`.
+  #91 added `history` as a ninth section, so `or` now matches three —
+  Exp**or**t, Expl**or**er, Hist**or**y. A bare count assertion rots
+  silently every time a section is added, which is precisely how this broke.
+- `RequestLogRow > Expanded Batch` asserts
+  `getByText(/api\/v1\/groups\?limit=200/)`. The batch fixture's second
+  endpoint is the _next page_ of the first (`…&after=…`), so the substring
+  regex matches two spans and `getByText` throws on the ambiguity.
+
+**What unblocks the next night — a human decision, both options Sam's.**
+Merge #92 (which repairs `main` as a side effect of its last commit), or
+cherry-pick that repair commit onto `main` ahead of it. Until one of those
+happens, every unattended run will stop here at step 1, correctly and for
+the same reason. This is the `D-017` failure mode restated: a red gate on
+`main` that nobody can clear without contending with in-flight work.
+
+**Selection that was prepared and not used**, so the next session need not
+redo the analysis. Sorted per step 3 (P0→P3, UX-first on ties), with #92's
+95 changed files applied as the contention filter:
+
+- `D-028` (P1) — skipped as unreachable, not contended: it is an audit
+  against a **real Okta org**, which an unattended sandbox has no access to.
+  It will sort to the top of the P1 list every night and be skipped every
+  night; worth Sam re-gating it (`blocked:needs-live-org`) so it stops
+  costing each run the same reasoning. Left `open` — re-gating an item is a
+  judgment call this session did not make on its own authority.
+- `D-013a`, `D-013b` (P1, correctness) — the audit-attribution pair. Files
+  disjoint from #92 and from each other. Note that `D-013a`'s "Done when"
+  requires the literal `unknown@unknown.com` to be absent from all of `src/`,
+  which is only true once `D-013b` lands too — they are one night's work, not
+  two, and were selected as such.
+- `I-002` (P2, ux) — `ClauseChecklist.tsx` and `CauseWorklistRow.tsx`, both
+  clear of #92.
+- `I-003` (P2, ux) — **contended**, skip: its `RuleCard.tsx` call site is in
+  #92's diff, and the item says explicitly not to split off "the two easy
+  ones".
+- `D-029a` (P2) — `ruleImpact.ts`, clear of #92. Its caller is
+  `useOktaApi.ts:180`, not `core.ts`, so the `origin` threading its
+  **Done when** requires does not collide with `D-013a`.
+
+No `Verified:` date needed re-checking — every candidate above was verified
+2026-08-24, one day old against the 14-day rule.
+
+---
+
 ## 2026-08-24 — gate-clearing session, not a nightly run
 
 **Baseline:** **red** — `npm run lint:cited-paths` fails on
