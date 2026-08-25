@@ -26,6 +26,10 @@ import {
   summarizeMemberSources,
   type MemberSourceBreakdown,
 } from '../../shared/membership/groupSource';
+import {
+  buildMemberSourceIndex,
+  type MemberSourceIndex,
+} from '../../shared/membership/memberSourceIndex';
 import { writeMemberSource } from '../cache/memberSourceCache';
 import { getOrFetch } from '../cache/entityCache';
 import { cacheKeys } from '../cache/keys';
@@ -65,6 +69,17 @@ export interface UseGroupSourceReturn {
   breakdown: MemberSourceBreakdown | null;
   /** Status of the (gated) member analysis. */
   memberStatus: SourceStatus;
+  /**
+   * Per-member source facts for the analyzed roster, or `null` before the
+   * analysis has run. Computed from the same members and rules as
+   * {@link UseGroupSourceReturn.breakdown} and sharing its verdict, so a meter
+   * drawn from the counts and a list filtered through this index cannot
+   * disagree about who is in which bucket.
+   *
+   * Held in state rather than banked in `memberSourceCache`: that cache serves
+   * the groups list's compact row meters, which have no use for a per-user map.
+   */
+  memberSourceIndex: MemberSourceIndex | null;
   /** Error message for whichever step failed. */
   error: string | null;
   /** Open the insight for a group and load its feeding rules. */
@@ -102,6 +117,7 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
   const [feedingRules, setFeedingRules] = useState<FeedingRule[]>([]);
   const [rulesStatus, setRulesStatus] = useState<SourceStatus>('idle');
   const [breakdown, setBreakdown] = useState<MemberSourceBreakdown | null>(null);
+  const [memberSourceIndex, setMemberSourceIndex] = useState<MemberSourceIndex | null>(null);
   const [memberStatus, setMemberStatus] = useState<SourceStatus>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -121,6 +137,7 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
       setGroup(nextGroup);
       setFeedingRules([]);
       setBreakdown(null);
+      setMemberSourceIndex(null);
       setMemberStatus('idle');
       setError(null);
       setRulesStatus('loading');
@@ -184,6 +201,17 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
           rules,
         );
         setBreakdown(summary);
+        // Deliberately **not** banked in `memberSourceCache`: that cache exists
+        // so the groups list's compact row meters are free, and a row meter has
+        // no use for a per-user map. Keeping it in state alone also keeps the
+        // cached payload small — this is one entry per member, not four counters.
+        setMemberSourceIndex(
+          buildMemberSourceIndex(
+            { id: group.id, name: group.name, type: group.type },
+            members,
+            rules,
+          ),
+        );
         // Bank it for the session: the groups list renders this split in each
         // row's compact meter, and must never pay for it itself.
         writeMemberSource(group.id, summary);
@@ -221,6 +249,13 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
         rules,
       );
       setBreakdown(summary);
+      setMemberSourceIndex(
+        buildMemberSourceIndex(
+          { id: group.id, name: group.name, type: group.type },
+          members,
+          rules,
+        ),
+      );
       // Keep the banked copy in step, so the groups list's compact meter does not
       // contradict the detail view it was opened from.
       writeMemberSource(group.id, summary);
@@ -232,6 +267,7 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
     runIdRef.current++;
     setGroup(null);
     setFeedingRules([]);
+    setMemberSourceIndex(null);
     setRulesStatus('idle');
     setBreakdown(null);
     setMemberStatus('idle');
@@ -245,6 +281,7 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
     rulesStatus,
     breakdown,
     memberStatus,
+    memberSourceIndex,
     error,
     open,
     analyzeMembers,
