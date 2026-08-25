@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import CauseWorklistRow from './CauseWorklistRow';
+import { NavigationProvider } from '../../../contexts/NavigationContext';
 import type { AccessCause } from './accessCause';
 import type { ClauseExplanation } from '../../../../shared/rules/explainExpression';
 
@@ -28,15 +29,18 @@ const meta = {
       description: {
         component:
           'One group on the cause worklist: its name, the rule it hinges on, the failing-clause evidence, and the jump into the full clause checklist.\n\n' +
-          'A `cannot-determine` row renders its reason as a sentence in the **neutral** palette — never `danger`, never `warning`. The clause preview is capped, with the remainder counted and left to the checklist. Long group and rule names wrap rather than overflow.',
+          'A `cannot-determine` row renders its reason as a sentence in the **neutral** palette — never `danger`, never `warning`. The clause preview is capped, with the remainder counted and left to the checklist. Long group and rule names wrap rather than overflow.\n\n' +
+          "Group ids **inside** the clause text are named by the same `resolveGroupName` the prerequisite lists use, so the evidence and the list above it read the same way. An id neither that resolver nor the clause's own matched references can name keeps its raw quoted form.",
       },
     },
   },
   decorators: [
     (Story) => (
-      <ul className="space-y-2 p-3">
-        <Story />
-      </ul>
+      <NavigationProvider handlers={{ group: fn() }}>
+        <ul className="space-y-2 p-3">
+          <Story />
+        </ul>
+      </NavigationProvider>
     ),
   ],
   args: { cause: blocked, onViewClauses: fn() },
@@ -45,6 +49,10 @@ const meta = {
     onViewClauses: {
       description:
         'Opens the full clause checklist for this cause. Omitted, the row offers no jump.',
+    },
+    resolveGroupName: {
+      description:
+        'Names the group ids in the rule condition — in the prerequisite lists and inside the failing-clause text alike. Without it, ids stay raw.',
     },
   },
 } satisfies Meta<typeof CauseWorklistRow>;
@@ -114,4 +122,40 @@ export const LongGroupName: Story = {
 /** Without a host that can navigate, the evidence stays but the jump goes. */
 export const WithoutClauseDeepLink: Story = {
   args: { onViewClauses: undefined },
+};
+
+/** A cause whose failing clause names two groups by id — one known, one not. */
+const byGroupMembership: AccessCause = {
+  ...blocked,
+  remedy: 'needs-group-membership',
+  failingClauses: [
+    {
+      expressionText: 'isMemberOfAnyGroup("00gFAKE010", "00gFAKE099")',
+      resolvedValue: undefined,
+      status: 'fail',
+      groupRequirement: 'member',
+      groupReferences: [
+        { match: 'id', value: '00gFAKE010', satisfied: false },
+        { match: 'id', value: '00gFAKE099', satisfied: false },
+      ],
+    },
+  ],
+};
+
+/** The host's name source — the comparison's group inventory, already in hand. */
+const resolveGroupName = (groupId: string): string | undefined =>
+  groupId === '00gFAKE010' ? 'Platform Engineers' : undefined;
+
+/**
+ * With a resolver: the known id reads as its group inside the clause text, and
+ * the unknown one keeps its raw quoted id — a name that is not loaded is never a
+ * reason to show a half-labelled badge.
+ */
+export const GroupIdsNamedInClauseText: Story = {
+  args: { cause: byGroupMembership, resolveGroupName },
+};
+
+/** The fallback, whole: no resolver at all, so the clause prints exactly as before. */
+export const GroupIdsUnresolved: Story = {
+  args: { cause: byGroupMembership },
 };

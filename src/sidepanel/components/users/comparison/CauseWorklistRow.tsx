@@ -12,6 +12,14 @@
  * neutral palette. It never borrows the `danger` or `warning` treatment: nothing
  * here resolved to false, and nothing is wrong — we simply could not tell.
  *
+ * ## The clause text names its groups too
+ *
+ * A failing clause used to print `isMemberOfAnyGroup("00gFAKE1")` verbatim while
+ * the group list directly above it named that very id. The evidence now goes
+ * through {@link module:sidepanel/components/groups/detail/RuleExpressionText},
+ * so both read the same way, off the same resolver. An id neither the host nor
+ * the clause's own references can name keeps its raw form.
+ *
  * ## Security
  *
  * `groupName`, `ruleName`, `expressionText` and `resolvedValue` are untrusted,
@@ -21,6 +29,7 @@
 import React from 'react';
 import { Button } from '../../shared';
 import ClauseGroupList from './ClauseGroupList';
+import RuleExpressionText, { type GroupNameResolver } from '../../groups/detail/RuleExpressionText';
 import type { AccessCause, UndeterminedReason } from './accessCause';
 import type {
   ClauseExplanation,
@@ -82,6 +91,9 @@ interface CauseWorklistRowProps {
   /**
    * Turns a group id embedded in a rule condition into its name. Without it the
    * row falls back to showing the raw id, as the Rules tab does.
+   *
+   * It names ids in **two** places: the prerequisite and blocking group lists,
+   * and the ids printed inside the failing clauses' own expression text.
    */
   resolveGroupName?: (groupId: string) => string | undefined;
 }
@@ -153,7 +165,7 @@ const CauseWorklistRow: React.FC<CauseWorklistRowProps> = ({
       renderGroupAction={renderGroupAction}
     />
 
-    <FailingClauses clauses={cause.failingClauses} />
+    <FailingClauses clauses={cause.failingClauses} resolveGroupName={resolveGroupName} />
 
     {onViewClauses && (
       <Button
@@ -178,8 +190,30 @@ const CauseWorklistRow: React.FC<CauseWorklistRowProps> = ({
 const formatResolvedValue = (value: RuleExprValue): string =>
   typeof value === 'string' ? JSON.stringify(value) : String(value);
 
+/**
+ * A name for every group id this row can name, widest source first.
+ *
+ * The host's resolver knows the whole comparison's group inventory; the clause's
+ * own references add the ones the *evaluator* matched, which is how a group
+ * missing from that inventory can still be named. Neither is a fetch — both are
+ * already in hand by the time the row renders.
+ *
+ * @param clause - The clause whose text is about to be printed.
+ * @param resolveGroupName - The host's resolver, if it has one.
+ */
+const clauseGroupNames =
+  (clause: ClauseExplanation, resolveGroupName?: GroupNameResolver): GroupNameResolver =>
+  (groupId) =>
+    resolveGroupName?.(groupId) ??
+    clause.groupReferences?.find(
+      (reference) => reference.match === 'id' && reference.value === groupId,
+    )?.matchedGroupName;
+
 /** The failing-clause evidence, capped — the checklist jump carries the rest. */
-const FailingClauses: React.FC<{ clauses: readonly ClauseExplanation[] }> = ({ clauses }) => {
+const FailingClauses: React.FC<{
+  clauses: readonly ClauseExplanation[];
+  resolveGroupName?: GroupNameResolver;
+}> = ({ clauses, resolveGroupName }) => {
   if (clauses.length === 0) return null;
   const hidden = clauses.length - CLAUSE_PREVIEW_LIMIT;
 
@@ -194,9 +228,11 @@ const FailingClauses: React.FC<{ clauses: readonly ClauseExplanation[] }> = ({ c
             key={`${index}-${clause.expressionText}`}
             className="rounded-md bg-neutral-50 px-2 py-1"
           >
-            <code className="block font-mono text-xs break-words whitespace-pre-wrap text-neutral-900">
-              {clause.expressionText}
-            </code>
+            <RuleExpressionText
+              text={clause.expressionText}
+              resolveGroupName={clauseGroupNames(clause, resolveGroupName)}
+              className="block font-mono text-xs break-words whitespace-pre-wrap text-neutral-900"
+            />
             {/* A group-membership call takes only string literals, and
                 `resolveClauseValue` skips literals by design — so "no value could
                 be read" is structurally guaranteed on these clauses and reads as

@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { fn } from 'storybook/test';
 import ClauseChecklist from './ClauseChecklist';
+import { NavigationProvider } from '../../../contexts/NavigationContext';
 import type { OktaUser } from '../../../../shared/types';
 
 /** An obviously fake user — no real org data ever ships in a story. */
@@ -35,10 +37,18 @@ const meta = {
           'Explains one rule condition against one user, clause by clause: the clause text in mono, the profile value that drove it, and a pass / fail / **not evaluated** outcome.\n\n' +
           'Two distinctions carry the whole feature. A clause the evaluator could not resolve renders **neutrally** — never with the `danger` treatment reserved for a clause that genuinely resolved to `false`, because "we could not check this" is not "this person does not qualify". And a value that was never readable (`undefined`) reads differently from an attribute that resolved to Okta\'s `null`.\n\n' +
           'A condition that never parsed — including an absent one — renders as a neutral "could not be checked" note with its reason, never as an empty checklist implying everything passed. A condition past the clause cap says how much it is showing.\n\n' +
+          'A group id inside the clause text is shown as a **named badge** when `groupContext` names it — the same list the explainer was already given, so no fetch happens to do it. An id it cannot name keeps its raw quoted form.\n\n' +
           '**Related internals:** [Shared](?path=/docs/internals-shared--docs)',
       },
     },
   },
+  decorators: [
+    (Story) => (
+      <NavigationProvider handlers={{ group: fn() }}>
+        <Story />
+      </NavigationProvider>
+    ),
+  ],
   argTypes: {
     expression: {
       description:
@@ -76,12 +86,25 @@ export const NotEvaluated: Story = {
 
 /**
  * The same clause once the caller supplies the user's complete group list: it
- * resolves instead of declining. This is what the Users tab's Groups pane now
- * shows, because that pane holds the whole list already.
+ * resolves instead of declining, and the id inside the clause text is shown as
+ * the group's name. This is what the Users tab's Groups pane now shows, because
+ * that pane holds the whole list already.
  */
 export const GroupClauseResolved: Story = {
   args: {
     expression: 'isMemberOfAnyGroup("00gFAKE1")',
+    groupContext: [{ id: '00gFAKE1', name: 'Engineering' }],
+  },
+};
+
+/**
+ * One clause, two ids, one of them not in the list: the named group becomes a
+ * badge and the unknown one keeps its raw quoted id. A name that is not in hand
+ * is never a reason to hide the id an admin can still go look up.
+ */
+export const GroupIdsPartiallyNamed: Story = {
+  args: {
+    expression: 'isMemberOfAnyGroup("00gFAKE1", "00gFAKE9")',
     groupContext: [{ id: '00gFAKE1', name: 'Engineering' }],
   },
 };

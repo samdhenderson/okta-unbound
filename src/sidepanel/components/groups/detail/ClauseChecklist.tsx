@@ -30,6 +30,13 @@
  * (`null`), so this view renders them as two different sentences. Collapsing them
  * into one dash would re-introduce the same confident-wrong-answer problem.
  *
+ * ## Group ids in the clause text are named where they can be
+ *
+ * `isMemberOfAnyGroup("00gFAKE1")` tells an admin nothing on its own. Where
+ * {@link ClauseChecklistProps.groupContext} names that id — the same list the
+ * explainer was already given, so nothing is fetched — {@link RuleExpressionText}
+ * renders the literal as a badge. An id it cannot name keeps its raw quoted form.
+ *
  * ## Security
  *
  * `expressionText` and `resolvedValue` are untrusted, end-user-controllable tenant
@@ -40,6 +47,7 @@
 import React, { useMemo } from 'react';
 import Icon, { type IconType } from '../../overview/shared/Icon';
 import { AlertMessage } from '../../shared';
+import RuleExpressionText, { type GroupNameResolver } from './RuleExpressionText';
 import {
   explainRuleExpression,
   type ClauseExplanation,
@@ -90,6 +98,8 @@ interface ClauseChecklistProps {
 interface ClauseRowProps {
   /** The explained clause to render. Its text and value are untrusted — render only. */
   clause: ClauseExplanation;
+  /** Names the group ids inside the clause text; absent, they stay raw. */
+  resolveGroupName?: GroupNameResolver;
 }
 
 /** How one {@link ClauseStatus} is presented: label, glyph, and token classes. */
@@ -165,15 +175,17 @@ const ResolvedValue: React.FC<{ value: RuleExprValue | undefined }> = ({ value }
 );
 
 /** One clause: its text, the value that drove it, its outcome, and any reason. */
-const ClauseRow: React.FC<ClauseRowProps> = ({ clause }) => {
+const ClauseRow: React.FC<ClauseRowProps> = ({ clause, resolveGroupName }) => {
   const presentation = statusPresentation[clause.status];
 
   return (
     <li className="rounded-md border border-neutral-200 bg-white p-3">
       <div className="flex items-start justify-between gap-3">
-        <code className="min-w-0 flex-1 font-mono text-xs break-words whitespace-pre-wrap text-neutral-900">
-          {clause.expressionText}
-        </code>
+        <RuleExpressionText
+          text={clause.expressionText}
+          resolveGroupName={resolveGroupName}
+          className="min-w-0 flex-1 font-mono text-xs break-words whitespace-pre-wrap text-neutral-900"
+        />
         <span
           className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium ${presentation.chipClass}`}
         >
@@ -242,6 +254,14 @@ const ClauseChecklist: React.FC<ClauseChecklistProps> = ({
     [expression, user, maxClauses, groupContext],
   );
 
+  // No list means no resolver — today's raw-id rendering, rather than one that
+  // answers `undefined` to everything.
+  const resolveGroupName = useMemo<GroupNameResolver | undefined>(() => {
+    if (!groupContext || groupContext.length === 0) return undefined;
+    const namesById = new Map(groupContext.map((entry) => [entry.id, entry.name]));
+    return (groupId) => namesById.get(groupId);
+  }, [groupContext]);
+
   if (clauses.length === 0) {
     const reasonCode =
       summary.result.outcome === 'unevaluable' ? summary.result.reasonCode : undefined;
@@ -275,7 +295,11 @@ const ClauseChecklist: React.FC<ClauseChecklistProps> = ({
 
       <ul className="space-y-2">
         {clauses.map((clause, index) => (
-          <ClauseRow key={`${index}-${clause.expressionText}`} clause={clause} />
+          <ClauseRow
+            key={`${index}-${clause.expressionText}`}
+            clause={clause}
+            resolveGroupName={resolveGroupName}
+          />
         ))}
       </ul>
     </div>
