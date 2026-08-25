@@ -21,20 +21,19 @@ import { useOktaApi } from './useOktaApi';
 import { extractReferencedGroupIds } from '../../shared/rules/groupRuleIndex';
 import { createLogger } from '../../shared/utils/logger';
 import type { SourceStatus } from './useGroupSource';
+import type { FormattedRule } from '../../shared/types';
 
 const log = createLogger('useGroupRuleReferences');
 
-/** A rule that names the group in its condition, reduced to what the view shows. */
-export interface ReferencingRule {
-  /** Okta rule id, used for the deep link into the Rules tab. */
-  id: string;
-  /** Rule name. */
-  name: string;
-  /** `ACTIVE` / `INACTIVE` as returned by Okta. */
-  status: string;
-  /** The raw condition expression that names this group, when the rule carries one. */
-  conditionExpression?: string;
-}
+/**
+ * A rule that names the group in its condition.
+ *
+ * **The full display model, not a narrowing of it** — the same change, for the
+ * same reason, as {@link module:sidepanel/hooks/useGroupSource.FeedingRule}.
+ * `ensureGroupRulesLoaded` already returns `FormattedRule[]`; copying four fields
+ * off each one meant the Rules tab could show a rule's name but not the rule.
+ */
+export type ReferencingRule = FormattedRule;
 
 /** Return shape of {@link useGroupRuleReferences}. */
 export interface UseGroupRuleReferencesReturn {
@@ -106,14 +105,9 @@ export function useGroupRuleReferences(
           return;
         }
         setRules(
-          all
-            .filter((rule) => extractReferencedGroupIds(rule.conditionExpression).includes(groupId))
-            .map((rule) => ({
-              id: rule.id,
-              name: rule.name,
-              status: rule.status,
-              conditionExpression: rule.conditionExpression,
-            })),
+          all.filter((rule) =>
+            extractReferencedGroupIds(rule.conditionExpression).includes(groupId),
+          ),
         );
         setStatus('done');
       })

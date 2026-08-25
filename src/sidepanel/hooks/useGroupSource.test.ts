@@ -93,6 +93,15 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/*
+  RETARGETED. These two used to spell out a five-field projection, because
+  `FeedingRule` was a narrowing of `FormattedRule` that dropped `condition`,
+  `groupIds`, `created` and `lastUpdated`. `getGroupRulesForGroup` always returned
+  the full rule, and the Group Detail Rules tab now renders it, so the hook passes
+  it through untouched. Same property — which run's rules were applied — asserted
+  against the whole rule instead of a hand-copied subset, which is strictly the
+  stronger check: a dropped field now fails here.
+*/
 describe('useGroupSource.open — stale-run guard on the rules load', () => {
   it('applies the rules of the run that is still current', async () => {
     api.getGroupRulesForGroup.mockResolvedValue([ruleA]);
@@ -103,15 +112,7 @@ describe('useGroupSource.open — stale-run guard on the rules load', () => {
     });
 
     await waitFor(() => expect(result.current.rulesStatus).toBe('done'));
-    expect(result.current.feedingRules).toEqual([
-      {
-        id: ruleA.id,
-        name: ruleA.name,
-        status: 'ACTIVE',
-        userAttributes: ruleA.userAttributes,
-        conditionExpression: ruleA.conditionExpression,
-      },
-    ]);
+    expect(result.current.feedingRules).toEqual([ruleA]);
     expect(result.current.error).toBeNull();
   });
 
@@ -146,15 +147,7 @@ describe('useGroupSource.open — stale-run guard on the rules load', () => {
       await second.promise;
     });
     await waitFor(() => expect(result.current.rulesStatus).toBe('done'));
-    expect(result.current.feedingRules).toEqual([
-      {
-        id: ruleB.id,
-        name: ruleB.name,
-        status: 'ACTIVE',
-        userAttributes: ruleB.userAttributes,
-        conditionExpression: ruleB.conditionExpression,
-      },
-    ]);
+    expect(result.current.feedingRules).toEqual([ruleB]);
   });
 
   it('surfaces a rules failure from the current run', async () => {

@@ -18,21 +18,33 @@ const members: OktaUser[] = Array.from({ length: 12 }, (_, i) => ({
   },
 }));
 
-/** Two feeding rules: one keys off `department`, the other off nothing an attribute card covers. */
+/**
+ * Two feeding rules: one keys off `department`, the other off nothing an attribute
+ * card covers. `FeedingRule` is the full `FormattedRule` now — the shape
+ * `getGroupRulesForGroup` already returned — so the fixture carries the whole rule.
+ */
 const feedingRules: FeedingRule[] = [
   {
     id: '0prFAKE1',
     name: 'Eng & Product — full-time',
     status: 'ACTIVE',
     userAttributes: ['department'],
+    condition: 'department in {"Engineering", "Product"}',
     conditionExpression: 'user.department in {"Engineering", "Product"}',
+    groupIds: ['00gFAKE1'],
+    created: '2024-01-01T00:00:00.000Z',
+    lastUpdated: '2025-01-01T00:00:00.000Z',
   },
   {
     id: '0prFAKE2',
     name: 'Managers',
     status: 'ACTIVE',
     userAttributes: ['title'],
+    condition: 'title == "Manager"',
     conditionExpression: 'user.title == "Manager"',
+    groupIds: ['00gFAKE1'],
+    created: '2024-01-01T00:00:00.000Z',
+    lastUpdated: '2025-01-01T00:00:00.000Z',
   },
 ];
 

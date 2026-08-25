@@ -2,18 +2,55 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import GroupRulesSection from './GroupRulesSection';
+import type { FormattedRule } from '../../../../shared/types';
 
 const ASSIGNS = 'Assigns members into this group';
 const REFERENCES = 'References this group in a condition';
 
+/**
+ * Both lists take the full `FormattedRule` now — the shape `RuleCard` renders and
+ * the shape both producing hooks already held. The fixture grew accordingly; no
+ * assertion below depends on the added fields except where stated.
+ */
+const rule = (
+  over: Partial<FormattedRule> & Pick<FormattedRule, 'id' | 'name'>,
+): FormattedRule => ({
+  status: 'ACTIVE',
+  condition: 'department == "Engineering"',
+  conditionExpression: 'user.department == "Engineering"',
+  groupIds: ['00gFAKE1'],
+  userAttributes: ['department'],
+  created: '2024-01-01T00:00:00.000Z',
+  lastUpdated: '2025-01-01T00:00:00.000Z',
+  ...over,
+});
+
 const base = {
-  assigningRules: [{ id: 'r1', name: 'All Engineers', status: 'ACTIVE' }],
+  assigningRules: [rule({ id: 'r1', name: 'All Engineers' })],
   assigningStatus: 'done' as const,
   assigningError: null,
-  referencingRules: [{ id: 'r2', name: 'Contractors gate', status: 'INACTIVE' }],
+  referencingRules: [rule({ id: 'r2', name: 'Contractors gate', status: 'INACTIVE' })],
   referencingStatus: 'done' as const,
   referencingError: null,
 };
+
+/**
+ * Expand one rule's card. The name is anchored to the disclosure's own label
+ * rather than matched loosely on the rule name — the collapsed body also holds a
+ * "Copy rule id for …" control, and jsdom does not honour `inert`, so a loose
+ * match finds both.
+ */
+function expandRule(scope: ReturnType<typeof within>, name: string) {
+  return userEvent.click(scope.getByRole('button', { name: `Expand ${name}` }));
+}
+
+/** The panel a disclosure toggle names, resolved through `aria-controls`. */
+function disclosureFor(toggle: HTMLElement): HTMLElement {
+  const id = toggle.getAttribute('aria-controls');
+  const panel = id ? document.getElementById(id) : null;
+  if (!panel) throw new Error('the disclosure toggle names no panel');
+  return panel;
+}
 
 /** The list under a given sub-heading, so the two axes can be asserted apart. */
 function listUnder(heading: string) {
@@ -36,10 +73,7 @@ describe('GroupRulesSection', () => {
     render(
       <GroupRulesSection
         {...base}
-        assigningRules={[
-          { id: 'r1', name: 'A', status: 'ACTIVE' },
-          { id: 'r3', name: 'B', status: 'ACTIVE' },
-        ]}
+        assigningRules={[rule({ id: 'r1', name: 'A' }), rule({ id: 'r3', name: 'B' })]}
       />,
     );
 
@@ -79,20 +113,65 @@ describe('GroupRulesSection', () => {
     expect(screen.getByText('All Engineers')).toBeInTheDocument();
   });
 
-  it('deep-links a rule by name when a navigation handler is supplied', async () => {
+  /*
+    RETARGETED. The deep link used to be the whole row: clicking a rule's name
+    navigated away to the Rules tab, which is why the one question this tab exists
+    to answer — what the rule says — could only be answered by leaving it. The
+    rows are `RuleCard`s now and the jump is a secondary control *inside* the
+    expanded card. Same handler, same argument, same "absent handler ⇒ absent
+    control" rule; only where the control lives has moved.
+  */
+  it('deep-links a rule from inside its expanded card', async () => {
     const onNavigateToRule = vi.fn();
     render(<GroupRulesSection {...base} onNavigateToRule={onNavigateToRule} />);
 
-    await userEvent.click(
-      screen.getByRole('button', { name: 'Open rule Contractors gate in the Rules tab' }),
-    );
+    await expandRule(listUnder(REFERENCES), 'Contractors gate');
+    const jump = await screen.findByTitle('Open rule Contractors gate in the Rules tab');
+    await userEvent.click(jump);
     expect(onNavigateToRule).toHaveBeenCalledWith('r2');
   });
 
-  it('renders inert rows when no navigation handler is supplied', () => {
+  it('offers no jump control when no navigation handler is supplied', () => {
     render(<GroupRulesSection {...base} />);
-    expect(screen.queryByRole('button', { name: /Open rule/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Open in Rules tab')).not.toBeInTheDocument();
     expect(screen.getByText('All Engineers')).toBeInTheDocument();
+  });
+
+  /*
+    New, and the point of the change: the rule's own condition is on the page
+    rather than one navigation away.
+
+    Asserted through the disclosure this rule's own toggle controls, not by text
+    search. `RuleCard` keeps its body mounted while closed (`.disclose` + `inert`,
+    so it collapses without unmounting), and jsdom honours neither `inert` nor
+    CSS — a bare `getByText` would pass against a card nobody opened, and would
+    match the *other* rule's card besides.
+  */
+  it('shows the rule itself, not just a link to it', async () => {
+    render(<GroupRulesSection {...base} />);
+
+    const toggle = listUnder(ASSIGNS).getByRole('button', { name: 'Expand All Engineers' });
+    const disclosure = disclosureFor(toggle);
+    expect(disclosure).toHaveAttribute('data-open', 'false');
+
+    await userEvent.click(toggle);
+
+    expect(disclosure).toHaveAttribute('data-open', 'true');
+    expect(within(disclosure).getByText('user.department == "Engineering"')).toBeInTheDocument();
+  });
+
+  /*
+    ADR-0039: this section wires none of the card's write verbs, so it must render
+    no control for them — not a disabled one, and not one that swallows the click.
+    `RuleCard` rendered Activate/Deactivate unconditionally until this commit,
+    which was invisible while `RulesTab` was its only consumer.
+  */
+  it('renders no write verb it cannot perform', async () => {
+    render(<GroupRulesSection {...base} />);
+
+    await expandRule(listUnder(ASSIGNS), 'All Engineers');
+    expect(screen.queryByRole('button', { name: /Deactivate Rule/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Activate Rule/ })).not.toBeInTheDocument();
   });
 
   it("shows each rule's Okta status verbatim", () => {

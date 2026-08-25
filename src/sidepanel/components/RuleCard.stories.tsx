@@ -35,7 +35,7 @@ const meta = {
       description: {
         component:
           'Expandable card summarising a single Okta group rule.\n\n' +
-          'The collapsed view shows the rule name, a status dot, current-group/conflict badges, and the condition. Expanding reveals the condition expression (with inline group-name badges), referenced user attributes, target groups, conflict details, metadata, and the activate/deactivate plus "View in Okta" actions. A deep-linked rule auto-expands and flashes on arrival. Memoised for list rendering.',
+          'The collapsed view shows the rule name, an ACTIVE/INACTIVE status badge, current-group/conflict badges, and the condition. Expanding reveals the condition expression (with inline group-name badges), referenced user attributes, target groups, conflict details, metadata, and the activate/deactivate plus "View in Okta" actions. A deep-linked rule auto-expands and flashes on arrival. Memoised for list rendering.',
       },
     },
   },

@@ -2,10 +2,22 @@
  * @module sidepanel/components/RuleCard
  * @description Expandable card summarising a single Okta group rule.
  *
- * Collapsed view shows the rule name, status dot, current-group/conflict badges,
- * and condition; the expanded view adds the condition expression (with group-name
+ * Collapsed view shows the rule name, an ACTIVE/INACTIVE status badge,
+ * current-group/conflict badges, and the condition; the expanded view adds the condition expression (with group-name
  * badges), referenced user attributes, target groups, conflict details, metadata,
  * and activate/deactivate plus "View in Okta" actions. Memoised for list rendering.
+ *
+ * **The status is stated in text, not hue.** It was a coloured dot — green ring
+ * for `ACTIVE`, grey for anything else — with no accompanying label, so the one
+ * fact the card most needed to carry was available only to a reader who could
+ * see the colour *and* knew the convention. The Group Detail Rules tab printed
+ * it as words (`RuleStatusPill`) before adopting this card, so keeping the dot
+ * would have quietly dropped a stated fact on the way in.
+ *
+ * **Every action is gated on its handler.** A surface that cannot perform a verb
+ * renders no control for it rather than one that swallows the click (ADR-0039) —
+ * which matters now that the card has a second consumer (the Group Detail Rules
+ * tab) that wires none of the writes.
  *
  * The card is {@link sidepanel/components/shared/ListRow} (ADR-0029): the header
  * is `children`, the expandable detail is the `body` slot, and the arrival flash
@@ -16,7 +28,7 @@
 import React, { useState, useCallback, useEffect, useId, useRef, memo } from 'react';
 import type { FormattedRule } from '../../shared/types';
 import { timeAgo } from '../../shared/ruleUtils';
-import { Button, CopyableId, IconButton, ListRow } from './shared';
+import { Badge, Button, CopyableId, IconButton, ListRow } from './shared';
 
 /**
  * Upper bound on the arrival-flash hold, in milliseconds. Mirrors `--dur-tell`
@@ -43,6 +55,16 @@ interface RuleCardProps {
   onPreviewImpact?: (rule: FormattedRule) => void;
   /** Called with the rule to start the "add target group" consolidation (A4). */
   onAddTargetGroup?: (rule: FormattedRule) => void;
+  /**
+   * Jumps to this rule on the Rules tab. Supplied by surfaces that show a rule
+   * somewhere *else* — the Group Detail Rules tab — and omitted by the Rules tab
+   * itself, where the destination is where the reader already is.
+   *
+   * It is a secondary affordance inside the expanded card, not the only way to
+   * see the rule: that was the whole defect of the link row this card replaced
+   * there.
+   */
+  onOpenInRulesTab?: (ruleId: string) => void;
   /** Okta org origin used to build the "View in Okta" rules-page link. */
   oktaOrigin?: string | null;
   /** When true, the card auto-expands and flashes on arrival (deep-link target). */
@@ -121,6 +143,7 @@ const RuleCard: React.FC<RuleCardProps> = memo(
     onDeactivate,
     onPreviewImpact,
     onAddTargetGroup,
+    onOpenInRulesTab,
     oktaOrigin,
     isHighlighted = false,
   }) => {
@@ -177,6 +200,10 @@ const RuleCard: React.FC<RuleCardProps> = memo(
     const handleAddTargetGroup = useCallback(() => {
       onAddTargetGroup?.(rule);
     }, [onAddTargetGroup, rule]);
+
+    const handleOpenInRulesTab = useCallback(() => {
+      onOpenInRulesTab?.(rule.id);
+    }, [onOpenInRulesTab, rule.id]);
 
     const hasConflicts = rule.conflicts && rule.conflicts.length > 0;
 
@@ -318,17 +345,25 @@ const RuleCard: React.FC<RuleCardProps> = memo(
               </div>
             </div>
 
-            {/* Actions */}
+            {/*
+              Actions. Every one is gated on its own handler: a surface that
+              cannot perform a verb renders no control for it, rather than a
+              button that swallows the click (ADR-0039). Activate/Deactivate used
+              to render unconditionally, which was invisible while `RulesTab` —
+              the only consumer — always wired both.
+            */}
             <div className="flex flex-wrap gap-2 pt-2">
-              {rule.status === 'ACTIVE' ? (
-                <Button variant="secondary" size="sm" onClick={handleDeactivate}>
-                  Deactivate Rule
-                </Button>
-              ) : (
-                <Button variant="primary" size="sm" onClick={handleActivate}>
-                  Activate Rule
-                </Button>
-              )}
+              {rule.status === 'ACTIVE'
+                ? onDeactivate && (
+                    <Button variant="secondary" size="sm" onClick={handleDeactivate}>
+                      Deactivate Rule
+                    </Button>
+                  )
+                : onActivate && (
+                    <Button variant="primary" size="sm" onClick={handleActivate}>
+                      Activate Rule
+                    </Button>
+                  )}
               {onPreviewImpact && rule.groupIds.length > 0 && (
                 <Button variant="secondary" size="sm" icon="users" onClick={handlePreviewImpact}>
                   Preview Impact
@@ -337,6 +372,16 @@ const RuleCard: React.FC<RuleCardProps> = memo(
               {onAddTargetGroup && (
                 <Button variant="secondary" size="sm" icon="plus" onClick={handleAddTargetGroup}>
                   Add Target Group
+                </Button>
+              )}
+              {onOpenInRulesTab && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleOpenInRulesTab}
+                  title={`Open rule ${rule.name} in the Rules tab`}
+                >
+                  Open in Rules tab
                 </Button>
               )}
               {oktaOrigin && (
@@ -383,31 +428,28 @@ const RuleCard: React.FC<RuleCardProps> = memo(
         onHeaderClick={toggleExpanded}
       >
         <div className="flex items-start gap-3 flex-1 min-w-0">
-          <div
-            className={`
-            mt-1 w-2.5 h-2.5 rounded-full shrink-0
-            ${rule.status === 'ACTIVE' ? 'bg-success ring-4 ring-success/20' : 'bg-neutral-400 ring-4 ring-neutral-400/20'}
-          `}
-          />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1">
               <h3 className="font-semibold text-neutral-900 text-sm">{rule.name}</h3>
+              <Badge variant={rule.status === 'ACTIVE' ? 'success' : 'neutral'}>
+                {rule.status}
+              </Badge>
               {rule.affectsCurrentGroup && (
-                <span className="px-2 py-0.5 rounded-md bg-primary text-white text-xs font-medium">
+                <Badge variant="primary" solid>
                   Current Group
-                </span>
+                </Badge>
               )}
               {hasConflicts && (
-                <span className="px-2 py-0.5 rounded-md bg-warning-light text-warning-text text-xs font-medium border border-warning-light">
+                <Badge variant="warning">
                   {rule.conflicts!.length} Conflict{rule.conflicts!.length > 1 ? 's' : ''}
-                </span>
+                </Badge>
               )}
             </div>
             <p className="text-sm text-neutral-600 truncate">{rule.condition}</p>
           </div>
         </div>
         <IconButton
-          label={isExpanded ? 'Collapse' : 'Expand'}
+          label={`${isExpanded ? 'Collapse' : 'Expand'} ${rule.name}`}
           variant="ghost"
           size="md"
           expanded={isExpanded}

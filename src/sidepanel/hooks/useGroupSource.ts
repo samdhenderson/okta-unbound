@@ -34,28 +34,28 @@ import { writeMemberSource } from '../cache/memberSourceCache';
 import { getOrFetch } from '../cache/entityCache';
 import { cacheKeys } from '../cache/keys';
 import { createLogger } from '../../shared/utils/logger';
+import type { FormattedRule } from '../../shared/types';
 
 const log = createLogger('useGroupSource');
 
 /** Async status of a load step. */
 export type SourceStatus = 'idle' | 'loading' | 'done' | 'error';
 
-/** A feeding rule reduced to what the modal displays. */
-export interface FeedingRule {
-  id: string;
-  name: string;
-  status: string;
-  /**
-   * The `user.<attr>` references the rule's condition mentions, extracted by
-   * `extractUserAttributes` ({@link module:shared/ruleUtils}). Feeds the
-   * attribute→rules reverse index built by
-   * {@link module:shared/rules/groupAttributeIndex}. Absent when the source
-   * rule carried none.
-   */
-  userAttributes?: string[];
-  /** The rule's raw condition expression, when the source rule carried one. */
-  conditionExpression?: string;
-}
+/**
+ * A rule whose `assignUserToGroups` targets the open group.
+ *
+ * **The full display model, not a narrowing of it.** `getGroupRulesForGroup`
+ * already returns `FormattedRule[]` — the exact shape `RuleCard` renders — and
+ * this hook used to copy four fields off each one and drop the rest, so the Group
+ * Detail Rules tab could only ever show a name and a status and had to send the
+ * reader to the Rules tab to see the rule itself. Keeping the whole object costs
+ * nothing: it is the same objects, from the same response.
+ *
+ * `userAttributes` is what feeds the attribute→rules reverse index built by
+ * {@link module:shared/rules/groupAttributeIndex}; it is required on
+ * `FormattedRule` (empty when the rule reads none), where it was optional here.
+ */
+export type FeedingRule = FormattedRule;
 
 /** Return shape of {@link useGroupSource}. */
 export interface UseGroupSourceReturn {
@@ -145,15 +145,7 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
       getGroupRulesForGroup(nextGroup.id)
         .then((rules) => {
           if (runId !== runIdRef.current) return;
-          setFeedingRules(
-            rules.map((r) => ({
-              id: r.id,
-              name: r.name,
-              status: r.status,
-              userAttributes: r.userAttributes,
-              conditionExpression: r.conditionExpression,
-            })),
-          );
+          setFeedingRules(rules);
           setRulesStatus('done');
         })
         .catch((err) => {
