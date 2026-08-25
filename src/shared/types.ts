@@ -441,6 +441,16 @@ export type ResultType = 'info' | 'success' | 'warning' | 'error';
 // Re-export undo types for convenience
 export type { UndoAction, UndoActionMetadata, UndoHistory } from './undoTypes';
 
+/**
+ * Whether the acting admin could be named when an entry was written.
+ *
+ * Pairs with {@link AuditLogEntry.performedBy}: `'resolved'` means the string is
+ * a real identity, `'unavailable'` means the `/users/me` lookup could not name
+ * anyone and `performedBy` is `null`. An audit trail that cannot say who acted
+ * must say *that*, not invent a plausible-looking address.
+ */
+export type ActorResolution = 'resolved' | 'unavailable';
+
 /** A persisted audit-trail record of one completed operation. */
 export interface AuditLogEntry {
   id: string;
@@ -448,7 +458,19 @@ export interface AuditLogEntry {
   action: 'remove_users' | 'add_users' | 'export' | 'activate_rule' | 'deactivate_rule';
   groupId: string;
   groupName: string;
-  performedBy: string;
+  /**
+   * Email of the admin who performed the operation, or `null` when the actor
+   * could not be resolved. Never a placeholder — see {@link ActorResolution}.
+   */
+  performedBy: string | null;
+  /**
+   * How {@link performedBy} was arrived at. Absent only on entries written
+   * before this field existed: rows already persisted in IndexedDB, and the
+   * rule/merge hooks still on the legacy placeholder path (`D-013b`). Readers
+   * must therefore treat `undefined` as "not recorded" and fall back to
+   * `performedBy === null` for the display decision.
+   */
+  actorResolution?: ActorResolution;
   affectedUsers: string[];
   result: 'success' | 'partial' | 'failed';
   details: {

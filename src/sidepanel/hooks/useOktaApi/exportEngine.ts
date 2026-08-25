@@ -187,6 +187,8 @@ export function createExportEngineOperations(coreApi: CoreApi) {
  *
  * Mirrors {@link module:hooks/useOktaApi/exportOperations}: `action: 'export'`,
  * no users modified, actor from `/users/me`. Audit-write failures are swallowed.
+ * An unresolved actor is recorded as `performedBy: null` /
+ * `actorResolution: 'unavailable'` — never as a placeholder identity.
  */
 async function logExportAudit(
   coreApi: CoreApi,
@@ -195,14 +197,15 @@ async function logExportAudit(
   startTime: number,
 ): Promise<void> {
   try {
-    const currentUser = await coreApi.getCurrentUser();
+    const actor = await coreApi.getCurrentUser();
     const entry: AuditLogEntry = {
       id: crypto.randomUUID(),
       timestamp: new Date(),
       action: 'export',
       groupId: descriptor.id,
       groupName: descriptor.displayName,
-      performedBy: currentUser.email,
+      performedBy: actor.kind === 'resolved' ? actor.email : null,
+      actorResolution: actor.kind === 'resolved' ? 'resolved' : 'unavailable',
       affectedUsers: [],
       result: 'success',
       details: {

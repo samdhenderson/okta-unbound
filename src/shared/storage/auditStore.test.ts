@@ -378,6 +378,78 @@ describe('AuditStore', () => {
     });
   });
 
+  // -------------------------------------------------------------------------
+  describe('exportAuditLog CSV', () => {
+    const fakeIDBKeyRange = {
+      bound: vi.fn((lower: Date, upper: Date) => ({ kind: 'bound', lower, upper })),
+      lowerBound: vi.fn((lower: Date) => ({ kind: 'lowerBound', lower })),
+      upperBound: vi.fn((upper: Date, open?: boolean) => ({ kind: 'upperBound', upper, open })),
+    };
+
+    const exportEntry = (overrides: Partial<AuditLogEntry> = {}): AuditLogEntry => ({
+      id: 'csv-1',
+      timestamp: new Date('2025-01-15T00:00:00.000Z'),
+      action: 'export',
+      groupId: '00gFAKE1',
+      groupName: 'Sales "VIP", EMEA',
+      performedBy: '=1+1',
+      affectedUsers: [],
+      result: 'success',
+      details: { usersSucceeded: 0, usersFailed: 0, apiRequestCount: 1, durationMs: 10 },
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      vi.stubGlobal('IDBKeyRange', fakeIDBKeyRange);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    /** Read a Blob as text — jsdom's Blob has no `text()`. */
+    function readBlob(blob: Blob): Promise<string> {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(blob);
+      });
+    }
+
+    /** The single data row of the exported CSV. */
+    async function exportRow(entries: AuditLogEntry[]): Promise<string> {
+      mockDB.getAllFromIndex.mockResolvedValueOnce(entries);
+      const blob = await auditStore.exportAuditLog(
+        new Date('2025-01-01T00:00:00.000Z'),
+        new Date('2025-02-01T00:00:00.000Z'),
+      );
+      return (await readBlob(blob)).split('\n')[1];
+    }
+
+    it('escapes every cell: quotes are doubled and a formula-triggering actor is neutralized', async () => {
+      const row = await exportRow([exportEntry()]);
+
+      // RFC 4180: embedded quotes doubled, field wrapped once.
+      expect(row).toContain('"Sales ""VIP"", EMEA"');
+      // Formula-injection guard on the actor cell.
+      expect(row).toContain(",'=1+1,");
+      expect(row).not.toContain(',=1+1,');
+    });
+
+    it('renders an unresolved actor as an explicit label, not a blank or invented cell', async () => {
+      const row = await exportRow([
+        exportEntry({
+          groupName: 'Plain Group',
+          performedBy: null,
+          actorResolution: 'unavailable',
+        }),
+      ]);
+
+      expect(row.split(',')[3]).toBe('(actor unavailable)');
+    });
+  });
+
   describe('settings cache', () => {
     it('logOperation skips the per-write settings read once updateSettings primed the cache', async () => {
       mockDB.put.mockResolvedValueOnce(undefined);

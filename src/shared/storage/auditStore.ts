@@ -7,10 +7,15 @@
  * statistics, CSV export, retention-based and full clears. Logging is
  * fire-and-forget: failures are logged and never propagate to callers. Exposed as
  * the {@link auditStore} singleton.
+ *
+ * An entry's actor is nullable: when the signed-in admin could not be resolved
+ * the trail records `performedBy: null` rather than a placeholder identity, and
+ * the CSV export says so explicitly ({@link ACTOR_UNAVAILABLE_LABEL}).
  */
 
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { createLogger } from '../utils/logger';
+import { escapeCSV } from '../utils/csvUtils';
 import type { AuditLogEntry, AuditFilters, AuditStats, AuditSettings } from '../types';
 
 const log = createLogger('AuditStore');
@@ -23,6 +28,14 @@ interface AuditDB extends DBSchema {
       timestamp: Date;
       groupId: string;
       action: string;
+      /**
+       * Actor index. `AuditLogEntry.performedBy` is nullable, and IndexedDB does
+       * not index null keys — an entry whose actor could not be resolved is
+       * simply absent from this index, so a `performedBy`-filtered
+       * {@link AuditStore.getHistory} never returns it. That is the intended
+       * outcome: it has no actor to filter by. Unfiltered and date-scoped reads
+       * still see it. The index itself is unchanged, so no DB version bump.
+       */
       performedBy: string;
       result: string;
     };
@@ -32,6 +45,13 @@ interface AuditDB extends DBSchema {
     value: AuditSettings;
   };
 }
+
+/**
+ * What the CSV export shows in "Performed By" when an entry has no resolved
+ * actor (`performedBy: null`). An explicit statement, not a blank cell and not
+ * a fabricated address.
+ */
+export const ACTOR_UNAVAILABLE_LABEL = '(actor unavailable)';
 
 const DB_NAME = 'okta-unbound-audit';
 const DB_VERSION = 1;
@@ -174,7 +194,12 @@ class AuditStore {
   }
 
   /**
-   * Export audit log to CSV blob
+   * Export audit log to CSV blob.
+   *
+   * Every cell goes through {@link escapeCSV} (RFC 4180 quoting plus the
+   * formula-injection guard) — group names, actor emails, and error messages
+   * are all end-user-controllable. An entry with no resolved actor renders
+   * {@link ACTOR_UNAVAILABLE_LABEL} rather than an empty or invented cell.
    */
   async exportAuditLog(startDate: Date, endDate: Date): Promise<Blob> {
     try {
@@ -192,16 +217,18 @@ class AuditStore {
         return [
           timestamp,
           entry.action,
-          `"${entry.groupName}"`,
-          entry.performedBy,
+          entry.groupName,
+          entry.performedBy ?? ACTOR_UNAVAILABLE_LABEL,
           entry.result,
           entry.affectedUsers.length,
           entry.details.usersSucceeded,
           entry.details.usersFailed,
           entry.details.durationMs,
           entry.details.apiRequestCount,
-          `"${errors}"`,
-        ].join(',');
+          errors,
+        ]
+          .map((cell) => escapeCSV(cell))
+          .join(',');
       });
 
       const csvContent = header + rows.join('\n');

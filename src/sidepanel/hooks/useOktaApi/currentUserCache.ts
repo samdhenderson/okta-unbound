@@ -12,26 +12,48 @@
  *
  * Only the parsed identity (email + id) is stored — no tokens, no session
  * material, and nothing is persisted; the cache is module-level memory only.
+ * **Only a resolved identity is ever cached**: a lookup that could not name an
+ * admin must not be pinned to the tab for the length of the TTL, because every
+ * audited operation in that window would inherit the same non-answer.
  */
 
-/** Parsed current-user identity used for audit attribution. */
-export interface CurrentUserIdentity {
-  /** Admin's email, or the `unknown@unknown.com` placeholder. */
+/** An admin the `/users/me` lookup positively identified. */
+export interface ResolvedActor {
+  /** Discriminant: this actor is known. */
+  kind: 'resolved';
+  /** Admin's email, as reported by their Okta profile. Audit attribution keys off this. */
   email: string;
-  /** Admin's Okta user id, or the `unknown` placeholder. */
+  /** Admin's Okta user id; best-effort — empty string if the response omitted it. */
   id: string;
 }
+
+/**
+ * The signed-in admin, or an explicit statement that we could not tell.
+ *
+ * Callers must switch on `kind` — there is deliberately no placeholder email,
+ * so a failed lookup can never be mistaken for a real identity in an audit
+ * entry, a CSV cell, or a log line. The `unavailable` variant records which
+ * path produced the non-answer:
+ *
+ * - `threw` — the `/users/me` request itself failed (transport/cancellation).
+ * - `failed` — Okta answered, but not with a successful payload.
+ * - `no-email` — the response carried no email to attribute the operation to.
+ */
+export type Actor = ResolvedActor | { kind: 'unavailable'; reason: ActorUnavailableReason };
+
+/** Why the acting admin could not be named. See {@link Actor}. */
+type ActorUnavailableReason = 'threw' | 'failed' | 'no-email';
 
 /** How long a cached current-user identity stays fresh (5 minutes). */
 export const CURRENT_USER_TTL_MS = 5 * 60 * 1000;
 
-const cache = new Map<number, { value: CurrentUserIdentity; expiresAt: number }>();
+const cache = new Map<number, { value: ResolvedActor; expiresAt: number }>();
 
 /**
- * Return the cached identity for `tabId` if present and fresh, else `null`.
- * An expired entry is evicted on read.
+ * Return the cached resolved actor for `tabId` if present and fresh, else
+ * `null`. An expired entry is evicted on read.
  */
-export function getCachedCurrentUser(tabId: number): CurrentUserIdentity | null {
+export function getCachedCurrentUser(tabId: number): ResolvedActor | null {
   const entry = cache.get(tabId);
   if (!entry) return null;
   if (Date.now() >= entry.expiresAt) {
@@ -41,8 +63,11 @@ export function getCachedCurrentUser(tabId: number): CurrentUserIdentity | null 
   return entry.value;
 }
 
-/** Store a freshly resolved identity for `tabId`, valid for the TTL. */
-export function cacheCurrentUser(tabId: number, value: CurrentUserIdentity): void {
+/**
+ * Store a freshly resolved actor for `tabId`, valid for the TTL. Only a
+ * {@link ResolvedActor} is accepted — an unavailable actor is never cached.
+ */
+export function cacheCurrentUser(tabId: number, value: ResolvedActor): void {
   cache.set(tabId, { value, expiresAt: Date.now() + CURRENT_USER_TTL_MS });
 }
 
