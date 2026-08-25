@@ -3,13 +3,26 @@
  * @description The Group Detail view's roster: the shared member explorer behind
  * this page's gated read, plus a confirm-gated per-row remove.
  *
- * Piggybacks on the same gated read {@link GroupMembershipSourceSection} already
- * offers — the roster this section lists is the exact `OktaUser[]` the member-source
- * analysis fetches, so opening this section costs nothing beyond that one opt-in
- * paginated read. Before that analysis has run, the section renders a gated prompt
- * (mirroring the source section's own idle state) rather than an empty list — an
- * empty list would read as "this group has no members," which is not the same
- * unresolved fact as "not read yet."
+ * One gate, one read. `useGroupSource`'s member analysis fetches the roster and
+ * classifies it in the same pass, so listing the members and explaining where they
+ * came from cost exactly one opt-in paginated read between them. Before it has
+ * run, this renders a gated prompt rather than an empty list — an empty list would
+ * read as "this group has no members," which is not the same unresolved fact as
+ * "not read yet."
+ *
+ * ## Why there is one card here and not two
+ *
+ * There used to be a `GroupMembershipSourceSection` above this one: its own card,
+ * its own `Analyze` button, its own idle/loading/error ladder — all driven by the
+ * *same* `useGroupSource` state this section reads. Two gates for one read meant a
+ * reader could load the roster and still be looking at an un-analyzed meter, and
+ * the duplicate ladder is why six of that component's cases were copies of six of
+ * this one's.
+ *
+ * Its readout is now the strip inside the explorer, where it is a filter as well
+ * as a chart; its two pieces of commentary — the indeterminate correction and the
+ * per-rule accounting — moved to {@link MemberSourceNotes} and render under that
+ * strip. Nothing it said was dropped.
  *
  * ## What this component is now
  *
@@ -63,6 +76,7 @@
 import React, { useMemo } from 'react';
 import { AlertMessage, Button, DetailSection, EmptyState, Modal, Skeleton } from '../../shared';
 import MemberExplorer, { type MemberSourceContext } from '../../members/MemberExplorer';
+import MemberSourceNotes from './MemberSourceNotes';
 import { toMemberSourceSegments } from '../memberSourceBuckets';
 import type {
   GroupMembership,
@@ -110,6 +124,8 @@ export interface GroupMembersSectionProps {
   breakdown: MemberSourceBreakdown | null;
   /** Per-member source classification, from the same analysis. */
   memberSourceIndex: MemberSourceIndex | null;
+  /** Deep-links a contributing rule in the Rules tab. */
+  onNavigateToRule?: (ruleId: string) => void;
   /**
    * Asks Okta which rules manage one member's membership (ADR-0031) — one API
    * call, from a click on an already-open row only. Absent (no live Okta tab) ⇒
@@ -142,9 +158,8 @@ export interface GroupMembersSectionProps {
 }
 
 /**
- * Renders the group's roster through the shared member explorer, gated behind the
- * same member-source analysis {@link GroupMembershipSourceSection} offers, with a
- * per-row confirm-gated remove.
+ * Renders the group's roster through the shared member explorer, behind the single
+ * gate that loads and classifies it, with a per-row confirm-gated remove.
  */
 const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
   groupType,
@@ -156,6 +171,7 @@ const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
   canAnalyze = true,
   breakdown,
   memberSourceIndex,
+  onNavigateToRule,
   onProveMemberSource,
   mfaResults,
   scanStatus,
@@ -195,9 +211,10 @@ const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
   );
 
   return (
+    /* Untitled: the tab is already labelled "Members", and a card headed
+       "Members" inside it is the tab-level echo of ADR-0032's *the header
+       describes the entity; the body must not repeat it*. */
     <DetailSection
-      title="Members"
-      description="The group's roster, read from the same analysis above."
       actions={
         status === 'idle' && hasMembers ? (
           <Button
@@ -219,8 +236,8 @@ const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
       ) : status === 'idle' ? (
         <p className="text-sm text-neutral-500">
           Not loaded yet. Reads all {memberCount.toLocaleString()} member
-          {memberCount === 1 ? '' : 's'} once — the same read the analysis above uses, so loading
-          here costs nothing extra once that analysis has already run.
+          {memberCount === 1 ? '' : 's'} once, then classifies each against the rules that assign
+          into this group — one read for both.
         </p>
       ) : status === 'loading' ? (
         <Skeleton variant="row" size="md" count={4} label="Loading members…" />
@@ -240,6 +257,11 @@ const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
           onRequestConfirm={onRequestConfirm}
           onCancelConfirm={onCancelConfirm}
           memberSource={memberSource}
+          sourceDetail={
+            breakdown ? (
+              <MemberSourceNotes breakdown={breakdown} onNavigateToRule={onNavigateToRule} />
+            ) : undefined
+          }
           onProveMemberSource={proveMemberSource}
           /* Withheld, not disabled, on the read-only group types (ADR-0039). */
           onRemoveMember={readOnlyReason ? undefined : onRequestRemove}

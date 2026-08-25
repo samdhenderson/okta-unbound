@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import MemberSourceFilterBar from './MemberSourceFilterBar';
 import type { MemberSourceBucket } from '../groups/memberSourceBuckets';
-import { INDIGO_RAMP } from '../../theme/chartPalette';
+import { CHART_OTHER_COLOR, INDIGO_RAMP } from '../../theme/chartPalette';
 
 const engineering: MemberSourceBucket = {
   key: 'rule:0prFAKE1',
@@ -82,7 +82,12 @@ const meta = {
           'is printed on the pills beside it, so a screen reader gets the whole answer as text ' +
           'rather than an unlabelled graphic.\n\n' +
           'Zero-count segments are dropped rather than drawn as an empty slice or offered as a ' +
-          'pill that would filter to nobody.',
+          'pill that would filter to nobody.\n\n' +
+          '**This is the whole readout on the Members tab** — `MemberSourceMeter` is not rendered ' +
+          'beside it, because a legend and a pill row carrying the same numbers is the same fact ' +
+          'twice down a 360px column. So each pill states its bucket, its count *and* its share, ' +
+          'and an aggregated tail says how many rules it folded in — as a line of text, not a ' +
+          '`title`, because a fact nobody can read without hovering is not stated.',
       },
     },
   },
@@ -142,7 +147,53 @@ export const DropsEmptySegments: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.queryByRole('button', { name: /Platform department/ })).toBeNull();
-    await expect(canvas.getByRole('button', { name: /Engineering department 60/ })).toBeVisible();
+    await expect(
+      canvas.getByRole('button', { name: /Engineering department 60 \(60%\)/ }),
+    ).toBeVisible();
+  },
+};
+
+/**
+ * Past the chart ramp's stops the remaining rules fold into `Other rules`. The
+ * count of what got folded is printed, never silently truncated — the invariant
+ * `memberSourceBuckets` states for the meter, kept here because this is the only
+ * readout on the Members tab.
+ */
+export const AggregatedTail: Story = {
+  args: {
+    segments: [
+      { ...engineering, count: 55, percent: 55 },
+      {
+        key: 'otherRules',
+        label: 'Other rules',
+        description: 'Rules past the chart ramp, folded together.',
+        count: 45,
+        percent: 45,
+        barClass: '',
+        dotClass: '',
+        color: CHART_OTHER_COLOR,
+        aggregatedRuleCount: 3,
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: /Other rules 45 \(45%\)/ })).toBeVisible();
+    await expect(canvas.getByText(/folds in \+3 more rules/)).toBeVisible();
+  },
+};
+
+/**
+ * Every bucket's label and share, as text. The bar above them is `aria-hidden`,
+ * so these pills are the entire accessible answer.
+ */
+export const StatesEveryShare: Story = {
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByRole('button', { name: /Engineering department 42 \(42%\)/ }),
+    ).toBeVisible();
+    await expect(canvas.getByRole('button', { name: /Multiple rules 5 \(5%\)/ })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: /Indeterminate 5 \(5%\)/ })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: /Manual 30 \(30%\)/ })).toBeVisible();
   },
 };
 

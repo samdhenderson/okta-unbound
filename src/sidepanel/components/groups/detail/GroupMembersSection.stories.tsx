@@ -73,17 +73,21 @@ const meta = {
   component: GroupMembersSection,
   tags: ['autodocs'],
   parameters: {
-    // A lone `DetailSection` starts its own `<h2>` with no page `<h1>` above it in
-    // isolation — same accepted trade-off as `GroupMembershipSourceSection`.
+    // The "Attributed to" heading starts at `<h3>` with no page heading above it
+    // in isolation — the pane that mounts this supplies the surrounding levels.
     a11y: { config: { rules: [{ id: 'heading-order', enabled: false }] } },
     docs: {
       description: {
         component:
-          "The Group Detail view's roster: displays members and, per row, a confirm-gated remove.\n\n" +
-          'It piggybacks on the same gated read `GroupMembershipSourceSection` already offers — the roster ' +
-          'here is the exact list the member-source analysis fetches, so this section costs nothing beyond ' +
-          'that one opt-in paginated read. Before that analysis has run it shows a gated prompt, never an ' +
-          'empty list: an empty list would read as "this group has no members," a different fact.\n\n' +
+          "The Group Detail view's roster: who is in the group, why, and — per row — a " +
+          'confirm-gated remove.\n\n' +
+          'One gate, one read: `useGroupSource`\u2019s member analysis fetches the roster and classifies ' +
+          'it in the same pass. Before it has run this shows a gated prompt, never an empty list: an ' +
+          'empty list would read as "this group has no members," a different fact.\n\n' +
+          'There used to be a second card above this one (`GroupMembershipSourceSection`) with its own ' +
+          'gate and its own idle/loading/error ladder over the *same* state — so a reader could load the ' +
+          'roster and still be looking at an un-analyzed meter. Its readout is the strip inside the ' +
+          'roster now; its two notes are `MemberSourceNotes`.\n\n' +
           "Adding a member lives in the action bar's Add-member modal, not here — see `AddGroupMemberModal`.\n\n" +
           '`APP_GROUP` and `BUILT_IN` groups reject membership writes at the Okta API, so the per-row remove ' +
           'control is hidden entirely and replaced with a one-line explanation — see `AppGroupReadOnly` ' +

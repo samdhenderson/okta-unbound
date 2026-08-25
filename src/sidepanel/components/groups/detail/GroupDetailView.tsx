@@ -7,7 +7,8 @@
  * `Tabs` shell (`variant="underline"`) splits the body into five panes, each
  * one tap away — no pane gated behind another: **Overview**
  * ({@link GroupOverviewPane}, verdict tiles that drill into the pane below
- * answering each), **Members** ({@link GroupMembershipSourceSection} +
+ * answering each), **Members** ({@link GroupMembersSection}, which folds the
+ * membership-source readout into its own roster —
  * {@link GroupMembersSection}, stacked), **Access**
  * ({@link GroupAccessSection} + {@link GroupPushSection}, stacked),
  * **Rules** ({@link GroupRulesSection}), and **Health**
@@ -57,7 +58,6 @@
  */
 import React, { useMemo, useState } from 'react';
 import GroupOverviewPane from './GroupOverviewPane';
-import GroupMembershipSourceSection from './GroupMembershipSourceSection';
 import GroupMembersSection from './GroupMembersSection';
 import GroupAccessSection from './GroupAccessSection';
 import GroupRulesSection from './GroupRulesSection';
@@ -304,17 +304,7 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
             )}
 
             {activeTab === 'members' && (
-              <div className="space-y-6" role="tabpanel" aria-label="Members">
-                <GroupMembershipSourceSection
-                  memberCount={group.memberCount}
-                  breakdown={source.breakdown}
-                  status={source.memberStatus}
-                  error={source.error}
-                  onAnalyze={source.analyzeMembers}
-                  canAnalyze={targetTabId !== null}
-                  onNavigateToRule={onNavigateToRule}
-                />
-
+              <div role="tabpanel" aria-label="Members">
                 <GroupMembersSection
                   groupType={group.type}
                   memberCount={group.memberCount}
@@ -325,6 +315,7 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                   canAnalyze={targetTabId !== null}
                   breakdown={source.breakdown}
                   memberSourceIndex={source.memberSourceIndex}
+                  onNavigateToRule={onNavigateToRule}
                   onProveMemberSource={proveMemberSource}
                   mfaResults={mfaScan.mfaResults}
                   scanStatus={mfaScan.scanStatus}

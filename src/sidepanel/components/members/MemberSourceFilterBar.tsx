@@ -19,6 +19,21 @@
  * every number it encodes is printed on the pills beside it, so a screen reader
  * gets the whole answer as text rather than an unlabelled graphic.
  *
+ * ## Nothing the readout said is dropped
+ *
+ * This is the *whole* readout on the Members tab — `MemberSourceMeter` is not
+ * rendered beside it, because a legend and a pill row carrying the same numbers
+ * is the same fact twice down a 360px column. So everything that suite pins has
+ * to survive here: each bucket's label, its share as a percentage, and — for the
+ * aggregated tail — **how many rules it folded in**. `memberSourceBuckets` states
+ * that last one as a hard rule: anything past the ramp aggregates into `Other
+ * rules` with its dropped-rule count stated, never silently truncated. It is a
+ * line of text under the pills, not a `title`, because a fact nobody can read
+ * without hovering is not stated.
+ *
+ * `MemberSourceMeter` itself is untouched and still owns the groups-list row
+ * expansion (`GroupListItemDetails`), which is a readout with nothing to filter.
+ *
  * ## The aggregated tail
  *
  * Past the chart ramp's stops, `toMemberSourceSegments` folds the remaining
@@ -57,6 +72,10 @@ const MemberSourceFilterBar: React.FC<MemberSourceFilterBarProps> = ({
   // A zero-count segment is dropped rather than drawn as an empty slice or
   // offered as a pill that would filter to nobody.
   const filled = segments.filter((segment) => segment.count > 0);
+  const aggregated = filled.reduce(
+    (count, segment) => count + (segment.aggregatedRuleCount ?? 0),
+    0,
+  );
   if (filled.length === 0) return null;
 
   return (
@@ -94,10 +113,18 @@ const MemberSourceFilterBar: React.FC<MemberSourceFilterBarProps> = ({
               className={`me-1.5 inline-block h-2 w-2 shrink-0 rounded-full align-middle ${segment.dotClass}`}
               style={{ backgroundColor: segment.color }}
             />
-            {segment.label} {segment.count.toLocaleString()}
+            {segment.label} {segment.count.toLocaleString()}{' '}
+            <span className="font-normal opacity-80">({segment.percent}%)</span>
           </FilterPill>
         ))}
       </div>
+
+      {/* The aggregated tail always states what it hid. */}
+      {aggregated > 0 && (
+        <p className="text-xs text-neutral-600">
+          &ldquo;Other rules&rdquo; folds in +{aggregated} more rule{aggregated === 1 ? '' : 's'}.
+        </p>
+      )}
     </div>
   );
 };

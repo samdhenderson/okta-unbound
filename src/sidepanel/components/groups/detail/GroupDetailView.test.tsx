@@ -5,7 +5,7 @@
  * Pins the container's own job — composing the read-only loads, the action bar,
  * and which of the five tabbed panes is on screen — not the panes' own
  * rendering, which each already has its own suite
- * (`GroupMembershipSourceSection.test.tsx`, `GroupMembersSection.test.tsx`,
+ * (`GroupMembersSection.test.tsx`,
  * `GroupRulesSection.test.tsx`; `GroupOverviewPane`, `GroupAccessSection`,
  * `GroupPushSection` and `GroupHealthPane` are pure-render leaves with only a
  * story, per ADR-0023). Every pane (including `GroupHealthPane`, which now
@@ -132,9 +132,6 @@ vi.mock('../../../hooks/useAddGroupMember', () => ({
 vi.mock('./GroupOverviewPane', () => ({
   default: () => <div data-testid="stub-overview" />,
 }));
-vi.mock('./GroupMembershipSourceSection', () => ({
-  default: () => <div data-testid="stub-membership-source" />,
-}));
 vi.mock('./GroupMembersSection', () => ({
   default: () => <div data-testid="stub-members" />,
 }));
@@ -182,7 +179,6 @@ describe('GroupDetailView', () => {
 
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('stub-overview')).toBeInTheDocument();
-    expect(screen.queryByTestId('stub-membership-source')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-members')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-access')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-push')).not.toBeInTheDocument();
@@ -190,14 +186,20 @@ describe('GroupDetailView', () => {
     expect(screen.queryByTestId('stub-health')).not.toBeInTheDocument();
   });
 
-  it('switches to the Members tab, rendering its two sections and unmounting Overview', async () => {
+  /*
+    One section, not two. `GroupMembershipSourceSection` is gone: it rendered a
+    second card, a second gate and a second idle/loading/error ladder over the
+    *same* `useGroupSource` state this pane reads, so a reader could load the
+    roster and still be looking at an un-analyzed meter. Its readout is the strip
+    inside the roster now, and its commentary is `MemberSourceNotes`.
+  */
+  it('switches to the Members tab, rendering its one section and unmounting Overview', async () => {
     const user = userEvent.setup();
     render(<GroupDetailView group={makeGroup()} targetTabId={1} />);
 
     await user.click(screen.getByRole('tab', { name: 'Members' }));
 
     expect(screen.getByRole('tab', { name: 'Members' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('stub-membership-source')).toBeInTheDocument();
     expect(screen.getByTestId('stub-members')).toBeInTheDocument();
     expect(screen.queryByTestId('stub-overview')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-access')).not.toBeInTheDocument();
@@ -216,7 +218,6 @@ describe('GroupDetailView', () => {
     expect(screen.getByTestId('stub-access')).toBeInTheDocument();
     expect(screen.getByTestId('stub-push')).toBeInTheDocument();
     expect(screen.queryByTestId('stub-overview')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('stub-membership-source')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-members')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-rules')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-health')).not.toBeInTheDocument();
@@ -231,7 +232,6 @@ describe('GroupDetailView', () => {
     expect(screen.getByRole('tab', { name: 'Rules' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('stub-rules')).toBeInTheDocument();
     expect(screen.queryByTestId('stub-overview')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('stub-membership-source')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-members')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-access')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-push')).not.toBeInTheDocument();
@@ -247,7 +247,6 @@ describe('GroupDetailView', () => {
     expect(screen.getByRole('tab', { name: 'Health' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('stub-health')).toBeInTheDocument();
     expect(screen.queryByTestId('stub-overview')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('stub-membership-source')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-members')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-access')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-push')).not.toBeInTheDocument();

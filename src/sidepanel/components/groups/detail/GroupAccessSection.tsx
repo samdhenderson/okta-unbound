@@ -4,7 +4,7 @@
  * this group is assigned to, plus any admin roles it grants to every member.
  *
  * The Group Detail view answers where members come from
- * ({@link GroupMembershipSourceSection}) and what rules touch the group
+ * ({@link GroupMembersSection}) and what rules touch the group
  * ({@link GroupRulesSection}), but never what membership *does* until this
  * section: the two grant axes surfaced by
  * {@link sidepanel/hooks/useGroupAccessGrants.useGroupAccessGrants}.

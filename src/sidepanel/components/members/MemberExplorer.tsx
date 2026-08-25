@@ -107,6 +107,14 @@ interface MemberExplorerProps {
    */
   memberSource?: MemberSourceContext;
   /**
+   * Commentary about *this* group's split, rendered directly under the source
+   * strip — the indeterminate correction and the per-rule accounting. Owned by
+   * the caller because it is about one group, not about how a roster is faceted;
+   * see `groups/detail/MemberSourceNotes`. Ignored when `memberSource` is absent,
+   * since there is no strip for it to sit under.
+   */
+  sourceDetail?: React.ReactNode;
+  /**
    * Request removal of a member from the group. Absent ⇒ rows render no remove
    * control (ADR-0039: an unimplemented verb is omitted, not shipped `disabled`).
    */
@@ -143,6 +151,7 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
   onCancelConfirm,
   oktaOrigin,
   memberSource,
+  sourceDetail,
   onRemoveMember,
   onProveMemberSource,
 }) => {
@@ -321,13 +330,16 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
           slice. Above the search bar because it is the question this roster
           answers first: not "who is in here" but "why". */}
       {memberSource && (
-        <MemberSourceFilterBar
-          segments={memberSource.segments}
-          activeKeys={activeSourceKeys}
-          onToggle={handleSourceToggle}
-          onClearAll={clearSourceFilters}
-          total={memberSource.index.byUserId.size}
-        />
+        <div className="space-y-3">
+          <MemberSourceFilterBar
+            segments={memberSource.segments}
+            activeKeys={activeSourceKeys}
+            onToggle={handleSourceToggle}
+            onClearAll={clearSourceFilters}
+            total={memberSource.index.byUserId.size}
+          />
+          {sourceDetail}
+        </div>
       )}
 
       {/* Search + Filters toggle */}
