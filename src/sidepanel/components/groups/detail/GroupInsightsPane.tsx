@@ -1,17 +1,35 @@
 /**
- * @module sidepanel/components/groups/detail/GroupHealthPane
- * @description Group Detail's fourth tab — "is this group's data trustworthy?"
+ * @module sidepanel/components/groups/detail/GroupInsightsPane
+ * @description Group Detail's fifth tab — what this group's data actually looks
+ * like, and where it has drifted.
  *
  * Three sections, all presentational: the caller owns every load and hands its
  * state through, so this pane can be storied in every state without a network.
  *
- * 1. **Attribute health** — intersects {@link discoverAttributeBreakdowns}'s
- *    per-attribute blank-rate/distribution report (over the group's already-loaded
- *    roster) with {@link indexRulesByAttribute}'s reverse index (over the group's
- *    feeding rules), so a card renders only for an attribute at least one feeding
- *    rule actually references — "attributes the rules depend on," not every
- *    attribute the org happens to populate. Gated behind the same roster load the
- *    Members tab uses (`memberStatus`/`onAnalyzeMembers` are `useGroupSource`'s
+ * ## Why it is not called "Health"
+ *
+ * "Health" names a verdict, and the pane does not deliver one — it delivers
+ * *material* a reader draws a verdict from, and it will hold more of it over time
+ * (staleness, orphaned assignments, rule overlap). Naming it for the subject
+ * rather than the judgement is what lets those land here without the label going
+ * stale. `AttributeHealthCard` keeps its own name: one card genuinely is about
+ * one attribute's health.
+ *
+ * 1. **Attribute spread** — {@link discoverAttributeBreakdowns}'s per-attribute
+ *    blank-rate/distribution report over the group's already-loaded roster, with
+ *    {@link indexRulesByAttribute}'s reverse index over the feeding rules layered
+ *    on as an **annotation**.
+ *
+ *    That layering used to be a *filter*: a card existed only for an attribute
+ *    some feeding rule referenced. It hid exactly the drift worth catching —
+ *    a `department` nobody's rule reads, spelled four different ways, is
+ *    invisible until the day someone writes a rule against it and it silently
+ *    grants the wrong people. So every discovered attribute gets a card, and the
+ *    rule-referenced ones sort first because they are the ones that grant access
+ *    today.
+ *
+ *    Gated behind the same roster load the Members tab uses
+ *    (`memberStatus`/`onAnalyzeMembers` are `useGroupSource`'s
  *    `memberStatus`/`analyzeMembers`, passed straight through) — opening this tab
  *    before ever visiting Members renders its own small idle/loading/error/done
  *    gate that calls the identical `analyzeMembers()`, which `getOrFetch` already
@@ -24,7 +42,7 @@
  * 3. **About this group** — the group's own reference facts
  *    ({@link GroupMetadataSection}), folded into a `CollapsibleSection` default
  *    closed. Moved here (and out of its old always-visible position below the tab
- *    card) because it answers the rarest questions of the four tabs.
+ *    card) because it answers the rarest questions of the five tabs.
  */
 import React, { useMemo } from 'react';
 import {
@@ -46,8 +64,8 @@ import {
 import type { SourceStatus } from '../../../hooks/useGroupSource';
 import type { OktaUser, MemberMfaResult, MfaScanStatus } from '../../../../shared/types';
 
-/** Props for {@link GroupHealthPane}. */
-interface GroupHealthPaneProps {
+/** Props for {@link GroupInsightsPane}. */
+interface GroupInsightsPaneProps {
   /** The group's Okta id — used by the folded "About this group" section. */
   groupId: string;
   /** The group's member count, used for the attribute gate's cost estimate. */
@@ -62,7 +80,11 @@ interface GroupHealthPaneProps {
   onAnalyzeMembers: () => void;
   /** `false` when no Okta tab is connected, which disables both gate buttons. */
   canAnalyze?: boolean;
-  /** The group's feeding rules, intersected with the attribute breakdown to build each card. */
+  /**
+   * The group's feeding rules. Layered onto the attribute cards as an annotation
+   * — which attributes currently grant access — never as the filter deciding
+   * which cards exist.
+   */
   feedingRules: readonly AttributeReferencingRule[];
   /** Deep-links a dependent rule into the Rules tab. */
   onNavigateToRule?: (ruleId: string) => void;
@@ -87,10 +109,10 @@ interface GroupHealthPaneProps {
 }
 
 /**
- * Renders the attribute-health cards, the gated MFA-coverage scan, and the
+ * Renders the attribute-spread cards, the gated MFA-coverage scan, and the
  * folded "About this group" metadata for one group.
  */
-const GroupHealthPane: React.FC<GroupHealthPaneProps> = ({
+const GroupInsightsPane: React.FC<GroupInsightsPaneProps> = ({
   groupId,
   memberCount,
   members,
@@ -113,22 +135,32 @@ const GroupHealthPane: React.FC<GroupHealthPaneProps> = ({
 
   const summaries = useMemo(() => (members ? discoverAttributeBreakdowns(members) : []), [members]);
   const ruleIndex = useMemo(() => indexRulesByAttribute(feedingRules), [feedingRules]);
-  const cards = useMemo(
-    () =>
-      summaries
-        .map((summary) => ({ summary, rules: ruleIndex.get(summary.key) }))
-        .filter(
-          (card): card is { summary: AttributeSummary; rules: AttributeRuleRef[] } =>
-            !!card.rules && card.rules.length > 0,
-        ),
-    [summaries, ruleIndex],
-  );
+
+  /*
+    Every discovered attribute gets a card; the rule index only decides the
+    *order*. Rule-referenced attributes come first because those are the ones
+    granting access today — but the ones no rule reads are where undetected drift
+    lives, so they are below the fold, not absent.
+
+    `discoverAttributeBreakdowns` already orders by "common organizational
+    attributes first, then fill rate", and that order is preserved inside each
+    half: a stable partition, not a re-sort.
+  */
+  const cards = useMemo(() => {
+    const withRules: Array<{ summary: AttributeSummary; rules: AttributeRuleRef[] }> = [];
+    const withoutRules: Array<{ summary: AttributeSummary; rules: AttributeRuleRef[] }> = [];
+    for (const summary of summaries) {
+      const rules = ruleIndex.get(summary.key) ?? [];
+      (rules.length > 0 ? withRules : withoutRules).push({ summary, rules });
+    }
+    return [...withRules, ...withoutRules];
+  }, [summaries, ruleIndex]);
 
   return (
     <div className="space-y-6">
       <DetailSection
-        title="Attribute health"
-        description="Blank rate and value spread for every attribute a feeding rule in this group depends on."
+        title="Attribute spread"
+        description="Blank rate and value spread for every profile attribute across this group's members. The ones a feeding rule depends on come first."
         actions={
           memberStatus === 'idle' && memberCount > 0 ? (
             <Button
@@ -150,8 +182,8 @@ const GroupHealthPane: React.FC<GroupHealthPaneProps> = ({
         ) : memberStatus === 'idle' ? (
           <p className="text-sm text-neutral-500">
             Not analyzed yet. Reads all {memberCount.toLocaleString()} member
-            {memberCount === 1 ? '' : 's'} once to compute each dependent attribute&apos;s blank
-            rate and value spread.
+            {memberCount === 1 ? '' : 's'} once to compute every profile attribute&apos;s blank rate
+            and value spread.
           </p>
         ) : memberStatus === 'loading' ? (
           <LoadingSpinner size="sm" message="Analyzing members…" centered />
@@ -162,7 +194,8 @@ const GroupHealthPane: React.FC<GroupHealthPaneProps> = ({
           />
         ) : cards.length === 0 ? (
           <p className="text-sm text-neutral-500">
-            No feeding rule assigning into this group references a user attribute.
+            No profile attribute in this group has a meaningful spread — every one is either blank
+            or unique per member.
           </p>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -221,4 +254,4 @@ const GroupHealthPane: React.FC<GroupHealthPaneProps> = ({
   );
 };
 
-export default GroupHealthPane;
+export default GroupInsightsPane;

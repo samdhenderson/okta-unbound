@@ -10,11 +10,13 @@ import {
   getObservedFactorLabels,
   humanizeAttributeKey,
   memberMatchesMfaValue,
+  outlierValues,
   sortMembers,
   NONE_VALUE,
   OTHER_VALUE,
   RESERVED_DIMENSIONS,
   SOURCE_DIMENSION,
+  type AttributeSummary,
   type MemberFilter,
 } from './memberAnalytics';
 import type { OktaUser, MemberMfaResult } from '../../../shared/types';
@@ -417,5 +419,113 @@ describe('RESERVED_DIMENSIONS', () => {
     expect(keys).not.toContain('source');
     expect(keys).not.toContain('status');
     expect(RESERVED_DIMENSIONS.has('mfa')).toBe(true);
+  });
+});
+
+/*
+  `outlierValues` accuses a record of being wrong, so every case here is about
+  the guards rather than the happy path: what it must *not* flag.
+*/
+describe('outlierValues', () => {
+  const summaryOf = (
+    rows: Array<[string, number]>,
+    total: number,
+    blanks = 0,
+  ): AttributeSummary => {
+    const populated = rows.reduce((sum, [, count]) => sum + count, 0);
+    return {
+      key: 'department',
+      label: 'Department',
+      distinct: rows.length,
+      populated,
+      total,
+      fillRate: (populated / total) * 100,
+      rows: [
+        ...rows.map(([value, count]) => ({
+          value,
+          label: value,
+          count,
+          pct: (count / total) * 100,
+        })),
+        ...(blanks > 0
+          ? [{ value: NONE_VALUE, label: '(none)', count: blanks, pct: (blanks / total) * 100 }]
+          : []),
+      ],
+    };
+  };
+
+  it('flags the handful that diverge from a dominant house style', () => {
+    const summary = summaryOf(
+      [
+        ['Engineering', 94],
+        ['engineering', 3],
+        ['ENGINEERING', 3],
+      ],
+      100,
+    );
+    expect(outlierValues(summary)).toEqual(['engineering', 'ENGINEERING']);
+  });
+
+  it('never flags the dominant value itself', () => {
+    const summary = summaryOf(
+      [
+        ['Engineering', 94],
+        ['engineering', 6],
+      ],
+      100,
+    );
+    expect(outlierValues(summary)).not.toContain('Engineering');
+  });
+
+  it('flags nothing when there is no dominant value to diverge from', () => {
+    // A legitimate three-way split. Calling the 25% arm an error would be nonsense.
+    const summary = summaryOf(
+      [
+        ['Engineering', 40],
+        ['Sales', 35],
+        ['Support', 25],
+      ],
+      100,
+    );
+    expect(outlierValues(summary)).toEqual([]);
+  });
+
+  it('never flags blanks — an empty attribute is a different problem', () => {
+    const summary = summaryOf([['Engineering', 95]], 100, 5);
+    expect(outlierValues(summary)).toEqual([]);
+  });
+
+  it('never flags the aggregated Other bucket, which is not one value', () => {
+    const summary: AttributeSummary = {
+      key: 'department',
+      label: 'Department',
+      distinct: 9,
+      populated: 100,
+      total: 100,
+      rows: [
+        { value: 'Engineering', label: 'Engineering', count: 94, pct: 94 },
+        { value: OTHER_VALUE, label: 'Other', count: 6, pct: 6 },
+      ],
+      fillRate: 100,
+    };
+    expect(outlierValues(summary)).toEqual([]);
+  });
+
+  it('measures share against the populated rows, not the whole roster', () => {
+    // Half the group is blank; among the people who *do* have a value, one
+    // spelling dominates and one diverges. The blanks must not dilute that.
+    const summary = summaryOf(
+      [
+        ['Engineering', 48],
+        ['engineering', 2],
+      ],
+      100,
+      50,
+    );
+    expect(outlierValues(summary)).toEqual(['engineering']);
+  });
+
+  it('flags nothing when only one value exists', () => {
+    expect(outlierValues(summaryOf([['Engineering', 100]], 100))).toEqual([]);
   });
 });

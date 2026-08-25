@@ -354,13 +354,13 @@ describe('App tab lifetime', () => {
 
     // Same detail view, still open, on the same group. The group id itself now
     // lives in the Health tab's folded "About this group" section
-    // (`GroupHealthPane.tsx`, step 8 of the Group Detail rework) rather than
+    // (`GroupInsightsPane.tsx`, step 8 of the Group Detail rework) rather than
     // always-visible below the tab card — switch there before asserting on it.
     const detail = screen.getByTestId('group-detail-view');
     expect(detail).toBeVisible();
     await uev.click(
       within(detail).getByRole('tab', {
-        name: 'Health',
+        name: 'Insights',
       }),
     );
     expect(within(detail).getByText('g1')).toBeInTheDocument();

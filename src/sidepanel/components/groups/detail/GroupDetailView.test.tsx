@@ -7,8 +7,8 @@
  * rendering, which each already has its own suite
  * (`GroupMembersSection.test.tsx`,
  * `GroupRulesSection.test.tsx`; `GroupOverviewPane`, `GroupAccessSection`,
- * `GroupPushSection` and `GroupHealthPane` are pure-render leaves with only a
- * story, per ADR-0023). Every pane (including `GroupHealthPane`, which now
+ * `GroupPushSection` and `GroupInsightsPane` are pure-render leaves with only a
+ * story, per ADR-0023). Every pane (including `GroupInsightsPane`, which now
  * owns the folded `GroupMetadataSection` internally — see that pane's own
  * module doc) and the action bar's modal are stubbed test doubles here so a
  * tab switch reads as "which stub is mounted" — the same pattern
@@ -144,8 +144,8 @@ vi.mock('./GroupRulesSection', () => ({
 vi.mock('./GroupPushSection', () => ({
   default: () => <div data-testid="stub-push" />,
 }));
-vi.mock('./GroupHealthPane', () => ({
-  default: () => <div data-testid="stub-health" />,
+vi.mock('./GroupInsightsPane', () => ({
+  default: () => <div data-testid="stub-insights" />,
 }));
 vi.mock('./AddGroupMemberModal', () => ({
   default: () => <div data-testid="stub-add-modal" />,
@@ -183,7 +183,7 @@ describe('GroupDetailView', () => {
     expect(screen.queryByTestId('stub-access')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-push')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-rules')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('stub-health')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('stub-insights')).not.toBeInTheDocument();
   });
 
   /*
@@ -205,7 +205,7 @@ describe('GroupDetailView', () => {
     expect(screen.queryByTestId('stub-access')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-push')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-rules')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('stub-health')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('stub-insights')).not.toBeInTheDocument();
   });
 
   it('switches to the Access tab, rendering Access + Push and unmounting Overview/Members', async () => {
@@ -220,7 +220,7 @@ describe('GroupDetailView', () => {
     expect(screen.queryByTestId('stub-overview')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-members')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-rules')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('stub-health')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('stub-insights')).not.toBeInTheDocument();
   });
 
   it('switches to the Rules tab, rendering Rules and unmounting everything else', async () => {
@@ -235,17 +235,17 @@ describe('GroupDetailView', () => {
     expect(screen.queryByTestId('stub-members')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-access')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-push')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('stub-health')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('stub-insights')).not.toBeInTheDocument();
   });
 
-  it('switches to the Health tab, rendering GroupHealthPane and unmounting everything else', async () => {
+  it('switches to the Insights tab, rendering GroupInsightsPane and unmounting everything else', async () => {
     const user = userEvent.setup();
     render(<GroupDetailView group={makeGroup()} targetTabId={1} />);
 
-    await user.click(screen.getByRole('tab', { name: 'Health' }));
+    await user.click(screen.getByRole('tab', { name: 'Insights' }));
 
-    expect(screen.getByRole('tab', { name: 'Health' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('stub-health')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Insights' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('stub-insights')).toBeInTheDocument();
     expect(screen.queryByTestId('stub-overview')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-members')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-access')).not.toBeInTheDocument();
@@ -260,7 +260,7 @@ describe('GroupDetailView', () => {
       'Members',
       'Access',
       'Rules',
-      'Health',
+      'Insights',
     ]);
   });
 

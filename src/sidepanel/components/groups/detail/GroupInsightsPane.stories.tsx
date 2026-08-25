@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
-import GroupHealthPane from './GroupHealthPane';
+import { expect, fn } from 'storybook/test';
+import GroupInsightsPane from './GroupInsightsPane';
 import type { FeedingRule } from '../../../hooks/useGroupSource';
 import type { OktaUser, MemberMfaResult } from '../../../../shared/types';
 
@@ -50,20 +50,28 @@ const mfaResults = new Map<string, MemberMfaResult>(
 );
 
 const meta = {
-  title: 'Groups/GroupHealthPane',
-  component: GroupHealthPane,
+  title: 'Groups/GroupInsightsPane',
+  component: GroupInsightsPane,
   tags: ['autodocs'],
   parameters: {
     docs: {
       description: {
         component:
-          "Group Detail's fourth tab: attribute-health cards (blank rate + which feeding " +
-          'rule(s) depend on it — the intersection of `discoverAttributeBreakdowns` and ' +
-          '`indexRulesByAttribute`), a gated opt-in MFA-coverage scan (never auto-runs), and ' +
+          "Group Detail's fifth tab: attribute-spread cards (blank rate, value distribution, " +
+          'and drift markers, from `discoverAttributeBreakdowns`), a gated opt-in MFA-coverage ' +
+          'scan (never auto-runs), and ' +
           'the group\'s own reference facts folded into a closed "About this group" section. ' +
           "Fully presentational — the caller owns every load (`useGroupSource`'s member " +
           'analysis, `useMemberMfaScan`) and passes its state through, mirroring how every ' +
           'other Group Detail section/pane is composed by `GroupDetailView`.\n\n' +
+          '**Not called "Health".** That names a verdict, and this pane delivers the material ' +
+          'a reader draws one from — and will hold more of it over time (staleness, orphaned ' +
+          'assignments, rule overlap). Naming it for the subject is what lets those land here ' +
+          'without the label going stale.\n\n' +
+          '**Every attribute gets a card; rules only decide the order.** The rule index used to ' +
+          'be a *filter*, so a card existed only for attributes some feeding rule referenced — ' +
+          'which hid the drift worth catching most. Rule-referenced attributes still sort first, ' +
+          'because those are the ones granting access today.\n\n' +
           '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs)',
       },
     },
@@ -81,7 +89,9 @@ const meta = {
     canAnalyze: {
       description: '`false` when no Okta tab is connected; disables both gate buttons.',
     },
-    feedingRules: { description: 'The feeding rules intersected with the attribute breakdown.' },
+    feedingRules: {
+      description: 'The feeding rules, layered onto the cards as an annotation and a sort key.',
+    },
     mfaResults: { description: 'Per-member MFA scan results, or `null` before a scan has run.' },
     scanStatus: { description: 'Current MFA scan lifecycle status.' },
   },
@@ -104,7 +114,7 @@ const meta = {
     created: new Date('2022-03-01T12:00:00Z'),
     lastUpdated: new Date('2025-11-14T09:30:00Z'),
   },
-} satisfies Meta<typeof GroupHealthPane>;
+} satisfies Meta<typeof GroupInsightsPane>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -127,14 +137,25 @@ export const RosterError: Story = {
   args: { memberStatus: 'error', error: 'Members could not be read.' },
 };
 
-/** Roster loaded: attribute cards render for `department` and `title` — both referenced by a feeding rule. */
+/** Roster loaded: a card per discovered attribute, rule-referenced ones first. */
 export const AttributeCards: Story = {
   args: { members, memberStatus: 'done' },
 };
 
-/** Roster loaded, but no feeding rule references a user attribute — no cards. */
+/**
+ * No feeding rule references any user attribute — and the cards render anyway.
+ *
+ * This is the case the old rule-filtered grid rendered as "No feeding rule
+ * assigning into this group references a user attribute", i.e. nothing. It is
+ * precisely where undetected drift lives: an attribute nobody's rule reads today
+ * is one somebody writes a rule against tomorrow.
+ */
 export const NoDependentAttributes: Story = {
   args: { members, memberStatus: 'done', feedingRules: [] },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('department')).toBeVisible();
+    await expect(canvas.queryByText(/Depended on by/)).toBeNull();
+  },
 };
 
 /** Roster loaded, MFA scan idle — the trigger is enabled (below `MFA_AUTO_THRESHOLD`). */

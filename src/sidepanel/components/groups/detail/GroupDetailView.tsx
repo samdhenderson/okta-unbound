@@ -12,7 +12,7 @@
  * {@link GroupMembersSection}, stacked), **Access**
  * ({@link GroupAccessSection} + {@link GroupPushSection}, stacked),
  * **Rules** ({@link GroupRulesSection}), and **Health**
- * ({@link GroupHealthPane} — attribute blank-rate/rule-dependency cards, a
+ * ({@link GroupInsightsPane} — attribute spread and drift cards, a
  * gated MFA-coverage scan, and the group's own reference facts folded into a
  * closed `CollapsibleSection`). `activeTab` is owned here (`useState`,
  * default `'overview'` — `'members'` when `autoAnalyze` is set; see that
@@ -35,7 +35,7 @@
  * rules that merely reference it,
  * {@link sidepanel/hooks/useGroupAccessGrants.useGroupAccessGrants} for what
  * membership actually grants (assigned apps, admin roles), and
- * {@link sidepanel/hooks/useMemberMfaScan.useMemberMfaScan} for the Health tab's
+ * {@link sidepanel/hooks/useMemberMfaScan.useMemberMfaScan} for the Insights tab's
  * opt-in MFA-coverage scan (scoped to the same roster the Members tab's gate
  * loads) — and hands their state to pure sections/panes.
  *
@@ -62,7 +62,7 @@ import GroupMembersSection from './GroupMembersSection';
 import GroupAccessSection from './GroupAccessSection';
 import GroupRulesSection from './GroupRulesSection';
 import GroupPushSection from './GroupPushSection';
-import GroupHealthPane from './GroupHealthPane';
+import GroupInsightsPane from './GroupInsightsPane';
 import GroupActionBar from './GroupActionBar';
 import AddGroupMemberModal from './AddGroupMemberModal';
 import { Tabs, type TabItem } from '../../shared';
@@ -78,7 +78,7 @@ import { OKTA_PAGE_SIZE } from '../../../../shared/utils/oktaPagination';
 import type { GroupSummary } from '../../../../shared/types';
 
 /** Which tabbed pane of the body (below the action bar) is on screen. */
-type GroupDetailTab = 'overview' | 'members' | 'access' | 'rules' | 'health';
+type GroupDetailTab = 'overview' | 'members' | 'access' | 'rules' | 'insights';
 
 /**
  * 5 pages of the group-members walk — the auto-load/manual-gate boundary for
@@ -96,7 +96,7 @@ const GROUP_DETAIL_TABS: TabItem[] = [
   { key: 'members', label: 'Members' },
   { key: 'access', label: 'Access' },
   { key: 'rules', label: 'Rules' },
-  { key: 'health', label: 'Health' },
+  { key: 'insights', label: 'Insights' },
 ];
 
 /** Props for {@link GroupDetailView}. */
@@ -173,7 +173,7 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
     source.resummarize,
   );
 
-  // The opt-in MFA-coverage scan, shared by the Health tab's coverage card and the
+  // The opt-in MFA-coverage scan, shared by the Insights tab's coverage card and the
   // Members tab's explorer — one scan, one cache entry, whichever tab triggers it.
   // Scoped to the exact roster the Members tab's gate loads
   // (`membersSection.members`) rather than fetching its own — `[]` before that
@@ -360,9 +360,9 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
               </div>
             )}
 
-            {activeTab === 'health' && (
-              <div role="tabpanel" aria-label="Health">
-                <GroupHealthPane
+            {activeTab === 'insights' && (
+              <div role="tabpanel" aria-label="Insights">
+                <GroupInsightsPane
                   groupId={group.id}
                   memberCount={group.memberCount}
                   members={membersSection.members}

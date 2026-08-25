@@ -1,7 +1,7 @@
 /**
  * @module sidepanel/components/groups/detail/GroupMfaCoverageSection
  * @description The MFA-coverage trigger, result summary, and large-group
- * confirmation gate for {@link module:sidepanel/components/groups/detail/GroupHealthPane}.
+ * confirmation gate for {@link module:sidepanel/components/groups/detail/GroupInsightsPane}.
  *
  * Purely presentational — the caller owns `useMemberMfaScan` and passes its
  * state and controls through. Same shape as `MemberExplorer.tsx`'s MFA panel

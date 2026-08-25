@@ -580,3 +580,61 @@ export function sortMembers(
   });
   return sorted;
 }
+
+/**
+ * Share of the dominant value at or above which an attribute is treated as
+ * having a house style worth diverging from.
+ *
+ * Below it there is no standard: an attribute split 40/35/25 across three
+ * departments is a legitimate spread, and calling the 25% one an outlier would
+ * be nonsense.
+ */
+export const OUTLIER_DOMINANT_SHARE = 60;
+
+/**
+ * Share at or below which a value is a candidate outlier, once a dominant value
+ * exists.
+ */
+export const OUTLIER_MAX_SHARE = 10;
+
+/**
+ * The values in one attribute's distribution that look like drift rather than
+ * spread: a handful of people whose value diverges from an otherwise dominant
+ * house style — `Engineering` in 94 rows and `engineering` in 3.
+ *
+ * Deliberately conservative, because a false positive here accuses a correct
+ * record of being wrong:
+ *
+ * - **A dominant value must exist** ({@link OUTLIER_DOMINANT_SHARE}). Without
+ *   one there is no standard to diverge from, and a genuine three-way split
+ *   would otherwise report its smallest arm as an error.
+ * - **Blanks are never outliers.** An empty attribute is a different problem
+ *   with a different fix, and the card already states the fill rate.
+ * - **The `Other` bucket is never an outlier.** It is an aggregate of values the
+ *   report did not name, so it cannot be one value that is wrong.
+ * - **The dominant value itself is never an outlier**, even in the degenerate
+ *   case where it is also below the small-share threshold.
+ *
+ * @param summary - One attribute's precomputed distribution.
+ * @returns The canonical values that look like drift, in the order they appear
+ * in the report. Empty when nothing qualifies — which is the common case.
+ */
+export function outlierValues(summary: AttributeSummary): string[] {
+  const real = summary.rows.filter((row) => row.value !== NONE_VALUE && row.value !== OTHER_VALUE);
+  if (real.length < 2) return [];
+
+  // Shares are of *all* members, blanks included; the comparison here is against
+  // the populated rows only, so a half-blank attribute is not disqualified from
+  // having a house style among the people who do have a value.
+  const populated = summary.populated;
+  if (populated === 0) return [];
+
+  const shareOf = (count: number): number => (count / populated) * 100;
+  let dominant = real[0];
+  for (const row of real) if (dominant && row.count > dominant.count) dominant = row;
+  if (!dominant || shareOf(dominant.count) < OUTLIER_DOMINANT_SHARE) return [];
+
+  return real
+    .filter((row) => row !== dominant && shareOf(row.count) <= OUTLIER_MAX_SHARE)
+    .map((row) => row.value);
+}

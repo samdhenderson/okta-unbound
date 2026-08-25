@@ -35,7 +35,7 @@ const meta = {
     docs: {
       description: {
         component:
-          "The gated, opt-in MFA-coverage trigger for GroupHealthPane's Health tab. Never " +
+          "The gated, opt-in MFA-coverage trigger for GroupInsightsPane's Insights tab. Never " +
           'auto-runs — `MfaScanButton` starts (or confirms) the scan, and above ' +
           '`MFA_AUTO_THRESHOLD` (500) members a `Modal` confirmation gate stands between the ' +
           'trigger and the scan, since it costs one API call per member. Once complete, the one ' +

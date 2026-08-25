@@ -376,10 +376,10 @@ describe('GroupsTab sub-navigation', () => {
     // RETARGETED (Group Health pane, step 8 of the Group Detail rework):
     // `GroupMetadataSection` is no longer a standalone section below the tab
     // card — it is folded into the Health tab's "About this group"
-    // `CollapsibleSection` (`GroupHealthPane.tsx`). Switch there before
+    // `CollapsibleSection` (`GroupInsightsPane.tsx`). Switch there before
     // asserting on the group id; the section stays mounted (though visually
     // collapsed) once its tab is active, so no extra "expand" click is needed.
-    await uev.click(tablist.getByRole('tab', { name: 'Health' }));
+    await uev.click(tablist.getByRole('tab', { name: 'Insights' }));
     expect(detail.getByText('g1')).toBeInTheDocument();
     expect(detail.getByRole('button', { name: 'Copy ID' })).toBeInTheDocument();
 

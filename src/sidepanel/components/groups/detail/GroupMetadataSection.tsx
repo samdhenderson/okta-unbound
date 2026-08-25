@@ -16,7 +16,7 @@
  * the one that used to be rendered here was always `undefined` outside fixtures.
  *
  * Body-only: it answers the rarest questions of the four Group Detail tabs, so its
- * one caller, {@link module:sidepanel/components/groups/detail/GroupHealthPane},
+ * one caller, {@link module:sidepanel/components/groups/detail/GroupInsightsPane},
  * folds this component's *content* into a `CollapsibleSection` titled "About this
  * group" (default closed) rather than its own always-visible card — this component
  * carries no section chrome of its own so it nests there cleanly.
