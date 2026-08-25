@@ -42,6 +42,7 @@ import {
   type UserStatusVariant,
 } from '../shared';
 import Icon from '../overview/shared/Icon';
+import { userDisplayName } from '../../../shared/utils/userDisplay';
 import { EXCLUDED_ATTRIBUTES, dimensionTitle } from './memberAnalytics';
 
 /** Props for {@link MemberRow}. */
@@ -58,6 +59,13 @@ interface MemberRowProps {
   expanded: boolean;
   /** Called with this member's id when the disclosure control is pressed. */
   onToggle: (userId: string) => void;
+  /**
+   * Request removal of this member from the group. **Omitted means the control
+   * is not rendered at all** — never rendered `disabled` (ADR-0039). Surfaces
+   * where a membership write would be rejected (`APP_GROUP`, `BUILT_IN`) leave
+   * it out and explain why once, above the list, rather than per row.
+   */
+  onRemove?: (user: OktaUser) => void;
 }
 
 /** Per-variant badge color classes (token palette, keyed by the shared variant map). */
@@ -101,10 +109,13 @@ const MemberRow: React.FC<MemberRowProps> = ({
   oktaOrigin,
   expanded,
   onToggle,
+  onRemove,
 }) => {
   const badgeClass = VARIANT_CLASSES[userStatusVariant(user.status)];
-  const fullName =
-    `${user.profile.firstName || ''} ${user.profile.lastName || ''}`.trim() || user.profile.login;
+  // The shared helper, not a local `first + last || login`: the remove control's
+  // accessible name is what a caller's test pins, and it has to be the same
+  // string the header shows.
+  const fullName = userDisplayName(user);
 
   // `useId`, never the user id: an Okta id is untrusted data and does not belong
   // in a DOM id (the same reasoning as `users/GroupMembershipRow`).
@@ -178,6 +189,20 @@ const MemberRow: React.FC<MemberRowProps> = ({
           <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
             {user.status}
           </span>
+          {onRemove && (
+            /* In the header, beside the chevron — not inside the disclosure. A
+               destructive verb a reader has to expand a row to find is worse UX
+               than one in plain sight, and the row is no longer an anchor, so
+               there is no `nested-interactive` cost to a second control here. */
+            <IconButton
+              label={`Remove ${fullName} from this group`}
+              variant="danger"
+              size="sm"
+              onClick={() => onRemove(user)}
+            >
+              <Icon type="trash" size="sm" />
+            </IconButton>
+          )}
           <IconButton
             label={`${expanded ? 'Hide' : 'Show'} details for ${fullName}`}
             variant="ghost"

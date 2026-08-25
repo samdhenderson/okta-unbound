@@ -8,6 +8,20 @@
  * `memberAnalytics`. Composes the search bar, filter panel, MFA scan panel,
  * composition reports, member list, and the details/copy modals. MFA scan results
  * are owned by the parent overview and passed in.
+ *
+ * ## Two surfaces, one explorer
+ *
+ * `overview/GroupOverview` and the Group Detail Members tab both mount this. Every
+ * prop the detail surface needs beyond the overview's set is **optional, and its
+ * absence is the overview's correct behaviour** — not a degraded one:
+ *
+ * - No `memberSource` ⇒ no meter, no source pills. The overview never loads
+ *   feeding rules, and labelling an unclassified roster "Manual" would manufacture
+ *   a fact (`users/GroupMembershipsList` states the same rule for the sibling case).
+ * - No `onRemoveMember` ⇒ rows render no remove control. Never a disabled one
+ *   (ADR-0039).
+ *
+ * So adding a surface never costs the other one a dead control.
  */
 import React, { useState, useMemo, useCallback } from 'react';
 import type { OktaUser, MemberMfaResult, MfaScanStatus } from '../../../shared/types';
@@ -21,6 +35,9 @@ import CopyMembersModal from './CopyMembersModal';
 import CompositionReports from './CompositionReports';
 import BreakdownDetailsModal from './BreakdownDetailsModal';
 import MemberList from './MemberList';
+import MemberSourceFilterBar from './MemberSourceFilterBar';
+import type { MemberSourceIndex } from '../../../shared/membership/memberSourceIndex';
+import type { MemberSourceBucket } from '../groups/memberSourceBuckets';
 import {
   type BreakdownRow,
   type Dimension,
@@ -33,10 +50,30 @@ import {
   sortMembers,
   getObservedFactorLabels,
   dimensionTitle,
+  SOURCE_DIMENSION,
 } from './memberAnalytics';
 
 /** Per-factor filter intent: unset, require-present, or require-absent. */
 type FactorMode = 'off' | 'has' | 'missing';
+
+/**
+ * Everything the explorer needs to show — and filter by — where each member's
+ * membership came from.
+ *
+ * One bundle rather than flat props because the feature is present or absent as a
+ * whole: an index with no segments has nothing to draw, and segments with no index
+ * would draw a meter whose pills could not resolve to anyone.
+ */
+export interface MemberSourceContext {
+  /** Per-member source classification, from `buildMemberSourceIndex`. */
+  index: MemberSourceIndex;
+  /**
+   * The exclusive display segments, in render order, from
+   * `toMemberSourceSegments`. The caller owns this because how many rules earn a
+   * named segment is a presentation decision the index deliberately does not make.
+   */
+  segments: MemberSourceBucket[];
+}
 
 /** Props for {@link MemberExplorer}. */
 interface MemberExplorerProps {
@@ -61,6 +98,16 @@ interface MemberExplorerProps {
   onCancelConfirm: () => void;
   /** Okta org origin for member Admin Console links (null when unknown). */
   oktaOrigin?: string | null;
+  /**
+   * Per-member membership source. Absent ⇒ no meter and no source pills — see the
+   * module doc for why that is the overview's correct rendering, not a fallback.
+   */
+  memberSource?: MemberSourceContext;
+  /**
+   * Request removal of a member from the group. Absent ⇒ rows render no remove
+   * control (ADR-0039: an unimplemented verb is omitted, not shipped `disabled`).
+   */
+  onRemoveMember?: (user: OktaUser) => void;
 }
 
 /** Number of member rows revealed per page / "Load more". */
@@ -79,6 +126,8 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
   onRequestConfirm,
   onCancelConfirm,
   oktaOrigin,
+  memberSource,
+  onRemoveMember,
 }) => {
   const [query, setQuery] = useState('');
   const [filters, setFilters] = useState<MemberFilter[]>([]);
@@ -98,9 +147,38 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
   const factorLabels = useMemo(() => getObservedFactorLabels(mfaResults), [mfaResults]);
   const mfaRows = useMemo(() => computeMfaBreakdown(members, mfaResults), [members, mfaResults]);
 
+  /*
+    Resolve the meter's aggregated tail.
+
+    `memberSourceIndex` deliberately assigns nobody to `otherRules`: which rules
+    get folded into it depends on how many named segments the meter drew, which is
+    presentation and not a fact about a member. The surface that did the
+    aggregating is the one that can resolve it — so the `rule:<id>` buckets the
+    segments did *not* name are unioned here into the `otherRules` key the pill
+    filters on. Everything else passes through untouched.
+  */
+  const sourceBuckets = useMemo(() => {
+    if (!memberSource) return null;
+    const named = new Set(memberSource.segments.map((segment) => segment.key));
+    const merged = new Map<string, ReadonlySet<string>>(memberSource.index.userIdsByBucket);
+    const tail = new Set<string>();
+    for (const [key, userIds] of memberSource.index.userIdsByBucket) {
+      if (key.startsWith('rule:') && !named.has(key)) {
+        for (const userId of userIds) tail.add(userId);
+      }
+    }
+    if (tail.size > 0) merged.set('otherRules', tail);
+    return merged;
+  }, [memberSource]);
+
+  const activeSourceKeys = useMemo(
+    () => new Set(filters.filter((f) => f.dimension === SOURCE_DIMENSION).map((f) => f.value)),
+    [filters],
+  );
+
   const filtered = useMemo(
-    () => filterMembers(members, debouncedQuery, filters, mfaResults),
-    [members, debouncedQuery, filters, mfaResults],
+    () => filterMembers(members, debouncedQuery, filters, mfaResults, sourceBuckets),
+    [members, debouncedQuery, filters, mfaResults, sourceBuckets],
   );
   const sorted = useMemo(
     () => sortMembers(filtered, sortBy, sortDesc, mfaResults),
@@ -165,6 +243,16 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
     });
   }, []);
 
+  const handleSourceToggle = useCallback(
+    (key: string, label: string) => toggleFilter(SOURCE_DIMENSION, key, `Source: ${label}`),
+    [toggleFilter],
+  );
+
+  const clearSourceFilters = useCallback(
+    () => setFilters((prev) => prev.filter((f) => f.dimension !== SOURCE_DIMENSION)),
+    [],
+  );
+
   const removeFilter = useCallback(
     (filter: MemberFilter) => setFilters((prev) => prev.filter((f) => f !== filter)),
     [],
@@ -208,6 +296,19 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
 
   return (
     <div className="space-y-4">
+      {/* Where these members came from — proportion at a glance, and a filter per
+          slice. Above the search bar because it is the question this roster
+          answers first: not "who is in here" but "why". */}
+      {memberSource && (
+        <MemberSourceFilterBar
+          segments={memberSource.segments}
+          activeKeys={activeSourceKeys}
+          onToggle={handleSourceToggle}
+          onClearAll={clearSourceFilters}
+          total={memberSource.index.byUserId.size}
+        />
+      )}
+
       {/* Search + Filters toggle */}
       <div className="flex gap-2">
         <div className="flex-1">
@@ -305,6 +406,7 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
           visibleCount={visibleCount}
           onLoadMore={loadMore}
           oktaOrigin={oktaOrigin}
+          onRemoveMember={onRemoveMember}
         />
       </div>
 

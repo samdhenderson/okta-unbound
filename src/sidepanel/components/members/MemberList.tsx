@@ -40,6 +40,11 @@ interface MemberListProps {
   onLoadMore: () => void;
   /** Okta org origin for per-member Admin Console links (null when unknown). */
   oktaOrigin?: string | null;
+  /**
+   * Request removal of a member. Passed straight through to
+   * {@link MemberRow.onRemove} — omitted means no row renders a remove control.
+   */
+  onRemoveMember?: (user: OktaUser) => void;
 }
 
 /** Number of additional rows revealed per "Load more". */
@@ -58,6 +63,7 @@ const MemberList: React.FC<MemberListProps> = ({
   visibleCount,
   onLoadMore,
   oktaOrigin,
+  onRemoveMember,
 }) => {
   const setStaggerRef = useStaggerReveal();
 
@@ -129,6 +135,7 @@ const MemberList: React.FC<MemberListProps> = ({
               oktaOrigin={oktaOrigin}
               expanded={openUserIds.has(user.id)}
               onToggle={toggleRow}
+              onRemove={onRemoveMember}
             />
           ))}
         </div>

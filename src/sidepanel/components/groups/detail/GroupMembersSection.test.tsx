@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import GroupMembersSection from './GroupMembersSection';
@@ -27,6 +27,17 @@ const base = {
   status: 'idle' as const,
   error: null,
   onAnalyze: () => {},
+  // No breakdown/index: the source meter and its filter pills are absent, which
+  // is the honest rendering for a roster nothing has classified. The cases below
+  // are about the gate, the roster and the remove confirm, none of which depend
+  // on attribution.
+  breakdown: null,
+  memberSourceIndex: null,
+  mfaResults: null,
+  scanStatus: 'idle' as const,
+  onRunScan: () => {},
+  onRequestConfirm: () => {},
+  onCancelConfirm: () => {},
   removeTarget: null as OktaUser | null,
   onRequestRemove: () => {},
   onCancelRemove: () => {},
@@ -34,6 +45,23 @@ const base = {
   removeStatus: 'idle' as const,
   removeError: null,
 };
+
+// The roster is `MemberExplorer`, whose list constructs an IntersectionObserver
+// for auto-paging on mount; jsdom ships none. A no-op stub is enough — paging
+// behaviour is `MemberList`'s own test, not this one's.
+beforeAll(() => {
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+    },
+  );
+});
 
 describe('GroupMembersSection', () => {
   it('gates behind a load prompt before the analysis has run, not an empty list', () => {
@@ -209,10 +237,21 @@ describe('GroupMembersSection', () => {
     });
   });
 
-  it('truncates very large rosters and points at Export members for the full list', () => {
+  /*
+    Supersedes 'truncates very large rosters and points at Export members for the
+    full list'. That case pinned `DISPLAY_CAP = 200` — a hard slice that hid
+    members 201 and up behind a sentence sending the reader to a CSV. The cap is
+    deleted, not relaxed: the explorer's list mounts a page at a time and grows on
+    scroll, so a 205-member roster is fully reachable in place. What is worth
+    pinning is that the roster no longer *stops*, so this asserts the count the
+    footer reports rather than the number of rows currently mounted.
+  */
+  it('does not cap a large roster — every member stays reachable', () => {
     const many = Array.from({ length: 205 }, (_, i) => makeUser(`00uFAKE${i}`, 'User', `${i}`));
     render(<GroupMembersSection {...base} status="done" members={many} memberCount={205} />);
 
-    expect(screen.getByText(/Showing the first 200 of 205 members/)).toBeInTheDocument();
+    expect(screen.queryByText(/Showing the first 200/)).not.toBeInTheDocument();
+    expect(screen.getByText(/of 205$/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Load more/ })).toBeInTheDocument();
   });
 });

@@ -172,12 +172,14 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
     source.resummarize,
   );
 
-  // The Health tab's opt-in MFA-coverage scan. Scoped to the exact roster the
-  // Members tab's gate loads (`membersSection.members`) rather than fetching its
-  // own — `[]` before that roster exists is inert, since `GroupHealthPane` only
-  // ever wires its trigger once the roster has loaded (see that component's
-  // `rosterReady` gate). Owned here, not inside the pane, so it stays a sibling
-  // of every other read-only load this container composes.
+  // The opt-in MFA-coverage scan, shared by the Health tab's coverage card and the
+  // Members tab's explorer — one scan, one cache entry, whichever tab triggers it.
+  // Scoped to the exact roster the Members tab's gate loads
+  // (`membersSection.members`) rather than fetching its own — `[]` before that
+  // roster exists is inert, since neither surface wires a trigger until the roster
+  // has loaded. Owned here, not inside a pane, so it stays a sibling of every
+  // other read-only load this container composes, and so the two tabs cannot each
+  // start their own.
   const mfaScan = useMemberMfaScan({
     groupId: group.id,
     members: membersSection.members ?? [],
@@ -303,6 +305,13 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                   error={source.error}
                   onAnalyze={source.analyzeMembers}
                   canAnalyze={targetTabId !== null}
+                  breakdown={source.breakdown}
+                  memberSourceIndex={source.memberSourceIndex}
+                  mfaResults={mfaScan.mfaResults}
+                  scanStatus={mfaScan.scanStatus}
+                  onRunScan={mfaScan.runScan}
+                  onRequestConfirm={mfaScan.requestConfirm}
+                  onCancelConfirm={mfaScan.cancelConfirm}
                   removeTarget={membersSection.removeTarget}
                   onRequestRemove={membersSection.requestRemove}
                   onCancelRemove={membersSection.cancelRemove}

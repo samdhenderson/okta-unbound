@@ -1,7 +1,7 @@
 /**
  * @module sidepanel/components/groups/detail/GroupMembersSection
- * @description The Group Detail view's roster: displays members and, per row, a
- * confirm-gated remove.
+ * @description The Group Detail view's roster: the shared member explorer behind
+ * this page's gated read, plus a confirm-gated per-row remove.
  *
  * Piggybacks on the same gated read {@link GroupMembershipSourceSection} already
  * offers — the roster this section lists is the exact `OktaUser[]` the member-source
@@ -10,6 +10,26 @@
  * (mirroring the source section's own idle state) rather than an empty list — an
  * empty list would read as "this group has no members," which is not the same
  * unresolved fact as "not read yet."
+ *
+ * ## What this component is now
+ *
+ * A **gate**, and nothing else. It used to hand-roll its own roster: a private
+ * two-line row, a hard `DISPLAY_CAP = 200` slice, and a sentence pointing at Export
+ * for the rest. Meanwhile `members/MemberExplorer` — search, faceted filters, MFA
+ * scanning, composition reports, windowed paging, sorting — was already mounted one
+ * tab over on the Overview, and already imported from this folder in three other
+ * places. So the roster is the explorer, and what stays here is the part the
+ * explorer must not learn:
+ *
+ * - **The `SourceStatus` ladder.** That vocabulary belongs to `useGroupSource`.
+ *   Teaching a component two surfaces share about one surface's loading hook is how
+ *   a shared component stops being shareable.
+ * - **The read-only reason**, below.
+ * - **The remove confirmation**, because the modal outlives the row that opened it.
+ *
+ * The 200-row cap is gone, not relaxed: `MemberList` mounts a page at a time and
+ * grows on scroll, so DOM size is capped by the viewport rather than by a number
+ * that silently hid members 201 and up.
  *
  * Adding a member does not live here — it's the action bar's
  * {@link module:sidepanel/components/groups/detail/GroupActionBar}
@@ -29,35 +49,32 @@
  * Okta rejects a direct membership write on both — `APP_GROUP` membership is
  * imported from the app that owns the group (`useOktaApi/groupCleanup.ts` already
  * refuses to touch one), and `BUILT_IN` groups (e.g. Everyone) are managed by Okta
- * itself. Rather than let a write fail at the API and surface a raw error, this
- * section's per-row remove control is hidden entirely and replaced with a
- * one-line explanation of why — that sentence is the actual value here, since
- * "why can't I edit this group?" is the question a reader would otherwise have
- * to guess at from a disabled button with no tooltip.
+ * itself. Rather than let a write fail at the API and surface a raw error, the
+ * per-row remove control is **not rendered at all** — `onRemoveMember` is simply
+ * withheld from the explorer (ADR-0039) — and replaced with a one-line explanation
+ * of why. That sentence is the actual value here, since "why can't I edit this
+ * group?" is the question a reader would otherwise have to guess at from a disabled
+ * button with no tooltip.
  *
  * Deliberately silent on whether a rule re-adds a removed member: the API
  * reference's claim that it does is unverified, and the Admin Console reportedly
  * writes a rule exclusion instead. Neither sentence ships until one is confirmed.
  */
-import React from 'react';
-import {
-  AlertMessage,
-  Button,
-  DetailSection,
-  EmptyState,
-  IconButton,
-  ListRow,
-  Modal,
-  Skeleton,
-} from '../../shared';
-import Icon from '../../overview/shared/Icon';
-import type { GroupSummary, OktaUser } from '../../../../shared/types';
+import React, { useMemo } from 'react';
+import { AlertMessage, Button, DetailSection, EmptyState, Modal, Skeleton } from '../../shared';
+import MemberExplorer, { type MemberSourceContext } from '../../members/MemberExplorer';
+import { toMemberSourceSegments } from '../memberSourceBuckets';
+import type {
+  GroupSummary,
+  MemberMfaResult,
+  MfaScanStatus,
+  OktaUser,
+} from '../../../../shared/types';
+import type { MemberSourceBreakdown } from '../../../../shared/membership/groupSource';
+import type { MemberSourceIndex } from '../../../../shared/membership/memberSourceIndex';
 import type { SourceStatus } from '../../../hooks/useGroupSource';
 import type { MemberWriteStatus } from './useGroupMembersSection';
 import { userDisplayName } from '../../../../shared/utils/userDisplay';
-
-/** Members beyond this count are not rendered — see {@link GroupMembersSection}. */
-const DISPLAY_CAP = 200;
 
 /** One-line explanation for why a group type's membership can't be edited here. */
 const READ_ONLY_REASON: Partial<Record<GroupSummary['type'], string>> = {
@@ -83,6 +100,26 @@ export interface GroupMembersSectionProps {
   /** `false` when no Okta tab is connected, which disables every gate/write. */
   canAnalyze?: boolean;
 
+  /**
+   * The analyzed manual-vs-rule split, for the explorer's source meter. `null`
+   * before the analysis has produced one — the meter and the source filter pills
+   * are then absent rather than empty.
+   */
+  breakdown: MemberSourceBreakdown | null;
+  /** Per-member source classification, from the same analysis. */
+  memberSourceIndex: MemberSourceIndex | null;
+
+  /** Per-member MFA scan results, or null before a scan has run. */
+  mfaResults: Map<string, MemberMfaResult> | null;
+  /** Current MFA scan lifecycle status. */
+  scanStatus: MfaScanStatus;
+  /** Start the MFA scan. */
+  onRunScan: () => void;
+  /** Request the MFA scan confirmation gate (large groups). */
+  onRequestConfirm: () => void;
+  /** Dismiss the MFA scan confirmation gate. */
+  onCancelConfirm: () => void;
+
   /** The member awaiting a remove confirmation, or `null`. */
   removeTarget: OktaUser | null;
   onRequestRemove: (user: OktaUser) => void;
@@ -92,37 +129,10 @@ export interface GroupMembersSectionProps {
   removeError: string | null;
 }
 
-/** One member row: name/email/login, plus a remove button unless the section is read-only. */
-const MemberListRow: React.FC<{
-  user: OktaUser;
-  readOnly: boolean;
-  onRequestRemove: (user: OktaUser) => void;
-}> = ({ user, readOnly, onRequestRemove }) => (
-  <ListRow as="li" density="compact">
-    <div className="flex items-center justify-between gap-3">
-      <div className="min-w-0">
-        <div className="truncate text-sm font-semibold text-neutral-900">
-          {userDisplayName(user)}
-        </div>
-        <div className="truncate text-xs text-neutral-600">{user.profile.email}</div>
-      </div>
-      {!readOnly && (
-        <IconButton
-          label={`Remove ${userDisplayName(user)} from this group`}
-          variant="danger"
-          size="sm"
-          onClick={() => onRequestRemove(user)}
-        >
-          <Icon type="trash" size="sm" />
-        </IconButton>
-      )}
-    </div>
-  </ListRow>
-);
-
 /**
- * Renders the group's roster with a per-row, confirm-gated remove, gated behind
- * the same member-source analysis {@link GroupMembershipSourceSection} offers.
+ * Renders the group's roster through the shared member explorer, gated behind the
+ * same member-source analysis {@link GroupMembershipSourceSection} offers, with a
+ * per-row confirm-gated remove.
  */
 const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
   groupType,
@@ -132,6 +142,13 @@ const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
   error,
   onAnalyze,
   canAnalyze = true,
+  breakdown,
+  memberSourceIndex,
+  mfaResults,
+  scanStatus,
+  onRunScan,
+  onRequestConfirm,
+  onCancelConfirm,
   removeTarget,
   onRequestRemove,
   onCancelRemove,
@@ -141,9 +158,16 @@ const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
 }) => {
   const hasMembers = memberCount > 0;
   const readOnlyReason = READ_ONLY_REASON[groupType];
-  const readOnly = readOnlyReason !== undefined;
-  const visibleMembers = members ? members.slice(0, DISPLAY_CAP) : [];
-  const truncated = (members?.length ?? 0) > DISPLAY_CAP;
+
+  /*
+    Index *and* breakdown, or neither. The explorer draws the meter from the
+    segments and resolves its pills through the index; one without the other would
+    either be a meter nothing can filter or a filter with nothing to label it.
+  */
+  const memberSource = useMemo<MemberSourceContext | undefined>(() => {
+    if (!breakdown || !memberSourceIndex) return undefined;
+    return { index: memberSourceIndex, segments: toMemberSourceSegments(breakdown) };
+  }, [breakdown, memberSourceIndex]);
 
   return (
     <DetailSection
@@ -180,35 +204,20 @@ const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
           message={{ text: error || 'Failed to load members.', type: 'danger' }}
           action={{ label: 'Retry', onClick: onAnalyze }}
         />
+      ) : !members || members.length === 0 ? (
+        <EmptyState icon="users" title="No members" description="This group's roster is empty." />
       ) : (
-        <div className="space-y-3">
-          {visibleMembers.length === 0 ? (
-            <EmptyState
-              icon="users"
-              title="No members"
-              description="This group's roster is empty."
-            />
-          ) : (
-            <>
-              <ul className="space-y-1.5">
-                {visibleMembers.map((user) => (
-                  <MemberListRow
-                    key={user.id}
-                    user={user}
-                    readOnly={readOnly}
-                    onRequestRemove={onRequestRemove}
-                  />
-                ))}
-              </ul>
-              {truncated && (
-                <p className="text-xs text-neutral-500">
-                  Showing the first {DISPLAY_CAP} of {members?.length.toLocaleString()} members. Use
-                  Export members above for the full list.
-                </p>
-              )}
-            </>
-          )}
-        </div>
+        <MemberExplorer
+          members={members}
+          mfaResults={mfaResults}
+          scanStatus={scanStatus}
+          onRunScan={onRunScan}
+          onRequestConfirm={onRequestConfirm}
+          onCancelConfirm={onCancelConfirm}
+          memberSource={memberSource}
+          /* Withheld, not disabled, on the read-only group types (ADR-0039). */
+          onRemoveMember={readOnlyReason ? undefined : onRequestRemove}
+        />
       )}
 
       <Modal
