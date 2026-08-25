@@ -150,9 +150,18 @@ account; the mastering signal locks exactly the accounts where a write would be
 overwritten or is not ours to make, which is a narrower and more accurate lock than a
 blanket deny.
 
+**The cohort source has since landed too.** The Group Detail Members tab is now the
+shared member explorer with search, source pills and attribute/MFA filters, and the
+Insights tab reports the attribute spread over _every_ browseable attribute with
+outlier values marked. That gives the bulk editor a better cohort than paste-and-resolve
+ever would: **the filtered set on screen**, entered from Insights → attribute spread →
+pick an outlier value → "Normalize N users". Paste/search cohort resolution stays a
+fallback for users who are not in one group, not the primary entry point.
+
 What remains for the bulk build:
 
-- **Cohort resolution** — paste/search users → resolved chips, reusing `BulkTargetList`.
+- **Cohort resolution** — the Members tab's active filter as the primary source;
+  paste/search → resolved chips (reusing `BulkTargetList`) as the fallback.
 - **Preflight over many users** — one `PreflightSummary` running the existing
   per-attribute gate across the cohort (N updatable / M skipped-locked + reasons,
   capturing old values), then a confirm modal restating the counts.
@@ -161,11 +170,35 @@ What remains for the bulk build:
   through `csvUtils.escapeCSV`) and the audit entry.
 - _Enhancement:_ value **templating** (find-replace / derive-from-existing) with a
   per-user before→after table.
-- **Unverified, and blocking nothing yet:** the sparse-patch merge behaviour of
-  `POST /api/v1/users/{id}` has not been checked against a real org. Confirm it before
-  fanning the write out across a cohort; the fallback lives in `profileOperations.ts`.
 - Done when: an admin can change one field across a resolved cohort, locked profiles are
   auto-skipped with reasons, the change is previewed/confirmed/audited/undoable, green.
+
+**Two hard blockers, both of which must be closed inside the bulk commit:**
+
+1. **Sparse-patch merge behaviour is unverified.** `POST /api/v1/users/{id}` has not
+   been checked against a real org, and it is marked `U` in the `okta-api` index.
+   Confirm it _before_ fanning the write out across a cohort; the fallback (send the
+   full profile, strip everything not `READ_WRITE`) is one function body in
+   `profileOperations.ts`. **This one needs a live org — it cannot be closed from the
+   repo.**
+2. **The undo history cap breaks naive bulk logging.** `undoManager.ts` sets
+   `MAX_UNDO_SIZE = 50`, so one entry per user means an 80-user run evicts its own
+   early entries and most of the run stops being revertable. Bulk needs **one
+   run-scoped entry** holding per-user before-values, which means a new `ActionType` —
+   and [ADR-0035](./adr/0035-the-first-profile-write.md) §5 built the forcing function
+   on purpose: `NOT_UNDOABLE` is an exhaustive `Record`, not a `switch` with a
+   `default:`, so adding the member **is a compile error until someone writes down what
+   undoing it means**. The existing caps (25 attributes × 1024 chars) are per _entry_,
+   so a run-scoped entry needs its own cohort cap — over-cap users recorded but marked
+   unrestorable, never silently truncated (ADR-0035 §4).
+
+**The bulk write needs its own ADR.** ADR-0035 governs the _first_ profile write, of one
+user, from a field the admin is looking at. This is the first **many**-user write, driven
+by a client-side filter the admin cannot audit row by row. The ADR has to answer: what
+the confirm shows (exact `from → to` per user, capped and paginated); cancellation
+semantics mid-run; what lands in the undo log; and the hard refusal — **never write an
+attribute a feeding rule reads without naming the rule and the membership change it would
+cause** (ADR-0036).
 
 ---
 

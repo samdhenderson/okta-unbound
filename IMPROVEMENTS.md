@@ -367,3 +367,69 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** None to write. Medium once implemented — the design commits the
   storage schema and the sync budget to a shape later levels must live inside.
 - **Status:** research:awaiting-review
+
+### I-013 · Create a feeding rule from the Group Detail action bar
+
+- **Category:** feature-completeness
+- **Priority:** P2
+- **Size:** M
+- **Files:** `src/sidepanel/components/groups/detail/GroupActionBar.tsx`,
+  `src/sidepanel/components/groups/detail/GroupDetailView.tsx`,
+  `src/sidepanel/hooks/useOktaApi/ruleWrites.ts` (the POST already exists),
+  `src/shared/membership/blastRadius.ts` (read-only, for the consequence copy)
+- **Verified:** 2026-08-24 — the group-detail strip ships _Export members_,
+  _Add_ and _Compare_, and has **no disclosure tier**; `ruleWrites.ts` already
+  holds the create call, wired only from the Rules tab.
+- **Problem:** The Rules tab now shows, in place, both rule relationships a
+  group has — and the most common answer to "no rule assigns users to this
+  group" is that someone wants to create one. Today that means leaving the
+  group, going to the Rules tab, and rebuilding the context by hand. The verb
+  the page is missing is the one its own empty state implies.
+- **Done when:** The group-detail action bar offers _Create feeding rule_
+  **behind More**, not in the row — ADR-0039 puts it there because it changes
+  state with no symmetric undo: deleting a rule does **not** un-grant the
+  memberships it already made. It ships with a confirm `Modal` stating that
+  consequence in plain language, and the confirm respects ADR-0036 — a new
+  rule's blast radius is a **prediction**, never asserted. This gives the strip
+  its first tier, so `ActionBar`'s `expansion` slot gets its first group-side
+  consumer. Co-located stories, axe-clean; the empty state on the Rules tab
+  gains a companion assertion beside its existing one rather than a rewrite.
+- **Risk:** Medium. It is the first group-level _write_ on this rung that is
+  not a membership change, and the first thing on the page that cannot be
+  undone by pressing the opposite button.
+- **Status:** open
+
+### I-014 · Normalize an attribute across the filtered members
+
+- **Category:** feature-completeness
+- **Priority:** P1
+- **Size:** L
+- **Files:** `docs/features-plan.md` item C (the full inventory of what exists
+  and what remains lives there, not duplicated here);
+  `docs/adr/0044-the-first-many-user-write.md` (to be created);
+  `src/shared/storage/undoManager.ts`;
+  `src/sidepanel/hooks/useOktaApi/profileOperations.ts`
+- **Verified:** 2026-08-24 — the Members tab's filter and the Insights tab's
+  attribute spread both shipped on `feat/group-detail-parity`; no bulk write
+  exists.
+- **Problem:** The Group Detail rework ends one step short of acting on what it
+  found. Insights now reports the attribute spread across every browseable
+  attribute and marks outlier values — a `department` spelled four ways is
+  visible for the first time — and the Members tab can filter down to exactly
+  the people holding a given value. Nothing can then fix them. The whole point
+  of surfacing config drift is being able to correct it, and the single-user
+  editor (ADR-0035) already shipped every piece of machinery the many-user
+  version needs.
+- **Done when:** An admin can pick an outlier value from the Insights attribute
+  spread, review the affected users, and normalize the attribute across them,
+  with the run previewed, confirmed, audited and revertable. **Both blockers in
+  `docs/features-plan.md` item C are closed first** — the sparse-patch merge
+  behaviour verified against a real org, and the undo cap redesigned as one
+  run-scoped entry rather than one per user. Ships with the ADR named above at
+  Status: Accepted.
+- **Risk:** High, and the reason this is its own item rather than a commit on
+  the parity branch. It is the app's first many-user write, driven by a
+  client-side filter the admin cannot audit row by row, and one of its two
+  blockers **cannot be closed from the repo** — verifying the endpoint needs a
+  live org.
+- **Status:** blocked:sparse-patch-merge-unverified
