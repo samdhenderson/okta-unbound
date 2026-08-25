@@ -115,6 +115,8 @@ export interface GroupMembersSectionProps {
   onAnalyze: () => void;
   /** `false` when no Okta tab is connected, which disables every gate/write. */
   canAnalyze?: boolean;
+  /** Okta org origin; without it a member row's disclosure offers no deep link. */
+  oktaOrigin?: string | null;
 
   /**
    * The analyzed manual-vs-rule split, for the explorer's source meter. `null`
@@ -169,6 +171,7 @@ const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
   error,
   onAnalyze,
   canAnalyze = true,
+  oktaOrigin,
   breakdown,
   memberSourceIndex,
   onNavigateToRule,
@@ -251,6 +254,7 @@ const GroupMembersSection: React.FC<GroupMembersSectionProps> = ({
       ) : (
         <MemberExplorer
           members={members}
+          oktaOrigin={oktaOrigin}
           mfaResults={mfaResults}
           scanStatus={scanStatus}
           onRunScan={onRunScan}

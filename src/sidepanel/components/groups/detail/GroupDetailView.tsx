@@ -105,6 +105,12 @@ interface GroupDetailViewProps {
   group: GroupSummary;
   /** Connected Okta tab id; reads are disabled and the gate button greys out when null. */
   targetTabId: number | null;
+  /**
+   * Okta org origin, from the connected tab. Every "View in Okta" affordance on
+   * this page is built from it plus a validated entity id; without it the links
+   * are absent rather than broken.
+   */
+  oktaOrigin?: string | null;
   /** Deep-links a rule in the Rules tab (from either rule list, or a contribution). */
   onNavigateToRule?: (ruleId: string) => void;
   /**
@@ -147,6 +153,7 @@ interface GroupDetailViewProps {
 const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   group,
   targetTabId,
+  oktaOrigin,
   onNavigateToRule,
   autoAnalyze = false,
   isActive = true,
@@ -306,6 +313,7 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
             {activeTab === 'members' && (
               <div role="tabpanel" aria-label="Members">
                 <GroupMembersSection
+                  oktaOrigin={oktaOrigin}
                   groupType={group.type}
                   memberCount={group.memberCount}
                   members={membersSection.members}
@@ -335,6 +343,7 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
             {activeTab === 'access' && (
               <div className="space-y-6" role="tabpanel" aria-label="Access">
                 <GroupAccessSection
+                  oktaOrigin={oktaOrigin}
                   apps={accessGrants.apps}
                   appsStatus={accessGrants.appsStatus}
                   appsError={accessGrants.appsError}
@@ -350,6 +359,7 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
             {activeTab === 'rules' && (
               <div role="tabpanel" aria-label="Rules">
                 <GroupRulesSection
+                  oktaOrigin={oktaOrigin}
                   assigningRules={source.feedingRules}
                   assigningStatus={source.rulesStatus}
                   assigningError={source.error}

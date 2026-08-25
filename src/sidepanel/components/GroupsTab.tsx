@@ -537,6 +537,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
             <GroupDetailView
               group={detailGroup}
               targetTabId={targetTabId}
+              oktaOrigin={oktaOrigin}
               onNavigateToRule={onNavigateToRule}
               autoAnalyze={autoAnalyzeGroupId === detailGroup.id}
               isActive={isActive}

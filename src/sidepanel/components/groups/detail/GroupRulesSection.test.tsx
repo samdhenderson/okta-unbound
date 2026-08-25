@@ -174,6 +174,20 @@ describe('GroupRulesSection', () => {
     expect(screen.queryByRole('button', { name: /Activate Rule/ })).not.toBeInTheDocument();
   });
 
+  /*
+    The org origin reaches the card or the link is absent — never a dead "View in
+    Okta" pointing at nothing. `GroupDetailView` did not pass one at all until this
+    was wired, so every deep link on the page was silently unrendered.
+  */
+  it('offers the Okta deep link only when an org origin is known', async () => {
+    const { rerender } = render(<GroupRulesSection {...base} />);
+    await expandRule(listUnder(ASSIGNS), 'All Engineers');
+    expect(screen.queryByRole('link', { name: /View in Okta/ })).not.toBeInTheDocument();
+
+    rerender(<GroupRulesSection {...base} oktaOrigin="https://example.okta.com" />);
+    expect(screen.getAllByRole('link', { name: /View in Okta/ }).length).toBeGreaterThan(0);
+  });
+
   it("shows each rule's Okta status verbatim", () => {
     render(<GroupRulesSection {...base} />);
     expect(screen.getByText('ACTIVE')).toBeInTheDocument();
