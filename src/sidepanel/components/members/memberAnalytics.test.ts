@@ -13,6 +13,8 @@ import {
   sortMembers,
   NONE_VALUE,
   OTHER_VALUE,
+  RESERVED_DIMENSIONS,
+  SOURCE_DIMENSION,
   type MemberFilter,
 } from './memberAnalytics';
 import type { OktaUser, MemberMfaResult } from '../../../shared/types';
@@ -332,5 +334,88 @@ describe('computeMfaBreakdown', () => {
 
   it('returns no rows when there is no scan', () => {
     expect(computeMfaBreakdown(members, null)).toEqual([]);
+  });
+});
+
+describe('filterMembers by membership source', () => {
+  // Ids per bucket, exactly the shape `buildMemberSourceIndex` produces.
+  const buckets = new Map<string, ReadonlySet<string>>([
+    ['rule:r1', new Set(['alice', 'bob'])],
+    ['direct', new Set(['carol'])],
+    ['unattributed', new Set(['dave'])],
+  ]);
+
+  const sourceFilter = (value: string): MemberFilter => ({
+    dimension: SOURCE_DIMENSION,
+    value,
+    label: value,
+  });
+
+  it('selects the members in the chosen bucket', () => {
+    const result = filterMembers(members, '', [sourceFilter('direct')], null, buckets);
+    expect(result.map((m) => m.id)).toEqual(['carol']);
+  });
+
+  it('ORs within the dimension, like any other facet', () => {
+    const result = filterMembers(
+      members,
+      '',
+      [sourceFilter('direct'), sourceFilter('unattributed')],
+      null,
+      buckets,
+    );
+    expect(result.map((m) => m.id)).toEqual(['carol', 'dave']);
+  });
+
+  it('ANDs across dimensions', () => {
+    const result = filterMembers(
+      members,
+      '',
+      [sourceFilter('rule:r1'), { dimension: 'title', value: 'Manager', label: 'Manager' }],
+      null,
+      buckets,
+    );
+    expect(result.map((m) => m.id)).toEqual(['bob']);
+  });
+
+  it('still applies the free-text query', () => {
+    const result = filterMembers(members, 'alice', [sourceFilter('rule:r1')], null, buckets);
+    expect(result.map((m) => m.id)).toEqual(['alice']);
+  });
+
+  it('matches nobody for a bucket the index does not carry', () => {
+    // Not the same as an empty bucket: `multiRule` is absent because nobody is
+    // in it, and "nobody" is the honest answer either way.
+    expect(filterMembers(members, '', [sourceFilter('multiRule')], null, buckets)).toEqual([]);
+  });
+
+  it('matches nobody — never everybody — when no index was supplied', () => {
+    // The state should be unreachable (source pills only render once the
+    // analysis has run). If it is reached, an unevaluable constraint satisfying
+    // everyone would leave a pill looking active while changing nothing.
+    expect(filterMembers(members, '', [sourceFilter('direct')], null, null)).toEqual([]);
+    expect(filterMembers(members, '', [sourceFilter('direct')], null)).toEqual([]);
+  });
+
+  it('is unaffected when no source filter is active', () => {
+    expect(filterMembers(members, '', [], null, null)).toHaveLength(members.length);
+  });
+});
+
+describe('RESERVED_DIMENSIONS', () => {
+  it('keeps a profile attribute from colliding with a built-in dimension', () => {
+    // An org really can define a custom `source` attribute. Discovering it would
+    // produce a facet whose filters are indistinguishable from the
+    // membership-source pills, since `Dimension` is a bare string.
+    const colliding = [
+      user('a', { source: 'Workday', status: 'Contractor' } as Partial<OktaUser['profile']>),
+      user('b', { source: 'Manual', status: 'Contractor' } as Partial<OktaUser['profile']>),
+    ];
+
+    const keys = discoverAttributeBreakdowns(colliding).map((summary) => summary.key);
+
+    expect(keys).not.toContain('source');
+    expect(keys).not.toContain('status');
+    expect(RESERVED_DIMENSIONS.has('mfa')).toBe(true);
   });
 });

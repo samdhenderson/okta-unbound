@@ -59,6 +59,28 @@ export const DIMENSION_TITLES: Record<string, string> = {
  * per person (names, emails, phone numbers, IDs). Their "spread" carries no signal,
  * so they are never offered as a composition facet.
  */
+/**
+ * Dimension names the filter grammar has already claimed, and which profile
+ * attribute discovery must therefore never materialise as a facet.
+ *
+ * `Dimension` is a bare `string`, so a discovered attribute and a built-in
+ * dimension are indistinguishable once they are in a {@link MemberFilter}. An
+ * org with a custom profile attribute literally named `source` would otherwise
+ * produce a facet whose filters collide with the membership-source pills —
+ * selecting one would silently filter by the other. `status` had the same hole
+ * before `source` existed; it is closed here too rather than left as the next
+ * person's surprise.
+ *
+ * Note `status` is *also* a legitimate dimension (`getMemberDimensionValue`
+ * special-cases it to the account status). Reserving it removes only the
+ * duplicate *profile* attribute of the same name, which is exactly the
+ * ambiguous case — where one bare name means two things, the built-in wins.
+ */
+export const RESERVED_DIMENSIONS = new Set<string>(['mfa', 'status', 'source']);
+
+/** The dimension a membership-source filter uses. */
+export const SOURCE_DIMENSION = 'source';
+
 export const EXCLUDED_ATTRIBUTES = new Set<string>([
   'login',
   'email',
@@ -297,7 +319,7 @@ export function discoverAttributeBreakdowns(
     const profile = member.profile;
     if (!profile) continue;
     for (const key in profile) {
-      if (EXCLUDED_ATTRIBUTES.has(key)) continue;
+      if (EXCLUDED_ATTRIBUTES.has(key) || RESERVED_DIMENSIONS.has(key)) continue;
       const value = coerceScalar(profile[key]);
       if (value === '') continue; // never materialize keys that are only ever empty
       let map = counts.get(key);
@@ -450,6 +472,9 @@ function matchesQuery(user: OktaUser, lowerQuery: string): boolean {
  * @param query - Free-text search over name/email/login (trimmed, case-insensitive).
  * @param filters - Active facet filters.
  * @param mfaResults - Per-member scan results, needed to evaluate mfa filters.
+ * @param sourceBuckets - Member ids per membership-source bucket, from
+ * `shared/membership/memberSourceIndex`. Needed only to evaluate
+ * {@link SOURCE_DIMENSION} filters; omit on surfaces that do not offer them.
  * @returns The subset of members matching the query and all filter dimensions.
  */
 export function filterMembers(
@@ -457,6 +482,7 @@ export function filterMembers(
   query: string,
   filters: MemberFilter[],
   mfaResults: Map<string, MemberMfaResult> | null,
+  sourceBuckets?: ReadonlyMap<string, ReadonlySet<string>> | null,
 ): OktaUser[] {
   const lowerQuery = query.trim().toLowerCase();
 
@@ -477,7 +503,22 @@ export function filterMembers(
     if (!matchesQuery(member, lowerQuery)) return false;
 
     for (const [dimension, values] of byDimension) {
-      if (dimension === 'mfa') {
+      if (dimension === SOURCE_DIMENSION) {
+        // Set membership, not a predicate: `otherRules` folds an arbitrary set
+        // of rules together and a predicate would have to be told which ones.
+        // OR within the dimension, like any other facet.
+        //
+        // With no index this matches **nothing**, deliberately. The state should
+        // be unreachable — source pills only render once the analysis has run —
+        // but the safe direction for an unevaluable constraint is to satisfy no
+        // one rather than everyone. Matching everything would leave a pill
+        // looking active while changing nothing, which is a false statement
+        // about what the reader is looking at; an empty list is visibly wrong
+        // and says so.
+        if (!sourceBuckets) return false;
+        const inAny = Array.from(values).some((value) => sourceBuckets.get(value)?.has(member.id));
+        if (!inAny) return false;
+      } else if (dimension === 'mfa') {
         // Each factor constraint is an independent requirement (AND), so
         // "Has SMS" + "Missing Okta Verify" means both must hold.
         const result = mfaResults?.get(member.id);
