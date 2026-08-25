@@ -215,6 +215,11 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
       // the work is genuinely a batch; a single request still goes through
       // `makeApiRequest`.
       runOperation: coreApi.runOperation,
+      // Audit attribution for side-panel hooks that write their own
+      // `AuditLogEntry`. One validated, per-tab-cached `/api/v1/users/me`
+      // lookup returning a discriminated `Actor` — never hand-roll that
+      // request again, and never substitute a placeholder identity (D-013b).
+      getCurrentUser: coreApi.getCurrentUser,
 
       // Group operations
       getAllGroupMembers: groupMemberOps.getAllGroupMembers,

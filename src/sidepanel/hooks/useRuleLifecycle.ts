@@ -8,13 +8,20 @@
  * undo metadata, current-user attribution, and post-mutation reload behavior.
  *
  * @remarks §8: routes through the rate-limited scheduler path — the current-user
- * lookup via `makeApiRequest('/api/v1/users/me')` and the mutation via
+ * lookup via the facade's `getCurrentUser()` and the mutation via
  * `activateGroupRule`/`deactivateGroupRule` (both `useOktaApi` ops that post
  * through the background `ApiScheduler`). No direct `chrome.tabs.sendMessage`.
+ *
+ * Audit attribution comes from `coreApi.getCurrentUser()` — the validated,
+ * per-tab-cached lookup — and is written verbatim: a resolved admin's email, or
+ * `performedBy: null` with `actorResolution: 'unavailable'`. There is no
+ * placeholder identity, and an unresolved actor never blocks the rule change
+ * (`D-013`/`D-013b`).
  */
 
 import { useCallback } from 'react';
 import type { FormattedRule, AuditLogEntry } from '../../shared/types';
+import type { Actor } from './useOktaApi/core';
 import { logAction } from '../../shared/undoManager';
 import { auditStore } from '../../shared/storage/auditStore';
 import { createLogger } from '../../shared/utils/logger';
@@ -80,7 +87,7 @@ export function useRuleLifecycle({
 }: UseRuleLifecycleOptions): UseRuleLifecycleReturn {
   // §8: own a useOktaApi slice so both the current-user lookup and the mutation
   // route through the rate-limited scheduler instead of a direct content call.
-  const { makeApiRequest, activateGroupRule, deactivateGroupRule } = useOktaApi({
+  const { getCurrentUser, activateGroupRule, deactivateGroupRule } = useOktaApi({
     targetTabId: targetTabId ?? null,
   });
 
@@ -90,22 +97,20 @@ export function useRuleLifecycle({
 
       const cfg = LIFECYCLE[kind];
       const startTime = Date.now();
-      let currentUserEmail = 'unknown@unknown.com';
+      /**
+       * The acting admin, or `null` if the lookup had not run yet when the
+       * catch below built its entry. `getCurrentUser` reports its own failures
+       * as `kind: 'unavailable'` and never throws, so every audit entry below
+       * records what we actually knew.
+       */
+      let actor: Actor | null = null;
 
       try {
         log.debug(`${cfg.gerund} rule:`, ruleId);
 
-        // Get current user for audit logging
-        try {
-          const userResponse = await makeApiRequest('/api/v1/users/me', {
-            reason: 'Resolve current admin for rule lifecycle audit attribution',
-          });
-          if (userResponse.success && userResponse.data) {
-            currentUserEmail = userResponse.data.profile?.email || 'unknown@unknown.com';
-          }
-        } catch (err) {
-          log.error('Failed to get current user:', err);
-        }
+        // Resolve the acting admin for audit attribution (validated + per-tab
+        // cached inside the facade; no placeholder identity on failure).
+        actor = await getCurrentUser();
 
         // Find the rule to get its name for undo logging
         const rule = rules.find((r) => r.id === ruleId);
@@ -132,7 +137,8 @@ export function useRuleLifecycle({
             action: cfg.auditAction,
             groupId: groupIds[0] || 'multiple',
             groupName: groupNames.length > 0 ? groupNames.join(', ') : ruleName,
-            performedBy: currentUserEmail,
+            performedBy: actor?.kind === 'resolved' ? actor.email : null,
+            actorResolution: actor?.kind === 'resolved' ? 'resolved' : 'unavailable',
             affectedUsers: [],
             result: 'success',
             details: {
@@ -158,7 +164,8 @@ export function useRuleLifecycle({
             action: cfg.auditAction,
             groupId: groupIds[0] || 'multiple',
             groupName: groupNames.length > 0 ? groupNames.join(', ') : ruleName,
-            performedBy: currentUserEmail,
+            performedBy: actor?.kind === 'resolved' ? actor.email : null,
+            actorResolution: actor?.kind === 'resolved' ? 'resolved' : 'unavailable',
             affectedUsers: [],
             result: 'failed',
             details: {
@@ -188,7 +195,8 @@ export function useRuleLifecycle({
           action: cfg.auditAction,
           groupId: groupIds[0] || 'unknown',
           groupName: groupNames.length > 0 ? groupNames.join(', ') : 'Unknown',
-          performedBy: currentUserEmail,
+          performedBy: actor?.kind === 'resolved' ? actor.email : null,
+          actorResolution: actor?.kind === 'resolved' ? 'resolved' : 'unavailable',
           affectedUsers: [],
           result: 'failed',
           details: {
@@ -204,7 +212,7 @@ export function useRuleLifecycle({
         });
       }
     },
-    [targetTabId, rules, reload, onError, makeApiRequest, activateGroupRule, deactivateGroupRule],
+    [targetTabId, rules, reload, onError, getCurrentUser, activateGroupRule, deactivateGroupRule],
   );
 
   const activateRule = useCallback(

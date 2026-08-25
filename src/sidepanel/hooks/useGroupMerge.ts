@@ -5,10 +5,13 @@
  * Loads a {@link MergePlan} preview (members + feeding rules for the survivor and
  * sources), then executes it: copy distinct source members into the survivor and
  * empty each source, all through the rate-limited scheduler with live progress.
- * Every run records an audit entry (attributed to the signed-in admin resolved
- * via `/api/v1/users/me`) and a bulk undo action per affected group so the
- * operation can be inspected and reversed. Emptying is blocked when a source is
- * fed by an active rule.
+ * Every run records two audit entries (both attributed to the signed-in admin,
+ * resolved through the facade's `getCurrentUser()`) and a bulk undo action per
+ * affected group so the operation can be inspected and reversed. When the actor
+ * cannot be resolved, both entries record `performedBy: null` /
+ * `actorResolution: 'unavailable'` rather than a placeholder identity, and the
+ * merge still runs (`D-013`/`D-013b`). Emptying is blocked when a source is fed
+ * by an active rule.
  */
 
 import { useCallback, useState } from 'react';
@@ -68,7 +71,13 @@ function toBulkUserInfo(u: OktaUser) {
  */
 export function useGroupMerge(targetTabId?: number): UseGroupMergeReturn {
   const api = useOktaApi({ targetTabId: targetTabId ?? null });
-  const { getAllGroupMembers, getGroupRulesForGroup, makeApiRequest, removeUserFromGroup } = api;
+  const {
+    getAllGroupMembers,
+    getGroupRulesForGroup,
+    getCurrentUser,
+    makeApiRequest,
+    removeUserFromGroup,
+  } = api;
   const { startProgress, updateProgress, completeProgress } = useProgress();
 
   const [phase, setPhase] = useState<MergePhase>('idle');
@@ -125,20 +134,10 @@ export function useGroupMerge(targetTabId?: number): UseGroupMergeReturn {
     let done = 0;
     const res: MergeResults = { copied: 0, copyFailed: 0, removed: 0, removeFailed: 0 };
 
-    // Resolve the signed-in admin for audit attribution (same pattern as
-    // useRuleLifecycle). Falls back to a labeled placeholder only if the
-    // `/api/v1/users/me` lookup fails.
-    let currentUserEmail = 'unknown@unknown.com';
-    try {
-      const userResponse = await makeApiRequest('/api/v1/users/me', {
-        reason: 'Resolve current admin for merge audit attribution',
-      });
-      if (userResponse.success && userResponse.data) {
-        currentUserEmail = userResponse.data.profile?.email || 'unknown@unknown.com';
-      }
-    } catch (err) {
-      log.error('Failed to get current user:', err);
-    }
+    // Resolve the signed-in admin for audit attribution through the facade: one
+    // validated, per-tab-cached `/api/v1/users/me` lookup that reports its own
+    // failures as `kind: 'unavailable'` instead of inventing an identity.
+    const actor = await getCurrentUser();
 
     startProgress('Merging groups', `Copying members into ${plan.survivor.name}…`, total, false);
 
@@ -208,7 +207,9 @@ export function useGroupMerge(targetTabId?: number): UseGroupMergeReturn {
 
       // Audit trail: one add entry (survivor) + one aggregate remove entry (sources).
       const auditBase = {
-        performedBy: currentUserEmail,
+        performedBy: actor.kind === 'resolved' ? actor.email : null,
+        actorResolution:
+          actor.kind === 'resolved' ? ('resolved' as const) : ('unavailable' as const),
         affectedUsers: [] as string[],
       };
       const addEntry: AuditLogEntry = {
@@ -254,7 +255,15 @@ export function useGroupMerge(targetTabId?: number): UseGroupMergeReturn {
     } finally {
       completeProgress();
     }
-  }, [plan, makeApiRequest, removeUserFromGroup, startProgress, updateProgress, completeProgress]);
+  }, [
+    plan,
+    getCurrentUser,
+    makeApiRequest,
+    removeUserFromGroup,
+    startProgress,
+    updateProgress,
+    completeProgress,
+  ]);
 
   const reset = useCallback(() => {
     setPhase('idle');

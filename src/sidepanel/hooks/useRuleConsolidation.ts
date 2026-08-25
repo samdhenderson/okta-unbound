@@ -8,8 +8,10 @@
  * union of target groups, **activate** it (if any source was active), and only
  * then **retire** (delete) the source rule(s). If the create or activate step
  * fails, no source is touched. Every run is audited (attributed to the signed-in
- * admin resolved via `/api/v1/users/me`) and captures the retired rules'
- * definitions for undo.
+ * admin, resolved through the facade's `getCurrentUser()`; an unresolvable actor
+ * is recorded as `performedBy: null` / `actorResolution: 'unavailable'` and
+ * never as a placeholder identity — `D-013`/`D-013b`) and captures the retired
+ * rules' definitions for undo.
  */
 
 import { useCallback, useState } from 'react';
@@ -113,7 +115,7 @@ export function useRuleConsolidation({
     deleteGroupRule,
     activateGroupRule,
     deactivateGroupRule,
-    makeApiRequest,
+    getCurrentUser,
   } = api;
 
   const [phase, setPhase] = useState<ConsolidationPhase>('idle');
@@ -207,20 +209,10 @@ export function useRuleConsolidation({
     setError(null);
     const startTime = Date.now();
 
-    // Resolve the signed-in admin for audit attribution (same pattern as
-    // useRuleLifecycle). Falls back to a labeled placeholder only if the
-    // `/api/v1/users/me` lookup fails.
-    let currentUserEmail = 'unknown@unknown.com';
-    try {
-      const userResponse = await makeApiRequest('/api/v1/users/me', {
-        reason: 'Resolve current admin for consolidation audit attribution',
-      });
-      if (userResponse.success && userResponse.data) {
-        currentUserEmail = userResponse.data.profile?.email || 'unknown@unknown.com';
-      }
-    } catch (err) {
-      log.error('Failed to get current user:', err);
-    }
+    // Resolve the signed-in admin for audit attribution through the facade: one
+    // validated, per-tab-cached `/api/v1/users/me` lookup that reports its own
+    // failures as `kind: 'unavailable'` instead of inventing an identity.
+    const actor = await getCurrentUser();
 
     try {
       // 1) Create the consolidated rule (INACTIVE). Nothing is retired if this fails.
@@ -289,7 +281,8 @@ export function useRuleConsolidation({
         action: 'activate_rule',
         groupId: preview.resultingGroupIds[0] || 'multiple',
         groupName: created.rule.name,
-        performedBy: currentUserEmail,
+        performedBy: actor.kind === 'resolved' ? actor.email : null,
+        actorResolution: actor.kind === 'resolved' ? 'resolved' : 'unavailable',
         affectedUsers: [],
         result: retireFailed === 0 ? 'success' : 'partial',
         details: {
@@ -324,7 +317,7 @@ export function useRuleConsolidation({
     deactivateGroupRule,
     deleteGroupRule,
     getRawGroupRule,
-    makeApiRequest,
+    getCurrentUser,
     onError,
     reload,
   ]);

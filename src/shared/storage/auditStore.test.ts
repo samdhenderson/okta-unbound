@@ -37,6 +37,7 @@ describe('AuditStore', () => {
         groupId: 'test-group',
         groupName: 'Test Group',
         performedBy: 'admin@example.com',
+        actorResolution: 'resolved',
         affectedUsers: ['user1', 'user2'],
         result: 'success',
         details: {
@@ -63,6 +64,7 @@ describe('AuditStore', () => {
         groupId: 'test-group',
         groupName: 'Test Group',
         performedBy: 'admin@example.com',
+        actorResolution: 'resolved',
         affectedUsers: [],
         result: 'success',
         details: {
@@ -89,6 +91,7 @@ describe('AuditStore', () => {
           groupId: 'group1',
           groupName: 'Group 1',
           performedBy: 'admin@example.com',
+          actorResolution: 'resolved',
           affectedUsers: ['user1'],
           result: 'success',
           details: {
@@ -105,6 +108,7 @@ describe('AuditStore', () => {
           groupId: 'group1',
           groupName: 'Group 1',
           performedBy: 'admin@example.com',
+          actorResolution: 'resolved',
           affectedUsers: [],
           result: 'success',
           details: {
@@ -135,6 +139,7 @@ describe('AuditStore', () => {
           groupId: 'group1',
           groupName: 'Group 1',
           performedBy: 'admin@example.com',
+          actorResolution: 'resolved',
           affectedUsers: [],
           result: 'success',
           details: {
@@ -164,6 +169,7 @@ describe('AuditStore', () => {
           groupId: 'group1',
           groupName: 'Group 1',
           performedBy: 'admin@example.com',
+          actorResolution: 'resolved',
           affectedUsers: [],
           result: 'success' as const,
           details: {
@@ -196,6 +202,7 @@ describe('AuditStore', () => {
           groupId: 'group1',
           groupName: 'Group 1',
           performedBy: 'admin@example.com',
+          actorResolution: 'resolved',
           affectedUsers: ['user1', 'user2'],
           result: 'success',
           details: {
@@ -212,6 +219,7 @@ describe('AuditStore', () => {
           groupId: 'group1',
           groupName: 'Group 1',
           performedBy: 'admin@example.com',
+          actorResolution: 'resolved',
           affectedUsers: [],
           result: 'failed',
           details: {
@@ -282,6 +290,7 @@ describe('AuditStore', () => {
       groupId: 'group1',
       groupName: 'Group 1',
       performedBy: 'admin@example.com',
+      actorResolution: 'resolved',
       affectedUsers: [],
       result: 'success',
       details: { usersSucceeded: 1, usersFailed: 0, apiRequestCount: 1, durationMs: 500 },
@@ -393,6 +402,7 @@ describe('AuditStore', () => {
       groupId: '00gFAKE1',
       groupName: 'Sales "VIP", EMEA',
       performedBy: '=1+1',
+      actorResolution: 'resolved',
       affectedUsers: [],
       result: 'success',
       details: { usersSucceeded: 0, usersFailed: 0, apiRequestCount: 1, durationMs: 10 },
@@ -410,7 +420,7 @@ describe('AuditStore', () => {
     /** Read a Blob as text — jsdom's Blob has no `text()`. */
     function readBlob(blob: Blob): Promise<string> {
       return new Promise((resolve, reject) => {
-        const reader = new FileReader();
+        const reader = new globalThis.FileReader();
         reader.onload = () => resolve(String(reader.result));
         reader.onerror = () => reject(reader.error);
         reader.readAsText(blob);
@@ -464,6 +474,7 @@ describe('AuditStore', () => {
         groupId: 'test-group',
         groupName: 'Test Group',
         performedBy: 'admin@example.com',
+        actorResolution: 'resolved',
         affectedUsers: ['user1'],
         result: 'success',
         details: { usersSucceeded: 1, usersFailed: 0, apiRequestCount: 1, durationMs: 100 },
@@ -485,6 +496,7 @@ describe('AuditStore', () => {
         groupId: 'test-group',
         groupName: 'Test Group',
         performedBy: 'admin@example.com',
+        actorResolution: 'resolved',
         affectedUsers: [],
         result: 'success',
         details: { usersSucceeded: 0, usersFailed: 0, apiRequestCount: 0, durationMs: 100 },

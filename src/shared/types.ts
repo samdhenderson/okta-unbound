@@ -464,13 +464,16 @@ export interface AuditLogEntry {
    */
   performedBy: string | null;
   /**
-   * How {@link performedBy} was arrived at. Absent only on entries written
-   * before this field existed: rows already persisted in IndexedDB, and the
-   * rule/merge hooks still on the legacy placeholder path (`D-013b`). Readers
-   * must therefore treat `undefined` as "not recorded" and fall back to
-   * `performedBy === null` for the display decision.
+   * How {@link performedBy} was arrived at. Required: every writer in the
+   * extension now takes its actor from `coreApi.getCurrentUser()` and records
+   * which answer it got, so a new entry can never be silent about attribution
+   * (`D-013b`).
+   *
+   * Rows persisted before the field existed have no value for it, and readers
+   * must stay tolerant of that — decide display from `performedBy === null`,
+   * never from the presence of this field.
    */
-  actorResolution?: ActorResolution;
+  actorResolution: ActorResolution;
   affectedUsers: string[];
   result: 'success' | 'partial' | 'failed';
   details: {
