@@ -63,6 +63,24 @@ export interface ProgressBridge {
   complete: () => void;
 }
 
+/**
+ * Options for {@link CoreApi.makeApiRequest}.
+ *
+ * `reason` is required — it is what the verbose request audit log
+ * (`shared/requestLog`) shows as "why" a request was made, and every call
+ * site in `useOktaApi/*` supplies one so the log has full coverage rather than
+ * a partial, unlabeled tail. Inside a {@link CoreApi.runOperation} task, reuse
+ * the same `name` passed to `runOperation` — it is already the operation's
+ * human label.
+ */
+export interface MakeApiRequestOptions {
+  method?: string;
+  body?: unknown;
+  priority?: RequestPriority;
+  /** Human-readable "why", e.g. `'Load group members'`. Shown in the History tab's verbose mode. */
+  reason: string;
+}
+
 /** Options for {@link CoreApi.runOperation}. */
 export interface RunOperationOptions<T> {
   /** Max concurrent tasks; defaults to the scheduler cap (5). */
@@ -86,13 +104,12 @@ export interface CoreApi {
   targetTabId: number | null;
   /** Send a message straight to the content script (bypasses the scheduler; not for Okta API calls). */
   sendMessage: <T = unknown>(message: MessageRequest) => Promise<MessageResponse<T>>;
-  /** Enqueue an Okta API request via the background scheduler; `priority` orders it against other in-flight work. */
-  makeApiRequest: (
-    endpoint: string,
-    method?: string,
-    body?: unknown,
-    priority?: RequestPriority,
-  ) => Promise<RequestResult>;
+  /**
+   * Enqueue an Okta API request via the background scheduler; `options.priority`
+   * orders it against other in-flight work, and `options.reason` is required —
+   * see {@link MakeApiRequestOptions}.
+   */
+  makeApiRequest: (endpoint: string, options: MakeApiRequestOptions) => Promise<RequestResult>;
   /** Resolve the signed-in admin's email/id (for audit logging); falls back to `'unknown'` on failure. */
   getCurrentUser: () => Promise<{ email: string; id: string }>;
   /** Throws if the caller has requested cancellation; call between iterations in long loops. */
@@ -175,10 +192,10 @@ export function createCoreApi(
    */
   const makeApiRequest = async (
     endpoint: string,
-    method: string = 'GET',
-    body?: unknown,
-    priority: RequestPriority = 'normal',
+    options: MakeApiRequestOptions,
   ): Promise<RequestResult> => {
+    const { method = 'GET', body, priority = 'normal', reason } = options;
+
     if (!targetTabId) {
       throw new Error('No target tab ID - not connected to Okta page');
     }
@@ -204,6 +221,7 @@ export function createCoreApi(
           body,
           tabId: targetTabId,
           priority,
+          reason,
         });
         break;
       } catch (error) {
@@ -243,7 +261,9 @@ export function createCoreApi(
     }
 
     try {
-      const response = await makeApiRequest('/api/v1/users/me');
+      const response = await makeApiRequest('/api/v1/users/me', {
+        reason: 'Resolve current admin identity',
+      });
       if (response.success && response.data) {
         // Cache the parsed identity (never the raw response).
         const identity = {

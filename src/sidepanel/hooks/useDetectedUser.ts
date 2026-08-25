@@ -109,7 +109,9 @@ export function useDetectedUser({
 
       try {
         // First fetch user details
-        const userResponse = await makeApiRequest(`/api/v1/users/${userId}`);
+        const userResponse = await makeApiRequest(`/api/v1/users/${userId}`, {
+          reason: 'Detect current Okta user',
+        });
 
         if (!userResponse.success) {
           throw new Error(userResponse.error || 'Failed to fetch user details');

@@ -133,7 +133,12 @@ export function createPolicyOperations(coreApi: CoreApi) {
   ): Promise<OktaPolicyListItem[]> => {
     try {
       return await fetchAllPages<OktaPolicyListItem>(
-        (url) => coreApi.makeApiRequest(url, 'GET', undefined, 'normal'),
+        (url) =>
+          coreApi.makeApiRequest(url, {
+            method: 'GET',
+            priority: 'normal',
+            reason: `List ${type} policies`,
+          }),
         `/api/v1/policies?type=${encodeURIComponent(type)}&limit=${OKTA_PAGE_SIZE}`,
         {
           schema: oktaPolicyListItemSchema,
@@ -159,9 +164,7 @@ export function createPolicyOperations(coreApi: CoreApi) {
     try {
       const response = await coreApi.makeApiRequest(
         `/api/v1/policies/${encodeURIComponent(policyId)}/rules`,
-        'GET',
-        undefined,
-        'normal',
+        { method: 'GET', priority: 'normal', reason: 'Load policy rules' },
       );
       if (!response.success) return [];
       return parseOktaList(oktaPolicyRuleSchema, response.data, 'GET /api/v1/policies/{id}/rules');
@@ -187,12 +190,11 @@ export function createPolicyOperations(coreApi: CoreApi) {
    */
   const getAppAccessPolicyId = async (appId: string): Promise<string | null> => {
     try {
-      const response = await coreApi.makeApiRequest(
-        `/api/v1/apps/${encodeURIComponent(appId)}`,
-        'GET',
-        undefined,
-        'normal',
-      );
+      const response = await coreApi.makeApiRequest(`/api/v1/apps/${encodeURIComponent(appId)}`, {
+        method: 'GET',
+        priority: 'normal',
+        reason: 'Resolve app access policy',
+      });
       if (!response.success || !response.data || typeof response.data !== 'object') return null;
 
       return extractAccessPolicyId((response.data as Record<string, unknown>)._links);

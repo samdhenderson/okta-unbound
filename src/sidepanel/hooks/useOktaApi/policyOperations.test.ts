@@ -57,9 +57,7 @@ describe('listPolicies', () => {
 
     expect(core.makeApiRequest).toHaveBeenCalledWith(
       '/api/v1/policies?type=ACCESS_POLICY&limit=200',
-      'GET',
-      undefined,
-      'normal',
+      { method: 'GET', priority: 'normal', reason: 'List ACCESS_POLICY policies' },
     );
     expect(result.map((p) => p.id)).toEqual(['rstFAKEpolicy00000001', 'rstFAKEpolicy00000002']);
     expect(result[0].name).toBe('Policy rstFAKEpolicy00000001');
@@ -73,12 +71,11 @@ describe('listPolicies', () => {
 
     await listPolicies('MFA_ENROLL');
 
-    expect(core.makeApiRequest).toHaveBeenCalledWith(
-      '/api/v1/policies?type=MFA_ENROLL&limit=200',
-      'GET',
-      undefined,
-      'normal',
-    );
+    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/policies?type=MFA_ENROLL&limit=200', {
+      method: 'GET',
+      priority: 'normal',
+      reason: 'List MFA_ENROLL policies',
+    });
   });
 
   it('follows the Link header across pages and concatenates results', async () => {
@@ -188,9 +185,7 @@ describe('getPolicyRules', () => {
 
     expect(core.makeApiRequest).toHaveBeenCalledWith(
       '/api/v1/policies/rstFAKEpolicy00000001/rules',
-      'GET',
-      undefined,
-      'normal',
+      { method: 'GET', priority: 'normal', reason: 'Load policy rules' },
     );
     expect(rules).toHaveLength(1);
     expect(rules[0].name).toBe('Catch-all');
@@ -249,12 +244,11 @@ describe('getAppAccessPolicyId', () => {
     const { getAppAccessPolicyId } = createPolicyOperations(core);
 
     expect(await getAppAccessPolicyId('0oaFAKEapp000000001')).toBe('rstFAKEpolicy00000001');
-    expect(core.makeApiRequest).toHaveBeenCalledWith(
-      '/api/v1/apps/0oaFAKEapp000000001',
-      'GET',
-      undefined,
-      'normal',
-    );
+    expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/apps/0oaFAKEapp000000001', {
+      method: 'GET',
+      priority: 'normal',
+      reason: 'Resolve app access policy',
+    });
   });
 
   it('accepts the 00p policy id prefix and ignores query/trailing slash', async () => {

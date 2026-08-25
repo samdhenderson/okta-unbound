@@ -28,7 +28,9 @@ describe('getUserGroupsRequest', () => {
     const result = await getUserGroupsRequest(makeApiRequest, 'u1');
 
     expect(makeApiRequest).toHaveBeenCalledTimes(1);
-    expect(makeApiRequest).toHaveBeenCalledWith('/api/v1/users/u1/groups?limit=200');
+    expect(makeApiRequest).toHaveBeenCalledWith('/api/v1/users/u1/groups?limit=200', {
+      reason: "Load user's groups",
+    });
     expect(result).toEqual({
       success: true,
       count: 2,
@@ -55,6 +57,7 @@ describe('getUserGroupsRequest', () => {
     expect(makeApiRequest).toHaveBeenNthCalledWith(
       2,
       '/api/v1/users/u1/groups?after=CURSOR&limit=200',
+      { reason: "Load user's groups" },
     );
     expect(result.count).toBe(2);
     expect(result.data?.map((m) => m.group.id)).toEqual(['g1', 'g2']);

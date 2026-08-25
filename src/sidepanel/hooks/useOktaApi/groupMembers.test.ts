@@ -53,6 +53,7 @@ describe('getAllGroupMembers boundary validation', () => {
 
     expect(makeApiRequest).toHaveBeenCalledWith(
       '/api/v1/groups/00gFAKE1/users?limit=200&expand=group-rules',
+      { reason: 'Load all group members' },
     );
     expect(members.map((m) => m.id)).toEqual(['00uFAKE1']);
   });
@@ -85,6 +86,7 @@ describe('getAllGroupMembers rule attribution', () => {
 
     expect(makeApiRequest).toHaveBeenCalledWith(
       '/api/v1/groups/00gFAKE1/users?limit=200&expand=group-rules',
+      { reason: 'Load all group members' },
     );
     expect(members[0]).toMatchObject({ _embedded: embedded });
   });
@@ -102,7 +104,9 @@ describe('getAllGroupMembers rule attribution', () => {
 
     const members = await getAllGroupMembers('00gFAKE1');
 
-    expect(makeApiRequest).toHaveBeenNthCalledWith(2, `${droppedNext}&expand=group-rules`);
+    expect(makeApiRequest).toHaveBeenNthCalledWith(2, `${droppedNext}&expand=group-rules`, {
+      reason: 'Load all group members',
+    });
     expect(members.map((m) => m.id)).toEqual(['00uFAKE1', '00uFAKE2']);
   });
 });
@@ -227,7 +231,9 @@ describe('getMembershipRuleProof', () => {
     await proof('00gFAKE1', '00uFAKE1');
 
     expect(transport).toHaveBeenCalledTimes(1);
-    expect(transport).toHaveBeenCalledWith('/api/v1/groups/00gFAKE1/users/00uFAKE1/group-rules');
+    expect(transport).toHaveBeenCalledWith('/api/v1/groups/00gFAKE1/users/00uFAKE1/group-rules', {
+      reason: 'Check group rule attribution for member',
+    });
   });
 
   it('reports the rules Okta names', async () => {

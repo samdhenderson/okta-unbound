@@ -22,13 +22,21 @@
  * names, attribute names and values — is tenant PII. It is rendered through
  * React's escaping and this component logs nothing at all.
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { UndoAction } from '../../shared/undoTypes';
 import { clearUndoHistory, getUndoHistory } from '../../shared/undoManager';
+import type { RequestLogEntry } from '../../shared/requestLogTypes';
+import { clearRequestLog, getRequestLog } from '../../shared/requestLog';
 import { useUndoAction } from '../hooks/useUndoAction';
 import AuditLogRow from './AuditLogRow';
 import AuditLogUndoModal from './AuditLogUndoModal';
-import { AlertMessage, Button, EmptyState, Modal, type AlertMessageData } from './shared';
+import RequestLogRow from './RequestLogRow';
+import { AlertMessage, Button, Checkbox, EmptyState, Modal, type AlertMessageData } from './shared';
+
+/** One row in the merged, timestamp-ordered history list. */
+type HistoryItem =
+  | { kind: 'action'; timestamp: number; action: UndoAction }
+  | { kind: 'request'; timestamp: number; entry: RequestLogEntry };
 
 /** Props for {@link AuditLogViewer}. */
 export interface AuditLogViewerProps {
@@ -57,6 +65,8 @@ type Notice = AlertMessageData | null;
  */
 const AuditLogViewer: React.FC<AuditLogViewerProps> = ({ targetTabId, isActive = true }) => {
   const [actions, setActions] = useState<UndoAction[]>([]);
+  const [requestEntries, setRequestEntries] = useState<RequestLogEntry[]>([]);
+  const [verbose, setVerbose] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [pendingUndo, setPendingUndo] = useState<UndoAction | null>(null);
   const [drifted, setDrifted] = useState<readonly string[] | undefined>(undefined);
@@ -67,22 +77,39 @@ const AuditLogViewer: React.FC<AuditLogViewerProps> = ({ targetTabId, isActive =
   const { undo, undoingActionId, undoability } = useUndoAction({ targetTabId });
 
   const refresh = useCallback(async () => {
-    const history = await getUndoHistory();
+    const [history, requestLog] = await Promise.all([getUndoHistory(), getRequestLog()]);
     setActions(history.actions);
+    setRequestEntries(requestLog.entries);
   }, []);
 
   // One effect for both the read and the subscription: a tab that is not
   // listening must re-read when it becomes active, or it renders whatever the
-  // history looked like when it was last visible.
+  // history looked like when it was last visible. Both storage keys are
+  // watched regardless of `verbose` so toggling it on shows current data
+  // immediately, with no extra fetch.
   useEffect(() => {
     if (!isActive) return;
     refresh();
     const handler = (changes: { [key: string]: chrome.storage.StorageChange }) => {
-      if (changes.undoHistory) refresh();
+      if (changes.undoHistory || changes.apiRequestLog) refresh();
     };
     chrome.storage.onChanged.addListener(handler);
     return () => chrome.storage.onChanged.removeListener(handler);
   }, [isActive, refresh]);
+
+  const historyItems = useMemo((): HistoryItem[] => {
+    const items: HistoryItem[] = actions.map((action) => ({
+      kind: 'action',
+      timestamp: action.timestamp,
+      action,
+    }));
+    if (verbose) {
+      for (const entry of requestEntries) {
+        items.push({ kind: 'request', timestamp: entry.timestamp, entry });
+      }
+    }
+    return items.sort((a, b) => b.timestamp - a.timestamp);
+  }, [actions, requestEntries, verbose]);
 
   const openUndo = useCallback((action: UndoAction) => {
     setNotice(null);
@@ -135,45 +162,69 @@ const AuditLogViewer: React.FC<AuditLogViewerProps> = ({ targetTabId, isActive =
   }, [closeUndo, pendingUndo, refresh, undo]);
 
   const confirmClear = useCallback(async () => {
-    await clearUndoHistory();
+    await Promise.all([clearUndoHistory(), clearRequestLog()]);
     setActions([]);
+    setRequestEntries([]);
     setExpandedId(null);
     setNotice(null);
     setIsClearOpen(false);
   }, []);
 
+  const historyCountLabel =
+    verbose && requestEntries.length > 0
+      ? `${actions.length} action${actions.length === 1 ? '' : 's'}, ${requestEntries.length} request batch${requestEntries.length === 1 ? '' : 'es'} logged`
+      : `${actions.length} action${actions.length === 1 ? '' : 's'} logged`;
+
   return (
     <div className="space-y-4">
       {notice && <AlertMessage message={notice} onDismiss={() => setNotice(null)} />}
 
-      {actions.length === 0 ? (
+      <Checkbox
+        checked={verbose}
+        onChange={setVerbose}
+        label="Verbose"
+        description="Also show every Okta API request made, grouped by why it was made"
+      />
+
+      {historyItems.length === 0 ? (
         <EmptyState
           icon="list"
           title="No audit history"
-          description="Actions you perform (user removals, profile edits, rule changes) will be logged here"
+          description={
+            verbose
+              ? 'Actions you perform, and the API requests behind them, will be logged here'
+              : 'Actions you perform (user removals, profile edits, rule changes) will be logged here'
+          }
         />
       ) : (
         <>
           <div className="flex items-center justify-between gap-3 rounded-md border border-neutral-200 bg-neutral-50 p-3">
-            <span className="text-sm font-medium text-neutral-700">
-              {actions.length} action{actions.length === 1 ? '' : 's'} logged
-            </span>
+            <span className="text-sm font-medium text-neutral-700">{historyCountLabel}</span>
             <Button variant="secondary" size="sm" onClick={() => setIsClearOpen(true)}>
               Clear History
             </Button>
           </div>
 
           <div className="space-y-3">
-            {actions.map((action) => (
-              <AuditLogRow
-                key={action.id}
-                action={action}
-                isExpanded={expandedId === action.id}
-                onToggle={(id) => setExpandedId((open) => (open === id ? null : id))}
-                onUndo={openUndo}
-                undoability={undoability}
-              />
-            ))}
+            {historyItems.map((item) =>
+              item.kind === 'action' ? (
+                <AuditLogRow
+                  key={item.action.id}
+                  action={item.action}
+                  isExpanded={expandedId === item.action.id}
+                  onToggle={(id) => setExpandedId((open) => (open === id ? null : id))}
+                  onUndo={openUndo}
+                  undoability={undoability}
+                />
+              ) : (
+                <RequestLogRow
+                  key={item.entry.id}
+                  entry={item.entry}
+                  isExpanded={expandedId === item.entry.id}
+                  onToggle={(id) => setExpandedId((open) => (open === id ? null : id))}
+                />
+              ),
+            )}
           </div>
         </>
       )}
@@ -204,8 +255,11 @@ const AuditLogViewer: React.FC<AuditLogViewerProps> = ({ targetTabId, isActive =
         }
       >
         <p className="text-sm text-pretty text-neutral-700">
-          All {actions.length} recorded action{actions.length === 1 ? '' : 's'} will be deleted from
-          this browser. Nothing in Okta changes, but any undo they still offered goes with them.
+          All {actions.length} recorded action{actions.length === 1 ? '' : 's'}
+          {requestEntries.length > 0 &&
+            ` and ${requestEntries.length} logged request batch${requestEntries.length === 1 ? '' : 'es'}`}{' '}
+          will be deleted from this browser. Nothing in Okta changes, but any undo they still
+          offered goes with them.
         </p>
       </Modal>
     </div>

@@ -43,8 +43,13 @@ const log = createLogger('SnapshotSync');
  * Issues one page request. Injected so this module stays free of Chrome-runtime
  * plumbing; the background supplies a scheduler-routed implementation at `low`
  * priority, and tests supply canned pages.
+ *
+ * @param reason - Human-readable "why", recorded to the verbose request audit
+ * log. One `PageRequest` instance is shared across every collection in a walk
+ * (`syncOrg` runs them concurrently), so the reason travels per-call rather
+ * than being fixed at construction time — this module passes `spec.context`.
  */
-export type PageRequest = (url: string) => Promise<PaginatedPageResult>;
+export type PageRequest = (url: string, reason?: string) => Promise<PaginatedPageResult>;
 
 /**
  * One leg of a **sharded** collection: a walk that is only part of the answer.
@@ -239,38 +244,42 @@ export async function runFullWalk<T>(
   };
 
   try {
-    await fetchAllPages<T>(request, startUrl, {
-      schema: spec.schema,
-      context: spec.context,
-      preserveParams: spec.preserveParams,
-      // On a resume the walk starts at a cursor, so the parameters to re-apply
-      // must come from the canonical URL rather than from the cursor.
-      paramSource: spec.firstUrl,
-      onPage: (rows, totalSoFar) => {
-        const identified: Array<{ id: string; entity: T; lastUpdated?: string }> = [];
-        for (const row of rows) {
-          const meta = identify(row);
-          // A row with no usable id cannot be keyed, so it is dropped rather
-          // than stored under a synthesised key that no later walk would match.
-          if (meta) identified.push({ id: meta.id, entity: row, lastUpdated: meta.lastUpdated });
-        }
+    await fetchAllPages<T>(
+      (pageUrl) => request(pageUrl, `Org inventory sync: ${spec.context}`),
+      startUrl,
+      {
+        schema: spec.schema,
+        context: spec.context,
+        preserveParams: spec.preserveParams,
+        // On a resume the walk starts at a cursor, so the parameters to re-apply
+        // must come from the canonical URL rather than from the cursor.
+        paramSource: spec.firstUrl,
+        onPage: (rows, totalSoFar) => {
+          const identified: Array<{ id: string; entity: T; lastUpdated?: string }> = [];
+          for (const row of rows) {
+            const meta = identify(row);
+            // A row with no usable id cannot be keyed, so it is dropped rather
+            // than stored under a synthesised key that no later walk would match.
+            if (meta) identified.push({ id: meta.id, entity: row, lastUpdated: meta.lastUpdated });
+          }
 
-        watermark = advanceWatermark(
-          watermark,
-          identified.map((item) => item.lastUpdated),
-        );
-        written = totalSoFar;
+          watermark = advanceWatermark(
+            watermark,
+            identified.map((item) => item.lastUpdated),
+          );
+          written = totalSoFar;
 
-        enqueue(() => orgSnapshotStore.upsertMany(collection, origin, identified, mark));
-        onPage?.(collection, totalSoFar);
+          enqueue(() => orgSnapshotStore.upsertMany(collection, origin, identified, mark));
+          onPage?.(collection, totalSoFar);
+        },
+        onCursor: (nextUrl) => {
+          const at = watermark;
+          enqueue(() =>
+            orgSnapshotStore.patchMeta(collection, origin, { cursor: nextUrl, watermark: at }),
+          );
+        },
       },
-      onCursor: (nextUrl) => {
-        const at = watermark;
-        enqueue(() =>
-          orgSnapshotStore.patchMeta(collection, origin, { cursor: nextUrl, watermark: at }),
-        );
-      },
-    });
+    );
     await drained;
   } catch (error) {
     // Let the queued writes finish before reporting: the pages that did land are
@@ -359,7 +368,10 @@ function deltaUrl(spec: CollectionSpec, watermark: string): string {
  * this direction costs a full walk; being wrong in the other costs correctness.
  */
 async function probeDeltaSupport(spec: CollectionSpec, request: PageRequest): Promise<boolean> {
-  const result = await request(countUrl(spec, `lastUpdated gt "${UNREACHABLE_WATERMARK}"`));
+  const result = await request(
+    countUrl(spec, `lastUpdated gt "${UNREACHABLE_WATERMARK}"`),
+    `Org inventory sync: ${spec.context} (delta probe)`,
+  );
   if (!result.success) return false;
   return readTotalCount(result.headers) === 0;
 }
@@ -380,7 +392,7 @@ async function runDriftCheck(
   options: FullWalkOptions,
 ): Promise<ReturnType<typeof driftVerdict>> {
   const { origin, request } = options;
-  const result = await request(countUrl(spec));
+  const result = await request(countUrl(spec), `Org inventory sync: ${spec.context} (drift check)`);
   if (!result.success) return 'unknown';
   const stored = await orgSnapshotStore.countCollection(spec.collection, origin);
   return driftVerdict(readTotalCount(result.headers), stored);
@@ -432,25 +444,29 @@ async function runDelta<T>(
   };
 
   try {
-    await fetchAllPages<T>(request, deltaUrl(spec, watermark), {
-      schema: spec.schema,
-      context: `${spec.context} (delta)`,
-      preserveParams: spec.preserveParams ? [...spec.preserveParams, 'search'] : ['search'],
-      onPage: (rows, totalSoFar) => {
-        const identified: Array<{ id: string; entity: T; lastUpdated?: string }> = [];
-        for (const row of rows) {
-          const item = identify(row);
-          if (item) identified.push({ id: item.id, entity: row, lastUpdated: item.lastUpdated });
-        }
-        watermark = advanceWatermark(
-          watermark,
-          identified.map((item) => item.lastUpdated),
-        ) as string;
-        written = totalSoFar;
-        enqueue(() => orgSnapshotStore.upsertMany(collection, origin, identified, now));
-        onPage?.(collection, totalSoFar);
+    await fetchAllPages<T>(
+      (pageUrl) => request(pageUrl, `Org inventory sync: ${spec.context} (delta)`),
+      deltaUrl(spec, watermark),
+      {
+        schema: spec.schema,
+        context: `${spec.context} (delta)`,
+        preserveParams: spec.preserveParams ? [...spec.preserveParams, 'search'] : ['search'],
+        onPage: (rows, totalSoFar) => {
+          const identified: Array<{ id: string; entity: T; lastUpdated?: string }> = [];
+          for (const row of rows) {
+            const item = identify(row);
+            if (item) identified.push({ id: item.id, entity: row, lastUpdated: item.lastUpdated });
+          }
+          watermark = advanceWatermark(
+            watermark,
+            identified.map((item) => item.lastUpdated),
+          ) as string;
+          written = totalSoFar;
+          enqueue(() => orgSnapshotStore.upsertMany(collection, origin, identified, now));
+          onPage?.(collection, totalSoFar);
+        },
       },
-    });
+    );
     await drained;
   } catch (error) {
     await drained.catch(() => undefined);
@@ -560,21 +576,25 @@ export async function runShardedWalk<T>(
       batch.map(async (shard) => {
         const rows: Array<{ id: string; entity: T; lastUpdated?: string }> = [];
         try {
-          await fetchAllPages<T>(request, shard.firstUrl, {
-            schema: spec.schema,
-            context: `${spec.context} (${shard.key})`,
-            preserveParams: spec.preserveParams,
-            paramSource: shard.firstUrl,
-            onPage: (page) => {
-              for (const row of page) {
-                const item = identifyRow(row, shard);
-                // A row with no usable id cannot be keyed, so it is dropped
-                // rather than stored under a synthesised key no later walk
-                // would match.
-                if (item) rows.push({ id: item.id, entity: row, lastUpdated: item.lastUpdated });
-              }
+          await fetchAllPages<T>(
+            (pageUrl) => request(pageUrl, `Org inventory sync: ${spec.context} (${shard.key})`),
+            shard.firstUrl,
+            {
+              schema: spec.schema,
+              context: `${spec.context} (${shard.key})`,
+              preserveParams: spec.preserveParams,
+              paramSource: shard.firstUrl,
+              onPage: (page) => {
+                for (const row of page) {
+                  const item = identifyRow(row, shard);
+                  // A row with no usable id cannot be keyed, so it is dropped
+                  // rather than stored under a synthesised key no later walk
+                  // would match.
+                  if (item) rows.push({ id: item.id, entity: row, lastUpdated: item.lastUpdated });
+                }
+              },
             },
-          });
+          );
         } catch {
           // One app's listing failing is not the collection failing. The shard
           // is left out of `completedShards`, which both keeps its existing rows

@@ -69,7 +69,9 @@ export function createGroupBulkOperations(
 
       try {
         // Get group name
-        const groupResponse = await coreApi.makeApiRequest(`/api/v1/groups/${groupId}`);
+        const groupResponse = await coreApi.makeApiRequest(`/api/v1/groups/${groupId}`, {
+          reason: 'Load group name for bulk operation',
+        });
         const groupName = groupResponse.data?.profile?.name || groupId;
 
         onProgress?.(i + 1, totalGroups, groupName);
@@ -131,7 +133,7 @@ export function createGroupBulkOperations(
             if (operation.config?.userId) {
               const removeResult = await coreApi.makeApiRequest(
                 `/api/v1/groups/${groupId}/users/${operation.config.userId}`,
-                'DELETE',
+                { method: 'DELETE', reason: 'Bulk remove user from group' },
               );
               result.status = removeResult.success ? 'success' : 'failed';
               result.itemsProcessed = removeResult.success ? 1 : 0;

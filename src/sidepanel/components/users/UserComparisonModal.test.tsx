@@ -551,6 +551,7 @@ describe('UserComparisonModal', () => {
         body: undefined,
         tabId: TAB_ID,
         priority: 'normal',
+        reason: 'Add user to group',
       });
 
       // The disappearing Add button IS the success affordance — there is no other one.
@@ -589,6 +590,7 @@ describe('UserComparisonModal', () => {
           body: undefined,
           tabId: TAB_ID,
           priority: 'normal',
+          reason: 'Add user to group',
         }),
       );
 

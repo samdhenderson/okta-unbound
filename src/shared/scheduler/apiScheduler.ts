@@ -14,6 +14,7 @@
  */
 
 import { createLogger } from '../utils/logger';
+import { flushAllPending, recordRequest } from '../requestLog';
 import { OperationCancelledError } from './cancellation';
 import { RateLimitDetector } from './rateLimitDetector';
 import type {
@@ -110,6 +111,9 @@ export class ApiScheduler {
    * @param body - Optional request body (ignored for GET).
    * @param tabId - Tab whose content script executes the fetch.
    * @param priority - Queue priority; higher runs first.
+   * @param reason - Human-readable "why", recorded to the verbose request
+   * audit log ({@link recordRequest}) when the request settles. Omit only when
+   * there is genuinely no caller-facing label; it falls back to a generic one.
    * @returns The {@link RequestResult} once the request settles.
    */
   async scheduleRequest(
@@ -118,6 +122,7 @@ export class ApiScheduler {
     body: unknown,
     tabId: number,
     priority: RequestPriority = 'normal',
+    reason?: string,
   ): Promise<RequestResult> {
     const dedupKey = this.getGetDedupKey(method, endpoint, tabId);
 
@@ -143,6 +148,7 @@ export class ApiScheduler {
         priority,
         tabId,
         timestamp: Date.now(),
+        reason,
         resolve: (result: RequestResult) => resolve(result),
         reject,
         retryCount: 0,
@@ -349,8 +355,11 @@ export class ApiScheduler {
       this.updateStatus('idle');
       // Fully idle: nothing queued, nothing in flight, no cooldown pending —
       // stop the fallback interval so the service worker can suspend.
-      // scheduleRequest restarts it.
+      // scheduleRequest restarts it. Flush any open request-log batches here,
+      // at the same moment we let the worker suspend, so an in-progress batch
+      // is never silently lost to suspension.
       this.stopProcessing();
+      void flushAllPending();
     }
   }
 
@@ -390,6 +399,7 @@ export class ApiScheduler {
       this.metrics.successfulRequests++;
       this.activeRequests.delete(request.id);
       request.resolve(result);
+      this.recordSettledRequest(request, true);
 
       log.debug('Request completed:', {
         id: request.id,
@@ -412,6 +422,7 @@ export class ApiScheduler {
         this.lastError = error instanceof Error ? error.message : 'Unknown error';
         this.activeRequests.delete(request.id);
         request.reject(error instanceof Error ? error : new Error('Request failed'));
+        this.recordSettledRequest(request, false);
       }
     } finally {
       this.notifyStateChange();
@@ -419,6 +430,23 @@ export class ApiScheduler {
       // itself) — drain immediately instead of waiting for the fallback tick.
       this.processQueue();
     }
+  }
+
+  /**
+   * Fold a finally-settled request (success, or final failure after retries)
+   * into the verbose request audit log. Not called for a coalesced GET's
+   * joined waiters (only the leader that actually hit the network), and not
+   * called for a mid-flight retry — only the terminal outcome.
+   */
+  private recordSettledRequest(request: QueuedRequest, success: boolean): void {
+    recordRequest({
+      reason: request.reason,
+      method: request.method,
+      endpoint: request.endpoint,
+      timestamp: request.timestamp,
+      durationMs: Date.now() - request.timestamp,
+      success,
+    });
   }
 
   /**

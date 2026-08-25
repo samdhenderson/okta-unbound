@@ -130,7 +130,9 @@ export function useGroupMerge(targetTabId?: number): UseGroupMergeReturn {
     // `/api/v1/users/me` lookup fails.
     let currentUserEmail = 'unknown@unknown.com';
     try {
-      const userResponse = await makeApiRequest('/api/v1/users/me');
+      const userResponse = await makeApiRequest('/api/v1/users/me', {
+        reason: 'Resolve current admin for merge audit attribution',
+      });
       if (userResponse.success && userResponse.data) {
         currentUserEmail = userResponse.data.profile?.email || 'unknown@unknown.com';
       }
@@ -145,10 +147,12 @@ export function useGroupMerge(targetTabId?: number): UseGroupMergeReturn {
       // so we log ONE bulk undo instead of flooding history per user).
       const copiedUsers: OktaUser[] = [];
       for (const user of plan.toCopy) {
-        const result = await makeApiRequest(
-          `/api/v1/groups/${plan.survivor.id}/users/${user.id}`,
-          'PUT',
-        );
+        const result = await makeApiRequest(`/api/v1/groups/${plan.survivor.id}/users/${user.id}`, {
+          method: 'PUT',
+          // Static label, not the survivor's name: `reason` is never redacted before
+          // storage (only `endpoint` is), so a tenant group name has no business in it.
+          reason: 'Merge groups: copy member into survivor',
+        });
         if (result.success) {
           res.copied++;
           copiedUsers.push(user);

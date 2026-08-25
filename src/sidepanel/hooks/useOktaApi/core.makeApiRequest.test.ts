@@ -66,7 +66,9 @@ describe('coreApi.makeApiRequest transient-port retry', () => {
       .mockRejectedValueOnce(new Error(PORT_CLOSED))
       .mockResolvedValueOnce({ success: true, data: { id: '00gFAKEGROUP' } });
 
-    const promise = makeCore().makeApiRequest('/api/v1/groups/00gFAKEGROUP/rules');
+    const promise = makeCore().makeApiRequest('/api/v1/groups/00gFAKEGROUP/rules', {
+      reason: 'Load group rules',
+    });
     await vi.runAllTimersAsync();
 
     await expect(promise).resolves.toEqual({ success: true, data: { id: '00gFAKEGROUP' } });
@@ -76,7 +78,7 @@ describe('coreApi.makeApiRequest transient-port retry', () => {
   it('gives up after two retries and propagates the error', async () => {
     runtimeSendMessage.mockRejectedValue(new Error(PORT_CLOSED));
 
-    const promise = makeCore().makeApiRequest('/api/v1/groups');
+    const promise = makeCore().makeApiRequest('/api/v1/groups', { reason: 'Load groups' });
     const assertion = expect(promise).rejects.toThrow(PORT_CLOSED);
     await vi.runAllTimersAsync();
     await assertion;
@@ -88,10 +90,10 @@ describe('coreApi.makeApiRequest transient-port retry', () => {
   it('never retries a write — a port error is ambiguous about whether it executed', async () => {
     runtimeSendMessage.mockRejectedValue(new Error(PORT_CLOSED));
 
-    const promise = makeCore().makeApiRequest(
-      '/api/v1/groups/00gFAKEGROUP/users/00uFAKEUSER',
-      'PUT',
-    );
+    const promise = makeCore().makeApiRequest('/api/v1/groups/00gFAKEGROUP/users/00uFAKEUSER', {
+      method: 'PUT',
+      reason: 'Add user to group',
+    });
     const assertion = expect(promise).rejects.toThrow(PORT_CLOSED);
     await vi.runAllTimersAsync();
     await assertion;
@@ -102,7 +104,7 @@ describe('coreApi.makeApiRequest transient-port retry', () => {
   it('does not retry a reloaded extension — the error surfaces immediately', async () => {
     runtimeSendMessage.mockRejectedValue(new Error(CONTEXT_INVALIDATED));
 
-    const promise = makeCore().makeApiRequest('/api/v1/groups');
+    const promise = makeCore().makeApiRequest('/api/v1/groups', { reason: 'Load groups' });
     const assertion = expect(promise).rejects.toThrow(CONTEXT_INVALIDATED);
     await vi.runAllTimersAsync();
     await assertion;

@@ -35,7 +35,7 @@ async function fetchAllMembers(
   let pageCount = 0;
 
   const members: OktaUser[] = await fetchAllPages<OktaUserListItem>(
-    (url) => coreApi.makeApiRequest(url),
+    (url) => coreApi.makeApiRequest(url, { reason: 'Load group members for cleanup' }),
     `/api/v1/groups/${groupId}/users?limit=${OKTA_PAGE_SIZE}`,
     {
       // Validated at the response boundary (ADR-0006): malformed rows are
@@ -113,7 +113,9 @@ export function createGroupCleanupOperations(
 
       // Check group type
       coreApi.callbacks.onProgress?.(0, 100, 'Checking group type...', apiCallsMade);
-      const groupDetails = await coreApi.makeApiRequest(`/api/v1/groups/${groupId}`);
+      const groupDetails = await coreApi.makeApiRequest(`/api/v1/groups/${groupId}`, {
+        reason: 'Check group type before removing deprovisioned users',
+      });
       trackApiCall();
 
       if (groupDetails.success && groupDetails.data?.type === 'APP_GROUP') {

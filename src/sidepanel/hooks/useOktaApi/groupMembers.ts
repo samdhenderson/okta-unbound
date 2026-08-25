@@ -77,10 +77,10 @@ export function createGroupMemberOperations(
     user: OktaUser,
     skipUndoLog = false,
   ) => {
-    const result = await coreApi.makeApiRequest(
-      `/api/v1/groups/${groupId}/users/${user.id}`,
-      'DELETE',
-    );
+    const result = await coreApi.makeApiRequest(`/api/v1/groups/${groupId}/users/${user.id}`, {
+      method: 'DELETE',
+      reason: 'Remove user from group',
+    });
 
     // Fires regardless of `skipUndoLog`: that flag controls the *audit* entry a
     // bulk caller aggregates, not whether this group's membership actually moved.
@@ -134,7 +134,10 @@ export function createGroupMemberOperations(
       'Remove user from groups',
       groupIds,
       async (groupId) => {
-        await coreApi.makeApiRequest(`/api/v1/groups/${groupId}/users/${userId}`, 'DELETE');
+        await coreApi.makeApiRequest(`/api/v1/groups/${groupId}/users/${userId}`, {
+          method: 'DELETE',
+          reason: 'Remove user from groups',
+        });
         onMembershipChanged?.(groupId);
         completedCount += 1;
         onProgress?.(completedCount, groupIds.length);
@@ -166,7 +169,7 @@ export function createGroupMemberOperations(
     let pageCount = 0;
 
     const allMembers: OktaUser[] = await fetchAllPages<MemberWithGroupRules>(
-      (url) => coreApi.makeApiRequest(url),
+      (url) => coreApi.makeApiRequest(url, { reason: 'Load all group members' }),
       `/api/v1/groups/${groupId}/users?limit=${OKTA_PAGE_SIZE}&expand=${GROUP_RULES_EXPAND}`,
       {
         // Validated at the response boundary (ADR-0006): malformed rows are
@@ -228,6 +231,7 @@ export function createGroupMemberOperations(
   ): Promise<MemberRuleAttribution> => {
     const result = await coreApi.makeApiRequest(
       `/api/v1/groups/${groupId}/users/${userId}/group-rules`,
+      { reason: 'Check group rule attribution for member' },
     );
 
     if (!result.success) {
@@ -261,10 +265,10 @@ export function createGroupMemberOperations(
       profile: { login: string; firstName: string; lastName: string; email: string };
     },
   ): Promise<{ success: boolean; error?: string }> => {
-    const result = await coreApi.makeApiRequest(
-      `/api/v1/groups/${groupId}/users/${user.id}`,
-      'PUT',
-    );
+    const result = await coreApi.makeApiRequest(`/api/v1/groups/${groupId}/users/${user.id}`, {
+      method: 'PUT',
+      reason: 'Add user to group',
+    });
 
     if (result.success) {
       onMembershipChanged?.(groupId);

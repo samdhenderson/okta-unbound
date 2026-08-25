@@ -105,7 +105,9 @@ export function createUserOperations(coreApi: CoreApi) {
    */
   const getUserLastLogin = async (userId: string): Promise<Date | null> => {
     try {
-      const response = await coreApi.makeApiRequest(`/api/v1/users/${userId}`);
+      const response = await coreApi.makeApiRequest(`/api/v1/users/${userId}`, {
+        reason: 'Load user last login',
+      });
       if (response.success && response.data?.lastLogin) {
         return new Date(response.data.lastLogin);
       }
@@ -151,7 +153,7 @@ export function createUserOperations(coreApi: CoreApi) {
       // Accumulate via onPage so a mid-walk failure still returns the pages
       // collected so far (fetchAllPages throws on a failed page).
       await fetchAllPages<OktaAppListItem>(
-        (url) => coreApi.makeApiRequest(url),
+        (url) => coreApi.makeApiRequest(url, { reason: 'Load user app assignments' }),
         `/api/v1/apps?filter=user.id+eq+"${userId}"&limit=${OKTA_PAGE_SIZE}&expand=user/${userId}`,
         {
           // Validated at the response boundary (ADR-0006): malformed rows are
@@ -216,12 +218,11 @@ export function createUserOperations(coreApi: CoreApi) {
       userIds,
       async (userId) => {
         try {
-          const response = await coreApi.makeApiRequest(
-            `/api/v1/users/${userId}`,
-            'GET',
-            undefined,
-            'low',
-          );
+          const response = await coreApi.makeApiRequest(`/api/v1/users/${userId}`, {
+            method: 'GET',
+            priority: 'low',
+            reason: 'Load user details',
+          });
           if (response.success && response.data) {
             userDetailsMap.set(userId, response.data);
           }
@@ -268,12 +269,11 @@ export function createUserOperations(coreApi: CoreApi) {
       userIds,
       async (userId) => {
         try {
-          const response = await coreApi.makeApiRequest(
-            `/api/v1/users/${userId}/factors`,
-            'GET',
-            undefined,
-            'low',
-          );
+          const response = await coreApi.makeApiRequest(`/api/v1/users/${userId}/factors`, {
+            method: 'GET',
+            priority: 'low',
+            reason: 'MFA scan',
+          });
           const rawFactors = response.success ? response.data : [];
           const validated = parseOktaList(
             oktaFactorSchema,
@@ -312,7 +312,9 @@ export function createUserOperations(coreApi: CoreApi) {
    */
   const getUserGroupMemberships = async (userId: string): Promise<number> => {
     try {
-      const response = await coreApi.makeApiRequest(`/api/v1/users/${userId}/groups?limit=1`);
+      const response = await coreApi.makeApiRequest(`/api/v1/users/${userId}/groups?limit=1`, {
+        reason: 'Count user group memberships',
+      });
       if (response.success && response.headers?.['x-total-count']) {
         return parseInt(response.headers['x-total-count'], 10);
       }
@@ -349,6 +351,7 @@ export function createUserOperations(coreApi: CoreApi) {
       // Use Okta's search API with the q parameter for flexible search
       const response = await coreApi.makeApiRequest(
         `/api/v1/users?q=${encodeURIComponent(query)}&limit=20`,
+        { reason: 'Search users' },
       );
 
       if (response.success && response.data) {
@@ -386,7 +389,9 @@ export function createUserOperations(coreApi: CoreApi) {
     status: string;
   } | null> => {
     try {
-      const response = await coreApi.makeApiRequest(`/api/v1/users/${userId}`);
+      const response = await coreApi.makeApiRequest(`/api/v1/users/${userId}`, {
+        reason: 'Load user by id',
+      });
       if (response.success && response.data) {
         const user = response.data;
         return {
@@ -413,10 +418,10 @@ export function createUserOperations(coreApi: CoreApi) {
    * @remarks Only valid for users in `ACTIVE` status.
    */
   const suspendUser = async (userId: string): Promise<{ success: boolean; error?: string }> => {
-    const result = await coreApi.makeApiRequest(
-      `/api/v1/users/${userId}/lifecycle/suspend`,
-      'POST',
-    );
+    const result = await coreApi.makeApiRequest(`/api/v1/users/${userId}/lifecycle/suspend`, {
+      method: 'POST',
+      reason: 'Suspend user',
+    });
     return { success: result.success, error: result.error };
   };
 
@@ -428,10 +433,10 @@ export function createUserOperations(coreApi: CoreApi) {
    * @remarks Only valid for users in `SUSPENDED` status.
    */
   const unsuspendUser = async (userId: string): Promise<{ success: boolean; error?: string }> => {
-    const result = await coreApi.makeApiRequest(
-      `/api/v1/users/${userId}/lifecycle/unsuspend`,
-      'POST',
-    );
+    const result = await coreApi.makeApiRequest(`/api/v1/users/${userId}/lifecycle/unsuspend`, {
+      method: 'POST',
+      reason: 'Unsuspend user',
+    });
     return { success: result.success, error: result.error };
   };
 
@@ -446,7 +451,7 @@ export function createUserOperations(coreApi: CoreApi) {
   const resetPassword = async (userId: string): Promise<{ success: boolean; error?: string }> => {
     const result = await coreApi.makeApiRequest(
       `/api/v1/users/${userId}/lifecycle/reset_password?sendEmail=true`,
-      'POST',
+      { method: 'POST', reason: 'Reset user password' },
     );
     return { success: result.success, error: result.error };
   };
