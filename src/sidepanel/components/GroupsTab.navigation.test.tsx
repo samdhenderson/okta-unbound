@@ -376,10 +376,10 @@ describe('GroupsTab sub-navigation', () => {
     // RETARGETED (Group Health pane, step 8 of the Group Detail rework):
     // `GroupMetadataSection` is no longer a standalone section below the tab
     // card — it is folded into the Health tab's "About this group"
-    // `CollapsibleSection` (`GroupHealthPane.tsx`). Switch there before
+    // `CollapsibleSection` (`GroupInsightsPane.tsx`). Switch there before
     // asserting on the group id; the section stays mounted (though visually
     // collapsed) once its tab is active, so no extra "expand" click is needed.
-    await uev.click(tablist.getByRole('tab', { name: 'Health' }));
+    await uev.click(tablist.getByRole('tab', { name: 'Insights' }));
     expect(detail.getByText('g1')).toBeInTheDocument();
     expect(detail.getByRole('button', { name: 'Copy ID' })).toBeInTheDocument();
 
@@ -415,11 +415,17 @@ describe('GroupsTab sub-navigation', () => {
     await uev.click(within(row).getByRole('button', { name: 'Analyze member source' }));
 
     const detail = within(screen.getByTestId('group-detail-view'));
-    // Already past the gate: the idle "Analyze" button is gone, unasked.
+    /*
+      RETARGETED: the Members tab used to carry two gates over one analysis —
+      "Analyze" on a membership-source card and "Load members" on the roster.
+      That card is gone and its readout folded into the roster, so there is one
+      gate and one name for it. Same property, same direction: already past the
+      gate, unasked, with the analyzed (empty) result on screen.
+    */
     await waitFor(() =>
-      expect(detail.queryByRole('button', { name: 'Analyze' })).not.toBeInTheDocument(),
+      expect(detail.queryByRole('button', { name: 'Load members' })).not.toBeInTheDocument(),
     );
-    expect(detail.getByText('No members to attribute.')).toBeInTheDocument();
+    expect(detail.getByText("This group's roster is empty.")).toBeInTheDocument();
   });
 
   it('auto-analyzes a plain drill-in when the group is within the auto-load budget', async () => {
@@ -442,12 +448,12 @@ describe('GroupsTab sub-navigation', () => {
       }),
     );
 
-    // Already past the gate: the idle "Analyze" button never appears, and the
-    // (empty, per the mock above) analyzed result renders directly.
+    // Already past the gate: the idle "Load members" button never appears, and
+    // the (empty, per the mock above) analyzed result renders directly.
     await waitFor(() =>
-      expect(detail.queryByRole('button', { name: 'Analyze' })).not.toBeInTheDocument(),
+      expect(detail.queryByRole('button', { name: 'Load members' })).not.toBeInTheDocument(),
     );
-    expect(detail.getByText('No members to attribute.')).toBeInTheDocument();
+    expect(detail.getByText("This group's roster is empty.")).toBeInTheDocument();
   });
 
   it('does not analyze on a plain drill-in when the group is over the auto-load budget', async () => {
@@ -464,6 +470,6 @@ describe('GroupsTab sub-navigation', () => {
       }),
     );
 
-    expect(detail.getByRole('button', { name: 'Analyze' })).toBeInTheDocument();
+    expect(detail.getByRole('button', { name: 'Load members' })).toBeInTheDocument();
   });
 });

@@ -1,12 +1,18 @@
 /**
  * @module sidepanel/components/users/UserDetailPanel
- * @description The Users tab's selected-user surface: three tabbed panes of one card.
+ * @description The Users tab's selected-user surface: three tabbed panes under one strip.
  *
  * **Groups**, **Apps** and **Profile** — the same three questions the native Okta
  * admin console splits a user into, but with source attribution on every row.
  * They are panes of one card rather than a stack of sections because they are
  * three answers to one question ("what does this person have, and why?"), and
  * stacking them made the page a scroll rather than a comparison.
+ *
+ * The **strip** sits above that card rather than inside it, which is Okta's own
+ * chrome and what `GroupDetailView` already did. Tabs inside the card read as a
+ * control belonging to the pane below them; outside, they read as what they are —
+ * a switch over which card is on screen. The card around the panes stays: that is
+ * what makes the three read as one surface.
  *
  * ## Panes are hidden, not unmounted
  *
@@ -198,64 +204,70 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
   ];
 
   return (
-    <div className="animate-rise-in overflow-hidden rounded-md border border-neutral-200 bg-white">
-      <div className="px-2">
-        <Tabs
-          tabs={tabs}
-          activeKey={pane}
-          onChange={(key) => onPaneChange(key as UserDetailPane)}
-          ariaLabel="User detail sections"
-        />
-      </div>
+    <div className="animate-rise-in">
+      {/*
+        The tab strip sits *above* the card, not inside it — the same chrome Group
+        Detail uses, and Okta's own. The panes keep the card: they are three
+        answers to one question and read as one surface, which is the whole reason
+        they are panes rather than a stack of sections.
+      */}
+      <Tabs
+        tabs={tabs}
+        activeKey={pane}
+        onChange={(key) => onPaneChange(key as UserDetailPane)}
+        ariaLabel="User detail sections"
+      />
 
-      <div
-        role="tabpanel"
-        aria-label="Groups"
-        hidden={pane !== 'groups'}
-        className={pane === 'groups' ? '' : 'hidden'}
-      >
-        <GroupMembershipsList
-          memberships={memberships}
-          user={user}
-          isLoading={isLoadingMemberships}
-          currentGroupId={currentGroupId}
-          oktaOrigin={oktaOrigin}
-          recentlyAddedGroupId={recentlyAddedGroupId}
-          appsByGroupId={appsByGroupId}
-          onProveMembershipSource={onProveMembershipSource}
-        />
-      </div>
+      <div className="mt-6 overflow-hidden rounded-md border border-neutral-200 bg-white">
+        <div
+          role="tabpanel"
+          aria-label="Groups"
+          hidden={pane !== 'groups'}
+          className={pane === 'groups' ? '' : 'hidden'}
+        >
+          <GroupMembershipsList
+            memberships={memberships}
+            user={user}
+            isLoading={isLoadingMemberships}
+            currentGroupId={currentGroupId}
+            oktaOrigin={oktaOrigin}
+            recentlyAddedGroupId={recentlyAddedGroupId}
+            appsByGroupId={appsByGroupId}
+            onProveMembershipSource={onProveMembershipSource}
+          />
+        </div>
 
-      <div
-        role="tabpanel"
-        aria-label="Apps"
-        hidden={pane !== 'apps'}
-        className={pane === 'apps' ? 'px-4 py-3' : 'hidden'}
-      >
-        <UserAppsList
-          apps={apps}
-          memberships={memberships}
-          isLoading={isLoadingApps}
-          complete={appsComplete}
-          oktaOrigin={oktaOrigin}
-        />
-      </div>
+        <div
+          role="tabpanel"
+          aria-label="Apps"
+          hidden={pane !== 'apps'}
+          className={pane === 'apps' ? 'px-4 py-3' : 'hidden'}
+        >
+          <UserAppsList
+            apps={apps}
+            memberships={memberships}
+            isLoading={isLoadingApps}
+            complete={appsComplete}
+            oktaOrigin={oktaOrigin}
+          />
+        </div>
 
-      <div
-        role="tabpanel"
-        aria-label="Profile"
-        hidden={pane !== 'profile'}
-        className={pane === 'profile' ? undefined : 'hidden'}
-      >
-        <UserProfilePane
-          attributes={attributes}
-          config={profileConfig}
-          ruleReads={ruleReads}
-          isLoading={isLoadingProfile}
-          onConfigure={() => setIsConfiguringProfile(true)}
-          edit={profileEdit?.controls}
-          cells={profileEdit?.cells}
-        />
+        <div
+          role="tabpanel"
+          aria-label="Profile"
+          hidden={pane !== 'profile'}
+          className={pane === 'profile' ? undefined : 'hidden'}
+        >
+          <UserProfilePane
+            attributes={attributes}
+            config={profileConfig}
+            ruleReads={ruleReads}
+            isLoading={isLoadingProfile}
+            onConfigure={() => setIsConfiguringProfile(true)}
+            edit={profileEdit?.controls}
+            cells={profileEdit?.cells}
+          />
+        </div>
       </div>
 
       {/*

@@ -20,6 +20,35 @@ import { createLogger } from '../../shared/utils/logger';
 
 const log = createLogger('useMemberMfaScan');
 
+/**
+ * Above this member count, starting a scan requires an explicit confirmation:
+ * the scan is one `GET /api/v1/users/{id}/factors` per member, so a press on a
+ * large roster is a request storm the reader should have agreed to.
+ *
+ * It lives here, beside the state machine it gates, rather than in either
+ * surface that renders the gate — `MemberExplorer` and
+ * `GroupMfaCoverageSection` held identical unexported copies, and a threshold
+ * that disagrees between two views of the same operation is a bug waiting for
+ * whichever copy gets tuned first.
+ */
+export const MFA_AUTO_THRESHOLD = 500;
+
+/**
+ * Whether a roster of `memberCount` members is large enough that scanning
+ * should go through the confirmation gate rather than starting immediately.
+ *
+ * The predicate rather than the bare constant is what callers want: both
+ * surfaces branch on exactly this comparison, and exporting the comparison
+ * keeps the boundary condition (`>`, not `>=`) from being re-derived — and
+ * re-derived differently — at each call site.
+ *
+ * @param memberCount - Number of members the scan would cover.
+ * @returns `true` when the caller should move to the `'confirming'` gate.
+ */
+export function mfaScanNeedsConfirm(memberCount: number): boolean {
+  return memberCount > MFA_AUTO_THRESHOLD;
+}
+
 /** Options for {@link useMemberMfaScan}. */
 export interface UseMemberMfaScanOptions {
   /** Okta group id the scan is scoped to; also the cache key's scope. */

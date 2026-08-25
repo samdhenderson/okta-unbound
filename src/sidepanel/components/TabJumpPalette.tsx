@@ -1,6 +1,6 @@
 /**
  * @module sidepanel/components/TabJumpPalette
- * @description ⌘K jump-to palette for the panel's eight top-level sections.
+ * @description ⌘K jump-to palette for the panel's nine top-level sections.
  *
  * The primary nav is an icon rail: inactive tabs are icon-only, which is compact
  * but asks the user to aim at a small target. This palette is the keyboard route
@@ -8,7 +8,7 @@
  * with ⌘K / Ctrl+K (see {@link module:sidepanel/hooks/useCommandPalette}, which
  * owns the one global listener), type a few letters, press Enter.
  *
- * Scope is deliberately **navigation destinations only** — the eight entries in
+ * Scope is deliberately **navigation destinations only** — the entries in
  * {@link module:sidepanel/tabs}. Searching groups/users/rules from here is a
  * later feature; the result list is shaped as a generic `{ id, label, icon }`
  * row so that lands as extra sections rather than a rewrite.

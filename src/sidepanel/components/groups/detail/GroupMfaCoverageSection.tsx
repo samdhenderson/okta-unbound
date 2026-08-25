@@ -1,29 +1,21 @@
 /**
  * @module sidepanel/components/groups/detail/GroupMfaCoverageSection
  * @description The MFA-coverage trigger, result summary, and large-group
- * confirmation gate for {@link module:sidepanel/components/groups/detail/GroupHealthPane}.
+ * confirmation gate for {@link module:sidepanel/components/groups/detail/GroupInsightsPane}.
  *
  * Purely presentational — the caller owns `useMemberMfaScan` and passes its
  * state and controls through. Same shape as `MemberExplorer.tsx`'s MFA panel
- * (`MfaScanButton` plus a `Modal` confirm above {@link MFA_AUTO_THRESHOLD}
- * members), scoped to one coverage summary line instead of the full
+ * (`MfaScanButton` plus a `Modal` confirm once
+ * {@link module:sidepanel/hooks/useMemberMfaScan.mfaScanNeedsConfirm} says so),
+ * scoped to one coverage summary line instead of the full
  * factor-distribution breakdown that surface renders.
  */
 import React, { useMemo } from 'react';
 import { AlertMessage, Button, Modal } from '../../shared';
-import MfaScanButton from '../../overview/members/MfaScanButton';
-import { computeMfaBreakdown } from '../../overview/members/memberAnalytics';
+import MfaScanButton from '../../members/MfaScanButton';
+import { computeMfaBreakdown } from '../../members/memberAnalytics';
+import { mfaScanNeedsConfirm } from '../../../hooks/useMemberMfaScan';
 import type { OktaUser, MemberMfaResult, MfaScanStatus } from '../../../../shared/types';
-
-/**
- * Above this member count, running the MFA scan requires an explicit
- * confirmation (one `GET .../factors` call per member). Mirrors
- * `MemberExplorer.tsx`'s identical, unexported constant — the two surfaces
- * gate the same operation and are kept at the same threshold deliberately;
- * duplicated rather than imported because `MemberExplorer` has exactly one
- * other consumer today and does not export it.
- */
-export const MFA_AUTO_THRESHOLD = 500;
 
 /** Props for {@link GroupMfaCoverageSection}. */
 export interface GroupMfaCoverageSectionProps {
@@ -66,7 +58,7 @@ const GroupMfaCoverageSection: React.FC<GroupMfaCoverageSectionProps> = ({
   onCancelConfirm,
 }) => {
   const handleScanClick = (): void => {
-    if (members.length > MFA_AUTO_THRESHOLD) onRequestConfirm();
+    if (mfaScanNeedsConfirm(members.length)) onRequestConfirm();
     else onRunScan();
   };
 

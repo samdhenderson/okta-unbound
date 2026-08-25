@@ -29,7 +29,7 @@ const rowClasses = 'flex w-full items-center justify-between gap-3 rounded-md bo
  *
  * @example
  * ```tsx
- * <RuleLinkRow name="All Engineers" trailing={<RuleStatusPill status="ACTIVE" />} onSelect={open} />
+ * <RuleLinkRow name="All Engineers" trailing={<Badge variant="success">ACTIVE</Badge>} onSelect={open} />
  * ```
  */
 const RuleLinkRow: React.FC<RuleLinkRowProps> = ({ name, trailing, detail, onSelect }) => {

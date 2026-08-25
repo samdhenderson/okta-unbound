@@ -32,7 +32,9 @@ const meta = {
           'whenever that prop was left out — a ghost action with no live wire.\n\n' +
           '**Export members** now only appears in the strip when `onExportGroup` is actually provided ' +
           '(omitted, never disabled-forever). **Add** is the everyday, reversible verb and stays in ' +
-          "the row at `priority: 'flex'`, mirroring `UserActionBar`'s treatment of *Add group*.\n\n" +
+          "the row at `priority: 'flex'`, mirroring `UserActionBar`'s treatment of *Add group*. " +
+          '**Compare** sits beside it for the same reason that strip puts its own *Compare* in the ' +
+          'row: it reads two rosters and writes nothing.\n\n' +
           'Unlike `UserActionBar`, this strip ships with **no disclosure tier** — there is no ' +
           "group-level verb today that changes the group's state with no symmetric undo, so there is " +
           'nothing to put behind **More**.',
@@ -44,13 +46,16 @@ const meta = {
     targetTabId: 1,
     onExportGroup: fn(),
     onAddMember: fn(),
+    onCompare: fn(),
     // Nothing scrolls in a story, so the strip renders at its resting geometry.
     sticky: false,
   },
   argTypes: {
     group: { description: 'The group every verb in the strip acts on.' },
     targetTabId: {
-      description: '`Add` disables without a connected tab — the type-ahead has nothing to search.',
+      description:
+        '`Add` and `Compare` both disable without a connected tab — neither type-ahead has ' +
+        'anything to search.',
     },
     onExportGroup: {
       description:
@@ -58,6 +63,7 @@ const meta = {
         '*Export members* is left out of the strip entirely.',
     },
     onAddMember: { description: 'Opens the Add-member modal.' },
+    onCompare: { description: 'Opens the picker for the second group in a comparison.' },
     sticky: {
       description: 'Pin the strip below the header. `false` in stories — nothing scrolls.',
     },
@@ -67,7 +73,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Both actions wired: Export members (pinned, primary) and Add (flex). */
+/** Every action wired: Export members (pinned, primary), Add and Compare (flex). */
 export const Default: Story = {};
 
 /** No `onExportGroup` — the strip renders only `Add`, never a disabled ghost button. */
@@ -86,6 +92,7 @@ export const NoConnectedTab: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('button', { name: 'Add' })).toBeDisabled();
+    await expect(canvas.getByRole('button', { name: 'Compare' })).toBeDisabled();
     await expect(canvas.getByRole('button', { name: /Export members/ })).toBeEnabled();
   },
 };

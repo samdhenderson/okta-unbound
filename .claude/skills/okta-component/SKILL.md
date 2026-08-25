@@ -37,7 +37,7 @@ Check three places before writing a line of markup: the barrel
 Most needs are already a prop away:
 
 - **A search field** → compose `Input` + `Icon` + `LoadingSpinner`/`IconButton`,
-  the way `src/sidepanel/components/overview/members/MemberSearchBar.tsx` does
+  the way `src/sidepanel/components/members/MemberSearchBar.tsx` does
   (leading `icon`, a conditional trailing clear `IconButton`). Copy its shape,
   not `SearchDropdown`'s or a hand-rolled div.
 - **A loading/empty/no-results ladder** → `ScrollableList`

@@ -18,7 +18,7 @@
  *   headline is a *derived* claim ("83% of members come from 4 rules"), never
  *   a bare count already on the header.
  * - **A fact that hasn't loaded is omitted, never rendered as a zero or a
- *   dash.** Membership source (see {@link GroupMembershipSourceSection}) may
+ *   dash.** Membership source (see {@link GroupMembersSection}) may
  *   still be genuinely `'idle'` — a group over `GroupDetailView`'s
  *   `AUTO_LOAD_MEMBER_CAP`, or no Okta tab connected — in which case its tile
  *   is the one call-to-action on this pane, never a number. Once the analysis
@@ -51,7 +51,7 @@ interface GroupOverviewPaneProps {
    * identity fact lives in `PageHeader` per ADR-0032. */
   group: GroupSummary;
   /** The manual-vs-rule membership split, once the gated analysis has run —
-   * the same data {@link GroupMembershipSourceSection} renders. */
+   * the same data {@link GroupMembersSection}'s source strip renders. */
   breakdown: MemberSourceBreakdown | null;
   /** Status of the gated member-source analysis. */
   memberStatus: SourceStatus;

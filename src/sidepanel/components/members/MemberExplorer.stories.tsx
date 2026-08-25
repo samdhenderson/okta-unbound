@@ -1,0 +1,93 @@
+import type { Meta, StoryObj } from '@storybook/react-vite';
+import { fn } from 'storybook/test';
+import type { MemberMfaResult } from '../../../shared/types';
+import MemberExplorer from './MemberExplorer';
+import { mockUsers } from '../../../test/mocks/fixtures';
+
+const mfaResults = new Map<string, MemberMfaResult>(
+  mockUsers.map((user, i) => [
+    user.id,
+    {
+      userId: user.id,
+      factors: [],
+      enrolled: i % 4 !== 0,
+      factorCount: i % 4 === 0 ? 0 : (i % 4) + 1,
+      factorLabels: i % 4 === 0 ? [] : ['Okta Verify (Fastpass)'].concat(i % 4 >= 2 ? ['SMS'] : []),
+    },
+  ]),
+);
+
+/** Orchestrator for in-group member search, faceting, MFA scanning, and listing. */
+const meta = {
+  title: 'Members/MemberExplorer',
+  component: MemberExplorer,
+  tags: ['autodocs'],
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Orchestrator for in-group member search, faceting, composition, MFA, and listing.\n\n' +
+          "Owns the explorer's client-side state — debounced search, the active filter set, " +
+          'sort field/direction, and the paged visible window — and derives the ' +
+          'filtered/sorted list via the pure `memberAnalytics` helpers. Composes the search ' +
+          'bar, filter panel, MFA scan panel, composition reports, member list, and the ' +
+          'details/copy modals. MFA scan results are owned by the parent overview and passed ' +
+          'in, so the scan lifecycle (idle → confirming → scanning → complete) is driven by ' +
+          'props.\n\n' +
+          '**Related internals:** [Types](?path=/docs/internals-types--docs)',
+      },
+    },
+  },
+  argTypes: {
+    members: { description: "The group's full member set (the explorer filters/sorts locally)." },
+    isReloading: {
+      description:
+        'True while the member set is being re-fetched behind the explorer; the list swaps to skeleton rows.',
+    },
+    mfaResults: { description: 'Per-member MFA scan results, or null before a scan has run.' },
+    scanStatus: { description: 'Current MFA scan lifecycle status.' },
+    onRunScan: { description: 'Start the MFA scan.' },
+    onRequestConfirm: { description: 'Request the confirmation gate (used for large groups).' },
+    onCancelConfirm: { description: 'Dismiss the confirmation gate.' },
+    oktaOrigin: {
+      description: 'Okta org origin for member Admin Console links (null when unknown).',
+    },
+  },
+  args: {
+    members: mockUsers,
+    isReloading: false,
+    mfaResults: null,
+    scanStatus: 'idle',
+    onRunScan: fn(),
+    onRequestConfirm: fn(),
+    onCancelConfirm: fn(),
+    oktaOrigin: null,
+  },
+} satisfies Meta<typeof MemberExplorer>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+/** No MFA scan yet run: search, composition, and the member list are all live. */
+export const Default: Story = {};
+
+/** Confirmation gate shown before scanning a large group. */
+export const ConfirmingScan: Story = {
+  args: { scanStatus: 'confirming' },
+};
+
+/** MFA scan in progress. */
+export const Scanning: Story = {
+  args: { scanStatus: 'scanning' },
+};
+
+/** MFA scan complete: factor breakdowns and per-member factor tags render. */
+export const ScanComplete: Story = {
+  args: { mfaResults, scanStatus: 'complete' },
+};
+
+/** An empty group renders the explorer's empty state throughout. */
+export const Empty: Story = {
+  args: { members: [] },
+};

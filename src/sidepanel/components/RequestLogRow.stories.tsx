@@ -135,8 +135,19 @@ export const ExpandedBatch: Story = {
   args: { entry: batch, isExpanded: true },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText(/api\/v1\/groups\?limit=200/)).toBeVisible();
-    await expect(canvas.getByText(/stats/)).toBeVisible();
+    /*
+      Exact strings, not `/groups\?limit=200/`: the batch's second endpoint is the
+      *next page* of the first (`…&after=…`), so a substring regex matches both
+      spans and `getByText` throws on the ambiguity. Naming each one is also the
+      better assertion — what an expanded batch owes the reader is its distinct
+      endpoints, and a paginated pair is exactly the case where "distinct" earns
+      its keep.
+    */
+    await expect(canvas.getByText('/api/v1/groups?limit=200')).toBeVisible();
+    await expect(
+      canvas.getByText('/api/v1/groups?limit=200&after=00gFAKE0000000000042'),
+    ).toBeVisible();
+    await expect(canvas.getByText('/api/v1/groups/00gFAKE0000000000001/stats')).toBeVisible();
   },
 };
 

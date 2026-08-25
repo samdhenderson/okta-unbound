@@ -16,11 +16,14 @@
  * *Add* is the everyday, reversible verb (an add can always be undone by a
  * remove) and stays in the row at `priority: 'flex'`, mirroring
  * {@link module:sidepanel/components/users/UserActionBar}'s treatment of *Add
- * group*. Unlike that strip, this one ships with **no disclosure tier**: there
- * is no group-level verb today that changes the group's state with no
- * symmetric undo, so there is nothing to put one press behind **More** — a
- * page with no irreversible action simply has no tier, rather than an empty
- * one invented to look consistent.
+ * group*. *Compare* joins it there for the reason that strip puts its own
+ * *Compare* in the row: a comparison reads two rosters and writes nothing, so
+ * the worst a mis-press costs is a page you close again. Unlike that strip,
+ * this one ships with **no disclosure tier**: there is no group-level verb
+ * today that changes the group's state with no symmetric undo, so there is
+ * nothing to put one press behind **More** — a page with no irreversible
+ * action simply has no tier, rather than an empty one invented to look
+ * consistent.
  *
  * `ActionBar` itself still owns every disclosure mechanic (there happens to be
  * none to disclose here); this component only decides what belongs in the row.
@@ -44,6 +47,8 @@ export interface GroupActionBarProps {
   onExportGroup?: (groupId: string, groupName: string) => void;
   /** Opens the Add-member modal. */
   onAddMember: () => void;
+  /** Opens the picker for the second group in a membership comparison. */
+  onCompare: () => void;
   /**
    * Pin the strip below the header while the page scrolls under it. Defaults to
    * `true`; pass `false` in a story, where there is nothing to scroll.
@@ -53,7 +58,8 @@ export interface GroupActionBarProps {
 
 /**
  * The group-detail rung's action strip: *Export members* (pinned, primary,
- * only when wired) and *Add* (flex) in the row, no disclosure tier.
+ * only when wired), *Add* and *Compare* (both flex) in the row, no disclosure
+ * tier.
  *
  * @param props - See {@link GroupActionBarProps}.
  *
@@ -64,6 +70,7 @@ export interface GroupActionBarProps {
  *   targetTabId={targetTabId}
  *   onExportGroup={onExportGroup}
  *   onAddMember={addMember.openModal}
+ *   onCompare={openComparePicker}
  * />
  * ```
  */
@@ -72,6 +79,7 @@ const GroupActionBar: React.FC<GroupActionBarProps> = ({
   targetTabId,
   onExportGroup,
   onAddMember,
+  onCompare,
   sticky = true,
 }) => {
   // Declaration order is reading order and overflow order both: `Export
@@ -100,6 +108,15 @@ const GroupActionBar: React.FC<GroupActionBarProps> = ({
       onClick: onAddMember,
       disabled: targetTabId === null,
       title: 'Add a member to this group',
+    },
+    {
+      id: 'compare',
+      label: 'Compare',
+      icon: 'users',
+      priority: 'flex',
+      onClick: onCompare,
+      disabled: targetTabId === null,
+      title: 'Compare this group\u2019s membership with another group',
     },
   ];
 

@@ -4,7 +4,7 @@
  * this group is assigned to, plus any admin roles it grants to every member.
  *
  * The Group Detail view answers where members come from
- * ({@link GroupMembershipSourceSection}) and what rules touch the group
+ * ({@link GroupMembersSection}) and what rules touch the group
  * ({@link GroupRulesSection}), but never what membership *does* until this
  * section: the two grant axes surfaced by
  * {@link sidepanel/hooks/useGroupAccessGrants.useGroupAccessGrants}.
@@ -22,6 +22,21 @@
  * {@link Badge} labelled "role assigned (scope not shown)" rather than as a
  * fully-resolved permission.
  *
+ * ## Apps are rows, not chips
+ *
+ * Each assigned app used to be a 24px `EntityLink` pill carrying a label and
+ * nothing else — a reader could not tell an `ACTIVE` SAML app from a deactivated
+ * bookmark without leaving the page. {@link GroupAppRow} is the same disclosure
+ * shape the Users tab's app list and the roster's member rows use, fed by the
+ * pure {@link module:sidepanel/components/groups/groupAppSource}. It costs no
+ * extra request: `GET /api/v1/groups/{id}/apps` already returned the status,
+ * sign-on mode and timestamps this list was discarding at the boundary.
+ *
+ * Push mappings are joined in as an **annotation** on the apps that appear here.
+ * {@link GroupPushSection} stays, and stays authoritative: a group is pushed to
+ * an app from that app's Push Groups tab, which does not require the group to be
+ * assigned to it, so an app can carry a mapping and never appear in this list.
+ *
  * ## "Unavailable" is not "no roles"
  *
  * The admin-roles read commonly `403`s for a non-super-admin session — an
@@ -32,17 +47,13 @@
  * renders as explicit text. Conflating the two would misreport a permission gap
  * as proof the group grants no admin access.
  */
-import React from 'react';
-import {
-  AlertMessage,
-  Badge,
-  DetailSection,
-  EmptyState,
-  EntityLink,
-  LoadingSpinner,
-} from '../../shared';
+import React, { useCallback, useMemo, useState } from 'react';
+import { AlertMessage, Badge, DetailSection, EmptyState, LoadingSpinner } from '../../shared';
+import GroupAppRow from './GroupAppRow';
+import { toGroupAppRows } from '../groupAppSource';
 import type { AppGrant, RoleGrant, RolesReadStatus } from '../../../hooks/useGroupAccessGrants';
 import type { SourceStatus } from '../../../hooks/useGroupSource';
+import type { PushGroupMapping } from '../../../../shared/types';
 
 /** Props for {@link GroupAccessSection}. */
 interface GroupAccessSectionProps {
@@ -60,16 +71,19 @@ interface GroupAccessSectionProps {
    * module doc.
    */
   rolesStatus: RolesReadStatus;
+  /**
+   * The group's push mappings, joined onto the app rows. **`undefined` means the
+   * enrichment did not run** and no row says anything about push; an empty array
+   * is the loaded fact that this group is pushed nowhere.
+   */
+  pushMappings?: PushGroupMapping[];
+  /** Okta org origin for per-app Admin Console links (null when unknown). */
+  oktaOrigin?: string | null;
 }
 
 /** Tooltip explaining why a role's resource scope is never shown. */
 const ROLE_SCOPE_CAVEAT =
   "Okta's group-roles listing reports the role type but not which apps or groups it applies to, so this is not the full grant.";
-
-/** One assigned app, rendered as an openable {@link EntityLink} chip. */
-const AppChip: React.FC<{ app: AppGrant }> = ({ app }) => (
-  <EntityLink type="app" id={app.id} name={app.label} />
-);
 
 /** One granted role: its type label plus a caveat badge — never the label alone. */
 const RoleRow: React.FC<{ role: RoleGrant }> = ({ role }) => (
@@ -91,7 +105,25 @@ const GroupAccessSection: React.FC<GroupAccessSectionProps> = ({
   appsError,
   roles,
   rolesStatus,
+  pushMappings,
+  oktaOrigin,
 }) => {
+  const rows = useMemo(() => toGroupAppRows(apps, pushMappings), [apps, pushMappings]);
+
+  /*
+    Open rows live here rather than in each row, so a re-render of the section
+    cannot close one — the same arrangement `MemberList` and
+    `GroupMembershipsList` use, for the same reason.
+  */
+  const [openAppIds, setOpenAppIds] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleRow = useCallback((appId: string) => {
+    setOpenAppIds((previous) => {
+      const next = new Set(previous);
+      if (!next.delete(appId)) next.add(appId);
+      return next;
+    });
+  }, []);
+
   const loading = appsStatus === 'loading' || rolesStatus === 'loading';
   // A *confirmed* zero — the roles read actually succeeded and came back
   // empty. `rolesStatus === 'unavailable'` must never satisfy this: that is
@@ -122,14 +154,18 @@ const GroupAccessSection: React.FC<GroupAccessSectionProps> = ({
             <h3 className="text-xs font-medium text-neutral-600">
               Assigned apps{apps.length > 0 && ` (${apps.length})`}
             </h3>
-            {apps.length === 0 ? (
+            {rows.length === 0 ? (
               <p className="mt-1.5 text-sm text-neutral-500">Not assigned to any app.</p>
             ) : (
-              <ul className="mt-1.5 flex flex-wrap gap-1.5">
-                {apps.map((app) => (
-                  <li key={app.id}>
-                    <AppChip app={app} />
-                  </li>
+              <ul className="mt-1.5 space-y-1.5">
+                {rows.map((row) => (
+                  <GroupAppRow
+                    key={row.id}
+                    row={row}
+                    expanded={openAppIds.has(row.id)}
+                    onToggle={toggleRow}
+                    oktaOrigin={oktaOrigin}
+                  />
                 ))}
               </ul>
             )}

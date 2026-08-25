@@ -11,25 +11,30 @@
  * Presentational; the caller owns
  * {@link sidepanel/hooks/useGroupSource.useGroupSource} and
  * {@link sidepanel/hooks/useGroupRuleReferences.useGroupRuleReferences}.
+ *
+ * ## A rule you can read, not a link to one
+ *
+ * Both lists were `RuleLinkRow`s: a name, a status pill, and a click that
+ * navigated *away* to the Rules tab. So the one question this tab exists to
+ * answer — "what does that rule actually say?" — could only be answered by
+ * leaving it. They are {@link RuleCard} now, the same expandable card the Rules
+ * tab itself renders, which discharges one of ADR-0030's outstanding migrations.
+ *
+ * It costs no request. `getGroupRulesForGroup` and `ensureGroupRulesLoaded`
+ * already return `FormattedRule[]` — the exact shape the card takes — and both
+ * hooks were copying four fields off each one and dropping the rest.
+ *
+ * `onNavigateToRule` survives as a **secondary** affordance inside the expanded
+ * card rather than as the only way to see the rule. None of the card's write
+ * verbs are wired here: this section cannot activate or deactivate a rule, so it
+ * renders no control that would (ADR-0039).
  */
 import React from 'react';
 import { AlertMessage, DetailSection, LoadingSpinner } from '../../shared';
-import RuleLinkRow from './RuleLinkRow';
+import RuleCard from '../../RuleCard';
 import type { FeedingRule, SourceStatus } from '../../../hooks/useGroupSource';
 import type { ReferencingRule } from '../../../hooks/useGroupRuleReferences';
-
-/** A rule's ACTIVE/INACTIVE state, exactly as Okta returns it. */
-const RuleStatusPill: React.FC<{ status: string }> = ({ status }) => (
-  <span
-    className={`px-2 py-0.5 rounded-md text-xs font-medium border ${
-      status === 'ACTIVE'
-        ? 'bg-success-light text-success-text border-success-light'
-        : 'bg-neutral-50 text-neutral-600 border-neutral-200'
-    }`}
-  >
-    {status}
-  </span>
-);
+import type { FormattedRule } from '../../../../shared/types';
 
 /** One headed rule list with its own async triad. */
 const RuleRelationList: React.FC<{
@@ -38,9 +43,10 @@ const RuleRelationList: React.FC<{
   status: SourceStatus;
   error: string | null;
   emptyMessage: string;
-  rules: Array<{ id: string; name: string; status: string; detail?: string }>;
+  rules: FormattedRule[];
+  oktaOrigin?: string | null;
   onNavigateToRule?: (ruleId: string) => void;
-}> = ({ heading, hint, status, error, emptyMessage, rules, onNavigateToRule }) => (
+}> = ({ heading, hint, status, error, emptyMessage, rules, oktaOrigin, onNavigateToRule }) => (
   <div>
     <h3 className="text-xs font-medium text-neutral-600">
       {heading}
@@ -55,18 +61,18 @@ const RuleRelationList: React.FC<{
       ) : rules.length === 0 ? (
         <p className="text-sm text-neutral-500">{emptyMessage}</p>
       ) : (
-        <ul className="space-y-1.5">
+        <div className="space-y-2">
           {rules.map((rule) => (
-            <li key={rule.id}>
-              <RuleLinkRow
-                name={rule.name}
-                detail={rule.detail}
-                trailing={<RuleStatusPill status={rule.status} />}
-                onSelect={onNavigateToRule ? () => onNavigateToRule(rule.id) : undefined}
-              />
-            </li>
+            /* No `onActivate`/`onDeactivate`/`onPreviewImpact`: this section
+               wires none of them, so the card renders no control for them. */
+            <RuleCard
+              key={rule.id}
+              rule={rule}
+              oktaOrigin={oktaOrigin}
+              onOpenInRulesTab={onNavigateToRule}
+            />
           ))}
-        </ul>
+        </div>
       )}
     </div>
   </div>
@@ -86,8 +92,10 @@ interface GroupRulesSectionProps {
   referencingStatus: SourceStatus;
   /** Error message when the referencing-rules load failed. */
   referencingError: string | null;
-  /** Deep-links a rule in the Rules tab. */
+  /** Deep-links a rule in the Rules tab, from inside its expanded card. */
   onNavigateToRule?: (ruleId: string) => void;
+  /** Okta org origin for each card's "View in Okta" link. */
+  oktaOrigin?: string | null;
 }
 
 /**
@@ -102,6 +110,7 @@ const GroupRulesSection: React.FC<GroupRulesSectionProps> = ({
   referencingStatus,
   referencingError,
   onNavigateToRule,
+  oktaOrigin,
 }) => (
   <DetailSection title="Rules">
     <div className="space-y-4">
@@ -112,6 +121,7 @@ const GroupRulesSection: React.FC<GroupRulesSectionProps> = ({
         error={assigningError}
         emptyMessage="No rule assigns users to this group. Members are added manually or by app push."
         rules={assigningRules}
+        oktaOrigin={oktaOrigin}
         onNavigateToRule={onNavigateToRule}
       />
 
@@ -121,12 +131,8 @@ const GroupRulesSection: React.FC<GroupRulesSectionProps> = ({
         status={referencingStatus}
         error={referencingError}
         emptyMessage="No rule condition references this group by id."
-        rules={referencingRules.map((rule) => ({
-          id: rule.id,
-          name: rule.name,
-          status: rule.status,
-          detail: rule.conditionExpression,
-        }))}
+        rules={referencingRules}
+        oktaOrigin={oktaOrigin}
         onNavigateToRule={onNavigateToRule}
       />
     </div>

@@ -5,10 +5,10 @@
  * Pins the container's own job — composing the read-only loads, the action bar,
  * and which of the five tabbed panes is on screen — not the panes' own
  * rendering, which each already has its own suite
- * (`GroupMembershipSourceSection.test.tsx`, `GroupMembersSection.test.tsx`,
+ * (`GroupMembersSection.test.tsx`,
  * `GroupRulesSection.test.tsx`; `GroupOverviewPane`, `GroupAccessSection`,
- * `GroupPushSection` and `GroupHealthPane` are pure-render leaves with only a
- * story, per ADR-0023). Every pane (including `GroupHealthPane`, which now
+ * `GroupPushSection` and `GroupInsightsPane` are pure-render leaves with only a
+ * story, per ADR-0023). Every pane (including `GroupInsightsPane`, which now
  * owns the folded `GroupMetadataSection` internally — see that pane's own
  * module doc) and the action bar's modal are stubbed test doubles here so a
  * tab switch reads as "which stub is mounted" — the same pattern
@@ -27,7 +27,7 @@
  * provides.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import GroupDetailView from './GroupDetailView';
 import type { GroupSummary } from '../../../../shared/types';
@@ -132,9 +132,6 @@ vi.mock('../../../hooks/useAddGroupMember', () => ({
 vi.mock('./GroupOverviewPane', () => ({
   default: () => <div data-testid="stub-overview" />,
 }));
-vi.mock('./GroupMembershipSourceSection', () => ({
-  default: () => <div data-testid="stub-membership-source" />,
-}));
 vi.mock('./GroupMembersSection', () => ({
   default: () => <div data-testid="stub-members" />,
 }));
@@ -147,8 +144,8 @@ vi.mock('./GroupRulesSection', () => ({
 vi.mock('./GroupPushSection', () => ({
   default: () => <div data-testid="stub-push" />,
 }));
-vi.mock('./GroupHealthPane', () => ({
-  default: () => <div data-testid="stub-health" />,
+vi.mock('./GroupInsightsPane', () => ({
+  default: () => <div data-testid="stub-insights" />,
 }));
 vi.mock('./AddGroupMemberModal', () => ({
   default: () => <div data-testid="stub-add-modal" />,
@@ -182,28 +179,33 @@ describe('GroupDetailView', () => {
 
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('stub-overview')).toBeInTheDocument();
-    expect(screen.queryByTestId('stub-membership-source')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-members')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-access')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-push')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-rules')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('stub-health')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('stub-insights')).not.toBeInTheDocument();
   });
 
-  it('switches to the Members tab, rendering its two sections and unmounting Overview', async () => {
+  /*
+    One section, not two. `GroupMembershipSourceSection` is gone: it rendered a
+    second card, a second gate and a second idle/loading/error ladder over the
+    *same* `useGroupSource` state this pane reads, so a reader could load the
+    roster and still be looking at an un-analyzed meter. Its readout is the strip
+    inside the roster now, and its commentary is `MemberSourceNotes`.
+  */
+  it('switches to the Members tab, rendering its one section and unmounting Overview', async () => {
     const user = userEvent.setup();
     render(<GroupDetailView group={makeGroup()} targetTabId={1} />);
 
     await user.click(screen.getByRole('tab', { name: 'Members' }));
 
     expect(screen.getByRole('tab', { name: 'Members' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('stub-membership-source')).toBeInTheDocument();
     expect(screen.getByTestId('stub-members')).toBeInTheDocument();
     expect(screen.queryByTestId('stub-overview')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-access')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-push')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-rules')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('stub-health')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('stub-insights')).not.toBeInTheDocument();
   });
 
   it('switches to the Access tab, rendering Access + Push and unmounting Overview/Members', async () => {
@@ -216,10 +218,9 @@ describe('GroupDetailView', () => {
     expect(screen.getByTestId('stub-access')).toBeInTheDocument();
     expect(screen.getByTestId('stub-push')).toBeInTheDocument();
     expect(screen.queryByTestId('stub-overview')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('stub-membership-source')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-members')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-rules')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('stub-health')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('stub-insights')).not.toBeInTheDocument();
   });
 
   it('switches to the Rules tab, rendering Rules and unmounting everything else', async () => {
@@ -231,23 +232,21 @@ describe('GroupDetailView', () => {
     expect(screen.getByRole('tab', { name: 'Rules' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('stub-rules')).toBeInTheDocument();
     expect(screen.queryByTestId('stub-overview')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('stub-membership-source')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-members')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-access')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-push')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('stub-health')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('stub-insights')).not.toBeInTheDocument();
   });
 
-  it('switches to the Health tab, rendering GroupHealthPane and unmounting everything else', async () => {
+  it('switches to the Insights tab, rendering GroupInsightsPane and unmounting everything else', async () => {
     const user = userEvent.setup();
     render(<GroupDetailView group={makeGroup()} targetTabId={1} />);
 
-    await user.click(screen.getByRole('tab', { name: 'Health' }));
+    await user.click(screen.getByRole('tab', { name: 'Insights' }));
 
-    expect(screen.getByRole('tab', { name: 'Health' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('stub-health')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Insights' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('stub-insights')).toBeInTheDocument();
     expect(screen.queryByTestId('stub-overview')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('stub-membership-source')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-members')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-access')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-push')).not.toBeInTheDocument();
@@ -261,7 +260,7 @@ describe('GroupDetailView', () => {
       'Members',
       'Access',
       'Rules',
-      'Health',
+      'Insights',
     ]);
   });
 
@@ -286,6 +285,26 @@ describe('GroupDetailView', () => {
 
     await user.click(screen.getByRole('button', { name: 'Add' }));
     expect(addMember.openModal).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+    The comparison itself belongs to `GroupComparisonModal`, which the Groups list
+    already opens from a multi-select and which has its own coverage. What this
+    rung adds is the missing half of that modal's input, so what is pinned here is
+    the container's own job: the strip's verb opens the picker, and no comparison
+    is running behind it until a group has actually been chosen.
+  */
+  it("wires the action bar's Compare button to the group picker", async () => {
+    const user = userEvent.setup();
+    render(<GroupDetailView group={makeGroup()} targetTabId={1} />);
+
+    expect(screen.queryByRole('dialog', { name: /Compare with another group/ })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Compare' }));
+
+    const picker = screen.getByRole('dialog', { name: /Compare with another group/ });
+    expect(picker).toBeInTheDocument();
+    expect(within(picker).getByRole('button', { name: 'Compare' })).toBeDisabled();
   });
 
   it('fires the gated member-source analysis exactly once when autoAnalyze is set and the open has landed', () => {

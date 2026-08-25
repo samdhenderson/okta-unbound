@@ -11,7 +11,7 @@ const meta = {
         component:
           "The group's own reference facts: description, id, and Okta's `created`/`lastUpdated` " +
           'timestamps. Body-only — no section chrome of its own — so its one caller, ' +
-          '`GroupHealthPane`, folds it into a `CollapsibleSection` titled "About this group" ' +
+          '`GroupInsightsPane`, folds it into a `CollapsibleSection` titled "About this group" ' +
           '(default closed) rather than rendering an always-visible card.',
       },
     },

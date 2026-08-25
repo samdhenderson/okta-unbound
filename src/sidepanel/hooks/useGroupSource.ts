@@ -26,32 +26,36 @@ import {
   summarizeMemberSources,
   type MemberSourceBreakdown,
 } from '../../shared/membership/groupSource';
+import {
+  buildMemberSourceIndex,
+  type MemberSourceIndex,
+} from '../../shared/membership/memberSourceIndex';
 import { writeMemberSource } from '../cache/memberSourceCache';
 import { getOrFetch } from '../cache/entityCache';
 import { cacheKeys } from '../cache/keys';
 import { createLogger } from '../../shared/utils/logger';
+import type { FormattedRule } from '../../shared/types';
 
 const log = createLogger('useGroupSource');
 
 /** Async status of a load step. */
 export type SourceStatus = 'idle' | 'loading' | 'done' | 'error';
 
-/** A feeding rule reduced to what the modal displays. */
-export interface FeedingRule {
-  id: string;
-  name: string;
-  status: string;
-  /**
-   * The `user.<attr>` references the rule's condition mentions, extracted by
-   * `extractUserAttributes` ({@link module:shared/ruleUtils}). Feeds the
-   * attribute→rules reverse index built by
-   * {@link module:shared/rules/groupAttributeIndex}. Absent when the source
-   * rule carried none.
-   */
-  userAttributes?: string[];
-  /** The rule's raw condition expression, when the source rule carried one. */
-  conditionExpression?: string;
-}
+/**
+ * A rule whose `assignUserToGroups` targets the open group.
+ *
+ * **The full display model, not a narrowing of it.** `getGroupRulesForGroup`
+ * already returns `FormattedRule[]` — the exact shape `RuleCard` renders — and
+ * this hook used to copy four fields off each one and drop the rest, so the Group
+ * Detail Rules tab could only ever show a name and a status and had to send the
+ * reader to the Rules tab to see the rule itself. Keeping the whole object costs
+ * nothing: it is the same objects, from the same response.
+ *
+ * `userAttributes` is what feeds the attribute→rules reverse index built by
+ * {@link module:shared/rules/groupAttributeIndex}; it is required on
+ * `FormattedRule` (empty when the rule reads none), where it was optional here.
+ */
+export type FeedingRule = FormattedRule;
 
 /** Return shape of {@link useGroupSource}. */
 export interface UseGroupSourceReturn {
@@ -65,6 +69,17 @@ export interface UseGroupSourceReturn {
   breakdown: MemberSourceBreakdown | null;
   /** Status of the (gated) member analysis. */
   memberStatus: SourceStatus;
+  /**
+   * Per-member source facts for the analyzed roster, or `null` before the
+   * analysis has run. Computed from the same members and rules as
+   * {@link UseGroupSourceReturn.breakdown} and sharing its verdict, so a meter
+   * drawn from the counts and a list filtered through this index cannot
+   * disagree about who is in which bucket.
+   *
+   * Held in state rather than banked in `memberSourceCache`: that cache serves
+   * the groups list's compact row meters, which have no use for a per-user map.
+   */
+  memberSourceIndex: MemberSourceIndex | null;
   /** Error message for whichever step failed. */
   error: string | null;
   /** Open the insight for a group and load its feeding rules. */
@@ -102,6 +117,7 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
   const [feedingRules, setFeedingRules] = useState<FeedingRule[]>([]);
   const [rulesStatus, setRulesStatus] = useState<SourceStatus>('idle');
   const [breakdown, setBreakdown] = useState<MemberSourceBreakdown | null>(null);
+  const [memberSourceIndex, setMemberSourceIndex] = useState<MemberSourceIndex | null>(null);
   const [memberStatus, setMemberStatus] = useState<SourceStatus>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -121,6 +137,7 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
       setGroup(nextGroup);
       setFeedingRules([]);
       setBreakdown(null);
+      setMemberSourceIndex(null);
       setMemberStatus('idle');
       setError(null);
       setRulesStatus('loading');
@@ -128,15 +145,7 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
       getGroupRulesForGroup(nextGroup.id)
         .then((rules) => {
           if (runId !== runIdRef.current) return;
-          setFeedingRules(
-            rules.map((r) => ({
-              id: r.id,
-              name: r.name,
-              status: r.status,
-              userAttributes: r.userAttributes,
-              conditionExpression: r.conditionExpression,
-            })),
-          );
+          setFeedingRules(rules);
           setRulesStatus('done');
         })
         .catch((err) => {
@@ -184,6 +193,17 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
           rules,
         );
         setBreakdown(summary);
+        // Deliberately **not** banked in `memberSourceCache`: that cache exists
+        // so the groups list's compact row meters are free, and a row meter has
+        // no use for a per-user map. Keeping it in state alone also keeps the
+        // cached payload small — this is one entry per member, not four counters.
+        setMemberSourceIndex(
+          buildMemberSourceIndex(
+            { id: group.id, name: group.name, type: group.type },
+            members,
+            rules,
+          ),
+        );
         // Bank it for the session: the groups list renders this split in each
         // row's compact meter, and must never pay for it itself.
         writeMemberSource(group.id, summary);
@@ -221,6 +241,13 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
         rules,
       );
       setBreakdown(summary);
+      setMemberSourceIndex(
+        buildMemberSourceIndex(
+          { id: group.id, name: group.name, type: group.type },
+          members,
+          rules,
+        ),
+      );
       // Keep the banked copy in step, so the groups list's compact meter does not
       // contradict the detail view it was opened from.
       writeMemberSource(group.id, summary);
@@ -232,6 +259,7 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
     runIdRef.current++;
     setGroup(null);
     setFeedingRules([]);
+    setMemberSourceIndex(null);
     setRulesStatus('idle');
     setBreakdown(null);
     setMemberStatus('idle');
@@ -245,6 +273,7 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
     rulesStatus,
     breakdown,
     memberStatus,
+    memberSourceIndex,
     error,
     open,
     analyzeMembers,

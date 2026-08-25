@@ -7,11 +7,12 @@
  * `Tabs` shell (`variant="underline"`) splits the body into five panes, each
  * one tap away — no pane gated behind another: **Overview**
  * ({@link GroupOverviewPane}, verdict tiles that drill into the pane below
- * answering each), **Members** ({@link GroupMembershipSourceSection} +
+ * answering each), **Members** ({@link GroupMembersSection}, which folds the
+ * membership-source readout into its own roster —
  * {@link GroupMembersSection}, stacked), **Access**
  * ({@link GroupAccessSection} + {@link GroupPushSection}, stacked),
  * **Rules** ({@link GroupRulesSection}), and **Health**
- * ({@link GroupHealthPane} — attribute blank-rate/rule-dependency cards, a
+ * ({@link GroupInsightsPane} — attribute spread and drift cards, a
  * gated MFA-coverage scan, and the group's own reference facts folded into a
  * closed `CollapsibleSection`). `activeTab` is owned here (`useState`,
  * default `'overview'` — `'members'` when `autoAnalyze` is set; see that
@@ -34,7 +35,7 @@
  * rules that merely reference it,
  * {@link sidepanel/hooks/useGroupAccessGrants.useGroupAccessGrants} for what
  * membership actually grants (assigned apps, admin roles), and
- * {@link sidepanel/hooks/useMemberMfaScan.useMemberMfaScan} for the Health tab's
+ * {@link sidepanel/hooks/useMemberMfaScan.useMemberMfaScan} for the Insights tab's
  * opt-in MFA-coverage scan (scoped to the same roster the Members tab's gate
  * loads) — and hands their state to pure sections/panes.
  *
@@ -55,21 +56,24 @@
  * logic even though the modal's mutation state lives in a separate hook
  * instance from the roster it writes into.
  */
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import GroupOverviewPane from './GroupOverviewPane';
-import GroupMembershipSourceSection from './GroupMembershipSourceSection';
 import GroupMembersSection from './GroupMembersSection';
 import GroupAccessSection from './GroupAccessSection';
 import GroupRulesSection from './GroupRulesSection';
 import GroupPushSection from './GroupPushSection';
-import GroupHealthPane from './GroupHealthPane';
+import GroupInsightsPane from './GroupInsightsPane';
 import GroupActionBar from './GroupActionBar';
 import AddGroupMemberModal from './AddGroupMemberModal';
+import CompareGroupModal from './CompareGroupModal';
+import GroupComparisonModal from '../GroupComparisonModal';
 import { Tabs, type TabItem } from '../../shared';
 import { useGroupSource } from '../../../hooks/useGroupSource';
+import { useOktaApi } from '../../../hooks/useOktaApi';
 import { useOwedLoad } from '../../../hooks/useOwedLoad';
 import { useGroupRuleReferences } from '../../../hooks/useGroupRuleReferences';
 import { useGroupAccessGrants } from '../../../hooks/useGroupAccessGrants';
+import { useGroupComparison } from '../../../hooks/useGroupComparison';
 import { useMemberMfaScan } from '../../../hooks/useMemberMfaScan';
 import { useGroupMembersSection } from './useGroupMembersSection';
 import { useAddGroupMember } from '../../../hooks/useAddGroupMember';
@@ -77,7 +81,7 @@ import { OKTA_PAGE_SIZE } from '../../../../shared/utils/oktaPagination';
 import type { GroupSummary } from '../../../../shared/types';
 
 /** Which tabbed pane of the body (below the action bar) is on screen. */
-type GroupDetailTab = 'overview' | 'members' | 'access' | 'rules' | 'health';
+type GroupDetailTab = 'overview' | 'members' | 'access' | 'rules' | 'insights';
 
 /**
  * 5 pages of the group-members walk — the auto-load/manual-gate boundary for
@@ -95,7 +99,7 @@ const GROUP_DETAIL_TABS: TabItem[] = [
   { key: 'members', label: 'Members' },
   { key: 'access', label: 'Access' },
   { key: 'rules', label: 'Rules' },
-  { key: 'health', label: 'Health' },
+  { key: 'insights', label: 'Insights' },
 ];
 
 /** Props for {@link GroupDetailView}. */
@@ -104,6 +108,12 @@ interface GroupDetailViewProps {
   group: GroupSummary;
   /** Connected Okta tab id; reads are disabled and the gate button greys out when null. */
   targetTabId: number | null;
+  /**
+   * Okta org origin, from the connected tab. Every "View in Okta" affordance on
+   * this page is built from it plus a validated entity id; without it the links
+   * are absent rather than broken.
+   */
+  oktaOrigin?: string | null;
   /** Deep-links a rule in the Rules tab (from either rule list, or a contribution). */
   onNavigateToRule?: (ruleId: string) => void;
   /**
@@ -139,13 +149,16 @@ interface GroupDetailViewProps {
  * source and a member roster with add/remove (Members tab), what membership
  * grants plus app push (Access tab), the two rule relationships (Rules tab),
  * and attribute health, a gated MFA scan, and the group's own reference facts
- * (Health tab). Its identity is the header's job. Export and membership
+ * (Insights tab). Its identity is the header's job. Export and membership
  * writes (the action bar's Add-member modal, and per-member add/remove) are
- * its only mutations; everything else here still just reads.
+ * its only mutations; everything else here still just reads — including the
+ * group comparison, which reuses the Groups list's `GroupComparisonModal`
+ * behind a picker for the second operand ({@link useGroupComparison}).
  */
 const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   group,
   targetTabId,
+  oktaOrigin,
   onNavigateToRule,
   autoAnalyze = false,
   isActive = true,
@@ -172,17 +185,38 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
     source.resummarize,
   );
 
-  // The Health tab's opt-in MFA-coverage scan. Scoped to the exact roster the
-  // Members tab's gate loads (`membersSection.members`) rather than fetching its
-  // own — `[]` before that roster exists is inert, since `GroupHealthPane` only
-  // ever wires its trigger once the roster has loaded (see that component's
-  // `rosterReady` gate). Owned here, not inside the pane, so it stays a sibling
-  // of every other read-only load this container composes.
+  // The opt-in MFA-coverage scan, shared by the Insights tab's coverage card and the
+  // Members tab's explorer — one scan, one cache entry, whichever tab triggers it.
+  // Scoped to the exact roster the Members tab's gate loads
+  // (`membersSection.members`) rather than fetching its own — `[]` before that
+  // roster exists is inert, since neither surface wires a trigger until the roster
+  // has loaded. Owned here, not inside a pane, so it stays a sibling of every
+  // other read-only load this container composes, and so the two tabs cannot each
+  // start their own.
   const mfaScan = useMemberMfaScan({
     groupId: group.id,
     members: membersSection.members ?? [],
     targetTabId: targetTabId ?? undefined,
   });
+
+  // The Members tab's per-row ADR-0031 proof: one call about one membership, from
+  // a click on an already-open row. This view holds no other `useOktaApi`
+  // instance, and this one issues nothing on mount — `useOktaApi` only hands back
+  // operations, and every operation here is behind a click.
+  //
+  // Most rows never offer it: the roster read already carries Okta's own
+  // attribution via `expand=group-rules` (ADR-0020), so the action appears only
+  // where that embed left the answer unknown.
+  const { getMembershipRuleProof, compareGroups } = useOktaApi({
+    targetTabId: targetTabId ?? null,
+  });
+  const proveMemberSource = useMemo(
+    () =>
+      targetTabId !== null
+        ? (userId: string) => getMembershipRuleProof(group.id, userId)
+        : undefined,
+    [targetTabId, group.id, getMembershipRuleProof],
+  );
 
   // The action bar's Add-member modal — a second, independent `useAddGroupMember`
   // instance from the one `useGroupMembersSection` composes internally for its
@@ -206,6 +240,13 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
     setAddMemberError(null);
     addMember.closeModal();
   };
+
+  // Compare with another group. Two dialogs in sequence, deliberately: the picker
+  // supplies the second operand, and the comparison itself is the same
+  // `GroupComparisonModal` the Groups list opens from a multi-select — this rung
+  // owns no second implementation of overlap analysis, only the missing half of
+  // its input. See `useGroupComparison` for why the picker uses the live search.
+  const comparison = useGroupComparison({ group, targetTabId, enabled: isActive });
 
   // `open` is memoized on the (stable) API operation, so this runs once per group.
   // While the Groups tab is hidden the open is *owed* rather than run: it reaches
@@ -254,6 +295,7 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
           targetTabId={targetTabId}
           onExportGroup={onExportGroup}
           onAddMember={openAddMemberModal}
+          onCompare={comparison.openPicker}
         />
 
         <div>
@@ -284,18 +326,9 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
             )}
 
             {activeTab === 'members' && (
-              <div className="space-y-6" role="tabpanel" aria-label="Members">
-                <GroupMembershipSourceSection
-                  memberCount={group.memberCount}
-                  breakdown={source.breakdown}
-                  status={source.memberStatus}
-                  error={source.error}
-                  onAnalyze={source.analyzeMembers}
-                  canAnalyze={targetTabId !== null}
-                  onNavigateToRule={onNavigateToRule}
-                />
-
+              <div role="tabpanel" aria-label="Members">
                 <GroupMembersSection
+                  oktaOrigin={oktaOrigin}
                   groupType={group.type}
                   memberCount={group.memberCount}
                   members={membersSection.members}
@@ -303,6 +336,15 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                   error={source.error}
                   onAnalyze={source.analyzeMembers}
                   canAnalyze={targetTabId !== null}
+                  breakdown={source.breakdown}
+                  memberSourceIndex={source.memberSourceIndex}
+                  onNavigateToRule={onNavigateToRule}
+                  onProveMemberSource={proveMemberSource}
+                  mfaResults={mfaScan.mfaResults}
+                  scanStatus={mfaScan.scanStatus}
+                  onRunScan={mfaScan.runScan}
+                  onRequestConfirm={mfaScan.requestConfirm}
+                  onCancelConfirm={mfaScan.cancelConfirm}
                   removeTarget={membersSection.removeTarget}
                   onRequestRemove={membersSection.requestRemove}
                   onCancelRemove={membersSection.cancelRemove}
@@ -316,11 +358,13 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
             {activeTab === 'access' && (
               <div className="space-y-6" role="tabpanel" aria-label="Access">
                 <GroupAccessSection
+                  oktaOrigin={oktaOrigin}
                   apps={accessGrants.apps}
                   appsStatus={accessGrants.appsStatus}
                   appsError={accessGrants.appsError}
                   roles={accessGrants.roles}
                   rolesStatus={accessGrants.rolesStatus}
+                  pushMappings={group.pushMappings}
                 />
 
                 <GroupPushSection mappings={group.pushMappings} />
@@ -330,6 +374,7 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
             {activeTab === 'rules' && (
               <div role="tabpanel" aria-label="Rules">
                 <GroupRulesSection
+                  oktaOrigin={oktaOrigin}
                   assigningRules={source.feedingRules}
                   assigningStatus={source.rulesStatus}
                   assigningError={source.error}
@@ -341,9 +386,9 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
               </div>
             )}
 
-            {activeTab === 'health' && (
-              <div role="tabpanel" aria-label="Health">
-                <GroupHealthPane
+            {activeTab === 'insights' && (
+              <div role="tabpanel" aria-label="Insights">
+                <GroupInsightsPane
                   groupId={group.id}
                   memberCount={group.memberCount}
                   members={membersSection.members}
@@ -383,6 +428,30 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
         onClose={closeAddMemberModal}
         onConfirm={addMember.confirmAddMember}
         addMemberError={addMemberError}
+      />
+
+      <CompareGroupModal
+        isOpen={comparison.isPicking}
+        group={group}
+        query={comparison.query}
+        onQueryChange={comparison.setQuery}
+        results={comparison.results}
+        isSearching={comparison.isSearching}
+        searchError={comparison.searchError}
+        selected={comparison.selected}
+        onSelect={comparison.select}
+        onClearSelected={comparison.clearSelected}
+        canSearch={targetTabId !== null}
+        onClose={comparison.closePicker}
+        onConfirm={comparison.confirm}
+      />
+
+      <GroupComparisonModal
+        isOpen={comparison.comparedWith !== null}
+        onClose={comparison.closeComparison}
+        groups={comparison.comparedWith ? [group, comparison.comparedWith] : []}
+        compareGroups={compareGroups}
+        memberCache={comparison.memberCache}
       />
     </>
   );

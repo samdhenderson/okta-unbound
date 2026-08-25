@@ -345,6 +345,9 @@ describe('useGroupSource.resummarize', () => {
     });
     await waitFor(() => expect(result.current.memberStatus).toBe('done'));
     expect(result.current.breakdown?.total).toBe(3);
+    // The per-member index rides the same analysis. It reads Okta's attribution
+    // back out of the already-cached roster, so it costs no request of its own.
+    expect(result.current.memberSourceIndex?.byUserId.size).toBe(3);
 
     const before = scheduledEndpoints().length;
 
@@ -354,6 +357,9 @@ describe('useGroupSource.resummarize', () => {
     });
 
     expect(result.current.breakdown?.total).toBe(2);
+    // The index has to move with the meter: the Members list filters through it,
+    // and a stale one would offer rows for people no longer in the group.
+    expect(result.current.memberSourceIndex?.byUserId.size).toBe(2);
     expect(scheduledEndpoints()).toHaveLength(before);
   });
 

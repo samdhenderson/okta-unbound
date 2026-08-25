@@ -41,12 +41,12 @@ the same playbook for any future large component:
 3. **Extract helpers** — move formatting/pure functions to `shared/utils` (dedupe
    `formatDate`/`getRelativeTime`/`isOktaUrl` while you're there).
 4. **Split UI into subcomponents** — one concern each (row, filter panel, header),
-   like the well-organized `overview/members/` folder does.
+   like the well-organized `components/members/` folder does.
 5. **Verify** tests still green after each step; land one component per PR.
 
 ## Reference patterns already in the repo
 
-- Good: `useOktaApi/` (module split), `overview/members/` (small focused
+- Good: `useOktaApi/` (module split), `components/members/` (small focused
   components), `ProgressContext` (documented, `useMemo`d).
 - The once near-identical `useGroupContext`/`useUserContext` now share a
   `useOktaTabContext` base (`src/sidepanel/hooks/useOktaTabContext.ts`);

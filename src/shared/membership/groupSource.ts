@@ -53,13 +53,13 @@
  * @see {@link summarizeMemberSources}
  */
 
-import type { OktaGroup, OktaUser, MembershipRule, GroupType } from '../types';
+import type { OktaGroup, OktaUser, MembershipRule, GroupType, GroupMembership } from '../types';
 import {
   analyzeMemberships,
   attributionNamesRules,
   isDeducedAttribution,
 } from '../utils/membershipAnalysis';
-import { readEmbeddedGroupRules } from './memberRuleAttribution';
+import { readEmbeddedGroupRules, type MemberRuleAttribution } from './memberRuleAttribution';
 
 /** A feeding rule and how many of the group's members it accounts for. */
 export interface RuleContribution {
@@ -175,6 +175,126 @@ export interface MemberSourceBreakdown {
   multiRuleMembers?: number;
 }
 
+/**
+ * One member's exclusive membership verdict — the decision the meter, the
+ * filter and the counters all have to agree on.
+ *
+ * This exists because two consumers need the same answer at different costs.
+ * {@link summarizeMemberSources} only wants tallies, and pays for the
+ * client-side heuristic only when Okta's embed said nothing.
+ * {@link module:shared/membership/memberSourceIndex.buildMemberSourceIndex}
+ * needs a full {@link GroupMembership} per member (a row explains *why*, clause
+ * by clause), so it runs the heuristic for everyone. Sharing the branch but not
+ * the heuristic call is what keeps the meter's segment counts and the filtered
+ * list's contents from ever disagreeing about which bucket someone is in,
+ * without making the summary pay the row surface's price.
+ */
+export interface MemberSourceVerdict {
+  /** The coarse, exclusive split: a rule put them here, or nothing did. */
+  kind: 'ruleBased' | 'direct';
+  /**
+   * Rules credited with this membership. Empty for a manual add, and empty for
+   * a rule-managed member no named rule explains (an `APP_GROUP`'s
+   * application-managed members, or an `ambiguous` attribution that carries
+   * candidates rather than an answer).
+   */
+  credited: readonly { id: string; name: string }[];
+  /** Whether `credited` came from Okta's embed or from the client heuristic. */
+  creditedBy: 'okta' | 'client';
+  /**
+   * Rule-managed by deduction rather than by evidence — the `unattributed`
+   * tally, and the reason such a member owns no exclusive rule segment.
+   */
+  deduced: boolean;
+  /** The single rule that exclusively explains this member, or `null`. */
+  soleRuleId: string | null;
+  /** Two or more distinct rules credit this member. */
+  multiRule: boolean;
+}
+
+/** A manual add — the one verdict with nothing to say about rules. */
+const DIRECT_VERDICT: MemberSourceVerdict = {
+  kind: 'direct',
+  credited: [],
+  creditedBy: 'client',
+  deduced: false,
+  soleRuleId: null,
+  multiRule: false,
+};
+
+/**
+ * Decide one member's verdict from Okta's answer and, where that answer does
+ * not settle it, the client-side classification.
+ *
+ * Pure and total. Runs no heuristic itself — `heuristic` is supplied by the
+ * caller, which is what lets {@link summarizeMemberSources} skip computing one
+ * on the two paths that never consult it.
+ *
+ * @param answer - What Okta's `expand=group-rules` embed said about this member.
+ * @param heuristic - The client-side classification, or `null` when the caller
+ * has not computed one. Required only on the fallback path; passing `null`
+ * there yields a `direct` verdict, matching the classifier's own treatment of a
+ * membership it cannot call rule-based.
+ * @param groupType - The group's type. `APP_GROUP` is the one type where an
+ * empty embed says nothing, because the source is the application rather than a
+ * group rule.
+ * @returns The member's {@link MemberSourceVerdict}.
+ */
+export function memberSourceVerdict(
+  answer: MemberRuleAttribution,
+  heuristic: GroupMembership | null,
+  groupType: GroupType | undefined,
+): MemberSourceVerdict {
+  // Okta named the feeding rule(s): authoritative, and never `unattributed`.
+  // A member fed by two rules is credited to both but counted once.
+  // `readEmbeddedGroupRules` already collapsed duplicate ids, so `length` is a
+  // distinct-rule count and a `rules` state always carries at least one.
+  if (answer.state === 'rules') {
+    const sole = answer.rules.length === 1 ? answer.rules[0].id : null;
+    return {
+      kind: 'ruleBased',
+      credited: answer.rules,
+      creditedBy: 'okta',
+      deduced: false,
+      soleRuleId: sole,
+      multiRule: sole === null,
+    };
+  }
+
+  // Okta asserted "no rule feeds this member" — an exactly-known manual add.
+  // Not applied to APP_GROUPs: there the source is the application, not a group
+  // rule, so an empty group-rules embed says nothing about it and the
+  // heuristic's application-managed classification still stands.
+  if (answer.state === 'no-rules' && groupType !== 'APP_GROUP') return DIRECT_VERDICT;
+
+  // Okta told us nothing about this member — the heuristic decides.
+  if (!heuristic || heuristic.membershipType !== 'RULE_BASED') return DIRECT_VERDICT;
+
+  const deduced = isDeducedAttribution(heuristic.attribution);
+
+  // An `ambiguous` attribution carries a candidate *set*, not an answer.
+  // Crediting its entries would manufacture an attribution the classifier
+  // explicitly does not have — and inflate every candidate rule's count by a
+  // member none of them was shown to explain. The member is already carried by
+  // `deduced`, which is the whole of what is known about them.
+  if (!attributionNamesRules(heuristic.attribution)) {
+    return { ...DIRECT_VERDICT, kind: 'ruleBased', deduced };
+  }
+
+  // Exclusive counting, mirroring the Okta path. A deduced member owns no rule
+  // segment — it is already carried by `deduced`, and giving it one too would
+  // count one person in two segments.
+  const sole = !deduced && heuristic.rules.length === 1 ? heuristic.rules[0].id : null;
+  return {
+    kind: 'ruleBased',
+    credited: heuristic.rules.map(({ id, name }) => ({ id, name })),
+    creditedBy: 'client',
+    deduced,
+    soleRuleId: sole,
+    multiRule: !deduced && heuristic.rules.length > 1,
+  };
+}
+
 /** Minimal group identity the aggregation needs. */
 export interface GroupIdentity {
   id: string;
@@ -238,64 +358,43 @@ export function summarizeMemberSources(
   };
 
   for (const member of members) {
-    const attribution = readEmbeddedGroupRules(member);
+    const answer = readEmbeddedGroupRules(member);
 
-    // Okta named the feeding rule(s): authoritative, and never `unattributed`.
-    // A member fed by two rules is credited to both but counted once.
-    if (attribution.state === 'rules') {
-      ruleBased++;
-      for (const rule of attribution.rules) {
-        credit(rule.id, rule.name);
-        memberCounts(rule.id, rule.name).oktaAttributedCount++;
-      }
-      // Exclusive counting: one rule owns the member, or nobody does and the
-      // member belongs to the multi-rule bucket instead. `readEmbeddedGroupRules`
-      // already collapsed duplicate ids, so `length` is a distinct-rule count.
-      const [only] = attribution.rules;
-      if (attribution.rules.length === 1) memberCounts(only.id, only.name).soleCount++;
-      else multiRuleMembers++;
-      continue;
-    }
+    // The heuristic is computed only where the verdict actually consults it —
+    // Okta's `rules` answer and its non-APP_GROUP `no-rules` answer both settle
+    // the question on their own. This is why the branch was extracted rather
+    // than shared by having both callers run the classifier: the row surface
+    // needs a membership for everyone, and the summary must not start paying
+    // for one in the orgs where the embed works.
+    const needsHeuristic =
+      answer.state === 'unknown' || (answer.state === 'no-rules' && group.type === 'APP_GROUP');
+    const heuristic = needsHeuristic ? analyzeMemberships([oktaGroup], rules, member)[0] : null;
 
-    // Okta asserted "no rule feeds this member" — an exactly-known manual add.
-    // Not applied to APP_GROUPs: there the source is the application, not a
-    // group rule, so an empty group-rules embed says nothing about it and the
-    // heuristic's application-managed classification still stands.
-    if (attribution.state === 'no-rules' && group.type !== 'APP_GROUP') {
-      direct++;
-      continue;
-    }
+    const verdict = memberSourceVerdict(answer, heuristic, group.type);
 
-    // Okta told us nothing about this member — fall back to the heuristic.
-    const [membership] = analyzeMemberships([oktaGroup], rules, member);
-    if (membership.membershipType !== 'RULE_BASED') {
+    if (verdict.kind === 'direct') {
       direct++;
       continue;
     }
 
     ruleBased++;
-    const deduced = isDeducedAttribution(membership.attribution);
-    if (deduced) unattributed++;
+    if (verdict.deduced) unattributed++;
 
-    // An `ambiguous` attribution carries a candidate *set*, not an answer.
-    // Crediting its entries would manufacture an attribution the classifier
-    // explicitly does not have — and inflate every candidate rule's count by a
-    // member none of them was shown to explain. The member is already carried
-    // by `unattributed`, which is the whole of what is known about them.
-    if (!attributionNamesRules(membership.attribution)) continue;
-
-    for (const rule of membership.rules) {
+    for (const rule of verdict.credited) {
       credit(rule.id, rule.name);
-      memberCounts(rule.id, rule.name).clientAttributedCount++;
+      const counts = memberCounts(rule.id, rule.name);
+      if (verdict.creditedBy === 'okta') counts.oktaAttributedCount++;
+      else counts.clientAttributedCount++;
     }
 
-    // Exclusive counting, mirroring the Okta path. A deduced member is already
-    // carried by `unattributed`; giving it a rule segment too would count one
-    // person in two segments.
-    if (deduced) continue;
-    const [only] = membership.rules;
-    if (membership.rules.length === 1) memberCounts(only.id, only.name).soleCount++;
-    else if (membership.rules.length > 1) multiRuleMembers++;
+    // Exclusive counting: one rule owns the member, or nobody does and the
+    // member belongs to the multi-rule bucket instead.
+    if (verdict.soleRuleId !== null) {
+      const sole = verdict.credited.find((rule) => rule.id === verdict.soleRuleId);
+      if (sole) memberCounts(sole.id, sole.name).soleCount++;
+    } else if (verdict.multiRule) {
+      multiRuleMembers++;
+    }
   }
 
   const byRule = Array.from(ruleCounts.values()).sort((a, b) => b.count - a.count);
