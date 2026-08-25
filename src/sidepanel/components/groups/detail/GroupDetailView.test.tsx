@@ -27,7 +27,7 @@
  * provides.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import GroupDetailView from './GroupDetailView';
 import type { GroupSummary } from '../../../../shared/types';
@@ -285,6 +285,26 @@ describe('GroupDetailView', () => {
 
     await user.click(screen.getByRole('button', { name: 'Add' }));
     expect(addMember.openModal).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+    The comparison itself belongs to `GroupComparisonModal`, which the Groups list
+    already opens from a multi-select and which has its own coverage. What this
+    rung adds is the missing half of that modal's input, so what is pinned here is
+    the container's own job: the strip's verb opens the picker, and no comparison
+    is running behind it until a group has actually been chosen.
+  */
+  it("wires the action bar's Compare button to the group picker", async () => {
+    const user = userEvent.setup();
+    render(<GroupDetailView group={makeGroup()} targetTabId={1} />);
+
+    expect(screen.queryByRole('dialog', { name: /Compare with another group/ })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Compare' }));
+
+    const picker = screen.getByRole('dialog', { name: /Compare with another group/ });
+    expect(picker).toBeInTheDocument();
+    expect(within(picker).getByRole('button', { name: 'Compare' })).toBeDisabled();
   });
 
   it('fires the gated member-source analysis exactly once when autoAnalyze is set and the open has landed', () => {

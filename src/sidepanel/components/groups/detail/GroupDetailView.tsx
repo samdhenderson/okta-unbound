@@ -65,12 +65,15 @@ import GroupPushSection from './GroupPushSection';
 import GroupInsightsPane from './GroupInsightsPane';
 import GroupActionBar from './GroupActionBar';
 import AddGroupMemberModal from './AddGroupMemberModal';
+import CompareGroupModal from './CompareGroupModal';
+import GroupComparisonModal from '../GroupComparisonModal';
 import { Tabs, type TabItem } from '../../shared';
 import { useGroupSource } from '../../../hooks/useGroupSource';
 import { useOktaApi } from '../../../hooks/useOktaApi';
 import { useOwedLoad } from '../../../hooks/useOwedLoad';
 import { useGroupRuleReferences } from '../../../hooks/useGroupRuleReferences';
 import { useGroupAccessGrants } from '../../../hooks/useGroupAccessGrants';
+import { useGroupComparison } from '../../../hooks/useGroupComparison';
 import { useMemberMfaScan } from '../../../hooks/useMemberMfaScan';
 import { useGroupMembersSection } from './useGroupMembersSection';
 import { useAddGroupMember } from '../../../hooks/useAddGroupMember';
@@ -146,9 +149,11 @@ interface GroupDetailViewProps {
  * source and a member roster with add/remove (Members tab), what membership
  * grants plus app push (Access tab), the two rule relationships (Rules tab),
  * and attribute health, a gated MFA scan, and the group's own reference facts
- * (Health tab). Its identity is the header's job. Export and membership
+ * (Insights tab). Its identity is the header's job. Export and membership
  * writes (the action bar's Add-member modal, and per-member add/remove) are
- * its only mutations; everything else here still just reads.
+ * its only mutations; everything else here still just reads — including the
+ * group comparison, which reuses the Groups list's `GroupComparisonModal`
+ * behind a picker for the second operand ({@link useGroupComparison}).
  */
 const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   group,
@@ -202,7 +207,9 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   // Most rows never offer it: the roster read already carries Okta's own
   // attribution via `expand=group-rules` (ADR-0020), so the action appears only
   // where that embed left the answer unknown.
-  const { getMembershipRuleProof } = useOktaApi({ targetTabId: targetTabId ?? null });
+  const { getMembershipRuleProof, compareGroups } = useOktaApi({
+    targetTabId: targetTabId ?? null,
+  });
   const proveMemberSource = useMemo(
     () =>
       targetTabId !== null
@@ -233,6 +240,13 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
     setAddMemberError(null);
     addMember.closeModal();
   };
+
+  // Compare with another group. Two dialogs in sequence, deliberately: the picker
+  // supplies the second operand, and the comparison itself is the same
+  // `GroupComparisonModal` the Groups list opens from a multi-select — this rung
+  // owns no second implementation of overlap analysis, only the missing half of
+  // its input. See `useGroupComparison` for why the picker uses the live search.
+  const comparison = useGroupComparison({ group, targetTabId, enabled: isActive });
 
   // `open` is memoized on the (stable) API operation, so this runs once per group.
   // While the Groups tab is hidden the open is *owed* rather than run: it reaches
@@ -281,6 +295,7 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
           targetTabId={targetTabId}
           onExportGroup={onExportGroup}
           onAddMember={openAddMemberModal}
+          onCompare={comparison.openPicker}
         />
 
         <div>
@@ -413,6 +428,30 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
         onClose={closeAddMemberModal}
         onConfirm={addMember.confirmAddMember}
         addMemberError={addMemberError}
+      />
+
+      <CompareGroupModal
+        isOpen={comparison.isPicking}
+        group={group}
+        query={comparison.query}
+        onQueryChange={comparison.setQuery}
+        results={comparison.results}
+        isSearching={comparison.isSearching}
+        searchError={comparison.searchError}
+        selected={comparison.selected}
+        onSelect={comparison.select}
+        onClearSelected={comparison.clearSelected}
+        canSearch={targetTabId !== null}
+        onClose={comparison.closePicker}
+        onConfirm={comparison.confirm}
+      />
+
+      <GroupComparisonModal
+        isOpen={comparison.comparedWith !== null}
+        onClose={comparison.closeComparison}
+        groups={comparison.comparedWith ? [group, comparison.comparedWith] : []}
+        compareGroups={compareGroups}
+        memberCache={comparison.memberCache}
       />
     </>
   );
