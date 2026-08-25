@@ -40,7 +40,7 @@ in-flight work from open work.
 **Items worked:** `D-013a`, `D-013b`, `I-002`. `D-014` closes as a side
 effect of `D-013b`, as its own entry said it would.
 
-**PR:** **PR_URL**
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/94
 
 **Branch:** `claude/stoic-gates-1rt7to`, not `nightly/2026-08-25`. The
 harness assigns the branch name in this environment; `SESSION.md` step 2

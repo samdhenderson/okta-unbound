@@ -74,7 +74,7 @@ block says they mean — same vocabulary, one definition, defined there.
   proving that fallback still renders cleanly.
 - **Risk:** Low-medium — user-facing rule display; needs both the resolved
   and unresolved cases tested.
-- **Status:** claimed:claude/stoic-gates-1rt7to
+- **Status:** done:#94
 - **Depends on:** I-001
 - **Ungated 2026-08-24:** the `groups/detail/` off-limits window was lifted
   (`CLAUDE.md`, `NIGHTLY.md` 2026-08-24). This item is implementable whole; it

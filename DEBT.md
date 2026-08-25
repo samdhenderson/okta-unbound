@@ -529,7 +529,7 @@ more expensive the day an audit viewer ships.
 
 - **Risk:** Medium — audit-trail semantics and a shared facade. Route through
   `security-logging-reviewer`.
-- **Status:** claimed:claude/stoic-gates-1rt7to
+- **Status:** done:#94
 
 ### D-013b · The three hand-rolled copies use the facade
 
@@ -559,7 +559,7 @@ more expensive the day an audit viewer ships.
   placeholder as _expected_ behaviour with no marker at all, so they will pass
   silently until someone reads them.
 - **Risk:** Medium. Behavior change on an audit path, deliberately.
-- **Status:** claimed:claude/stoic-gates-1rt7to
+- **Status:** done:#94
 - **Depends on:** `D-013a`
 - **Closes:** `D-014` — the per-tab TTL cache comes along with the facade.
 
@@ -600,7 +600,7 @@ more expensive the day an audit viewer ships.
   would bake the old fallback into the shared helper, which is what the original
   "sequence it after D-013" note was protecting against.
 - **Risk:** n/a.
-- **Status:** claimed:claude/stoic-gates-1rt7to (closed by D-013b)
+- **Status:** done:#94 (closed by D-013b)
 
 ### D-015 · The ghost copy-id recipe is now duplicated in EntityLink and CopyableId
 
