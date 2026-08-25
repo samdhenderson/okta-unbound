@@ -12,6 +12,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import type { OktaUser, MemberMfaResult, MfaScanStatus } from '../../../shared/types';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { mfaScanNeedsConfirm } from '../../hooks/useMemberMfaScan';
 import Button from '../shared/Button';
 import Modal from '../shared/Modal';
 import MemberSearchBar from './MemberSearchBar';
@@ -33,9 +34,6 @@ import {
   getObservedFactorLabels,
   dimensionTitle,
 } from './memberAnalytics';
-
-/** Above this member count, scanning requires explicit confirmation (1 API call per member). */
-const MFA_AUTO_THRESHOLD = 500;
 
 /** Per-factor filter intent: unset, require-present, or require-absent. */
 type FactorMode = 'off' | 'has' | 'missing';
@@ -191,7 +189,7 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
   // A single scan entry point (used by the filter panel and the Composition MFA
   // tab): large groups route through the confirmation gate, small ones scan now.
   const handleScanClick = useCallback(() => {
-    if (members.length > MFA_AUTO_THRESHOLD) onRequestConfirm();
+    if (mfaScanNeedsConfirm(members.length)) onRequestConfirm();
     else onRunScan();
   }, [members.length, onRequestConfirm, onRunScan]);
 

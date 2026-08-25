@@ -10,7 +10,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import type { OktaUser, MemberMfaResult } from '../../shared/types';
-import { useMemberMfaScan } from './useMemberMfaScan';
+import { MFA_AUTO_THRESHOLD, mfaScanNeedsConfirm, useMemberMfaScan } from './useMemberMfaScan';
 import { resetEntityCache, peek, setEntry } from '../cache/entityCache';
 import { cacheKeys } from '../cache/keys';
 
@@ -39,6 +39,19 @@ beforeEach(() => {
   // The entity cache is a module singleton; clear it so a scan cached by one
   // test doesn't leak into the next.
   resetEntityCache();
+});
+
+describe('mfaScanNeedsConfirm', () => {
+  // The comparison is `>`, not `>=`: a roster of exactly MFA_AUTO_THRESHOLD
+  // scans without a gate. Both surfaces that render the gate branch on this
+  // predicate, so pinning the boundary here is what stops the two from
+  // disagreeing about which side of it 500 falls on.
+  it('is false at and below the threshold, true above it', () => {
+    expect(mfaScanNeedsConfirm(0)).toBe(false);
+    expect(mfaScanNeedsConfirm(MFA_AUTO_THRESHOLD - 1)).toBe(false);
+    expect(mfaScanNeedsConfirm(MFA_AUTO_THRESHOLD)).toBe(false);
+    expect(mfaScanNeedsConfirm(MFA_AUTO_THRESHOLD + 1)).toBe(true);
+  });
 });
 
 describe('useMemberMfaScan', () => {
