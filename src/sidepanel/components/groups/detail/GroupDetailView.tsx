@@ -340,6 +340,7 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                   appsError={accessGrants.appsError}
                   roles={accessGrants.roles}
                   rolesStatus={accessGrants.rolesStatus}
+                  pushMappings={group.pushMappings}
                 />
 
                 <GroupPushSection mappings={group.pushMappings} />

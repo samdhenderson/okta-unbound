@@ -55,6 +55,20 @@ export interface AppGrant {
   id: string;
   /** Display label. */
   label: string;
+  /**
+   * Okta lifecycle status (`ACTIVE`, `INACTIVE`, …), when the row reported one.
+   *
+   * Optional because `oktaAppListItemSchema` catches every field past the id:
+   * a row Okta sends an unexpected value for degrades to "not reported" rather
+   * than being dropped, which would cost the caller a whole application. So
+   * absent here is genuinely unknown, and a consumer must render nothing rather
+   * than an "Unknown" badge.
+   */
+  status?: string;
+  /** Sign-on mode, when the row reported one. Same optionality contract as {@link status}. */
+  signOnMode?: string;
+  /** When Okta last updated the app, when the row reported a parseable date. */
+  lastUpdated?: Date;
 }
 
 /**
@@ -114,9 +128,31 @@ export interface UseGroupAccessGrantsReturn {
   rolesStatus: RolesReadStatus;
 }
 
-/** Reduce a validated app-list row to what the view renders. */
-function toAppGrant(app: { id: string; label?: string; name?: string }): AppGrant {
-  return { id: app.id, label: app.label ?? app.name ?? app.id };
+/**
+ * Reduce a validated app-list row to what the view renders.
+ *
+ * Keeps the three descriptive fields `oktaAppListItemSchema` was already
+ * validating and this function used to discard. They cost nothing — the same
+ * response carried them — and they are what lets the Access tab render an app
+ * row rather than a chip.
+ */
+function toAppGrant(app: {
+  id: string;
+  label?: string;
+  name?: string;
+  status?: string;
+  signOnMode?: string;
+  lastUpdated?: string | null;
+}): AppGrant {
+  // An unparseable timestamp is dropped, never surfaced as `Invalid Date`.
+  const lastUpdated = app.lastUpdated ? new Date(app.lastUpdated) : undefined;
+  return {
+    id: app.id,
+    label: app.label ?? app.name ?? app.id,
+    status: app.status,
+    signOnMode: app.signOnMode,
+    lastUpdated: lastUpdated && !Number.isNaN(lastUpdated.getTime()) ? lastUpdated : undefined,
+  };
 }
 
 /** Reduce a validated role row to what the view renders. */
