@@ -1,21 +1,48 @@
 /**
  * @module sidepanel/components/members/MemberRow
- * @description Single member card: name, email, login, status badge, and MFA factor tags.
+ * @description Single member row: name, email, login, status badge, MFA factor
+ * tags, and a disclosure explaining the member.
  *
- * Memoized (large lists). When an org origin is provided the whole row becomes a
- * deep link to the member's Okta Admin Console profile. Factor tags (or a "No MFA"
- * badge) render only once a scan has completed.
+ * Memoized (large lists). The card is
+ * {@link sidepanel/components/shared/ListRow} at `compact` density (ADR-0029) —
+ * the row used to carry its own hand-written chrome string. The interior follows
+ * the typography contract in `docs/design-system.md`, which retired three
+ * arbitrary sizes here (`text-[11px]` on the login, `text-[10px]` on the factor
+ * tags and the status badge).
  *
- * The card is {@link sidepanel/components/shared/ListRow} at `compact` density
- * (ADR-0029) — the row used to carry its own hand-written chrome string. The
- * interior follows the typography contract in `docs/design-system.md`, which
- * retired three arbitrary sizes here (`text-[11px]` on the login, `text-[10px]`
- * on the factor tags and the status badge).
+ * ## Why the row is no longer a link
+ *
+ * It used to render `ListRow as="a"` whenever an org origin was known, making the
+ * whole card a deep link to the Okta Admin Console. That forecloses everything
+ * else: a disclosure chevron — or a remove control — inside an anchor is axe's
+ * `nested-interactive`, and `ListRow`'s own guidance names the case ("a button
+ * cannot legally contain a checkbox or another button"). So the row stops being a
+ * link and the deep link moves **inside** the disclosure, which is where both
+ * reference rows already put it (`users/GroupMembershipRow`, `users/UserAppRow`).
+ *
+ * `StretchedButton` was the other way to keep a whole-row target, and is
+ * deliberately not used: its contract requires every sibling control to be
+ * `relative z-10`, so a row carrying both a chevron and a remove button would owe
+ * two escape hatches for an activation the chevron already owns.
+ *
+ * ## Who owns `expanded`
+ *
+ * The **list**, not the row — the same arrangement as
+ * `users/GroupMembershipsList`, and for the same reason: filtering a row out and
+ * back in must not close it. That matters more here, where every filter pill
+ * click re-filters the list under the reader.
  */
-import React from 'react';
+import React, { useId } from 'react';
 import type { OktaUser, MemberMfaResult } from '../../../shared/types';
-import { ListRow, userStatusVariant, type UserStatusVariant } from '../shared';
-import { oktaAdminEntityUrl } from '../../../shared/utils/oktaUrl';
+import {
+  IconButton,
+  ListRow,
+  OpenInOktaLink,
+  userStatusVariant,
+  type UserStatusVariant,
+} from '../shared';
+import Icon from '../overview/shared/Icon';
+import { EXCLUDED_ATTRIBUTES, dimensionTitle } from './memberAnalytics';
 
 /** Props for {@link MemberRow}. */
 interface MemberRowProps {
@@ -25,8 +52,12 @@ interface MemberRowProps {
   mfa?: MemberMfaResult;
   /** True once an MFA scan has completed, so we can show "No MFA" for 0-factor users. */
   mfaScanned?: boolean;
-  /** Okta org origin; when set, the row links to the member's Admin Console profile. */
+  /** Okta org origin; when set, the disclosure offers an Admin Console deep link. */
   oktaOrigin?: string | null;
+  /** Whether this row's disclosure is open. Owned by the list — see the module docs. */
+  expanded: boolean;
+  /** Called with this member's id when the disclosure control is pressed. */
+  onToggle: (userId: string) => void;
 }
 
 /** Per-variant badge color classes (token palette, keyed by the shared variant map). */
@@ -38,27 +69,89 @@ const VARIANT_CLASSES: Record<UserStatusVariant, string> = {
   neutral: 'bg-neutral-100 text-neutral-700',
 };
 
-/** Renders one member card, optionally wrapped as an Admin Console deep link. */
-const MemberRow: React.FC<MemberRowProps> = ({ user, mfa, mfaScanned, oktaOrigin }) => {
+/**
+ * The member's browseable profile attributes — the same set the composition
+ * facets offer, so a value that looks wrong in a row is a value the reader can
+ * go and filter on. Identity/PII fields are excluded there and excluded here;
+ * they carry no spread, and the two that matter are already on the row header.
+ *
+ * @param user - The member.
+ * @returns `[key, value]` pairs with a non-empty scalar value, key-sorted.
+ */
+function browseableAttributes(user: OktaUser): Array<[string, string]> {
+  const profile = user.profile as Record<string, unknown>;
+  return Object.entries(profile)
+    .filter(([key]) => !EXCLUDED_ATTRIBUTES.has(key))
+    .map(([key, raw]): [string, string] => {
+      if (typeof raw === 'string') return [key, raw.trim()];
+      if (typeof raw === 'number' || typeof raw === 'boolean') return [key, String(raw)];
+      // Objects, arrays and null have no scalar rendering here, and inventing
+      // one ("[object Object]") would read as a real value.
+      return [key, ''];
+    })
+    .filter(([, value]) => value !== '')
+    .sort(([a], [b]) => a.localeCompare(b));
+}
+
+/** Renders one member card with its disclosure. */
+const MemberRow: React.FC<MemberRowProps> = ({
+  user,
+  mfa,
+  mfaScanned,
+  oktaOrigin,
+  expanded,
+  onToggle,
+}) => {
   const badgeClass = VARIANT_CLASSES[userStatusVariant(user.status)];
   const fullName =
     `${user.profile.firstName || ''} ${user.profile.lastName || ''}`.trim() || user.profile.login;
 
-  const adminUrl = oktaAdminEntityUrl(oktaOrigin, 'user', user.id);
+  // `useId`, never the user id: an Okta id is untrusted data and does not belong
+  // in a DOM id (the same reasoning as `users/GroupMembershipRow`).
+  const disclosureId = useId();
+  const attributes = browseableAttributes(user);
 
   return (
-    // `as` follows the deep link: an anchor when there is somewhere to go, a plain
-    // container when there is not. `ListRow` sets `rel="noopener noreferrer"` for
-    // the `_blank` target itself, so the call site cannot forget it.
     <ListRow
-      as={adminUrl ? 'a' : 'div'}
-      href={adminUrl ?? undefined}
-      target={adminUrl ? '_blank' : undefined}
       density="compact"
-      title={adminUrl ? 'Open user in Okta Admin Console' : undefined}
+      dataAttributes={{ 'data-user-id': user.id }}
+      body={
+        /* `.disclose` animates `grid-template-rows` between 0fr and 1fr, so the
+             body collapses to zero height with no JS measurement and stays mounted
+             while closed — held out of the tab order and the accessible tree by
+             `inert` rather than unmounted. */
+        <div
+          id={disclosureId}
+          className="disclose"
+          data-open={expanded}
+          inert={!expanded || undefined}
+        >
+          <div>
+            <div className="space-y-3 border-t border-neutral-200 px-3 pb-3 pt-2">
+              {attributes.length > 0 && (
+                <div>
+                  <div className="mb-1 text-xs font-medium text-neutral-600">Profile</div>
+                  <dl className="space-y-0.5">
+                    {attributes.map(([key, value]) => (
+                      <div key={key} className="flex items-baseline justify-between gap-3">
+                        <dt className="shrink-0 text-xs text-neutral-600">{dimensionTitle(key)}</dt>
+                        <dd className="min-w-0 truncate font-mono text-xs text-neutral-900">
+                          {value}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              )}
+
+              <OpenInOktaLink oktaOrigin={oktaOrigin} entityType="user" entityId={user.id} />
+            </div>
+          </div>
+        </div>
+      }
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold text-neutral-900">{fullName}</div>
           <div className="truncate text-xs text-neutral-600">{user.profile.email}</div>
           <div className="truncate font-mono text-xs text-neutral-500">{user.profile.login}</div>
@@ -81,9 +174,25 @@ const MemberRow: React.FC<MemberRowProps> = ({ user, mfa, mfaScanned, oktaOrigin
             </div>
           )}
         </div>
-        <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
-          {user.status}
-        </span>
+        <div className="flex shrink-0 items-center gap-1">
+          <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
+            {user.status}
+          </span>
+          <IconButton
+            label={`${expanded ? 'Hide' : 'Show'} details for ${fullName}`}
+            variant="ghost"
+            size="sm"
+            expanded={expanded}
+            controls={disclosureId}
+            onClick={() => onToggle(user.id)}
+          >
+            <Icon
+              type="chevron-right"
+              size="sm"
+              className={`transition-transform duration-(--dur-quick) ${expanded ? 'rotate-90' : ''}`}
+            />
+          </IconButton>
+        </div>
       </div>
     </ListRow>
   );

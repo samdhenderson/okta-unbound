@@ -14,7 +14,7 @@
  * `Skeleton variant="row"` placeholders — the shape is known, so there is nothing
  * for a spinner to explain — and the hook re-arms on the container that comes back.
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useStaggerReveal } from '../../hooks/useStaggerReveal';
 import type { OktaUser, MemberMfaResult } from '../../../shared/types';
 import ScrollableList from '../shared/ScrollableList';
@@ -60,6 +60,26 @@ const MemberList: React.FC<MemberListProps> = ({
   oktaOrigin,
 }) => {
   const setStaggerRef = useStaggerReveal();
+
+  /*
+    Open rows live here rather than in each row, so that filtering a row out and
+    back in does not close it — the same arrangement, for the same reason, as
+    `users/GroupMembershipsList`. It matters more on this surface, where every
+    filter pill click re-filters the list under the reader.
+
+    Note this is deliberately *not* lifted to `MemberExplorer` beside
+    `visibleCount`, even though both are list state. `visibleCount` is up there
+    because it has to **reset** when the filters change; this must not. Same
+    shape, opposite requirement.
+  */
+  const [openUserIds, setOpenUserIds] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleRow = useCallback((userId: string) => {
+    setOpenUserIds((previous) => {
+      const next = new Set(previous);
+      if (!next.delete(userId)) next.add(userId);
+      return next;
+    });
+  }, []);
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const hasMore = visibleCount < members.length;
@@ -107,6 +127,8 @@ const MemberList: React.FC<MemberListProps> = ({
               mfa={mfaResults?.get(user.id)}
               mfaScanned={mfaScanned}
               oktaOrigin={oktaOrigin}
+              expanded={openUserIds.has(user.id)}
+              onToggle={toggleRow}
             />
           ))}
         </div>
