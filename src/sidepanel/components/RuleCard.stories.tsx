@@ -2,6 +2,14 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, within } from 'storybook/test';
 import type { FormattedRule } from '../../shared/types';
 import RuleCard from './RuleCard';
+import { NavigationProvider } from '../contexts/NavigationContext';
+
+/**
+ * Target groups render as `EntityLink` chips, which need a navigation host to be
+ * openable — without one every chip degrades to plain text, which would hide the
+ * very affordance these stories exist to show.
+ */
+const navigationHandlers = { rule: fn(), group: fn(), user: fn(), app: fn(), policy: fn() };
 
 const baseRule: FormattedRule = {
   id: '00rABCDEF1234567890',
@@ -35,10 +43,19 @@ const meta = {
       description: {
         component:
           'Expandable card summarising a single Okta group rule.\n\n' +
-          'The collapsed view shows the rule name, an ACTIVE/INACTIVE status badge, current-group/conflict badges, and the condition. Expanding reveals the condition expression (with inline group-name badges), referenced user attributes, target groups, conflict details, metadata, and the activate/deactivate plus "View in Okta" actions. A deep-linked rule auto-expands and flashes on arrival. Memoised for list rendering.',
+          'The collapsed view shows the rule name, an ACTIVE/INACTIVE status badge, current-group/conflict badges, and the condition. Expanding reveals the condition expression (with inline group-name badges), referenced user attributes, target groups, conflict details, metadata, and the activate/deactivate plus "View in Okta" actions. A deep-linked rule auto-expands and flashes on arrival. Memoised for list rendering.\n\n' +
+          '**A target group is named, or it is stated as un-named.** Every group — in the condition expression and under THEN ADD TO GROUPS — is a shared `EntityLink` chip that opens the group and copies its raw id. When no name was resolved, the card says "Group name not loaded" beside the copyable id instead of printing the id where a name belongs: an unresolved group used to be indistinguishable from a group actually called `00g1a2b3…`.\n\n' +
+          '**Related internals:** [EntityLink](?path=/docs/shared-entitylink--docs)',
       },
     },
   },
+  decorators: [
+    (Story) => (
+      <NavigationProvider handlers={navigationHandlers}>
+        <Story />
+      </NavigationProvider>
+    ),
+  ],
   argTypes: {
     rule: { description: 'The formatted rule to display.' },
     onActivate: {
@@ -91,6 +108,62 @@ export const Expanded: Story = {
         name: `Copy rule id for ${baseRule.name}`,
       }),
     ).toBeInTheDocument();
+  },
+};
+
+/**
+ * Every target group resolved to a name: each is an openable chip, with a copy
+ * control named after the *id* rather than the group, since two groups on one card
+ * can share a display name.
+ */
+export const NamedTargetGroups: Story = {
+  args: { isHighlighted: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByRole('button', { name: 'Open group Engineering – All' }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole('button', { name: `Copy group id ${baseRule.groupIds[0]}` }),
+    ).toBeInTheDocument();
+  },
+};
+
+/**
+ * The same rule with **no names resolved** for its target groups. The card states
+ * the gap — "Group name not loaded" — and puts the raw id in the identifier
+ * register beside its copy control, rather than printing the id where a name
+ * belongs. Nothing here fetches, so the name cannot be filled in at render time.
+ */
+export const UnresolvedTargetGroups: Story = {
+  args: {
+    isHighlighted: true,
+    rule: { ...baseRule, groupNames: undefined, allGroupNamesMap: {} },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getAllByText('Group name not loaded')).toHaveLength(2);
+    await expect(
+      canvas.getByRole('button', { name: `Copy group id ${baseRule.groupIds[1]}` }),
+    ).toBeInTheDocument();
+    // No name, so nothing claims to open the group.
+    await expect(canvas.queryByRole('button', { name: /^Open group/ })).not.toBeInTheDocument();
+  },
+};
+
+/**
+ * A condition expression that names a group by id. The literal is replaced by the
+ * chip it resolves to — the same trade `RuleExpressionText` makes for the Group
+ * Detail clause view, so the app's two renderers of rule conditions read alike.
+ */
+export const ConditionNamesAGroup: Story = {
+  args: {
+    isHighlighted: true,
+    rule: {
+      ...baseRule,
+      condition: 'isMemberOfAnyGroup("00g1a2b3c4d5e6f7g8h9")',
+      conditionExpression: 'isMemberOfAnyGroup("00g1a2b3c4d5e6f7g8h9")',
+    },
   },
 };
 
