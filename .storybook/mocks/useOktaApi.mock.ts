@@ -92,6 +92,15 @@ export function makeUseOktaApiValue(overrides: UseOktaApiValue = {}): UseOktaApi
 
     // Core
     makeApiRequest: makeApiRequestFn(),
+    // The "many calls, one tracked operation" wiring (ADR-0009). Consumers pass
+    // it a body; the benign default just runs it, so a story exercises the
+    // caller's own logic rather than the scheduler's bookkeeping.
+    runOperation: fn(async (_name?: unknown, body?: unknown) =>
+      typeof body === 'function' ? (body as () => unknown)() : undefined,
+    ),
+    // Audit attribution. `null` is the honest default — a story has no signed-in
+    // admin — and callers must never substitute a placeholder identity (D-013b).
+    getCurrentUser: asyncFn(null),
 
     // Group operations
     getAllGroupMembers: asyncFn([]),
@@ -115,6 +124,10 @@ export function makeUseOktaApiValue(overrides: UseOktaApiValue = {}): UseOktaApi
     executeBulkOperation: asyncFn(),
     searchGroups: asyncFn([]),
     getGroupById: asyncFn(null),
+    // One membership, one call, asked only when a reader presses "Prove it"
+    // (ADR-0031). `null` means "no proof was obtained", which the UI renders as
+    // unproven — never as "assigned directly" (ADR-0020).
+    getMembershipRuleProof: asyncFn(null),
 
     // User operations
     getUserLastLogin: asyncFn(null),
@@ -129,10 +142,23 @@ export function makeUseOktaApiValue(overrides: UseOktaApiValue = {}): UseOktaApi
     suspendUser: asyncFn(),
     unsuspendUser: asyncFn(),
     resetPassword: asyncFn(),
+    // Org-wide profile-attribute definitions. `useUserComparison` destructures
+    // this, so the comparison surface cannot render its Attributes tab without it.
+    getUserProfileSchema: asyncFn(null),
+    // The whole validated user, profile included — what an editor needs, and
+    // what `getUserById`'s six-field projection deliberately is not.
+    getUserRaw: asyncFn(null),
+    // The extension's one profile write. Three-state by design: an 'unknown'
+    // MAY have applied and must never render as a plain failure.
+    updateUserProfile: asyncFn({ outcome: 'saved' }),
 
     // App inventory operations (read-only: Apps tab + app Overview enrichment)
     getAppById: asyncFn(null),
     getAppAssignmentCounts: asyncFn(null),
+    // Fallback for naming an app's granting group when the `expand=user/{id}`
+    // embed named none. Linear in app count, so it is gated behind an explicit
+    // per-row action rather than a list load (ADR-0031).
+    getAppGroupAssignments: asyncFn([]),
 
     // Auth policy operations (read-only: Auth Policies tab)
     listPolicies: asyncFn([]),

@@ -65,6 +65,7 @@ manifest.v2.json
 storybook-static
 .storybook/generated
 shots/
+clips/
 
 # design-sync (claude.ai/design) — transient build + verification state
 .design-sync/sb-reference/
@@ -76,3 +77,10 @@ ds-bundle/
 
 #Design Sync Exports for UI changes and New Feature UI
 designDocs/
+
+# Okta demo-org seeding (seed/) — these hold real org identifiers and must not
+# be committed: data/ is the exported group/rule/app CSVs, .state/ records the
+# ids of users a run created. The script itself is safe to commit; it reads the
+# org URL and API token from the environment only.
+seed/data/
+seed/.state/

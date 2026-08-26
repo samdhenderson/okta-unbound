@@ -33,6 +33,12 @@ export default defineConfig({
         '**/*.config.*',
         '**/*.stories.{ts,tsx}',
         '**/mockData',
+        // The demo dataset and its operations exist only to stage the `Demo/`
+        // scenes for the reel (ADR-0043). They ship in no build — Rollup follows
+        // the manifest entry graph and nothing there reaches them — and they are
+        // exercised by filming, not by tests, so counting them would drag the
+        // gate down for code that has no behaviour to assert.
+        'src/sidepanel/demo/**',
         'dist/',
         '.github/',
         'docs/',

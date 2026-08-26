@@ -156,6 +156,13 @@ route each container to where it belongs:
 - **`Sidepanel/`** — app-shell chrome that isn't feature-specific (`ActivityBar`,
   `ActivityBarView`, `TabNavigation`, `ContextBar`, `ErrorBoundary`,
   `AuditLogViewer`).
+- **`Demo/`** — the demo reel's scenes (ADR-0043). These are **not component
+  stories and not tested surfaces**: each mounts the whole `App` against the
+  seeded demo org in `src/sidepanel/demo/`, carries `tags: ['!test']` with `a11y`
+  and `actions` disabled, and holds **no `play` function** — the choreography
+  lives in `.storybook/scripts/film-scenes.mjs`, which drives them from
+  Playwright. Run `npm run film` to record them, `npm run film -- --reel` for one
+  continuous 16:9 cut. Do not copy this shape for a component story.
 
 The `Introduction.mdx` landing page is titled **`Getting Started`** so it sorts
 as its own root rather than colliding with the `Overview/*` component group.

@@ -21,14 +21,9 @@
  * (`channel: 'chrome'`), so Playwright's managed browsers need not be downloaded.
  */
 import { chromium } from 'playwright';
-import { spawn } from 'node:child_process';
-import { createServer } from 'node:net';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const here = path.dirname(fileURLToPath(import.meta.url));
-const REPO = path.resolve(here, '../..');
+import { connect, shutdownFor, REPO } from './lib/storybook-server.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(`--${name}`);
@@ -55,88 +50,10 @@ if (!filters.length) {
   process.exit(1);
 }
 
-/** Resolve a free TCP port (0 = let the OS pick). */
-const freePort = () =>
-  new Promise((resolve, reject) => {
-    const srv = createServer();
-    srv.on('error', reject);
-    srv.listen(0, () => {
-      const { port } = srv.address();
-      srv.close(() => resolve(port));
-    });
-  });
-
-/** A Storybook index.json we can enumerate, or null if nothing is listening. */
-async function probe(url) {
-  try {
-    const res = await fetch(`${url}/index.json`, { signal: AbortSignal.timeout(2000) });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json?.entries ? json : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Reuse a running dev server, else start one we own and must clean up. */
-async function connect() {
-  const preset = process.env.SB_URL ?? 'http://localhost:6006';
-  const running = await probe(preset);
-  if (running) return { url: preset, index: running, child: null };
-
-  const port = await freePort();
-  const url = `http://localhost:${port}`;
-  console.log(
-    `no storybook on :6006 — starting one on :${port} (seconds if Vite's cache is warm, up to a minute if not).\n` +
-      `tip: keep \`npm run storybook\` running and this step is skipped.`,
-  );
-  // `detached` + `unref` for two reasons: an attached ChildProcess handle keeps
-  // Node's event loop alive, so the script would hang forever waiting on a server
-  // it never gets around to killing; and its own process group lets us signal
-  // storybook AND the node it forks in one shot.
-  const child = spawn(
-    path.join(REPO, 'node_modules/.bin/storybook'),
-    ['dev', '-p', String(port), '--no-open', '--quiet', '--ci'],
-    { cwd: REPO, stdio: 'ignore', detached: true },
-  );
-  child.unref();
-  child.on('error', (err) => {
-    console.error(`\nfailed to start storybook: ${err.message}`);
-    process.exit(1);
-  });
-
-  const started = Date.now();
-  const deadline = started + 180_000;
-  while (Date.now() < deadline) {
-    if (child.exitCode !== null) {
-      console.error(`storybook exited with code ${child.exitCode}`);
-      process.exit(1);
-    }
-    const index = await probe(url);
-    const secs = Math.round((Date.now() - started) / 1000);
-    if (index) {
-      console.log(`storybook ready in ${secs}s`);
-      return { url, index, child };
-    }
-    if (secs && secs % 10 === 0) console.log(`  …still booting (${secs}s)`);
-    await new Promise((r) => setTimeout(r, 1000));
-  }
-  child.kill();
-  console.error('storybook did not become ready within 180s');
-  process.exit(1);
-}
-
 const { url, index, child } = await connect();
 
 /** Stop the server we started (never one that was already running). */
-const shutdown = () => {
-  if (!child?.pid) return;
-  try {
-    process.kill(-child.pid, 'SIGTERM');
-  } catch {
-    /* already gone */
-  }
-};
+const shutdown = shutdownFor(child);
 process.on('exit', shutdown);
 process.on('SIGINT', () => process.exit(130));
 
