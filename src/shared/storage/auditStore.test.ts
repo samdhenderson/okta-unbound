@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { auditStore } from './auditStore';
-import type { AuditLogEntry, AuditSettings } from '../types';
+import type {
+  ActorResolution,
+  AuditLogEntry,
+  AuditSettings,
+  PersistedAuditLogEntry,
+} from '../types';
 
 // Mock IndexedDB
 const mockDB: any = {
@@ -388,6 +393,51 @@ describe('AuditStore', () => {
   });
 
   // -------------------------------------------------------------------------
+  // D-032: the DB predates `actorResolution`, so a row can lack it. `getHistory`
+  // must neither invent a value nor promise one in its type.
+  // -------------------------------------------------------------------------
+  describe('rows persisted before actorResolution existed', () => {
+    /**
+     * Compile-time assertion helper: accepts only a value that is definitely an
+     * {@link ActorResolution}. Paired with `@ts-expect-error` below to pin that
+     * a row out of `getHistory` is *not* one.
+     */
+    const requireResolution = (_value: ActorResolution): void => {};
+
+    /** A row as written before `D-013a`: the `actorResolution` key is absent. */
+    const legacyRow = (): PersistedAuditLogEntry => ({
+      id: 'legacy-1',
+      timestamp: new Date('2024-11-02T00:00:00.000Z'),
+      action: 'remove_users',
+      groupId: '00gFAKE1',
+      groupName: 'Legacy Group',
+      performedBy: 'admin@example.com',
+      affectedUsers: ['00uFAKE1'],
+      result: 'success',
+      details: { usersSucceeded: 1, usersFailed: 0, apiRequestCount: 1, durationMs: 500 },
+    });
+
+    it('getHistory returns the row untouched and does not promise the field', async () => {
+      mockDB.getAll.mockResolvedValueOnce([legacyRow()]);
+
+      const [row] = await auditStore.getHistory();
+
+      // No back-fill: the absent field stays absent, rather than becoming
+      // 'resolved' (a claim the writer never made) or 'unavailable' (a claim
+      // contradicted by the actor string the row does carry).
+      expect('actorResolution' in row).toBe(false);
+      expect(row.actorResolution).toBeUndefined();
+      expect(row.performedBy).toBe('admin@example.com');
+
+      // @ts-expect-error `PersistedAuditLogEntry.actorResolution` is optional, so
+      // a reader is told about the gap by the compiler instead of meeting a bare
+      // `undefined` at runtime. Without D-032's split type this line compiles and
+      // the expect-error is reported as unused.
+      requireResolution(row.actorResolution);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   describe('exportAuditLog CSV', () => {
     const fakeIDBKeyRange = {
       bound: vi.fn((lower: Date, upper: Date) => ({ kind: 'bound', lower, upper })),
@@ -428,7 +478,7 @@ describe('AuditStore', () => {
     }
 
     /** The single data row of the exported CSV. */
-    async function exportRow(entries: AuditLogEntry[]): Promise<string> {
+    async function exportRow(entries: PersistedAuditLogEntry[]): Promise<string> {
       mockDB.getAllFromIndex.mockResolvedValueOnce(entries);
       const blob = await auditStore.exportAuditLog(
         new Date('2025-01-01T00:00:00.000Z'),
@@ -457,6 +507,27 @@ describe('AuditStore', () => {
       ]);
 
       expect(row.split(',')[3]).toBe('(actor unavailable)');
+    });
+
+    it('exports a pre-D-013a row with its stored actor, not the unavailable label', async () => {
+      // The row carries an actor string but no `actorResolution` (D-032). The
+      // export decides the cell from `performedBy` alone, so it must not be
+      // mistaken for an unresolved actor.
+      const legacy: PersistedAuditLogEntry = {
+        id: 'legacy-csv',
+        timestamp: new Date('2025-01-15T00:00:00.000Z'),
+        action: 'export',
+        groupId: '00gFAKE1',
+        groupName: 'Plain Group',
+        performedBy: 'admin@example.com',
+        affectedUsers: [],
+        result: 'success',
+        details: { usersSucceeded: 0, usersFailed: 0, apiRequestCount: 1, durationMs: 10 },
+      };
+
+      const row = await exportRow([legacy]);
+
+      expect(row.split(',')[3]).toBe('admin@example.com');
     });
   });
 

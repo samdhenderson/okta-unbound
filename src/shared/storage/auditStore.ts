@@ -11,19 +11,35 @@
  * An entry's actor is nullable: when the signed-in admin could not be resolved
  * the trail records `performedBy: null` rather than a placeholder identity, and
  * the CSV export says so explicitly ({@link ACTOR_UNAVAILABLE_LABEL}).
+ *
+ * Writes take {@link AuditLogEntry}; reads return {@link PersistedAuditLogEntry},
+ * whose `actorResolution` is optional. The database predates that field, so a row
+ * written before `D-013a` has no value for it — and this store never invents one
+ * on the way out (`D-032`).
  */
 
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { createLogger } from '../utils/logger';
 import { escapeCSV } from '../utils/csvUtils';
-import type { AuditLogEntry, AuditFilters, AuditStats, AuditSettings } from '../types';
+import type {
+  AuditLogEntry,
+  PersistedAuditLogEntry,
+  AuditFilters,
+  AuditStats,
+  AuditSettings,
+} from '../types';
 
 const log = createLogger('AuditStore');
 
 interface AuditDB extends DBSchema {
   operations: {
     key: string;
-    value: AuditLogEntry;
+    /**
+     * The row shape, not the write shape: rows older than `D-013a` carry no
+     * `actorResolution`. Writes still take a full {@link AuditLogEntry}, which
+     * is assignable to this.
+     */
+    value: PersistedAuditLogEntry;
     indexes: {
       timestamp: Date;
       groupId: string;
@@ -139,12 +155,22 @@ class AuditStore {
   }
 
   /**
-   * Get audit history with optional filtering and limit
+   * Get audit history with optional filtering and limit.
+   *
+   * Returns {@link PersistedAuditLogEntry}, not {@link AuditLogEntry}: rows are
+   * handed back exactly as stored, so a row written before `D-013a` comes out
+   * with **no** `actorResolution` at all. That absence is the honest answer —
+   * the alternative, back-filling `'resolved'` or `'unavailable'`, would attach
+   * to a legacy row a claim its writer never made (`D-032`). Callers that
+   * display attribution must branch on all three cases; see
+   * {@link PersistedAuditLogEntry.actorResolution}.
+   *
+   * Sorted newest-first, after filtering and before `limit` is applied.
    */
-  async getHistory(filters: AuditFilters = {}, limit?: number): Promise<AuditLogEntry[]> {
+  async getHistory(filters: AuditFilters = {}, limit?: number): Promise<PersistedAuditLogEntry[]> {
     try {
       const db = await this.getDB();
-      let results: AuditLogEntry[] = [];
+      let results: PersistedAuditLogEntry[] = [];
 
       // If we have a specific filter that can use an index, use it
       if (filters.groupId) {
@@ -200,6 +226,11 @@ class AuditStore {
    * formula-injection guard) — group names, actor emails, and error messages
    * are all end-user-controllable. An entry with no resolved actor renders
    * {@link ACTOR_UNAVAILABLE_LABEL} rather than an empty or invented cell.
+   *
+   * The "Performed By" cell is decided by `performedBy` alone and never by
+   * `actorResolution`, so the optional field on {@link PersistedAuditLogEntry}
+   * changes nothing here: a pre-`D-013a` row exports the actor string it was
+   * stored with, and only a `null` actor produces the label (`D-032`).
    */
   async exportAuditLog(startDate: Date, endDate: Date): Promise<Blob> {
     try {

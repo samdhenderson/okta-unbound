@@ -448,10 +448,23 @@ export type { UndoAction, UndoActionMetadata, UndoHistory } from './undoTypes';
  * a real identity, `'unavailable'` means the `/users/me` lookup could not name
  * anyone and `performedBy` is `null`. An audit trail that cannot say who acted
  * must say *that*, not invent a plausible-looking address.
+ *
+ * Both members are claims a writer made at the time. A row that predates the
+ * field made neither claim, and that third state is spelled as the *absence* of
+ * the field on {@link PersistedAuditLogEntry} — never as a member of this union,
+ * so no writer can record "I did not check" as if it were an answer.
  */
 export type ActorResolution = 'resolved' | 'unavailable';
 
-/** A persisted audit-trail record of one completed operation. */
+/**
+ * The audit-trail record a writer hands to `auditStore.logOperation` — the
+ * **write** shape. Every field is required, including {@link
+ * AuditLogEntry.actorResolution}.
+ *
+ * This is not what comes back out of the database: rows written before the
+ * attribution fields existed lack them. Read paths return {@link
+ * PersistedAuditLogEntry}.
+ */
 export interface AuditLogEntry {
   id: string;
   timestamp: Date;
@@ -464,14 +477,18 @@ export interface AuditLogEntry {
    */
   performedBy: string | null;
   /**
-   * How {@link performedBy} was arrived at. Required: every writer in the
-   * extension now takes its actor from `coreApi.getCurrentUser()` and records
-   * which answer it got, so a new entry can never be silent about attribution
-   * (`D-013b`).
+   * How {@link performedBy} was arrived at. Required on the write side: every
+   * writer in the extension takes its actor from `coreApi.getCurrentUser()` and
+   * records which answer it got, so a new entry can never be silent about
+   * attribution (`D-013b`).
    *
-   * Rows persisted before the field existed have no value for it, and readers
-   * must stay tolerant of that — decide display from `performedBy === null`,
-   * never from the presence of this field.
+   * What the code guarantees on the **read** side is weaker, and deliberately
+   * so: `auditStore.getHistory` returns {@link PersistedAuditLogEntry}, where
+   * this field is optional. Every row written by this extension since `D-013a`
+   * carries it; rows persisted before that do not, and `getHistory` returns them
+   * as they were stored rather than back-filling a claim nobody made (`D-032`).
+   * A reader must therefore handle three cases, not two — see {@link
+   * PersistedAuditLogEntry.actorResolution}.
    */
   actorResolution: ActorResolution;
   affectedUsers: string[];
@@ -483,6 +500,33 @@ export interface AuditLogEntry {
     durationMs: number;
     errorMessages?: string[];
   };
+}
+
+/**
+ * An audit-trail record as it comes *back out of* IndexedDB — the **row** shape.
+ *
+ * Identical to {@link AuditLogEntry} except that {@link
+ * PersistedAuditLogEntry.actorResolution} is optional, because the database
+ * predates that field: rows written before `D-013a` have no value for it and
+ * there is no migration that could honestly supply one (`D-032`). Splitting the
+ * type is what makes that gap visible to the compiler instead of leaving readers
+ * to discover it as a stray `undefined`.
+ */
+export interface PersistedAuditLogEntry extends Omit<AuditLogEntry, 'actorResolution'> {
+  /**
+   * How {@link PersistedAuditLogEntry.performedBy} was arrived at, or
+   * `undefined` when the row predates the field.
+   *
+   * `undefined` is **not** a synonym for `'unavailable'`. `'unavailable'` is a
+   * positive record that a lookup ran and could not name anyone (and then
+   * `performedBy` is `null`); `undefined` means attribution was never recorded
+   * either way, so the row's `performedBy` string — whatever it is — carries no
+   * statement about how it was obtained. A UI that distinguishes actors must
+   * treat the absent case as its own third branch; collapsing it into either
+   * member of {@link ActorResolution} relabels a legacy row with a claim the
+   * writer never made, which is the thing `D-013` exists to prevent.
+   */
+  actorResolution?: ActorResolution;
 }
 
 /** Optional filters for querying the audit trail. */
