@@ -1,14 +1,15 @@
 /**
  * Tests for {@link useRuleLifecycle} — the security-sensitive audit path behind
- * rule activate/deactivate (`DEBT.md` D-004).
+ * rule activate/deactivate (`DEBT.md` D-004, D-013b).
  *
- * Three branches are pinned here, all as *observed current behaviour* so a later
- * fix has something to move:
+ * Three branches are pinned here:
  *
- * 1. The `/api/v1/users/me` lookup failing still writes an audit entry, but
- *    attributes it to the `unknown@unknown.com` placeholder — i.e. the entry
- *    misattributes who performed the rule change, and nothing is surfaced to the
- *    user. These cases assert today's behaviour, not the desired one.
+ * 1. Attribution comes from the facade's `getCurrentUser()`. A resolved admin is
+ *    recorded verbatim; every `kind: 'unavailable'` answer is recorded as
+ *    `performedBy: null` / `actorResolution: 'unavailable'` — never a
+ *    placeholder identity — and the rule change still goes ahead (`D-013`).
+ *    Which failure produced the non-answer (`threw` / `failed` / `no-email`) is
+ *    the facade's business, pinned in `useOktaApi/core.getCurrentUser.test.ts`.
  * 2. A `response.success === false` mutation surfaces an error to the caller and
  *    writes a `failed` audit entry without reloading the rule list.
  * 3. A thrown error surfaces its message and writes a `failed` audit entry with
@@ -32,7 +33,7 @@ vi.mock('../../shared/undoManager', () => ({
 }));
 
 const api = {
-  makeApiRequest: vi.fn(),
+  getCurrentUser: vi.fn(),
   activateGroupRule: vi.fn(),
   deactivateGroupRule: vi.fn(),
 };
@@ -75,9 +76,10 @@ function onlyAuditEntry() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  api.makeApiRequest.mockResolvedValue({
-    success: true,
-    data: { id: '00uFAKEADMIN01', profile: { email: 'admin@example.com' } },
+  api.getCurrentUser.mockResolvedValue({
+    kind: 'resolved',
+    email: 'admin@example.com',
+    id: '00uFAKEADMIN01',
   });
   api.activateGroupRule.mockResolvedValue({ success: true });
   api.deactivateGroupRule.mockResolvedValue({ success: true });
@@ -96,54 +98,72 @@ describe('useRuleLifecycle current-user attribution', () => {
     expect(entry.action).toBe('activate_rule');
     expect(entry.result).toBe('success');
     expect(entry.performedBy).toBe('admin@example.com');
+    expect(entry.actorResolution).toBe('resolved');
     expect(entry.groupId).toBe('00gFAKEGROUP01');
     expect(entry.groupName).toBe('Engineering');
     expect(reload).toHaveBeenCalledTimes(1);
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it('CURRENT BEHAVIOUR: misattributes the entry to unknown@unknown.com when the /users/me lookup throws, and tells the user nothing', async () => {
-    api.makeApiRequest.mockRejectedValue(new Error('me lookup failed'));
+  it('records no actor when the lookup itself threw, and still performs the rule change', async () => {
+    api.getCurrentUser.mockResolvedValue({ kind: 'unavailable', reason: 'threw' });
     const { result, reload, onError } = setup();
 
     await act(async () => {
       await result.current.activateRule(RULE_ID);
     });
 
-    // The rule change still succeeds and is still audited — but the audit trail
-    // records a placeholder instead of the admin who performed it, with no
-    // signal to the user. This pins the misattribution, it does not endorse it.
+    // The rule change still succeeds and is still audited — the entry says it
+    // could not name the actor rather than inventing one, and a failed metadata
+    // lookup never blocks a legitimate admin action (D-013).
     const entry = onlyAuditEntry();
     expect(entry.result).toBe('success');
-    expect(entry.performedBy).toBe('unknown@unknown.com');
+    expect(entry.performedBy).toBeNull();
+    expect(entry.actorResolution).toBe('unavailable');
     expect(onError).not.toHaveBeenCalled();
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
-  it('CURRENT BEHAVIOUR: misattributes the entry to unknown@unknown.com when /users/me returns an unsuccessful response', async () => {
-    api.makeApiRequest.mockResolvedValue({ success: false, error: 'Unauthorized' });
+  it('records no actor when the lookup returned an unsuccessful response', async () => {
+    api.getCurrentUser.mockResolvedValue({ kind: 'unavailable', reason: 'failed' });
     const { result, onError } = setup();
 
     await act(async () => {
       await result.current.deactivateRule(RULE_ID);
     });
 
-    expect(onlyAuditEntry().performedBy).toBe('unknown@unknown.com');
+    const entry = onlyAuditEntry();
+    expect(entry.performedBy).toBeNull();
+    expect(entry.actorResolution).toBe('unavailable');
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it('CURRENT BEHAVIOUR: misattributes the entry to unknown@unknown.com when /users/me returns a profile without an email', async () => {
-    api.makeApiRequest.mockResolvedValue({
-      success: true,
-      data: { id: '00uFAKEADMIN01', profile: {} },
-    });
+  it('records no actor when the profile carried no email', async () => {
+    api.getCurrentUser.mockResolvedValue({ kind: 'unavailable', reason: 'no-email' });
     const { result } = setup();
 
     await act(async () => {
       await result.current.activateRule(RULE_ID);
     });
 
-    expect(onlyAuditEntry().performedBy).toBe('unknown@unknown.com');
+    const entry = onlyAuditEntry();
+    expect(entry.performedBy).toBeNull();
+    expect(entry.actorResolution).toBe('unavailable');
+  });
+
+  it('asks the facade for the actor instead of hand-rolling the /users/me request', async () => {
+    const { result } = setup();
+
+    await act(async () => {
+      await result.current.activateRule(RULE_ID);
+    });
+
+    // One lookup per run, through the cached facade path. The mocked facade
+    // deliberately exposes no `makeApiRequest`: a hook that still hand-rolled
+    // `/api/v1/users/me` would throw here instead of auditing a success
+    // (D-013b/D-014).
+    expect(api.getCurrentUser).toHaveBeenCalledTimes(1);
+    expect(onlyAuditEntry().result).toBe('success');
   });
 
   it('keeps a successful activation working when the audit write itself rejects', async () => {
@@ -282,8 +302,8 @@ describe('useRuleLifecycle thrown error', () => {
     expect(entry.groupName).toBe('Unknown');
   });
 
-  it('CURRENT BEHAVIOUR: still attributes the failure entry to unknown@unknown.com when the /users/me lookup also failed', async () => {
-    api.makeApiRequest.mockRejectedValue(new Error('me lookup failed'));
+  it('records no actor on the failure entry when the actor lookup also came back unavailable', async () => {
+    api.getCurrentUser.mockResolvedValue({ kind: 'unavailable', reason: 'threw' });
     api.activateGroupRule.mockRejectedValue(new Error('boom'));
     const { result, onError } = setup();
 
@@ -292,7 +312,9 @@ describe('useRuleLifecycle thrown error', () => {
     });
 
     expect(onError).toHaveBeenCalledWith('boom');
-    expect(onlyAuditEntry().performedBy).toBe('unknown@unknown.com');
+    const entry = onlyAuditEntry();
+    expect(entry.performedBy).toBeNull();
+    expect(entry.actorResolution).toBe('unavailable');
   });
 });
 

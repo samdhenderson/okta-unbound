@@ -17,8 +17,11 @@
 import { vi } from 'vitest';
 import type { CoreApi } from '@/sidepanel/hooks/useOktaApi/core';
 
-/** The signed-in admin the fake `getCurrentUser` resolves to. Fake placeholder. */
-export const FAKE_ADMIN = { email: 'admin@example.com', id: 'admin' } as const;
+/**
+ * The signed-in admin the fake `getCurrentUser` resolves to — a
+ * `kind: 'resolved'` {@link Actor}. Fake placeholder values.
+ */
+export const FAKE_ADMIN = { kind: 'resolved', email: 'admin@example.com', id: 'admin' } as const;
 
 /**
  * Overrides accepted by {@link makeFakeCore}.

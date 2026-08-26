@@ -16,7 +16,15 @@ import type { MessageRequest, MessageResponse, OperationCallbacks } from './type
 import type { RequestResult, RequestPriority } from '@/shared/scheduler/types';
 import { runBatch, type BatchProgress, type BatchOutcome } from '@/shared/scheduler/runBatch';
 import { createLogger } from '@/shared/utils/logger';
-import { getCachedCurrentUser, cacheCurrentUser } from './currentUserCache';
+import { z } from 'zod';
+import {
+  getCachedCurrentUser,
+  cacheCurrentUser,
+  type Actor,
+  type ResolvedActor,
+} from './currentUserCache';
+
+export type { Actor } from './currentUserCache';
 
 const log = createLogger('useOktaApi');
 
@@ -28,6 +36,21 @@ const TRANSIENT_PORT_ERROR_PATTERNS = [
   'message port closed before a response',
   'receiving end does not exist',
 ];
+
+/**
+ * The slice of `GET /api/v1/users/me` audit attribution needs.
+ *
+ * Deliberately lenient (`passthrough`, everything optional): the only field
+ * that decides anything is `profile.email`, and its absence is a valid answer
+ * (`reason: 'no-email'`) rather than an error — so this schema classifies the
+ * response instead of rejecting it.
+ */
+const currentUserSchema = z
+  .object({
+    id: z.string().optional(),
+    profile: z.object({ email: z.string().optional() }).passthrough().optional(),
+  })
+  .passthrough();
 
 /** Retries allowed after a transient port failure (GET only). */
 const TRANSIENT_PORT_MAX_RETRIES = 2;
@@ -110,8 +133,13 @@ export interface CoreApi {
    * see {@link MakeApiRequestOptions}.
    */
   makeApiRequest: (endpoint: string, options: MakeApiRequestOptions) => Promise<RequestResult>;
-  /** Resolve the signed-in admin's email/id (for audit logging); falls back to `'unknown'` on failure. */
-  getCurrentUser: () => Promise<{ email: string; id: string }>;
+  /**
+   * Resolve the signed-in admin (for audit attribution) as a discriminated
+   * {@link Actor}: either `kind: 'resolved'` with a real email/id, or
+   * `kind: 'unavailable'` with the reason it could not be determined. There is
+   * no placeholder identity — callers must branch on `kind`.
+   */
+  getCurrentUser: () => Promise<Actor>;
   /** Throws if the caller has requested cancellation; call between iterations in long loops. */
   checkCancelled: () => void;
   /** Clear any prior cancellation; call once at the start of a cancellable operation. */
@@ -249,12 +277,17 @@ export function createCoreApi(
 
   /**
    * Resolve the signed-in admin via `/api/v1/users/me`, for audit attribution.
+   *
    * Served from a per-tab TTL cache when fresh (see `currentUserCache`) so
-   * back-to-back audited operations don't re-hit the endpoint; only a
-   * successful lookup is cached, and entries expire naturally by TTL.
-   * @returns The current user's email and id; `'unknown'` placeholders if the call fails.
+   * back-to-back audited operations don't re-hit the endpoint. **Only a
+   * `kind: 'resolved'` actor is cached** — an unavailable actor would otherwise
+   * be pinned to the tab for the whole TTL and mislabel every audited operation
+   * in that window; leaving it uncached means the next call retries.
+   *
+   * @returns A {@link Actor}: the admin's email and id when known, otherwise
+   *   `kind: 'unavailable'` with the reason. Never a placeholder identity.
    */
-  const getCurrentUser = async (): Promise<{ email: string; id: string }> => {
+  const getCurrentUser = async (): Promise<Actor> => {
     if (targetTabId !== null) {
       const cached = getCachedCurrentUser(targetTabId);
       if (cached) return cached;
@@ -264,21 +297,29 @@ export function createCoreApi(
       const response = await makeApiRequest('/api/v1/users/me', {
         reason: 'Resolve current admin identity',
       });
-      if (response.success && response.data) {
-        // Cache the parsed identity (never the raw response).
-        const identity = {
-          email: response.data.profile?.email || 'unknown@unknown.com',
-          id: response.data.id || 'unknown',
-        };
-        if (targetTabId !== null) {
-          cacheCurrentUser(targetTabId, identity);
-        }
-        return identity;
+      if (!response.success || !response.data) {
+        return { kind: 'unavailable', reason: 'failed' };
       }
-      return { email: 'unknown@unknown.com', id: 'unknown' };
+      // Validate at the boundary (ADR-0006) rather than reading `any` off the
+      // raw payload; anything that is not an object with a string email is
+      // simply not an identity we can attribute an operation to.
+      const parsed = currentUserSchema.safeParse(response.data);
+      const email = parsed.success ? parsed.data.profile?.email : undefined;
+      if (!parsed.success || !email) {
+        // A profile with no email cannot be attributed to anyone — and must not
+        // be cached, or one empty profile mislabels the whole TTL window.
+        return { kind: 'unavailable', reason: 'no-email' };
+      }
+      // Cache the parsed identity (never the raw response). Attribution keys off
+      // the email; `id` is best-effort and empty if Okta omitted it.
+      const actor: ResolvedActor = { kind: 'resolved', email, id: parsed.data.id ?? '' };
+      if (targetTabId !== null) {
+        cacheCurrentUser(targetTabId, actor);
+      }
+      return actor;
     } catch (error) {
       log.error('Failed to get current user', error);
-      return { email: 'unknown@unknown.com', id: 'unknown' };
+      return { kind: 'unavailable', reason: 'threw' };
     }
   };
 

@@ -529,7 +529,7 @@ more expensive the day an audit viewer ships.
 
 - **Risk:** Medium — audit-trail semantics and a shared facade. Route through
   `security-logging-reviewer`.
-- **Status:** open
+- **Status:** done:#94
 
 ### D-013b · The three hand-rolled copies use the facade
 
@@ -559,7 +559,7 @@ more expensive the day an audit viewer ships.
   placeholder as _expected_ behaviour with no marker at all, so they will pass
   silently until someone reads them.
 - **Risk:** Medium. Behavior change on an audit path, deliberately.
-- **Status:** open
+- **Status:** done:#94
 - **Depends on:** `D-013a`
 - **Closes:** `D-014` — the per-tab TTL cache comes along with the facade.
 
@@ -600,7 +600,7 @@ more expensive the day an audit viewer ships.
   would bake the old fallback into the shared helper, which is what the original
   "sequence it after D-013" note was protecting against.
 - **Risk:** n/a.
-- **Status:** blocked:superseded-by-D-013b
+- **Status:** done:#94 (closed by D-013b)
 
 ### D-015 · The ghost copy-id recipe is now duplicated in EntityLink and CopyableId
 
@@ -1359,3 +1359,125 @@ origin)` imperatively rather than `useOrgSnapshot` —
   scoped by a status field the file already parses.
 - **Status:** open
 - **Related:** `D-030`, `D-018`, `D-024`
+
+### D-032 · Audit rows written before `actorResolution` contradict their own type
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/shared/types.ts` (`AuditLogEntry`),
+  `src/shared/storage/auditStore.ts` (`getHistory`, `logOperation`)
+- **Verified:** 2026-08-25 — noticed by the `D-013b` writer while making the
+  field required.
+- **Problem:** `AuditLogEntry` is both the write shape and the IndexedDB row
+  shape, and since `D-013b` those genuinely differ. `actorResolution` is
+  required, but rows persisted before `D-013a` have no such field, so
+  `getHistory` hands callers `AuditLogEntry` objects that do not satisfy the
+  type. Nothing reads the field today, which is the only reason this is latent
+  rather than a live bug — `D-013c`, or any audit-trail UI that branches on
+  `actorResolution`, would hit it immediately and would read `undefined` as a
+  falsy "unavailable" without ever having been told.
+- **Done when:** Either a `PersistedAuditLogEntry` (field optional) is split
+  from the write-side `AuditLogEntry` and `getHistory` returns it, or
+  `getHistory` normalises at read time so every row it returns really does carry
+  the field. Whichever is chosen, the `AuditLogEntry` TypeDoc note that
+  currently warns readers to decide display from `performedBy === null` is
+  updated to say what the code now guarantees.
+- **Risk:** Low — no DB migration either way; this is a type/read-path fix.
+- **Status:** open
+- **Related:** `D-013a`, `D-013b`, `D-013c`
+
+### D-033 · Two docs still cite `unknown@unknown.com` as current behavior
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `docs/ux-guidelines.md:90`, `docs/features-plan.md:250`
+- **Verified:** 2026-08-25 — both cited while implementing `D-013a`.
+- **Problem:** Both describe the placeholder actor as what the extension does.
+  `D-013b` removed the literal from `src/` entirely, so the docs now describe
+  behavior that no longer exists. `lint:cited-paths` cannot catch this — it
+  checks that cited _paths_ resolve, not that cited _behavior_ is still real.
+- **Done when:** Both passages describe the `Actor` contract instead: an
+  unresolved actor is recorded as `performedBy: null` with
+  `actorResolution: 'unavailable'`, and the operation proceeds anyway.
+- **Risk:** None — documentation only.
+- **Status:** open
+
+### D-034 · `useGroupMerge` copies members with a hand-rolled loop, not `runOperation`
+
+- **Category:** standards
+- **Priority:** P2
+- **Size:** M
+- **Files:** `src/sidepanel/hooks/useGroupMerge.ts`
+- **Verified:** 2026-08-25 — read while wiring the hook to the actor facade.
+- **Problem:** The survivor-membership PUTs run as a hand-rolled `for` loop over
+  `makeApiRequest`. `CONVENTIONS.md`'s "Okta API throttling" section says any
+  bulk/multi-call operation goes through `coreApi.runOperation`, never a
+  hand-rolled loop. Every request still passes through the scheduler, so this is
+  not a rate-limit hole — it is a convergence problem plus a missing cancel: a
+  merge in flight cannot be abandoned the way every other bulk operation can.
+- **Done when:** The member copy runs through `coreApi.runOperation`, and the
+  merge's progress reporting and undo bookkeeping are preserved — that
+  bookkeeping is the reason this was not folded into `D-013b`.
+- **Risk:** Medium — rewrites the progress and undo paths of a destructive
+  operation. Needs its own tests before the change, not after.
+- **Status:** open
+
+### D-035 · `currentUserSchema` lives in `core.ts`, away from every other Okta schema
+
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaApi/core.ts:48-53`,
+  `src/shared/schemas/okta.ts`
+- **Verified:** 2026-08-25 — raised by `security-logging-reviewer` on the
+  `D-013a`/`D-013b` diff, advisory.
+- **Problem:** `D-013a` added a lenient zod schema for `/api/v1/users/me`
+  inline in `core.ts`. Every other Okta-response schema lives in
+  `shared/schemas/okta.ts`. ADR-0006 is satisfied either way — this is
+  discoverability drift, not a validation gap — but the next person adding a
+  boundary schema now has two places to look and two precedents to copy.
+- **Done when:** The schema moves to `shared/schemas/okta.ts` beside its
+  siblings, or a one-line comment in `okta.ts` records why hook-local response
+  schemas are allowed to stay local.
+- **Risk:** Low.
+- **Status:** open
+
+### D-036 · `ClauseChecklist.tsx` is over the ~300-line bar
+
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/groups/detail/ClauseChecklist.tsx`
+- **Verified:** 2026-08-25 — 309 lines after `I-002`, confirmed by
+  `ui-reviewer` (the implementing agent reported 312 and attributed the growth
+  to TypeDoc; roughly half of it is the `resolveGroupName` `useMemo`, the new
+  prop, and the `RuleExpressionText` wiring — real logic).
+- **Problem:** `CLAUDE.md` asks for components under ~300 lines with logic
+  pushed into hooks. The file was at 285 before `I-002` and is now just over.
+- **Done when:** `ClauseRow` and `ResolvedValue` are extracted as siblings —
+  the same move `ClauseGroupList.tsx` already records — and the file is back
+  under the bar without behavior changing.
+- **Risk:** Low — behavior-preserving extraction, route to
+  `architecture-refactor`.
+- **Status:** open
+
+### D-037 · `useOktaApi`'s returned facade has no explicit interface
+
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/sidepanel/hooks/useOktaApi.ts`
+- **Verified:** 2026-08-25 — noticed while adding `getCurrentUser` to the
+  facade for `D-013b`.
+- **Problem:** The facade's public surface is inferred from a ~90-key object
+  literal. Adding a key — which `D-013b` had to do — changes the public API of
+  the hook every side-panel surface consumes, and nothing in review shows that
+  as an API change. There is also no single place to read what the facade
+  offers.
+- **Done when:** The return value is annotated with an exported, TypeDoc'd
+  interface, so an addition or removal is visible as a type change.
+- **Risk:** Low mechanically, but it will surface existing shape mismatches;
+  expect the first attempt to reveal more than it fixes.
+- **Status:** open

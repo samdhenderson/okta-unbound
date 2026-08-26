@@ -17,6 +17,110 @@ Entry format:
 
 ---
 
+## 2026-08-25 (second run) — three items shipped
+
+**Baseline:** green, all nine gates. `type-check`; `lint` 0 errors / 155
+warnings; `format:check`; `test:coverage` 225 files / 3199 tests;
+`knip:circular`; `lint:control-chars` 896 files; `lint:cited-paths` 54 files;
+`test:storybook` 161 files / 1123 tests; `build`. **The two story failures
+that stopped the earlier run today are gone** — `#92` merged at 14:13Z and
+repaired `RequestLogRow.stories.tsx` and `TabJumpPalette.stories.tsx` exactly
+as that entry predicted it would. Note for the next session: `node_modules`
+was absent on a cold container and `npm ci` had to run before any gate meant
+anything; a `type-check` against a missing tree fails with
+`Cannot find type definition file for 'chrome'`, which looks like a code
+failure and is not one.
+
+**Open PRs at step 2: zero.** No contention filter to apply, no three-PR
+stop, and no branch collision — `#93` used `claude/stoic-gates-jlvx8n`, not
+this run's branch. `gh` is not available in this environment; the GitHub MCP
+tools stood in for it, which satisfies step 2's requirement to distinguish
+in-flight work from open work.
+
+**Items worked:** `D-013a`, `D-013b`, `I-002`. `D-014` closes as a side
+effect of `D-013b`, as its own entry said it would.
+
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/94
+
+**Branch:** `claude/stoic-gates-1rt7to`, not `nightly/2026-08-25`. The
+harness assigns the branch name in this environment; `SESSION.md` step 2
+already anticipates that ("whatever the harness assigns in its place"). It
+counts as an unattended run's branch for the three-PR cap.
+
+**Backlog after:** 24 open / 58 total — 7 IMPROVEMENTS open (of 16), 17 DEBT
+open (of 42), 6 gated (3 `blocked:`, 3 `research:awaiting-review`). Eight new
+items were filed tonight (below), which is why open count rises even though
+four items closed.
+
+**Notes:**
+
+_Selection._ The prepared list in the earlier entry was reused rather than
+re-derived, since `#92`'s merge removed the only reason those items were
+skipped. `D-028` sorts to the top of P1 again and was skipped again: it is an
+audit against a **real Okta org**, which an unattended sandbox cannot reach.
+That is now three consecutive nights spending the same reasoning on the same
+unreachable item — it wants re-gating to `blocked:needs-live-org`, which is
+Sam's call and not a session's.
+
+_A deviation, resolved within the night._ `D-013a` could not ship
+`actorResolution` as a required field on its own: doing so red-lines
+`type-check` in `D-013b`'s three hooks, so the commit could not stand alone
+or survive the per-commit hook. It shipped optional with a TypeDoc note
+naming `D-013b` as the tightener, and `D-013b` tightened it. Both commits are
+in this PR, so `main` never sees the optional state. Worth knowing that the
+one-commit-per-item rule and a shared type change can genuinely conflict, and
+that sequencing inside one PR is the way out.
+
+_Scope beyond Files lists, all disclosed._ Four files were touched that no
+item's **Files** list named, each forced rather than chosen:
+`useOktaApi.ts` (+1 key — `coreApi.getCurrentUser` was never exposed on the
+facade the three hooks consume, so `D-013b` was literally unreachable without
+it); `auditStore.test.ts` (pinning coverage for `exportAuditLog`, which had
+none, plus `actorResolution` on 12 fixtures once the field went required);
+`test/factories/coreApi.ts` (`FAKE_ADMIN` must satisfy `Actor`); and
+`RuleExpressionText.tsx` (a new sibling — the alternative was duplicating the
+tokeniser across two call sites or pushing `ClauseChecklist.tsx` to ~350
+lines).
+
+_Reviews._ `security-logging-reviewer` and `ui-reviewer` both returned
+**nothing blocking**; all findings were advisory and are in the PR body.
+Worth recording that neither agent has a Bash tool in this environment, so
+neither could run `git diff` — both reviewed the working tree at the named
+paths instead, and both said so unprompted. That is a real limitation of
+step 6 as written: a reviewer cannot see what _changed_, only what _is_. It
+did not matter here because the tree and the branch head were identical, but
+a future session should hand reviewers the diff as text rather than a command
+they cannot run.
+
+_A new lint warning, caught and closed._ The branch briefly took lint from
+155 to 156 warnings: a new test helper needs `FileReader` (jsdom's `Blob` has
+no `text()` — verified with a throwaway probe rather than assumed), and the
+bare global is not in the eslint globals list. Reaching it through
+`globalThis` returns the count to baseline. It was folded into `D-013b`'s
+commit rather than `D-013a`'s, where it belongs, only because this
+environment has no non-interactive rebase; the commit message says so.
+
+_Eight items filed, none folded in._ `D-032` (audit rows written before
+`actorResolution` contradict their own type — latent today, live the moment
+`D-013c` or any audit UI reads the field), `D-033` (two docs still cite
+`unknown@unknown.com`), `D-034` (`useGroupMerge` copies members with a
+hand-rolled loop instead of `runOperation`), `D-035` (`currentUserSchema`
+placement), `D-036` (`ClauseChecklist.tsx` now 309 lines), `D-037`
+(`useOktaApi` has no explicit facade interface), `I-015` (`ClauseGroupList`
+prints a raw uncopyable id, now the less capable half of the view `I-002`
+cited as already correct), `I-016` (`RuleExpressionText` is consumed
+cross-feature). `I-009` was **widened** rather than duplicated:
+`ui-reviewer` found that `EntityLink`'s chip `aria-label` has no override
+prop at all, so `I-002`'s explicit `copyIdLabel` moves that collision to the
+open control rather than closing it.
+
+_Recommended next pick._ `D-013c` is now unblocked and is the natural
+follow-on — it is the third of the D-013 family and its dependency just
+landed. `D-032` should be weighed first if `D-013c` will branch on
+`actorResolution`, since that is exactly the read path `D-032` describes.
+
+---
+
 ## 2026-08-25 — stopped: red baseline whose only repair sites belong to an open PR
 
 **Baseline:** **red** — `npm run test:storybook`: 2 test files failed of 158,

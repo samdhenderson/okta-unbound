@@ -441,6 +441,16 @@ export type ResultType = 'info' | 'success' | 'warning' | 'error';
 // Re-export undo types for convenience
 export type { UndoAction, UndoActionMetadata, UndoHistory } from './undoTypes';
 
+/**
+ * Whether the acting admin could be named when an entry was written.
+ *
+ * Pairs with {@link AuditLogEntry.performedBy}: `'resolved'` means the string is
+ * a real identity, `'unavailable'` means the `/users/me` lookup could not name
+ * anyone and `performedBy` is `null`. An audit trail that cannot say who acted
+ * must say *that*, not invent a plausible-looking address.
+ */
+export type ActorResolution = 'resolved' | 'unavailable';
+
 /** A persisted audit-trail record of one completed operation. */
 export interface AuditLogEntry {
   id: string;
@@ -448,7 +458,22 @@ export interface AuditLogEntry {
   action: 'remove_users' | 'add_users' | 'export' | 'activate_rule' | 'deactivate_rule';
   groupId: string;
   groupName: string;
-  performedBy: string;
+  /**
+   * Email of the admin who performed the operation, or `null` when the actor
+   * could not be resolved. Never a placeholder — see {@link ActorResolution}.
+   */
+  performedBy: string | null;
+  /**
+   * How {@link performedBy} was arrived at. Required: every writer in the
+   * extension now takes its actor from `coreApi.getCurrentUser()` and records
+   * which answer it got, so a new entry can never be silent about attribution
+   * (`D-013b`).
+   *
+   * Rows persisted before the field existed have no value for it, and readers
+   * must stay tolerant of that — decide display from `performedBy === null`,
+   * never from the presence of this field.
+   */
+  actorResolution: ActorResolution;
   affectedUsers: string[];
   result: 'success' | 'partial' | 'failed';
   details: {

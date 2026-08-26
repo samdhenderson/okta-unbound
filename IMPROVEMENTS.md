@@ -74,7 +74,7 @@ block says they mean — same vocabulary, one definition, defined there.
   proving that fallback still renders cleanly.
 - **Risk:** Low-medium — user-facing rule display; needs both the resolved
   and unresolved cases tested.
-- **Status:** open
+- **Status:** done:#94
 - **Depends on:** I-001
 - **Ungated 2026-08-24:** the `groups/detail/` off-limits window was lifted
   (`CLAUDE.md`, `NIGHTLY.md` 2026-08-24). This item is implementable whole; it
@@ -256,6 +256,18 @@ block says they mean — same vocabulary, one definition, defined there.
   entities must pass `copyIdLabel`, and a story shows the collision case.
 - **Risk:** Low.
 - **Status:** open
+- **Widened 2026-08-25 by `ui-reviewer` on `I-002`'s diff:** the copy control
+  is only half of it. `EntityLink`'s **chip** derives its `aria-label` as
+  `Open <type> <name>` (`EntityLink.tsx:146`) and exposes **no override prop
+  at all**, so a caller cannot disambiguate it the way `copyIdLabel` allows for
+  the copy control. `I-002` now renders two badges side by side inside one rule
+  expression, which makes this reachable: two groups sharing a display name
+  produce two identically-named "Open group …" controls with different
+  destinations. `I-002` passed an explicit `copyIdLabel`, which moves the
+  collision to the open control rather than closing it. **Done when** should
+  therefore cover the chip's label too, not just the copy control's — and the
+  story it asks for should render two badges with the same name and different
+  ids, which nothing in the repo does today.
 
 ### I-010 · The `Copy <type> id for <name>` label still collides on duplicate names
 
@@ -433,3 +445,46 @@ block says they mean — same vocabulary, one definition, defined there.
   blockers **cannot be closed from the repo** — verifying the endpoint needs a
   live org.
 - **Status:** blocked:sparse-patch-merge-unverified
+
+### I-015 · `ClauseGroupList`'s resolved rows print a raw, uncopyable id
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/users/comparison/ClauseGroupList.tsx:201-205`
+- **Verified:** 2026-08-25 — noticed while implementing `I-002`.
+- **Problem:** `GroupEntry` renders the raw group id under a resolved name in a
+  hand-rolled `<span className="font-mono">` — not copyable, not linked.
+  `I-002` cited this list as the sibling that already did the right thing, and
+  it now is the _less_ capable of the two: the expression text beside it badges
+  the same ids with `EntityLink copyId`.
+- **Done when:** The id under a resolved name uses `EntityLink` with `copyId`
+  like the expression text does, or the raw `<span>` is replaced with
+  `CopyableId` where a link would be wrong. The unresolvable case keeps
+  rendering as it does today.
+- **Risk:** Low — render-time change, no new fetch.
+- **Status:** open
+- **Related:** `I-002`, `I-001`
+
+### I-016 · `RuleExpressionText` is consumed cross-feature from `groups/detail/`
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/groups/detail/RuleExpressionText.tsx`,
+  `src/sidepanel/components/users/comparison/CauseWorklistRow.tsx`,
+  `src/sidepanel/components/shared/index.ts`, `docs/components.md`
+- **Verified:** 2026-08-25 — created and immediately cross-imported by `I-002`.
+- **Problem:** `I-002` added `RuleExpressionText` under `groups/detail/` and
+  `users/comparison/CauseWorklistRow` imports it from there. It is the first
+  cross-feature consumer of a `groups/detail/` component (`MembershipRuleEvidence`
+  is the existing precedent for the coupling, which is the reason this was not
+  treated as blocking). A component two features consume is a shared component
+  that happens to live in one of them.
+- **Done when:** Either it moves to `components/shared/`, is exported from the
+  barrel and gains a `docs/components.md` entry, or a note in `docs/components.md`
+  records why feature-to-feature imports are acceptable here so the next case is
+  not re-litigated.
+- **Risk:** Low — a move plus import updates, no behavior change.
+- **Status:** open
+- **Related:** `I-002`

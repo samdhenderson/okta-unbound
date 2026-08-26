@@ -80,9 +80,42 @@ describe('ClauseChecklist', () => {
       />,
     );
 
-    expect(within(rowFor('isMemberOfAnyGroup("00gFAKE1")')).getByText('Pass')).toBeInTheDocument();
+    // The clause text now names the group rather than printing its id (I-002),
+    // so the row is found by the name the same list supplied.
+    expect(within(rowFor('Engineering')).getByText('Pass')).toBeInTheDocument();
     expect(screen.getByText('Rule matches this user')).toBeInTheDocument();
     expect(screen.queryByText(/needs group context/)).not.toBeInTheDocument();
+  });
+
+  /**
+   * I-002. The group list already in hand is the only name source — no fetch —
+   * and the raw id stays available through the badge's copy control.
+   */
+  it('names a group id inside the clause text when the group context names it', () => {
+    render(
+      <ClauseChecklist
+        expression='isMemberOfAnyGroup("00gFAKE1")'
+        user={user}
+        groupContext={[{ id: '00gFAKE1', name: 'Engineering' }]}
+      />,
+    );
+
+    expect(screen.getByText('Engineering')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy group id 00gFAKE1' })).toBeInTheDocument();
+  });
+
+  /** The fallback: an id the group list cannot name keeps its raw quoted form. */
+  it('leaves a group id the context does not name as raw text', () => {
+    render(
+      <ClauseChecklist
+        expression='isMemberOfAnyGroup("00gFAKE9")'
+        user={user}
+        groupContext={[{ id: '00gFAKE1', name: 'Engineering' }]}
+      />,
+    );
+
+    expect(screen.getByText('isMemberOfAnyGroup("00gFAKE9")')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Copy group id/ })).not.toBeInTheDocument();
   });
 
   /** A group absent from a *complete* list is a confident "not a member" (ADR-0021). */

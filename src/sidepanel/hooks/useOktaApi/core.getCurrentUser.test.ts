@@ -1,11 +1,16 @@
 /**
- * Tests for the per-tab TTL cache on coreApi.getCurrentUser.
+ * Tests for coreApi.getCurrentUser: its `Actor` contract and its per-tab TTL cache.
  *
  * Every audited operation resolves the acting admin via `/api/v1/users/me`;
  * within the TTL that lookup must be served from the module-level cache (one
  * network request), while different tabs — potentially different Okta
- * sessions/orgs — must never share an entry. Failed lookups are not cached, so
- * a later call can retry.
+ * sessions/orgs — must never share an entry.
+ *
+ * The result is a discriminated `Actor`: `kind: 'resolved'` with a real
+ * email/id, or `kind: 'unavailable'` with the reason. **Only a resolved actor
+ * is cached** — each of the three unavailable paths (`threw`, `failed`,
+ * `no-email`) must leave the cache empty so the next call retries, rather than
+ * pinning a non-answer to the tab for the whole TTL.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createCoreApi } from './core';
@@ -42,7 +47,7 @@ describe('coreApi.getCurrentUser TTL cache', () => {
     const first = await core.getCurrentUser();
     const second = await core.getCurrentUser();
 
-    expect(first).toEqual({ email: 'admin@example.com', id: '00uFAKEADMIN' });
+    expect(first).toEqual({ kind: 'resolved', email: 'admin@example.com', id: '00uFAKEADMIN' });
     expect(second).toEqual(first);
     expect(meCallCount()).toBe(1);
   });
@@ -80,10 +85,50 @@ describe('coreApi.getCurrentUser TTL cache', () => {
     const core = makeCore(1);
 
     const failed = await core.getCurrentUser();
-    expect(failed).toEqual({ email: 'unknown@unknown.com', id: 'unknown' });
+    expect(failed).toEqual({ kind: 'unavailable', reason: 'threw' });
 
     const retried = await core.getCurrentUser();
-    expect(retried).toEqual({ email: 'admin@example.com', id: '00uFAKEADMIN' });
+    expect(retried).toEqual({ kind: 'resolved', email: 'admin@example.com', id: '00uFAKEADMIN' });
+    expect(meCallCount()).toBe(2);
+  });
+
+  it('reports an unsuccessful response as unavailable and does not cache it', async () => {
+    runtimeSendMessage.mockReset();
+    runtimeSendMessage.mockResolvedValueOnce({ success: false }).mockResolvedValueOnce({
+      success: true,
+      data: { id: '00uFAKEADMIN', profile: { email: 'admin@example.com' } },
+    });
+
+    const core = makeCore(1);
+
+    expect(await core.getCurrentUser()).toEqual({ kind: 'unavailable', reason: 'failed' });
+    expect(await core.getCurrentUser()).toEqual({
+      kind: 'resolved',
+      email: 'admin@example.com',
+      id: '00uFAKEADMIN',
+    });
+    expect(meCallCount()).toBe(2);
+  });
+
+  it('reports a profile with no email as unavailable and never caches it', async () => {
+    runtimeSendMessage.mockReset();
+    runtimeSendMessage
+      .mockResolvedValueOnce({ success: true, data: { id: '00uFAKEADMIN', profile: {} } })
+      .mockResolvedValueOnce({
+        success: true,
+        data: { id: '00uFAKEADMIN', profile: { email: 'admin@example.com' } },
+      });
+
+    const core = makeCore(1);
+
+    expect(await core.getCurrentUser()).toEqual({ kind: 'unavailable', reason: 'no-email' });
+    // Caching the no-email answer would mislabel every audited operation on this
+    // tab until the TTL turned over; the next call must re-ask instead.
+    expect(await core.getCurrentUser()).toEqual({
+      kind: 'resolved',
+      email: 'admin@example.com',
+      id: '00uFAKEADMIN',
+    });
     expect(meCallCount()).toBe(2);
   });
 });

@@ -3,7 +3,7 @@
  * @description Group cleanup operations for removing inactive users
  */
 
-import type { CoreApi } from './core';
+import type { Actor, CoreApi } from './core';
 import type { OktaUser, AuditLogEntry } from './types';
 import type { RequestResult } from '../../../shared/scheduler/types';
 import type { BulkUserInfo } from '../../../shared/undoTypes';
@@ -89,7 +89,9 @@ export function createGroupCleanupOperations(
    */
   const removeDeprovisioned = async (groupId: string) => {
     const startTime = Date.now();
-    let currentUser: { email: string; id: string } | null = null;
+    // `null` until the lookup has been attempted at all; afterwards an Actor
+    // that either names the admin or says it could not be determined.
+    let currentUser: Actor | null = null;
     let groupName = 'Unknown Group';
     let removed = 0;
     let failed = 0;
@@ -239,7 +241,8 @@ export function createGroupCleanupOperations(
           action: 'remove_users',
           groupId,
           groupName,
-          performedBy: currentUser.email,
+          performedBy: currentUser.kind === 'resolved' ? currentUser.email : null,
+          actorResolution: currentUser.kind === 'resolved' ? 'resolved' : 'unavailable',
           affectedUsers: affectedUserIds,
           result: failed === 0 ? 'success' : removed === 0 ? 'failed' : 'partial',
           details: {
