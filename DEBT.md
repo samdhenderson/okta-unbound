@@ -1191,7 +1191,18 @@ origin)` imperatively rather than `useOrgSnapshot` —
   unchanged, covering a cold snapshot.
 - **Risk:** Low — one read site, one shape, and the fallback already handles an
   empty result.
-- **Status:** open
+- **Resolution note:** shipped with `orgSnapshotStore.getCollection`, not
+  `getRecords` as the filing said. The store's own TypeDoc says to prefer
+  `getCollection` everywhere except a composed-key collection (`appGroups`), and
+  it returns unwrapped entities — which is exactly `rawRules`, with no
+  `.map(r => r.entity)`. Rules are keyed from `row.id`, so the envelope carries
+  nothing here. The origin is threaded `RulesTab` → a new optional
+  `UseOktaApiOptions.oktaOrigin` → `useOktaApi.ts` → the factory; four files
+  beyond this item's **Files** list, forced by its own "needs one threaded from
+  its caller". The fallback is unchanged and now covers three cases rather than
+  one: no origin resolved yet, a cold snapshot, and a snapshot holding only
+  another org. One consequence was filed rather than folded in: `D-038`.
+- **Status:** claimed:claude/stoic-gates-i8aob4
 
 ### D-029b · User memberships derive their rules
 
@@ -1384,7 +1395,25 @@ origin)` imperatively rather than `useOrgSnapshot` —
   currently warns readers to decide display from `performedBy === null` is
   updated to say what the code now guarantees.
 - **Risk:** Low — no DB migration either way; this is a type/read-path fix.
-- **Status:** open
+- **Resolution note:** shipped the **split type**, not read-time normalisation,
+  and the argument matters for whoever reads this next. Normalising cannot be
+  done honestly here: before `D-013a` an unresolvable actor was written as the
+  literal `unknown@unknown.com`, **not** as `null`, so a legacy row is never
+  `performedBy === null`. Mapping every legacy row to `'unavailable'` would
+  misreport the majority that name a real admin; mapping to `'resolved'` (or
+  deriving it from `performedBy !== null`, which is the same thing for legacy
+  rows) would relabel the placeholder rows as resolved — the exact invention
+  `D-013`'s policy forbids. The only rule separating the two populations is
+  sniffing for a literal `D-013a` deliberately deleted from `src/`.
+  So `PersistedAuditLogEntry` carries the field as optional and is what the
+  `AuditDB` row schema and `getHistory` return; the absent field **is** the
+  third state. `ActorResolution` was deliberately **not** widened with a third
+  member — it is also the write-side type, and a writer must not be able to
+  record "I did not check" as an answer. Confirmed: `exportAuditLog` decides its
+  cell from `performedBy` alone, so a legacy row still exports its stored actor
+  rather than `(actor unavailable)`, still through `escapeCSV`. No `DB_VERSION`
+  bump, no migration, no index change.
+- **Status:** claimed:claude/stoic-gates-i8aob4
 - **Related:** `D-013a`, `D-013b`, `D-013c`
 
 ### D-033 · Two docs still cite `unknown@unknown.com` as current behavior
@@ -1481,3 +1510,172 @@ origin)` imperatively rather than `useOrgSnapshot` —
 - **Risk:** Low mechanically, but it will surface existing shape mismatches;
   expect the first attempt to reveal more than it fixes.
 - **Status:** open
+
+### D-038 · Rule impact trusts a snapshot that may be mid-walk
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaApi/ruleImpact.ts` (`fetchRawRules`),
+  `src/shared/snapshot/orgSnapshotStore.ts` (`getMeta`),
+  `src/shared/snapshot/syncMeta.ts`,
+  `src/sidepanel/cache/useOrgSnapshot.ts:14-21` (the contract being bypassed)
+- **Verified:** 2026-08-26 — raised independently by the `D-029a` writer **and**
+  by `security-logging-reviewer` on the same diff.
+- **Problem:** `D-029a` moved the impact preview onto the org snapshot, and it
+  trusts the snapshot whenever it returns at least one row. It never reads
+  `complete` from the collection's sync meta. `useOrgSnapshot.ts:14-21` states
+  the contract this bypasses in so many words — "a partial walk is labelled
+  partial … so a caller can caveat rather than render a truncated inventory as
+  the org" (ADR-0040 §7) — and exposes `complete` precisely so a consumer can
+  honour it. `ruleImpact` reads the store imperatively (it is an operation
+  factory, not a hook) and so never sees it.
+  The question this feature answers is "who loses access if I deactivate this
+  rule". The dangerous direction is not a missing rule but a **stale** one: a
+  rule deleted in Okta but not yet swept from an incomplete walk makes the tool
+  believe a member is still covered by another active rule when they are not,
+  which **understates** the impact of the deactivation. That is a wrong answer
+  to an access question, presented unqualified.
+- **Done when:** Either `fetchRawRules` requires `complete` before serving from
+  the snapshot and falls through to its existing paginated fetch otherwise, or
+  the impact summary carries the incompleteness through to the UI so the admin
+  is not given an unqualified answer. Pick one deliberately and record why — the
+  first is cheaper and costs a walk; the second is more informative and is the
+  direction ADR-0040 §7 points. A test pins that a partial snapshot does not
+  silently become the answer.
+- **Risk:** Low to fix. The risk is leaving it: the failure is a confident wrong
+  answer, not an error state.
+- **Status:** open
+- **Related:** `D-029a` (introduced the read), `D-029`
+- **Also noticed:** an org with genuinely zero group rules can never satisfy
+  "at least one row", so it re-paginates `/api/v1/groups/rules` on every impact
+  preview even when fully synced. Correctness-safe — it never serves wrong data
+  — so it is a missed optimisation, not a second defect. A `complete` check
+  would incidentally fix it, which is one more argument for that option.
+
+### D-039 · `RuleCard`'s memo comparator omits the group props it renders
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/components/RuleCard.tsx` (the `memo` comparator)
+- **Verified:** 2026-08-26 — raised by the `I-003` writer while working in the file.
+- **Problem:** The custom `memo` comparator does not compare `groupIds`,
+  `groupNames` or `allGroupNamesMap`, so a card whose group names resolve _after_
+  first paint can keep rendering the stale set. `docs/components.md` states the
+  rule directly: a custom comparator must be kept in step with the props the
+  component actually reads.
+  `I-003` makes this materially more visible. Before it, an unresolved group and
+  a resolved one differed by a colour and a truncated id; now they are two
+  different components — an `EntityLink` chip that opens the group versus a
+  stated "name not loaded". A missed re-render used to look like a styling
+  quirk; it now looks like the app not knowing a group it does know.
+- **Done when:** The comparator covers every prop the render reads, or is
+  removed in favour of the default shallow compare with a note saying why the
+  custom one was not needed. A test pins that late-arriving group names repaint
+  the card.
+- **Risk:** Low. Widening a comparator can only cause _more_ re-renders, never
+  a stale one.
+- **Status:** open
+- **Related:** `I-003`
+
+### D-040 · `RuleCard.tsx` is well over the ~300-line bar and hand-rolls its icons
+
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/sidepanel/components/RuleCard.tsx`,
+  `src/sidepanel/components/shared/OpenInOktaLink.tsx` (the primitive it should
+  be using), `src/sidepanel/components/overview/shared/Icon.tsx`
+- **Verified:** 2026-08-26 — measured by the `I-003` writer; ~490 lines before
+  that item, ~530 after.
+- **Problem:** Three separate house rules, all in one file:
+  1. `CLAUDE.md` asks for components under ~300 lines with logic pushed into
+     hooks. The expanded detail body is the obvious extraction (`RuleCardDetails`).
+  2. Two inline `<svg>` elements — the external-link glyph on "View in Okta" and
+     the disclosure chevron — against the rule that icons come from the `Icon`
+     registry.
+  3. That same anchor carries `style={{ fontFamily: 'var(--font-heading)',
+minHeight: '36px' }}`, an inline pixel style, and looks like it simply
+     wants to be the shared `OpenInOktaLink`.
+     Its "USES ATTRIBUTES" pills also hand-roll a chip that duplicates `Badge`.
+- **Done when:** The file is back under the bar by extraction (no behaviour
+  change), both inline SVGs come from `Icon` or the anchor becomes
+  `OpenInOktaLink`, and the attribute pills use `Badge`. Route to
+  `architecture-refactor`; existing tests and stories stay green untouched.
+- **Risk:** Low — behaviour-preserving, but the file has two consumers now
+  (the Rules tab and the Group Detail Rules tab), so verify both.
+- **Status:** open
+- **Related:** `I-003`, `D-036` (the same bar, one file over)
+
+### D-041 · Decorative icons carry no `aria-hidden`, app-wide
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/overview/shared/Icon.tsx`,
+  `src/sidepanel/components/shared/EntityLink.tsx`,
+  `src/sidepanel/components/shared/CopyableId.tsx`
+- **Verified:** 2026-08-26 — raised by `ui-reviewer` on the `I-003` diff, which
+  added three fresh instances of a pre-existing gap.
+- **Problem:** `docs/ux-guidelines.md` requires decorative SVG and dividers to
+  carry `aria-hidden="true"`. `Icon` never sets it itself, and its call sites
+  inside `EntityLink` and `CopyableId` do not either — so every entity chip in
+  the app announces a decorative glyph that duplicates the label beside it.
+  This is systemic and pre-existing; `I-003` did not introduce it, which is why
+  it was filed rather than folded into that diff (`CLAUDE.md`).
+- **Done when:** Decorative `Icon` usages are hidden from the accessibility tree
+  — defaulting `aria-hidden` inside `Icon` with an opt-out for the rare case
+  where the glyph _is_ the accessible name is the cheapest route, but check for
+  that case first rather than assuming it does not exist. Stories stay axe-clean.
+- **Risk:** Low, but it touches every icon in the app, so land it on its own.
+- **Status:** open
+
+### D-042 · The `idb` fake is copy-pasted across four test files
+
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaApi/ruleImpact.test.ts`,
+  `src/sidepanel/hooks/useAppsData.test.ts`,
+  `src/sidepanel/hooks/useGroupsLoader.test.tsx`,
+  `src/shared/snapshot/orgSnapshotStore.test.ts`,
+  `src/test/factories/` (the home it wants)
+- **Verified:** 2026-08-26 — the fourth copy was added by `D-029a`; the writer
+  flagged it rather than extracting mid-item.
+- **Problem:** The same `vi.hoisted` `Map`-backed `idb` fake now exists verbatim
+  in four test files. Every surface that moves onto the org snapshot adds
+  another copy, and `D-029b`/`D-029c` are queued to do exactly that.
+  `src/test/factories/` already exists for shared test doubles.
+- **Done when:** One fake in `src/test/factories/`; all four files import it.
+  Purely test-side, behaviour-preserving; every existing assertion stays.
+- **Risk:** Low.
+- **Status:** open
+- **Related:** `D-029a`, `D-029b`, `D-029c`
+
+### D-043 · Nothing validates an audit row on the way out of IndexedDB
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/shared/storage/auditStore.ts` (`getHistory`, `getStats`),
+  `src/shared/types.ts` (`PersistedAuditLogEntry`)
+- **Verified:** 2026-08-26 — noticed by the `D-032` writer while splitting the
+  row type.
+- **Problem:** `getHistory` trusts whatever `idb` returns to match the declared
+  shape. A row carrying a garbage `actorResolution` string — written by an older
+  build, or by anything that reached the database — types as `ActorResolution`
+  and passes straight through to a caller that will branch on it. `D-032` made
+  the declared shape honest about a _missing_ field; it did nothing about a
+  _wrong_ one.
+  ADR-0006 targets Okta responses, not our own storage, so this violates no
+  stated rule. It is the same class of problem one storage layer down, and it is
+  filed so the decision is deliberate rather than an omission.
+- **Done when:** Either rows are parsed on read with a lenient zod schema the
+  way Okta responses are (dropping or repairing a malformed row, never
+  throwing), or a note in `auditStore.ts` records why our own store is trusted
+  and Okta's responses are not.
+- **Risk:** Low either way. The cost of leaving it is a silent wrong branch in
+  whatever audit UI ships next.
+- **Status:** open
+- **Related:** `D-032`, `D-013c`

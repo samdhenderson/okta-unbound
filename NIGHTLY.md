@@ -17,6 +17,115 @@ Entry format:
 
 ---
 
+## 2026-08-26 — three items shipped
+
+**Baseline:** green, all nine gates, run against `main` at `ca07a02` before any
+work. `type-check`; `lint` 0 errors / 155 warnings; `format:check`;
+`test:coverage`; `knip:circular`; `lint:control-chars` 899 files;
+`lint:cited-paths` 54 files; `test:storybook` 162 files / 1133 tests;
+`build`. As the previous entry warned, `node_modules` was absent on a cold
+container and `npm ci` had to run before any gate meant anything.
+
+**Open PRs at step 2: zero.** No item ids claimed, no contended files, no
+three-PR stop, no branch collision. `gh` is still unavailable in this
+environment; the GitHub MCP tools stood in for it, which satisfies step 2's
+requirement to distinguish in-flight work from open work.
+
+**Items worked:** `I-003`, `D-029a`, `D-032`.
+
+**PR:** _(filled in below)_
+
+**Branch:** `claude/stoic-gates-i8aob4` — harness-assigned, as `SESSION.md`
+step 2 anticipates. It counts as an unattended run's branch for the three-PR cap.
+
+**Backlog after:** 30 open / 67 total — 7 IMPROVEMENTS open (of 17), 23 DEBT
+open (of 50), 6 gated (3 `blocked:`, 3 `research:awaiting-review`), plus the 3
+`claimed:` by this PR. Seven new items were filed tonight, which is why the open
+count rises even though three items close.
+
+_On that count._ It is 2 higher on the DEBT side than the previous entry's
+arithmetic predicts (42 + 6 filed = 48, not 50). The number above was produced by
+parsing every `### D-NNN ·` heading and its `Status:` line, excluding the three
+**parent headers** that carry no status of their own (`D-007`, `D-013`, `D-029`)
+— so it counts 50 real items. I could not reproduce the previous entry's 42 by
+any counting rule I tried, so tonight's figure is stated with its method rather
+than carried forward from a number that may have been a slip. Next session:
+either reproduce 50 the same way or say why not; do not average the two.
+
+**Notes:**
+
+_Selection._ `D-028` sorts to the top of P1 and was skipped for the **fourth**
+consecutive night: it is an audit against a real Okta org, which an unattended
+sandbox cannot reach. The previous entry asked for it to be re-gated
+`blocked:needs-live-org`; repeating the request here rather than acting on it,
+because re-gating is Sam's call. Four nights have now spent the same reasoning
+on the same unreachable item.
+
+`I-013` sorted second (P2, `IMPROVEMENTS.md`, ungated) and was **not** taken.
+The item says which verb to add and where ADR-0039 puts it, but not what the
+create-rule form asks for — a rule name, a condition expression, a target group.
+That is design content a reviewer could disagree with after the code exists,
+which is exactly `CLAUDE.md`'s plan-and-approval gate, and an unattended run has
+nobody to take the go-ahead from. Left `open` and unmodified. If Sam wants it
+reachable by a nightly, it needs either the form specified in the item or an
+`research:awaiting-review` gate so a session writes the proposal instead.
+
+`D-029b` was excluded not by contention but by `D-029`'s own header — "one
+consumer per PR" — since `D-029a` is this PR's consumer.
+
+_Re-verification._ All three selected items carried a `Verified:` date inside 14
+days, so the `okta-claim-check` re-check was not mandated. Each **Problem** was
+still spot-checked against the tree before claiming, and all three held.
+
+_A review finding, fixed by amending._ `ui-reviewer` returned one **blocking**
+item: `GroupPushSection`'s new id-only path was `text-sm` while its own named
+path (`EntityLink`) is `text-xs`, putting two rows of one list a type size apart
+— the exact inconsistency `docs/design-system.md` names. Fixed inside `I-003`'s
+own commit per step 6, not as a fixup commit. Mechanically this needed the three
+commits rebuilt, since the fix belonged to the first of three; nothing had been
+pushed, so no force-push was involved. Worth recording for the next session:
+`git reset --hard` is **denied** in this environment and `git rebase -i` is
+unsupported, so the working route is `git reset --soft <base>` (which never
+touches the working tree) followed by re-committing each item's file set against
+its saved message. Save the messages with `git log --format=%B` **first**.
+
+_`security-logging-reviewer` returned nothing blocking_, and did the useful thing
+of independently checking the diff's own load-bearing claim rather than taking
+it: `ruleImpact.ts` widens snapshot rows `as unknown as OktaGroupRule[]` on the
+argument that `RULES_SPEC` zod-parsed them on write, and the reviewer verified
+that against `snapshotSync.ts` — same schema as the fallback fetch path, so no
+ADR-0006 gap. It also confirmed the origin read is an exact-match IndexedDB
+index lookup, not a substring match, so `CLAUDE.md`'s hostname-parsing rule is
+not in play.
+
+_Scope beyond Files lists, all disclosed._ `D-029a` needed an origin that no
+layer above it carried. Four files its **Files** list does not name were touched,
+each forced by the item's own "needs one threaded from its caller":
+`useOktaApi/types.ts` (one optional option), `useOktaApi.ts` (the wiring line),
+`RulesTab.tsx` (one call site — that file already held `oktaOrigin`), and
+`ruleImpact.test.ts`. `I-003` and `D-032` stayed inside their lists.
+
+_Seven new items filed_ (`D-038`–`D-043`, `I-017`), none folded into tonight's
+diff. Two are worth Sam's attention above the rest: **`D-038`** — the impact
+preview now reads a snapshot that may be mid-walk and never checks `complete`,
+so a not-yet-swept stale rule can make it _understate_ who loses access, which
+is a confident wrong answer to an access question; it was raised independently
+by the implementing agent and the security reviewer. **`D-039`** — `RuleCard`'s
+`memo` comparator omits the group props it renders, which `I-003` turns from a
+styling quirk into "the app does not know a group it does know".
+
+_One thing not filed, deliberately._ `useOktaApi/types.ts` does not re-export
+`PersistedAuditLogEntry`. It is a one-line follow-up that only matters when
+something reads the audit trail from the hook layer — i.e. when `D-013c` or an
+audit viewer lands — so it belongs to that work rather than to its own item.
+
+_Also worth knowing._ Within the Rules tab, the impact preview now reads the
+snapshot while the rule list still reads `RulesCache`. That is the disagreement
+`D-029` exists to close and it is not newly introduced, but `D-029a` makes it
+live on one screen. `D-029c`, which closes it, is `blocked:needs-human`.
+
+---
+
 ## 2026-08-25 (second run) — three items shipped
 
 **Baseline:** green, all nine gates. `type-check`; `lint` 0 errors / 155

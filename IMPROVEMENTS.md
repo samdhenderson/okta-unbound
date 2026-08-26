@@ -98,7 +98,16 @@ block says they mean — same vocabulary, one definition, defined there.
   visibly (not silently) indicates when only the id is known. Render-time fix
   only — no new fetch.
 - **Risk:** Low.
-- **Status:** open
+- **Resolution note:** all three sites shipped together, as the item requires.
+  A named entity goes through `EntityLink` with `copyId`; an id-only entity
+  renders a local chip that **states** the gap — an `Icon`, a muted-italic
+  "Group/App name not loaded", and the raw id through `CopyableId` — rather than
+  letting the id occupy the name's slot. `RuleCard`'s truncated `(00g1a2b3…)`
+  suffix was dropped: it was never enough to paste anywhere, and `copyId`
+  replaces it with the whole id. Two consequences were filed rather than folded
+  in: the id-only chip cannot **open** the entity (`EntityLink` requires a name),
+  and the chip recipe now exists three times — both are `I-017`.
+- **Status:** claimed:claude/stoic-gates-i8aob4
 - **Depends on:** I-001
 - **Ungated 2026-08-24:** the `groups/detail/` window was lifted, so all three
   sites ship together. Do **not** split this into "the two easy ones" — a
@@ -488,3 +497,45 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Low — a move plus import updates, no behavior change.
 - **Status:** open
 - **Related:** `I-002`
+
+### I-017 · One unresolved-entity reference, not three
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/RuleCard.tsx` (`UnnamedGroupChip`),
+  `src/sidepanel/components/groups/GroupListItemDetails.tsx` (`UnnamedPushApp`),
+  `src/sidepanel/components/groups/detail/GroupPushSection.tsx` (`UnnamedPushApp`),
+  `src/sidepanel/components/shared/EntityLink.tsx`,
+  `src/sidepanel/components/shared/index.ts`, `docs/components.md`
+- **Verified:** 2026-08-26 — all three written by `I-003` in one sitting.
+- **Problem:** `I-003` fixed "an id must not sit in a name's slot" at three call
+  sites and produced three near-identical local chips to do it — glyph, a muted
+  italic "…name not loaded", and a `CopyableId` — differing only in glyph, text
+  size, and whether the chip has a border. This is the same drift `D-015` and
+  `I-016` describe: a recipe that exists three times is a shared component that
+  has not been written yet. Two things it would fix at once:
+  1. **The id-only state cannot open the entity.** A valid, navigable group or
+     app id is in hand, but `EntityLink` requires a `name`, and passing the id as
+     the name is precisely the defect `I-003` removed. So the unresolved state
+     copies but does not open, which is a capability regression against the
+     resolved state sitting next to it.
+  2. **Chip chrome disagrees with the non-answer convention.** `RuleCard`'s copy
+     gives the unresolved state a dashed-border pill; the two push copies render
+     as plain inline text. `GroupSourceIndicator.tsx` and `AppScopeIndicator.tsx`
+     both state the rule explicitly — a chip is for a proven answer, and a
+     non-answer is left un-chipped so it never carries an answer's weight.
+     Raised by `ui-reviewer` on the `I-003` diff as advisory.
+- **Done when:** One treatment for "this reference is known only by id" — an
+  id-only mode on `EntityLink` is the obvious home, since it already owns the
+  resolved case and the unlinkable-name case. All three sites use it, it opens
+  the entity when the id is navigable, and its chrome follows the non-answer
+  convention. A story renders resolved and unresolved side by side in one list.
+- **Risk:** Low — render-time only, no new fetch, three call sites.
+- **Note on contrast:** the three chips use `text-neutral-600` (chosen over the
+  precedent's `text-neutral-400`, which is ~2.2:1 and would risk axe). Against
+  `bg-neutral-50` that computes to ~4.63:1 — over the 4.5:1 AA floor, but by a
+  thin margin, with no lint gate watching it. Settle the register here, once,
+  with a real contrast check rather than by eye. Raised by `ui-reviewer`.
+- **Status:** open
+- **Related:** `I-003` (created all three), `I-001`, `I-015`, `I-016`, `D-015`
