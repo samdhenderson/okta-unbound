@@ -134,7 +134,13 @@ const RulesTab: React.FC<RulesTabProps> = ({
     if (type === 'error') setError(message || null);
   }, []);
 
-  const api = useOktaApi({ targetTabId: targetTabId ?? null, onResult: handleResult });
+  // `oktaOrigin` lets `captureRuleImpact` read the org snapshot's rules instead
+  // of re-paginating `/api/v1/groups/rules` (D-029a).
+  const api = useOktaApi({
+    targetTabId: targetTabId ?? null,
+    oktaOrigin,
+    onResult: handleResult,
+  });
   const impact = useRuleImpact(api.captureRuleImpact);
   const data = useRulesData({ targetTabId, onError: handleError, currentGroupId, oktaOrigin });
   const { rules, stats, loadRules } = data;

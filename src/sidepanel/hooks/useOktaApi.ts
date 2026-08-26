@@ -42,7 +42,10 @@ import { createRuleWriteOperations } from './useOktaApi/ruleWrites';
  *
  * @remarks
  * The options (see `UseOktaApiOptions`) scope every operation to
- * `targetTabId`'s content script and wire the result/progress callbacks.
+ * `targetTabId`'s content script and wire the result/progress callbacks. The
+ * optional `oktaOrigin` scopes the operations that read the org snapshot
+ * imperatively (currently rule impact); omitting it costs those a fetch rather
+ * than changing what they answer.
  * `onResult` reports user-facing messages as a single `{ message, type }` object
  * (see `OperationResult`) — the object shape is deliberate: a positional
  * `(message, type)` signature accepts a one-argument handler, which silently drops
@@ -60,7 +63,7 @@ import { createRuleWriteOperations } from './useOktaApi/ruleWrites';
  * await api.addUserToGroup(userId, groupId);
  * ```
  */
-export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOptions) {
+export function useOktaApi({ targetTabId, oktaOrigin, onResult, onProgress }: UseOktaApiOptions) {
   const [isLoading, setIsLoading] = useState(false);
 
   // Cancellation is shared through ProgressContext so a single global control (the
@@ -177,8 +180,8 @@ export function useOktaApi({ targetTabId, onResult, onProgress }: UseOktaApiOpti
     [groupMemberOps],
   );
   const ruleImpactOps = useMemo(
-    () => createRuleImpactOperations(coreApi, groupMemberOps.getAllGroupMembers),
-    [coreApi, groupMemberOps],
+    () => createRuleImpactOperations(coreApi, groupMemberOps.getAllGroupMembers, oktaOrigin),
+    [coreApi, groupMemberOps, oktaOrigin],
   );
   const ruleWriteOps = useMemo(() => createRuleWriteOperations(coreApi), [coreApi]);
 

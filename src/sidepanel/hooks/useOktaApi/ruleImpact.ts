@@ -4,14 +4,15 @@
  *
  * Gathers the raw inputs the pure {@link summarizeRuleImpact} engine needs — the
  * org's rules (with their exclusion lists) and each target group's current
- * members — entirely over the rate-limited scheduler path, then hands off to the
- * engine for the set math. No mutation, and no per-member API calls: the "who
- * loses access" answer comes from rules metadata + the members already fetched.
+ * members — from the org snapshot plus the rate-limited scheduler path, then
+ * hands off to the engine for the set math. No mutation, and no per-member API
+ * calls: the "who loses access" answer comes from rules metadata + the members
+ * already fetched.
  */
 
 import type { CoreApi } from './core';
 import type { OktaUser, OktaGroupRule, GroupType } from '../../../shared/types';
-import { RulesCache } from '../../../shared/rulesCache';
+import { orgSnapshotStore } from '../../../shared/snapshot/orgSnapshotStore';
 import { OperationCancelledError } from '../../../shared/scheduler/cancellation';
 import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
 import { oktaGroupRuleSchema, type OktaGroupRuleResponse } from '@/shared/schemas/okta';
@@ -57,27 +58,42 @@ export interface RuleImpactOperations {
  * @param coreApi - Shared transport surface (see {@link CoreApi}).
  * @param getAllGroupMembers - Paginated member fetch (from
  * `createGroupMemberOperations`), reused to read each target group's members.
+ * @param oktaOrigin - Connected org origin, threaded from the caller because
+ * this is an imperative factory rather than a React hook (so it reads
+ * `orgSnapshotStore` directly instead of `useOrgSnapshot`). `null`/`undefined`
+ * before the origin resolves, which degrades to the paginated fetch rather than
+ * reading some other org's rules.
  * @returns `{ captureRuleImpact }`.
  */
 export function createRuleImpactOperations(
   coreApi: CoreApi,
   getAllGroupMembers: (groupId: string) => Promise<OktaUser[]>,
+  oktaOrigin?: string | null,
 ): RuleImpactOperations {
   /**
    * Fetch every group rule (raw, so exclusion lists survive), following `Link`
    * pagination at low priority so it never starves interactive requests.
    *
-   * @remarks Served from the fresh {@link RulesCache} when it carries raw rules
-   * (a Rules-tab load or a group-rules lookup populated it from the same Okta
-   * listing), so opening the impact preview does not re-paginate
-   * `/api/v1/groups/rules`. A stale/missing entry — or a legacy entry written
-   * before raw rules were cached (`rawRules: []`) — falls through to the fetch.
+   * @remarks Served from the background-owned org snapshot's `rules` collection
+   * (`RULES_SPEC`) when it holds rows for this org, so opening the impact
+   * preview does not re-paginate `/api/v1/groups/rules` and cannot disagree with
+   * the rule attribution other surfaces derive from the same rows (D-029a). A
+   * cold snapshot — or no origin yet — falls through to the fetch below.
    */
   const fetchRawRules = async (): Promise<OktaGroupRule[]> => {
-    const cached = await RulesCache.get();
-    if (cached && cached.rawRules.length > 0) {
-      log.debug('Serving raw rules from RulesCache', { count: cached.rawRules.length });
-      return cached.rawRules;
+    if (oktaOrigin) {
+      // Rows were zod-parsed against `oktaGroupRuleSchema` on write by the
+      // snapshot walk (ADR-0006), so this is a read of already-validated data;
+      // the widen through `unknown` is the same one the fetch path documents
+      // below, for the same passthrough reason.
+      const stored = await orgSnapshotStore.getCollection<OktaGroupRuleResponse>(
+        'rules',
+        oktaOrigin,
+      );
+      if (stored.length > 0) {
+        log.debug('Serving raw rules from the org snapshot', { count: stored.length });
+        return stored as unknown as OktaGroupRule[];
+      }
     }
 
     const rules = await fetchAllPages<OktaGroupRuleResponse>(
@@ -129,9 +145,9 @@ export function createRuleImpactOperations(
    * @param rule - The rule to analyze (id, name, target group ids/names).
    * @param opts - Optional progress callback.
    * @returns A {@link RuleImpactSummary} with per-group and org-level counts.
-   * @remarks Cost is one rules listing (often served from the RulesCache) plus,
-   * per target group, one group-meta read and one paginated member fetch — no
-   * per-member calls. Target groups load through {@link CoreApi.runOperation}
+   * @remarks Cost is one rules listing (usually free — served from the org
+   * snapshot) plus, per target group, one group-meta read and one paginated
+   * member fetch — no per-member calls. Target groups load through {@link CoreApi.runOperation}
    * (ADR-0009): cancellable and activity-bar visible. The first failing group
    * aborts the capture with its error re-raised (matching the old serial loop);
    * a cancel raises {@link OperationCancelledError}.

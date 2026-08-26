@@ -68,6 +68,14 @@ export interface OperationCallbacks {
 export interface UseOktaApiOptions {
   /** Content-script tab connected to Okta, or `null` when no Okta page is attached. */
   targetTabId: number | null;
+  /**
+   * Connected org origin, used by operations that read the background-owned org
+   * snapshot imperatively (they are factories, not hooks, so they cannot call
+   * `useOrgSnapshot`). Optional: omitting it — or passing `null` before the
+   * origin resolves — degrades those operations to their paginated fetch rather
+   * than reading another org's rows.
+   */
+  oktaOrigin?: string | null;
   /** See {@link OperationCallbacks.onResult}. */
   onResult?: (result: OperationResult) => void;
   /** See {@link OperationCallbacks.onProgress}. */
