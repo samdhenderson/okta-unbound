@@ -188,7 +188,12 @@ if (REEL) {
   await page.close();
   await context.close();
   const dest = path.join(OUT, 'okta-unbound-reel.webm');
-  if (video) await video.saveAs(dest);
+  if (video) {
+    await video.saveAs(dest);
+    // saveAs copies; without this the raw `page@<hash>.webm` stays behind and the
+    // output directory holds two of every clip.
+    await video.delete().catch(() => {});
+  }
 
   const totalMs = Date.now() - reelStarted;
   await writeFile(
@@ -253,7 +258,10 @@ for (const scene of scenes) {
   await context.close();
 
   const dest = path.join(OUT, `${scene.id}.webm`);
-  if (video) await video.saveAs(dest);
+  if (video) {
+    await video.saveAs(dest);
+    await video.delete().catch(() => {});
+  }
 
   const durationMs = Date.now() - started;
   manifest.push({
