@@ -19,6 +19,13 @@
  * which matters now that the card has a second consumer (the Group Detail Rules
  * tab) that wires none of the writes.
  *
+ * **A target group is named, or it is stated as un-named.** Every group this card
+ * shows goes through the shared {@link sidepanel/components/shared/EntityLink}
+ * when a name is in hand, and through `UnnamedGroupChip` — a muted "Group name
+ * not loaded" beside the copyable raw id — when only the id is. Both pills were
+ * hand-rolled `<span>`s that printed the bare id in the *name's own slot*, so an
+ * unresolved group read as though its id were its name (I-003).
+ *
  * The card is {@link sidepanel/components/shared/ListRow} (ADR-0029): the header
  * is `children`, the expandable detail is the `body` slot, and the arrival flash
  * is the shared `flash` prop rather than a hand-applied `animate-affirm-flash`.
@@ -28,7 +35,8 @@
 import React, { useState, useCallback, useEffect, useId, useRef, memo } from 'react';
 import type { FormattedRule } from '../../shared/types';
 import { timeAgo } from '../../shared/ruleUtils';
-import { Badge, Button, CopyableId, IconButton, ListRow } from './shared';
+import { Badge, Button, CopyableId, EntityLink, IconButton, ListRow } from './shared';
+import Icon from './overview/shared/Icon';
 
 /**
  * Upper bound on the arrival-flash hold, in milliseconds. Mirrors `--dur-tell`
@@ -72,9 +80,43 @@ interface RuleCardProps {
 }
 
 /**
+ * A target group this card knows only by id.
+ *
+ * Deliberately **not** an {@link sidepanel/components/shared/EntityLink}: that chip
+ * needs a name, and passing the id in as the name is exactly the defect this
+ * replaces — an id sitting in the name's slot, indistinguishable from a resolved
+ * one. Instead the missing name is *stated*, in the muted-italic non-answer
+ * register the comparison views use, and the id is rendered through
+ * {@link sidepanel/components/shared/CopyableId} so it reads as an identifier
+ * (mono, its own colour) and can still be pasted into a search.
+ *
+ * The chip does not open the group. Nothing here fetches, so nothing can turn the
+ * id into a name at render time (I-003 is a render-time fix).
+ */
+const UnnamedGroupChip: React.FC<{
+  /** The Okta group id the rule assigns to. */
+  groupId: string;
+}> = ({ groupId }) => (
+  <span
+    className="inline-flex max-w-full items-center gap-1 rounded-md border border-dashed border-neutral-300 px-2 py-0.5 text-xs"
+    title="This rule assigns to this group id. No name for it was loaded into this view."
+  >
+    <Icon type="users" size="xs" className="shrink-0 text-neutral-500" />
+    <span className="shrink-0 italic text-neutral-600">Group name not loaded</span>
+    <CopyableId value={groupId} label={`Copy group id ${groupId}`} />
+  </span>
+);
+
+/**
  * Renders an Okta group-id token inside a rule condition expression, replacing
- * recognised 20-char group ids (`00g…`) with an inline group-name badge when a
+ * recognised 20-char group ids (`00g…`) with the shared `EntityLink` badge when a
  * name is available in `allGroupNamesMap`; other text is returned unchanged.
+ *
+ * The badge *replaces* the literal it stood for and therefore carries `copyId` —
+ * the same trade `RuleExpressionText` makes for reconstructed clause text, so the
+ * app's two renderers of rule conditions read alike. An id with no known name is
+ * left verbatim: this is source text, and a bare id in mono inside a `<code>`
+ * block already reads as an id rather than as a name.
  *
  * @param expression - The raw condition expression to render.
  * @param allGroupNamesMap - Optional map of group id to display name for badge lookup.
@@ -107,15 +149,19 @@ const renderConditionWithGroupBadges = (
     // Add the group ID with badge if name exists
     if (groupName && groupName !== groupId) {
       parts.push(
-        <React.Fragment key={`${groupId}-${match.index}`}>
-          <span className="font-mono text-xs text-neutral-600">{groupId}</span>
-          <span
-            className="ml-2 px-2 py-0.5 rounded-md bg-primary-light text-primary-text text-xs font-medium border border-primary-highlight"
-            title={`Group: ${groupName}`}
-          >
-            {groupName}
-          </span>
-        </React.Fragment>,
+        <EntityLink
+          key={`${groupId}-${match.index}`}
+          type="group"
+          id={groupId}
+          name={groupName}
+          copyId
+          // The id is no longer on screen once the badge stands in for it, so the
+          // copy control names the id rather than the group: two groups in one
+          // condition can share a display name, and the derived default would
+          // then collide (I-009).
+          copyIdLabel={`Copy group id ${groupId}`}
+          className="align-middle"
+        />,
       );
     } else {
       parts.push(groupId);
@@ -268,24 +314,24 @@ const RuleCard: React.FC<RuleCardProps> = memo(
                 <div className="flex flex-wrap gap-2">
                   {rule.groupIds.map((groupId, index) => {
                     const groupName = rule.groupNames?.[index];
-                    const isNameDifferent = groupName && groupName !== groupId;
+                    // A `groupNames` entry equal to the id is the upstream
+                    // formatter's own "unresolved" marker, not a name.
+                    const resolvedName = groupName !== groupId ? groupName : undefined;
 
-                    return (
-                      <span
+                    return resolvedName ? (
+                      <EntityLink
                         key={groupId}
-                        className="px-2.5 py-1 rounded-md bg-success-light text-success-text text-sm font-medium border border-success-light"
-                      >
-                        {isNameDifferent ? (
-                          <>
-                            <span className="font-semibold">{groupName}</span>
-                            <span className="ml-1.5 text-xs font-mono opacity-75">
-                              ({groupId.substring(0, 8)}...)
-                            </span>
-                          </>
-                        ) : (
-                          <span className="font-mono">{groupId}</span>
-                        )}
-                      </span>
+                        type="group"
+                        id={groupId}
+                        name={resolvedName}
+                        copyId
+                        // The chip shows the name only — the truncated
+                        // "(00g1a2b3…)" it replaced was never enough to paste
+                        // anywhere — so the copy control names the id itself.
+                        copyIdLabel={`Copy group id ${groupId}`}
+                      />
+                    ) : (
+                      <UnnamedGroupChip key={groupId} groupId={groupId} />
                     );
                   })}
                 </div>
