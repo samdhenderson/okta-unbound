@@ -1202,7 +1202,7 @@ origin)` imperatively rather than `useOrgSnapshot` —
   its caller". The fallback is unchanged and now covers three cases rather than
   one: no origin resolved yet, a cold snapshot, and a snapshot holding only
   another org. One consequence was filed rather than folded in: `D-038`.
-- **Status:** claimed:claude/stoic-gates-i8aob4
+- **Status:** done:#95
 
 ### D-029b · User memberships derive their rules
 
@@ -1413,7 +1413,7 @@ origin)` imperatively rather than `useOrgSnapshot` —
   cell from `performedBy` alone, so a legacy row still exports its stored actor
   rather than `(actor unavailable)`, still through `escapeCSV`. No `DB_VERSION`
   bump, no migration, no index change.
-- **Status:** claimed:claude/stoic-gates-i8aob4
+- **Status:** done:#95
 - **Related:** `D-013a`, `D-013b`, `D-013c`
 
 ### D-033 · Two docs still cite `unknown@unknown.com` as current behavior

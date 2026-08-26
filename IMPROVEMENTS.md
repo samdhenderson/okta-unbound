@@ -107,7 +107,7 @@ block says they mean — same vocabulary, one definition, defined there.
   replaces it with the whole id. Two consequences were filed rather than folded
   in: the id-only chip cannot **open** the entity (`EntityLink` requires a name),
   and the chip recipe now exists three times — both are `I-017`.
-- **Status:** claimed:claude/stoic-gates-i8aob4
+- **Status:** done:#95
 - **Depends on:** I-001
 - **Ungated 2026-08-24:** the `groups/detail/` window was lifted, so all three
   sites ship together. Do **not** split this into "the two easy ones" — a

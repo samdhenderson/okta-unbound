@@ -33,7 +33,7 @@ requirement to distinguish in-flight work from open work.
 
 **Items worked:** `I-003`, `D-029a`, `D-032`.
 
-**PR:** _(filled in below)_
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/95
 
 **Branch:** `claude/stoic-gates-i8aob4` — harness-assigned, as `SESSION.md`
 step 2 anticipates. It counts as an unattended run's branch for the three-PR cap.
