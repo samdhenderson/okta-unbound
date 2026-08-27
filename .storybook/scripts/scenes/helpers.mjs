@@ -2,13 +2,20 @@
  * Camera moves shared by the demo scenes.
  *
  * These exist because a Storybook `play` function can do none of them: it has no
- * wheel, no viewport, no visible cursor, and nowhere to put a caption.
+ * wheel, no viewport, no visible cursor, and nowhere to put a margin.
  * Everything here runs from Playwright against the live page.
  *
  * Every locator helper takes a **short** timeout. The first cut of this script
  * used Playwright's 30s default, so a selector that never matched produced half
  * a minute of frozen video before the beat was recorded as failed. On a shoot, a
  * missed mark should cost a second, not a take.
+ *
+ * The margin verbs at the bottom are thin `page.evaluate` wrappers over
+ * `window.__DEMO_STAGE__` (see `showcase.mjs`). There is deliberately **no
+ * `clearCaption`**. Its only correct use was at a scene boundary, and the runner
+ * owns that now via `resetMargin`; the first cut called it at the end of most
+ * beats and then kept filming, which is what left 45% of the frame empty for
+ * seconds at a time.
  */
 
 /**
@@ -122,28 +129,6 @@ export async function typeInto(page, locator, text, { delay = 85, timeout = 6000
 }
 
 /**
- * Put a caption on the stage.
- *
- * Pass `anchor` (a selector) to align the caption with that element and draw a
- * connector plus a spotlight ring to it — the difference between a title card
- * and a caption that is actually about something.
- */
-export async function say(page, spec) {
-  await page.evaluate((s) => window.__DEMO_STAGE__?.caption(s), spec);
-}
-
-/** Ring an element the current caption is about. Returns false if it isn't on screen. */
-export async function spotlight(page, selector) {
-  return page.evaluate((sel) => window.__DEMO_STAGE__?.spotlight(sel) ?? false, selector);
-}
-
-/** Animate the current caption out. */
-export async function clearCaption(page) {
-  await page.evaluate(() => window.__DEMO_STAGE__?.clear());
-  await hold(360);
-}
-
-/**
  * Step the panel's width through a ladder of values.
  *
  * The ActionBar's overflow beat. `actionBarFit` re-splits the row as the panel
@@ -164,3 +149,75 @@ export async function sweepPanelWidth(page, widths, { hold: holdMs = 1000 } = {}
     await hold(holdMs);
   }
 }
+
+/**
+ * Scroll an element to the middle of the scroller before clicking it.
+ *
+ * `moveAndClick` calls `scrollIntoViewIfNeeded`, which parks an element just
+ * inside the viewport edge — and this app has a `sticky top-0 z-40` nav there.
+ * The pointer then lands on the nav, `moveAndClick` still returns `true`
+ * because it did dispatch a click, and the beat is recorded as landed while
+ * nothing happened. That is exactly how the first cut narrated an impact
+ * preview over a button press that never reached its button.
+ */
+export async function centreInView(page, locator, settle = 700) {
+  const found = await find(locator);
+  if (!found) return false;
+  await found.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await hold(settle);
+  return true;
+}
+
+/* --- The margin ---------------------------------------------------------- */
+
+/** Set the scene's claim. Replaces in place; the band is never left empty. */
+export const claim = (page, spec) => page.evaluate((s) => window.__DEMO_STAGE__?.claim(s), spec);
+
+/** Land the proof line: the one literal fact that settles the claim. */
+export const proof = (page, spec) => page.evaluate((s) => window.__DEMO_STAGE__?.proof(s), spec);
+
+/** Empty the middle band, so the next register starts clean. */
+export const clearBody = (page) => page.evaluate(() => window.__DEMO_STAGE__?.clearBody());
+
+/** Open an evidence block; `evidence()` appends into it. */
+export const evidenceBlock = (page) => page.evaluate(() => window.__DEMO_STAGE__?.evidenceBlock());
+
+/** Append one evidence line: a literal artifact, quoted, never prose. */
+export const evidence = (page, text) =>
+  page.evaluate((t) => window.__DEMO_STAGE__?.evidence(t), text);
+
+/** A counting tally, optionally with a coloured delta. */
+export const tally = (page, spec) => page.evaluate((s) => window.__DEMO_STAGE__?.tally(s), spec);
+
+/** Retarget the most recent tally's number without rebuilding the block. */
+export const tallyTo = (page, value, suffix) =>
+  page.evaluate(([v, s]) => window.__DEMO_STAGE__?.tallyTo(v, s), [value, suffix]);
+
+/** Open a two-person set diff; `diffRow()` appends into it. */
+export const diffBlock = (page, spec) =>
+  page.evaluate((s) => window.__DEMO_STAGE__?.diffBlock(s), spec);
+
+/** One row of the diff. `shared` strikes through, `only` holds, `cause` signals. */
+export const diffRow = (page, spec) =>
+  page.evaluate((s) => window.__DEMO_STAGE__?.diffRow(s), spec);
+
+/** Open a trace block; `trace()` appends into it. */
+export const traceBlock = (page) => page.evaluate(() => window.__DEMO_STAGE__?.traceBlock());
+
+/** Append one trace line. */
+export const trace = (page, text, tone) =>
+  page.evaluate(([t, n]) => window.__DEMO_STAGE__?.trace(t, n), [text, tone]);
+
+/** Dim the margin's body so the panel carries a scroll or resize beat alone. */
+export const strip = (page, on) => page.evaluate((v) => window.__DEMO_STAGE__?.strip(v), on);
+
+/** A short line pinned beside an element, for "look at this". */
+export const callout = (page, text, selector) =>
+  page.evaluate(([t, s]) => window.__DEMO_STAGE__?.callout(t, s), [text, selector]);
+
+/** Ring an element the margin is about. Returns false if it isn't on screen. */
+export const spotlight = (page, selector) =>
+  page.evaluate((sel) => window.__DEMO_STAGE__?.spotlight(sel) ?? false, selector);
+
+/** Drop spotlights and callouts. Does not touch the margin. */
+export const clearOverlays = (page) => page.evaluate(() => window.__DEMO_STAGE__?.clearOverlays());
