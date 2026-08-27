@@ -1222,7 +1222,7 @@ origin)` imperatively rather than `useOrgSnapshot` —
   carry ids in place of names) stops being a concern and its comment goes.
 - **Risk:** Low-medium — correctness-critical read that surfaces render verdicts
   from. Pin the derived output against the current cached output first.
-- **Status:** claimed:claude/stoic-gates-s5qcjg
+- **Status:** done:#97
 
 ### D-029c · The Rules tab stops owning a cache
 
@@ -1545,7 +1545,7 @@ origin)` imperatively rather than `useOrgSnapshot` —
   silently become the answer.
 - **Risk:** Low to fix. The risk is leaving it: the failure is a confident wrong
   answer, not an error state.
-- **Status:** claimed:claude/stoic-gates-s5qcjg
+- **Status:** done:#97
 - **Related:** `D-029a` (introduced the read), `D-029`
 - **Also noticed:** an org with genuinely zero group rules can never satisfy
   "at least one row", so it re-paginates `/api/v1/groups/rules` on every impact
@@ -1576,7 +1576,7 @@ origin)` imperatively rather than `useOrgSnapshot` —
   the card.
 - **Risk:** Low. Widening a comparator can only cause _more_ re-renders, never
   a stale one.
-- **Status:** claimed:claude/stoic-gates-s5qcjg
+- **Status:** done:#97
 - **Related:** `I-003`
 
 ### D-040 · `RuleCard.tsx` is well over the ~300-line bar and hand-rolls its icons
