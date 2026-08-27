@@ -111,8 +111,28 @@
   --animate-overlay-out: overlay-out var(--dur-quick) var(--ease-exit) both;
   --animate-panel-in: panel-in var(--dur-move) var(--ease-entrance) both;
   --animate-panel-out: panel-out var(--dur-quick) var(--ease-exit) both;
-  --animate-push-in: push-in var(--dur-travel) var(--ease-standard) both;
-  --animate-pop-in: pop-in var(--dur-travel) var(--ease-standard) both;
+  /*
+   * `backwards`, not `both` — the only two primitives here that do not fill forwards.
+   *
+   * These are the view-stack entrances, so the element they run on is a whole rung
+   * wrapper: an ancestor of everything on the page, including a docked `.dock-band`.
+   * A forwards fill keeps the animation applying after it finishes, and an animation
+   * still applying `transform`/`opacity` keeps its element a stacking context — Chrome
+   * reports the settled wrapper as `transform: matrix(1, 0, 0, 1, 0, 0)`, not `none`.
+   * That trapped `ActionBar`'s `z-30` *inside* the rung, below the header's `z-20`
+   * sticky layer, so the header repainted its own 1px border over the very pixel the
+   * merge's `top: -1px` had just covered: the Groups detail rung showed a hairline
+   * above its action strip where the Users rung showed none. ADR-0032's sticky stack
+   * only resolves if nothing between the band and the header is a stacking context.
+   *
+   * Nothing about the motion changes. `push-in` and `pop-in` both end at
+   * `opacity: 1; transform: none` — the element's own resting values — so the forwards
+   * half was buying the trap and nothing else, and neither has a delay, which is the
+   * only thing the backwards half is for. The `*-out` primitives above keep `both`:
+   * they genuinely end away from their resting state and need the fill to hold there.
+   */
+  --animate-push-in: push-in var(--dur-travel) var(--ease-standard) backwards;
+  --animate-pop-in: pop-in var(--dur-travel) var(--ease-standard) backwards;
   --animate-skeleton-sweep: skeleton-sweep 1.4s linear infinite;
 
   /*

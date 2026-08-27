@@ -1679,3 +1679,37 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   whatever audit UI ships next.
 - **Status:** open
 - **Related:** `D-032`, `D-013c`
+
+### D-044 · `--bar-bleed` is measured through the rung's entrance transform
+
+- **Category:** correctness
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/shared/useActionOverflow.ts` (`publish`),
+  `src/sidepanel/components/GroupsTab.tsx` (the rung wrapper that supplies the
+  transform), `src/sidepanel/tailwind.css` (`.dock-band::before`, `::after`)
+- **Verified:** 2026-08-26 — found while fixing the docked strip's missing merge
+  seam on the Groups detail rung; deliberately left out of that diff.
+- **Problem:** `publish()` sets `--bar-bleed` from
+  `band.getBoundingClientRect().left`, which is the distance the merge has to
+  bleed to reach the panel edge. `getBoundingClientRect` reports the
+  **transformed** box. On the Groups tab the strip mounts inside a wrapper
+  running `animate-push-in` (`transform: translateX(16%)` at its first frame),
+  and the hook's first measure pass fires from a `ResizeObserver` during that
+  entrance — so the published bleed can be the gutter plus ~16% of the rung's
+  width rather than the gutter. The Users rung never sees this because its
+  detail rung has no entrance animation. The consequence is cosmetic and
+  transient — a merged strip that overhangs the panel edges further than it
+  should, until any resize re-publishes a resting measurement — which is why it
+  is filed rather than fixed inline.
+- **Done when:** The published bleed reflects the band's **untransformed**
+  position. Either the pass is deferred until no ancestor animation is in effect,
+  or the offset is derived from something transform-free (`offsetLeft` against
+  the offset parent, or the column's own padding), with a comment saying which
+  and why. A story or unit test pins the published value against a transformed
+  ancestor; today nothing covers it, and jsdom cannot see it (no stylesheet, no
+  layout).
+- **Risk:** Low. `--bar-bleed` feeds only the merge chrome and the bleed plate —
+  nothing in flow, nothing interactive.
+- **Status:** open
+- **Related:** ADR-0032
