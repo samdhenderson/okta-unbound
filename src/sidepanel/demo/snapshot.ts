@@ -60,58 +60,58 @@ function group(
  */
 export const demoGroups: RawOktaGroup[] = [
   group(GROUP.everyone, 'Everyone', 'All users in your organization', { type: 'BUILT_IN' }),
-  group(GROUP.engineering, 'Engineering — All', 'Every engineer, rule-assigned by department'),
-  group(GROUP.sales, 'Sales — All', 'Rule-assigned by department'),
-  group(GROUP.customerSuccess, 'Customer Success — All', 'Rule-assigned by department'),
-  group(GROUP.marketing, 'Marketing — All', 'Rule-assigned by department'),
-  group(GROUP.finance, 'Finance — All', 'Rule-assigned by department'),
-  group(GROUP.peopleOps, 'People Ops — All', 'Rule-assigned by department'),
-  group(GROUP.it, 'IT — All', 'Rule-assigned by department'),
-  group(GROUP.security, 'Security — All', 'Rule-assigned by department'),
-  group(GROUP.data, 'Data — All', 'Rule-assigned by department'),
-  group(GROUP.legal, 'Legal — All', 'Rule-assigned by department'),
+  group(GROUP.engineering, 'Engineering - All', 'Every engineer, rule-assigned by department'),
+  group(GROUP.sales, 'Sales - All', 'Rule-assigned by department'),
+  group(GROUP.customerSuccess, 'Customer Success - All', 'Rule-assigned by department'),
+  group(GROUP.marketing, 'Marketing - All', 'Rule-assigned by department'),
+  group(GROUP.finance, 'Finance - All', 'Rule-assigned by department'),
+  group(GROUP.peopleOps, 'People Ops - All', 'Rule-assigned by department'),
+  group(GROUP.it, 'IT - All', 'Rule-assigned by department'),
+  group(GROUP.security, 'Security - All', 'Rule-assigned by department'),
+  group(GROUP.data, 'Data - All', 'Rule-assigned by department'),
+  group(GROUP.legal, 'Legal - All', 'Rule-assigned by department'),
   group(
     GROUP.awsProdAdmin,
-    'AWS Prod — Admin',
+    'AWS Prod - Admin',
     'Production AWS console access. Reviewed quarterly.',
   ),
-  group(GROUP.awsProdReadOnly, 'AWS Prod — ReadOnly', 'Read-only production AWS access'),
+  group(GROUP.awsProdReadOnly, 'AWS Prod - ReadOnly', 'Read-only production AWS access'),
   group(GROUP.vpnUsers, 'VPN Users', 'Rule-assigned to every active employee'),
-  group(GROUP.contractorsEmea, 'Contractors — EMEA', 'Rule-assigned: contractors in EMEA offices'),
-  group(GROUP.contractorsAmer, 'Contractors — AMER', 'Rule-assigned: contractors in US/CA offices'),
+  group(GROUP.contractorsEmea, 'Contractors - EMEA', 'Rule-assigned: contractors in EMEA offices'),
+  group(GROUP.contractorsAmer, 'Contractors - AMER', 'Rule-assigned: contractors in US/CA offices'),
   group(GROUP.oktaAdministrators, 'Okta Administrators', 'Super admin and org admin holders'),
-  group(GROUP.onCallEngineering, 'On-Call — Engineering', 'Paged rotation. Managed by hand.'),
+  group(GROUP.onCallEngineering, 'On-Call - Engineering', 'Paged rotation. Managed by hand.'),
   group(GROUP.releaseManagers, 'Release Managers', 'Can promote a build to production'),
-  group(GROUP.incidentResponse, 'Security — Incident Response', 'IR pager rotation'),
+  group(GROUP.incidentResponse, 'Security - Incident Response', 'IR pager rotation'),
   group(GROUP.interns, 'Interns 2026', 'Summer cohort. Expires at the end of the season.'),
-  group(GROUP.dormant, 'Dormant — 120d', 'No sign-in in 120 days. Review for deactivation.'),
+  group(GROUP.dormant, 'Dormant - 120d', 'No sign-in in 120 days. Review for deactivation.'),
   group(GROUP.executiveStaff, 'Executive Staff', 'Leadership team'),
   group(GROUP.londonOffice, 'London Office', 'Rule-assigned by city'),
   group(GROUP.berlinOffice, 'Berlin Office', 'Rule-assigned by city'),
   group(GROUP.seattleOffice, 'Seattle Office', 'Rule-assigned by city'),
   group(GROUP.austinOffice, 'Austin Office', 'Rule-assigned by city'),
   group(GROUP.sydneyOffice, 'Sydney Office', 'Rule-assigned by city'),
-  group(GROUP.salesforceSalesUsers, 'Salesforce — Sales Users', 'Pushed from Salesforce', {
+  group(GROUP.salesforceSalesUsers, 'Salesforce - Sales Users', 'Pushed from Salesforce', {
     type: 'APP_GROUP',
     source: { id: fakeId('0oa', 1), name: 'Salesforce' },
   }),
-  group(GROUP.salesforceAdmins, 'Salesforce — Admins', 'Pushed from Salesforce', {
+  group(GROUP.salesforceAdmins, 'Salesforce - Admins', 'Pushed from Salesforce', {
     type: 'APP_GROUP',
     source: { id: fakeId('0oa', 1), name: 'Salesforce' },
   }),
-  group(GROUP.workdayAllWorkers, 'Workday — All Workers', 'Sourced from Workday HR', {
+  group(GROUP.workdayAllWorkers, 'Workday - All Workers', 'Sourced from Workday HR', {
     type: 'APP_GROUP',
     source: { id: fakeId('0oa', 2), name: 'Workday HR' },
   }),
-  group(GROUP.githubEngineering, 'GitHub — Engineering', 'Pushed to GitHub Enterprise', {
+  group(GROUP.githubEngineering, 'GitHub - Engineering', 'Pushed to GitHub Enterprise', {
     type: 'APP_GROUP',
     source: { id: fakeId('0oa', 3), name: 'GitHub Enterprise' },
   }),
-  group(GROUP.zoomLicensed, 'Zoom — Licensed', 'Pushed to Zoom', {
+  group(GROUP.zoomLicensed, 'Zoom - Licensed', 'Pushed to Zoom', {
     type: 'APP_GROUP',
     source: { id: fakeId('0oa', 5), name: 'Zoom' },
   }),
-  group(GROUP.datadogEngineering, 'Datadog — Engineering', 'Pushed to Datadog', {
+  group(GROUP.datadogEngineering, 'Datadog - Engineering', 'Pushed to Datadog', {
     type: 'APP_GROUP',
     source: { id: fakeId('0oa', 7), name: 'Datadog' },
   }),
@@ -279,7 +279,7 @@ export const demoGroupsById: ReadonlyMap<string, RawOktaGroup> = new Map(
  * The group the drilldown scene opens.
  *
  * Pinned so the scene's header, member count and feeding-rule badge are the
- * same on every take. `Engineering — All` is the right choice: it is large
+ * same on every take. `Engineering - All` is the right choice: it is large
  * enough to cascade, and it is fed by a rule, so its member rows can show the
  * direct-vs-rule provenance the scene exists to demonstrate.
  */

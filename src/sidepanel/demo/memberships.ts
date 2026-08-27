@@ -62,7 +62,7 @@ export const GROUP = {
   datadogEngineering: 34,
 } as const;
 
-/** The departments that get a rule-fed `<Department> — All` group. */
+/** The departments that get a rule-fed `<Department> - All` group. */
 const DEPARTMENT_GROUPS: readonly { ordinal: number; department: string }[] = [
   { ordinal: GROUP.engineering, department: 'Engineering' },
   { ordinal: GROUP.sales, department: 'Sales' },

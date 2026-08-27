@@ -183,7 +183,7 @@ export const GroupDrilldown: Story = {
       context: {
         getGroupInfo: {
           groupId: DEMO_HERO_GROUP_ID,
-          groupName: demoGroupsById.get(DEMO_HERO_GROUP_ID)?.profile?.name ?? 'Engineering — All',
+          groupName: demoGroupsById.get(DEMO_HERO_GROUP_ID)?.profile?.name ?? 'Engineering - All',
         },
       },
     });
@@ -259,7 +259,7 @@ export const ActionBarShowcase: Story = {
       context: {
         getGroupInfo: {
           groupId: DEMO_HERO_GROUP_ID,
-          groupName: demoGroupsById.get(DEMO_HERO_GROUP_ID)?.profile?.name ?? 'Engineering — All',
+          groupName: demoGroupsById.get(DEMO_HERO_GROUP_ID)?.profile?.name ?? 'Engineering - All',
         },
       },
     });
