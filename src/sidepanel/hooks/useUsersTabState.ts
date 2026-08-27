@@ -312,6 +312,7 @@ export function useUsersTabState({
   // so last-write-wins across search / auto-load / lifecycle is preserved.
   const { memberships, rules, loadMemberships, clearMemberships } = useUserMemberships({
     targetTabId,
+    oktaOrigin,
     onError: setError,
     onLoadingChange: setIsLoadingMemberships,
   });
