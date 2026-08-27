@@ -1222,7 +1222,7 @@ origin)` imperatively rather than `useOrgSnapshot` —
   carry ids in place of names) stops being a concern and its comment goes.
 - **Risk:** Low-medium — correctness-critical read that surfaces render verdicts
   from. Pin the derived output against the current cached output first.
-- **Status:** open
+- **Status:** claimed:claude/stoic-gates-s5qcjg
 
 ### D-029c · The Rules tab stops owning a cache
 
@@ -1545,7 +1545,7 @@ origin)` imperatively rather than `useOrgSnapshot` —
   silently become the answer.
 - **Risk:** Low to fix. The risk is leaving it: the failure is a confident wrong
   answer, not an error state.
-- **Status:** open
+- **Status:** claimed:claude/stoic-gates-s5qcjg
 - **Related:** `D-029a` (introduced the read), `D-029`
 - **Also noticed:** an org with genuinely zero group rules can never satisfy
   "at least one row", so it re-paginates `/api/v1/groups/rules` on every impact
@@ -1576,7 +1576,7 @@ origin)` imperatively rather than `useOrgSnapshot` —
   the card.
 - **Risk:** Low. Widening a comparator can only cause _more_ re-renders, never
   a stale one.
-- **Status:** open
+- **Status:** claimed:claude/stoic-gates-s5qcjg
 - **Related:** `I-003`
 
 ### D-040 · `RuleCard.tsx` is well over the ~300-line bar and hand-rolls its icons
@@ -1713,3 +1713,227 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   nothing in flow, nothing interactive.
 - **Status:** open
 - **Related:** ADR-0032
+
+### D-045 · Two more row comparators carry the drift `D-039` just removed
+
+- **Category:** correctness
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/policies/PolicyCard.tsx` (the `memo`
+  comparator and its comment at `:156`),
+  `src/sidepanel/components/groups/GroupListItem.tsx` (its comparator),
+  `docs/components.md` (the "Keep the memo comparator in step" rule)
+- **Verified:** 2026-08-27 — raised by the `D-039` writer while removing
+  `RuleCard`'s comparator; the two siblings were read, not assumed.
+- **Problem:** `D-039` found that `RuleCard`'s hand-written comparator had
+  fallen behind the props its render reads, and removed it in favour of the
+  default shallow compare — the honest compare turned out to be identical, since
+  every field hangs off one `rule` prop with stable identity. `PolicyCard` and
+  `GroupListItem` still carry hand-written comparators of the same shape and
+  have never been enumerated against their render bodies, so the same drift may
+  already be live in them. `PolicyCard.tsx:156` also now describes something
+  that no longer exists — its comment reads "Field-wise prop comparison,
+  mirroring `RuleCard` and `GroupListItem`".
+  The `D-039` writer additionally noted that these comparators tend to omit
+  **handler** props, which is the more dangerous half: a handler wired after
+  first paint leaves a control missing, and a handler swapped after first paint
+  leaves a stale closure being invoked.
+- **Done when:** Each of the two comparators is enumerated against every prop
+  its component's render actually reads — handlers included — and is either
+  widened to match or removed in favour of shallow compare with a note saying
+  why, exactly as `D-039` did. A test pins late-arriving data repainting each
+  card. `docs/components.md`'s blanket "Rows are `memo`ised with a custom
+  comparator; every newly rendered field must be added to it" is reworded to
+  match whatever survives — it is currently stated as a house rule that
+  `RuleCard` no longer follows.
+- **Risk:** Low. Widening or dropping a comparator can only cause _more_
+  re-renders, never a stale one.
+- **Status:** open
+- **Related:** `D-039`
+
+### D-046 · The Rules tab re-creates every handler it hands to a `RuleCard`
+
+- **Category:** perf
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/RulesTab.tsx` (`handlePreviewImpact`,
+  `handleRequestDeactivate`, and the inline `onLoad` passed to
+  `RulesListPanel`)
+- **Verified:** 2026-08-27 — measured by the `D-039` writer at the call sites
+  while choosing between widening and removing the comparator.
+- **Problem:** `RulesTab` passes plain function expressions re-created on every
+  render as `onDeactivate` and `onPreviewImpact`, plus an inline
+  `onLoad={() => loadRules(false)}`. `D-039` removed `RuleCard`'s custom
+  comparator, which had been masking this by ignoring handler props entirely —
+  so with shallow compare in place these unstable references are now what
+  limits memoisation on this surface. This is a caller-side stability problem
+  and was deliberately **not** papered over by a comparator that ignores props
+  it also invokes.
+- **Done when:** The handlers `RulesTab` passes down are stabilised with
+  `useCallback` (or hoisted), so `RuleCard`'s shallow compare can actually
+  skip unchanged rows. No behavior change — this is purely render volume.
+- **Risk:** Low. Nothing changes but how often a row re-renders.
+- **Status:** open
+- **Related:** `D-039`
+
+### D-047 · A fully-walked org with no rules reads the same as a rule that hits nobody
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useRuleImpact.ts`,
+  `src/sidepanel/components/RulesTab.tsx`,
+  `docs/adr/0040-the-background-owns-the-org.md` §7
+- **Verified:** 2026-08-27 — noticed by the `D-038` writer while replacing the
+  row-count gate with a `complete` check.
+- **Problem:** `D-038` made `fetchRawRules` serve from the org snapshot only
+  when the rules walk is `complete`, which is correct and closes the
+  understated-impact hole. It leaves a smaller seam behind: when the walk is
+  complete and the org genuinely holds zero group rules, the impact summary
+  reports that nobody loses access — accurate, but rendered identically to a
+  rule that has been evaluated against a full inventory and truly affects
+  nobody. The admin cannot tell "there is nothing to collide with" from "I
+  checked, and nothing collides".
+- **Done when:** The two cases are distinguishable in the impact summary, or a
+  deliberate note records why they need not be. This is the seam ADR-0040 §7's
+  "caveat rather than render a truncated inventory as the org" would eventually
+  attach to, and it is the cheaper half of the remedy `D-038` declined for
+  scope.
+- **Risk:** Low — it is a copy/state distinction, not a data change.
+- **Status:** open
+- **Related:** `D-038`, ADR-0040 §7
+
+### D-048 · A rule's exclusion list never reaches the user-path classifier
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** M
+- **Files:** `src/shared/ruleUtils.ts` (`formatRuleForDisplay`, the producer),
+  `src/shared/types.ts` (`FormattedRule`),
+  `src/shared/utils/membershipAnalysis.ts:138-172` (the documented hole),
+  `src/sidepanel/components/UsersTab.test.tsx` (where it is now characterized)
+- **Verified:** 2026-08-27 — surfaced by `D-029b` when rule seeding moved onto a
+  path that actually formats what it is given; the producer and the type were
+  both read, not inferred.
+- **Problem:** `isUserExcludedFromRule` reads
+  `conditions.people.users.exclude`, which only a **raw** Okta rule carries.
+  Every rule that reaches the user-path classifier is a `FormattedRule`, and
+  that shape has no `conditions` at all — `formatRuleForDisplay` keeps
+  `groupIds`, `conditionExpression` and `userAttributes` and drops the rest. So
+  the function always returns `false` on this surface, and a user on a rule's
+  exclusion list is still attributed to the very rule that excludes them: the
+  row says `Rule?` where the truth is `Direct`.
+  `membershipAnalysis.ts` documents this in full and deliberately leaves it to
+  the producer to close, which is why this is its own item. It is **pre-existing
+  and long-standing** — `RulesCache` stored the same formatted shape, so no
+  migration caused it; `D-029b` only made it visible, and pinned it as a
+  `CHARACTERIZED (defect)` case rather than deleting the assertion that had
+  been passing on a fixture no producer emits.
+- **Bounded, and worth stating:** it cannot invent a membership, only mis-name
+  its source — exclusion is consulted to _downgrade_ an attribution, never to
+  create one. Okta applies exclusions before it reports membership, so the
+  primary attribution source (`_embedded['group-rules']`) is unaffected. Only
+  this fallback over-attributes, and only on the user path.
+- **Done when:** The formatted shape carries what the classifier needs to see an
+  exclusion — widening `FormattedRule` alone changes nothing, so the producer
+  must populate it — and `UsersTab.test.tsx`'s characterization case is restored
+  to asserting `Direct` with the rule unnamed, which is what it asserted before
+  `D-029b` and what the admin should see. `membershipAnalysis.ts`'s "Known hole"
+  block comes out with it.
+- **Risk:** Medium. It changes an attribution verdict an admin acts on, and the
+  producer feeds every formatted-rule consumer, not just this one.
+- **Status:** open
+- **Related:** `D-029b`
+
+### D-049 · `RULE_INVENTORY_KEY` is a cache-key literal outside `keys.ts`
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useUserMemberships.ts` (the
+  `RULE_INVENTORY_KEY = 'groupRuleInventory'` declaration),
+  `src/sidepanel/cache/keys.ts`
+- **Verified:** 2026-08-27 — noticed by the `D-029b` writer while preserving the
+  republish through this key.
+- **Problem:** `CLAUDE.md` states that every cache key literal lives in
+  `keys.ts`. This one is declared in the hook that publishes it, so the entity
+  cache's key grammar cannot be read in one place, and a second publisher of the
+  same inventory would have no obvious literal to reuse. Pre-existing; `D-029b`
+  preserved the key deliberately rather than moving it, since relocating a cache
+  key is a change to the cache-key grammar and belongs in its own diff.
+- **Done when:** The literal moves to `src/sidepanel/cache/keys.ts` beside the
+  others and the hook imports it. No behavior change — the key string itself
+  must not change, or in-flight cached inventories are orphaned.
+- **Risk:** Low, provided the string is preserved verbatim.
+- **Status:** open
+- **Related:** `D-029b`
+
+### D-050 · The group-rules fallback fetch validates nothing
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/fetchGroupRulesRequest.ts` (the pagination
+  loop), `src/shared/schemas/okta.ts` (`oktaGroupRuleSchema`),
+  `src/shared/utils/oktaPagination.ts` (`parseOktaList`, the validated helper)
+- **Verified:** 2026-08-27 — raised as **blocking** by `security-logging-reviewer`
+  on the `D-029b`/`D-038` diff, then independently confirmed: the file contains
+  no `zod`, `parseOktaList` or `schema` reference of any kind, and is untouched
+  by that diff.
+- **Problem:** `fetchGroupRulesRequest` concatenates `response.data` straight
+  into `OktaGroupRule[]` — a raw cast, with no boundary validation at all. ADR-0006
+  requires every Okta response to be validated with zod before it is rendered or
+  branched on, and rule `conditions.expression` and
+  `actions.assignUserToGroups.groupIds` are named in `docs/security.md` as
+  end-user-controllable.
+  This diverges from the write side and from its own sibling: the snapshot's
+  `RULES_SPEC` (`snapshotSync.ts`) validates every rule row through
+  `oktaGroupRuleSchema` before storing it, and `ruleImpact.fetchRawRules`'
+  inline fallback re-validates with the same schema. Only this path does not.
+- **Not introduced by `D-029b`, but newly load-bearing.** It is long-standing
+  shared infrastructure with **five non-test consumers** — `useRulesData.ts`,
+  `useBlastRadius.ts`, `useUserComparison.ts`, `useUserMemberships.ts` and
+  `RuleCard.tsx` — which is why it was filed rather than folded into that item's
+  diff. `D-029b` makes it the sole fallback for user-membership rule attribution
+  once `RulesCache` stops serving that flow, so a malformed row now reaches a
+  surface that answers "why is this user in this group".
+- **Done when:** The pagination loop validates each page with
+  `oktaGroupRuleSchema` through `parseOktaList`, mirroring
+  `ruleImpact.ts`'s fallback, and drops or reports a row that fails rather than
+  casting it. A test pins that a malformed rule row does not reach a consumer.
+  Check all five consumers still behave when a row is rejected — a lenient
+  schema that keeps the rest of the page is likely the right shape here.
+- **Risk:** Low to fix, and it closes an ADR-0006 gap on a surface that renders
+  access verdicts.
+- **Status:** open
+- **Related:** `D-029b`, `D-038`, ADR-0006
+
+### D-051 · Two always-on log calls pass a raw caught error
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaApi/ruleImpact.ts` (the `log.warn` in
+  the group-meta fetch), `src/sidepanel/hooks/useUserMemberships.ts` (the
+  `log.error` in the membership load's catch)
+- **Verified:** 2026-08-27 — raised by `security-logging-reviewer`; both lines
+  confirmed **pre-existing** and untouched by tonight's diff (every log line the
+  diff adds is a `log.debug` carrying a count or an outcome).
+- **Problem:** `logger.ts` gates `debug` to development but `warn` and `error`
+  always emit, including in production builds. Both call sites hand the raw
+  caught `error`/`err` object to the logger rather than extracting `.message`,
+  so whatever a future throw site attaches to that object ships to the console.
+  `CLAUDE.md` allows identifiers and outcomes only — never request/response
+  bodies or PII. There is no evidence either error currently carries a body;
+  this is about the shape, not a known leak.
+  `snapshotSync.ts` already models the stricter discipline, extracting
+  `error.message` and logging only a code plus the collection, with a comment
+  warning that copying such a line into a shipping `log.error` would do exactly
+  what this item describes.
+- **Done when:** Both sites log `error instanceof Error ? error.message :
+'unknown'` (or an equivalent narrowing) instead of the raw object. A sweep for
+  other `log.warn`/`log.error` call sites passing a bare caught value is worth
+  doing in the same pass, since the fix is mechanical.
+- **Risk:** Low. Console output changes; nothing else.
+- **Status:** open
+- **Related:** `D-029b`, `D-038`

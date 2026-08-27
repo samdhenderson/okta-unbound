@@ -17,6 +17,143 @@ Entry format:
 
 ---
 
+## 2026-08-27 — three items shipped
+
+**Baseline:** green, all nine gates, run against `main` at `1dd374b` before any
+work. `type-check`; `lint` 0 errors / 155 warnings; `format:check`;
+`test:coverage` 226 files / 3215 tests; `knip:circular`; `lint:control-chars`
+917 files; `lint:cited-paths` 54 files; `test:storybook` 164 files / 1148 tests.
+`build` was not required — nothing in tonight's diff touches `manifest.json`,
+`vite.config.ts`, `src/background/**` or `src/content/**`. As the last two
+entries warned, `node_modules` was absent on a cold container and `npm ci` had
+to run before any gate meant anything.
+
+**Open PRs at step 2: zero.** No item ids claimed, no contended files, no
+three-PR stop, no branch collision. `gh` is still unavailable in this
+environment; the GitHub MCP tools stood in for it, which satisfies step 2's
+requirement to distinguish in-flight work from open work.
+
+**Items worked:** `D-029b`, `D-038`, `D-039`.
+
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/97
+
+**Branch:** `claude/stoic-gates-s5qcjg` — harness-assigned, as `SESSION.md`
+step 2 anticipates. It counts as an unattended run's branch for the three-PR cap.
+
+**Backlog after:** 35 open / 75 total — 7 IMPROVEMENTS open (of 17), 28 DEBT
+open (of 58), 6 gated (3 `blocked:`, 3 `research:awaiting-review`), 2 `closed:`,
+plus tonight's 3 shipped. Seven new items were filed, which is why the open count
+rises even though three close.
+
+_On the count._ The previous entry asked the next session to either reproduce its
+50 by the same method or say why not. **It reproduces.** Parsing every `### D-NNN ·`
+heading with its `Status:` line and excluding the three parent headers that carry
+no status of their own (`D-007`, `D-013`, `D-029`) gives 51 real DEBT items on
+`main` at `1dd374b` — the previous entry's 50, plus `D-044`, filed by PR #96 after
+that entry was written. Tonight's seven take it to 58. The arithmetic is now
+continuous across three entries; keep using this method.
+
+**Notes:**
+
+_Selection, and a reversal worth recording._ `D-028` sorts to the top of P1 and
+was skipped for the **fifth** consecutive night, for the same reason: it is an
+audit against a real Okta org, which an unattended sandbox cannot reach. Two
+prior entries asked for it to be re-gated `blocked:needs-live-org`. Repeating
+the request rather than acting on it, because re-gating is Sam's call — but five
+nights have now spent the same reasoning on the same unreachable item, and the
+cost of that is no longer trivial.
+
+`I-013` sorted second (P2, `IMPROVEMENTS.md`, ungated) and I **started** a writer
+on it before stopping it. The previous entry had declined it on the grounds that
+the item says which verb to add and where ADR-0039 puts it, but not what the
+create-rule form asks for — design content a reviewer could disagree with after
+the code exists, which is `CLAUDE.md`'s plan-and-approval gate, with nobody to
+take the go-ahead from. That reasoning was recorded _for the next session_, and I
+did not read it until after dispatching the agent. Stopped it at its first tool
+call; it had made no edits, confirmed by `git status`. `D-029b` was substituted.
+**The lesson is an ordering one:** `SESSION.md` step 2 sends a session to the open
+PRs before the backlog, but nothing sends it to the previous `NIGHTLY.md` entry,
+where the last run's selection reasoning lives. Reading the top entry belongs in
+step 2 alongside the PR survey — a documented refusal is exactly as binding as a
+`claimed:` marker, and cheaper to miss.
+
+`D-029b` was excluded last night by `D-029`'s "one consumer per PR" header, since
+`D-029a` was that PR's consumer. It is this PR's only `D-029` consumer, so the
+constraint is satisfied.
+
+_Re-verification._ All three selected items carried a `Verified:` date inside 14
+days, so the `okta-claim-check` re-check was not mandated. Each **Problem** was
+spot-checked against the tree before claiming, and all three held.
+
+_A flipped assertion — the thing on this PR most wanting a human eye._
+`UsersTab.test.tsx`'s "classifies an excluded user as DIRECT even when an active
+rule targets the group" is now a `CHARACTERIZED (defect)` case asserting `Rule?`.
+`CLAUDE.md`'s hard rule says to flag a wrong-looking assertion and stop, so I
+verified the writer's justification independently rather than taking it: `FormattedRule`
+(`shared/types.ts:178-192`) genuinely has no `conditions` field,
+`formatRuleForDisplay` genuinely drops it, and `membershipAnalysis.ts:138-172`
+documents the resulting hole at length and calls it pre-existing and deliberately
+left to the producer. So the old assertion pinned behaviour production has never
+had — it was green only because its fixture injected a raw-shaped rule past the
+formatter through the `RulesCache` stub, and `RulesCache` stored the same formatted
+shape, so no migration caused it. The two coverage sources the writer cited as
+staying behind were both confirmed present:
+`shared/utils/membershipAnalysis.test.ts:88` and
+`shared/membership/attributionParity.test.ts:221`. The underlying defect is filed
+as `D-048`. This is disclosed at the top of the PR body, not buried.
+
+_Reviews._ `ui-reviewer` and `security-logging-reviewer` both returned **nothing
+blocking that this diff introduced**. Both ran without Bash in this environment
+and so reviewed current file state rather than `git diff origin/main...HEAD` —
+worth knowing, because it produced one false positive and one misattribution that
+a diff would have prevented:
+
+- `security-logging-reviewer` marked as **blocking** that
+  `fetchGroupRulesRequest.ts` performs no zod validation. The gap is **real** —
+  confirmed: the file contains no `zod`/`parseOktaList`/`schema` reference at all —
+  but the file is **untouched by this diff** and has five non-test consumers, so
+  folding a fix in would have widened the PR against `CLAUDE.md`'s one-concern
+  rule. Filed as `D-050`, which is the remedy the reviewer itself offered.
+  It did the genuinely useful thing first, though: it independently verified the
+  diff's load-bearing claim that snapshot rows were zod-parsed on write by
+  `RULES_SPEC`, tracing `snapshotSync.ts:251` → `parseOktaList` →
+  `upsertMany`, and confirmed it holds.
+- Its Finding 9 (no test covers the new `complete` gate in `useUserMemberships`)
+  is a **false positive**: it read `useUserMemberships.test.tsx` and missed the new
+  `useUserMemberships.ruleSource.test.tsx`, which pins exactly that gate in both
+  directions ("lists the rules when the org has no completed walk", "reports an
+  empty completed walk as an answer, not as a failure"). Not acted on.
+- Its Finding 2 (two `log.warn`/`log.error` sites pass a raw caught error) is real
+  but **pre-existing** — every log line this diff adds is a `log.debug` carrying a
+  count or an outcome, verified against the diff. Filed as `D-051`.
+- `ui-reviewer` was asked directly whether removing `RuleCard`'s comparator is an
+  acceptable trade given the render-volume cost, and said yes, on the grounds that
+  the comparator was not merely suboptimal but wrong — it omitted all five handler
+  props, each of which gates a control per ADR-0039. It confirmed the existing
+  story set still covers what the component renders.
+
+_Seven new items filed_ (`D-045`–`D-051`), none folded into tonight's diff. Two
+are worth Sam's attention above the rest: **`D-048`** — a rule's exclusion list
+never reaches the user-path classifier, so an excluded user is attributed to the
+very rule that excludes them; long-standing, newly visible, and it is the item
+that would let `UsersTab.test.tsx`'s flipped assertion be restored. **`D-050`** —
+the group-rules fallback fetch validates nothing, an ADR-0006 gap on a path that
+five surfaces read.
+
+_Scope beyond Files lists, disclosed._ `D-029b` needed an origin its callers held
+but did not pass: four files beyond its list — `useUsersTabState.ts`,
+`useUserComparison.ts`, `overview/UserOverview.tsx` (one line each) and the two
+`UsersTab` test files, retargeted off the `RulesCache` stub and verified to pass
+against **both** the old and new hook. `D-038` and `D-039` stayed inside their
+lists.
+
+_Also worth knowing._ `D-029b` removes one of `RulesCache`'s three remaining
+readers. `useRulesData` (`D-029c`, `blocked:needs-human`) and `groupDiscovery`
+(`D-029d`) are what is left, and `groupDiscovery.fetchAndCacheAllGroupRules` is
+now its only remaining _writer_.
+
+---
+
 ## 2026-08-26 — three items shipped
 
 **Baseline:** green, all nine gates, run against `main` at `ca07a02` before any
