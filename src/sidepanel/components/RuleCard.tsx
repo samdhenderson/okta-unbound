@@ -180,7 +180,28 @@ const renderConditionWithGroupBadges = (
 
 /**
  * Memoised card displaying a single group rule with an expandable detail view.
- * A custom comparator limits re-renders to changes in the fields it actually shows.
+ *
+ * **Default shallow compare, deliberately — no custom comparator.** There was one,
+ * and it listed eight rule fields; the render reads roughly twice that
+ * (`conditionExpression`, `allGroupNamesMap`, `userAttributes`, `groupIds`,
+ * `groupNames`, `lastUpdated`, each conflict's severity/reason/`rule2.name`) plus
+ * five handler props that each gate a control. Group names resolve *after* the
+ * first paint — `fetchGroupRulesRequest` fills `groupNames`/`allGroupNamesMap`
+ * from the org snapshot — so the omission left a card rendering "Group name not
+ * loaded" for a group it had since learned the name of (D-039). A list of fields
+ * that has to be re-derived every time the body changes is a comparator that will
+ * drift again; the compiler cannot check it, and being wrong costs correctness
+ * while being over-broad costs only a re-render.
+ *
+ * Shallow compare still has something to bite on here: `rule` keeps its identity
+ * across parent renders at both call sites — `RulesTab` maps rules through a
+ * `useMemo` that returns the *same* object when `affectsCurrentGroup` is
+ * unchanged, and `GroupRulesSection` passes its hook's array straight down — and
+ * `allGroupNamesMap` is rebuilt only when that rule object is, so comparing it by
+ * reference (which is what shallow does) is right rather than self-defeating.
+ * `RulesTab` does re-create some of its handler props each render, which blunts
+ * the memo on that surface; the fix for that is stabilising them at the caller,
+ * not compensating for it here with a comparator that ignores them.
  */
 const RuleCard: React.FC<RuleCardProps> = memo(
   ({
@@ -512,19 +533,6 @@ const RuleCard: React.FC<RuleCardProps> = memo(
           </svg>
         </IconButton>
       </ListRow>
-    );
-  },
-  (prevProps, nextProps) => {
-    // Custom comparison for memoization
-    return (
-      prevProps.rule.id === nextProps.rule.id &&
-      prevProps.rule.name === nextProps.rule.name &&
-      prevProps.rule.status === nextProps.rule.status &&
-      prevProps.rule.condition === nextProps.rule.condition &&
-      prevProps.rule.affectsCurrentGroup === nextProps.rule.affectsCurrentGroup &&
-      prevProps.isHighlighted === nextProps.isHighlighted &&
-      prevProps.oktaOrigin === nextProps.oktaOrigin &&
-      (prevProps.rule.conflicts?.length || 0) === (nextProps.rule.conflicts?.length || 0)
     );
   },
 );
