@@ -109,6 +109,19 @@ consumes it in its own `top`. One owner per variable, every value measured.
 | `PageHeader`    | `sticky top-[var(--rail-h,0px)] z-20` | `--header-h` on its `TabPanel`  | `--rail-h`                                      |
 | `ActionBar`     | `sticky z-30`                         | —                               | `calc(var(--rail-h,0px) + var(--header-h,0px))` |
 
+**The `z-index` column only means anything inside one stacking context.** `ActionBar`'s
+`z-30` beats `PageHeader`'s `z-20` — which is what lets the merge's final `top: -1px`
+paint over the header's own bottom border — but only while the two resolve against the
+same context. **Nothing between the band and the header may establish one.** The trap is
+not obvious: a wrapper whose entrance animation touches `opacity`/`transform` and fills
+_forwards_ stays a stacking context after it has finished, computing
+`transform: matrix(1, 0, 0, 1, 0, 0)` rather than `none`, so `z-30` is scoped inside the
+rung and the unpositioned rung paints below the header. The symptom is a 1px divider above
+a docked strip, with the merge itself running perfectly — the Groups detail rung had it and
+the Users rung did not, because only the former wraps its rung in `animate-push-in`. Fixed
+by giving the two view-stack primitives a `backwards` fill (`docs/motion.md`); the
+`Shared/ActionBar` → _Docked inside an animated rung_ story is what holds it.
+
 This is what ADR-0030 declined, but not in the form it declined it. A hard-coded offset
 rots the moment a band's padding or wrapping changes; a measured one cannot. Both variables
 default to `0px`, so a story — or any surface without those bands — behaves exactly as

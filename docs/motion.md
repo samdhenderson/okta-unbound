@@ -81,6 +81,25 @@ directly — never write the `animation:` property by hand.
 | Push in      | `animate-push-in`      | `--dur-travel` / `--ease-standard` | a pushed view (`useViewStack`) arriving from the right                   |
 | Pop in       | `animate-pop-in`       | `--dur-travel` / `--ease-standard` | a popped view arriving from the left                                     |
 
+**Push in and pop in fill `backwards`; everything else in the table fills `both`.**
+That is deliberate and it is not a motion choice. These two run on a whole rung
+wrapper — an ancestor of every sticky band on the page — and a forwards fill keeps
+the animation applying after it finishes, which keeps its element a stacking
+context: Chrome reports a settled `animate-push-in` wrapper as
+`transform: matrix(1, 0, 0, 1, 0, 0)`, not `none`. That trapped `ActionBar`'s
+`z-30` inside the rung, below `PageHeader`'s `z-20` sticky layer, and left a
+hairline above the docked strip on the Groups detail rung (ADR-0032 §The sticky
+stack). Both keyframe sets end at `opacity: 1; transform: none` — the element's own
+resting values — so dropping the forwards half changes nothing you can see and
+releases the trap. The `*-out` primitives keep `both`: they end away from their
+resting state and need the fill to hold there.
+
+**If you add a rung-level or page-level animation, check it the same way.** Anything
+that animates `opacity`, `transform`, `filter` or `backdrop-filter` with a forwards
+fill, on an element between a sticky band and the header it merges into, will break
+that merge in exactly this way — and it will look like a CSS-border bug, not a
+paint-order one, because the merge itself still runs perfectly.
+
 Two related, non-`animate-*` primitives in `@layer components`:
 
 - **`.disclose`** — the layout-never-jumps pattern (rule 4): a wrapper that

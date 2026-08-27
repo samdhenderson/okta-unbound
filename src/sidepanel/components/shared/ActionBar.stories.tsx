@@ -257,6 +257,90 @@ export const StickyInAScroller: Story = {
 };
 
 /**
+ * The same docked strip one wrapper deeper: the shape `GroupsTab` renders, where the detail
+ * rung arrives under an entrance animation (`animate-push-in`) and the strip is therefore a
+ * *grandchild* of the scroller rather than a child of it.
+ *
+ * It is here because that wrapper broke the merge. The last thing the merge does is paint the
+ * band's chrome 1px *over* the header's bottom border, and that only lands because the strip's
+ * `z-30` and the header's `z-20` resolve in the **same stacking context** (ADR-0032). A
+ * forwards-filling animation of `opacity`/`transform` keeps its element a stacking context
+ * indefinitely — long after the animation has finished and its computed values have gone back
+ * to looking inert — so with `--animate-push-in` filling `both`, the strip's `z-30` was scoped
+ * *inside* this wrapper. The wrapper itself is unpositioned, painting at the `z-index: auto`
+ * level below the header's positive-z sticky layer, so the header repainted its own border over
+ * the 1px the strip had just covered. The merge ran perfectly and left a hairline behind it: the
+ * group page showed a divider above its action bar where the user page showed none.
+ *
+ * Both view-stack tokens now fill `backwards`. That changes nothing about the motion — `push-in`
+ * and `pop-in` both end at `opacity: 1; transform: none`, which is the element's own resting
+ * state, so the forwards half of `both` was only ever buying the stacking context — and the trap
+ * is gone the moment the entrance is over. **The invariant this story exists to hold: nothing
+ * between the band and the header may establish a stacking context.**
+ *
+ * Scroll it to the bottom next to *Sticky in a scroller*; the seam has to be absent in both.
+ * There is deliberately no assertion below — the headless story project loads no application CSS
+ * (see `narrowFrame`), so there is no animation there to create a stacking context and nothing an
+ * assertion could catch. This one is checked in a real engine, by eye and by screenshot.
+ */
+export const DockedInsideAnAnimatedRung: Story = {
+  parameters: { motion: 'on' },
+  args: {
+    sticky: true,
+    actions: [
+      {
+        id: 'export-members',
+        label: 'Export members',
+        icon: 'download',
+        variant: 'primary',
+        onClick: fn(),
+      },
+      { id: 'add-member', label: 'Add', icon: 'plus', onClick: fn() },
+      { id: 'compare', label: 'Compare', icon: 'users', onClick: fn() },
+    ],
+  },
+  render: (args) => (
+    <div
+      data-header-scope
+      className="h-96 w-[360px] overflow-y-auto [overflow-anchor:none] bg-canvas"
+    >
+      <PageHeader
+        sticky
+        title="Engineering - All"
+        badge={{ text: 'Okta Group', variant: 'primary' }}
+        identityKey="00gFAKE1a2b3c4d5e6"
+        identity={
+          <EntityIdentity
+            rows={[
+              [{ kind: 'id', value: '00gFAKE1a2b3c4d5e6', copyLabel: 'Copy group id' }],
+              [{ kind: 'metric', icon: 'users', value: '128', label: 'members' }],
+            ]}
+          />
+        }
+      />
+      {/*
+        The wrapper under test: `GroupsTab` puts exactly this between the scroller and the rung
+        so a pushed detail view travels in from the right.
+      */}
+      <div className="animate-push-in">
+        <div className="space-y-6 px-6 py-6">
+          <ActionBar {...args} />
+          {['Membership source', 'Rules', 'Grants access to', 'App push', 'Metadata'].map(
+            (title) => (
+              <DetailSection key={title} title={title}>
+                <p className="text-sm text-neutral-600">
+                  Body content, tall enough that the strip above has something to hold against.
+                </p>
+              </DetailSection>
+            ),
+          )}
+        </div>
+      </div>
+    </div>
+  ),
+};
+
+/**
  * The tiered strip: everyday verbs in tier 1, a disclosure below them. Toggle **More** and
  * the strip *stretches* — the row opens inside the band, under the same chrome, so it reads as
  * the control growing rather than as a card arriving underneath it. The buttons hold still,
