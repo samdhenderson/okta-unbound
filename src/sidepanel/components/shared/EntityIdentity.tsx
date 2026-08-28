@@ -79,12 +79,21 @@ const Fact: React.FC<{ fact: IdentityFact }> = ({ fact }) => {
 
   if (fact.kind === 'status') {
     return (
-      <span className="inline-flex items-center gap-1.5">
+      <span className="inline-flex min-w-0 items-center gap-1.5">
         <span
           aria-hidden="true"
           className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT_BG[fact.variant]}`}
         />
-        <span>{fact.text}</span>
+        {/* Okta status names are long (`PASSWORD_EXPIRED`); without `min-w-0` the
+            flex item refuses to shrink and overruns the title column at 360px.
+            Truncating rather than wrapping is deliberate — a status that wraps puts
+            the header's height back under the entity's control, which is the whole
+            thing demoting badges to facts was meant to fix. `title` keeps the full
+            value reachable; assistive tech reads it regardless, since `truncate` is
+            purely visual. */}
+        <span className="truncate" title={fact.text}>
+          {fact.text}
+        </span>
       </span>
     );
   }
@@ -125,14 +134,19 @@ const EntityIdentity: React.FC<EntityIdentityProps> = ({ rows }) => {
           className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-neutral-600"
         >
           {row.map((fact, factIndex) => (
-            <React.Fragment key={factIndex}>
+            // The separator is bound to the fact that follows it, in one flex item,
+            // rather than sitting beside it as a sibling. A sibling separator wraps
+            // independently of its fact: when the row breaks, the middot stays behind
+            // and orphans at the end of the previous line with nothing after it. That
+            // was visible at 480px the moment a row carried three facts.
+            <span key={factIndex} className="inline-flex min-w-0 items-center gap-x-2">
               {factIndex > 0 && (
                 <span aria-hidden="true" className="text-neutral-300">
                   ·
                 </span>
               )}
               <Fact fact={fact} />
-            </React.Fragment>
+            </span>
           ))}
         </div>
       ))}
