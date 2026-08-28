@@ -2,9 +2,10 @@
  * Choreographed scenes for the demo reel.
  *
  * These are **stages, not tests**. Each export seeds the demo org, mounts the
- * whole side panel, and stops. Nothing here clicks anything: the choreography
- * lives in `.storybook/scripts/film-scenes.mjs`, which drives the page from
- * Playwright. See ADR-0043 for why.
+ * whole side panel, and stops. Nothing here clicks anything: the walking lives
+ * in `.storybook/scripts/capture/walks/`, driven from Playwright by
+ * `capture/capture.mjs`. See ADR-0043 for why the split, and ADR-0045 for why
+ * the walk is now all that Playwright does.
  *
  * That split is not stylistic. A `play` function cannot scroll a wheel or
  * resize a viewport, and both are load-bearing here — `useStaggerReveal` only
@@ -57,6 +58,7 @@ import {
   demoGetUserRaw,
   demoMakeApiRequest,
   demoSearchGroups,
+  demoScanGroupMfa,
   demoSearchUsers,
 } from './api';
 import { demoDelay, installDemoControls, seedDemoSnapshot, setDemoLatency } from './control';
@@ -102,6 +104,10 @@ const demoApiValue = makeUseOktaApiValue({
   getUserGroupMemberships: slow(demoGetUserGroupMemberships),
   batchGetUserDetails: slow(demoBatchGetUserDetails),
   captureRuleImpact: slow(demoCaptureRuleImpact),
+  // Not wrapped in `slow`: the scan paces itself against a wall clock so the bar
+  // lands on its mark, and adding the scene's read latency on top would push it
+  // past the shot it is framed for.
+  scanGroupMfa: fn(demoScanGroupMfa),
 });
 
 /**
@@ -109,7 +115,9 @@ const demoApiValue = makeUseOktaApiValue({
  *
  * Renders nothing. It exists because `ProgressContext` is only reachable from
  * inside the provider, and the film script needs to drive the ActivityBar from
- * outside the page for the bulk-operation scene.
+ * outside the page. The MFA-coverage scene uses it: `demoScanGroupMfa` reports
+ * through this bridge because the real scan drives the bar via
+ * `coreApi.runOperation`, and the scenes have mocked that facade away.
  */
 const DemoBridge: React.FC = () => {
   const { startProgress, updateBatch, completeProgress } = useProgress();
@@ -170,6 +178,14 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/** The connected-page context every scene that drills into the hero group needs. */
+const heroGroupContext = {
+  getGroupInfo: {
+    groupId: DEMO_HERO_GROUP_ID,
+    groupName: demoGroupsById.get(DEMO_HERO_GROUP_ID)?.profile?.name ?? 'Engineering - All',
+  },
+};
+
 /**
  * Scene 1 — browse the org's groups, open one, and ask why someone is in it.
  *
@@ -178,15 +194,7 @@ type Story = StoryObj<typeof meta>;
  */
 export const GroupDrilldown: Story = {
   beforeEach: async () => {
-    await stage({
-      tab: 'groups',
-      context: {
-        getGroupInfo: {
-          groupId: DEMO_HERO_GROUP_ID,
-          groupName: demoGroupsById.get(DEMO_HERO_GROUP_ID)?.profile?.name ?? 'Engineering - All',
-        },
-      },
-    });
+    await stage({ tab: 'groups', context: heroGroupContext });
   },
 };
 
@@ -203,15 +211,39 @@ export const RuleImpact: Story = {
 };
 
 /**
- * Scene 3 — a bulk membership change, with the ActivityBar tracking it.
+ * Scene 3 — MFA coverage across a group, one request per member.
  *
- * The progress bar's motion is real; its *numbers* are driven by the film
- * script through `__OKTA_DEMO__.progress`, because bulk-operation progress
- * normally flows through the facade this story has mocked away.
+ * Replaces an earlier bulk-membership scene that drove the ActivityBar by hand
+ * over a surface where nothing was being written. This one is the real thing:
+ * `scanGroupMfa` is genuinely one `GET /api/v1/users/{id}/factors` per member,
+ * the single job in this app that no query parameter can collapse, and
+ * therefore the one place the scheduler's progress bar is reporting on work an
+ * administrator actually waits for.
+ *
+ * The numbers are derived end to end. Factors come from
+ * {@link module:sidepanel/demo/factors}, which computes them from each user's
+ * own status, employee type and department; the panel then summarizes them with
+ * the same `summarizeFactors` a live org would go through. So when the coverage
+ * line says how many members have no second factor, that count is a consequence
+ * of the org, and filtering the roster to those people returns exactly them.
  */
-export const BulkOperation: Story = {
+export const MfaCoverage: Story = {
   beforeEach: async () => {
-    await stage({ tab: 'users', latency: 300 });
+    await stage({ tab: 'groups', latency: 300, context: heroGroupContext });
+  },
+};
+
+/**
+ * Scene 4 — a group read as a population rather than as a list.
+ *
+ * The composition reports discover their own facets: `discoverAttributeBreakdowns`
+ * looks at what the members actually carry rather than at a fixed column set, so
+ * the dimensions on screen are the ones this group happens to vary along. Sorting
+ * and filtering then compose over the same roster.
+ */
+export const GroupComposition: Story = {
+  beforeEach: async () => {
+    await stage({ tab: 'groups', latency: 300, context: heroGroupContext });
   },
 };
 
@@ -243,6 +275,34 @@ export const UserComparison: Story = {
 };
 
 /**
+ * Scene 5 — why one of the pair has access and the other does not.
+ *
+ * The same stage as {@link UserComparison}: the film script runs the compare
+ * flow as a prologue and this scene's argument starts where that one's ends. It
+ * is a separate story rather than a second choreography over the same one
+ * because `SCENES` is keyed by story id, and a scene is a stage.
+ */
+export const AccessCauses: Story = {
+  beforeEach: async () => {
+    const left = demoUsersById.get(DEMO_COMPARISON_PAIR.left);
+    await stage({
+      tab: 'users',
+      latency: 350,
+      context: {
+        getUserInfo: left
+          ? {
+              userId: left.id,
+              userName: `${left.profile.firstName} ${left.profile.lastName}`,
+              userEmail: left.profile.email,
+              userStatus: left.status,
+            }
+          : null,
+      },
+    });
+  },
+};
+
+/**
  * Scene 5 — the action strip.
  *
  * Two beats, both driven from Playwright. A scroll ramp walks the `.dock-band`
@@ -253,15 +313,6 @@ export const UserComparison: Story = {
  */
 export const ActionBarShowcase: Story = {
   beforeEach: async () => {
-    await stage({
-      tab: 'groups',
-      latency: 200,
-      context: {
-        getGroupInfo: {
-          groupId: DEMO_HERO_GROUP_ID,
-          groupName: demoGroupsById.get(DEMO_HERO_GROUP_ID)?.profile?.name ?? 'Engineering - All',
-        },
-      },
-    });
+    await stage({ tab: 'groups', latency: 200, context: heroGroupContext });
   },
 };

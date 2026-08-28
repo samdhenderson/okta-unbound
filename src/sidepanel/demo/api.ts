@@ -19,13 +19,16 @@
  *   therefore one the app derived, which is the whole reason the dataset models
  *   memberships instead of asserting counts.
  */
-import type { OktaGroup, OktaUser } from '../../shared/types';
+import type { MemberMfaResult, OktaGroup, OktaUser } from '../../shared/types';
+import { summarizeFactors } from '../../shared/utils/mfaUtils';
 import {
   summarizeRuleImpact,
   toImpactRule,
   type RuleImpactSummary,
   type TargetGroupMembers,
 } from '../../shared/membership/ruleImpact';
+import type { DemoControls } from './control';
+import { demoFactorsFor } from './factors';
 import { demoGroupMembers, demoUserGroups } from './memberships';
 import { demoApps, demoGroups, demoGroupsById, demoRules } from './snapshot';
 import { demoUsers, demoUsersById } from './users';
@@ -147,6 +150,11 @@ export async function demoMakeApiRequest(endpoint?: string): Promise<DemoResult>
     const q = queryParam(queryString, 'q') || queryParam(queryString, 'search');
     return ok(demoUsers.filter((u) => matchesQuery(u, q)).slice(0, 20));
   }
+
+  // The factors route exists so a direct-transport caller and the named
+  // `scanGroupMfa` operation below cannot disagree about the same user.
+  const factorsUserId = captured(/^\/api\/v1\/users\/([^/]+)\/factors$/);
+  if (factorsUserId !== undefined) return ok(demoFactorsFor(factorsUserId));
 
   const singleUserId = captured(/^\/api\/v1\/users\/([^/]+)$/);
   if (singleUserId !== undefined) return ok(demoUsersById.get(singleUserId) ?? null);
@@ -280,4 +288,63 @@ export async function demoSearchGroups(query: string): Promise<typeof demoGroups
 /** Every rule that assigns into a group. */
 export async function demoGetGroupRulesForGroup(groupId: string): Promise<typeof demoRules> {
   return demoRules.filter((r) => (r.actions?.assignUserToGroups?.groupIds ?? []).includes(groupId));
+}
+
+/**
+ * How long a full scan should take on camera, in milliseconds.
+ *
+ * The real operation is one `GET /api/v1/users/{id}/factors` per member — the
+ * one job in this app that is genuinely irreducible, and therefore the one place
+ * the scheduler's progress bar is doing something an admin actually waits on. A
+ * demo that resolved it instantly would show the bar for two frames and prove
+ * nothing; one that took as long as the real thing would be unwatchable. Seven
+ * seconds is long enough to read the bar move and short enough to hold a shot.
+ */
+const SCAN_WALL_CLOCK_MS = 7000;
+
+/**
+ * Scan a set of users for enrolled MFA factors, the way the real operation does.
+ *
+ * Mirrors `useOktaApi`'s `scanGroupMfa`: same signature, same `Map` return, same
+ * per-user summarization through the app's own {@link summarizeFactors}, so the
+ * numbers the coverage view renders are derived here exactly as they would be
+ * from a live org.
+ *
+ * The one thing it cannot mirror is the ActivityBar. The real scan drives it via
+ * `coreApi.runOperation`, and the scenes have mocked the facade that provides
+ * it — so progress is reported through the `__OKTA_DEMO__.progress` bridge the
+ * story publishes, which is wired to the same `ProgressContext` the real bar
+ * reads. The bar's motion is real; only its source is different.
+ *
+ * @param userIds - The members to scan, in the order the bar will count them.
+ * @param onProgress - Optional per-item callback, matching the real operation's.
+ * @returns Per-user results keyed by user id.
+ */
+export async function demoScanGroupMfa(
+  userIds: string[],
+  onProgress?: (current: number, total: number) => void,
+): Promise<Map<string, MemberMfaResult>> {
+  const total = userIds.length;
+  const results = new Map<string, MemberMfaResult>();
+  const progress = (globalThis as { __OKTA_DEMO__?: DemoControls }).__OKTA_DEMO__?.progress;
+
+  progress?.start('MFA scan', `Scanning 0/${total} members`, total);
+
+  // Pace by elapsed wall clock rather than by a fixed per-item sleep, so the
+  // scan still lands on its mark when the machine is busy encoding video.
+  const started = Date.now();
+  for (const [i, userId] of userIds.entries()) {
+    const completed = i + 1;
+    results.set(userId, summarizeFactors(userId, demoFactorsFor(userId)));
+
+    const due = started + (SCAN_WALL_CLOCK_MS * completed) / Math.max(total, 1);
+    const wait = due - Date.now();
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+
+    progress?.update(completed, total, `Scanned ${completed}/${total} members`);
+    onProgress?.(completed, total);
+  }
+
+  progress?.complete();
+  return results;
 }
