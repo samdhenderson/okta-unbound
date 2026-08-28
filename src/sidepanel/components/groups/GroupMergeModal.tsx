@@ -12,6 +12,7 @@ import React, { useMemo, useState } from 'react';
 import Modal from '../shared/Modal';
 import Button from '../shared/Button';
 import LoadingSpinner from '../shared/LoadingSpinner';
+import AlertMessage, { type AlertMessageData } from '../shared/AlertMessage';
 import StatCard from '../overview/shared/StatCard';
 import type { GroupSummary } from '../../../shared/types';
 import type { MergePhase, MergeResults } from '../../hooks/useGroupMerge';
@@ -25,6 +26,13 @@ interface GroupMergeModalProps {
   plan: MergePlan | null;
   results: MergeResults | null;
   error: string | null;
+  /**
+   * Non-blocking notice for a run whose acting admin could not be confirmed, so
+   * the audit entries carry no actor (`D-013c`). The merge still runs.
+   */
+  actorNotice?: AlertMessageData | null;
+  /** Dismiss {@link GroupMergeModalProps.actorNotice}. */
+  onDismissActorNotice?: () => void;
   /** Load the preview for the chosen survivor + the remaining sources. */
   onPreview: (survivor: GroupSummary, sources: GroupSummary[]) => void;
   /** Execute the previewed plan. */
@@ -41,6 +49,8 @@ const GroupMergeModal: React.FC<GroupMergeModalProps> = ({
   plan,
   results,
   error,
+  actorNotice,
+  onDismissActorNotice,
   onPreview,
   onExecute,
   onClose,
@@ -90,6 +100,12 @@ const GroupMergeModal: React.FC<GroupMergeModalProps> = ({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Merge groups" size="lg" footer={footer}>
+      {/* The run was audited without an actor. Informational: it neither blocks
+          nor gates the wizard's steps (D-013c). */}
+      {actorNotice && (
+        <AlertMessage message={actorNotice} onDismiss={onDismissActorNotice} className="mb-4" />
+      )}
+
       {/* Step 1 — choose survivor */}
       {showSelect && (
         <div className="space-y-3">

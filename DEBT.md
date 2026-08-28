@@ -580,7 +580,15 @@ more expensive the day an audit viewer ships.
   Reuse what is already in `components/shared`; a new surface for this needs a
   reason. Ships with a story, axe-clean (ADR-0010/ADR-0014).
 - **Risk:** Low.
-- **Status:** open
+- **Resolution note:** the surface is `AlertMessage` (`warning` — a degraded
+  outcome, not a failure), driven by a new `useActorNotice` hook that owns the
+  copy and the state so all three flows say the same thing. It renders in
+  **two** places, not one: `RulesTab`'s existing alert stack for
+  activate/deactivate, and inside `RuleConsolidationModal` /`GroupMergeModal`
+  for the two wizard flows — those run behind an open modal, where a banner on
+  the tab underneath would never be seen. `noteActor` is pure state called after
+  `getCurrentUser()`; it never gates the write.
+- **Status:** done:#99
 - **Depends on:** `D-013b`
 
 ### D-014 · useRuleLifecycle re-implements CoreApi.getCurrentUser
@@ -1905,7 +1913,19 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   schema that keeps the rest of the page is likely the right shape here.
 - **Risk:** Low to fix, and it closes an ADR-0006 gap on a surface that renders
   access verdicts.
-- **Status:** open
+- **Resolution note:** `oktaGroupRuleSchema` needed no change — it is already
+  `.passthrough()` with only `id`/`name`/`status` required, and `parseOktaList`
+  already drops the offending row, keeps the page, and logs counts only. **The
+  gap was worse than this filing said:** a rule whose
+  `conditions.expression.value` is not a string made `formatRuleForDisplay`
+  throw, so one malformed row returned `{ success: false }` for the _whole_
+  rules load. The empty-page guard deliberately still reads pre-validation
+  `response.data.length`; using the validated count would let a page whose rows
+  were all dropped look like an empty final page and silently truncate the list.
+  Two of the five named consumers (`useBlastRadius`, `useUserComparison`) import
+  only `loadCachedGroupNames` from this module, not `fetchGroupRulesRequest` —
+  they consume a different export and are unaffected.
+- **Status:** done:#99
 - **Related:** `D-029b`, `D-038`, ADR-0006
 
 ### D-051 · Two always-on log calls pass a raw caught error
@@ -2224,8 +2244,154 @@ affects every scroll box in the app, on every platform.
   rather than assuming it does.
 - **Risk:** Low to change, but it is a one-line rule affecting every scroll box in
   the app, so land it alone and look at the narrow breakpoint.
-- **Status:** open
+- **Resolution note:** shipped on `.scrollable-list` only. The app scroll root
+  was looked at, as the item required, and **deliberately left alone**: it is
+  unstyled, so it keeps the platform scrollbar (an overlay bar on macOS, against
+  which `scrollbar-gutter` is spec'd as a no-op); where it is classic it is
+  ~15px and already overflowing in most states; and decisively,
+  `scrollbar-gutter` reserves inside the scroll container's padding box, so it
+  would inset every full-bleed sticky band inside the root — `ContextBar` and
+  `PageHeader` — leaving their background and bottom border ~15px short of the
+  panel edge as a permanent seam. 6px inside a bordered list card reads as
+  padding; 15px beside a white header band reads as a defect. The reflow is the
+  lesser artifact there.
+- **Status:** done:#99
 - **Related:** `D-053`, ADR-0044. **The reel works around this by setting
   `scrollbar-gutter: stable` in `SHOWCASE_CSS`, which is reel-side only and does
   nothing for real users.** When this lands, that rule becomes a harmless
-  restatement rather than a mask.
+  restatement rather than a mask. **Correction, found while implementing:** the
+  reel rule (now `.storybook/scripts/capture/stage.mjs:139`, not `SHOWCASE_CSS`)
+  targets **two** selectors. Its `.scrollable-list` half is indeed a harmless
+  restatement now. Its `[data-testid='app-scroll-root']` half is **not** — given
+  the decision above it stays reel-only, and therefore stays a mask. Defensible
+  on its own terms (the reel shoots at a fixed, wider viewport where a shifting
+  root on camera is unacceptable and the header-seam cost does not bite), but it
+  is a deliberate divergence now rather than a duplicate.
+
+### D-054 · `ScrollableList` still shifts 6px on load→loaded
+
+- **Category:** correctness
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/shared/ScrollableList.tsx` (the loading
+  branch and the empty branch, versus the scrolling branch at `:148`)
+- **Verified:** 2026-08-28 — found by the `D-053g` writer while implementing it.
+- **Problem:** `D-053g` reserved the scrollbar channel on `.scrollable-list`, but
+  `ScrollableList` puts that class **only** on its scrolling branch. Its loading
+  branch and its empty branch render `boxClasses('overflow-hidden')` without it,
+  so those boxes have no reserved gutter while the loaded box does — content
+  still jumps 6px the moment a spinner is replaced by rows, which is the exact
+  reflow `D-053g` exists to remove. The CSS fix cannot reach this from
+  `tailwind.css`, because the class is the hook.
+- **Done when:** The reserved gutter applies across all three branches, so the
+  box's content width does not change between loading, empty and loaded. Check
+  whether adding `scrollable-list` to the non-scrolling branches has any other
+  effect (they are `overflow-hidden`, so the `::-webkit-scrollbar` rules should
+  be inert) before assuming the one-word change is enough.
+- **Risk:** Low — but it is the remaining tail of `D-053g`, so verify against the
+  same story set that item used.
+- **Status:** open
+- **Related:** `D-053g`
+
+### D-055 · `formatRuleForDisplay` does unguarded string work on a field it does not validate
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/shared/ruleUtils.ts` (`formatRuleForDisplay`, the `.replace(…)`
+  around `:117`), `src/sidepanel/hooks/useOktaApi/groupDiscovery.ts` (a caller
+  that formats rules from its own source)
+- **Verified:** 2026-08-28 — found by the `D-050` writer; the throw was
+  reproduced as the pre-fix failure of that item's first new test.
+- **Problem:** `formatRuleForDisplay` types its input as an already-validated
+  `OktaGroupRule` and then performs unguarded string operations on
+  `rule.conditions.expression.value`. When that field is not a string the
+  function **throws**, and because it runs inside a `.map` over a whole page, one
+  bad row takes down the entire rules load rather than costing one row. `D-050`
+  closed the boundary on `fetchGroupRulesRequest`'s path, so that specific
+  entry is now safe — but the function is exported and reachable from at least
+  `groupDiscovery.ts`, which formats rules obtained its own way.
+- **Done when:** Every `formatRuleForDisplay` caller is **enumerated** (not
+  sampled — use the `okta-claim-check` skill) and either shown to validate
+  upstream, or the function is made to defend itself against a non-string
+  expression. A test pins whichever guarantee is chosen.
+- **Risk:** Low to investigate. The defect it protects against is a whole-surface
+  outage from a single malformed row, which is why this is P2 and not P3.
+- **Status:** open
+- **Related:** `D-050`
+
+### D-056 · `AlertMessage` hand-rolls two raw buttons inside `components/shared`
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/shared/AlertMessage.tsx:133` (the inline
+  action button), `:149` (the dismiss button)
+- **Verified:** 2026-08-28 — found by the `D-013c` writer; both confirmed
+  pre-existing and untouched by that diff.
+- **Problem:** `CLAUDE.md`'s hard rule is never to hand-roll a `<button>` —
+  import from the `components/shared` barrel. `AlertMessage` hand-rolls two, and
+  it **is** `components/shared`, so the component the rule exists to protect is
+  the one breaking it. `Button` and `IconButton` live in the same directory. The
+  dismiss button already carries `aria-label="Dismiss message"` and an `Icon`,
+  which is most of what `IconButton` would give it.
+- **Done when:** Both buttons come from the shared primitives, with
+  `AlertMessage`'s rendered output and public props unchanged (it has ~35 call
+  sites across `src/sidepanel/components/`, so this must be behaviour-preserving).
+  Existing tests and stories stay green without retargeting.
+- **Risk:** Low-medium — behaviour-preserving in intent, but the blast radius is
+  every alert in the app, so lean on the story suite.
+- **Status:** open
+
+### D-057 · `RulesTab`'s alert states cannot be reached by a story
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/sidepanel/components/RulesTab.tsx` (the alert stack),
+  `src/sidepanel/components/RulesTab.stories.tsx`
+- **Verified:** 2026-08-28 — found by the `D-013c` writer while adding the
+  actor-unavailable notice.
+- **Problem:** `RulesTab`'s error banner, and now the `D-013c` actor-unavailable
+  notice, are driven by internal hook state rather than props, so
+  `RulesTab.stories.tsx` cannot render either state. Two user-visible alert
+  states therefore have no story and no axe coverage, on a tab that does have a
+  story file. The two modal notices added by `D-013c` are prop-driven and **are**
+  covered; this is the one render site that is not.
+- **Done when:** The alert stack is reachable from a story — most likely by
+  extracting it into a prop-driven subcomponent — and both states ship an
+  axe-clean story (ADR-0010/ADR-0014). This is a refactor of how the tab gets its
+  alert state, not a copy change, which is why it was not folded into `D-013c`.
+- **Risk:** Low-medium — touches a large tab component; `RulesTab.tsx` is already
+  near the ~300-line bar, so extraction should reduce it rather than grow it.
+- **Status:** open
+- **Related:** `D-013c`
+
+### D-058 · Two modals hand-roll the eyebrow recipe `Eyebrow` exists to own
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/RuleConsolidationModal.tsx:151,162,186`,
+  `src/sidepanel/components/groups/GroupMergeModal.tsx:116` (the hand-rolled
+  eyebrow labels), `:127` (an off-scale `py-2.5`),
+  `src/sidepanel/components/shared/Eyebrow.tsx` (the primitive they should use)
+- **Verified:** 2026-08-28 — spotted by `ui-reviewer` while reviewing the
+  `D-013c` diff; both files confirmed **pre-existing** and untouched by that
+  change.
+- **Problem:** Four call sites across the two wizard modals build a section
+  eyebrow out of the `tracking-wider` recipe that `docs/design-system.md` bans in
+  favour of the shared `Eyebrow` component, which exists precisely so the
+  typography contract lives in one place. `GroupMergeModal.tsx:127` additionally
+  uses an off-scale `py-2.5`. Reported as advisory, not blocking, and
+  deliberately not folded into `D-013c`'s diff — that item added notice props to
+  these files and nothing else, and widening it would have broken the
+  one-concern-per-PR rule.
+- **Done when:** All four eyebrow labels render through `Eyebrow`, the `py-2.5`
+  moves onto the spacing scale, and both modals' existing stories stay green
+  without retargeting. Check whether the same recipe appears in other modals
+  before fixing only these two — enumerate, do not sample.
+- **Risk:** Low — presentational, behind two components that already have story
+  coverage.
+- **Status:** open
+- **Related:** `D-013c` (how it was found)

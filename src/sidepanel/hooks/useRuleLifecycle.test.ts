@@ -2,7 +2,7 @@
  * Tests for {@link useRuleLifecycle} — the security-sensitive audit path behind
  * rule activate/deactivate (`DEBT.md` D-004, D-013b).
  *
- * Three branches are pinned here:
+ * Four branches are pinned here:
  *
  * 1. Attribution comes from the facade's `getCurrentUser()`. A resolved admin is
  *    recorded verbatim; every `kind: 'unavailable'` answer is recorded as
@@ -14,6 +14,8 @@
  *    writes a `failed` audit entry without reloading the rule list.
  * 3. A thrown error surfaces its message and writes a `failed` audit entry with
  *    the placeholder group identifiers.
+ * 4. An unresolved actor also raises the non-blocking `actorNotice` so the admin
+ *    is told at the time — and the rule change still happens (`D-013c`).
  *
  * The Okta API (`useOktaApi`), the audit store, and the undo manager are fully
  * mocked; all identifiers are fake placeholders.
@@ -315,6 +317,55 @@ describe('useRuleLifecycle thrown error', () => {
     const entry = onlyAuditEntry();
     expect(entry.performedBy).toBeNull();
     expect(entry.actorResolution).toBe('unavailable');
+  });
+});
+
+describe('useRuleLifecycle actor-unavailable notice', () => {
+  // D-013c: the trail already stops lying (D-013a/b); these pin that the admin
+  // is *told* at the time, once, and that the telling never gates the write.
+  const NOTICE_TEXT =
+    "Couldn't confirm your signed-in identity. This action will be recorded without an actor.";
+
+  it('raises the notice and still performs the rule change when the actor is unavailable', async () => {
+    api.getCurrentUser.mockResolvedValue({ kind: 'unavailable', reason: 'no-email' });
+    const { result, reload, onError } = setup();
+
+    await act(async () => {
+      await result.current.activateRule(RULE_ID);
+    });
+
+    expect(result.current.actorNotice).toEqual({ text: NOTICE_TEXT, type: 'warning' });
+    // Non-blocking: the mutation ran, was audited, reloaded the list, and no
+    // error was surfaced — the notice is the only difference.
+    expect(api.activateGroupRule).toHaveBeenCalledWith(RULE_ID);
+    expect(onlyAuditEntry().result).toBe('success');
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('raises no notice when the actor resolved', async () => {
+    const { result } = setup();
+
+    await act(async () => {
+      await result.current.deactivateRule(RULE_ID);
+    });
+
+    expect(result.current.actorNotice).toBeNull();
+  });
+
+  it('clears the notice when the admin dismisses it', async () => {
+    api.getCurrentUser.mockResolvedValue({ kind: 'unavailable', reason: 'threw' });
+    const { result } = setup();
+
+    await act(async () => {
+      await result.current.activateRule(RULE_ID);
+    });
+    expect(result.current.actorNotice).not.toBeNull();
+
+    act(() => {
+      result.current.dismissActorNotice();
+    });
+    expect(result.current.actorNotice).toBeNull();
   });
 });
 

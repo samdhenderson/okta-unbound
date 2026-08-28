@@ -17,6 +17,153 @@ Entry format:
 
 ---
 
+## 2026-08-28 — three items shipped
+
+**Baseline:** green, all nine gates, run against `main` at `389f6e5` before any
+work. `type-check`; `lint` 0 errors / 155 warnings; `format:check`;
+`test:coverage`; `knip:circular`; `lint:control-chars` 957 files;
+`lint:cited-paths` 55 files; `test:storybook` 164 files / 1148 tests. `build` was
+not required — nothing in tonight's diff touches `manifest.json`,
+`vite.config.ts`, `src/background/**` or `src/content/**`. For the third entry
+running, `node_modules` was absent on a cold container and `npm ci` had to run
+before any gate meant anything. Worth noting how that presents: the first
+`type-check` failed with `Cannot find type definition file for 'chrome'`, and
+`lint` with `Cannot find package '@eslint/js'` — both read like config rot rather
+than a missing install, and `format:check` even produced a plausible-looking list
+of 8 "unformatted" files (a different resolved Prettier) that vanished after
+`npm ci`. **A red baseline on a cold container is not a red baseline until
+`node_modules` exists.**
+
+**Open PRs at step 2: zero.** No item ids claimed, no contended files, no
+three-PR stop, no branch collision. `gh` is still unavailable in this
+environment; the GitHub MCP tools stood in for it, which satisfies step 2's
+requirement to distinguish in-flight work from open work.
+
+**Read the previous entry before selecting, per its own request.** The 2026-08-27
+entry asked for that to become part of step 2, on the grounds that a documented
+refusal is as binding as a `claimed:` marker. Done, and it changed the pick — see
+`I-013` below.
+
+**Items worked:** `D-050`, `D-013c`, `D-053g`.
+
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/99
+
+**Branch:** `claude/stoic-gates-nsen7u` — harness-assigned, as `SESSION.md`
+step 2 anticipates. It counts as an unattended run's branch for the three-PR cap.
+
+**Backlog after:** 43 open / 87 total — 7 `IMPROVEMENTS.md` open (of 17), 36
+`DEBT.md` open (of 70), 7 gated (4 `blocked:`, 3 `research:awaiting-review`), 2
+`closed:`, plus tonight's 3 shipped. Four new items were filed, which is why the
+open count barely moves.
+
+_On the count._ The previous entry's method reproduces and the arithmetic stays
+continuous, but the jump needs explaining: it recorded 58 DEBT items, and this
+entry records 70. The gap is not drift. PR #98 (the reel) filed **eight** items
+with a status of its own — `D-052` plus `D-053a`–`D-053g` — after that entry was
+written; `D-053` itself is a parent header carrying no status, like `D-007`,
+`D-013` and `D-029`. 58 + 8 = 66, plus tonight's four = 70. Keep excluding the
+now-**four** parent headers when counting.
+
+**Notes:**
+
+_Selection._ `D-028` sorts to the top of P1 and was skipped for the **sixth**
+consecutive night, for the sixth time for the same reason: it is an audit against
+a real Okta org, which an unattended sandbox cannot reach. Three prior entries
+have now asked for it to be re-gated `blocked:needs-live-org`. Not doing it
+unilaterally — re-gating is Sam's call — but six nights have each spent the same
+paragraph reaching the same conclusion, and that is no longer a rounding error.
+**Concrete request: either re-gate it, or say in the item that the sandbox skip
+is expected, so a session can stop re-deriving it.**
+
+`I-013` sorted second and was skipped again, this time _before_ dispatching a
+writer rather than after. The previous entry's refusal (the item names the verb
+and where ADR-0039 puts it, but not what the create-rule form asks for — design
+content a reviewer could disagree with once the code exists, with nobody to take
+the go-ahead from) was read at step 2 and treated as binding. The ordering fix
+that entry proposed works.
+
+Also skipped, and worth Sam knowing why: **`D-007a`** and **`D-048`** both sort
+into the P2 band and are both genuinely valuable, but each changes an existing
+contract — `RequestResult` becoming a discriminated union in one case,
+`FormattedRule` gaining the exclusion list in the other. `CLAUDE.md`'s
+plan-and-approval gate covers exactly that, and an unattended session has nobody
+to take approval from. `D-007a` additionally would have collided with `D-050` at
+the type level, since `fetchGroupRulesRequest` reads `response.success`/`.data` —
+so they were not disjoint in the way their **Files** lists suggest. **Files lists
+under-detect contention when one item changes a type the other reads.**
+
+_Re-verification._ All three selected items carried a `Verified:` date inside 14
+days (`D-013c` 2026-08-24, the other two 2026-08-27), so the `okta-claim-check`
+re-check was not mandated. Each **Problem** was read against the tree before
+claiming; all three held, and `D-050`'s turned out to understate the defect.
+
+_`D-050` was worse than its filing._ The item described an ADR-0006 boundary gap —
+unvalidated data reaching a surface that renders access verdicts. True, but the
+sharper consequence is that it was a **whole-surface outage from one bad row**: a
+rule whose `conditions.expression.value` is not a string makes
+`formatRuleForDisplay` throw inside a `.map` over the page, so the entire rules
+load returned `{ success: false }`. That is now a dropped row instead of a dead
+tab. The underlying unguarded-string defect in `formatRuleForDisplay` is filed as
+`D-055` (P2) — `D-050` closed the one entry point, but the function is exported
+and `groupDiscovery.ts` formats rules from its own source.
+
+_The lead did not commit while a writer was live._ `CONVENTIONS.md`'s rule was
+followed, and it was tested: a stop-hook prompt to commit arrived while the
+`D-013c` writer still had uncommitted edits. Rather than commit blind, the
+tracked tree was snapshotted with `git stash create` + a throwaway tag first —
+which is strictly better than copying files aside, because it survives the
+`git reset --hard HEAD` that `lint-staged`'s failure path would run, and costs
+nothing. Recommend that as the standard move when a commit cannot wait: **snapshot
+with `git stash create`, then commit.** All three commits' hooks passed, so the
+net was never needed.
+
+_A `pgrep` self-match, again._ Three background waiter shells built as
+`until ! pgrep -f 'vitest'; do sleep …; done` matched **their own command line**
+and would have spun forever — the same `D-021` trap, in a new costume. `D-021`
+fixed the recipe for `pkill`; the failure mode belongs to `pgrep -f` generally.
+Anything that greps for a process by a string it also contains needs the
+`^[^ ]*node[^ ]* ` anchor, not just the `pkill` in the documented recipe. Reaped
+by pid; no real runner was touched.
+
+_Reviews._ `security-logging-reviewer` returned **nothing blocking** and
+confirmed the load-bearing claims rather than asserting them: that a row rejected
+by `parseOktaList` cannot reach a consumer, that `parseOktaList`'s drop logging
+emits `{ context, dropped, total }` and never row content, and that `noteActor`
+is pure state with no early return, throw, or confirm gated on `actor.kind` in
+any of the three hooks. It flagged one thing it could not verify without Bash —
+that the audit-entry construction is textually unchanged — and was right to flag
+rather than assume. **Closed by the lead:** `git diff origin/main...HEAD` over the
+three hooks and `GroupsTab.tsx` shows zero changed lines in any
+`performedBy`/`actorResolution` expression; every change is additive.
+
+Both reviewers again ran **without Bash** in this environment, so they reviewed
+current file state rather than a diff. That is now a three-night pattern and it
+has a real cost — last night it produced a false positive and a misattribution.
+Both were briefed this time to label every finding introduced-by-this-diff versus
+pre-existing, which worked. **Worth Sam's attention: giving these two agents Bash,
+or having the lead paste the diff into the prompt, would remove a recurring
+source of reviewer error.**
+
+_Four new items filed_ (`D-054`–`D-057`), none folded into tonight's diff.
+`D-055` is the one worth Sam's eye: a single malformed rule row can still take
+down any surface that formats rules from a source `D-050` did not close.
+`D-054` is the remaining tail of `D-053g` — `ScrollableList` puts the
+`scrollable-list` class only on its scrolling branch, so the loading and empty
+branches have no reserved gutter and content still jumps 6px when a spinner is
+replaced by rows. The CSS fix cannot reach it, because the class is the hook.
+
+_Scope beyond Files lists, disclosed._ `D-013c`'s **Files** list said
+"`src/sidepanel/components/` (the existing notification surface — find it, do not
+add one), plus the three hooks". The surface is `AlertMessage`, and it needed
+**two** render sites, not one: `RulesTab`'s alert stack, and inside
+`RuleConsolidationModal`/`GroupMergeModal`, because those two operations run
+behind an open modal where a banner on the tab underneath is invisible. That
+pulled in `GroupsTab.tsx` (two lines of wiring) and both modal components. Called
+out because it is more files than the item's list implies, for a reason the item
+did not anticipate.
+
+---
+
 ## 2026-08-27 — three items shipped
 
 **Baseline:** green, all nine gates, run against `main` at `1dd374b` before any

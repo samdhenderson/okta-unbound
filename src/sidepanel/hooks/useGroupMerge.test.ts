@@ -7,7 +7,8 @@
  * `useRuleLifecycle` uses — and that an actor the facade could not resolve is
  * recorded on both entries as `performedBy: null` /
  * `actorResolution: 'unavailable'`, never a placeholder identity and never a
- * reason to abort the merge (`D-013`/`D-013b`). The Okta API (`useOktaApi`),
+ * reason to abort the merge (`D-013`/`D-013b`) — but is surfaced to the admin at
+ * the time as a non-blocking `actorNotice` (`D-013c`). The Okta API (`useOktaApi`),
  * the progress context, the audit store, and the undo manager are fully mocked;
  * the pure `planGroupMerge` runs for real.
  */
@@ -119,5 +120,49 @@ describe('useGroupMerge audit attribution', () => {
     // The merge itself still completed — an unnamed actor is a labelled gap in
     // the trail, not a reason to refuse the operation (D-013).
     expect(result.current.phase).toBe('done');
+  });
+});
+
+describe('useGroupMerge actor-unavailable notice', () => {
+  // D-013c: the admin is told, once and non-blockingly, that the merge they just
+  // ran was recorded without an actor.
+  const NOTICE_TEXT =
+    "Couldn't confirm your signed-in identity. This action will be recorded without an actor.";
+
+  it('raises the notice and still merges when the actor is unavailable', async () => {
+    api.getCurrentUser.mockResolvedValue({ kind: 'unavailable', reason: 'no-email' });
+
+    const result = await runMerge();
+
+    expect(result.current.actorNotice).toEqual({ text: NOTICE_TEXT, type: 'warning' });
+    // Non-blocking: the member copy and the source emptying both ran, and the
+    // results are the same as with a resolved actor.
+    expect(api.makeApiRequest).toHaveBeenCalledTimes(1);
+    expect(api.removeUserFromGroup).toHaveBeenCalledTimes(1);
+    expect(result.current.phase).toBe('done');
+    expect(result.current.results).toEqual({
+      copied: 1,
+      copyFailed: 0,
+      removed: 1,
+      removeFailed: 0,
+    });
+  });
+
+  it('raises no notice when the actor resolved', async () => {
+    const result = await runMerge();
+
+    expect(result.current.actorNotice).toBeNull();
+  });
+
+  it('clears the notice when the wizard is reset', async () => {
+    api.getCurrentUser.mockResolvedValue({ kind: 'unavailable', reason: 'failed' });
+
+    const result = await runMerge();
+    expect(result.current.actorNotice).not.toBeNull();
+
+    act(() => {
+      result.current.reset();
+    });
+    expect(result.current.actorNotice).toBeNull();
   });
 });

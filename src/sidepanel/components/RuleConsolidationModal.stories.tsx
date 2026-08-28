@@ -6,6 +6,7 @@ import type {
   ConsolidationResult,
   RetireRuleRef,
 } from '../hooks/useRuleConsolidation';
+import { ACTOR_UNAVAILABLE_NOTICE } from '../hooks/useActorNotice';
 
 /** A search hit used by the add-target group-picker step. */
 const mockGroupHits = [
@@ -78,6 +79,11 @@ const meta = {
     preview: { description: 'The dry-run diff of the resulting rule, or null before a preview.' },
     result: { description: 'The outcome of a completed run, or null until done.' },
     error: { description: 'Failure message to surface, or null.' },
+    actorNotice: {
+      description:
+        'Non-blocking notice for a run whose acting admin could not be confirmed, so the audit entry carries no actor (D-013c).',
+    },
+    onDismissActorNotice: { description: 'Dismiss the actor-unavailable notice.' },
     searchGroups: { description: 'Search groups by name (add-target select step).' },
     onChooseGroup: { description: 'Choose the group to add.' },
     onExecute: { description: 'Execute the consolidation.' },
@@ -129,4 +135,18 @@ export const Done: Story = {
 /** The consolidation failed and surfaced an error message. */
 export const ErrorState: Story = {
   args: { phase: 'error', error: 'Failed to create the consolidated rule: rate limited.' },
+};
+
+/**
+ * A completed run whose acting admin could not be confirmed (`D-013c`): the
+ * consolidation went through and is audited, with the entry recording no actor.
+ * The notice is informational — it never blocks, confirms, or aborts the run.
+ */
+export const ActorUnavailable: Story = {
+  args: {
+    phase: 'done',
+    result: mockResult,
+    actorNotice: ACTOR_UNAVAILABLE_NOTICE,
+    onDismissActorNotice: fn(),
+  },
 };

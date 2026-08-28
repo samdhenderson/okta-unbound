@@ -7,7 +7,8 @@
  * instead of a direct `chrome.tabs.sendMessage`. The four-stage pipeline was ported
  * verbatim from the content script's `ruleHandlers.ts` (since deleted — this module
  * is the sole implementation):
- *   1. paginate `/api/v1/groups/rules?limit=200` (follow `Link` rel="next");
+ *   1. paginate `/api/v1/groups/rules?limit=200` (follow `Link` rel="next"),
+ *      validating every page against `oktaGroupRuleSchema` (ADR-0006);
  *   2. label referenced group ids with names from the org snapshot (no API calls;
  *      unknown ids fall back to the id in the display — ADR-0040);
  *   3. detect attribute/target conflicts between active rules (O(n²));
@@ -23,6 +24,7 @@ import { nextPageUrl } from './useOktaApi/utilities';
 import { orgSnapshotStore } from '../../shared/snapshot/orgSnapshotStore';
 import type { RawOktaGroup } from '../components/groups/groupSummary';
 import { createLogger } from '../../shared/utils/logger';
+import { oktaGroupRuleSchema, parseOktaList } from '../../shared/schemas/okta';
 
 const log = createLogger('fetchGroupRulesRequest');
 
@@ -108,6 +110,10 @@ export async function loadCachedGroupNames(
  *   connected org, required for step 2 to resolve anything at all.
  * @returns `{ success: true, rules, stats, conflicts }`; a failed rules page is
  *   returned verbatim, and a thrown error becomes `{ success: false, error }`.
+ * @remarks Every page is validated with `oktaGroupRuleSchema` through
+ *   `parseOktaList` (ADR-0006). Validation is *lenient*: a malformed row is
+ *   dropped rather than failing the load, so `rules`, `rawRules` and `stats`
+ *   describe only the rows Okta returned in a shape this extension understands.
  */
 export async function fetchGroupRulesRequest(
   makeApiRequest: MakeApiRequest,
@@ -125,9 +131,22 @@ export async function fetchGroupRulesRequest(
       if (!response.success) {
         return response;
       }
-      const page: OktaGroupRule[] = response.data || [];
-      rules = rules.concat(page);
-      nextUrl = nextPageUrl(nextUrl, response.headers?.link, page.length);
+      // Validated at the response boundary (ADR-0006), mirroring
+      // `ruleImpact.fetchRawRules`: `parseOktaList` is lenient, so a row that
+      // fails `oktaGroupRuleSchema` is dropped and counted in a single warning
+      // (counts only, never the row) while the rest of the page survives.
+      // Rule expressions and target group ids are end-user-controllable
+      // (`docs/security.md`), and five surfaces render what this returns.
+      const page = parseOktaList(oktaGroupRuleSchema, response.data, 'GET /api/v1/groups/rules');
+      // The lenient schema `.passthrough()`es fields it does not declare
+      // (`created`, `lastUpdated`, `type`, …), so validated rows still carry the
+      // domain type's required audit fields at runtime — hence the widen through
+      // `unknown`, the same one `ruleImpact` documents.
+      rules = rules.concat(page as unknown as OktaGroupRule[]);
+      // The empty-page loop guard reads what Okta *returned*, not what survived
+      // validation: a page whose rows were all dropped is not the last page.
+      const rowsReturned = Array.isArray(response.data) ? response.data.length : 0;
+      nextUrl = nextPageUrl(nextUrl, response.headers?.link, rowsReturned);
     }
 
     log.debug('Fetched rules (total across all pages)', { count: rules.length });

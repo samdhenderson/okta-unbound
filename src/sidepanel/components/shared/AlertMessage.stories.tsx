@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import AlertMessage from './AlertMessage';
+import { ACTOR_UNAVAILABLE_NOTICE } from '../../hooks/useActorNotice';
 
 /** Inline alert/notification banner with status icon and optional dismiss + action. */
 const meta = {
@@ -100,6 +101,17 @@ export const DangerWithAction: Story = {
       variant: 'danger',
     },
   },
+};
+
+/**
+ * The audited-without-an-actor notice (`D-013c`): an operation whose signed-in
+ * admin could not be resolved still goes through, and says so once,
+ * non-blockingly. `warning`, not `danger` — the write succeeded; only its
+ * attribution is missing. The copy is shared from `useActorNotice` so the rules,
+ * consolidation, and merge flows all say the same thing.
+ */
+export const ActorUnavailable: Story = {
+  args: { message: ACTOR_UNAVAILABLE_NOTICE },
 };
 
 /** Without dismiss button. */
