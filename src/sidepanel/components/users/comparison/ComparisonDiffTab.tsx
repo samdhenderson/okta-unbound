@@ -324,9 +324,7 @@ const SideCell: React.FC<{
         className={`${cellClasses} border-dashed border-neutral-200 text-neutral-400`}
         title={`${userName} does not have this`}
       >
-        <span aria-hidden="true" className="shrink-0">
-          —
-        </span>
+        <Icon type="minus" size="sm" aria-hidden="true" className="shrink-0" />
         <span className="truncate">{userName}</span>
       </span>
     );

@@ -62,7 +62,7 @@ const remedyPresentation: Record<AccessRemedy, RemedyPresentation> = {
   'blocked-by-attribute': {
     heading: 'Fix a profile attribute',
     description:
-      'A rule feeds this group and a clause that was actually checked failed. Change the profile value — or the rule.',
+      'A rule feeds this group and a clause that was actually checked failed. Change the profile value, or the rule.',
     icon: 'alert',
     groupClass: 'border-warning-light bg-warning-light',
     iconClass: 'text-warning',
@@ -78,7 +78,7 @@ const remedyPresentation: Record<AccessRemedy, RemedyPresentation> = {
   'blocked-by-group-membership': {
     heading: 'Remove a blocking membership',
     description:
-      'A rule feeds this group but excludes members of certain other groups, and this user is in one of them. No profile edit or added group closes it — the membership has to go.',
+      'A rule feeds this group but excludes members of certain other groups, and this user is in one of them. No profile edit or added group closes it. The membership has to go.',
     icon: 'hand',
     // The danger palette, matching `excluded-by-rule`: this IS an exclusion,
     // expressed through a group membership rather than a people list.
@@ -104,7 +104,7 @@ const remedyPresentation: Record<AccessRemedy, RemedyPresentation> = {
   'app-managed': {
     heading: 'Assign the application',
     description:
-      'An app masters this group and manages its own members. No profile edit or manual add reproduces it — assign the app instead.',
+      'An app masters this group and manages its own members. No profile edit or manual add reproduces it. Assign the app instead.',
     icon: 'app',
     groupClass: 'border-neutral-200 bg-neutral-50',
     iconClass: 'text-neutral-500',
@@ -112,7 +112,7 @@ const remedyPresentation: Record<AccessRemedy, RemedyPresentation> = {
   'cannot-determine': {
     heading: 'Needs investigation',
     description:
-      'We could not work these out. Nothing here is known to be wrong — check them before you act.',
+      'We could not work these out. Nothing here is known to be wrong, so check them before you act.',
     icon: 'minus',
     groupClass: 'border-neutral-200 bg-neutral-50',
     iconClass: 'text-neutral-500',
