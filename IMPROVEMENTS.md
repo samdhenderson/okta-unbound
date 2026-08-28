@@ -539,3 +539,102 @@ block says they mean — same vocabulary, one definition, defined there.
   with a real contrast check rather than by eye. Raised by `ui-reviewer`.
 - **Status:** open
 - **Related:** `I-003` (created all three), `I-001`, `I-015`, `I-016`, `D-015`
+
+### I-018 · A ⌘K that works before you have clicked into the panel
+
+- **Category:** ux
+- **Priority:** P2
+- **Size:** M
+- **Files:** `docs/adr/0046-a-keyboard-route-into-the-panel.md` (to be created);
+  read-only for reference: `src/sidepanel/hooks/useCommandPalette.ts`,
+  `src/sidepanel/components/TabJumpPalette.tsx`, `manifest.json`
+- **Verified:** 2026-08-28 — `useCommandPalette` registers a plain `window`
+  keydown inside the side-panel document; `manifest.json` has no `commands` key.
+- **Problem:** The ⌘K palette is unreachable in the situation it exists for.
+  Its listener lives in the side-panel document, so the chord only lands once
+  you have already clicked into the panel; pressed while focus is in the Okta
+  page, Chrome takes it for the omnibox. Home's jump bar softens this — it is a
+  real autofocused input on a real tab — but the _shortcut_ is still a control
+  that does nothing from the place a person would use it.
+
+  The fix is a `manifest.json` `commands` entry, which needs an ADR and Sam's
+  explicit review: it is a new permission-shaped surface, it can collide with a
+  user's own bindings, and Chrome's four-shortcut budget per extension makes it
+  a decision about which single chord is worth spending.
+
+- **Done when:** A Proposed-status ADR exists under `docs/adr/` covering the
+  chord, the collision story, and what happens when the panel is closed. **Zero
+  files under `src/`.**
+- **Risk:** n/a — research only.
+- **Status:** research:awaiting-review
+- **Related:** the Home tab program (which made the jump bar the primary route)
+
+### I-019 · MFA coverage for a group, from Home
+
+- **Category:** feature-completeness
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/sidepanel/components/home/ReportsCard.tsx`,
+  `src/sidepanel/components/home/homeReports.ts`,
+  `src/sidepanel/hooks/useHomeReports.ts`,
+  `src/sidepanel/components/groups/detail/GroupDetailView.tsx` (`autoAnalyze`),
+  `src/sidepanel/components/GroupsTab.tsx`, `src/sidepanel/App.tsx`
+- **Verified:** 2026-08-28 — the Home reports shipped with two rows; this third
+  one was deliberately left out, not overlooked.
+- **Problem:** The third report the Home design names is _MFA coverage for a
+  group_: pick a group, and see how much of it has a factor enrolled. Unlike the
+  two that shipped it is **not free** — it is a per-member factor scan — so it
+  is a scoped, opt-in launcher rather than a number on a row: choose a group
+  from the snapshot (zero requests), then land on that group's Insights pane
+  with `useMemberMfaScan` ready but still not auto-run.
+
+  The reason it was cut is plumbing, not doubt about the feature.
+  `GroupDetailView.autoAnalyze` is a boolean doing two jobs at once: it triggers
+  the member-source analysis _and_ picks the initial pane. Landing on Insights
+  needs it generalised into `initialPane?: GroupDetailTab`, and that request has
+  to thread Home → `App` → `GroupsTab` → `GroupDetailView`. That is a contract
+  change across four files and belongs in its own commit.
+
+- **Done when:** `autoAnalyze` is widened to `initialPane` without changing what
+  a plain drill-in does (`GroupDetailView.test.tsx` already pins both the
+  `autoAnalyze` landing and the budget-based auto-load landing — neither may
+  move), a group chooser expands in place in `ReportsCard` reading the groups
+  snapshot rather than searching Okta per keystroke, and the scan still never
+  auto-runs.
+- **Risk:** Medium — the `initialPane` widening touches a component four
+  surfaces mount.
+- **Status:** open
+- **Related:** the Home reports commit, ADR-0018
+
+### I-020 · Home's reports as Export Engine descriptors
+
+- **Category:** feature-completeness
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/sidepanel/export/types.ts`,
+  `src/sidepanel/export/descriptors/`, `src/sidepanel/export/registry.ts`,
+  `src/sidepanel/components/home/ReportsCard.tsx`,
+  `src/sidepanel/components/home/homeReports.ts`, `src/sidepanel/App.tsx`
+  (`handleNavigateToExport`)
+- **Verified:** 2026-08-28 — the reports ship as expand-in-place only; the
+  preview caps at 25 and says so, with no route to the rest.
+- **Problem:** An opened report shows its first 25 findings and states that it
+  is truncating. There is nowhere to send someone who wants all 137, and no way
+  to get the list out of the panel — which is exactly what an admin acting on
+  "empty groups nothing fills" needs.
+
+  The Export tab already solves both. It is descriptor-driven
+  (`EntityExport`), `App.tsx` already owns the `ExportRequest` route into it,
+  and CSV escaping is already handled (`csvUtils.escapeCSV`). The work is
+  deciding what a report-shaped descriptor is: today every descriptor fetches
+  from an `endpoint`, and these produce their rows from a **local join** over
+  the org snapshot, with no endpoint at all. That is a new `EntityContextMode`
+  or a new row source, and it is a design decision rather than a new file.
+
+- **Done when:** A report can be opened in the Export tab pre-scoped, its
+  columns come from the same descriptor the preview reads, and the honesty rules
+  survive the trip — a report whose collections cannot support a count must not
+  become an export that quietly ships a partial list.
+- **Risk:** Medium — it widens a contract every existing descriptor implements.
+- **Status:** open
+- **Related:** `I-019`, ADR-0030, ADR-0040

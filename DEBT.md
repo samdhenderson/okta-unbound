@@ -2395,3 +2395,142 @@ affects every scroll box in the app, on every platform.
   coverage.
 - **Status:** open
 - **Related:** `D-013c` (how it was found)
+
+### D-059 · `handleGetAppInfo` fetches the app on every app page, even when the DOM already answered
+
+- **Category:** perf
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/content/index.ts:190-208` (the unconditional fetch),
+  `src/content/groupHandlers.ts:46-62` (the DOM-first pattern to mirror),
+  `src/sidepanel/hooks/useOktaPageContext.ts` (the caller)
+- **Verified:** 2026-08-28 — read at the commit that removed the Overview tab;
+  the fetch is issued whether or not `extractAppNameFromPage()` returned a name.
+- **Problem:** `handleGetAppInfo` scrapes the name from the DOM and then issues
+  `GET /api/v1/apps/{id}` regardless, using the response only to fill a name it
+  usually already has. `handleGetGroupInfo` next door does the opposite and
+  correct thing: it fetches **only** when the DOM came up empty.
+
+  This was harmless while `useOktaPageContext` was gated to the active Overview
+  tab. That tab is gone and the hook is now the `ContextBar` masthead's feed,
+  gated on `!isPinned` alone — so an admin browsing app pages now pays one
+  request per app page, on every tab, forever. Accepted knowingly when the
+  re-gate landed, and filed here rather than folded into that commit.
+
+  **The nuance that makes this not a one-line change:** the API response also
+  supplies `appLabel`, which the DOM cannot. A naive "skip the fetch when the DOM
+  gave a name" drops the label. Decide deliberately whether `appLabel` is worth a
+  request on every app page — `AppInfo.appLabel` is optional, and its consumers
+  should be enumerated before it is quietly stopped being populated.
+
+- **Done when:** The app fetch is conditional in the same shape
+  `groupHandlers.ts` uses, `src/content/index.test.ts`'s `getAppInfo` block gains
+  a case proving the request is **not** issued when the DOM supplies a name, and
+  whatever is decided about `appLabel` is stated in the handler's doc comment
+  rather than left to be rediscovered.
+- **Risk:** Low — one handler, already covered by `content/index.test.ts`.
+- **Status:** open
+- **Related:** the Overview-tab removal (which promoted this from harmless to
+  per-page), `D-007a`
+
+### D-060 · Can `/api/v1/apps` report group assignments, or must the snapshot fan out?
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** M
+- **Files:** `src/shared/snapshot/snapshotSync.ts` (`APP_GROUPS_SPEC`,
+  `pushEnabledAppShards`), `src/sidepanel/components/apps/appFilters.ts`
+  (`pushesNoGroups` and the long doc explaining the narrowing),
+  `src/sidepanel/components/groups/ruleOrphans.ts` (`PUSH_APPS_ONLY`),
+  `src/sidepanel/hooks/useOrgFigures.ts` (the "pushes nothing" finding)
+- **Verified:** 2026-08-28 — `APP_GROUPS_SPEC.shards` walks
+  `/api/v1/apps/{id}/groups` for group-push apps only; nothing in the repo has
+  tested whether the question can be answered more cheaply.
+- **Problem:** The `appGroups` collection is a fan-out: one listing per
+  push-enabled app. Everything built on it therefore answers a **narrower**
+  question than the one an admin asks. "Apps with no group assigned" ships as
+  "Push apps pushing nothing"; the app-access report carries `PUSH_APPS_ONLY`;
+  and for any app outside that set an absent assignment means _nobody asked_,
+  not _nothing is assigned_.
+
+  The narrowing is honest but may be unnecessary. If `GET /api/v1/apps` supports
+  an `expand` that returns each app's group assignments — or if any single
+  listing answers the same question — the whole fan-out collapses to one walk
+  and three surfaces widen at once. Nobody has checked; the current shape was
+  chosen because the fan-out was the only route _known_, not because it was
+  compared against an alternative.
+
+- **Done when:** The `okta-api` skill and Okta's own docs are checked for an
+  `expand` (or any other single-listing route) that yields app→group
+  assignments, and the finding is written down either way. If one exists,
+  `APP_GROUPS_SPEC` loses its shard provider and `pushesNoGroups` becomes a real
+  "no group assigned"; if none does, `PUSH_APPS_ONLY` and `appFilters.ts`'s doc
+  get a line citing this item so the next reader does not re-open the question.
+- **Risk:** Medium — a widened filter changes what three shipped surfaces claim,
+  so it needs the honesty rules re-checked, not just the query swapped.
+- **Status:** open
+- **Related:** ADR-0040, `I-012`
+
+### D-061 · A rule can point at a group that no longer exists, and nothing says so
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** M
+- **Files:** `src/shared/rules/groupRuleIndex.ts`,
+  `src/sidepanel/components/groups/ruleOrphans.ts` (the sibling module this
+  would join), `src/sidepanel/components/RuleCard.tsx`
+- **Verified:** 2026-08-28 — noticed while building the Home reports; the
+  snapshot holds both collections, so the join is free and simply is not made.
+- **Problem:** `actions.assignUserToGroups.groupIds` is a list of ids Okta does
+  not validate against the group inventory on read. A rule whose target group
+  was deleted still lists it, still shows as `ACTIVE`, and does nothing — and
+  the panel renders it exactly like a working rule. The org snapshot already
+  holds `groups` and `rules`, so "target ids with no matching group" is a set
+  difference over rows on disk: **zero requests.**
+
+  The honesty rule from the Home reports applies unchanged and is the reason
+  this is not a five-line change: groups is read _negatively_ here (a missing id
+  is only meaningful if the group walk finished), so the finding must be
+  suppressed entirely unless that collection is `complete`. Reusing
+  `resolveCount`'s `gates` is the intended shape.
+
+- **Done when:** The join lives beside the others in `ruleOrphans.ts` with its
+  own unit cases, an incomplete group walk suppresses it, and the rule surface
+  says which target is missing rather than rendering a dead rule as a live one.
+- **Risk:** Low to compute, medium to present — claiming a rule is broken is a
+  strong claim, and it must not be made off a half-read group list.
+- **Status:** open
+- **Related:** `D-060`, ADR-0040 §7
+
+### D-062 · Two context engines probe the same page twice on every navigation
+
+- **Category:** perf
+- **Priority:** P2
+- **Size:** M
+- **Files:** `docs/adr/0047-one-context-engine.md` (to be created); read-only for
+  reference: `src/sidepanel/hooks/useOktaTabContext.ts`,
+  `src/sidepanel/hooks/useGroupContext.ts`,
+  `src/sidepanel/hooks/useOktaPageContext.ts`, `src/sidepanel/App.tsx`
+- **Verified:** 2026-08-28 — both hooks are mounted in `App` and both are now
+  always-on; each sends its own `getOktaOrigin` plus its own entity probes on
+  every navigation.
+- **Problem:** `App` runs two independent `useOktaTabContext` instances.
+  `useGroupContext` feeds every tab's `targetTabId`/`oktaOrigin`;
+  `useOktaPageContext` feeds the `ContextBar` masthead. They have always
+  overlapped, but the overlap used to be bounded because the page hook was gated
+  to the active Overview tab. Removing that tab made it always-on, so the
+  duplication is now paid on **every** navigation rather than on some of them.
+
+  Folding one into the other would roughly halve probe traffic. It is
+  architecturally significant — it changes what feeds nine tabs and the
+  masthead, and the two hooks have different failure semantics today (one
+  latches `error`, the other falls back to `admin`) — so it is a proposal
+  first.
+
+- **Done when:** A Proposed-status ADR exists under `docs/adr/` naming the merged
+  hook's shape, what happens to the two failure semantics, and how a pin
+  interacts with a single engine. **Zero files under `src/`.**
+- **Risk:** n/a — research only.
+- **Status:** research:awaiting-review
+- **Related:** `D-059` (the other traffic cost the re-gate exposed), ADR-0018,
+  ADR-0026
