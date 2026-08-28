@@ -410,7 +410,10 @@ export const OrgFiguresAreFree: Story = {
     // The findings and the totals caption both come out of rows already on
     // disk, so a warm org paints the whole card without issuing a request.
     await expect(
-      await canvas.findByRole('button', { name: /Groups with no members/ }),
+      await canvas.findByRole('button', {
+        name: 'Open the filtered list',
+        description: /Groups with no members/,
+      }),
     ).toBeInTheDocument();
     await expect(await canvas.findByRole('button', { name: '2 groups' })).toBeInTheDocument();
     await waitFor(() => expect(syncRequests).toBe(0));

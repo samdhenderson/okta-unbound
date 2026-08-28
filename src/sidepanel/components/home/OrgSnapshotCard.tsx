@@ -38,11 +38,10 @@
  */
 import React from 'react';
 import Eyebrow from '../shared/Eyebrow';
-import Button from '../shared/Button';
 import Icon from '../shared/Icon';
 import IconButton from '../shared/IconButton';
-import ListRow from '../shared/ListRow';
 import Skeleton from '../shared/Skeleton';
+import StretchedButton from '../shared/StretchedButton';
 import { getRelativeTime } from '../../../shared/utils/dateFormat';
 import type { ListViewRequest, ListViewTab } from '../../listViewRequest';
 import type { OrgBox, OrgSubCount } from './orgFigures';
@@ -72,73 +71,99 @@ export interface OrgSnapshotCardProps {
  * never twitches between a `4` and a `214` — and so an em dash occupies the same
  * space a number would, which is what lets a missing value sit in the list
  * without the row looking broken.
+ *
+ * A missing value dims to `text-neutral-400` at normal weight: the row is still
+ * there and still readable, but nothing about it competes with the findings that
+ * carry a real number.
  */
 const FigureNumber: React.FC<{ value: number | null }> = ({ value }) => (
   <span
     aria-hidden={value === null ? 'true' : undefined}
-    className="w-[2.6ch] shrink-0 text-right text-xl font-semibold tabular-nums text-neutral-900"
+    className={`w-[2.6ch] shrink-0 text-right text-xl leading-tight tabular-nums ${
+      value === null ? 'font-normal text-neutral-400' : 'font-semibold text-neutral-900'
+    }`}
   >
     {value === null ? '—' : value.toLocaleString()}
+  </span>
+);
+
+/** The two lines beside the number: the finding, and what it is out of. */
+const FindingLines: React.FC<{ subCount: OrgSubCount; id: string }> = ({ subCount, id }) => (
+  <span className="flex min-w-0 flex-1 flex-col gap-px">
+    <span
+      id={id}
+      className={`text-sm ${
+        subCount.value === null ? 'font-medium text-neutral-600' : 'font-semibold text-neutral-900'
+      }`}
+    >
+      {subCount.label}
+    </span>
+    {subCount.note && (
+      <span
+        className={`text-xs ${
+          subCount.status === 'partial' ? 'text-warning-text' : 'text-neutral-600'
+        }`}
+      >
+        {subCount.note}
+      </span>
+    )}
   </span>
 );
 
 /**
  * One finding row.
  *
- * A control when it has a number to stand behind, and a plain row when it does
- * not.
+ * A flush `<li>` with no border of its own — the separators belong to the
+ * parent's `divide-y divide-neutral-100`, which is ADR-0029's second sanctioned
+ * pattern for a dense list that reads as one table-like surface rather than a
+ * stack of cards. A per-row `ListRow` would draw a card border inside a card
+ * border; a per-row `border-t` + `first:border-t-0` is the same idea spelled the
+ * way that ADR bans.
+ *
+ * Activation is a {@link StretchedButton} covering the row rather than a
+ * `<button>` wrapping its content, so the row keeps flush padding and no button
+ * chrome. `describedBy` points at this row's own finding text, so every overlay
+ * announcing "Open the filtered list" is still distinguishable.
  */
 const Finding: React.FC<{
   subCount: OrgSubCount;
   onOpen: (request: ListViewRequest) => void;
 }> = ({ subCount, onOpen }) => {
+  const labelId = `org-finding-${subCount.key}`;
+
   if (subCount.status === 'reading') {
     return (
-      <ListRow density="compact">
+      <li className="px-3 py-2.5">
         <Skeleton variant="text" size="sm" width="w-3/4" label={`Reading ${subCount.label}`} />
-      </ListRow>
+      </li>
     );
   }
 
-  const lines = (
-    <span className="min-w-0 flex-1">
-      <span className="block text-sm font-semibold text-neutral-900">{subCount.label}</span>
-      {subCount.note && (
-        <span
-          className={`block text-xs ${
-            subCount.status === 'partial' ? 'text-warning-text' : 'text-neutral-600'
-          }`}
-        >
-          {subCount.note}
-        </span>
-      )}
-    </span>
-  );
-
   if (subCount.value === null) {
+    // Recessed rather than removed. A collection that was never read has no
+    // findings, so dropping the row would make "nothing to fix" and "nothing
+    // known" look identical — and it is not a control, because a link into a
+    // list that would disagree with the figure is the dead control ADR-0039
+    // bans, wearing a different hat.
     return (
-      <ListRow density="compact">
-        <span className="flex items-center gap-3">
-          <FigureNumber value={null} />
-          {lines}
-        </span>
-      </ListRow>
+      <li className="flex items-start gap-2.5 bg-neutral-50 px-3 py-2.5">
+        <FigureNumber value={null} />
+        <FindingLines subCount={subCount} id={labelId} />
+      </li>
     );
   }
 
   return (
-    <ListRow
-      as="button"
-      density="compact"
-      onClick={() => onOpen(subCount.request)}
-      ariaLabel={`${subCount.value.toLocaleString()} ${subCount.label} — open the filtered list`}
-    >
-      <span className="flex items-center gap-3">
-        <FigureNumber value={subCount.value} />
-        {lines}
-        <Icon type="chevron-right" size="xs" className="shrink-0 text-neutral-400" />
-      </span>
-    </ListRow>
+    <li className="relative flex items-start gap-2.5 px-3 py-2.5 transition-colors duration-(--dur-instant) hover:bg-neutral-50">
+      <StretchedButton
+        label="Open the filtered list"
+        describedBy={labelId}
+        onClick={() => onOpen(subCount.request)}
+      />
+      <FigureNumber value={subCount.value} />
+      <FindingLines subCount={subCount} id={labelId} />
+      <Icon type="chevron-right" size="xs" className="mt-1.5 shrink-0 text-neutral-400" />
+    </li>
   );
 };
 
@@ -182,21 +207,35 @@ const OrgSnapshotCard: React.FC<OrgSnapshotCardProps> = ({
         </IconButton>
       </div>
 
-      <div className="space-y-1">
+      <ul className="divide-y divide-neutral-100 overflow-hidden rounded-md border border-neutral-200 bg-white">
         {findings.map((subCount) => (
           <Finding key={subCount.key} subCount={subCount} onOpen={onOpenListView} />
         ))}
-      </div>
+      </ul>
 
       {totals.length > 0 && (
-        <p className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-neutral-600">
+        <p className="flex flex-wrap items-baseline gap-1 text-xs text-neutral-600">
           {totals.map((box, index) => (
             <React.Fragment key={box.key}>
-              {index > 0 && <span aria-hidden="true">·</span>}
-              <Button variant="ghost" size="sm" onClick={() => onOpenTab(box.tab)}>
+              {index > 0 && (
+                <span aria-hidden="true" className="text-neutral-300">
+                  ·
+                </span>
+              )}
+              {/*
+                §3 exception: chromeless text-link, the same one `GroupFilterPanel`'s
+                "Clear all" takes — there is no shared text-link primitive, and a
+                `Button` here would put three chunky pills under a dense list and
+                out-weigh the findings the card exists to lead with.
+              */}
+              <button
+                type="button"
+                onClick={() => onOpenTab(box.tab)}
+                className="rounded-sm px-0.5 text-primary-text underline decoration-primary-highlight underline-offset-2 hover:bg-primary-light focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"
+              >
                 {box.status === 'partial' ? 'at least ' : ''}
                 {box.value?.toLocaleString()} {box.noun}
-              </Button>
+              </button>
             </React.Fragment>
           ))}
         </p>

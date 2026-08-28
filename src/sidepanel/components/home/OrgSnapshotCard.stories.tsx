@@ -255,7 +255,7 @@ export const CrossCollectionSuppressed: Story = {
     // Tailwind-less headless story genuinely proves: 214 must not appear as the
     // unfilled count, and the row must not be a control.
     await expect(
-      canvas.queryByRole('button', { name: /Groups no rule fills/ }),
+      canvas.queryByRole('button', { description: /Groups no rule fills/ }),
     ).not.toBeInTheDocument();
     await expect(
       canvas.getByText('Needs group rules, which have not been read.'),
@@ -270,7 +270,14 @@ export const CrossCollectionSuppressed: Story = {
 export const FindingOpensTheList: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: /31 Groups with no members/ }));
+    // Named generically and described by its own row — StretchedButton's
+    // documented contract, since every overlay in a list carries the same label.
+    await userEvent.click(
+      canvas.getByRole('button', {
+        name: 'Open the filtered list',
+        description: /Groups with no members/,
+      }),
+    );
     await expect(args.onOpenListView).toHaveBeenCalledWith({ tab: 'groups', view: 'empty' });
   },
 };
