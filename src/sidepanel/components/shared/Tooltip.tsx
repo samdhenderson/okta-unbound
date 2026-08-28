@@ -150,7 +150,9 @@ const Tooltip: React.FC<TooltipProps> = ({ label, disabled = false, children }) 
   // horizontal scroll, which does not bubble.
   useEffect(() => {
     if (!anchor) return;
-    const onKeyDown = (event: KeyboardEvent) => {
+    // `globalThis.`-qualified because eslint's `no-undef` runs off the explicit
+    // DOM globals allow-list in `eslint.config.js`, which has no `KeyboardEvent`.
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
       // Deliberately not `preventDefault`/`stopPropagation`: the tooltip traps
       // nothing, so an Escape that also closes an enclosing surface is correct.
       if (event.key === 'Escape') close();
