@@ -45,6 +45,7 @@ info`) — never `error`.
 `shared/`: `Button`, `IconButton`, `StretchedButton`, `FilterPill`, `SortPill`,
 `CopyButton`, `CopyableId`, `OpenInOktaLink`, `Modal`, `Input`, `Checkbox`, `Select`,
 `Textarea`, `PageHeader`, `EntityIdentity`, `EntityLink`, `Badge`, `Breadcrumbs`, `Tabs`,
+`Tooltip`,
 `CollapsibleSection`, `DetailSection`, `ActionBar`, `AlertMessage`, `EmptyState`,
 `Eyebrow`, `LoadingSpinner`, `Skeleton`, `ListRow`, `ScrollableList`, `SearchDropdown`,
 `SelectionChips`.
@@ -91,7 +92,7 @@ drill-in.
 `tabindex`, arrow-key nav) with three variants: `underline` (section nav),
 `segmented` (compact toggle) and `rail` (icon-first primary nav).
 
-The **`rail`** variant is what `TabNavigation` uses for the panel's eight
+The **`rail`** variant is what `TabNavigation` uses for the panel's nine
 top-level sections. Inactive tabs are icon-only (`TabItem.icon`, an `IconType`);
 the active tab's label unfurls via `grid-template-columns: 0fr → 1fr` at
 `--dur-move`, so the strip never toggles `display` to make room. What still
@@ -103,6 +104,58 @@ tab's `count` badge is therefore _not_ in its accessible name; see the JSDoc on
 `TabItem.label` before adding counts to the rail.) The measurement behind the
 edge state, the scroll-active-into-view and the sliding indicator lives in
 `hooks/useTabRail.ts`, not the component.
+
+The rail's interaction states are read from Odyssey rather than invented. Active
+is `Tabs`' marking — a 2px `--color-primary` underline plus a
+`--color-primary-text` (`TypographyColorAction`) label at `font-semibold`
+(`TypographyWeightBodyBold`, 600) — and never a filled block, which is `SideNav`'s
+pattern and belongs to a vertical rail. The `--color-neutral-50` hover wash and
+the **inset** focus ring (`box-shadow: inset 0 0 0 2px` with `outline: none`,
+Odyssey's `theme.mixins.insetFocusRing`) are `SideNav`'s, and are identical across
+both Odyssey navigations. Note the rail's focus recipe is deliberately _not_ the
+outset `ring-2` the `underline` and `segmented` variants use — which is why the
+weight and focus classes live per-variant rather than in `Tabs`' shared base.
+
+The underline slide and the label unfurl are **sequenced, not simultaneous**. The
+labels' `grid-template-columns` transition carries a `--dur-move` delay, so the
+strip is held still for one `--dur-move` window while the underline travels on
+`--ease-glide`; only then do the outgoing and incoming labels cross over, and
+across that second window the indicator has no transition at all and is measured
+per frame. `useTabRail`'s `sliding` flag is the line between the two phases. This
+amends ADR-0028, which forbade transitioning the indicator outright — the reason
+it gave (an indicator chasing a growing label) is exactly what the sequence
+removes.
+
+The rail carries **no border of its own**, and neither does `ContextBar`: they are
+bands of one top-chrome slab, and the single rule that closes that slab lives on
+`TabNavigation`'s `<nav>` (the sticky element, so the edge survives scrolling).
+Separation inside the slab is spacing and type weight. The `underline` variant
+keeps its `border-b` — there the rule is the indicator's own track.
+
+`Tooltip` is the **hover- and focus-triggered label chip**, and the reason no new
+code should reach for a native `title=`: `title` cannot be styled, fires on an
+uncontrollable delay, and never appears for a keyboard user at all. It opens on
+hover **and** on focus after `--dur-hover-intent` (400ms, mirrored in JS as
+`HOVER_INTENT_MS` the way `useCountUp` mirrors `--dur-tell`), carries
+`role="tooltip"` wired to its trigger with `aria-describedby`, closes on Escape,
+blur, pointer-leave or any scroll that would move the trigger, and traps no focus.
+
+A tooltip **describes; it does not name.** An icon-only control still needs its own
+`aria-label` — the rail's tabs keep theirs, and the chip is additive on top. It also
+renders **no wrapper element**: the trigger comes from a render prop and the chip is
+portalled to `document.body`, which is what lets it sit inside a `role="tablist"`
+(an intervening `<span>` fails axe's `aria-required-children`) and inside a scroll
+container that would otherwise clip it.
+
+```tsx
+<Tooltip label="Groups">
+  {(trigger) => (
+    <button type="button" aria-label="Groups" {...trigger}>
+      <Icon type="users" />
+    </button>
+  )}
+</Tooltip>
+```
 
 `Breadcrumbs` is the trail primitive for **in-tab push/pop sub-navigation**
 (`nav > ol`, ancestor crumbs are buttons, the last carries `aria-current="page"`).

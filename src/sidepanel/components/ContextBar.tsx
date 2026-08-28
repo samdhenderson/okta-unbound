@@ -122,11 +122,13 @@ const ContextBar: React.FC<ContextBarProps> = ({
   const liveChanged = isPinned && liveContextChanged;
 
   return (
-    <div
-      className="bg-white border-b border-neutral-200 z-40"
-      style={{ fontFamily: 'var(--font-primary)' }}
-    >
-      <div className="px-5 py-3 flex items-center justify-between gap-3">
+    // No border of its own: this is the first band of the top-chrome slab, not a
+    // stripe. The rail beneath it carries the one rule that closes the whole slab
+    // (see `TabNavigation`); separation *inside* the slab comes from spacing and
+    // type weight. Horizontal padding is `--sp-gutter`, so the masthead breathes
+    // with the panel's measured width instead of holding 20px at 360px.
+    <div className="bg-white z-40" style={{ fontFamily: 'var(--font-primary)' }}>
+      <div className="px-(--sp-gutter) py-3 flex items-center justify-between gap-3">
         {/* Identity */}
         <div className="flex items-center gap-2.5 min-w-0">
           <span
@@ -211,7 +213,7 @@ const ContextBar: React.FC<ContextBarProps> = ({
 
       {/* Live-context-changed hint (pinned only) */}
       {liveChanged && (
-        <div className="px-5 py-2 bg-warning-light border-t border-warning-light flex items-center justify-between gap-2 text-xs text-warning-text">
+        <div className="px-(--sp-gutter) py-2 bg-warning-light border-t border-warning-light flex items-center justify-between gap-2 text-xs text-warning-text">
           <span className="truncate">
             {liveEntityName ? (
               <>

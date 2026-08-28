@@ -9,15 +9,20 @@
  *
  * The `rail` variant is the side panel's top-level navigation: inactive tabs are
  * icon-only and the active tab's label unfurls (`grid-template-columns: 0fr → 1fr`),
- * which is what lets eight sections fit a panel the user can drag down to 360px.
- * It shares the tablist semantics, roving tabindex and keyboard handling above
- * verbatim; only the container classes, the tab classes and the button children
- * differ. Its overflow affordances — edge fades, scroll-active-into-view and the
- * sliding indicator — are measured by
- * {@link sidepanel/hooks/useTabRail.useTabRail}.
+ * which is what lets nine sections fit a panel the user can drag down to 360px. It
+ * shares the tablist semantics, roving tabindex and keyboard handling verbatim; only
+ * the container classes, the tab classes and the button children differ. Its overflow
+ * affordances are measured by {@link sidepanel/hooks/useTabRail.useTabRail}, and its
+ * slide and label unfurl are **sequenced** — see that hook's header.
+ *
+ * Its states are read from Odyssey, not invented: active is `Tabs`' 2px underline
+ * plus `TypographyColorAction` text at `TypographyWeightBodyBold` and never a filled
+ * block (that is `SideNav`'s, for a vertical rail); the hover wash and the inset
+ * focus ring are `SideNav`'s.
  */
 import React, { useRef } from 'react';
 import Icon, { type IconType } from '../shared/Icon';
+import Tooltip, { type TooltipTriggerProps } from './Tooltip';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useTabRail } from '../../hooks/useTabRail';
 
@@ -27,8 +32,8 @@ export interface TabItem {
   key: string;
   /**
    * Visible label. Under the `rail` variant this is also the tab's `aria-label`
-   * and `title`, so it is the accessible name whether or not the label is
-   * currently unfurled.
+   * and its `Tooltip` text, so it is the accessible name whether or not the label
+   * is currently unfurled.
    *
    * @remarks Because `aria-label` overrides an element's contents, a rail tab's
    * `count` badge is **not** part of its accessible name. If counts are ever
@@ -77,22 +82,35 @@ const HEADING_FONT = { fontFamily: 'var(--font-heading)' };
  * eats vertical space in a 360px panel) and carries `mask-image` edge fades
  * keyed off the `data-overflow` attribute, so scrolling never writes a style.
  * `black`/`transparent` in those gradients are mask alpha stops, not colors.
+ *
+ * The rail deliberately has **no border of its own** — it was bordered above (by
+ * `ContextBar`) *and* below, which detached it from both neighbours. It is one band
+ * of the top-chrome slab now and `TabNavigation`'s `<nav>` carries the slab's single
+ * closing rule; `underline` keeps its border, which is the indicator's own track.
  */
 const listClassesByVariant: Record<TabsVariant, string> = {
   segmented: 'flex items-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 p-1',
   underline:
     'flex items-center gap-1 border-b border-neutral-200 overflow-x-auto overflow-y-hidden',
   rail:
-    'relative flex items-center gap-0.5 border-b border-neutral-200 overflow-x-auto overflow-y-hidden ' +
+    'relative flex items-center gap-0.5 pb-1.5 overflow-x-auto overflow-y-hidden ' +
     '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden ' +
     'data-[overflow=start]:[mask-image:linear-gradient(to_right,transparent,black_1.5rem)] ' +
     'data-[overflow=end]:[mask-image:linear-gradient(to_left,transparent,black_1.5rem)] ' +
     'data-[overflow=both]:[mask-image:linear-gradient(to_right,transparent,black_1.5rem,black_calc(100%_-_1.5rem),transparent)]',
 };
 
-/** Shared by every variant's tab button. */
-const TAB_BASE =
-  'relative flex items-center text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary';
+/**
+ * Shared by every variant's tab button. Weight and focus are deliberately *not* here:
+ * the rail follows Odyssey's navigation recipe (body weight inactive, bold active; an
+ * inset ring), the other two the panel's own (uniform `font-semibold`; an outset
+ * ring). Folding either in would make one override the other, and Tailwind class
+ * order in a template string does not decide which wins.
+ */
+const TAB_BASE = 'relative flex items-center text-xs focus-visible:outline-none';
+
+/** Focus treatment for the two non-rail variants: the panel's standard outset ring. */
+const RING_FOCUS = 'focus-visible:ring-2 focus-visible:ring-primary';
 
 /**
  * Accessible tab bar. Selection is controlled by the caller via
@@ -124,7 +142,7 @@ const Tabs: React.FC<TabsProps> = ({
 
   // The ref is attached only for `rail`, so every effect in the hook short-circuits
   // on a null node for the other variants — no conditional hook, no behavior change.
-  const { edge, indicator } = useTabRail({
+  const { edge, indicator, sliding } = useTabRail({
     listRef,
     activeKey,
     tabCount: tabs.length,
@@ -175,24 +193,27 @@ const Tabs: React.FC<TabsProps> = ({
       {tabs.map((tab, index) => {
         const active = tab.key === activeKey;
 
-        // Same padding as the `underline` variant — the rail is a sibling of it,
-        // not its own sizing system. The wider target also matters here, where an
-        // inactive tab is a bare 16px icon. Overflow past the panel edge is the
-        // expected case, not a reason to shave padding: the edge masks and
-        // scroll-active-into-view exist precisely to absorb it.
-        const railClasses = `${TAB_BASE} shrink-0 rounded-t-md px-3 py-2.5 transition-colors duration-(--dur-instant) ${
-          active ? 'text-primary' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
+        // Same padding as `underline` — the rail is a sibling of it, not its own
+        // sizing system, and the wider target matters where an inactive tab is a bare
+        // 16px icon. `rounded-md` all round now that the item sits on no border (6px
+        // is Odyssey's `BorderRadiusMain`), and active text is `--color-primary-text`
+        // (`TypographyColorAction`) — `--color-primary` is the fill hue, which on this
+        // rail means the underline and nothing else.
+        const railClasses = `${TAB_BASE} shrink-0 rounded-md px-3 py-2.5 transition-colors duration-(--dur-instant) focus-visible:inset-ring-2 focus-visible:inset-ring-primary ${
+          active
+            ? 'text-primary-text font-semibold'
+            : 'font-medium text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
         }`;
 
         const tabClasses = isRail
           ? railClasses
           : isSegmented
-            ? `${TAB_BASE} flex-1 justify-center gap-1.5 rounded-md px-3 py-1.5 transition-all duration-(--dur-instant) ${
+            ? `${TAB_BASE} ${RING_FOCUS} flex-1 justify-center gap-1.5 rounded-md px-3 py-1.5 font-semibold transition-all duration-(--dur-instant) ${
                 active
                   ? 'bg-white text-neutral-900 shadow-sm'
                   : 'text-neutral-600 hover:text-neutral-900'
               }`
-            : `${TAB_BASE} gap-1.5 whitespace-nowrap px-3 py-2.5 border-b-2 transition-colors duration-(--dur-instant) ${
+            : `${TAB_BASE} ${RING_FOCUS} gap-1.5 whitespace-nowrap px-3 py-2.5 font-semibold border-b-2 transition-colors duration-(--dur-instant) ${
                 active
                   ? 'text-primary border-primary'
                   : 'text-neutral-600 border-transparent hover:text-neutral-900'
@@ -206,7 +227,7 @@ const Tabs: React.FC<TabsProps> = ({
             ? 'bg-primary-light text-primary-text'
             : 'bg-neutral-100 text-neutral-600';
 
-        return (
+        const renderTab = (trigger?: TooltipTriggerProps) => (
           <button
             key={tab.key}
             ref={(el) => {
@@ -217,14 +238,15 @@ const Tabs: React.FC<TabsProps> = ({
             aria-selected={active}
             // Derived from `tab.label` rather than a separate prop so the visible
             // label and the accessible name cannot drift, and so an icon-only tab
-            // still has a name for `button-name`.
+            // still has a name for `button-name`. The tooltip below is *additive* —
+            // it describes, the `aria-label` names.
             aria-label={isRail ? tab.label : undefined}
-            title={isRail ? tab.label : undefined}
             tabIndex={active ? 0 : -1}
             onClick={() => onChange(tab.key)}
             onKeyDown={(event) => handleKeyDown(event, index)}
             className={tabClasses}
             style={HEADING_FONT}
+            {...trigger}
           >
             {isRail && tab.icon ? (
               <>
@@ -232,12 +254,16 @@ const Tabs: React.FC<TabsProps> = ({
                   <Icon type={tab.icon} size="sm" />
                 </span>
                 {/* Label unfurl: a 0fr → 1fr grid column animates to the label's
-                    intrinsic width with no measurement and no `display` toggle,
-                    so the strip never jumps to make room. */}
+                    intrinsic width with no measurement and no `display` toggle. The
+                    `--dur-move` delay is phase 2 of `useTabRail`'s sequence — it holds
+                    the strip still while the underline slides, and both the collapsing
+                    and the unfurling label carry it so they cross over together.
+                    Dropped under reduced motion: the CSS freeze zeroes the duration
+                    but not the delay, leaving a label 220ms late. */}
                 <span
                   className={`grid transition-[grid-template-columns] duration-(--dur-move) ease-standard ${
-                    active ? 'grid-cols-[1fr]' : 'grid-cols-[0fr]'
-                  }`}
+                    reducedMotion ? '' : 'delay-(--dur-move)'
+                  } ${active ? 'grid-cols-[1fr]' : 'grid-cols-[0fr]'}`}
                 >
                   <span className="min-w-0 overflow-hidden whitespace-nowrap ps-1.5">
                     {tab.label}
@@ -256,15 +282,32 @@ const Tabs: React.FC<TabsProps> = ({
             )}
           </button>
         );
+
+        // Only the rail collapses a tab to a glyph, so only it needs a chip naming
+        // one. `Tooltip` renders no wrapper of its own, which keeps these buttons
+        // direct children of the tablist — an intervening `<span>` would break
+        // `aria-required-children`.
+        return isRail ? (
+          <Tooltip key={tab.key} label={tab.label}>
+            {renderTab}
+          </Tooltip>
+        ) : (
+          renderTab()
+        );
       })}
       {isRail && (
         // Inside the scrolling track, so it travels with the tabs and never needs
-        // re-measuring on scroll. Deliberately un-transitioned: the active label is
-        // growing over the same interval, so a transitioned indicator would chase a
-        // moving target — the slide comes from the buttons' own reflow instead.
+        // re-measuring on scroll. The transition applies *only* while `sliding` —
+        // phase 1, when the labels' delay holds the strip still. Outside it the
+        // geometry tracks a live reflow frame by frame, where a transition would lag
+        // behind rather than describe it (the failure ADR-0028 avoided by never
+        // transitioning at all). `--ease-glide` overshoots gently: over this short a
+        // distance, right under the pointer, `--ease-affirm` reads as a wobble.
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute bottom-0 h-0.5 rounded-full bg-primary"
+          className={`pointer-events-none absolute bottom-0 h-0.5 rounded-full bg-primary ${
+            sliding ? 'transition-[left,width] duration-(--dur-move) ease-glide' : ''
+          }`}
           style={{ left: indicator.left, width: indicator.width }}
         />
       )}
