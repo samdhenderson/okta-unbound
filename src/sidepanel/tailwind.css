@@ -103,6 +103,23 @@
     1
   ); /* confirmation only — the one curve that overshoots */
 
+  /*
+   * The response layer (ADR-0046). `--dur-press` sits *below* `--dur-instant`
+   * deliberately: a press must resolve inside the click, not after it, and 80ms
+   * already reads as lag on a pointer-down. `--ease-press` is front-loaded with no
+   * overshoot — the depress is immediate; the release rides `--ease-affirm`.
+   */
+  --dur-press: 60ms;
+  --ease-press: cubic-bezier(0.2, 0, 0.1, 1);
+  /*
+   * The rail indicator's slide. A second overshoot curve, deliberately gentler than
+   * `--ease-affirm`'s 1.3: the underline travels a short distance directly under the
+   * pointer, where affirm's overshoot reads as a wobble rather than a confirmation.
+   * Not `--ease-standard`, because with the label unfurl sequenced behind it
+   * (ADR-0028) a slide with no overshoot at all reads as a teleport.
+   */
+  --ease-glide: cubic-bezier(0.3, 1.12, 0.5, 1);
+
   /* Keyframe-driven animation primitives */
   --animate-rise-in: rise-in var(--dur-move) var(--ease-entrance) both;
   --animate-collapse-out: collapse-out var(--dur-quick) var(--ease-exit) both;
@@ -169,6 +186,49 @@
    * scroll underneath it. It only exists at full merge; at rest it is `none`.
    */
   --shadow-dock: 0 7px 11px -9px rgb(16 24 40 / 0.1);
+
+  /*
+   * Interactive-card elevation (ADR-0047). Read from Odyssey, not invented: `--lift-1`
+   * is `DepthLow` and `--lift-2` is `DepthMedium`, both from
+   * `odyssey-design-tokens/src/depth.json`. Odyssey's own `Card` carries `DepthMedium`
+   * at rest and deepens to `DepthHigh` on `.isClickable:hover` — so a shadow on a card
+   * is Odyssey's behaviour, not a departure from it. `DepthHigh` is deliberately not
+   * adopted: it is heavier than anything a 360px panel needs.
+   *
+   * Never transition `box-shadow` directly with these. Odyssey's own `labs/AppTile`
+   * pre-paints the shadow on an `::after` at `opacity: 0` and cross-fades the opacity;
+   * `.lift-on-hover` below does the same, for the same reason — animating a shadow
+   * repaints, animating an opacity composites.
+   */
+  --lift-1: 0 1px 2px 0 rgb(39 39 39 / 0.07);
+  --lift-2:
+    0 1px 4px 0 rgb(39 39 39 / 0.08), 0 4px 6px 0 rgb(39 39 39 / 0.01),
+    0 5px 15px 0 rgb(39 39 39 / 0.05);
+
+  /*
+   * Semantic spacing roles (ADR-0048). Six named roles on top of a 4px base;
+   * components consume the *role*, never a raw step — which is what stops eighteen
+   * copies drifting into four recipes, the same failure that forced `Eyebrow` to exist.
+   *
+   * The values here are the `default` density. The two other scopes are declared below
+   * this block, outside `@theme`, because a density scope is a *conditional* override
+   * and `@theme` emits one flat `:root`.
+   *
+   * Structural roles (`gutter`, `rung`, `card`) snap to 4px. The fine roles keep 2px
+   * granularity: `--sp-row-y: 10px` and `--sp-inline: 6px` are real, load-bearing
+   * half-steps that Tailwind itself ships (`py-2.5`, `gap-1.5`), and rounding them to
+   * the 4px grid collapses distinctions the row typography depends on.
+   *
+   * Density changes space only. Type never scales — a 360px panel and a 720px panel
+   * show the same font sizes; only the space between things moves.
+   */
+  --sp-gutter: 16px; /* panel horizontal padding */
+  --sp-rung: 16px; /* gap between stacked cards */
+  --sp-card: 16px; /* inside a DetailSection */
+  --sp-row-y: 10px; /* ListRow vertical padding */
+  --sp-row-x: 12px; /* ListRow horizontal padding */
+  --sp-inline: 8px; /* between chips, pills, icons */
+  --sp-field: 10px; /* between form controls */
 
   @keyframes rise-in {
     from {
@@ -275,7 +335,165 @@
   }
 }
 
+/*
+ * Density scopes — the two overrides on top of the `default` values declared in
+ * `@theme static` above.
+ *
+ * ## Why a media query and not a container query
+ *
+ * The design brief specifies a container query on the panel root. In a Chrome side
+ * panel the panel root *is* the viewport — there is no larger page around it, which is
+ * why `useIsNarrow` has always been able to read `window.innerWidth` and be right. A
+ * container query would additionally require an ancestor declaring `container-type`,
+ * and an element cannot respond to a container query on itself, so it would force a
+ * wrapper element to exist for no behavioural gain. The media query resolves against
+ * exactly the same measurement with none of that.
+ *
+ * It also survives Storybook: ADR-0014's `sidepanelCompact` (360) / `sidepanelDefault`
+ * (480) / `sidepanelWide` (720) presets resize the story iframe's viewport, so every
+ * story exercises the real breakpoints for free.
+ *
+ * ## Why `[data-density]` exists as well
+ *
+ * Density is *derived*, not chosen — there is no user setting and nothing to maintain.
+ * The attribute is an explicit escape hatch for stories and tests that need to pin one
+ * scope without resizing a viewport, and it deliberately wins over the media query so a
+ * pinned story is not silently reinterpreted by the runner's window size.
+ */
+@media (width < 400px) {
+  :root {
+    --sp-gutter: 12px;
+    --sp-rung: 12px;
+    --sp-card: 12px;
+    --sp-row-y: 8px;
+    --sp-row-x: 10px;
+    --sp-inline: 6px;
+    --sp-field: 8px;
+  }
+}
+
+@media (width >= 560px) {
+  :root {
+    --sp-gutter: 20px;
+    --sp-rung: 24px;
+    --sp-card: 20px;
+    --sp-row-y: 12px;
+    --sp-row-x: 16px;
+    --sp-inline: 10px;
+    --sp-field: 12px;
+  }
+}
+
+[data-density='compact'] {
+  --sp-gutter: 12px;
+  --sp-rung: 12px;
+  --sp-card: 12px;
+  --sp-row-y: 8px;
+  --sp-row-x: 10px;
+  --sp-inline: 6px;
+  --sp-field: 8px;
+}
+
+[data-density='default'] {
+  --sp-gutter: 16px;
+  --sp-rung: 16px;
+  --sp-card: 16px;
+  --sp-row-y: 10px;
+  --sp-row-x: 12px;
+  --sp-inline: 8px;
+  --sp-field: 10px;
+}
+
+[data-density='comfortable'] {
+  --sp-gutter: 20px;
+  --sp-rung: 24px;
+  --sp-card: 20px;
+  --sp-row-y: 12px;
+  --sp-row-x: 16px;
+  --sp-inline: 10px;
+  --sp-field: 12px;
+}
+
 @layer components {
+  /*
+   * ## The response layer (ADR-0046)
+   *
+   * `docs/motion.md` covers *arrival* — things entering and leaving. These two classes
+   * cover *response*: what the interface does the instant you touch it. The rule that
+   * keeps this from becoming decoration is that response motion is only ever caused by
+   * the user's own input, so it cannot surprise them and cannot fire while they read.
+   *
+   * Both inherit the blanket reduced-motion freeze at the bottom of this file. Neither
+   * needs `.motion-exempt` — a frozen press is a press that simply resolves instantly,
+   * which is the correct behaviour, not a broken one.
+   */
+
+  /*
+   * Press. Odyssey's own press state is a third, darker background step
+   * (`hover → PalettePrimaryDark`, `active → PalettePrimaryDarker`) and it never uses
+   * `transform` — components carry that colour step themselves. The scale here is this
+   * panel's addition on top of it, not a replacement for it.
+   *
+   * The `:active` rule re-declares duration and easing rather than adding a property,
+   * so the depress runs at `--dur-press` and the *release* falls back to this rule's
+   * `--dur-quick`/`--ease-affirm`. That asymmetry is the whole effect: instant down,
+   * eased back up.
+   */
+  .press {
+    --press-scale: 0.955;
+    transition:
+      transform var(--dur-quick) var(--ease-affirm),
+      background-color var(--dur-instant) var(--ease-standard),
+      border-color var(--dur-instant) var(--ease-standard),
+      box-shadow var(--dur-instant) var(--ease-standard),
+      color var(--dur-instant) var(--ease-standard);
+  }
+
+  .press:active:not(:disabled, [aria-disabled='true']) {
+    transform: scale(var(--press-scale));
+    transition-duration: var(--dur-press);
+    transition-timing-function: var(--ease-press);
+  }
+
+  /*
+   * A row is a much wider target than a button, so the same ratio reads as a lurch.
+   * Scaled to travel roughly the same number of pixels at the edge instead.
+   */
+  .press-subtle {
+    --press-scale: 0.995;
+  }
+
+  /*
+   * Hover lift for *interactive* cards (ADR-0047).
+   *
+   * The shadow is pre-painted on an `::after` at `opacity: 0` and cross-faded, which is
+   * Odyssey's own technique in `labs/AppTile` — animating a `box-shadow` repaints every
+   * frame, animating an `opacity` composites. `border-radius: inherit` keeps the shadow
+   * on the card's real corner without the class needing to know what that corner is.
+   *
+   * Deliberately no `translateY`: it would collide with `.press`'s `transform` on any
+   * surface that is both liftable and pressable, which is most of them. The elevation
+   * change alone carries it, and that is also all Odyssey's `Card` does.
+   */
+  .lift {
+    position: relative;
+  }
+
+  .lift::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: var(--lift-1);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--dur-instant) var(--ease-standard);
+  }
+
+  .lift:hover::after {
+    opacity: 1;
+  }
+
   .tab-content {
     @apply hidden;
   }
