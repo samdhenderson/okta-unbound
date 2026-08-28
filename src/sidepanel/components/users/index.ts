@@ -14,8 +14,6 @@ export { default as UserAppsList } from './UserAppsList';
 export { default as UserProfilePane } from './UserProfilePane';
 export { default as ProfileDisplayModal } from './ProfileDisplayModal';
 export { default as GroupMembershipsList } from './GroupMembershipsList';
-export { default as UserIdentityCard } from './UserIdentityCard';
-export { default as UserComparisonModal } from './UserComparisonModal';
 export { default as UserComparisonPanel } from './UserComparisonPanel';
 export { default as UserComparisonView } from './UserComparisonView';
 export { default as AddToGroupModal } from './AddToGroupModal';

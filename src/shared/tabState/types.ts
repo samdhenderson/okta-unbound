@@ -10,8 +10,15 @@
 import type { FormattedRule, RuleStats, GroupSummary } from '../types';
 import type { RuleSortMode } from '../rules/similarity';
 
-/** Identifiers for the side-panel tabs whose state is persisted. */
-export type TabName = 'overview' | 'rules' | 'users' | 'groups' | 'history';
+/**
+ * Identifiers for the side-panel tabs whose state is persisted.
+ *
+ * `'home'` replaces the retired `'overview'`. It is listed so
+ * `TabStateManager.markTabVisited('home')` has a name to write under; Home
+ * persists no state of its own beyond that visit stamp, because everything on
+ * it is derived from the org snapshot or from the working set's own store.
+ */
+export type TabName = 'home' | 'rules' | 'users' | 'groups' | 'history';
 
 /**
  * Fields common to every persisted tab state.
@@ -66,7 +73,7 @@ export interface HistoryTabState extends BaseTabState {
 
 /** Aggregate of every tab's persisted state, each `null` when absent. */
 export interface AllTabStates {
-  overview: BaseTabState | null;
+  home: BaseTabState | null;
   rules: RulesTabState | null;
   users: UsersTabState | null;
   groups: GroupsTabState | null;

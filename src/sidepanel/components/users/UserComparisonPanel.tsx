@@ -2,7 +2,8 @@
  * @module sidepanel/components/users/UserComparisonPanel
  * @description View-stack host for the two-user comparison — the Users tab's mount site.
  *
- * The Users-tab counterpart of {@link UserComparisonModal}: it owns the
+ * The Users-tab comparison host, and since the Overview tab's dialog was
+ * retired the only one. It owns the
  * {@link sidepanel/hooks/useUserComparison.useUserComparison} instance and renders
  * the shared {@link UserComparisonView} with no dialog chrome, because the tab shows
  * the comparison as a **pushed view** (ADR-0016) — one `PageHeader` above it carries

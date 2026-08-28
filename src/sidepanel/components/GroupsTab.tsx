@@ -91,10 +91,13 @@ interface GroupsTabProps {
   onGroupSelected?: () => void;
   /**
    * Opens the Export tab pre-scoped to a group's members — the detail view's
-   * page-level "Export members" action (ADR-0030). Optional: `App.tsx` already
-   * owns a `handleExportGroup` of this shape for the Overview tab but does not
-   * yet wire it through to the Groups tab, so this stays a no-op action rather
-   * than a hard requirement until that wiring lands.
+   * page-level "Export members" action (ADR-0030). `App.tsx` wires it, and has
+   * since the prop existed.
+   *
+   * Optional only so a story or a test can mount this tab without an Export
+   * route. Omitting it **omits the action** rather than disabling it (ADR-0039).
+   * This doc used to claim the wiring was missing; ADR-0039 records that the
+   * claim was false in the very commit that made it, and it is corrected here.
    */
   onExportGroup?: (groupId: string, groupName: string) => void;
   /**

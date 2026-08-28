@@ -72,14 +72,6 @@ interface RulesTabProps {
   /** Deep-link to a group in the Groups tab (from a rule's target groups, B → A2). */
   onNavigateToGroup?: (groupId: string) => void;
   /**
-   * One-shot request to scope the list to the current group on arrival (e.g. from
-   * the group Overview's "View Rules"). The value is the group id being scoped to;
-   * cleared via {@link RulesTabProps.onScopeConsumed} once applied.
-   */
-  scopeToGroupId?: string | null;
-  /** Invoked once {@link RulesTabProps.scopeToGroupId} has been applied. */
-  onScopeConsumed?: () => void;
-  /**
    * A pre-filtered view requested from another tab (the Home card's "N paused").
    * Applied once on arrival, then cleared via
    * {@link RulesTabProps.onListViewConsumed}.
@@ -108,8 +100,6 @@ const RulesTab: React.FC<RulesTabProps> = ({
   selectedRuleId,
   onRuleSelected,
   onNavigateToGroup,
-  scopeToGroupId,
-  onScopeConsumed,
   listView,
   onListViewConsumed,
   isActive = true,
@@ -232,25 +222,10 @@ const RulesTab: React.FC<RulesTabProps> = ({
     if (isActive) void TabStateManager.markTabVisited('rules');
   }, [isActive]);
 
-  // Fulfil a one-shot "View Rules for this group" request: pre-apply the
-  // current-group filter so the list arrives scoped to the detected group. Runs
-  // after the persisted-state restore so it wins over any restored filter.
-  const scopeHandledRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!scopeToGroupId) {
-      scopeHandledRef.current = null;
-      return;
-    }
-    if (!restoreAttempted || scopeHandledRef.current === scopeToGroupId) return;
-    scopeHandledRef.current = scopeToGroupId;
-    if (currentGroupId) setActiveFilter('current-group');
-    onScopeConsumed?.();
-  }, [scopeToGroupId, restoreAttempted, currentGroupId, onScopeConsumed]);
-
-  // A pre-filtered view requested from the Home card. Like the scope request it
-  // waits for the persisted-state restore, so it lands *after* (and beats) any
-  // filter the last session left behind — otherwise arriving on "Paused" would
-  // depend on what the restore happened to write first.
+  // A pre-filtered view requested from the Home card. It waits for the
+  // persisted-state restore, so it lands *after* (and beats) any filter the last
+  // session left behind — otherwise arriving on "Paused" would depend on what
+  // the restore happened to write first.
   //
   // The search box is cleared too: a stale query would silently subtract from
   // the count the card just showed, and a filter that disagrees with the figure

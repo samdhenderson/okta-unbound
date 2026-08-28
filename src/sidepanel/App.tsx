@@ -26,8 +26,18 @@
  * Nine live tabs mean nine sets of live effects, so **every tab is told whether
  * it is active** and gates its own background work on it (auto-loads, page-context
  * re-probes, debounced search, window listeners). No hidden tab may issue Okta API
- * traffic. `useOktaPageContext(activeTab === 'overview' && !isPinned)` below is the
- * original instance of that pattern.
+ * traffic.
+ *
+ * The masthead is the exception, and deliberately so. `useOktaPageContext` below
+ * is gated on `!isPinned` alone rather than on any tab, because {@link ContextBar}
+ * renders above the rail on *every* tab: gating its feed on one of them would
+ * leave it describing a page the browser left minutes ago from the other eight —
+ * the ADR-0032 defect where the bar misdescribes the live page. ADR-0018's rule
+ * is that no hidden **tab** issues Okta traffic; the masthead is shell chrome,
+ * which is why `useGroupContext` beside it has always been always-on. ADR-0026's
+ * visibility gate still applies and lives inside `useOktaTabContext` itself
+ * (`document.hidden` defers and resyncs), so a hidden panel still probes
+ * nothing.
  */
 import React, { useState, useEffect, useCallback, useMemo, useRef, lazy } from 'react';
 import ContextBar from './components/ContextBar';
@@ -49,7 +59,6 @@ import ActivityBar from './components/ActivityBar';
 // `TabPanel`) shows the standard spinner during the one-time fetch, without
 // disturbing the tabs already mounted beside it. ExportTab is a named export from
 // its barrel, so it is re-shaped into a default export for React.lazy.
-const OverviewTab = lazy(() => import('./components/OverviewTab'));
 const RulesTab = lazy(() => import('./components/RulesTab'));
 const UsersTab = lazy(() => import('./components/UsersTab'));
 const GroupsTab = lazy(() => import('./components/GroupsTab'));
@@ -82,15 +91,12 @@ const App: React.FC = () => {
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   // A one-shot request to open a specific user in the Users tab (e.g. from the
-  // Overview's "View all groups"); cleared by the tab once consumed.
+  // a jump into a user); cleared by the tab once consumed.
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   // A one-shot request to open the Export tab pre-scoped (e.g. from the group
-  // Overview's "Export Members"); cleared by the tab once consumed.
+  // a detail rung's export action); cleared by the tab once consumed.
   const [exportRequest, setExportRequest] = useState<ExportRequest | null>(null);
   const [listViewRequest, setListViewRequest] = useState<ListViewRequest | null>(null);
-  // A one-shot request to scope the Rules tab to a group on arrival (from the
-  // group Overview's "View Rules"); cleared by the tab once consumed.
-  const [scopeRulesToGroupId, setScopeRulesToGroupId] = useState<string | null>(null);
   // The pinned snapshot (null = following the live tab). Persisted across reopen.
   const [pinned, setPinned] = useState<PinnedContext | null>(null);
   const isPinned = pinned !== null;
@@ -125,10 +131,11 @@ const App: React.FC = () => {
     oktaOrigin,
     refetch: refetchGroupContext,
   } = useGroupContext();
-  // Single live page detector feeding the ContextBar + Overview. It re-probes only
-  // while Overview is active AND not pinned; otherwise it holds the last-known
-  // context (and records that a resync is owed, surfaced as `resyncPending`).
-  const page = useOktaPageContext(activeTab === 'overview' && !isPinned);
+  // Single live page detector feeding the ContextBar. It re-probes whenever the
+  // bar is showing live detection rather than a pin; when pinned it holds the
+  // last-known context (and records that a resync is owed, surfaced as
+  // `resyncPending`). See the module header for why this is not tab-gated.
+  const page = useOktaPageContext(!isPinned);
 
   // Restore a persisted pin on mount. The snapshot's `targetTabId` is a per-session
   // Chrome id, so it is revalidated before use: it may be re-targeted at a live Okta
@@ -150,7 +157,7 @@ const App: React.FC = () => {
     });
   }, []);
 
-  // The identity shown in the bar + Overview: the pinned snapshot, or live detection.
+  // The identity shown in the bar: the pinned snapshot, or live detection.
   const isLivePinnable = page.pageType === 'group' || page.pageType === 'user';
   const effective = pinned
     ? {
@@ -226,7 +233,7 @@ const App: React.FC = () => {
   // Re-probe *both* context engines. The panel runs two independent
   // `useOktaTabContext` instances — the always-on `useGroupContext` (which drives
   // the ContextBar's connection dot and the feature tabs' target tab) and the
-  // Overview-scoped `useOktaPageContext`. Every recovery affordance used to nudge
+  // masthead-scoped `useOktaPageContext`. Every recovery affordance used to nudge
   // only the latter, so a latched `error` on the always-on engine had no manual
   // exit and the bar stayed "Disconnected" forever. Both promises are fired and
   // voided: the hooks own their own error handling and never reject.
@@ -314,7 +321,7 @@ const App: React.FC = () => {
   );
 
   // Open the Export tab pre-scoped to a descriptor + context entity (deep-linked
-  // from an Overview action).
+  // from an entity's page-level export action).
   const handleNavigateToExport = (request: ExportRequest) => {
     setExportRequest(request);
     setActiveTab('export');
@@ -327,9 +334,6 @@ const App: React.FC = () => {
       contextId: groupId,
       contextLabel: groupName,
     });
-
-  const handleExportApp = (descriptorId: string, appId: string, appName: string) =>
-    handleNavigateToExport({ descriptorId, contextId: appId, contextLabel: appName });
 
   /**
    * Open a list tab with one filter already applied — how the Home card's
@@ -357,13 +361,6 @@ const App: React.FC = () => {
     setActiveTab(tab);
     chrome.storage.local.set({ [SELECTED_TAB_KEY]: tab });
   }, []);
-
-  // "View Rules" from a group Overview: open the Rules tab scoped to that group.
-  const handleViewGroupRules = (groupId: string) => {
-    setScopeRulesToGroupId(groupId);
-    setActiveTab('rules');
-    chrome.storage.local.set({ [SELECTED_TAB_KEY]: 'rules' });
-  };
 
   /**
    * Render one tab panel: nothing until the tab has been activated once, then a
@@ -435,28 +432,6 @@ const App: React.FC = () => {
               onOpenTab={handleOpenTab}
             />
           ))}
-          {renderTabPanel('overview', () => (
-            <OverviewTab
-              onTabChange={handleTabChange}
-              pageType={effective.pageType}
-              groupInfo={effective.groupInfo}
-              userInfo={effective.userInfo}
-              appInfo={page.appInfo ?? null}
-              policyInfo={page.policyInfo ?? null}
-              connectionStatus={effective.connectionStatus}
-              targetTabId={effective.targetTabId}
-              error={effective.error}
-              isLoading={effective.isLoading}
-              oktaOrigin={effective.oktaOrigin}
-              onRetry={handleRefreshAll}
-              onViewAllGroups={() => {
-                if (effective.userInfo) handleNavigateToUser(effective.userInfo.userId);
-              }}
-              onExportGroup={handleExportGroup}
-              onExportApp={handleExportApp}
-              onViewGroupRules={handleViewGroupRules}
-            />
-          ))}
           {renderTabPanel('rules', (isActive) => (
             <RulesTab
               isActive={isActive}
@@ -466,8 +441,6 @@ const App: React.FC = () => {
               selectedRuleId={selectedRuleId}
               onRuleSelected={() => setSelectedRuleId(null)}
               onNavigateToGroup={handleNavigateToGroup}
-              scopeToGroupId={scopeRulesToGroupId}
-              onScopeConsumed={() => setScopeRulesToGroupId(null)}
               listView={viewFor(listViewRequest, 'rules')}
               onListViewConsumed={clearListViewRequest}
             />
@@ -489,9 +462,8 @@ const App: React.FC = () => {
               onNavigateToRule={handleNavigateToRule}
               selectedGroupId={selectedGroupId}
               onGroupSelected={() => setSelectedGroupId(null)}
-              // The same descriptor-driven Export Engine route the group
-              // Overview's "Export Members" already takes. Without this the
-              // drilled-in group's action greys itself out.
+              // The descriptor-driven Export Engine route (ADR-0030). Without
+              // it the drilled-in group's "Export members" greys itself out.
               onExportGroup={handleExportGroup}
               listView={viewFor(listViewRequest, 'groups')}
               onListViewConsumed={clearListViewRequest}

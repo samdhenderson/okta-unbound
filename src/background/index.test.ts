@@ -161,7 +161,7 @@ describe('rejects tab-originated privileged actions', () => {
 
   it('rejects a tab-originated saveTabState and never touches the store', () => {
     const { returned, sendResponse } = send(
-      { action: 'saveTabState', tabName: 'overview', state: { x: 1 } },
+      { action: 'saveTabState', tabName: 'home', state: { x: 1 } },
       CONTENT_SCRIPT,
     );
 
@@ -176,8 +176,8 @@ describe('rejects tab-originated privileged actions', () => {
   it.each([
     ['resumeScheduler', {}] as const,
     ['clearSchedulerQueue', {}] as const,
-    ['loadTabState', { tabName: 'overview' }] as const,
-    ['clearTabState', { tabName: 'overview' }] as const,
+    ['loadTabState', { tabName: 'home' }] as const,
+    ['clearTabState', { tabName: 'home' }] as const,
   ])('rejects a tab-originated %s', (action, extra) => {
     const { returned, sendResponse } = send({ action, ...extra }, CONTENT_SCRIPT);
 
@@ -221,7 +221,7 @@ describe('accepts side-panel (no sender.tab) calls', () => {
 
   it('saveTabState from the side panel persists via TabStateManager', async () => {
     const { returned, sendResponse } = send(
-      { action: 'saveTabState', tabName: 'overview', state: { x: 1 } },
+      { action: 'saveTabState', tabName: 'home', state: { x: 1 } },
       SIDE_PANEL,
     );
 

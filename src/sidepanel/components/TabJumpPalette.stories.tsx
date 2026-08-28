@@ -41,7 +41,7 @@ const meta = {
   args: {
     isOpen: true,
     onClose: fn(),
-    activeTab: 'overview',
+    activeTab: 'home',
     onSelect: fn(),
   },
 } satisfies Meta<typeof TabJumpPalette>;

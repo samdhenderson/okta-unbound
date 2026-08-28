@@ -289,6 +289,14 @@ navigation that did not happen.
   emoji.
 - Three of the four badge palettes are gone; the fourth (`UserIdentityCard`'s) goes when
   the Overview tab gains a header.
+
+> **Note, 2026-08-28.** Two consequences above have since resolved themselves. The
+> Overview tab was removed and replaced by Home, so `UserIdentityCard` — kept only
+> because `UserOverview` rendered a full identity card with no `PageHeader` to move
+> it into — was deleted with it, and the fourth badge palette went at the same time.
+> Nothing in this ADR's decision changes: the header still owns identity, and Home
+> deliberately has no `PageHeader` at all, because one there could only say "Home".
+
 - `SWAP_MS` in `PageHeader` is a hand-kept mirror of `--dur-move`, in the same arrangement
   as `Modal`'s `EXIT_MS` and `useCountUp`'s `COUNT_UP_MS`. There is no lint gate.
 - The sticky stack cannot be verified in jsdom — there is no scroller and no layout. It is a

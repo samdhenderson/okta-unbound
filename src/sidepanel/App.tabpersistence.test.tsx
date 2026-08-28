@@ -213,7 +213,7 @@ async function openTab(uev: ReturnType<typeof userEvent.setup>, label: string) {
  * this file passed inside a full-suite run (some earlier file had already warmed
  * the chunk) and failed when run on its own. The budget below is the wait these
  * call sites always meant; it matches the explicit budgets already used for
- * multi-step loads in `UsersTab.test.tsx` and `UserComparisonModal.test.tsx`.
+ * multi-step loads in `UsersTab.test.tsx`.
  */
 const TAB_MOUNT_TIMEOUT = 5000;
 

@@ -124,7 +124,7 @@ const TabJumpPalette: React.FC<TabJumpPaletteProps> = ({
   // header close button, from a passive effect; a child's effects (and React's
   // `autoFocus`) all run *before* its parent's, so focusing synchronously here,
   // or passing `autoFocus` to `Input`, loses that race —
-  // `UserComparisonModal.test.tsx` pins exactly that outcome as CHARACTERIZED.
+  // `TabJumpPalette.test.tsx` pins exactly that outcome as CHARACTERIZED.
   // A ⌘K palette that lands focus on "Close" instead of the search field is
   // useless, so this one wins the race by yielding first.
   useEffect(() => {

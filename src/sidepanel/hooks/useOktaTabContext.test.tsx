@@ -365,3 +365,84 @@ describe('useOktaTabContext reload recovery', () => {
     consoleError.mockRestore();
   });
 });
+
+/**
+ * The masthead's feed, after the Overview tab was removed.
+ *
+ * `App` used to pass `activeTab === 'overview' && !isPinned` here, which was
+ * correct only while the one consumer of the detection *was* that tab. The
+ * `ContextBar` masthead renders above the rail on every tab, so the gate is now
+ * `!isPinned` alone — and these cases are what stop it drifting back.
+ */
+describe('useOktaPageContext enablement', () => {
+  const groupResponder = (action: string): SendResponse =>
+    action === 'getGroupInfo'
+      ? { success: true, data: { groupId: '00g1', groupName: 'Engineering' } }
+      : origin(action);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setVisibility('visible');
+  });
+
+  afterEach(() => {
+    setVisibility('visible');
+  });
+
+  /** Fire a real cross-entity navigation at the most recent `onUpdated` listener. */
+  function navigateTo(url: string): void {
+    const onUpdated = lastListener<
+      (id: number, change: { url?: string }, tab: chrome.tabs.Tab) => void
+    >(chrome.tabs.onUpdated.addListener);
+    onUpdated(42, { url }, { url } as chrome.tabs.Tab);
+  }
+
+  it('re-detects on navigation while enabled, whatever tab is on screen', async () => {
+    // The whole point of the re-gate: the bar must not go stale because the
+    // reader is looking at Groups rather than at Home.
+    mockOktaTab(groupResponder);
+    const { result } = renderHook(() => useOktaPageContext(true));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    const before = sendCount();
+    navigateTo('https://acme.okta.com/admin/groups/00gOTHER');
+    await waitFor(() => expect(sendCount()).toBeGreaterThan(before));
+  });
+
+  it('stays inert once pinned', async () => {
+    // A pin is a deliberate freeze on one entity, so a navigation must not move
+    // it — that is the one thing `enabled: false` still exists for. Driven
+    // through the real transition (detect, then pin) rather than mounting
+    // already-disabled, which is what a person pressing Pin actually does.
+    mockOktaTab(groupResponder);
+    const { result, rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) => useOktaPageContext(enabled),
+      { initialProps: { enabled: true } },
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    rerender({ enabled: false });
+    const before = sendCount();
+    navigateTo('https://acme.okta.com/admin/groups/00gOTHER');
+    await afterDebounce();
+    expect(sendCount()).toBe(before);
+  });
+
+  it('stays inert while the panel is hidden, even though it is always enabled', async () => {
+    // ADR-0026's gate, on the hook that is now always-on. Always-enabled must
+    // not mean always-probing: a side panel nobody is looking at costs nothing.
+    mockOktaTab(groupResponder);
+    const { result } = renderHook(() => useOktaPageContext(true));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    const before = sendCount();
+    setVisibility('hidden');
+    navigateTo('https://acme.okta.com/admin/groups/00gHIDDEN');
+    await afterDebounce();
+    expect(sendCount()).toBe(before);
+
+    setVisibility('visible');
+    document.dispatchEvent(new globalThis.Event('visibilitychange'));
+    await waitFor(() => expect(sendCount()).toBeGreaterThan(before));
+  });
+});

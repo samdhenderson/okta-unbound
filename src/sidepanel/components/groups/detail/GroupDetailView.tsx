@@ -137,10 +137,10 @@ interface GroupDetailViewProps {
   isActive?: boolean;
   /**
    * Opens the Export tab pre-scoped to this group's members (the page-level
-   * "Export members" action). Optional and forwarded as-is from `GroupsTab`;
-   * per ADR-0039, omitting it **omits the action from {@link GroupActionBar}
-   * entirely** rather than shipping it disabled — `App.tsx` does not wire this
-   * through to the Groups tab yet.
+   * "Export members" action). Forwarded as-is from `GroupsTab`, which `App.tsx`
+   * wires; per ADR-0039, omitting it **omits the action from
+   * {@link GroupActionBar} entirely** rather than shipping it disabled, which is
+   * why it stays optional for stories and tests.
    */
   onExportGroup?: (groupId: string, groupName: string) => void;
 }

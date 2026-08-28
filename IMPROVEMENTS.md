@@ -345,7 +345,7 @@ block says they mean — same vocabulary, one definition, defined there.
   read-only for reference: `docs/adr/0040-the-background-owns-the-org.md`,
   `src/shared/snapshot/snapshotSync.ts` (the `CollectionSpec` / `ShardProvider`
   model), `src/shared/snapshot/types.ts:9-25`,
-  `src/sidepanel/components/OverviewTab.tsx`
+  `src/sidepanel/components/home/OrgSnapshotCard.tsx`
 - **Verified:** 2026-08-24 — four collections wired (`groups`, `apps`, `rules`,
   `appGroups`); no depth control exists.
 - **Problem:** ADR-0040 gave the org one background-owned store, and the

@@ -631,7 +631,7 @@ describe('membership classification (in-file heuristic)', () => {
 // 3b. Compare entry point: the selected-user actions expose a Compare button.
 //     It now PUSHES a comparison view onto the tab's view stack (ADR-0016)
 //     instead of opening a dialog; the Overview tab still hosts the same feature
-//     in a modal, which UserComparisonModal.test.tsx covers.
+//     in a modal, which the retired Overview dialog's suite covered.
 // ===========================================================================
 describe('compare entry point', () => {
   async function renderWithSelectedUser() {

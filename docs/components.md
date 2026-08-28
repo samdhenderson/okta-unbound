@@ -1,7 +1,7 @@
 # Components
 
 Shared UI lives in [`src/sidepanel/components/shared/`](../src/sidepanel/components/shared/).
-Feature components live under `components/{groups,users,overview}/`.
+Feature components live under `components/{groups,users,apps,home}/`.
 
 ## Hard rules
 
