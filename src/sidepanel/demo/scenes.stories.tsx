@@ -41,7 +41,7 @@ import {
   setStorageSeed,
 } from '../../../.storybook/mocks/chrome';
 
-import { DEMO_HERO_GROUP_ID, demoGroupsById } from './snapshot';
+import { DEMO_HERO_GROUP_ID, currentGroupsById } from './snapshot';
 import { DEMO_COMPARISON_PAIR, demoUsersById } from './users';
 import {
   demoBatchGetUserDetails,
@@ -60,8 +60,10 @@ import {
   demoSearchGroups,
   demoScanGroupMfa,
   demoSearchUsers,
+  demoUpdateUserProfile,
 } from './api';
 import { demoDelay, installDemoControls, seedDemoSnapshot, setDemoLatency } from './control';
+import { resetDemoWrites } from './state';
 
 /** Storage key `App` restores its active tab from. */
 const SELECTED_TAB_KEY = 'okta_unbound_selected_tab';
@@ -104,6 +106,7 @@ const demoApiValue = makeUseOktaApiValue({
   getUserGroupMemberships: slow(demoGetUserGroupMemberships),
   batchGetUserDetails: slow(demoBatchGetUserDetails),
   captureRuleImpact: slow(demoCaptureRuleImpact),
+  updateUserProfile: slow(demoUpdateUserProfile),
   // Not wrapped in `slow`: the scan paces itself against a wall clock so the bar
   // lands on its mark, and adding the scene's read latency on top would push it
   // past the shot it is framed for.
@@ -143,6 +146,9 @@ async function stage(options: {
 }): Promise<void> {
   resetSyncSnapshotResponder();
   resetSchedulerState();
+  // Before the seed: `seedDemoSnapshot` reads the org through the overlay, so a
+  // take that inherited the previous take's edits would seed them into IndexedDB.
+  resetDemoWrites();
   resetPageContext();
   resetStorageSeed();
 
@@ -182,7 +188,7 @@ type Story = StoryObj<typeof meta>;
 const heroGroupContext = {
   getGroupInfo: {
     groupId: DEMO_HERO_GROUP_ID,
-    groupName: demoGroupsById.get(DEMO_HERO_GROUP_ID)?.profile?.name ?? 'Engineering - All',
+    groupName: currentGroupsById().get(DEMO_HERO_GROUP_ID)?.profile?.name ?? 'Engineering - All',
   },
 };
 

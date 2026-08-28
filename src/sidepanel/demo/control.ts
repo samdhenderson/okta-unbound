@@ -15,7 +15,7 @@
 import { orgSnapshotStore } from '../../shared/snapshot/orgSnapshotStore';
 import { SHARD_KEY_SEPARATOR } from '../../shared/snapshot/types';
 import { DEMO_ORIGIN } from './org';
-import { demoAppGroups, demoApps, demoGroups, demoRules } from './snapshot';
+import { DEMO_GROUP_COUNT, currentGroups, demoAppGroups, demoApps, demoRules } from './snapshot';
 
 /**
  * Artificial latency, in milliseconds, applied to every demo read.
@@ -28,6 +28,15 @@ import { demoAppGroups, demoApps, demoGroups, demoRules } from './snapshot';
  * dependency array.
  */
 let latencyMs = 450;
+
+/**
+ * The control surface the mounted scene installed, if one has.
+ *
+ * Held so a write can reach `emitSnapshotUpdated` without the story threading it
+ * down through the API layer. Only the Storybook layer owns the `chrome` fake
+ * that emits it, which is why the handle is injected rather than imported.
+ */
+let installedControls: DemoControls | null = null;
 
 /** Set the artificial read latency. */
 export function setDemoLatency(ms: number): void {
@@ -54,7 +63,7 @@ export async function seedDemoSnapshot(): Promise<void> {
   await orgSnapshotStore.upsertMany(
     'groups',
     DEMO_ORIGIN,
-    demoGroups.map((entity) => ({ id: entity.id, entity })),
+    currentGroups().map((entity) => ({ id: entity.id, entity })),
     now,
   );
   await orgSnapshotStore.upsertMany(
@@ -85,7 +94,7 @@ export async function seedDemoSnapshot(): Promise<void> {
       lastFullWalkAt: now,
       itemCount:
         collection === 'groups'
-          ? demoGroups.length
+          ? DEMO_GROUP_COUNT
           : collection === 'rules'
             ? demoRules.length
             : collection === 'apps'
@@ -108,13 +117,48 @@ export async function seedDemoSnapshotPartial(groupCount: number): Promise<void>
   await orgSnapshotStore.upsertMany(
     'groups',
     DEMO_ORIGIN,
-    demoGroups.slice(0, groupCount).map((entity) => ({ id: entity.id, entity })),
+    currentGroups()
+      .slice(0, groupCount)
+      .map((entity) => ({ id: entity.id, entity })),
     now,
   );
   await orgSnapshotStore.patchMeta('groups', DEMO_ORIGIN, {
     complete: false,
-    itemCount: demoGroups.length,
+    itemCount: DEMO_GROUP_COUNT,
   });
+}
+
+/**
+ * Re-publish the group rows after a write, and tell the panel they moved.
+ *
+ * A profile edit re-derives every rule-fed membership (ADR-0052), which changes
+ * headcounts — but the panel does not read `memberships.ts`. It reads the rows
+ * `seedDemoSnapshot` wrote into IndexedDB, and those are now stale by exactly
+ * the amount the write changed. So the rows are written again and the app's own
+ * `snapshotUpdated` broadcast is fired.
+ *
+ * That second half is the point. The alternative was to reach into the panel and
+ * force a re-render, which would prove nothing: the repaint a viewer sees here
+ * is the same one a background walk produces against a live org, travelling the
+ * same listener in `useOrgSnapshot`. Only the source of the rows differs.
+ *
+ * Groups alone: rules, apps and app-group assignments cannot change under a
+ * profile write, and re-seeding them would spend three IndexedDB round trips to
+ * write back what is already there.
+ */
+export async function republishDemoGroups(): Promise<void> {
+  await orgSnapshotStore.upsertMany(
+    'groups',
+    DEMO_ORIGIN,
+    currentGroups().map((entity) => ({ id: entity.id, entity })),
+    Date.now(),
+  );
+  await orgSnapshotStore.patchMeta('groups', DEMO_ORIGIN, {
+    complete: true,
+    lastFullWalkAt: Date.now(),
+    itemCount: DEMO_GROUP_COUNT,
+  });
+  installedControls?.emitSnapshotUpdated();
 }
 
 /** Live progress handles a scene publishes so the script can drive the ActivityBar. */
@@ -155,6 +199,7 @@ export function installDemoControls(emitSnapshotUpdated: () => void): DemoContro
     seedPartial: seedDemoSnapshotPartial,
     emitSnapshotUpdated,
   };
+  installedControls = controls;
   (globalThis as unknown as { __OKTA_DEMO__?: DemoControls }).__OKTA_DEMO__ = controls;
   return controls;
 }
