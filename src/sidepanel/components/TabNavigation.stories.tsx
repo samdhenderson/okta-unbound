@@ -26,7 +26,7 @@ const meta = {
     onTabChange: { description: 'Called with the chosen tab id when a tab is clicked.' },
   },
   args: {
-    activeTab: 'overview',
+    activeTab: 'home',
     onTabChange: fn(),
   },
 } satisfies Meta<typeof TabNavigation>;

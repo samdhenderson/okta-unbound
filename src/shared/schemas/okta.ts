@@ -431,6 +431,30 @@ export function isProfileSourceApp(features: readonly string[] | undefined): boo
 }
 
 /**
+ * The `features` value that means an app instance has **Group Push** turned on —
+ * the integration that mirrors Okta groups into the downstream app.
+ *
+ * This flag is load-bearing beyond labelling: it is the exact population the
+ * org snapshot walks `/api/v1/apps/{id}/groups` for (`APP_GROUPS_SPEC`'s
+ * shards). Anything that reasons about *absence* of stored app-group
+ * assignments must gate on it, or it reads "we never asked" as "nothing is
+ * assigned".
+ */
+const GROUP_PUSH_FEATURE = 'GROUP_PUSH';
+
+/**
+ * Whether Okta reports Group Push as enabled on this app instance.
+ *
+ * @param features - The app row's `features` array, or `undefined`.
+ * @returns `true` when the array contains `GROUP_PUSH`.
+ * @example
+ * isGroupPushApp(['GROUP_PUSH', 'IMPORT_NEW_USERS']); // true
+ */
+export function isGroupPushApp(features: readonly string[] | undefined): boolean {
+  return features !== undefined && features.includes(GROUP_PUSH_FEATURE);
+}
+
+/**
  * Shape a string must match to be accepted as an Okta group id: the `00g`
  * prefix followed by an alphanumeric body, 18+ characters in total.
  *

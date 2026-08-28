@@ -60,7 +60,13 @@ const ADMIN: PageDetection = { pageType: 'admin', ...NO_ENTITY };
  *
  * @param enabled - When `false`, live re-detection on navigation is suspended
  *   (a resync is deferred until re-enabled while the panel is visible). Defaults
- *   to `true`. Used to scope detection to the active Overview tab.
+ *   to `true`. `App` passes `!isPinned`: a pinned masthead is deliberately
+ *   describing a page the browser may have left, so it must not re-detect. It is
+ *   **not** gated on any tab — {@link ContextBar} renders above the rail on every
+ *   one of them, and a tab-gated feed would leave the bar misdescribing the live
+ *   page from the other eight (ADR-0032). ADR-0018's rule is that no hidden *tab*
+ *   issues Okta traffic; ADR-0026's visibility gate lives inside
+ *   {@link useOktaTabContext} and still stops a hidden panel probing.
  * @returns The detected `pageType` with the corresponding `groupInfo` /
  *   `userInfo` / `appInfo` / `policyInfo` (the others `null`), plus shared
  *   connection state (`connectionStatus`, `targetTabId`, `error`, `isLoading`,

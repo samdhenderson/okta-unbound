@@ -3,7 +3,7 @@
  * @description Phase 1 of the comparison surface: search for and pick the second user.
  */
 import React from 'react';
-import Icon from '../../overview/shared/Icon';
+import Icon from '../../shared/Icon';
 import Input from '../../shared/Input';
 import LoadingSpinner from '../../shared/LoadingSpinner';
 import UserSearchResults from '../UserSearchResults';
@@ -67,7 +67,7 @@ const ComparisonSearchPhase: React.FC<ComparisonSearchPhaseProps> = ({
       {/*
         No `autoFocus`: neither host has ever produced focus here (Modal's own
         effect focuses its close button after the child commit — characterized in
-        UserComparisonModal.test.tsx), and the pushed host mounts this input while
+        the retired Overview dialog), and the pushed host mounts this input while
         the view is popped, where autofocusing would steal focus from the tab.
         Focus into a pushed view is `useViewStack`'s job, and it lands here.
       */}

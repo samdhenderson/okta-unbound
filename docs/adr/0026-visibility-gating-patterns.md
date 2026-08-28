@@ -75,6 +75,12 @@ The data-layer plan proposed adding `visible` and `revalidateOnShow` to
    frozen upstream by `useOktaPageContext(activeTab === 'overview' && !isPinned)`. The
    gating already lives one level up the tree. Adding the option gives them nothing.
 
+   > **Note, 2026-08-28.** The Overview tab has been removed and the expression
+   > cited here is now `useOktaPageContext(!isPinned)` — see the note added to
+   > ADR-0018 for why the tab dropped out of it. The finding is unaffected: the
+   > point was that these keys are frozen _upstream_, and they still are. What
+   > changed is which condition freezes them.
+
 3. **`useAppsData` cannot take it.** Its latch identity is `(targetTabId, oktaOrigin)`
    while its cache key is `oktaOrigin` alone — deliberately, so two Chrome tabs on one
    org share an inventory. `useEntityQuery` refetches on cache-key identity plus TTL,

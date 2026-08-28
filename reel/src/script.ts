@@ -87,9 +87,9 @@ interface CoverageRow {
  *
  * Tour first, so the film establishes what the product *is* before it argues
  * about what it is *for*; the three deep chapters then run without needing to
- * reintroduce anything. `overview` is deliberately absent: it is being renamed
- * Home and repurposed, and a chapter shot against it today films a tab that is
- * about to stop existing in that form.
+ * reintroduce anything. The Overview tab it once opened on has been removed and
+ * replaced by Home, which has no chapter yet — a `home` scene is worth shooting
+ * and is deliberately not being faked from the old footage.
  */
 export const SCRIPT: Scene[] = [
   {

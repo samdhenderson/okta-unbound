@@ -12,7 +12,7 @@ import React, { useMemo, useState } from 'react';
 import type { MemberMfaResult, MfaScanStatus } from '../../../shared/types';
 import CollapsibleSection from '../shared/CollapsibleSection';
 import { Input, Tabs, type TabItem } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import AttributeFacet from './AttributeFacet';
 import BreakdownReport from './BreakdownReport';
 import MfaScanButton from './MfaScanButton';

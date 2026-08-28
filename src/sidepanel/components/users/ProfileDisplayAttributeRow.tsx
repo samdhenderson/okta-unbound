@@ -16,7 +16,7 @@
  */
 import React from 'react';
 import { Badge, Checkbox, IconButton, Select } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import type { AttributeDescriptor, AttributeKind } from './profileAttributes';
 
 /** One `<option>` in the row's category dropdown. */

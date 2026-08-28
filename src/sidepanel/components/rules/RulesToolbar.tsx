@@ -10,11 +10,11 @@ import React from 'react';
 import FilterPill from '../shared/FilterPill';
 import Select from '../shared/Select';
 import Input from '../shared/Input';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import { RULE_SORT_LABELS, type RuleSortMode } from '../../../shared/rules/similarity';
 
 /** Client-side filter applied on top of the text search over loaded rules. */
-export type RulesFilterType = 'all' | 'active' | 'conflicts' | 'current-group';
+export type RulesFilterType = 'all' | 'active' | 'paused' | 'conflicts' | 'current-group';
 
 /** Order in which the sort options are offered. */
 const SORT_OPTIONS: RuleSortMode[] = ['default', 'similarity', 'name'];
@@ -65,6 +65,9 @@ const RulesToolbar: React.FC<RulesToolbarProps> = ({
         </FilterPill>
         <FilterPill active={activeFilter === 'active'} onClick={() => onFilterChange('active')}>
           Active Only
+        </FilterPill>
+        <FilterPill active={activeFilter === 'paused'} onClick={() => onFilterChange('paused')}>
+          Paused
         </FilterPill>
         <FilterPill
           active={activeFilter === 'conflicts'}

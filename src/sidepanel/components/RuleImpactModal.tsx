@@ -12,7 +12,7 @@ import React, { useState } from 'react';
 import Modal from './shared/Modal';
 import Button from './shared/Button';
 import LoadingSpinner from './shared/LoadingSpinner';
-import StatCard from './overview/shared/StatCard';
+import StatCard from './shared/StatCard';
 import type { RuleImpactSummary, TargetGroupImpact } from '../../shared/membership/ruleImpact';
 import type { RuleImpactMode, RuleImpactStatus, RuleImpactProgress } from '../hooks/useRuleImpact';
 import { userDisplayName } from '../../shared/utils/userDisplay';

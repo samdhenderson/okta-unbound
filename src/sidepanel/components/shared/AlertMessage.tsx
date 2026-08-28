@@ -6,7 +6,7 @@
  * (`success | warning | danger | info` — ADR-0002). Renders with `role="alert"`.
  */
 import React from 'react';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import { type StatusType } from './status';
 
 /** The content of an alert: display text plus its severity. */

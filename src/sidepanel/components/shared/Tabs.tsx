@@ -17,7 +17,7 @@
  * {@link sidepanel/hooks/useTabRail.useTabRail}.
  */
 import React, { useRef } from 'react';
-import Icon, { type IconType } from '../overview/shared/Icon';
+import Icon, { type IconType } from '../shared/Icon';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useTabRail } from '../../hooks/useTabRail';
 

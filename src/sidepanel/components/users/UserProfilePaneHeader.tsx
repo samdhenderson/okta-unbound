@@ -44,7 +44,7 @@
  */
 import React from 'react';
 import { Button, IconButton } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 
 /**
  * The pane-level edit verbs and the state that decides which of them show.

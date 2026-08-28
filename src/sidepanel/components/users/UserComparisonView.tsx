@@ -17,16 +17,18 @@
  *
  * ## Why the hook lives in the host, not here
  *
- * The comparison has two hosts — {@link UserComparisonModal} (the Overview's dialog)
- * and {@link UserComparisonPanel} (the Users tab's pushed view, ADR-0016) — and both
- * must keep the comparison's state alive while the surface is hidden so that
- * `useUserComparison`'s reset effect, not an unmount, is what clears it. A dialog
- * unmounts its children when closed, so a hook called *here* would have a different
- * lifetime in each host. It is therefore instantiated one level up, in each host.
+ * The host must keep the comparison's state alive while the surface is hidden, so
+ * that `useUserComparison`'s reset effect — not an unmount — is what clears it. The
+ * hook is therefore instantiated one level up, in the host.
  *
- * "Change user" is rendered here rather than by the host: the dialog has a footer and
- * the pushed view does not, so the one affordance that must exist in both lives with
- * the surface it acts on.
+ * That shape is not arbitrary. There were two hosts until the Overview tab was
+ * retired with its dialog: {@link UserComparisonPanel} (the Users tab's pushed
+ * view, ADR-0016) and a dialog, which unmounts its children when closed. A hook
+ * called *here* would have had a different lifetime in each.
+ *
+ * "Change user" is rendered here rather than by the host for the same reason: a
+ * dialog has a footer to put it in and a pushed view does not, so the one
+ * affordance that had to exist in both lives with the surface it acts on.
  *
  * ## The one write this surface performs
  *

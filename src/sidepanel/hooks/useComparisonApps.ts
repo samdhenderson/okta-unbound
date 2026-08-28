@@ -2,7 +2,7 @@
  * @module sidepanel/hooks/useComparisonApps
  * @description Loads and holds the app-assignment side of the user-comparison view.
  *
- * Extracted from `UserComparisonModal`; owns fetching both users' app lists whenever
+ * Extracted from the retired `UserComparisonModal`; owns fetching both users' app lists whenever
  * the compared user changes and exposing them plus a loading flag to the modal.
  */
 

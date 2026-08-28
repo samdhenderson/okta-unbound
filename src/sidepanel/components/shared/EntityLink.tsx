@@ -41,7 +41,7 @@
  * text (escaped) and truncate rather than overflow their row.
  */
 import React from 'react';
-import Icon, { type IconType } from '../overview/shared/Icon';
+import Icon, { type IconType } from '../shared/Icon';
 import IconButton from './IconButton';
 import { useEntityNavigation, type EntityType } from '../../contexts/NavigationContext';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';

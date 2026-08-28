@@ -11,7 +11,7 @@
 import React, { useMemo } from 'react';
 import Button from '../shared/Button';
 import EmptyState from '../shared/EmptyState';
-import StatCard from '../overview/shared/StatCard';
+import StatCard from '../shared/StatCard';
 import type { GroupSummary } from '../../../shared/types';
 import { analyzeClutter } from './clutterAnalysis';
 

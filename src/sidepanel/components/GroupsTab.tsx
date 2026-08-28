@@ -46,16 +46,19 @@ import AlertMessage from './shared/AlertMessage';
 import Button from './shared/Button';
 import EntityIdentity from './shared/EntityIdentity';
 import OpenInOktaLink from './shared/OpenInOktaLink';
+import WorkingSetPinButton from './shared/WorkingSetPinButton';
 import { groupIdentity } from './groups/groupIdentity';
 import { useOktaApi } from '../hooks/useOktaApi';
 import type { OperationResult } from '../hooks/useOktaApi/types';
 import { useGroupsLoader } from '../hooks/useGroupsLoader';
 import { useGroupLiveSearch } from '../hooks/useGroupLiveSearch';
 import { useGroupFilters } from '../hooks/useGroupFilters';
+import type { GroupsListView } from '../listViewRequest';
 import { useGroupSelection } from '../hooks/useGroupSelection';
 import { useGroupMembersCache } from '../hooks/useGroupMembersCache';
 import { useGroupMerge } from '../hooks/useGroupMerge';
 import { useViewStack } from '../hooks/useViewStack';
+import { useWorkingSet } from '../hooks/useWorkingSet';
 import { useScrollPreservation } from '../hooks/useScrollPreservation';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { GroupSummary } from '../../shared/types';
@@ -88,10 +91,13 @@ interface GroupsTabProps {
   onGroupSelected?: () => void;
   /**
    * Opens the Export tab pre-scoped to a group's members — the detail view's
-   * page-level "Export members" action (ADR-0030). Optional: `App.tsx` already
-   * owns a `handleExportGroup` of this shape for the Overview tab but does not
-   * yet wire it through to the Groups tab, so this stays a no-op action rather
-   * than a hard requirement until that wiring lands.
+   * page-level "Export members" action (ADR-0030). `App.tsx` wires it, and has
+   * since the prop existed.
+   *
+   * Optional only so a story or a test can mount this tab without an Export
+   * route. Omitting it **omits the action** rather than disabling it (ADR-0039).
+   * This doc used to claim the wiring was missing; ADR-0039 records that the
+   * claim was false in the very commit that made it, and it is corrected here.
    */
   onExportGroup?: (groupId: string, groupName: string) => void;
   /**
@@ -100,6 +106,14 @@ interface GroupsTabProps {
    * is gated on it. Defaults to `true` for standalone use.
    */
   isActive?: boolean;
+  /**
+   * A pre-filtered view requested from another tab (the Home card's group
+   * sub-counts). Applied once on arrival, then cleared via
+   * {@link GroupsTabProps.onListViewConsumed}.
+   */
+  listView?: GroupsListView | null;
+  /** Invoked once {@link GroupsTabProps.listView} has been applied. */
+  onListViewConsumed?: () => void;
 }
 
 /** Breadcrumb label for a group pushed onto the view stack. */
@@ -121,6 +135,8 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   onGroupSelected,
   isActive = true,
   onExportGroup,
+  listView,
+  onListViewConsumed,
 }) => {
   // Shell-owned state: error has three producers (loader, live search, useOktaApi
   // onResult) so it stays here; searchMode is read by three hooks so it stays above
@@ -202,6 +218,9 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   // deep link — from one pure builder, so those four never disagree with each other.
   const identity = detailGroup ? groupIdentity(detailGroup) : undefined;
 
+  // Read only for the pin's own state; the list of pinned entities is Home's.
+  const workingSet = useWorkingSet(oktaOrigin);
+
   const { push: pushView } = nav;
   const handleOpenDetail = useCallback(
     (group: GroupSummary) => {
@@ -276,6 +295,45 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
     // unstable-filters-identity churn while still reacting when a load completes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedGroupId, groups, loading]);
+
+  // A pre-filtered view requested from the Home card.
+  //
+  // Two things have to happen together or the arrival is a lie. The list must be
+  // in cached mode — the live search returns Okta's matches for a query, and no
+  // local filter applies to them. And every other axis is cleared, so the rows
+  // on screen are the population the figure counted rather than that population
+  // intersected with whatever was left selected.
+  //
+  // The filter panel is deliberately NOT opened. A reader who pressed a finding
+  // asked for the list, not for the controls that produced it, and arriving on
+  // an expanded panel puts a wall of selects between them and the rows. What
+  // stops the short list being unexplained is the toggle's active-filter count,
+  // which is already on screen and is one press from the panel.
+  //
+  // Groups load on demand, so a request can arrive against an empty list; the
+  // load is kicked once and the filter simply applies to the rows when they land.
+  const listViewHandledRef = useRef<GroupsListView | null>(null);
+  useEffect(() => {
+    if (!listView) {
+      listViewHandledRef.current = null;
+      return;
+    }
+    if (listViewHandledRef.current === listView) return;
+    listViewHandledRef.current = listView;
+
+    nav.reset();
+    setSearchMode('cached');
+    filters.clearFilters();
+    if (listView === 'empty') filters.setSizeFilter('empty');
+    else filters.setRuleFilter('unruled');
+
+    if (groups.length === 0 && !loading) void loadAllGroups();
+    onListViewConsumed?.();
+    // `filters` and `nav` are recreated every render; depending on them would
+    // re-run this on every keystroke. The ref above is what makes it once-per
+    // request, exactly as the `selectedGroupId` deep-link below does.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listView, groups.length, loading]);
 
   const handleExportSelection = useCallback(() => {
     if (selectedGroupIds.size === 0) {
@@ -354,6 +412,20 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
             </Button>
           )
         }
+        cornerAction={
+          detailGroup && (
+            <WorkingSetPinButton
+              pinned={workingSet.isPinned('group', detailGroup.id)}
+              onToggle={() =>
+                workingSet.togglePin({
+                  kind: 'group',
+                  id: detailGroup.id,
+                  name: detailGroup.name,
+                })
+              }
+            />
+          )
+        }
       />
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
@@ -408,6 +480,8 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
                 setSizeFilter={filters.setSizeFilter}
                 pushFilter={filters.pushFilter}
                 setPushFilter={filters.setPushFilter}
+                ruleFilter={filters.ruleFilter}
+                setRuleFilter={filters.setRuleFilter}
                 pushAppFilter={filters.pushAppFilter}
                 setPushAppFilter={filters.setPushAppFilter}
                 availablePushApps={filters.availablePushApps}

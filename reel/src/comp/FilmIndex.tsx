@@ -56,7 +56,7 @@
 import React from 'react';
 import { interpolate } from 'remotion';
 import { TAB_DEFS } from '../../../src/sidepanel/tabs';
-import Icon from '../../../src/sidepanel/components/overview/shared/Icon';
+import Icon from '../../../src/sidepanel/components/shared/Icon';
 import { INDEX } from '../layout';
 import { FONT, INTER, STAGE, TYPE } from '../theme';
 

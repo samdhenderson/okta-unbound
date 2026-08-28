@@ -47,12 +47,22 @@ Okta's API budget.
 
 ## Features
 
-### Overview tab
+### Home tab
 
-Context-aware insights based on the current Okta page:
+The panel's landing tab. Every fact on it either arrives free, arrives in one list
+request, or is a button:
 
-- Automatic detection of group, user, app, and admin pages
-- Quick stats and relevant actions for each context
+- A jump bar: paste an Okta id or type a name to go straight to a group, user, app
+  or rule. A well-formed id resolves against the local org snapshot first, so on a
+  warm org it costs **zero requests**
+- A working set: what you pinned, and the last few entities you opened
+- This org: the findings worth acting on — empty groups, groups no rule fills,
+  paused rules, deactivated apps — each one a link into that list, already filtered
+- Reports: empty groups nothing fills, and app access no rule maintains, both read
+  out of rows already on disk and both expandable in place
+
+The masthead above the rail still names whatever Okta page the browser is showing,
+on every tab.
 
 ### Users tab
 

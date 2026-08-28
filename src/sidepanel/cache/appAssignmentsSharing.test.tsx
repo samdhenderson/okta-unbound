@@ -1,18 +1,21 @@
 /**
- * Regression test for the `['appAssignments', appId]` entity-cache key collision.
+ * Regression test for the `appAssignmentCounts` entity-cache key collision.
  *
- * The Applications tab's expanded row and the detected-app Overview both cache an
- * app's assignment data, and — because every tab stays mounted (ADR-0018) — both can
- * be live at once against the same module-level `entityCache` singleton. They used to
- * write **two different shapes under one key**: the row stored
- * `{ users, groups }` while the Overview stored `{ counts, accessPolicyId }`.
- * Whichever populated first corrupted the other's read, and in the Overview→row
- * direction that meant `data.users` was `undefined` and the row crashed on
- * `undefined.toLocaleString()`.
+ * Two screens used to cache an app's assignment data under one key while
+ * writing **two different shapes** into it: the Applications-tab row stored
+ * `{ users, groups }` and the detected-app Overview stored
+ * `{ counts, accessPolicyId }`. Because every tab stays mounted (ADR-0018) both
+ * could be live at once against the same module-level `entityCache` singleton,
+ * so whichever populated first corrupted the other's read — and in the
+ * Overview→row direction that meant `data.users` was `undefined` and the row
+ * crashed on `undefined.toLocaleString()`.
  *
- * Both now share one key holding one shape, so the entry is not just safe but
- * genuinely warm: whichever screen the user reaches first spares the other a request.
- * These tests drive the two consumers in both orders against a single cache.
+ * The Overview tab is gone, so this is now a **single-consumer** test, reduced
+ * from the two-order version deliberately rather than deleted (ADR-0022). What
+ * it keeps is the part a second consumer would break: the *shape* stored under
+ * the key, asserted against the cache itself. A future screen writing a wrapper
+ * object into this entry fails here rather than in whatever component reads it
+ * second.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -27,9 +30,9 @@ const api = vi.hoisted(() => ({
 vi.mock('../hooks/useOktaApi', () => ({ useOktaApi: () => api }));
 vi.mock('../../sidepanel/hooks/useOktaApi', () => ({ useOktaApi: () => api }));
 
-import AppOverview from '../components/overview/AppOverview';
 import AppListItem from '../components/apps/AppListItem';
-import { resetEntityCache } from './entityCache';
+import { peek, resetEntityCache } from './entityCache';
+import { cacheKeys } from './keys';
 import type { AppAssignmentCounts } from '../hooks/useOktaApi/appOperations';
 
 const APP_ID = '0oaFAKE000000000001';
@@ -60,45 +63,25 @@ async function renderExpandedRow() {
 const rowCountBadge = () =>
   screen.getAllByText((_content, el) => el?.textContent === '1,284 users' && el.tagName === 'SPAN');
 
-describe('app assignment counts shared between the Overview and the Apps tab', () => {
-  it('renders the row counts when the Overview populated the cache first', async () => {
-    render(<AppOverview appId={APP_ID} appName="Payroll" targetTabId={1} onExport={vi.fn()} />);
-    await screen.findByText('1,284');
-
-    // Previously the Overview left `{ counts, accessPolicyId }` under this key, so the
-    // row read `data.users === undefined` and threw on `.toLocaleString()`.
+describe('the shared app assignment-counts cache entry', () => {
+  it('holds the counts themselves, not a wrapper around them', async () => {
     const { unmount } = await renderExpandedRow();
     await waitFor(() => expect(rowCountBadge().length).toBeGreaterThan(0));
+    // The collision was a *shape* disagreement, so the shape is what is pinned.
+    // A second consumer storing `{ counts, accessPolicyId }` here again fails
+    // this line rather than crashing whichever screen reads the entry second.
+    expect(peek(cacheKeys.appAssignmentCounts(APP_ID))).toEqual(COUNTS);
     unmount();
   });
 
-  it('renders the Overview counts when the Apps tab populated the cache first', async () => {
-    const { unmount } = await renderExpandedRow();
+  it('fetches once, then serves the entry warm', async () => {
+    const first = await renderExpandedRow();
     await waitFor(() => expect(rowCountBadge().length).toBeGreaterThan(0));
-    unmount();
+    first.unmount();
 
-    render(<AppOverview appId={APP_ID} appName="Payroll" targetTabId={1} onExport={vi.fn()} />);
-    expect(await screen.findByText('1,284')).toBeInTheDocument();
-  });
-
-  it('fetches the counts once across both consumers', async () => {
-    render(<AppOverview appId={APP_ID} appName="Payroll" targetTabId={1} onExport={vi.fn()} />);
-    await screen.findByText('1,284');
-    const afterOverview = api.getAppAssignmentCounts.mock.calls.length;
-
-    const { unmount } = await renderExpandedRow();
+    const second = await renderExpandedRow();
     await waitFor(() => expect(rowCountBadge().length).toBeGreaterThan(0));
-    unmount();
-
-    // One shared entry, one walk of `/apps/{id}/users` + `/apps/{id}/groups`.
-    expect(api.getAppAssignmentCounts).toHaveBeenCalledTimes(afterOverview);
-  });
-
-  it('issues one GET /api/v1/apps/{id} per app overview', async () => {
-    render(<AppOverview appId={APP_ID} appName="Payroll" targetTabId={1} onExport={vi.fn()} />);
-    await screen.findByText('1,284');
-
-    // The access-policy id is derived from this record's `_links`, not re-fetched.
-    expect(api.getAppById).toHaveBeenCalledTimes(1);
+    expect(api.getAppAssignmentCounts).toHaveBeenCalledTimes(1);
+    second.unmount();
   });
 });

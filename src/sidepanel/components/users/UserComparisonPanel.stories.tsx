@@ -24,7 +24,8 @@ const meta = {
       description: {
         component:
           "View-stack host for the two-user comparison — the Users tab's mount site.\n\n" +
-          'The counterpart of `UserComparisonModal`: it owns the `useUserComparison` instance ' +
+          'The Users-tab comparison host, and since the Overview dialog was retired the only ' +
+          'one: it owns the `useUserComparison` instance ' +
           'and renders the shared `UserComparisonView` with **no dialog chrome**, because the ' +
           "Users tab shows the comparison as a pushed view (ADR-0016). The tab's one " +
           '`PageHeader` above it carries the title, the breadcrumb trail and the back ' +

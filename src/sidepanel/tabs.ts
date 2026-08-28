@@ -8,19 +8,11 @@
  * top-level section (e.g. Applications, Authentication Policies) means adding
  * one entry here — the navigation bar and persistence-restore pick it up.
  */
-import type { IconType } from './components/overview/shared/Icon';
+import type { IconType } from './components/shared/Icon';
 
 /** Identifier for each top-level side-panel tab. */
 export type TabType =
-  | 'overview'
-  | 'rules'
-  | 'users'
-  | 'groups'
-  | 'apps'
-  | 'policies'
-  | 'export'
-  | 'explorer'
-  | 'history';
+  'home' | 'rules' | 'users' | 'groups' | 'apps' | 'policies' | 'export' | 'explorer' | 'history';
 
 /** One top-level tab: its stable id, its visible label, and its rail glyph. */
 export interface TabDef {
@@ -49,7 +41,7 @@ export interface TabDef {
  * and deliberately unchanged.
  */
 export const TAB_DEFS: ReadonlyArray<TabDef> = [
-  { id: 'overview', label: 'Overview', icon: 'chart' },
+  { id: 'home', label: 'Home', icon: 'home' },
   { id: 'users', label: 'Users', icon: 'user' },
   { id: 'groups', label: 'Groups', icon: 'users' },
   { id: 'apps', label: 'Apps', icon: 'app' },
@@ -63,15 +55,21 @@ export const TAB_DEFS: ReadonlyArray<TabDef> = [
 /**
  * Retired tab ids from earlier versions mapped to their current equivalents.
  *
+ * `'overview'` is listed like any other retired id. It was the panel's landing
+ * tab for most of this extension's life, so it is the id most likely to be
+ * sitting in an existing install's `chrome.storage.local` — and Home is what
+ * replaced it, both in position and in job.
+ *
  * NOTE: `'apps'` is no longer listed here. It used to be a retired id migrated to
  * `'overview'`; now that the Applications tab exists it is a real {@link TabType},
  * so a saved `'apps'` selection passes through {@link migrateLegacyTabId}
  * unchanged and restores the Applications tab.
  */
 const LEGACY_TAB_MAP: Readonly<Record<string, TabType>> = {
-  dashboard: 'overview',
-  operations: 'overview',
-  security: 'overview',
+  overview: 'home',
+  dashboard: 'home',
+  operations: 'home',
+  security: 'home',
   undo: 'history',
 };
 
@@ -80,7 +78,10 @@ const LEGACY_TAB_MAP: Readonly<Record<string, TabType>> = {
  * {@link TabType}.
  *
  * Current ids pass through unchanged; retired ids map to their successors; any
- * unrecognized value falls back to `'overview'` rather than being trusted.
+ * unrecognized value falls back to the first tab rather than being trusted.
+ *
+ * The fallback is `'home'`: it is the tab the rail opens on, so an unreadable
+ * saved value lands where a first-time user lands.
  *
  * @param saved - The raw tab id read from `chrome.storage.local`.
  * @returns A valid current tab id.
@@ -89,5 +90,5 @@ export function migrateLegacyTabId(saved: string): TabType {
   if (TAB_DEFS.some((tab) => tab.id === saved)) {
     return saved as TabType;
   }
-  return LEGACY_TAB_MAP[saved] ?? 'overview';
+  return LEGACY_TAB_MAP[saved] ?? 'home';
 }

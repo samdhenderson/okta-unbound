@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import LoadingSpinner from './LoadingSpinner';
 
 /** Spinning loading indicator with optional message and centering. */

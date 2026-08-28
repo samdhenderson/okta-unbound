@@ -16,7 +16,7 @@
  */
 import React, { useMemo, useState } from 'react';
 import { Button, Checkbox, Eyebrow, FilterPill, IconButton, Input } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import type {
   ProfileDisplayCategory,
   ProfileDisplayConfig,

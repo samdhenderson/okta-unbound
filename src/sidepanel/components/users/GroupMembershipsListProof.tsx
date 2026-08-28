@@ -35,7 +35,7 @@
  */
 import React, { useCallback, useState } from 'react';
 import { Button } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import { membershipSourceLine, sourceLineLabel } from '../../../shared/membership/sourceLine';
 import { withMembershipProvenance } from '../../../shared/membership/provenance';
 import type { MemberRuleAttribution } from '../../../shared/membership/memberRuleAttribution';

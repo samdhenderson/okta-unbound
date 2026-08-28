@@ -23,7 +23,7 @@
  */
 import React from 'react';
 import { CopyableId, CopyButton, EntityLink } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import MemberSourceMeter from './detail/MemberSourceMeter';
 import type { GroupSummary } from '../../../shared/types';
 import type { MemberSourceBreakdown } from '../../../shared/membership/groupSource';

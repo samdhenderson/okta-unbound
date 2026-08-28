@@ -59,7 +59,7 @@
  */
 import React, { useMemo, useState } from 'react';
 import { Badge, EmptyState, Eyebrow, FilterPill, IconButton, Input, Skeleton } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import type { ProfileDisplayConfig } from '../../../shared/storage/profileDisplayStore';
 import type { AttributeDescriptor } from './profileAttributes';
 import { buildAttributeBlocks } from './profileAttributeBlocks';

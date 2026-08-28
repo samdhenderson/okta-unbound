@@ -33,7 +33,7 @@ component.
 
 Check three places before writing a line of markup: the barrel
 (`src/sidepanel/components/shared/index.ts`), the `Icon` registry
-(`src/sidepanel/components/overview/shared/Icon.tsx`), and `shared/utils/`.
+(`src/sidepanel/components/shared/Icon.tsx`), and `shared/utils/`.
 Most needs are already a prop away:
 
 - **A search field** → compose `Input` + `Icon` + `LoadingSpinner`/`IconButton`,
@@ -70,7 +70,7 @@ Most primitives use `sm | md | lg`, but they are **not** the same three
 pixel values across components, and two primitives extend the scale on
 purpose:
 
-- `Icon` (`src/sidepanel/components/overview/shared/Icon.tsx`): `xs | sm | md
+- `Icon` (`src/sidepanel/components/shared/Icon.tsx`): `xs | sm | md
 | lg | xl` → 12 / 16 / 20 / 24 / 32px.
 - `LoadingSpinner` (`src/sidepanel/components/shared/LoadingSpinner.tsx`):
   `sm | md | lg | xl | 2xl` → 16 / 20 / 24 / 32 / 48px, default `xl`.

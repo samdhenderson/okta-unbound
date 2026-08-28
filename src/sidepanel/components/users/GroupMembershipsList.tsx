@@ -48,7 +48,7 @@
  */
 import React, { useMemo, useState } from 'react';
 import { EmptyState, FilterPill, IconButton, Input, Skeleton } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import GroupMembershipRow from './GroupMembershipRow';
 import { useMembershipProofs } from './GroupMembershipsListProof';
 import {

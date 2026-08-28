@@ -32,7 +32,7 @@
  * happen.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import IconButton from './IconButton';
 import Badge, { type BadgeVariant } from './Badge';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -61,6 +61,17 @@ interface PageHeaderProps {
    * {@link PageHeaderProps.badge}, which sits to their left.
    */
   actions?: React.ReactNode;
+  /**
+   * Optional node parked in the **bottom-right corner** of the header, below
+   * {@link PageHeaderProps.actions} — today the working-set pin.
+   *
+   * A separate slot rather than another entry in `actions` because it is a
+   * different weight of thing: `actions` holds the page's verbs, and a small
+   * optional convenience sitting among them would read as one. In flow rather
+   * than absolutely positioned, so it cannot land on top of a long identity
+   * region at 360px.
+   */
+  cornerAction?: React.ReactNode;
   /**
    * Optional back handler. When set, a leading chevron-left {@link IconButton} is
    * rendered before the title. Pass `undefined` at the root of a view stack to
@@ -147,6 +158,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   title,
   subtitle,
   actions,
+  cornerAction,
   badge,
   onBack,
   backLabel = 'Back',
@@ -282,10 +294,24 @@ const PageHeader: React.FC<PageHeaderProps> = ({
             region below it has said anything. Here it sits with the actions, immediately
             left of the Okta link, and the title gets the width.
           */}
-          {(badge || actions) && (
-            <div className="shrink-0 flex items-center gap-2">
-              {badge && <Badge variant={badge.variant}>{badge.text}</Badge>}
-              {actions}
+          {(badge || actions || cornerAction) && (
+            <div
+              className={`shrink-0 flex flex-col items-end gap-2 ${hasRegion ? 'self-stretch' : ''}`}
+            >
+              {(badge || actions) && (
+                <div className="flex items-center gap-2">
+                  {badge && <Badge variant={badge.variant}>{badge.text}</Badge>}
+                  {actions}
+                </div>
+              )}
+              {/*
+                `mt-auto` is what parks this in the corner: with an identity
+                region the column is stretched to the header's full height and
+                the margin pushes the node to the bottom; without one the column
+                is content-height and the margin collapses, so a header with no
+                region renders exactly as it did before this slot existed.
+              */}
+              {cornerAction && <div className="mt-auto">{cornerAction}</div>}
             </div>
           )}
         </div>

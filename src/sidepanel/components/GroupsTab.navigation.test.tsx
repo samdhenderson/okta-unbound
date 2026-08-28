@@ -84,7 +84,11 @@ globalThis.chrome = {
     onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
   },
   tabs: { sendMessage: vi.fn(), get: vi.fn() },
-  storage: { local: { get: storageGet, set: storageSet, remove: vi.fn() } },
+  storage: {
+    local: { get: storageGet, set: storageSet, remove: vi.fn() },
+    // The header's working-set pin subscribes here (`useWorkingSet`).
+    onChanged: { addListener: vi.fn(), removeListener: vi.fn() },
+  },
 } as any;
 
 /** A serialized GroupSummary, i.e. what lives in chrome.storage.local. */

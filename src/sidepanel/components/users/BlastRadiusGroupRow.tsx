@@ -39,7 +39,7 @@
  */
 import React from 'react';
 import { Badge, ListRow } from '../shared';
-import Icon, { type IconType } from '../overview/shared/Icon';
+import Icon, { type IconType } from '../shared/Icon';
 import { BUCKET_PILL_LABELS, type MembershipBucket } from './membershipVerdict';
 import type { GroupEffect, GroupEffectKind } from '../../../shared/membership/blastRadiusTypes';
 

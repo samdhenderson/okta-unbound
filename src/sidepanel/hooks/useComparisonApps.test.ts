@@ -3,7 +3,7 @@
  * @description The one branch the end-to-end comparison tests cannot reach: an
  * app read that fails for **one** of the two users.
  *
- * `UserComparisonModal.test.tsx` drives the whole surface through a single
+ * `UsersTab.test.tsx` drives the whole surface through a single
  * `appsResponse` stub, so it can only fail both walks together. The buckets are a
  * set difference, though, so a short list on one side alone is enough to invent a
  * "only the other user has this" row — which makes the asymmetric case the one

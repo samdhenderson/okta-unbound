@@ -404,7 +404,10 @@ chrome.runtime.onInstalled.addListener((details) => {
     chrome.storage.sync.set({
       version,
       operationDelay: 100,
-      defaultView: 'overview',
+      // Write-only: nothing reads this key, so the rename needs no migration.
+      // Kept accurate anyway — a stale value here would be the first thing to
+      // mislead whoever eventually gives it a reader.
+      defaultView: 'home',
     });
 
     // Set up audit log retention alarm (runs daily at midnight)

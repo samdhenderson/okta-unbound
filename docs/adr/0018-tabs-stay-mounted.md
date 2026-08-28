@@ -59,9 +59,9 @@ decision rests entirely on hidden tabs being inert.
 > looking at.**
 
 A new tab, or a new mount effect in an existing tab, is not done until it has an
-answer for "what does this do while hidden?". `App.tsx:108`'s
-`useOktaPageContext(activeTab === 'overview' && !isPinned)` is the original instance
-of the pattern. As audited at the time of this decision:
+answer for "what does this do while hidden?". `App.tsx`'s
+`useOktaPageContext(activeTab === 'overview' && !isPinned)` was the original
+instance of the pattern. As audited at the time of this decision:
 
 | Tab      | What is gated while hidden                                                  |
 | -------- | --------------------------------------------------------------------------- |
@@ -73,6 +73,19 @@ of the pattern. As audited at the time of this decision:
 | Policies | The one-per-connected-tab policy auto-load                                  |
 | Export   | The live match-count probe                                                  |
 | History  | Nothing to gate — `AuditLogViewer` reads IndexedDB, issues no Okta traffic  |
+
+> **Note, 2026-08-28.** The Overview tab has been removed and replaced by Home,
+> and the reference example above went with it. `useOktaPageContext` survives as
+> the `ContextBar` masthead's feed and is now gated `!isPinned` alone — the
+> masthead renders above the rail on _every_ tab, so tab-gating its feed would
+> leave it misdescribing the live page from the other eight (ADR-0032). That is
+> not an exception to the rule in the callout: the rule binds **tabs**, and the
+> masthead is shell chrome, which is why `useGroupContext` beside it has always
+> been always-on. ADR-0026's visibility gate still applies and still lives inside
+> `useOktaTabContext`, so a hidden panel probes nothing.
+>
+> The Overview row of the table is therefore retired. Home's row reads: the jump
+> bar's debounced search, and one org-snapshot top-up per activation.
 
 ### Two patterns for gating, and when to use which
 

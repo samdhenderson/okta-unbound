@@ -2,25 +2,30 @@
  * @module sidepanel/components/AppsTab
  * @description Applications tab shell: a READ-ONLY inventory of the org's Okta apps.
  *
- * A thin coordinator that owns only shell state (search text, status bucket, sort,
- * and the error banner) and composes {@link useAppsData} with the presentational
- * {@link AppsToolbar} and {@link AppsListPanel}. There are no writes anywhere in
- * this tab — every operation it reaches for is a read
+ * A thin coordinator that owns only shell state (search text, status and
+ * group-push buckets, sort, and the error banner) and composes {@link useAppsData}
+ * with the presentational {@link AppsToolbar} and {@link AppsListPanel}. There are
+ * no writes anywhere in this tab — every operation it reaches for is a read
  * (`getAppAssignmentCounts`); the inventory itself comes from the org snapshot.
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertMessage, Button, PageHeader } from './shared';
 import AppsToolbar from './apps/AppsToolbar';
 import AppsListPanel from './apps/AppsListPanel';
 import {
   computeActiveAppFilterCount,
   filterAndSortApps,
+  type AppGroupsFilter,
   type AppSortField,
   type AppStatusFilter,
 } from './apps/appFilters';
 import { useOktaApi } from '../hooks/useOktaApi';
 import type { OperationResult } from '../hooks/useOktaApi/types';
 import { useAppsData } from '../hooks/useAppsData';
+import { useOrgSnapshot } from '../cache/useOrgSnapshot';
+import { splitShardedId } from '../../shared/snapshot/types';
+import type { OktaAppGroupAssignment } from '../../shared/schemas/okta';
+import type { AppsListView } from '../listViewRequest';
 
 /** Props for {@link AppsTab}. */
 export interface AppsTabProps {
@@ -34,6 +39,14 @@ export interface AppsTabProps {
    * is shown rather than firing in the background. Defaults to `true`.
    */
   isActive?: boolean;
+  /**
+   * A pre-filtered view requested from another tab (the Home card's app
+   * sub-counts). Applied once on arrival, then cleared via
+   * {@link AppsTabProps.onListViewConsumed}.
+   */
+  listView?: AppsListView | null;
+  /** Invoked once {@link AppsTabProps.listView} has been applied. */
+  onListViewConsumed?: () => void;
 }
 
 /**
@@ -41,10 +54,17 @@ export interface AppsTabProps {
  * filters, sorts, and lists it. Load failures surface as a dismissible `danger`
  * banner rather than an empty list presented as truth.
  */
-const AppsTab: React.FC<AppsTabProps> = ({ targetTabId, oktaOrigin, isActive = true }) => {
+const AppsTab: React.FC<AppsTabProps> = ({
+  targetTabId,
+  oktaOrigin,
+  isActive = true,
+  listView,
+  onListViewConsumed,
+}) => {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<AppStatusFilter>('');
+  const [groupsFilter, setGroupsFilter] = useState<AppGroupsFilter>('');
   const [sortBy, setSortBy] = useState<AppSortField>('label');
   const [sortDesc, setSortDesc] = useState(false);
 
@@ -68,15 +88,59 @@ const AppsTab: React.FC<AppsTabProps> = ({ targetTabId, oktaOrigin, isActive = t
     enabled: isActive,
   });
 
+  // Records, not rows: which app an assignment belongs to lives in the storage
+  // key (`${appId}::${groupId}`), because Okta returns only the assigned group's
+  // id. Same read `useGroupsLoader` does, so the collection is already mounted
+  // for this org and this costs no extra request.
+  const { records: assignmentRecords } = useOrgSnapshot<OktaAppGroupAssignment>(
+    'appGroups',
+    oktaOrigin,
+    targetTabId,
+    { enabled: isActive },
+  );
+
+  const appsWithPushedGroups = useMemo(() => {
+    const ids = new Set<string>();
+    for (const record of assignmentRecords) {
+      const split = splitShardedId(record.id);
+      if (split) ids.add(split.shardKey);
+    }
+    return ids;
+  }, [assignmentRecords]);
+
   const filteredApps = useMemo(
-    () => filterAndSortApps(apps, { searchQuery, statusFilter, sortBy, sortDesc }),
-    [apps, searchQuery, statusFilter, sortBy, sortDesc],
+    () =>
+      filterAndSortApps(
+        apps,
+        { searchQuery, statusFilter, groupsFilter, sortBy, sortDesc },
+        appsWithPushedGroups,
+      ),
+    [apps, searchQuery, statusFilter, groupsFilter, sortBy, sortDesc, appsWithPushedGroups],
   );
 
   const activeFilterCount = useMemo(
-    () => computeActiveAppFilterCount({ statusFilter }),
-    [statusFilter],
+    () => computeActiveAppFilterCount({ statusFilter, groupsFilter }),
+    [statusFilter, groupsFilter],
   );
+
+  // A pre-filtered view requested from the Home card. Both axes are set on every
+  // request — the one the card asked for, and the other one back to "All" — so
+  // arriving here always shows exactly the population the figure counted, never
+  // that population minus whatever was left selected last time. The search box
+  // is cleared for the same reason.
+  const listViewHandledRef = useRef<AppsListView | null>(null);
+  useEffect(() => {
+    if (!listView) {
+      listViewHandledRef.current = null;
+      return;
+    }
+    if (listViewHandledRef.current === listView) return;
+    listViewHandledRef.current = listView;
+    setSearchQuery('');
+    setStatusFilter(listView === 'inactive' ? 'INACTIVE' : '');
+    setGroupsFilter(listView === 'pushes-nothing' ? 'no-groups' : '');
+    onListViewConsumed?.();
+  }, [listView, onListViewConsumed]);
 
   const handleToggleSort = useCallback((field: AppSortField) => {
     setSortBy((prev) => {
@@ -92,6 +156,7 @@ const AppsTab: React.FC<AppsTabProps> = ({ targetTabId, oktaOrigin, isActive = t
   const handleClearFilters = useCallback(() => {
     setSearchQuery('');
     setStatusFilter('');
+    setGroupsFilter('');
   }, []);
 
   const handleRefresh = useCallback(() => {
@@ -125,6 +190,8 @@ const AppsTab: React.FC<AppsTabProps> = ({ targetTabId, oktaOrigin, isActive = t
               onSearchQueryChange={setSearchQuery}
               statusFilter={statusFilter}
               onStatusFilterChange={setStatusFilter}
+              groupsFilter={groupsFilter}
+              onGroupsFilterChange={setGroupsFilter}
               sortBy={sortBy}
               sortDesc={sortDesc}
               onToggleSort={handleToggleSort}

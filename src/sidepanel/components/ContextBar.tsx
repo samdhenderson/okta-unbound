@@ -12,7 +12,7 @@
  */
 import React from 'react';
 import { CopyableId, IconButton } from './shared';
-import Icon from './overview/shared/Icon';
+import Icon from './shared/Icon';
 import type { ConnectionStatus } from '../hooks/useOktaTabContext';
 import type { PageType } from '../hooks/useOktaPageContext';
 

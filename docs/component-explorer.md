@@ -150,7 +150,7 @@ route each container to where it belongs:
 - **`Rules/`** — the rules tab, cards, and rule modals (`RulesTab`, `RuleCard`,
   `RuleImpactModal`, `RuleConsolidationModal`).
 - **`Groups/` · `Users/` · `Overview/`** — the corresponding tab and its feature
-  components (`GroupsTab`, `UsersTab`, `OverviewTab`, …).
+  components (`GroupsTab`, `UsersTab`, `HomeTab`, …).
 - **`Export/`** — the export flow.
 - **`Shared/`** — reusable primitives (`components/shared/`).
 - **`Sidepanel/`** — app-shell chrome that isn't feature-specific (`ActivityBar`,

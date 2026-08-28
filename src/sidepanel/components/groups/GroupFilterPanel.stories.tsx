@@ -19,7 +19,8 @@ const meta = {
       description: {
         component:
           'Expandable cached-mode filter + sort panel for the groups list.\n\n' +
-          'Filters by group type, member-count bucket, push status, and push-target app, ' +
+          'Filters by group type, member-count bucket, push status, rule attribution, and ' +
+          'push-target app, ' +
           'and sorts by a chosen field/direction. When any filters are ' +
           'active it surfaces a summary chips row with a "Clear all" link; the ' +
           'push-target-app row is hidden when no push apps are available.',
@@ -34,6 +35,8 @@ const meta = {
     setSizeFilter: { description: 'Sets the member-count bucket.' },
     pushFilter: { description: 'Push-status filter.' },
     setPushFilter: { description: 'Sets the push-status filter.' },
+    ruleFilter: { description: 'Rule-attribution filter.' },
+    setRuleFilter: { description: 'Sets the rule-attribution filter.' },
     pushAppFilter: { description: 'Set of push-target app ids to filter by (empty = all).' },
     setPushAppFilter: { description: 'Updates the push-target-app id set.' },
     availablePushApps: { description: 'Push-target apps available as filter chips.' },
@@ -50,6 +53,8 @@ const meta = {
     setSizeFilter: fn(),
     pushFilter: '',
     setPushFilter: fn(),
+    ruleFilter: '',
+    setRuleFilter: fn(),
     pushAppFilter: new Set<string>(),
     setPushAppFilter: fn(),
     availablePushApps,
@@ -81,6 +86,20 @@ export const WithPushAppFilter: Story = {
   args: {
     activeFilterCount: 1,
     pushAppFilter: new Set(['app1', 'app2']),
+  },
+};
+
+/**
+ * The rule-attribution axis, set to "No rules".
+ *
+ * The chip reads "No rules" rather than naming a consequence: a group no rule
+ * feeds is maintained by hand, but Okta Workflows, SCIM and direct API calls all
+ * add members without a group rule and none of them are visible from here.
+ */
+export const WithRuleFilter: Story = {
+  args: {
+    activeFilterCount: 1,
+    ruleFilter: 'unruled',
   },
 };
 

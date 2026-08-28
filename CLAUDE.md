@@ -157,7 +157,7 @@ be reviewed with `security-logging-reviewer`.
   backlog: `docs/features-plan.md`. Skills: `.claude/skills/`.
 - `AGENTS.md` (repo root): a thin cross-tool pointer back to this file — project
   description + commands only. Keep in sync via `docs/development.md`.
-- Shared UI: `src/sidepanel/components/shared/`. Icons: `overview/shared/Icon.tsx`.
+- Shared UI: `src/sidepanel/components/shared/`. Icons: `shared/Icon.tsx`.
 - API client: `src/sidepanel/hooks/useOktaApi/` (module-per-concern pattern).
 - Caching: `src/sidepanel/cache/` (`entityCache` + `useEntityQuery`; every cache key
   literal lives in `keys.ts`).

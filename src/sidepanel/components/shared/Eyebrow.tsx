@@ -48,6 +48,16 @@ export interface EyebrowProps {
   className?: string;
   /** Native `title` tooltip, for a label whose full meaning does not fit. */
   title?: string;
+  /**
+   * DOM `id`, so a control elsewhere can point at this label with
+   * `aria-labelledby`/`aria-describedby`.
+   *
+   * The case it exists for: a `StretchedButton` covering a card carries the same
+   * generic name on every card in a list ("Open groups"), and `describedBy`
+   * pointing at the card's eyebrow is what makes each one distinguishable to a
+   * screen reader.
+   */
+  id?: string;
   /** Optional test handle. */
   testId?: string;
 }
@@ -76,8 +86,14 @@ const Eyebrow: React.FC<EyebrowProps> = ({
   className = '',
   title,
   testId,
+  id,
 }) => (
-  <Component className={`${eyebrowClasses} ${className}`} title={title} data-testid={testId}>
+  <Component
+    id={id}
+    className={`${eyebrowClasses} ${className}`}
+    title={title}
+    data-testid={testId}
+  >
     {children}
   </Component>
 );

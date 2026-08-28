@@ -60,7 +60,7 @@ import {
   userStatusVariant,
   type UserStatusVariant,
 } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import MembershipRuleEvidence from '../users/MembershipRuleEvidence';
 import MembershipProofAction, {
   type MembershipProofOutcome,

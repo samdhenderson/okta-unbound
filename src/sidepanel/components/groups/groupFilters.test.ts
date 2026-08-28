@@ -25,6 +25,7 @@ const emptyState: GroupFilterState = {
   sizeFilter: '',
   pushFilter: '',
   pushAppFilter: new Set(),
+  ruleFilter: '',
   sortBy: 'name',
   sortDesc: false,
 };
@@ -225,13 +226,14 @@ describe('filterAndSortGroups', () => {
 });
 
 describe('computeActiveFilterCount', () => {
-  it('counts the 3 scalar filters plus one for any push-app selection', () => {
+  it('counts the 4 scalar filters plus one for any push-app selection', () => {
     expect(
       computeActiveFilterCount({
         typeFilter: '',
         sizeFilter: '',
         pushFilter: '',
         pushAppFilter: new Set(),
+        ruleFilter: '',
       }),
     ).toBe(0);
     expect(
@@ -240,15 +242,54 @@ describe('computeActiveFilterCount', () => {
         sizeFilter: 'small',
         pushFilter: 'pushed',
         pushAppFilter: new Set(['a1', 'a2']),
+        ruleFilter: 'unruled',
       }),
-    ).toBe(4);
+    ).toBe(5);
     expect(
       computeActiveFilterCount({
         typeFilter: 'OKTA_GROUP',
         sizeFilter: '',
         pushFilter: '',
         pushAppFilter: new Set(),
+        ruleFilter: '',
       }),
     ).toBe(1);
+  });
+});
+
+describe('the rule filter', () => {
+  const fed = g({ id: 'fed', hasRules: true, ruleCount: 2 });
+  const unfed = g({ id: 'unfed', hasRules: false });
+  // A group named in another rule's CONDITION, but that no rule assigns anyone
+  // to. It still has nothing filling it, so it counts as unruled.
+  const conditionOnly = g({ id: 'condition-only', hasRules: false, usedInRuleCount: 3 });
+
+  it('passes everything through when unset', () => {
+    const all = [fed, unfed, conditionOnly];
+    expect(filterAndSortGroups(all, emptyState)).toHaveLength(3);
+  });
+
+  it('keeps only groups no rule assigns anyone to', () => {
+    const kept = filterAndSortGroups([fed, unfed, conditionOnly], {
+      ...emptyState,
+      ruleFilter: 'unruled',
+    });
+    expect(kept.map((group) => group.id)).toEqual(['condition-only', 'unfed']);
+  });
+
+  it('keeps only groups a rule feeds', () => {
+    const kept = filterAndSortGroups([fed, unfed, conditionOnly], {
+      ...emptyState,
+      ruleFilter: 'ruled',
+    });
+    expect(kept.map((group) => group.id)).toEqual(['fed']);
+  });
+
+  it('reads `hasRules`, not `usedInRuleCount`', () => {
+    // The two answer different questions: `hasRules` is "does a rule PUT people
+    // here", `usedInRuleCount` is "does a rule mention this group to decide
+    // something else". Only the first says whether membership maintains itself.
+    const kept = filterAndSortGroups([conditionOnly], { ...emptyState, ruleFilter: 'unruled' });
+    expect(kept).toHaveLength(1);
   });
 });

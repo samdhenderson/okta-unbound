@@ -39,7 +39,7 @@
  */
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface ModalProps {

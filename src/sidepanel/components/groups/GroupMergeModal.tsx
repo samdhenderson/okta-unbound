@@ -13,7 +13,7 @@ import Modal from '../shared/Modal';
 import Button from '../shared/Button';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import AlertMessage, { type AlertMessageData } from '../shared/AlertMessage';
-import StatCard from '../overview/shared/StatCard';
+import StatCard from '../shared/StatCard';
 import type { GroupSummary } from '../../../shared/types';
 import type { MergePhase, MergeResults } from '../../hooks/useGroupMerge';
 import type { MergePlan } from '../../../shared/membership/mergePlan';

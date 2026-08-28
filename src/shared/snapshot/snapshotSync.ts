@@ -19,6 +19,7 @@
 
 import type { z } from 'zod';
 import {
+  isGroupPushApp,
   oktaAppGroupAssignmentSchema,
   oktaAppListItemSchema,
   oktaGroupListItemSchema,
@@ -759,9 +760,6 @@ export const APPS_SPEC: CollectionSpec = {
   context: 'GET /api/v1/apps',
 };
 
-/** Okta's name for the provisioning feature that pushes groups out to an app. */
-const GROUP_PUSH_FEATURE = 'GROUP_PUSH';
-
 /** How long app-group assignments may be served before the fan-out re-runs. */
 const APP_GROUPS_REFRESH_MS = 6 * 60 * 60 * 1000;
 
@@ -824,7 +822,7 @@ async function pushEnabledAppShards(origin: string): Promise<Shard[]> {
 
   const appIds = new Set<string>();
   for (const app of apps) {
-    if (app.features?.includes(GROUP_PUSH_FEATURE) && app.id) appIds.add(app.id);
+    if (isGroupPushApp(app.features) && app.id) appIds.add(app.id);
   }
 
   if (appIds.size === 0) {

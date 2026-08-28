@@ -17,6 +17,7 @@ import AlertMessage from './shared/AlertMessage';
 import RulesMetaRow from './rules/RulesMetaRow';
 import RulesStatsGrid from './rules/RulesStatsGrid';
 import RulesToolbar, { type RulesFilterType } from './rules/RulesToolbar';
+import type { RulesListView } from '../listViewRequest';
 import RulesListPanel from './rules/RulesListPanel';
 import RulesMergeBanner from './rules/RulesMergeBanner';
 import CurrentGroupRuleRelations from './rules/CurrentGroupRuleRelations';
@@ -71,13 +72,13 @@ interface RulesTabProps {
   /** Deep-link to a group in the Groups tab (from a rule's target groups, B → A2). */
   onNavigateToGroup?: (groupId: string) => void;
   /**
-   * One-shot request to scope the list to the current group on arrival (e.g. from
-   * the group Overview's "View Rules"). The value is the group id being scoped to;
-   * cleared via {@link RulesTabProps.onScopeConsumed} once applied.
+   * A pre-filtered view requested from another tab (the Home card's "N paused").
+   * Applied once on arrival, then cleared via
+   * {@link RulesTabProps.onListViewConsumed}.
    */
-  scopeToGroupId?: string | null;
-  /** Invoked once {@link RulesTabProps.scopeToGroupId} has been applied. */
-  onScopeConsumed?: () => void;
+  listView?: RulesListView | null;
+  /** Invoked once {@link RulesTabProps.listView} has been applied. */
+  onListViewConsumed?: () => void;
   /**
    * Whether this is the selected top-level tab. The tab stays mounted while hidden
    * (ADR-0018), so anything that should mean "on arrival" rather than "on mount"
@@ -99,8 +100,8 @@ const RulesTab: React.FC<RulesTabProps> = ({
   selectedRuleId,
   onRuleSelected,
   onNavigateToGroup,
-  scopeToGroupId,
-  onScopeConsumed,
+  listView,
+  onListViewConsumed,
   isActive = true,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -221,20 +222,46 @@ const RulesTab: React.FC<RulesTabProps> = ({
     if (isActive) void TabStateManager.markTabVisited('rules');
   }, [isActive]);
 
-  // Fulfil a one-shot "View Rules for this group" request: pre-apply the
-  // current-group filter so the list arrives scoped to the detected group. Runs
-  // after the persisted-state restore so it wins over any restored filter.
-  const scopeHandledRef = useRef<string | null>(null);
+  // A pre-filtered view requested from the Home card. It waits for the
+  // persisted-state restore, so it lands *after* (and beats) any filter the last
+  // session left behind — otherwise arriving on "Paused" would depend on what
+  // the restore happened to write first.
+  //
+  // The search box is cleared too: a stale query would silently subtract from
+  // the count the card just showed, and a filter that disagrees with the figure
+  // that opened it is worse than no link.
+  const listViewHandledRef = useRef<RulesListView | null>(null);
   useEffect(() => {
-    if (!scopeToGroupId) {
-      scopeHandledRef.current = null;
+    if (!listView) {
+      listViewHandledRef.current = null;
       return;
     }
-    if (!restoreAttempted || scopeHandledRef.current === scopeToGroupId) return;
-    scopeHandledRef.current = scopeToGroupId;
-    if (currentGroupId) setActiveFilter('current-group');
-    onScopeConsumed?.();
-  }, [scopeToGroupId, restoreAttempted, currentGroupId, onScopeConsumed]);
+    if (!restoreAttempted || listViewHandledRef.current === listView) return;
+    listViewHandledRef.current = listView;
+    setSearchQuery('');
+    setActiveFilter(listView);
+    onListViewConsumed?.();
+  }, [listView, restoreAttempted, onListViewConsumed]);
+
+  // Rules load manually, not on mount, so a view request can arrive against an
+  // empty list. Same load-on-demand the rule deep-link below does.
+  const listViewLoadRef = useRef<RulesListView | null>(null);
+  useEffect(() => {
+    if (!listView) {
+      listViewLoadRef.current = null;
+      return;
+    }
+    if (
+      restoreAttempted &&
+      rules.length === 0 &&
+      !data.isLoading &&
+      targetTabId != null &&
+      listViewLoadRef.current !== listView
+    ) {
+      listViewLoadRef.current = listView;
+      void loadRules(false);
+    }
+  }, [listView, restoreAttempted, rules.length, data.isLoading, targetTabId, loadRules]);
 
   // A cross-tab deep-link can arrive before rules have ever been loaded this
   // session (rules load manually, not on mount). Kick a cache-first load once so
@@ -316,6 +343,11 @@ const RulesTab: React.FC<RulesTabProps> = ({
     switch (activeFilter) {
       case 'active':
         result = result.filter((r) => r.status === 'ACTIVE');
+        break;
+      // A paused rule is a rule that has stopped maintaining its groups. Nothing
+      // in Okta says when it was paused or by whom, so the list is the finding.
+      case 'paused':
+        result = result.filter((r) => r.status === 'INACTIVE');
         break;
       case 'conflicts':
         result = result.filter((r) => r.conflicts && r.conflicts.length > 0);

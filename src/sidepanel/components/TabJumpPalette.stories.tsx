@@ -41,7 +41,7 @@ const meta = {
   args: {
     isOpen: true,
     onClose: fn(),
-    activeTab: 'overview',
+    activeTab: 'home',
     onSelect: fn(),
   },
 } satisfies Meta<typeof TabJumpPalette>;
@@ -49,7 +49,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Freshly opened: the unfiltered list of all nine sections. */
+/** Freshly opened: the unfiltered list of every section in the rail. */
 export const Default: Story = {};
 
 /** Opened from a different section, so a different row carries the "Current" marker. */

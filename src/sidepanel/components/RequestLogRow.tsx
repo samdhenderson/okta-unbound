@@ -14,7 +14,7 @@
  */
 import React, { useId } from 'react';
 import { Badge, IconButton, ListRow } from './shared';
-import Icon from './overview/shared/Icon';
+import Icon from './shared/Icon';
 import { formatActionTime } from '../../shared/undoManager';
 import type { RequestLogEntry } from '../../shared/requestLogTypes';
 

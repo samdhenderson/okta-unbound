@@ -20,7 +20,7 @@
  */
 import React, { memo, useCallback, useId, useState } from 'react';
 import { CopyableId, IconButton, ListRow } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import PolicyRulesList from './PolicyRulesList';
 import { useEntityQuery } from '../../cache/useEntityQuery';
 import type { OktaPolicyListItem, OktaPolicyRule } from '../../../shared/schemas/okta';

@@ -257,13 +257,13 @@ const meta = {
           'The two-user comparison surface itself, independent of how it is shown.\n\n' +
           'Purely presentational: every piece of state (search, load, bucketing, similarity, ' +
           'optimistic group-copy) is owned by `useUserComparison` and handed in whole as the ' +
-          '`comparison` prop. The hook is instantiated by the **host**, not here, because both ' +
-          'hosts must keep the comparison alive while its surface is hidden — so that the ' +
-          "hook's reset effect, not an unmount, is what clears a finished comparison.\n\n" +
-          "Two hosts render this: `UserComparisonModal` (the Overview tab's dialog) and " +
-          '`UserComparisonPanel` (the Users tab\'s pushed view, ADR-0016). "Change user" is ' +
-          'rendered here rather than by a host, because the dialog has a footer and the pushed ' +
-          'view does not.\n\n' +
+          '`comparison` prop. The hook is instantiated by the **host**, not here, so that the ' +
+          "host can keep the comparison alive while its surface is hidden — the hook's reset " +
+          'effect, not an unmount, is what clears a finished comparison.\n\n' +
+          "One host renders this today: `UserComparisonPanel`, the Users tab's pushed view " +
+          '(ADR-0016). There were two until the Overview tab was retired with its dialog, which ' +
+          'is why "Change user" is rendered here rather than by a host — a dialog has a footer ' +
+          'to put it in and a pushed view does not.\n\n' +
           '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs), ' +
           '[Types](?path=/docs/internals-types--docs)',
       },

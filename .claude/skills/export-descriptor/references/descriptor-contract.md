@@ -10,7 +10,7 @@ the parts the type signatures cannot.
 | ------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`          | `string`   | Registry key, preset key, and audit surrogate id. Kebab-case, matching the file stem (`network-zones` ← `networkZones.ts`). **Never rename** — presets and last-used selections in IndexedDB are keyed on it. |
 | `displayName` | `string`   | Hub label and the CSV filename stem.                                                                                                                                                                          |
-| `icon`        | `IconType` | Must already exist in `overview/shared/Icon.tsx`.                                                                                                                                                             |
+| `icon`        | `IconType` | Must already exist in `shared/Icon.tsx`.                                                                                                                                                                      |
 | `description` | `string`   | One line in the entity hub. Say what the rows _are_, not that it exports them.                                                                                                                                |
 
 ## Scoping — `context`

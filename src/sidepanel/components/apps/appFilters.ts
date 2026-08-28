@@ -6,11 +6,27 @@
  * combined {@link filterAndSortApps} pipeline, and the status → badge-variant
  * mapping — all side-effect free, mirroring `groups/groupFilters.ts`.
  */
-import type { OktaAppListItem } from '../../../shared/schemas/okta';
+import { isGroupPushApp, type OktaAppListItem } from '../../../shared/schemas/okta';
 import { parseRegexQuery } from '../../../shared/utils/regexQuery';
 
 /** Status bucket filter (`''` = all). */
 export type AppStatusFilter = '' | 'ACTIVE' | 'INACTIVE';
+
+/**
+ * Group-assignment filter (`''` = all).
+ *
+ * `no-groups` means **Group Push is on and the app pushes nothing** — a
+ * configured integration doing no work.
+ *
+ * It is deliberately not "no group is assigned to this app", which this
+ * extension cannot answer for free. The org snapshot walks
+ * `/api/v1/apps/{id}/groups` only for the apps Okta flags `GROUP_PUSH`
+ * (`APP_GROUPS_SPEC`'s shards), so for every other app an absent assignment
+ * means *we never asked*. Widening the bucket to those apps would report the
+ * whole inventory as unassigned. Answering it properly costs one request per
+ * app, which is not a list filter.
+ */
+export type AppGroupsFilter = '' | 'no-groups';
 
 /** Field the applications list can be sorted by. */
 export type AppSortField = 'label' | 'status' | 'created';
@@ -22,6 +38,7 @@ export type AppStatusVariant = 'success' | 'neutral' | 'danger';
 export interface AppFilterState {
   searchQuery: string;
   statusFilter: AppStatusFilter;
+  groupsFilter: AppGroupsFilter;
   sortBy: AppSortField;
   sortDesc: boolean;
 }
@@ -88,6 +105,25 @@ export function matchesAppStatus(status: string | undefined, filter: AppStatusFi
 }
 
 /**
+ * Group-push predicate: is this a push app that pushes no groups?
+ *
+ * Total in the safe direction — an app without the `GROUP_PUSH` feature is
+ * `false` whatever `appsWithPushedGroups` holds, because the snapshot never
+ * asked about it and silence is not an answer (see {@link AppGroupsFilter}).
+ *
+ * @param app - The app to test.
+ * @param appsWithPushedGroups - Ids of apps the snapshot holds at least one
+ * group assignment for.
+ * @returns `true` when Group Push is enabled and no assignment is stored.
+ */
+export function pushesNoGroups(
+  app: OktaAppListItem,
+  appsWithPushedGroups: ReadonlySet<string>,
+): boolean {
+  return isGroupPushApp(app.features) && !appsWithPushedGroups.has(app.id);
+}
+
+/**
  * Undirected comparator for the sort field; callers apply the sort direction.
  *
  * `created` sorts a missing date LAST in ascending order (returns 1/-1 for the
@@ -116,15 +152,21 @@ export function compareAppsBy(
 
 /**
  * The filter + sort pipeline: copies the input (never mutates it), applies the
- * search and status axes conjunctively, then sorts in place on the copy.
+ * search, status and group-push axes conjunctively, then sorts in place on the
+ * copy.
  *
  * @param apps - The loaded app inventory.
  * @param state - The current filter/sort state.
+ * @param appsWithPushedGroups - Ids of apps the snapshot holds a group
+ * assignment for. Defaults to empty, which only matters when `groupsFilter` is
+ * set — and an empty set there is the honest reading of a snapshot that holds
+ * no assignments.
  * @returns A new, filtered and sorted array.
  */
 export function filterAndSortApps(
   apps: OktaAppListItem[],
   state: AppFilterState,
+  appsWithPushedGroups: ReadonlySet<string> = new Set(),
 ): OktaAppListItem[] {
   let filtered = [...apps];
 
@@ -134,6 +176,10 @@ export function filterAndSortApps(
 
   if (state.statusFilter) {
     filtered = filtered.filter((app) => matchesAppStatus(app.status, state.statusFilter));
+  }
+
+  if (state.groupsFilter === 'no-groups') {
+    filtered = filtered.filter((app) => pushesNoGroups(app, appsWithPushedGroups));
   }
 
   filtered.sort((a, b) => {
@@ -163,10 +209,12 @@ export function appStatusVariant(status: string | undefined): AppStatusVariant {
 }
 
 /**
- * Badge count for the toolbar: 1 when a status bucket is selected, else 0. The
+ * Badge count for the toolbar: one per selected bucket (status, group push). The
  * search query is deliberately NOT counted (the `computeActiveFilterCount`
  * precedent in `groupFilters`).
  */
-export function computeActiveAppFilterCount(state: Pick<AppFilterState, 'statusFilter'>): number {
-  return state.statusFilter ? 1 : 0;
+export function computeActiveAppFilterCount(
+  state: Pick<AppFilterState, 'statusFilter' | 'groupsFilter'>,
+): number {
+  return (state.statusFilter ? 1 : 0) + (state.groupsFilter ? 1 : 0);
 }

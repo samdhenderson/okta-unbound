@@ -32,7 +32,7 @@
  * {@link sidepanel/components/shared/OpenInOktaLink.OpenInOktaLink} from
  * {@link EntityIdentityDescriptor.link} itself. That is what keeps the builders pure.
  */
-import type { IconType } from '../overview/shared/Icon';
+import type { IconType } from '../shared/Icon';
 import type { OktaAdminEntityType } from '../../../shared/utils/oktaUrl';
 import type { BadgeVariant } from './Badge';
 

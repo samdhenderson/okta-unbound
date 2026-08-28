@@ -10,7 +10,7 @@
  * ## Two hosts, one hook
  *
  * The comparison has two mount sites and they hide it differently:
- * {@link UserComparisonModal} (the Overview's dialog, which has no view stack) and
+ * the retired Overview tab's dialog (which had no view stack) and
  * {@link UserComparisonPanel} (the Users tab's pushed view, ADR-0016). So the hook
  * takes an abstract {@link UseUserComparisonOptions.isActive} — "the surface is on
  * screen" — rather than the dialog's `isOpen`: the dialog passes `isOpen`, the
