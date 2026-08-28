@@ -294,6 +294,29 @@
     }
   }
 
+  /*
+   * Reserve the scrollbar's channel. Giving `::-webkit-scrollbar` an explicit
+   * width below opts the box out of Chrome's overlay scrollbars on every platform
+   * and gives it a classic one, whose 6px comes out of the content box. Without a
+   * stable gutter the box loses those 6px at the exact moment a list crosses from
+   * fitting to overflowing — a row arriving from a fetch, a disclosure opening, a
+   * filter clearing — and every string under a `truncate` re-lays-out. There is no
+   * quiet period to wait out, the available width simply changes, so it is
+   * reserved whether or not the bar is showing and the transition costs nothing.
+   *
+   * Deliberately *not* on the panel's own scroll root (`app-scroll-root` in
+   * `App`). That scroller is unstyled, so it keeps the platform scrollbar — an
+   * overlay one on macOS, where `scrollbar-gutter` is a no-op regardless — and a
+   * gutter there would inset the full-bleed sticky bands (`ContextBar`,
+   * `PageHeader`), stopping their background and bottom border short of the panel
+   * edge. At the 360px narrow width, 6px inside a bordered list card reads as
+   * padding; a permanent ~15px stripe of canvas beside a white header band reads
+   * as a seam.
+   */
+  .scrollable-list {
+    scrollbar-gutter: stable;
+  }
+
   .scrollable-list::-webkit-scrollbar {
     width: 6px;
   }
