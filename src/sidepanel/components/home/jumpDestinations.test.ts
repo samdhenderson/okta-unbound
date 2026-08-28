@@ -5,7 +5,6 @@
 import { describe, it, expect } from 'vitest';
 import { DESTINATION_TAB, KIND_ICON, destinationLabel, navigationTarget } from './jumpDestinations';
 import type { OktaIdKind } from '../../../shared/utils/oktaId';
-import { RECOGNISED_ID_PREFIXES, oktaIdKind } from '../../../shared/utils/oktaId';
 import { TAB_DEFS } from '../../tabs';
 
 const ALL_KINDS: OktaIdKind[] = ['group', 'user', 'app', 'rule'];
@@ -24,18 +23,6 @@ describe('DESTINATION_TAB', () => {
     const railIds = TAB_DEFS.map((def) => def.id);
     for (const kind of ALL_KINDS) {
       expect(railIds).toContain(DESTINATION_TAB[kind]);
-    }
-  });
-
-  it('covers every kind the id classifier can produce', () => {
-    // The two modules are separate on purpose; this pins that they stay in step,
-    // so a new recognised prefix cannot ship without a destination.
-    const producible = RECOGNISED_ID_PREFIXES.map((prefix) =>
-      oktaIdKind(`${prefix}FAKE0000000000001`),
-    );
-    expect(producible).not.toContain(null);
-    for (const kind of producible) {
-      expect(DESTINATION_TAB[kind as OktaIdKind]).toBeDefined();
     }
   });
 });

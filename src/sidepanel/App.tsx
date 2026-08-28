@@ -38,16 +38,17 @@ import TabPanel from './components/TabPanel';
 import TabJumpPalette from './components/TabJumpPalette';
 import { useCommandPalette } from './hooks/useCommandPalette';
 import { migrateLegacyTabId, type TabType } from './tabs';
-import OverviewTab from './components/OverviewTab';
+import HomeTab from './components/HomeTab';
 import type { ExportRequest } from './components/export';
 import ActivityBar from './components/ActivityBar';
 
 // Code-split the non-default tabs so the initial side-panel load only ships the
-// Overview (the default tab). Each import lands in its own chunk, fetched on
+// Home tab (the default tab). Each import lands in its own chunk, fetched on
 // first activation of that tab; that tab's own Suspense boundary (inside
 // `TabPanel`) shows the standard spinner during the one-time fetch, without
 // disturbing the tabs already mounted beside it. ExportTab is a named export from
 // its barrel, so it is re-shaped into a default export for React.lazy.
+const OverviewTab = lazy(() => import('./components/OverviewTab'));
 const RulesTab = lazy(() => import('./components/RulesTab'));
 const UsersTab = lazy(() => import('./components/UsersTab'));
 const GroupsTab = lazy(() => import('./components/GroupsTab'));
@@ -76,7 +77,7 @@ const PINNED_CONTEXT_KEY = 'okta_unbound_pinned_context';
  * `handleNavigateToRule`.
  */
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>('home');
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   // A one-shot request to open a specific user in the Users tab (e.g. from the
@@ -96,7 +97,7 @@ const App: React.FC = () => {
   // tab; every path that sets `activeTab` funnels through the effect below, so
   // deep links and the persisted-tab restore mount their target too.
   const [mountedTabs, setMountedTabs] = useState<ReadonlySet<TabType>>(
-    () => new Set<TabType>(['overview']),
+    () => new Set<TabType>(['home']),
   );
   useEffect(() => {
     setMountedTabs((prev) => (prev.has(activeTab) ? prev : new Set(prev).add(activeTab)));
@@ -396,6 +397,13 @@ const App: React.FC = () => {
 
           {/* Each tab mounts on first activation and is hidden — never unmounted —
             thereafter, so its local state survives leaving the tab. */}
+          {renderTabPanel('home', (isActive) => (
+            <HomeTab
+              isActive={isActive}
+              targetTabId={tabContext.targetTabId ?? null}
+              oktaOrigin={tabContext.oktaOrigin ?? undefined}
+            />
+          ))}
           {renderTabPanel('overview', () => (
             <OverviewTab
               onTabChange={handleTabChange}

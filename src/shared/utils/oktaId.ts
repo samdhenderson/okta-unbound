@@ -99,24 +99,3 @@ export function oktaIdKind(candidate: string): OktaIdKind | null {
   if (!OKTA_ID_RE.test(trimmed)) return null;
   return ID_PREFIX_KINDS.get(trimmed.slice(0, OKTA_ID_PREFIX_LENGTH)) ?? null;
 }
-
-/**
- * Whether a candidate is a well-formed id of a kind this app can reach.
- *
- * Sugar over {@link oktaIdKind} for call sites that only need the boolean — a
- * jump bar deciding whether to suppress its debounced search, for instance.
- *
- * @param candidate - Raw user input.
- * @returns `true` when {@link oktaIdKind} would return a kind.
- */
-export function isOktaId(candidate: string): boolean {
-  return oktaIdKind(candidate) !== null;
-}
-
-/**
- * The prefixes this module recognises, for tests and for documentation.
- *
- * Exported so `oktaId.test.ts` can assert agreement with
- * {@link module:shared/utils/redact} without either module importing the other.
- */
-export const RECOGNISED_ID_PREFIXES: ReadonlyArray<string> = [...ID_PREFIX_KINDS.keys()];

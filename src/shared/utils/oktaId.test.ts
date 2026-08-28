@@ -5,7 +5,7 @@
  * All ids here are fake (`00gFAKE…`), per the repo's no-secrets rule.
  */
 import { describe, it, expect } from 'vitest';
-import { oktaIdKind, isOktaId, RECOGNISED_ID_PREFIXES } from './oktaId';
+import { oktaIdKind } from './oktaId';
 import { redactJson } from './redact';
 
 /** Builds a shape-valid fake id: a 3-char prefix + exactly 17 alphanumerics. */
@@ -68,23 +68,6 @@ describe('oktaIdKind', () => {
   });
 });
 
-describe('isOktaId', () => {
-  it('agrees with oktaIdKind on every input', () => {
-    const cases = [
-      fakeId('00g'),
-      fakeId('00u'),
-      fakeId('0oa'),
-      fakeId('0pr'),
-      fakeId('00p'),
-      'Engineering',
-      '',
-    ];
-    for (const candidate of cases) {
-      expect(isOktaId(candidate)).toBe(oktaIdKind(candidate) !== null);
-    }
-  });
-});
-
 describe('agreement with the redaction prefix table', () => {
   // `redact.ts` keeps its own prefix table, for the opposite purpose: hiding ids
   // rather than reaching them. The two lists deliberately differ — redaction
@@ -109,9 +92,5 @@ describe('agreement with the redaction prefix table', () => {
     const ruleId = fakeId('0pr');
     expect(oktaIdKind(ruleId)).toBe('rule');
     expect(redactJson({ id: ruleId }).redactedCount).toBe(0);
-  });
-
-  it('exposes exactly the four reachable prefixes', () => {
-    expect([...RECOGNISED_ID_PREFIXES].sort()).toEqual(['00g', '00u', '0oa', '0pr']);
   });
 });

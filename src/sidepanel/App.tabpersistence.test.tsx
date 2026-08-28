@@ -374,22 +374,38 @@ describe('App tab lifetime', () => {
     expect(screen.getByLabelText('Select Engineering')).toBeChecked();
   });
 
-  it('leaves the Overview mounted and does not re-run the Groups cache read on return', async () => {
+  it('leaves the first tab mounted and does not re-run the Groups cache read on return', async () => {
     const uev = userEvent.setup();
     renderApp();
 
+    // RETARGETED (ADR-0040): the rehydrate reads the snapshot rather than
+    // `chrome.storage.local`, so the read being counted is the IndexedDB one.
+    // RETARGETED again (Home tab): Home reads the `groups` collection at boot to
+    // resolve pasted ids, so the count no longer starts at zero. Measuring the
+    // *delta* isolates the Groups tab's own rehydrate from the shell's, which is
+    // what this case was always about — the absolute total was only ever a proxy.
+    const groupReads = () => collectionReads.filter((name) => name === 'groups').length;
+
+    // Wait for the shell's own snapshot reads to land before taking a baseline.
+    // Home reads groups, rules and apps once each on mount, and sampling before
+    // those resolve would attribute one of them to the Groups tab.
+    await waitFor(() => {
+      expect(collectionReads).toContain('rules');
+      expect(collectionReads).toContain('apps');
+      expect(collectionReads).toContain('groups');
+    });
+    const beforeGroups = groupReads();
+
     await openTab(uev, 'Groups');
     await groupRow('Engineering');
-    // RETARGETED (ADR-0040): the rehydrate now reads the snapshot rather than
-    // `chrome.storage.local`, so the read being counted is the IndexedDB one.
-    const cacheReads = collectionReads.filter((name) => name === 'groups').length;
-    expect(cacheReads).toBe(1);
+    const afterGroups = groupReads();
+    expect(afterGroups - beforeGroups).toBe(1);
 
     await openTab(uev, 'Apps');
     await openTab(uev, 'Groups');
 
     // A remount would rehydrate all over again; a hidden tab does not.
-    expect(collectionReads.filter((name) => name === 'groups')).toHaveLength(cacheReads);
+    expect(groupReads()).toBe(afterGroups);
   });
 
   it("restores each tab's own scroll offset on return, not the offset it was left at", async () => {

@@ -12,6 +12,7 @@ import type { IconType } from './components/shared/Icon';
 
 /** Identifier for each top-level side-panel tab. */
 export type TabType =
+  | 'home'
   | 'overview'
   | 'rules'
   | 'users'
@@ -49,6 +50,7 @@ export interface TabDef {
  * and deliberately unchanged.
  */
 export const TAB_DEFS: ReadonlyArray<TabDef> = [
+  { id: 'home', label: 'Home', icon: 'search' },
   { id: 'overview', label: 'Overview', icon: 'chart' },
   { id: 'users', label: 'Users', icon: 'user' },
   { id: 'groups', label: 'Groups', icon: 'users' },
@@ -80,7 +82,12 @@ const LEGACY_TAB_MAP: Readonly<Record<string, TabType>> = {
  * {@link TabType}.
  *
  * Current ids pass through unchanged; retired ids map to their successors; any
- * unrecognized value falls back to `'overview'` rather than being trusted.
+ * unrecognized value falls back to the first tab rather than being trusted.
+ *
+ * The fallback is `'home'`, not `'overview'`: Home is the tab the rail opens on,
+ * so an unreadable saved value lands where a first-time user lands. `'overview'`
+ * is still a real {@link TabType} and still passes through unchanged — it is
+ * being retired, and the legacy entries pointing at it move when it goes.
  *
  * @param saved - The raw tab id read from `chrome.storage.local`.
  * @returns A valid current tab id.
@@ -89,5 +96,5 @@ export function migrateLegacyTabId(saved: string): TabType {
   if (TAB_DEFS.some((tab) => tab.id === saved)) {
     return saved as TabType;
   }
-  return LEGACY_TAB_MAP[saved] ?? 'overview';
+  return LEGACY_TAB_MAP[saved] ?? 'home';
 }

@@ -28,8 +28,16 @@ describe('migrateLegacyTabId', () => {
     }
   });
 
-  it('falls back to overview for unknown ids', () => {
-    expect(migrateLegacyTabId('not-a-tab')).toBe('overview');
-    expect(migrateLegacyTabId('')).toBe('overview');
+  // The fallback moved from `'overview'` to `'home'` when Home became the tab
+  // the rail opens on: an unreadable saved value should land where a first-time
+  // user lands. The retired ids above still point at `'overview'` while it
+  // exists, and move with it when it is removed.
+  it('falls back to home for unknown ids', () => {
+    expect(migrateLegacyTabId('not-a-tab')).toBe('home');
+    expect(migrateLegacyTabId('')).toBe('home');
+  });
+
+  it('passes the new home id through', () => {
+    expect(migrateLegacyTabId('home')).toBe('home');
   });
 });

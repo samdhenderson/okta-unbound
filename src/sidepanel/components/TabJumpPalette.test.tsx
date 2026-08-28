@@ -158,18 +158,22 @@ describe('TabJumpPalette', () => {
       await waitFor(() => expect(field()).toHaveFocus());
     });
 
+    // Addressed by position in TAB_DEFS rather than by tab name: the subject is
+    // the roving-focus model, not which sections happen to exist. Naming rows
+    // pinned the registry's contents to this file, so adding or removing a tab
+    // broke a keyboard test that has nothing to do with either.
     it('moves focus into the list on ArrowDown and back to the field on ArrowUp', async () => {
       renderPalette();
       await waitFor(() => expect(field()).toHaveFocus());
 
       await userEvent.keyboard('{ArrowDown}');
-      expect(row('Overview')).toHaveFocus();
+      expect(row(TAB_DEFS[0].label)).toHaveFocus();
 
       await userEvent.keyboard('{ArrowDown}');
-      expect(row('Users')).toHaveFocus();
+      expect(row(TAB_DEFS[1].label)).toHaveFocus();
 
       await userEvent.keyboard('{ArrowUp}');
-      expect(row('Overview')).toHaveFocus();
+      expect(row(TAB_DEFS[0].label)).toHaveFocus();
 
       await userEvent.keyboard('{ArrowUp}');
       expect(field()).toHaveFocus();
@@ -193,7 +197,7 @@ describe('TabJumpPalette', () => {
 
       await userEvent.keyboard('{ArrowDown}{ArrowDown}{Enter}');
 
-      expect(onSelect).toHaveBeenCalledWith('users');
+      expect(onSelect).toHaveBeenCalledWith(TAB_DEFS[1].id);
       expect(onClose).toHaveBeenCalled();
     });
 
@@ -203,19 +207,19 @@ describe('TabJumpPalette', () => {
 
       const tabbable = () => rows().filter((el) => el.getAttribute('tabindex') === '0');
       expect(tabbable()).toHaveLength(1);
-      expect(tabbable()[0]).toBe(row('Overview'));
+      expect(tabbable()[0]).toBe(row(TAB_DEFS[0].label));
 
       await userEvent.keyboard('{ArrowDown}{ArrowDown}');
 
       expect(tabbable()).toHaveLength(1);
-      expect(tabbable()[0]).toBe(row('Users'));
+      expect(tabbable()[0]).toBe(row(TAB_DEFS[1].label));
     });
 
     it('re-anchors the tab order to the top row when the query changes', async () => {
       renderPalette();
       await waitFor(() => expect(field()).toHaveFocus());
       await userEvent.keyboard('{ArrowDown}{ArrowDown}');
-      expect(row('Users')).toHaveAttribute('tabindex', '0');
+      expect(row(TAB_DEFS[1].label)).toHaveAttribute('tabindex', '0');
 
       await userEvent.click(field());
       await userEvent.type(field(), 'o');
@@ -226,7 +230,7 @@ describe('TabJumpPalette', () => {
     it('announces the number of matching sections', async () => {
       renderPalette();
 
-      expect(screen.getByRole('status')).toHaveTextContent('9 sections available');
+      expect(screen.getByRole('status')).toHaveTextContent(`${TAB_DEFS.length} sections available`);
 
       await userEvent.type(field(), 'export');
 
