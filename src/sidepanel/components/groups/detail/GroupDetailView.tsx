@@ -77,6 +77,7 @@ import { useGroupComparison } from '../../../hooks/useGroupComparison';
 import { useMemberMfaScan } from '../../../hooks/useMemberMfaScan';
 import { useGroupMembersSection } from './useGroupMembersSection';
 import { useAddGroupMember } from '../../../hooks/useAddGroupMember';
+import { useWorkingSetEntry } from '../../../hooks/useWorkingSetEntry';
 import { OKTA_PAGE_SIZE } from '../../../../shared/utils/oktaPagination';
 import type { GroupSummary } from '../../../../shared/types';
 
@@ -170,6 +171,21 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   // that prop's doc). The initializer runs once, so a later prop change does
   // not retroactively move a reader who is already looking at a tab.
   const [activeTab, setActiveTab] = useState<GroupDetailTab>(autoAnalyze ? 'members' : 'overview');
+
+  // Two lines, and the reason they are *here* rather than in the navigation
+  // machinery: this rung is the only surface that knows all four facts at once —
+  // which kind, which id, what it is called, and which pane is open. Gated on
+  // `isActive` because the rung stays mounted behind another top-level tab
+  // (ADR-0018) and a hidden one must not keep re-asserting itself as the most
+  // recent thing the reader looked at.
+  useWorkingSetEntry({
+    origin: oktaOrigin,
+    kind: 'group',
+    id: group.id,
+    name: group.name,
+    pane: GROUP_DETAIL_TABS.find((tab) => tab.key === activeTab)?.label,
+    enabled: isActive,
+  });
 
   const source = useGroupSource(targetTabId ?? undefined);
   const references = useGroupRuleReferences(group.id, targetTabId ?? undefined, isActive);

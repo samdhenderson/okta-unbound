@@ -3,8 +3,13 @@ import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import HomeTab from './HomeTab';
 import { NavigationProvider } from '../contexts/NavigationContext';
 import { useOktaApi, makeUseOktaApiValue } from '../../../.storybook/mocks/useOktaApi.mock';
-import { resetSyncSnapshotResponder } from '../../../.storybook/mocks/chrome';
+import {
+  resetSyncSnapshotResponder,
+  resetStorageSeed,
+  setStorageSeed,
+} from '../../../.storybook/mocks/chrome';
 import { orgSnapshotStore } from '../../shared/snapshot/orgSnapshotStore';
+import { WORKING_SET_STORAGE_KEY } from '../../shared/storage/workingSetStore';
 import type { RawOktaGroup } from './groups/groupSummary';
 import type { OktaGroupRule } from '../../shared/types';
 
@@ -166,6 +171,7 @@ const meta = {
   },
   beforeEach: async () => {
     resetSyncSnapshotResponder();
+    resetStorageSeed();
     ops = makeOps();
     useOktaApi.mockReturnValue(makeUseOktaApiValue(ops));
     await seedSnapshot();
@@ -296,5 +302,62 @@ export const Inactive: Story = {
   play: async ({ canvasElement }) => {
     await userEvent.type(field(canvasElement), 'eng');
     await expect(ops.searchGroups).not.toHaveBeenCalled();
+  },
+};
+
+/**
+ * A working panel. The jump bar is still the first thing in the scroller, but
+ * below it sits what the reader pinned and what they were last looking at — so
+ * the common case, returning to something you had open ten minutes ago, costs
+ * one press and no request at all.
+ */
+export const WithWorkingSet: Story = {
+  beforeEach: async () => {
+    setStorageSeed({
+      [WORKING_SET_STORAGE_KEY]: {
+        version: 1,
+        origins: {
+          [ORIGIN]: {
+            pinned: [
+              {
+                kind: 'group',
+                id: ENG_ID,
+                name: 'Engineering',
+                lastPane: 'Members',
+                lastSeenAt: Date.now(),
+              },
+            ],
+            recent: [
+              {
+                kind: 'user',
+                id: ADA_ID,
+                name: 'Ada Lovelace',
+                lastPane: 'Profile',
+                lastSeenAt: Date.now() - 86_400_000,
+              },
+            ],
+          },
+        },
+      },
+    });
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText('Engineering')).toBeInTheDocument();
+    await expect(await canvas.findByText('Ada Lovelace')).toBeInTheDocument();
+    // Pinned and recent are read from storage, not fetched.
+    await expect(ops.getGroupById).not.toHaveBeenCalled();
+    await expect(ops.getUserById).not.toHaveBeenCalled();
+  },
+};
+
+/**
+ * The same panel with nothing remembered. `Pinned` holds its space and says how
+ * to fill it — the pin lives in the corner of a detail header, which nobody
+ * looks at until they know it is there.
+ */
+export const ColdWorkingSet: Story = {
+  play: async ({ canvasElement }) => {
+    await expect(await within(canvasElement).findByText(/Nothing pinned yet/)).toBeInTheDocument();
   },
 };

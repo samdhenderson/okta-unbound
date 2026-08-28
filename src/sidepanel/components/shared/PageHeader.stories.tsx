@@ -4,6 +4,7 @@ import Breadcrumbs from './Breadcrumbs';
 import Button from './Button';
 import EntityIdentity from './EntityIdentity';
 import PageHeader from './PageHeader';
+import WorkingSetPinButton from './WorkingSetPinButton';
 
 /**
  * Top-of-view header bar with title, optional subtitle, status badge, leading back
@@ -22,6 +23,7 @@ const meta = {
           'The optional badge renders through the shared `Badge` primitive, so it speaks the canonical vocabulary — `danger`, never `error` (ADR-0002). Actions are right-aligned.\n\n' +
           'The leading-slot props (`onBack`, `leading`, `breadcrumbs`) are additive and optional — omitting them renders the original layout unchanged. They exist so a tab driven by `useViewStack` keeps **one** header mounted whose contents swap in place as views are pushed and popped, rather than each view rendering its own header.\n\n' +
           '`identity` extends that downward: an expanding region describing the entity you are browsing, so a detail view no longer opens with a card repeating the title. Changing `identityKey` crossfades it; the `<h1>` and its badge never do.\n\n' +
+          '`cornerAction` parks a small control in the bottom-right corner, below the actions — a different weight of thing from a page verb, kept out of `actions` so it does not read as one. It is in flow, not absolutely positioned, so it cannot land on top of a long identity region at 360px.\n\n' +
           '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs)',
       },
     },
@@ -178,6 +180,45 @@ export const WithIdentity: Story = {
       />
     ),
     actions: <Button icon="external-link">Open in Okta</Button>,
+  },
+};
+
+/**
+ * The corner slot in the shape it exists for: the working-set pin, parked below
+ * the page action rather than beside it.
+ *
+ * The pin is icon-only on purpose. `ContextBar` already has a control called
+ * **Pin** — freeze the panel on the detected page — and two identically-worded
+ * controls in one panel would be a real confusion, so this one never says the
+ * word on screen and its accessible name says where the thing goes: *Pin to
+ * Home*.
+ */
+export const WithCornerAction: Story = {
+  args: {
+    ...WithIdentity.args,
+    cornerAction: <WorkingSetPinButton pinned={false} onToggle={fn()} />,
+  },
+};
+
+/** Already on Home. The toggle reports `aria-pressed`, not a relabelled button. */
+export const WithCornerActionPinned: Story = {
+  args: {
+    ...WithIdentity.args,
+    cornerAction: <WorkingSetPinButton pinned onToggle={fn()} />,
+  },
+};
+
+/**
+ * A header with no identity region. The corner column collapses to content
+ * height, so the slot degrades to sitting under the actions rather than floating
+ * in space — and a header that passes none renders exactly as it did before this
+ * slot existed.
+ */
+export const CornerActionWithoutIdentity: Story = {
+  args: {
+    title: 'Groups',
+    subtitle: 'Browse, search, and manage groups',
+    cornerAction: <WorkingSetPinButton pinned={false} onToggle={fn()} />,
   },
 };
 

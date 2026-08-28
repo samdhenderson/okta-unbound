@@ -46,6 +46,7 @@ import AlertMessage from './shared/AlertMessage';
 import Button from './shared/Button';
 import EntityIdentity from './shared/EntityIdentity';
 import OpenInOktaLink from './shared/OpenInOktaLink';
+import WorkingSetPinButton from './shared/WorkingSetPinButton';
 import { groupIdentity } from './groups/groupIdentity';
 import { useOktaApi } from '../hooks/useOktaApi';
 import type { OperationResult } from '../hooks/useOktaApi/types';
@@ -56,6 +57,7 @@ import { useGroupSelection } from '../hooks/useGroupSelection';
 import { useGroupMembersCache } from '../hooks/useGroupMembersCache';
 import { useGroupMerge } from '../hooks/useGroupMerge';
 import { useViewStack } from '../hooks/useViewStack';
+import { useWorkingSet } from '../hooks/useWorkingSet';
 import { useScrollPreservation } from '../hooks/useScrollPreservation';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { GroupSummary } from '../../shared/types';
@@ -201,6 +203,9 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   // The header's whole description of this group — title, type badge, member count and
   // deep link — from one pure builder, so those four never disagree with each other.
   const identity = detailGroup ? groupIdentity(detailGroup) : undefined;
+
+  // Read only for the pin's own state; the list of pinned entities is Home's.
+  const workingSet = useWorkingSet(oktaOrigin);
 
   const { push: pushView } = nav;
   const handleOpenDetail = useCallback(
@@ -352,6 +357,20 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
             >
               Refresh
             </Button>
+          )
+        }
+        cornerAction={
+          detailGroup && (
+            <WorkingSetPinButton
+              pinned={workingSet.isPinned('group', detailGroup.id)}
+              onToggle={() =>
+                workingSet.togglePin({
+                  kind: 'group',
+                  id: detailGroup.id,
+                  name: detailGroup.name,
+                })
+              }
+            />
           )
         }
       />

@@ -48,6 +48,13 @@ globalThis.chrome = {
       set: vi.fn(),
       remove: vi.fn(),
     },
+    // `workingSetStore.subscribe` and `AuditLogViewer` both register here. A
+    // spy is enough for the suite: no test asserts a broadcast arrives, and a
+    // missing member would make an unrelated component throw on mount.
+    onChanged: {
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    },
   },
 } as any;
 

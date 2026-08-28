@@ -76,9 +76,18 @@ import { useProfileDisplayConfig } from './useProfileDisplayConfig';
 import { useUserApps, type AppsByGroupId } from './useUserApps';
 import type { UserAppAssignment, UserAppsResult } from './useOktaApi/userOperations';
 import type { RuleInventoryState } from './useUserMemberships';
+import { userDisplayName } from '../../shared/utils/userDisplay';
+import { useWorkingSetEntry } from './useWorkingSetEntry';
 
 /** Which pane of the user-detail rung is on screen. */
 export type UserDetailPane = 'groups' | 'apps' | 'profile';
+
+/** Pane keys as the Home tab's working set shows them back to the reader. */
+const PANE_LABEL: Record<UserDetailPane, string> = {
+  groups: 'Groups',
+  apps: 'Apps',
+  profile: 'Profile',
+};
 
 /** Options for {@link useUserDetailPanes}. */
 export interface UseUserDetailPanesOptions {
@@ -193,6 +202,21 @@ export function useUserDetailPanes({
     setPaneUserId(userId);
     setPane('groups');
   }
+
+  // Two lines, and the reason they are *here* rather than in the navigation
+  // machinery: this rung is the only surface that knows all four facts at once —
+  // which kind, which id, what it is called, and which pane is open. Gated on
+  // the same `enabled` as the loads, because the rung stays mounted behind
+  // another top-level tab (ADR-0018) and a hidden one must not keep re-asserting
+  // itself as the most recent thing the reader looked at.
+  useWorkingSetEntry({
+    origin: oktaOrigin,
+    kind: 'user',
+    id: userId,
+    name: user ? userDisplayName(user) : null,
+    pane: PANE_LABEL[pane],
+    enabled,
+  });
 
   const appsResult = useUserApps(userId, {
     targetTabId: targetTabId ?? null,

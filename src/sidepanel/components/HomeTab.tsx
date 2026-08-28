@@ -32,12 +32,15 @@
  */
 import React, { useMemo, useState } from 'react';
 import JumpBar from './home/JumpBar';
+import WorkingSet from './home/WorkingSet';
 import { useOktaApi } from '../hooks/useOktaApi';
 import { useOrgEntityIndex } from '../hooks/useOrgEntityIndex';
+import { useWorkingSet } from '../hooks/useWorkingSet';
 import { useJumpResolver, type JumpResult } from '../hooks/useJumpResolver';
 import { useEntityNavigation } from '../contexts/NavigationContext';
 import { navigationTarget } from './home/jumpDestinations';
 import type { OktaIdKind } from '../../shared/utils/oktaId';
+import type { WorkingSetRef } from '../../shared/storage/workingSetStore';
 
 /** Props for {@link HomeTab}. */
 export interface HomeTabProps {
@@ -63,6 +66,7 @@ const HomeTab: React.FC<HomeTabProps> = ({ isActive, targetTabId, oktaOrigin }) 
   const nav = useEntityNavigation();
 
   const index = useOrgEntityIndex({ oktaOrigin, targetTabId, enabled: isActive });
+  const workingSet = useWorkingSet(oktaOrigin);
 
   // Captured once, at mount. React applies `autoFocus` on mount only, and the
   // tab is never unmounted, so this cannot re-steal focus from the rail button
@@ -145,6 +149,10 @@ const HomeTab: React.FC<HomeTabProps> = ({ isActive, targetTabId, oktaOrigin }) 
     nav.navigateTo({ type: navigationTarget(result.kind), id: result.id });
   };
 
+  const handleOpenEntry = (entry: WorkingSetRef) => {
+    nav.navigateTo({ type: entry.kind, id: entry.id });
+  };
+
   return (
     <div className="tab-content active">
       <div className="w-full max-w-7xl mx-auto px-6 py-6 space-y-6">
@@ -154,6 +162,14 @@ const HomeTab: React.FC<HomeTabProps> = ({ isActive, targetTabId, oktaOrigin }) 
           canReach={(kind) => nav.canNavigateTo(navigationTarget(kind))}
           oktaOrigin={oktaOrigin}
           autoFocus={autoFocus}
+        />
+
+        <WorkingSet
+          pinned={workingSet.pinned}
+          recent={workingSet.recent}
+          onOpen={handleOpenEntry}
+          onUnpin={(entry) => workingSet.forget(entry.kind, entry.id)}
+          onForget={(entry) => workingSet.forget(entry.kind, entry.id)}
         />
       </div>
     </div>

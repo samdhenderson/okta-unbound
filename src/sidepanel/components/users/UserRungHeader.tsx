@@ -24,10 +24,11 @@
 import React from 'react';
 import Breadcrumbs from '../shared/Breadcrumbs';
 import PageHeader from '../shared/PageHeader';
-import { EntityIdentity, OpenInOktaLink } from '../shared';
+import { EntityIdentity, OpenInOktaLink, WorkingSetPinButton } from '../shared';
 import { userIdentity } from './userIdentity';
 import { userDisplayName } from '../../../shared/utils/userDisplay';
 import type { OktaUser } from '../../../shared/types';
+import { useWorkingSet } from '../../hooks/useWorkingSet';
 import type { ViewStack } from '../../hooks/useViewStack';
 import type { UsersViewEntry } from '../../hooks/useUsersTabState';
 
@@ -89,6 +90,9 @@ const UserRungHeader: React.FC<UserRungHeaderProps> = ({
     isDetailOpen && !isCompareOpen && isLoadedUserThisRung
       ? (selectedUser ?? undefined)
       : undefined;
+  // Read only for the pin's own state; the list of pinned entities is Home's.
+  const workingSet = useWorkingSet(oktaOrigin);
+
   const identity = detailUser
     ? userIdentity(detailUser, {
         // Both counts are omitted until their payload lands, so the region shows
@@ -136,6 +140,20 @@ const UserRungHeader: React.FC<UserRungHeaderProps> = ({
             oktaOrigin={oktaOrigin}
             entityType={identity.link.entityType}
             entityId={identity.link.entityId}
+          />
+        )
+      }
+      cornerAction={
+        detailUser && (
+          <WorkingSetPinButton
+            pinned={workingSet.isPinned('user', detailUser.id)}
+            onToggle={() =>
+              workingSet.togglePin({
+                kind: 'user',
+                id: detailUser.id,
+                name: userDisplayName(detailUser),
+              })
+            }
           />
         )
       }

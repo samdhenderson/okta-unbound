@@ -23,6 +23,7 @@ export { default as Checkbox } from './Checkbox';
 export { default as Select } from './Select';
 export { default as Textarea } from './Textarea';
 export { default as PageHeader } from './PageHeader';
+export { default as WorkingSetPinButton } from './WorkingSetPinButton';
 export { default as Breadcrumbs } from './Breadcrumbs';
 export { default as Tabs } from './Tabs';
 export { default as CollapsibleSection } from './CollapsibleSection';

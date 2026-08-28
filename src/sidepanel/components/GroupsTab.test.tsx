@@ -186,7 +186,11 @@ globalThis.chrome = {
     },
   },
   tabs: { sendMessage: tabsSendMessage, get: tabsGet },
-  storage: { local: { get: storageGet, set: storageSet, remove: vi.fn() } },
+  storage: {
+    local: { get: storageGet, set: storageSet, remove: vi.fn() },
+    // The header's working-set pin subscribes here (`useWorkingSet`).
+    onChanged: { addListener: vi.fn(), removeListener: vi.fn() },
+  },
 } as any;
 
 /** Endpoint -> response router for the background scheduler. */
