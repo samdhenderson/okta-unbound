@@ -16,16 +16,20 @@
  * per-tab-cached lookup — and is written verbatim: a resolved admin's email, or
  * `performedBy: null` with `actorResolution: 'unavailable'`. There is no
  * placeholder identity, and an unresolved actor never blocks the rule change
- * (`D-013`/`D-013b`).
+ * (`D-013`/`D-013b`). When it is unresolved the hook also raises
+ * {@link UseRuleLifecycleReturn.actorNotice} so the admin is told at the time
+ * rather than discovering the gap in a later export (`D-013c`).
  */
 
 import { useCallback } from 'react';
 import type { FormattedRule, AuditLogEntry } from '../../shared/types';
 import type { Actor } from './useOktaApi/core';
+import type { AlertMessageData } from '../components/shared/AlertMessage';
 import { logAction } from '../../shared/undoManager';
 import { auditStore } from '../../shared/storage/auditStore';
 import { createLogger } from '../../shared/utils/logger';
 import { useOktaApi } from './useOktaApi';
+import { useActorNotice } from './useActorNotice';
 
 const log = createLogger('RulesTab');
 
@@ -70,6 +74,13 @@ interface UseRuleLifecycleReturn {
   activateRule: (ruleId: string) => Promise<void>;
   /** Deactivate an active rule (callers gate this behind the impact confirm). */
   deactivateRule: (ruleId: string) => Promise<void>;
+  /**
+   * Non-blocking notice shown when the last run could not name the acting admin,
+   * or `null` when it could. The rule change happens either way (`D-013c`).
+   */
+  actorNotice: AlertMessageData | null;
+  /** Dismiss {@link UseRuleLifecycleReturn.actorNotice}. */
+  dismissActorNotice: () => void;
 }
 
 /**
@@ -90,6 +101,7 @@ export function useRuleLifecycle({
   const { getCurrentUser, activateGroupRule, deactivateGroupRule } = useOktaApi({
     targetTabId: targetTabId ?? null,
   });
+  const { actorNotice, noteActor, dismissActorNotice } = useActorNotice();
 
   const runLifecycle = useCallback(
     async (ruleId: string, kind: LifecycleKind) => {
@@ -111,6 +123,9 @@ export function useRuleLifecycle({
         // Resolve the acting admin for audit attribution (validated + per-tab
         // cached inside the facade; no placeholder identity on failure).
         actor = await getCurrentUser();
+        // Tell the admin their identity could not be confirmed, then carry on:
+        // the notice is informational and never gates the mutation (`D-013c`).
+        noteActor(actor);
 
         // Find the rule to get its name for undo logging
         const rule = rules.find((r) => r.id === ruleId);
@@ -212,7 +227,16 @@ export function useRuleLifecycle({
         });
       }
     },
-    [targetTabId, rules, reload, onError, getCurrentUser, activateGroupRule, deactivateGroupRule],
+    [
+      targetTabId,
+      rules,
+      reload,
+      onError,
+      getCurrentUser,
+      noteActor,
+      activateGroupRule,
+      deactivateGroupRule,
+    ],
   );
 
   const activateRule = useCallback(
@@ -224,5 +248,5 @@ export function useRuleLifecycle({
     [runLifecycle],
   );
 
-  return { activateRule, deactivateRule };
+  return { activateRule, deactivateRule, actorNotice, dismissActorNotice };
 }

@@ -10,14 +10,17 @@
  * fails, no source is touched. Every run is audited (attributed to the signed-in
  * admin, resolved through the facade's `getCurrentUser()`; an unresolvable actor
  * is recorded as `performedBy: null` / `actorResolution: 'unavailable'` and
- * never as a placeholder identity — `D-013`/`D-013b`) and captures the retired
- * rules' definitions for undo.
+ * never as a placeholder identity — `D-013`/`D-013b`, and surfaced to the admin
+ * as {@link UseRuleConsolidationReturn.actorNotice} while the run proceeds —
+ * `D-013c`) and captures the retired rules' definitions for undo.
  */
 
 import { useCallback, useState } from 'react';
 import type { FormattedRule, OktaGroupRule, AuditLogEntry } from '../../shared/types';
 import type { RetiredRuleSnapshot } from '../../shared/undoTypes';
+import type { AlertMessageData } from '../components/shared/AlertMessage';
 import { useOktaApi } from './useOktaApi';
+import { useActorNotice } from './useActorNotice';
 import { logAction } from '../../shared/undoManager';
 import { auditStore } from '../../shared/storage/auditStore';
 import {
@@ -85,6 +88,13 @@ export interface UseRuleConsolidationReturn {
   preview: ConsolidationPreview | null;
   result: ConsolidationResult | null;
   error: string | null;
+  /**
+   * Non-blocking notice shown when the run could not name the acting admin, or
+   * `null` when it could. The consolidation runs either way (`D-013c`).
+   */
+  actorNotice: AlertMessageData | null;
+  /** Dismiss {@link UseRuleConsolidationReturn.actorNotice}. */
+  dismissActorNotice: () => void;
   /** Open the "add target group" flow for a rule (loads its raw form). */
   openAddTarget: (rule: FormattedRule) => void;
   /** Choose the group to add (add-target flow), computing the preview. */
@@ -117,6 +127,7 @@ export function useRuleConsolidation({
     deactivateGroupRule,
     getCurrentUser,
   } = api;
+  const { actorNotice, noteActor, dismissActorNotice } = useActorNotice();
 
   const [phase, setPhase] = useState<ConsolidationPhase>('idle');
   const [baseRule, setBaseRule] = useState<OktaGroupRule | null>(null);
@@ -213,6 +224,9 @@ export function useRuleConsolidation({
     // validated, per-tab-cached `/api/v1/users/me` lookup that reports its own
     // failures as `kind: 'unavailable'` instead of inventing an identity.
     const actor = await getCurrentUser();
+    // Tell the admin their identity could not be confirmed, then carry on: the
+    // notice is informational and never gates the writes below (`D-013c`).
+    noteActor(actor);
 
     try {
       // 1) Create the consolidated rule (INACTIVE). Nothing is retired if this fails.
@@ -318,6 +332,7 @@ export function useRuleConsolidation({
     deleteGroupRule,
     getRawGroupRule,
     getCurrentUser,
+    noteActor,
     onError,
     reload,
   ]);
@@ -328,7 +343,20 @@ export function useRuleConsolidation({
     setPreview(null);
     setResult(null);
     setError(null);
-  }, []);
+    dismissActorNotice();
+  }, [dismissActorNotice]);
 
-  return { phase, preview, result, error, openAddTarget, chooseGroup, openMerge, execute, close };
+  return {
+    phase,
+    preview,
+    result,
+    error,
+    actorNotice,
+    dismissActorNotice,
+    openAddTarget,
+    chooseGroup,
+    openMerge,
+    execute,
+    close,
+  };
 }

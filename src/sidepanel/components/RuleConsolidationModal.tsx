@@ -12,6 +12,7 @@ import Modal from './shared/Modal';
 import Button from './shared/Button';
 import Input from './shared/Input';
 import LoadingSpinner from './shared/LoadingSpinner';
+import AlertMessage, { type AlertMessageData } from './shared/AlertMessage';
 import type {
   ConsolidationPhase,
   ConsolidationPreview,
@@ -26,6 +27,13 @@ interface RuleConsolidationModalProps {
   preview: ConsolidationPreview | null;
   result: ConsolidationResult | null;
   error: string | null;
+  /**
+   * Non-blocking notice for a run whose acting admin could not be confirmed, so
+   * the audit entry carries no actor (`D-013c`). The consolidation still runs.
+   */
+  actorNotice?: AlertMessageData | null;
+  /** Dismiss {@link RuleConsolidationModalProps.actorNotice}. */
+  onDismissActorNotice?: () => void;
   /** Search groups by name (add-target select step). */
   searchGroups: (query: string) => Promise<Array<{ id: string; name: string }>>;
   /** Choose the group to add. */
@@ -42,6 +50,8 @@ const RuleConsolidationModal: React.FC<RuleConsolidationModalProps> = ({
   preview,
   result,
   error,
+  actorNotice,
+  onDismissActorNotice,
   searchGroups,
   onChooseGroup,
   onExecute,
@@ -93,6 +103,12 @@ const RuleConsolidationModal: React.FC<RuleConsolidationModalProps> = ({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Consolidate rule" size="lg" footer={footer}>
+      {/* The run was audited without an actor. Informational: it neither blocks
+          nor gates the wizard's steps (D-013c). */}
+      {actorNotice && (
+        <AlertMessage message={actorNotice} onDismiss={onDismissActorNotice} className="mb-4" />
+      )}
+
       {phase === 'loading' && <LoadingSpinner size="xl" centered message="Loading rule…" />}
 
       {/* Add-target: pick a group */}

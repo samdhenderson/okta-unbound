@@ -10,13 +10,16 @@
  * affected group so the operation can be inspected and reversed. When the actor
  * cannot be resolved, both entries record `performedBy: null` /
  * `actorResolution: 'unavailable'` rather than a placeholder identity, and the
- * merge still runs (`D-013`/`D-013b`). Emptying is blocked when a source is fed
- * by an active rule.
+ * merge still runs (`D-013`/`D-013b`) — with {@link UseGroupMergeReturn.actorNotice}
+ * telling the admin so at the time (`D-013c`). Emptying is blocked when a source
+ * is fed by an active rule.
  */
 
 import { useCallback, useState } from 'react';
 import type { GroupSummary, AuditLogEntry, OktaUser } from '../../shared/types';
+import type { AlertMessageData } from '../components/shared/AlertMessage';
 import { useOktaApi } from './useOktaApi';
+import { useActorNotice } from './useActorNotice';
 import { useProgress } from '../contexts/ProgressContext';
 import { logAction } from '../../shared/undoManager';
 import { auditStore } from '../../shared/storage/auditStore';
@@ -46,6 +49,13 @@ export interface UseGroupMergeReturn {
   plan: MergePlan | null;
   results: MergeResults | null;
   error: string | null;
+  /**
+   * Non-blocking notice shown when the run could not name the acting admin, or
+   * `null` when it could. The merge runs either way (`D-013c`).
+   */
+  actorNotice: AlertMessageData | null;
+  /** Dismiss {@link UseGroupMergeReturn.actorNotice}. */
+  dismissActorNotice: () => void;
   /** Load the preview for the chosen survivor + sources. */
   preview: (survivor: GroupSummary, sources: GroupSummary[]) => Promise<void>;
   /** Execute the previewed plan (copy into survivor, empty sources). */
@@ -79,6 +89,7 @@ export function useGroupMerge(targetTabId?: number): UseGroupMergeReturn {
     removeUserFromGroup,
   } = api;
   const { startProgress, updateProgress, completeProgress } = useProgress();
+  const { actorNotice, noteActor, dismissActorNotice } = useActorNotice();
 
   const [phase, setPhase] = useState<MergePhase>('idle');
   const [plan, setPlan] = useState<MergePlan | null>(null);
@@ -138,6 +149,9 @@ export function useGroupMerge(targetTabId?: number): UseGroupMergeReturn {
     // validated, per-tab-cached `/api/v1/users/me` lookup that reports its own
     // failures as `kind: 'unavailable'` instead of inventing an identity.
     const actor = await getCurrentUser();
+    // Tell the admin their identity could not be confirmed, then carry on: the
+    // notice is informational and never gates the merge below (`D-013c`).
+    noteActor(actor);
 
     startProgress('Merging groups', `Copying members into ${plan.survivor.name}…`, total, false);
 
@@ -258,6 +272,7 @@ export function useGroupMerge(targetTabId?: number): UseGroupMergeReturn {
   }, [
     plan,
     getCurrentUser,
+    noteActor,
     makeApiRequest,
     removeUserFromGroup,
     startProgress,
@@ -270,7 +285,18 @@ export function useGroupMerge(targetTabId?: number): UseGroupMergeReturn {
     setPlan(null);
     setResults(null);
     setError(null);
-  }, []);
+    dismissActorNotice();
+  }, [dismissActorNotice]);
 
-  return { phase, plan, results, error, preview, execute, reset };
+  return {
+    phase,
+    plan,
+    results,
+    error,
+    actorNotice,
+    dismissActorNotice,
+    preview,
+    execute,
+    reset,
+  };
 }
