@@ -116,14 +116,21 @@ export const stageCss = (scale = RENDER_SCALE, retime = RETIME) => `
     overflow: hidden;
   }
 
-  /* The app root is \`h-screen\`. At \`RENDER_SCALE\` 1 the viewport IS the panel,
-     so this is a harmless restatement — kept because it stops being harmless the
-     moment anyone raises the scale. Measured at scale 2 without it: a scroller
-     1960px tall inside a 980px panel, so the 33-group list had 29px of travel
-     and a scroll beat filmed a still page. The symptom is not an error; it is a
-     chapter that looks like it simply has nothing in it. */
+  /* The scroller must not outgrow the panel. Measured at scale 2 before the
+     shell was restructured: a scroller 1960px tall inside a 980px panel, so the
+     33-group list had 29px of travel and a scroll beat filmed a still page. The
+     symptom is not an error; it is a chapter that looks like it simply has
+     nothing in it.
+
+     A \`max-height\` and not a \`height\`. The scroller is \`flex: 1 1 0%\` inside a
+     \`h-screen\` column, below \`ContextBar\` and the tab rail, so its size is
+     resolved by flex-grow dividing the free space — an explicit \`height\` is
+     never consulted at all, not even with \`!important\`, because the flex-basis
+     is \`0%\` rather than \`auto\`. This file asserted one for months after the
+     shell moved, and it did nothing. A \`max-height\` is a real ceiling: it clamps
+     the used size after flex resolution, which is where the scale-2 overflow
+     actually appeared. */
   [data-testid='app-scroll-root'] {
-    height: 100% !important;
     max-height: 100% !important;
   }
 
@@ -223,7 +230,16 @@ export async function verifyStage(page, scale = RENDER_SCALE) {
         layoutWidth: root ? Math.round(root.offsetWidth) : null,
         wantedLayoutWidth: panelW,
         scrollerHeight: scroller?.clientHeight ?? null,
-        wantedScrollerHeight: panelH,
+        // The scroller's foot, not its height. It sits below ContextBar and the
+        // tab rail, so its height is the panel minus whatever chrome the shell
+        // currently carries — a number that legitimately moves whenever a band
+        // is added, removed or resized, and that this file pinned to 980 until
+        // the shell stopped putting the scroller at the top of the panel. Its
+        // *bottom* edge is the invariant: the scroller ends where the panel
+        // ends. That is what the scale-2 regression violated, and by a mile.
+        scrollerBottom: scroller ? Math.round(scroller.getBoundingClientRect().bottom) : null,
+        wantedScrollerBottom: panelH,
+        minScrollerHeight: Math.round(panelH / 2),
         scrollTravel: scroller ? scroller.scrollHeight - scroller.clientHeight : null,
       };
     },
@@ -248,10 +264,23 @@ export async function verifyStage(page, scale = RENDER_SCALE) {
         '— it is not seeing itself as a side panel',
     );
   }
-  if (measured.scrollerHeight !== measured.wantedScrollerHeight) {
+  if (measured.scrollerBottom !== measured.wantedScrollerBottom) {
     problems.push(
-      `scroller is ${measured.scrollerHeight}px tall, wanted ${measured.wantedScrollerHeight}px ` +
-        '— the h-screen override missed and scroll beats will film a still page',
+      `scroller ends at ${measured.scrollerBottom}px, wanted ${measured.wantedScrollerBottom}px ` +
+        '— it is not bounded by the panel, so scroll beats will film a still page',
+    );
+  }
+  // A floor, not `> 0`. The scroller cannot actually reach zero — `pb-14` keeps
+  // 56px of padding in the content box no matter how hard its height is clamped —
+  // so `> 0` is a condition no reachable state violates, and a guard that cannot
+  // be made to fail is a guard that proves nothing (ADR-0044). Half the panel is
+  // a bound the real failure would cross: chrome bands growing until the view
+  // they sit above is a slot. Verified by clamping the scroller and watching this
+  // fire.
+  if (measured.scrollerHeight !== null && measured.scrollerHeight < measured.minScrollerHeight) {
+    problems.push(
+      `scroller is only ${measured.scrollerHeight}px of a ${PANEL.height}px panel — the ` +
+        'chrome above it has grown until there is no view left to film',
     );
   }
   return { ok: problems.length === 0, problems, measured };
