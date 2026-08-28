@@ -91,6 +91,20 @@
   --dur-move: 220ms; /* things arriving or leaving — rows, modal enter, popovers */
   --dur-travel: 320ms; /* panel-crossing — drawer, view push/pop */
   --dur-tell: 500ms; /* deliberately noticeable — count-up, success flash, progress */
+  /*
+   * Hover intent — how long a pointer must rest on a target before that counts as a
+   * deliberate enquiry rather than a pass-through. `Tooltip` is the only consumer.
+   *
+   * It sits apart from the scale above because it is not the length of an animation:
+   * nothing moves for these 400ms. It is a *threshold*, tuned against the icon rail,
+   * where nine targets sit ~40px apart — anything shorter and sweeping the pointer
+   * across the strip strobes a chip over every glyph on the way past.
+   *
+   * Mirrored in JS as `HOVER_INTENT_MS` in `shared/Tooltip.tsx`, for the same reason
+   * `useCountUp` mirrors `--dur-tell`: a delay is a `setTimeout`, not a transition,
+   * and jsdom parses no stylesheet to read the token back from.
+   */
+  --dur-hover-intent: 400ms;
 
   /* Easings */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1); /* the workhorse */
@@ -174,11 +188,26 @@
    * at 32px still 25%. At 16px it rests flat through ~7px of scroll, merges over
    * the next ~17, and reaches 100% on exactly the frame the strip parks.
    */
-  --merge-range: 16px;
+  /*
+   * MUST stay shorter than the gap the strip closes, or the merge is already part-done
+   * before the page has moved and the strip can never show its resting shape.
+   *
+   * That gap is the tab column's top padding, which ADR-0048 turned from a fixed 24px
+   * into `--sp-gutter` — 12px at compact. The old fixed 16px was calibrated against 24
+   * and is *larger* than the compact gutter, so below 400px the strip would have rested
+   * partially merged at scroll zero. It scales with the gutter now, holding the ratio
+   * the ADR-0038 measurements were taken at (16/24 = 2/3) rather than a new guess.
+   *
+   * Overridden per density below, alongside the `--sp-*` roles it derives from.
+   */
+  --merge-range: 10px;
   /* Fallback gutter, used until `useActionOverflow` publishes the measured
-     `--bar-bleed`. The literal is the tab content wrapper's `px-6`; the measured
-     value is exact and also survives a panel wider than `max-w-7xl`. */
-  --merge-bleed: 1.5rem;
+     `--bar-bleed`. It *is* the tab content wrapper's horizontal padding, so it now
+     derives from that role rather than restating it — before ADR-0048 the wrapper was
+     a fixed `px-6` and this was the literal `1.5rem`, which silently stopped being
+     true at every density. The measured value is still exact and also survives a panel
+     wider than `max-w-7xl`. */
+  --merge-bleed: var(--sp-gutter);
   --merge-radius: 0.375rem; /* the strip's resting corner — `rounded-md`, animated to 0 */
   /*
    * The one shadow on a non-overlay surface. `docs/design-system.md` reserves
@@ -188,9 +217,9 @@
   --shadow-dock: 0 7px 11px -9px rgb(16 24 40 / 0.1);
 
   /*
-   * Interactive-card elevation (ADR-0047). Read from Odyssey, not invented: `--lift-1`
-   * is `DepthLow` and `--lift-2` is `DepthMedium`, both from
-   * `odyssey-design-tokens/src/depth.json`. Odyssey's own `Card` carries `DepthMedium`
+   * Interactive-card elevation (ADR-0047). Read from Odyssey, not invented: this is
+   * `DepthLow` from `odyssey-design-tokens/src/depth.json`. Odyssey's own `Card` carries
+   * `DepthMedium`
    * at rest and deepens to `DepthHigh` on `.isClickable:hover` — so a shadow on a card
    * is Odyssey's behaviour, not a departure from it. `DepthHigh` is deliberately not
    * adopted: it is heavier than anything a 360px panel needs.
@@ -201,9 +230,6 @@
    * repaints, animating an opacity composites.
    */
   --lift-1: 0 1px 2px 0 rgb(39 39 39 / 0.07);
-  --lift-2:
-    0 1px 4px 0 rgb(39 39 39 / 0.08), 0 4px 6px 0 rgb(39 39 39 / 0.01),
-    0 5px 15px 0 rgb(39 39 39 / 0.05);
 
   /*
    * Semantic spacing roles (ADR-0048). Six named roles on top of a 4px base;
@@ -369,6 +395,7 @@
     --sp-row-x: 10px;
     --sp-inline: 6px;
     --sp-field: 8px;
+    --merge-range: 8px;
   }
 }
 
@@ -381,6 +408,7 @@
     --sp-row-x: 16px;
     --sp-inline: 10px;
     --sp-field: 12px;
+    --merge-range: 13px;
   }
 }
 
@@ -392,6 +420,7 @@
   --sp-row-x: 10px;
   --sp-inline: 6px;
   --sp-field: 8px;
+  --merge-range: 8px;
 }
 
 [data-density='default'] {
@@ -402,6 +431,7 @@
   --sp-row-x: 12px;
   --sp-inline: 8px;
   --sp-field: 10px;
+  --merge-range: 10px;
 }
 
 [data-density='comfortable'] {
@@ -412,6 +442,7 @@
   --sp-row-x: 16px;
   --sp-inline: 10px;
   --sp-field: 12px;
+  --merge-range: 13px;
 }
 
 @layer components {
@@ -439,28 +470,44 @@
    * `--dur-quick`/`--ease-affirm`. That asymmetry is the whole effect: instant down,
    * eased back up.
    */
-  .press {
+  /*
+   * Both classes are self-sufficient: `.press-subtle` used alone behaves exactly like
+   * `.press` with a flatter scale, and `press press-subtle` together is equivalent.
+   *
+   * That is deliberate and was learned the hard way. The first cut defined the `:active`
+   * transform on `.press` only and let `.press-subtle` override the variable, so
+   * `.press-subtle` alone silently did nothing — it set a custom property no rule read.
+   * Eight call sites across five directories had already adopted it that way before the
+   * gap was caught, and *none* of them could fail a test: ADR-0023 bans asserting on
+   * class names, and the headless story runner loads no CSS, so an inert press class is
+   * invisible to every gate this repo has.
+   */
+  .press,
+  .press-subtle {
     --press-scale: 0.955;
     transition:
       transform var(--dur-quick) var(--ease-affirm),
       background-color var(--dur-instant) var(--ease-standard),
       border-color var(--dur-instant) var(--ease-standard),
       box-shadow var(--dur-instant) var(--ease-standard),
-      color var(--dur-instant) var(--ease-standard);
-  }
-
-  .press:active:not(:disabled, [aria-disabled='true']) {
-    transform: scale(var(--press-scale));
-    transition-duration: var(--dur-press);
-    transition-timing-function: var(--ease-press);
+      color var(--dur-instant) var(--ease-standard),
+      opacity var(--dur-instant) var(--ease-standard);
   }
 
   /*
    * A row is a much wider target than a button, so the same ratio reads as a lurch.
-   * Scaled to travel roughly the same number of pixels at the edge instead.
+   * Scaled to travel roughly the same number of pixels at the edge instead. Declared
+   * after the shared rule above so it wins the variable.
    */
   .press-subtle {
     --press-scale: 0.995;
+  }
+
+  .press:active:not(:disabled, [aria-disabled='true']),
+  .press-subtle:active:not(:disabled, [aria-disabled='true']) {
+    transform: scale(var(--press-scale));
+    transition-duration: var(--dur-press);
+    transition-timing-function: var(--ease-press);
   }
 
   /*
