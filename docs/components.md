@@ -244,12 +244,18 @@ the row (`flex`, or `pinned` for the page's one primary verb); a change to the
 entity's state with **no symmetric undo** — suspend, delete, deactivate — defaults
 to `tier`, behind a confirm `Modal` that states the consequence in plain language
 next to the control ("Blocks sign-in until reversed," not just "Suspend").
-A **list** rung reads the same two rules slightly differently (ADR-0051): with no single
+A **list** rung reads the same rules with two additions (ADR-0051). With no single
 page-level verb, `variant: 'primary'` marks the one open inline panel — which also pins
-it, so the control that closes that panel can never overflow — and the tier may sort by
-**frequency** where the consequence test returns _row_ for everything. Frequency may move
-a verb down, never up, and never brings a confirm `Modal` with it. `GroupsListActionBar`
-is that shape.
+it, so the control that closes that panel can never overflow. And the tier may sort by
+**frequency** as well as consequence, though frequency may move a verb down, never up,
+and never brings a confirm `Modal` with it.
+
+Two traps that rung found the hard way. **A wizard in front of a verb does not move that
+verb into the row** — the test asks what the verb does, not what stands between the press
+and the doing. And where the set of verbs **varies with state**, the leading position must
+hold a control whose worst outcome is another click: a strip ordered purely by weight puts
+a different control under the same pixel as the state changes, which is how
+`GroupsListActionBar` briefly shipped _Merge_ where _Select all_ had been.
 **An `ActionDescriptor` is never declared for a handler that isn't wired yet** — an
 unimplemented verb is omitted, the same "absent is not zero" discipline ADR-0032
 applies to identity facts, not rendered `disabled` forever with a tooltip standing
