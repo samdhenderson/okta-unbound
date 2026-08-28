@@ -46,7 +46,7 @@ refusal is as binding as a `claimed:` marker. Done, and it changed the pick — 
 
 **Items worked:** `D-050`, `D-013c`, `D-053g`.
 
-**PR:** _(filled in below)_
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/99
 
 **Branch:** `claude/stoic-gates-nsen7u` — harness-assigned, as `SESSION.md`
 step 2 anticipates. It counts as an unattended run's branch for the three-PR cap.

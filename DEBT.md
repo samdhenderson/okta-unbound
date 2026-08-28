@@ -588,7 +588,7 @@ more expensive the day an audit viewer ships.
   for the two wizard flows — those run behind an open modal, where a banner on
   the tab underneath would never be seen. `noteActor` is pure state called after
   `getCurrentUser()`; it never gates the write.
-- **Status:** claimed:claude/stoic-gates-nsen7u
+- **Status:** done:#99
 - **Depends on:** `D-013b`
 
 ### D-014 · useRuleLifecycle re-implements CoreApi.getCurrentUser
@@ -1925,7 +1925,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   Two of the five named consumers (`useBlastRadius`, `useUserComparison`) import
   only `loadCachedGroupNames` from this module, not `fetchGroupRulesRequest` —
   they consume a different export and are unaffected.
-- **Status:** claimed:claude/stoic-gates-nsen7u
+- **Status:** done:#99
 - **Related:** `D-029b`, `D-038`, ADR-0006
 
 ### D-051 · Two always-on log calls pass a raw caught error
@@ -2255,7 +2255,7 @@ affects every scroll box in the app, on every platform.
   panel edge as a permanent seam. 6px inside a bordered list card reads as
   padding; 15px beside a white header band reads as a defect. The reflow is the
   lesser artifact there.
-- **Status:** claimed:claude/stoic-gates-nsen7u
+- **Status:** done:#99
 - **Related:** `D-053`, ADR-0044. **The reel works around this by setting
   `scrollbar-gutter: stable` in `SHOWCASE_CSS`, which is reel-side only and does
   nothing for real users.** When this lands, that rule becomes a harmless
