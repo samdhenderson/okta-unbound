@@ -56,6 +56,9 @@ convention; the specs in [`../`](../README.md) describe the _what_.
 | [0047](./0047-elevation-on-interactive-cards.md)                     | Elevation on interactive cards, and the premise that was wrong                    | Accepted | "Okta doesn't shadow cards" was false — Odyssey's `Card` ships `DepthMedium`. Rule narrowed to static cards; `--lift-*` from Odyssey. |
 | [0048](./0048-spacing-roles-and-derived-density.md)                  | Spacing roles, and a density nobody chooses                                       | Accepted | Six semantic `--sp-*` roles over three width-derived scopes. Media query, not container query — the panel root _is_ the viewport.     |
 | [0049](./0049-one-slab-and-a-sequenced-indicator.md)                 | One slab, and an indicator that slides before the label moves                     | Accepted | Amends 0028. Four band rules → one on the sticky `<nav>`. Indicator slides while labels are frozen, then is measured. New `Tooltip`.  |
+| [0050](./0050-the-chrome-leaves-the-scroller.md)                     | The chrome leaves the scroller                                                    | Accepted | Amends 0032 §3. Shell stops scrolling; chrome sits outside it so the ~15px bar spans content only. Rail un-sticks, `--rail-h` gone.   |
+
+| [0051](./0051-a-verb-strip-for-a-list-rung.md) | A verb strip for a list rung | Accepted | Discharges 0039's deferral. `GroupSelectionBar` → `GroupsListActionBar`. `primary` marks the open panel; the tier sorts by frequency. |
 
 ## Adding an ADR
 

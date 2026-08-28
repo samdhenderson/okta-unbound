@@ -71,7 +71,7 @@ import GroupCleanupPanel from './groups/GroupCleanupPanel';
 import GroupSearchBar from './groups/GroupSearchBar';
 import GroupFilterToggle from './groups/GroupFilterToggle';
 import GroupFilterPanel from './groups/GroupFilterPanel';
-import GroupSelectionBar, { type ActivePanel } from './groups/GroupSelectionBar';
+import GroupsListActionBar, { type ActivePanel } from './groups/GroupsListActionBar';
 import GroupsListPanel from './groups/GroupsListPanel';
 import GroupDetailView from './groups/detail/GroupDetailView';
 import GroupMergeModal from './groups/GroupMergeModal';
@@ -501,7 +501,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
 
             {/* Selection & Action Bar - Only in cached mode */}
             {searchMode === 'cached' && (
-              <GroupSelectionBar
+              <GroupsListActionBar
                 selectedCount={selectedGroupIds.size}
                 filteredCount={filteredGroups.length}
                 activePanel={activePanel}

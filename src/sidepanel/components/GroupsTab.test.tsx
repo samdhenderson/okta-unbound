@@ -1345,8 +1345,8 @@ describe('live mode isolation', () => {
     render(<GroupsTab targetTabId={1} />);
     expect(screen.queryByRole('button', { name: /^Filters/ })).not.toBeInTheDocument();
     expect(screen.queryByText('Group Type')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Select All' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Export List/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Select all/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Export list' })).not.toBeInTheDocument();
   });
 
   it('returns live results in the response order — never filtered or sorted', async () => {
@@ -1386,14 +1386,18 @@ describe('selection', () => {
     for (const name of ['AppOne', 'OktaOne', 'OktaTwo']) {
       await uev.click(screen.getByRole('checkbox', { name: `Select ${name}` }));
     }
-    expect(screen.getByText('3 of 3 selected')).toBeInTheDocument();
+    // RETARGETED: `GroupsListActionBar` replaced the `N of M selected` readout —
+    // the selected count is the header badge, the filtered denominator is what
+    // `Select all` offers to take. Same two numbers, same assertion.
+    expect(screen.getByRole('button', { name: 'Select all (3)' })).toBeInTheDocument();
     expect(screen.getByText('3 Selected')).toBeInTheDocument();
 
     await uev.click(screen.getByRole('button', { name: /^Filters/ }));
     await uev.click(section('Group Type').getByRole('button', { name: 'App' }));
 
     expect(renderedGroupNames()).toEqual(['AppOne']);
-    expect(screen.getByText('3 of 1 selected')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Select all (1)' })).toBeInTheDocument();
+    expect(screen.getByText('3 Selected')).toBeInTheDocument();
 
     // Export uses `groups`, not `filteredGroups` — all three, including the hidden ones.
     await uev.click(screen.getByRole('button', { name: /Export \(3\)/ }));
@@ -1437,21 +1441,23 @@ describe('selection', () => {
     expect(screen.getByRole('checkbox', { name: 'Select AppOne' })).toBeChecked();
   });
 
-  it('Select All selects only the filtered groups; Deselect All clears everything', async () => {
+  it('Select all selects only the filtered groups; Deselect clears everything', async () => {
     const uev = userEvent.setup();
     await renderCached(fixtures);
     await uev.click(screen.getByRole('button', { name: /^Filters/ }));
     await uev.click(section('Group Type').getByRole('button', { name: 'Okta' }));
 
-    await uev.click(screen.getByRole('button', { name: 'Select All' }));
-    expect(screen.getByText('2 of 2 selected')).toBeInTheDocument();
+    await uev.click(screen.getByRole('button', { name: 'Select all (2)' }));
+    expect(screen.getByText('2 Selected')).toBeInTheDocument();
 
     await uev.click(section('Group Type').getByRole('button', { name: 'All' }));
-    expect(screen.getByText('2 of 3 selected')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Select all (3)' })).toBeInTheDocument();
+    expect(screen.getByText('2 Selected')).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Select AppOne' })).not.toBeChecked();
 
-    await uev.click(screen.getByRole('button', { name: 'Deselect All' }));
-    expect(screen.getByText('0 of 3 selected')).toBeInTheDocument();
+    await uev.click(screen.getByRole('button', { name: 'Deselect' }));
+    expect(screen.queryByText(/\d+ Selected/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Select all (3)' })).toBeEnabled();
   });
 
   it('loading a collection replaces the selection wholesale', async () => {
@@ -1467,17 +1473,17 @@ describe('selection', () => {
     expect(screen.getByRole('checkbox', { name: 'Select OktaTwo' })).toBeChecked();
   });
 
-  it('shows Compare only for 2-5 selections and Bulk Actions only above 0', async () => {
+  it('shows Compare only for 2-5 selections and Bulk actions only above 0', async () => {
     const uev = userEvent.setup();
     await renderCached(fixtures);
     const compare = () => screen.queryByRole('button', { name: /^Compare/ });
 
     expect(compare()).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Bulk Actions' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Bulk actions' })).not.toBeInTheDocument();
 
     await uev.click(screen.getByRole('checkbox', { name: 'Select AppOne' }));
     expect(compare()).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Bulk Actions' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bulk actions' })).toBeInTheDocument();
 
     await uev.click(screen.getByRole('checkbox', { name: 'Select OktaOne' }));
     expect(compare()).toHaveTextContent('Compare (2)');
@@ -1485,9 +1491,9 @@ describe('selection', () => {
 });
 
 // ===========================================================================
-// 9. Export List CSV — pin the current bytes before any csvUtils swap.
+// 9. Export list CSV — pin the current bytes before any csvUtils swap.
 // ===========================================================================
-describe('Export List CSV', () => {
+describe('Export list CSV', () => {
   let revokeObjectURL: ReturnType<typeof vi.fn>;
   let clickSpy: ReturnType<typeof vi.spyOn>;
   let blobs: Array<{ text: string; type: string | undefined }>;
@@ -1534,7 +1540,7 @@ describe('Export List CSV', () => {
       }),
     ]);
 
-    await uev.click(screen.getByRole('button', { name: /Export List/ }));
+    await uev.click(screen.getByRole('button', { name: 'Export list' }));
 
     expect(blobs).toHaveLength(1);
     expect(blobs[0].type).toBe('text/csv');
@@ -1561,12 +1567,12 @@ describe('Export List CSV', () => {
     await uev.click(screen.getByRole('button', { name: /^Filters/ }));
     await uev.click(section('Group Type').getByRole('button', { name: 'App' }));
 
-    await uev.click(screen.getByRole('button', { name: /Export List/ }));
+    await uev.click(screen.getByRole('button', { name: 'Export list' }));
     expect(blobs[0].text).toContain('"AppOne"');
     expect(blobs[0].text).not.toContain('"OktaOne"');
 
     await uev.click(section('Group Type').getByRole('button', { name: 'Built-in' }));
-    expect(screen.getByRole('button', { name: /Export List/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Export list' })).toBeDisabled();
   });
 });
 
@@ -1609,7 +1615,7 @@ describe('prop brokering', () => {
   it('keeps onRemoveUserFromGroups Object.is-stable across re-renders', async () => {
     const uev = userEvent.setup();
     await renderCached([cachedGroup({ id: 'a', name: 'Alpha' })]);
-    await uev.click(screen.getByRole('button', { name: /Cross-Search/ }));
+    await uev.click(screen.getByRole('button', { name: /^Cross-search/ }));
     const remove = captured.props.CrossGroupSearch.onRemoveUserFromGroups;
 
     await uev.click(screen.getByRole('checkbox', { name: 'Select Alpha' }));
@@ -1688,22 +1694,24 @@ describe('prop brokering', () => {
 // 11. The shared member cache Map + compareGroups' in-place mutation
 // ===========================================================================
 describe('groupMembersCache', () => {
-  it('onFetchMembers populates the cache immutably and the Cross-Search badge reflects it', async () => {
+  it('onFetchMembers populates the cache immutably and the Cross-search count reflects it', async () => {
     route(/^\/api\/v1\/groups\/a\/users\?limit=200&expand=group-rules$/, () => ({
       success: true,
       headers: {},
       data: [user('u1')],
     }));
     await renderCached([cachedGroup({ id: 'a', name: 'Alpha' })]);
-    const crossSearch = () => screen.getByRole('button', { name: /Cross-Search/ }).textContent;
+    // RETARGETED: an `ActionDescriptor` carries no JSX, so the cached-members
+    // count is part of the label rather than a `Button` badge element.
+    const crossSearch = () => screen.getByRole('button', { name: /Cross-search/ }).textContent;
 
-    expect(crossSearch()).toBe('Cross-Search');
+    expect(crossSearch()).toBe('Cross-search');
 
     await act(async () => {
       await captured.props.GroupExportModal.onFetchMembers('a');
     });
 
-    expect(crossSearch()).toBe('Cross-Search1');
+    expect(crossSearch()).toBe('Cross-search (1)');
   });
 
   // SURPRISE (pinned as-is): api.compareGroups writes straight into the state Map
@@ -1742,13 +1750,13 @@ describe('groupMembersCache', () => {
     expect(memberFetches).toBe(2);
 
     // Half 2: ...but React never learned about it, so the badge is still absent.
-    expect(screen.getByRole('button', { name: /Cross-Search/ }).textContent).toBe('Cross-Search');
+    expect(screen.getByRole('button', { name: /Cross-search/ }).textContent).toBe('Cross-search');
   });
 
   it('passes the raw (uncloned) cache Map to both the comparison modal and cross-search', async () => {
     const uev = userEvent.setup();
     await renderCached([cachedGroup({ id: 'a', name: 'Alpha' })]);
-    await uev.click(screen.getByRole('button', { name: /Cross-Search/ }));
+    await uev.click(screen.getByRole('button', { name: /^Cross-search/ }));
 
     expect(
       Object.is(
@@ -1765,7 +1773,7 @@ describe('groupMembersCache', () => {
       cachedGroup({ id: 'b', name: 'Beta' }),
     ]);
     await uev.click(screen.getByRole('checkbox', { name: 'Select Alpha' }));
-    await uev.click(screen.getByRole('button', { name: /Cross-Search/ }));
+    await uev.click(screen.getByRole('button', { name: /^Cross-search/ }));
 
     expect([...captured.props.CrossGroupSearch.groupNames.entries()]).toEqual([
       ['a', 'Alpha'],
@@ -1781,7 +1789,7 @@ describe('handleRemoveUserFromGroups', () => {
   async function openCrossSearch() {
     const uev = userEvent.setup();
     await renderCached([cachedGroup({ id: 'a', name: 'Alpha' })]);
-    await uev.click(screen.getByRole('button', { name: /Cross-Search/ }));
+    await uev.click(screen.getByRole('button', { name: /^Cross-search/ }));
     return captured.props.CrossGroupSearch.onRemoveUserFromGroups;
   }
 
@@ -1845,7 +1853,7 @@ describe('inline panels', () => {
     const uev = userEvent.setup();
     await renderCached(fixtures);
 
-    await uev.click(screen.getByRole('button', { name: /Cross-Search/ }));
+    await uev.click(screen.getByRole('button', { name: /^Cross-search/ }));
     expect(screen.getByTestId('cross-group-search')).toBeInTheDocument();
 
     await uev.click(screen.getByRole('button', { name: /Collections/ }));
@@ -1859,7 +1867,7 @@ describe('inline panels', () => {
   it('closes via the child onClose callback', async () => {
     const uev = userEvent.setup();
     await renderCached(fixtures);
-    await uev.click(screen.getByRole('button', { name: /Cross-Search/ }));
+    await uev.click(screen.getByRole('button', { name: /^Cross-search/ }));
 
     act(() => captured.props.CrossGroupSearch.onClose());
 
@@ -1870,10 +1878,10 @@ describe('inline panels', () => {
     const uev = userEvent.setup();
     await renderCached(fixtures);
     await uev.click(screen.getByRole('checkbox', { name: 'Select Alpha' }));
-    await uev.click(screen.getByRole('button', { name: 'Bulk Actions' }));
+    await uev.click(screen.getByRole('button', { name: 'Bulk actions' }));
     expect(screen.getByTestId('bulk-panel')).toBeInTheDocument();
 
-    await uev.click(screen.getByRole('button', { name: 'Deselect All' }));
+    await uev.click(screen.getByRole('button', { name: 'Deselect' }));
 
     expect(screen.queryByTestId('bulk-panel')).not.toBeInTheDocument();
   });
@@ -1882,7 +1890,7 @@ describe('inline panels', () => {
     const uev = userEvent.setup();
     await renderCached(fixtures);
     await uev.click(screen.getByRole('checkbox', { name: 'Select Alpha' }));
-    await uev.click(screen.getByRole('button', { name: 'Bulk Actions' }));
+    await uev.click(screen.getByRole('button', { name: 'Bulk actions' }));
 
     await act(async () => captured.props.BulkOperationsPanel.onExportSelection());
 

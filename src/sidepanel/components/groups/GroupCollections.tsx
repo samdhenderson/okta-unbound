@@ -172,7 +172,7 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
   return (
     <div className="border border-neutral-200 rounded-md bg-white overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between p-(--sp-card) bg-neutral-50 border-b border-neutral-200">
+      <div className="flex items-center justify-between p-(--sp-card)">
         <div>
           <h4 className="text-sm font-semibold text-neutral-900">Group Collections</h4>
           <p className="text-xs text-neutral-500 mt-0.5">

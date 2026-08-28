@@ -128,7 +128,11 @@ removes.
 
 The rail carries **no border of its own**, and neither does `ContextBar`: they are
 bands of one top-chrome slab, and the single rule that closes that slab lives on
-`TabNavigation`'s `<nav>` (the sticky element, so the edge survives scrolling).
+`TabNavigation`'s `<nav>` — the last band, so the edge sits where the slab meets the
+content. Neither band is sticky: the whole slab sits **outside** the panel's scroller
+(ADR-0050), so it holds still without needing to, and the scrollbar spans the content
+region only. `ContextBar` is one line for the same reason — a band that never scrolls
+away spends its height permanently.
 Separation inside the slab is spacing and type weight. The `underline` variant
 keeps its `border-b` — there the rule is the indicator's own track.
 
@@ -231,7 +235,7 @@ one to be the first to disappear.
   its `aria-controls` target, and renders the control only when the tier has content.
   Leave the tier uncontrolled unless the page has to collapse it on a rung change.
 
-**A detail page never calls `<ActionBar>` directly — it wraps it in its own
+**No page calls `<ActionBar>` directly — it wraps it in its own
 `<Entity>ActionBar`** (`UserActionBar` is the reference shape), even for a single
 action; the wrapper is where the page's second verb goes, and retrofitting one onto
 an inline call site later means finding and migrating it. The wrapper decides where
@@ -240,6 +244,12 @@ the row (`flex`, or `pinned` for the page's one primary verb); a change to the
 entity's state with **no symmetric undo** — suspend, delete, deactivate — defaults
 to `tier`, behind a confirm `Modal` that states the consequence in plain language
 next to the control ("Blocks sign-in until reversed," not just "Suspend").
+A **list** rung reads the same two rules slightly differently (ADR-0051): with no single
+page-level verb, `variant: 'primary'` marks the one open inline panel — which also pins
+it, so the control that closes that panel can never overflow — and the tier may sort by
+**frequency** where the consequence test returns _row_ for everything. Frequency may move
+a verb down, never up, and never brings a confirm `Modal` with it. `GroupsListActionBar`
+is that shape.
 **An `ActionDescriptor` is never declared for a handler that isn't wired yet** — an
 unimplemented verb is omitted, the same "absent is not zero" discipline ADR-0032
 applies to identity facts, not rendered `disabled` forever with a tooltip standing

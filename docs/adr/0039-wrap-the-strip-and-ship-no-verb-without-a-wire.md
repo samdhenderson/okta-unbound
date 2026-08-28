@@ -159,6 +159,12 @@ per-item failure a partial batch can't cleanly roll back — is a real open ques
 this ADR does not answer. That refinement is for whichever ADR ships
 `GroupSelectionBar`, not this one.
 
+> **Discharged by [ADR-0051](./0051-a-verb-strip-for-a-list-rung.md).** On a list rung
+> `primary` marks the **open inline panel** rather than a page-level verb, and the tier
+> sorts that strip by **frequency** — because the consequence test returns _row_ for every
+> verb it holds. The batch-undo question is explicitly still open: nothing in that strip
+> commits a batch write, so nothing there tests it.
+
 ## Consequences
 
 - **`GroupDetailView` is the one current violator of rule 1**, and this ADR does
