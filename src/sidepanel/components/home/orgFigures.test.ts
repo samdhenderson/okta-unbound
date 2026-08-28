@@ -155,6 +155,28 @@ describe('subCountStatus', () => {
     expect(subCountStatus(source({ isReading: true }), [source()])).toBe('reading');
     expect(subCountStatus(source(), [source({ isReading: true })])).toBe('reading');
   });
+
+  it('treats a FLOOR like the counted collection, not like a gate', () => {
+    // The third role, and the one the reports need. "App access no rule
+    // maintains" draws its population out of the app-group assignments, so an
+    // unfinished assignment walk shortens the answer without corrupting it —
+    // the same floor an unfinished groups walk produces, and emphatically not
+    // the suppression a gate would produce.
+    expect(subCountStatus(source(), [source()], [source({ complete: false })])).toBe('partial');
+    expect(subCountStatus(source(), [source()], [source()])).toBe('ok');
+  });
+
+  it('still suppresses when a floor was never read at all', () => {
+    // A floor may be short. It may not be absent: with nothing read there is no
+    // population to have drawn from, so the count is not a floor, it is nothing.
+    expect(
+      subCountStatus(source(), [], [source({ complete: false, lastFullWalkAt: null, count: 0 })]),
+    ).toBe('unavailable');
+  });
+
+  it('reads as reading while a floor is still loading', () => {
+    expect(subCountStatus(source(), [], [source({ isReading: true })])).toBe('reading');
+  });
 });
 
 describe('buildSubCount', () => {
@@ -212,6 +234,18 @@ describe('buildSubCount', () => {
   it('shows no note while reading — the skeleton is the message', () => {
     const reading = buildSubCount({ ...base, counted: named({ isReading: true }) });
     expect(reading).toMatchObject({ status: 'reading', value: null, note: undefined });
+  });
+
+  it('names the collection that actually fell short, which may be a floor', () => {
+    // With a floor in play the short collection is not always the counted one,
+    // and quoting the wrong name would send a reader to refresh something that
+    // is already current.
+    const floor = buildSubCount({
+      ...base,
+      floors: [named({ complete: false }, 'app group assignments')],
+    });
+    expect(floor).toMatchObject({ status: 'partial', value: 31 });
+    expect(floor.note).toBe('At least — the last read of app group assignments did not finish.');
   });
 });
 

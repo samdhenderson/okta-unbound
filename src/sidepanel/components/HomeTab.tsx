@@ -23,6 +23,14 @@
  * asked for that exact thing, and an unreachable one still gets an
  * "Open in Okta" route.
  *
+ * ## The reports mount nothing of their own
+ *
+ * `useHomeReports` takes the same snapshot handles the jump bar and the org card
+ * already hold, so both reports under the card are joins over rows on disk. It
+ * deliberately owns no sync ladder: `useOrgFigures` owns the single top-up Home
+ * is allowed to spend per mount, and a second consumer deciding independently
+ * that the snapshot looked stale would double it.
+ *
  * ## No `PageHeader`
  *
  * Deliberate, per the design: a header on Home could only say "Home". The jump
@@ -34,10 +42,12 @@ import React, { useMemo, useState } from 'react';
 import JumpBar from './home/JumpBar';
 import WorkingSet from './home/WorkingSet';
 import OrgSnapshotCard from './home/OrgSnapshotCard';
+import ReportsCard from './home/ReportsCard';
 import { useOktaApi } from '../hooks/useOktaApi';
 import { useOrgEntityIndex } from '../hooks/useOrgEntityIndex';
 import { useWorkingSet } from '../hooks/useWorkingSet';
 import { useOrgFigures } from '../hooks/useOrgFigures';
+import { useHomeReports } from '../hooks/useHomeReports';
 import { useJumpResolver, type JumpResult } from '../hooks/useJumpResolver';
 import { useEntityNavigation } from '../contexts/NavigationContext';
 import { navigationTarget } from './home/jumpDestinations';
@@ -88,6 +98,11 @@ const HomeTab: React.FC<HomeTabProps> = ({
     enabled: isActive,
     connected: targetTabId !== null,
   });
+  // No `enabled` and no sync of its own: both reports are joins over the rows
+  // `useOrgFigures` already mounted, and it owns the single top-up Home is
+  // allowed to spend. A second consumer deciding independently that the
+  // snapshot looked stale would double it.
+  const { reports } = useHomeReports({ index });
 
   // Captured once, at mount. React applies `autoFocus` on mount only, and the
   // tab is never unmounted, so this cannot re-steal focus from the rail button
@@ -201,6 +216,11 @@ const HomeTab: React.FC<HomeTabProps> = ({
           canRefresh={orgFigures.canRefresh}
           onOpenTab={onOpenTab}
           onOpenListView={onOpenListView}
+        />
+
+        <ReportsCard
+          reports={reports}
+          onOpenGroup={(id) => nav.navigateTo({ type: 'group', id })}
         />
       </div>
     </div>

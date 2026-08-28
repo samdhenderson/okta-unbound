@@ -197,40 +197,58 @@ export interface OrgBox extends OrgFigure {
 }
 
 /**
- * Classify a finding from the collection it counts and the collections it
- * consults to *exclude* rows.
+ * Classify a count from the collections behind it.
  *
- * The asymmetry between the two is the whole rule, and it is the same one
+ * Three roles, and the asymmetry between them is the whole rule — the same one
  * `useOrgEntityIndex` applies to a jump-bar miss: **a positive reading survives
  * an unfinished walk; a negative one does not.**
  *
  * - `counted` may be `partial`. "31 groups with no members" out of an
  *   interrupted group walk is a floor — the pages that never arrived can only
  *   add more — and the card says "at least".
- * - `gates` may not. "Groups no rule fills" is computed by subtracting the
- *   groups some rule targets, so a rule list missing half its pages does not
- *   under-report; it reports every group those missing rules fed as unfilled.
- *   That is not a floor with a caveat, it is a wrong number, and there is no
- *   honest way to label it. So a gate that is anything but `ok` suppresses the
- *   count entirely.
+ * - `floors` are read the same way, positively, but are a *second* collection
+ *   contributing rows. An incomplete one shrinks the answer without corrupting
+ *   it, so it degrades the count to a floor exactly as `counted` does. The
+ *   reports need this and the findings do not: "app access no rule maintains"
+ *   draws its population from the app-group assignments, where every finding on
+ *   the org card counts one collection and subtracts from others.
+ * - `gates` may not be anything but `ok`. "Groups no rule fills" is computed by
+ *   subtracting the groups some rule targets, so a rule list missing half its
+ *   pages does not under-report; it reports every group those missing rules fed
+ *   as unfilled. That is not a floor with a caveat, it is a wrong number, and
+ *   there is no honest way to label it. So a gate that is anything but `ok`
+ *   suppresses the count entirely.
  *
  * @param counted - The collection the rows are counted from.
  * @param gates - Collections consulted to exclude rows. Usually empty.
- * @returns The finding's status.
+ * @param floors - Further collections read positively. Usually empty.
+ * @returns The count's status.
  */
-export function subCountStatus(counted: FigureSource, gates: FigureSource[]): OrgFigureStatus {
-  const own = figureStatus(counted);
-  if (own === 'reading' || gates.some((gate) => figureStatus(gate) === 'reading')) return 'reading';
-  if (gates.some((gate) => figureStatus(gate) !== 'ok')) return 'unavailable';
-  return own;
+export function subCountStatus(
+  counted: FigureSource,
+  gates: FigureSource[],
+  floors: FigureSource[] = [],
+): OrgFigureStatus {
+  const positives = [counted, ...floors].map(figureStatus);
+  const negatives = gates.map(figureStatus);
+  if ([...positives, ...negatives].some((status) => status === 'reading')) return 'reading';
+  if (negatives.some((status) => status !== 'ok')) return 'unavailable';
+  if (positives.some((status) => status === 'unavailable')) return 'unavailable';
+  return positives.some((status) => status === 'partial') ? 'partial' : 'ok';
 }
 
-/** Everything one finding row needs to be built. */
-export interface SubCountInput {
-  /** Stable key. */
-  key: string;
-  /** The finding, as a sentence. */
-  label: string;
+/** What a count resolved to, and the line that explains it. */
+export interface CountResolution {
+  /** See {@link subCountStatus}. */
+  status: OrgFigureStatus;
+  /** The number, or `null` when nothing behind it can support one. */
+  value: number | null;
+  /** What the number is out of when there is one, and why there is not when there is not. */
+  note?: string;
+}
+
+/** The collections behind one count, and the number they produced. */
+export interface CountInput {
   /** The collection the rows are counted from. */
   counted: NamedSource;
   /**
@@ -238,32 +256,76 @@ export interface SubCountInput {
    * these are held to a stricter bar. Usually empty.
    */
   gates?: NamedSource[];
+  /** Further collections read positively. Usually empty. */
+  floors?: NamedSource[];
   /** The number, used only when the status supports one. */
   count: number;
-  /** The filtered list this finding opens. */
-  request: ListViewRequest;
 }
 
 /**
- * The line under a finding: what the number is out of, or why there is none.
+ * The line under a count: what the number is out of, or why there is none.
  *
  * The unavailable branch names the collection that is missing, and which one it
  * is matters — "needs group rules" points somewhere different from "groups have
  * not been read". A bare "not read" would leave a reader guessing between them.
  */
-function subCountNote(
+function countNote(
   status: OrgFigureStatus,
   counted: NamedSource,
   gates: NamedSource[],
+  floors: NamedSource[],
 ): string | undefined {
   if (status === 'reading') return undefined;
   if (status === 'ok') return `of ${counted.source.count.toLocaleString()} ${counted.noun}`;
-  if (status === 'partial') return `At least — the last read of ${counted.noun} did not finish.`;
+  if (status === 'partial') {
+    // Name the collection that actually fell short, which with a floor in play
+    // is not always the one being counted.
+    const short = [counted, ...floors].find((source) => figureStatus(source.source) !== 'ok');
+    return `At least — the last read of ${(short ?? counted).noun} did not finish.`;
+  }
 
-  const blocking = gates.find((gate) => figureStatus(gate.source) !== 'ok');
+  const blocking = [...gates, ...floors].find((source) => figureStatus(source.source) !== 'ok');
   return blocking
     ? `Needs ${blocking.noun}, which have not been read.`
     : `${counted.noun[0].toUpperCase()}${counted.noun.slice(1)} have not been read yet.`;
+}
+
+/**
+ * Resolve one count against the collections behind it.
+ *
+ * The shared core of a finding on the org card and a report row, so the two
+ * surfaces cannot end up applying the honesty rules differently.
+ *
+ * @param input - See {@link CountInput}.
+ * @returns See {@link CountResolution}.
+ */
+export function resolveCount({
+  counted,
+  gates = [],
+  floors = [],
+  count,
+}: CountInput): CountResolution {
+  const status = subCountStatus(
+    counted.source,
+    gates.map((gate) => gate.source),
+    floors.map((floor) => floor.source),
+  );
+  const hasValue = status === 'ok' || status === 'partial';
+  return {
+    status,
+    value: hasValue ? count : null,
+    note: countNote(status, counted, gates, floors),
+  };
+}
+
+/** Everything one finding row needs to be built. */
+export interface SubCountInput extends CountInput {
+  /** Stable key. */
+  key: string;
+  /** The finding, as a sentence. */
+  label: string;
+  /** The filtered list this finding opens. */
+  request: ListViewRequest;
 }
 
 /**
@@ -272,27 +334,8 @@ function subCountNote(
  * @param input - See {@link SubCountInput}.
  * @returns The finding descriptor.
  */
-export function buildSubCount({
-  key,
-  label,
-  counted,
-  gates = [],
-  count,
-  request,
-}: SubCountInput): OrgSubCount {
-  const status = subCountStatus(
-    counted.source,
-    gates.map((gate) => gate.source),
-  );
-  const hasValue = status === 'ok' || status === 'partial';
-  return {
-    key,
-    label,
-    status,
-    value: hasValue ? count : null,
-    note: subCountNote(status, counted, gates),
-    request,
-  };
+export function buildSubCount({ key, label, request, ...counts }: SubCountInput): OrgSubCount {
+  return { key, label, ...resolveCount(counts), request };
 }
 
 /**

@@ -425,6 +425,10 @@ export const OrgFiguresAreFree: Story = {
       }),
     ).toBeInTheDocument();
     await expect(await canvas.findByRole('button', { name: '2 groups' })).toBeInTheDocument();
+    // And so do the reports, off the same handles — no second mount, no second
+    // sync ladder. Their presence in the same story is what pins that.
+    await expect(await canvas.findByText('Empty groups nothing fills')).toBeInTheDocument();
+    await expect(await canvas.findByText('App access no rule maintains')).toBeInTheDocument();
     await waitFor(() => expect(syncRequests).toBe(0));
   },
 };

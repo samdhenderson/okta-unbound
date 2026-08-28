@@ -42,6 +42,7 @@ import Icon from '../shared/Icon';
 import IconButton from '../shared/IconButton';
 import Skeleton from '../shared/Skeleton';
 import StretchedButton from '../shared/StretchedButton';
+import FigureNumber from './FigureNumber';
 import { getRelativeTime } from '../../../shared/utils/dateFormat';
 import type { ListViewRequest, ListViewTab } from '../../listViewRequest';
 import type { OrgBox, OrgSubCount } from './orgFigures';
@@ -63,39 +64,6 @@ export interface OrgSnapshotCardProps {
   /** Open a tab's list with a filter applied — what a finding does. */
   onOpenListView: (request: ListViewRequest) => void;
 }
-
-/**
- * The number column.
- *
- * At least `2.6ch` of `tabular-nums` so the left edge of the sentences beside it
- * never twitches between a `4` and a `214` — and so an em dash occupies the same
- * space a number would, which is what lets a missing value sit in the list
- * without the row looking broken. A minimum rather than a fixed width: a
- * four-digit org must widen the column, not spill out of it.
- *
- * Sized and centred to the full height of the two lines beside it, so the number
- * reads as the row's subject rather than as a caption sitting on the first line.
- * `self-stretch` takes the height from the text block rather than asserting one,
- * so the column stays matched if a note ever wraps to a second line.
- *
- * A missing value dims to `text-neutral-400` at normal weight: the row is still
- * there and still readable, but nothing about it competes with the findings that
- * carry a real number.
- */
-const FigureNumber: React.FC<{ value: number | null }> = ({ value }) => (
-  <span
-    aria-hidden={value === null ? 'true' : undefined}
-    className="flex shrink-0 items-center self-stretch"
-  >
-    <span
-      className={`min-w-[2.6ch] text-right text-3xl leading-none tabular-nums ${
-        value === null ? 'font-normal text-neutral-400' : 'font-semibold text-neutral-900'
-      }`}
-    >
-      {value === null ? '—' : value.toLocaleString()}
-    </span>
-  </span>
-);
 
 /** The two lines beside the number: the finding, and what it is out of. */
 const FindingLines: React.FC<{ subCount: OrgSubCount; id: string }> = ({ subCount, id }) => (
