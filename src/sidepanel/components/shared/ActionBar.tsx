@@ -94,6 +94,10 @@
  * carries it along; and it opens through the shared `.disclose` grid, so the
  * strip's height animates with no JS measurement.
  *
+ * It opens below {@link ActionBarProps.subRow} when there is one, so on a list
+ * rung the disclosure appears under the search field rather than between the
+ * verbs and the thing they filter.
+ *
  * It holds two things, in order: the actions that did not fit, which this
  * component owns and the caller never sees, and then
  * {@link ActionBarProps.expansion} verbatim. A separator appears only when both
@@ -160,6 +164,21 @@ export interface ActionBarProps {
    * a story, where there is nothing to scroll), which also opts out of the merge.
    */
   sticky?: boolean;
+  /**
+   * Arbitrary caller UI rendered **inside the band, directly beneath the action
+   * row and above the disclosure tier**. Unlike {@link ActionBarProps.expansion}
+   * it is always visible, so it is for a control that belongs to the strip's
+   * surface rather than behind its disclosure — a list rung's search field is the
+   * case it exists for (ADR-0051).
+   *
+   * It rides the merge: whatever is here docks and goes full-bleed with the rest
+   * of the band, which is the point. Keep it to one row. A tall sub-row makes a
+   * tall pinned band, and the panel is 360px wide at its narrowest.
+   *
+   * Unlike a descriptor it may carry JSX, because it is never measured — the fit
+   * arithmetic only looks at the action row.
+   */
+  subRow?: React.ReactNode;
   /**
    * Arbitrary caller UI for the tier — an account-state block, a form, anything.
    * It is appended below any actions that overflowed there, and it is the reason
@@ -239,6 +258,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
   actions,
   ariaLabel,
   sticky = true,
+  subRow,
   expansion,
   tierOpen,
   defaultTierOpen = false,
@@ -365,6 +385,13 @@ const ActionBar: React.FC<ActionBarProps> = ({
           </span>
         )}
       </div>
+
+      {subRow !== undefined && (
+        /* Same horizontal padding as the row above it and no rule between them:
+           the two are one surface, and a hairline here would read as the tier
+           opening. The tier's own `border-t` still separates *it* from this. */
+        <div className="px-2 pb-2">{subRow}</div>
+      )}
 
       {hasTier && (
         /*

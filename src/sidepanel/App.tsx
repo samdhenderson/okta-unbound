@@ -455,6 +455,10 @@ const App: React.FC = () => {
             {renderTabPanel('groups', (isActive) => (
               <GroupsTab
                 isActive={isActive}
+                // The rung's list scrolls this, not a box of its own, so the
+                // offset that has to survive a push into a group's detail view
+                // lives here (ADR-0051 §5).
+                scrollRootRef={scrollRootRef}
                 targetTabId={tabContext.targetTabId ?? null}
                 oktaOrigin={tabContext.oktaOrigin ?? undefined}
                 onNavigateToRule={handleNavigateToRule}

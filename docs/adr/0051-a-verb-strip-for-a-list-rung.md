@@ -128,12 +128,59 @@ the thing you press is not a compression — it is where it was needed. Cached c
 results ride the label the same way (`Cross-search (5)`), because a descriptor has no
 badge slot.
 
-### 5. The strip is not sticky here
+### 5. The rung gives up its nested scroller so the strip can dock
 
-`sticky={false}`. The groups list rung is already a fixed toolbar zone above its own inner
-scroller, so there is nothing for the strip to pin against and nothing to merge into; it
-renders `.dock-band`'s resting card, which is the white bordered card every other surface
-on the rung is.
+The first cut passed `sticky={false}`, on the grounds that the groups list rung was
+"already a fixed toolbar zone above its own inner scroller, so there is nothing for the
+strip to pin against". That is a true description of the rung and the wrong conclusion
+about it. The rung was the problem.
+
+`GroupsTab` was a `h-[calc(100vh-280px)] min-h-[400px]` flex column with a frozen toolbar
+over a `ScrollableList` scroll box. Three things follow from that shape, and all three are
+bad:
+
+- **Nothing in the toolbar can be `sticky`**, because there is no page scroll for it to
+  stick against. So the strip could only ever be a card bolted to the top — Sam's reading
+  of it: "just a grey permanently stuck component" — while every other `ActionBar` in the
+  app docks and merges into its header as it parks.
+- **Two scrollbars.** An inner one for the list beside the panel's own.
+- **The height comes from a magic number.** `100vh - 280px` is the sum of a chrome, a
+  header, two gutters and a footer, none of which it is measured from, and all of which
+  ADR-0032's published heights exist to stop hard-coding.
+
+So the rung is now a plain block that scrolls the panel's one scroller, exactly like the
+Users tab, and the strip is `sticky` with no argument. `ScrollableList` gains
+`scrolls={false}` for the list inside it.
+
+**The strip is a direct child of the rung, not of the toolbar group**, and that is
+load-bearing rather than tidy: a `sticky` element only travels within its own parent's box.
+Nested one level deeper, in a wrapper holding just the strip and the filter panel, it
+measured un-sticking and scrolling away at `y = -183` instead of parking at 205. Its parent
+has to be the box the list is in. (The `.dock-sentinel` timeline hoists onto that same
+parent — `:has(> .dock-sentinel)` — so the two constraints agree.)
+
+**The search field moves into the strip**, via a new `subRow` slot on the shared
+`ActionBar`: always-visible caller UI inside the band, under the verbs and above the tier.
+So search docks with the verbs rather than scrolling away from them, and the **More** tier
+opens _below_ the field rather than between the verbs and the thing they filter. It is
+never measured — the fit arithmetic only reads the action row — which is why, unlike a
+descriptor, it may carry JSX.
+
+Measured in Chromium at 360px, scrolled: header collapses 114px → 64px, the strip parks at
+`y = 155` (= the scroller's 91px top edge + 64px of header) with `top` tracking `--header-h`
+live through the collapse, and its `::before` runs the merge from `inset-inline: 0` /
+`radius: 6px` to `-12px` / `0`. One continuous white surface from the chrome down.
+
+### 6. A pinned header collapses its subtitle
+
+A detail rung's header collapses its identity region when it pins (ADR-0032). A list rung
+has no identity region, so it pinned at full height — 114px on the Groups tab at 360px,
+most of it the subtitle wrapping to three lines, parked permanently over 91px of chrome.
+That was invisible while the rung had a nested scroller, because nothing ever scrolled past
+the header.
+
+`PageHeader`'s subtitle now collapses through the same `.disclose` grid: it is orientation,
+worth a line while you are arriving and nothing once you are reading. 114px → 64px.
 
 ## Consequences
 
@@ -151,6 +198,19 @@ on the rung is.
   tier: they are large surfaces (a triage report, a collections manager) and a disclosure
   that stretches a band to 400px is not a disclosure. **Their placement in the page flow is
   a known open question**, raised by Sam when this landed and not addressed here.
+- **`ActionBar` gains one prop, `subRow`.** ADR-0038 declined to ship slots without a
+  consumer ("shipping an unused prop is dead API"); this is the consumer. It is additive
+  and optional, so no existing call site changes.
+- **`GroupsTab`'s scroll preservation changed subject, not behaviour.** The rung's list
+  offset used to live on its own `.scrollable-list` box, destroyed by `display: none` on a
+  push. It now lives on the shared scroller, passed in as `scrollRootRef` — never
+  `display: none`, but _clamped_ by a shorter detail view, which needs the same repair.
+  `TabPanel`'s own preservation of that node does not collide: it transitions on a tab
+  switch, this one on a push or pop, and the two never fire in the same commit. The test
+  that pinned it was retargeted, not dropped.
+- **`AppsTab` still has the old shape** — `h-[calc(100vh-280px)]` over a nested scroller.
+  It was not touched here. Anything that wants a sticky band on that rung has to make the
+  same move first.
 - **Frequency as a tier reason is now precedent.** It is bounded on purpose: it may move a
   verb down, never up, and never substitutes for the consequence test.
 - **A list rung's verb order is a safety surface, not a layout preference.** The general

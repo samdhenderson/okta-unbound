@@ -107,6 +107,16 @@ interface GroupsTabProps {
    */
   isActive?: boolean;
   /**
+   * The panel's one scroller (`App`'s content region). The rung's list scrolls it
+   * rather than a box of its own (ADR-0051 §5), so the offset that has to survive
+   * a push into the detail view lives here — see
+   * {@link sidepanel/hooks/useScrollPreservation.useScrollPreservation}.
+   *
+   * Optional, and a no-op when omitted: a story or a standalone test mounts this
+   * tab with no scroller above it, and there is then nothing to preserve.
+   */
+  scrollRootRef?: React.RefObject<HTMLElement | null>;
+  /**
    * A pre-filtered view requested from another tab (the Home card's group
    * sub-counts). Applied once on arrival, then cleared via
    * {@link GroupsTabProps.onListViewConsumed}.
@@ -134,6 +144,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   selectedGroupId,
   onGroupSelected,
   isActive = true,
+  scrollRootRef,
   onExportGroup,
   listView,
   onListViewConsumed,
@@ -184,7 +195,10 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   // Sub-navigation: the list stays mounted (hidden) and the detail view renders as
   // its sibling, so nothing the list accumulated is lost on the way back.
   const detailViewRef = useRef<HTMLDivElement>(null);
-  const listScrollRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  /* `useScrollPreservation` wants a ref; the caller may not have given us one. A
+     stable local stand-in keeps the hook's contract without a conditional call. */
+  const noScroller = useRef<HTMLElement | null>(null);
   // Set when a push was requested *in order to* analyze member source, so the
   // pushed detail view runs that analysis instead of waiting for a second click.
   const [autoAnalyzeGroupId, setAutoAnalyzeGroupId] = useState<string | null>(null);
@@ -194,9 +208,21 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
     getKey: groupCrumbKey,
     viewRef: detailViewRef,
   });
-  // Visible only when this tab is selected *and* no detail view is pushed — both
-  // hide the list with `display: none`, and both destroy its scroll box.
-  const captureListScroll = useScrollPreservation(listScrollRef, isActive && nav.isRoot);
+  /*
+    Visible only when this tab is selected *and* no detail view is pushed.
+
+    The subject is the panel's shared scroller, not a box of this rung's own — the
+    rung gave that up so its strip could dock (ADR-0051 §5). That scroller is never
+    `display: none`, so the offset is not destroyed the way a hidden box's was;
+    it is *clamped* instead, because the pushed detail view is a different height.
+    Same repair either way, and `TabPanel`'s own preservation of the same node does
+    not collide: that one transitions on a tab switch, this one on a push or pop,
+    and the two never fire in the same commit.
+  */
+  const captureListScroll = useScrollPreservation(
+    scrollRootRef ?? noScroller,
+    isActive && nav.isRoot,
+  );
 
   const handleCloseMerge = useCallback(() => {
     setShowMergeModal(false);
@@ -357,6 +383,32 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
     setActivePanel((prev) => (prev === panel ? 'none' : panel));
   }, []);
 
+  /*
+    The search field and its filter toggle, built once because they render in two
+    different places: inside the strip's `subRow` in cached mode, and on their own
+    in live mode, where there is no selection and so no strip to sit in.
+  */
+  const searchRow = (
+    <div className="flex gap-2">
+      <GroupSearchBar
+        searchMode={searchMode}
+        liveSearchQuery={liveSearch.liveSearchQuery}
+        onLiveSearchQueryChange={liveSearch.setLiveSearchQuery}
+        searchQuery={filters.searchQuery}
+        onSearchQueryChange={filters.setSearchQuery}
+        isLiveSearching={liveSearch.isLiveSearching}
+      />
+
+      {searchMode === 'cached' && (
+        <GroupFilterToggle
+          showFilters={showFilters}
+          activeFilterCount={activeFilterCount}
+          onToggle={() => setShowFilters((prev) => !prev)}
+        />
+      )}
+    </div>
+  );
+
   return (
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
       {/*
@@ -442,41 +494,57 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
                 // tab's first render is not a navigation. Restarting on each pop is
                 // free: the element is coming back from `display: none`, which is
                 // when CSS (re)starts an animation.
-                `flex flex-col h-[calc(100vh-280px)] min-h-[400px] ${
-                  nav.transition === 'pop' ? 'animate-pop-in' : ''
-                }`
+                //
+                // No fixed height and no nested scroller. This rung used to be a
+                // `h-[calc(100vh-280px)]` flex column over a scrolling list, which
+                // froze the toolbar above it: nothing up there could be `sticky`,
+                // because there was no page scroll for it to stick against, so the
+                // strip sat as a card bolted to the top while every other
+                // `ActionBar` in the app docks and merges into its header. The rung
+                // scrolls the panel's one scroller now (ADR-0051 §5), same as the
+                // Users tab.
+                `space-y-(--sp-rung) ${nav.transition === 'pop' ? 'animate-pop-in' : ''}`
               : 'hidden'
           }
         >
           {/*
-            Fixed Header Section. Deliberately tighter than the rung above (raw
-            `space-y-3`, not `--sp-rung`): search, filters, selection and alerts read
-            as one toolbar zone, and none of ADR-0048's six roles names "gap inside a
-            toolbar cluster" — forcing it into `--sp-field` or `--sp-inline` would
-            misdescribe the relationship. Matching the rung here would also erase the
-            visual distinction between this zone and the card stack below it.
+            A direct child of the rung, not of the toolbar group below it, and that
+            is load-bearing rather than tidy: a `sticky` element only travels
+            within its own parent's box, so a strip nested in a short wrapper
+            un-sticks and scrolls away the moment that wrapper is past. Its parent
+            has to be the box the list is in. The `.dock-sentinel` timeline hoists
+            onto this parent too (`:has(> .dock-sentinel)` in `tailwind.css`).
           */}
-          <div className="shrink-0 space-y-3">
-            {/* Search Bar + Filter Toggle */}
-            <div className="flex gap-2">
-              <GroupSearchBar
-                searchMode={searchMode}
-                liveSearchQuery={liveSearch.liveSearchQuery}
-                onLiveSearchQueryChange={liveSearch.setLiveSearchQuery}
-                searchQuery={filters.searchQuery}
-                onSearchQueryChange={filters.setSearchQuery}
-                isLiveSearching={liveSearch.isLiveSearching}
-              />
+          {searchMode === 'cached' ? (
+            <GroupsListActionBar
+              search={searchRow}
+              selectedCount={selectedGroupIds.size}
+              filteredCount={filteredGroups.length}
+              activePanel={activePanel}
+              crossSearchBadge={membersCache.groupMembersCache.size}
+              onSelectAll={() => selection.replaceSelection(filteredGroups.map((g) => g.id))}
+              onDeselectAll={selection.deselectAll}
+              onCompare={() => setShowComparisonModal(true)}
+              onMerge={() => setShowMergeModal(true)}
+              onTogglePanel={togglePanel}
+              onExportSelection={handleExportSelection}
+              onExportGroupsList={handleExportGroupsList}
+            />
+          ) : (
+            // Live mode has no selection and so no verbs to strip; the search field
+            // stands on its own rather than inside an empty band.
+            searchRow
+          )}
 
-              {searchMode === 'cached' && (
-                <GroupFilterToggle
-                  showFilters={showFilters}
-                  activeFilterCount={activeFilterCount}
-                  onToggle={() => setShowFilters((prev) => !prev)}
-                />
-              )}
-            </div>
-
+          {/*
+            Deliberately tighter than the rung around it (raw `space-y-3`, not
+            `--sp-rung`): filters, panels and alerts read as one toolbar zone, and
+            none of ADR-0048's six roles names "gap inside a toolbar cluster" —
+            forcing it into `--sp-field` or `--sp-inline` would misdescribe the
+            relationship. Matching the rung here would also erase the visual
+            distinction between this zone and the card stack below it.
+          */}
+          <div className="space-y-3">
             {/* Expandable Filter Panel */}
             {searchMode === 'cached' && showFilters && (
               <GroupFilterPanel
@@ -496,23 +564,6 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
                 sortDesc={filters.sortDesc}
                 toggleSort={filters.toggleSort}
                 clearFilters={filters.clearFilters}
-              />
-            )}
-
-            {/* Selection & Action Bar - Only in cached mode */}
-            {searchMode === 'cached' && (
-              <GroupsListActionBar
-                selectedCount={selectedGroupIds.size}
-                filteredCount={filteredGroups.length}
-                activePanel={activePanel}
-                crossSearchBadge={membersCache.groupMembersCache.size}
-                onSelectAll={() => selection.replaceSelection(filteredGroups.map((g) => g.id))}
-                onDeselectAll={selection.deselectAll}
-                onCompare={() => setShowComparisonModal(true)}
-                onMerge={() => setShowMergeModal(true)}
-                onTogglePanel={togglePanel}
-                onExportSelection={handleExportSelection}
-                onExportGroupsList={handleExportGroupsList}
               />
             )}
 
@@ -596,7 +647,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
             onOpenDetail={handleOpenDetail}
             onAnalyzeSource={handleAnalyzeSource}
             highlightedGroupId={selectedGroupId ?? undefined}
-            scrollRef={listScrollRef}
+            scrollRef={listRef}
           />
         </div>
 

@@ -5,6 +5,7 @@ import ActionBar from './ActionBar';
 import Button from './Button';
 import DetailSection from './DetailSection';
 import EntityIdentity from './EntityIdentity';
+import Input from './Input';
 import PageHeader from './PageHeader';
 
 /**
@@ -41,6 +42,11 @@ const meta = {
     ariaLabel: {
       description:
         'Accessible name for the group, e.g. `"Actions for Jane Doe"`. Required — a bare group of buttons announces nothing about what it acts on.',
+    },
+    subRow: {
+      description:
+        'Always-visible caller UI inside the band, under the verbs and above the tier — a list ' +
+        "rung's search field. Never measured, so unlike a descriptor it may carry JSX.",
     },
     sticky: {
       description:
@@ -380,6 +386,54 @@ export const WithExpansion: Story = {
     await userEvent.click(more);
     await expect(more).toHaveAttribute('aria-expanded', 'true');
     await expect(canvas.getByRole('button', { name: 'Suspend user' })).toBeVisible();
+  },
+};
+
+/**
+ * `subRow` — always-visible caller UI **inside** the band, under the verbs and above
+ * the tier. It is the slot a list rung's search field lives in
+ * (`GroupsListActionBar`, ADR-0051): the field then docks and merges with the strip
+ * instead of scrolling away from the verbs that filter what it searches, and the
+ * **More** tier opens *below* it rather than between the verbs and the field.
+ *
+ * Unlike a descriptor it may carry JSX, because it is never measured — the fit
+ * arithmetic only looks at the action row above it. Keep it to one row: a tall
+ * sub-row makes a tall pinned band, and the panel is 360px wide at its narrowest.
+ */
+export const WithSubRow: Story = {
+  args: {
+    ariaLabel: 'Actions for the groups list',
+    actions: [
+      { id: 'select-all', label: 'Select all (34)', onClick: fn(), priority: 'pinned' },
+      { id: 'cross-search', label: 'Cross-search', icon: 'search', onClick: fn() },
+      { id: 'cleanup', label: 'Cleanup', icon: 'sparkles', onClick: fn(), priority: 'tier' },
+    ],
+    subRow: (
+      <div className="flex gap-2">
+        <Input
+          size="sm"
+          type="search"
+          value=""
+          onChange={fn()}
+          ariaLabel="Filter groups"
+          placeholder="Search by name, description…"
+        />
+        <Button variant="secondary" size="sm" icon="settings" onClick={fn()}>
+          Filters
+        </Button>
+      </div>
+    ),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // The field is inside the band, so it docks with it.
+    const band = canvasElement.querySelector('.dock-band') as HTMLElement;
+    await expect(band).toContainElement(canvas.getByRole('searchbox', { name: 'Filter groups' }));
+
+    // And the tier opens below it, not between the verbs and the field.
+    const more = canvas.getByRole('button', { name: 'More' });
+    await userEvent.click(more);
+    await expect(canvas.getByRole('button', { name: 'Cleanup' })).toBeVisible();
   },
 };
 

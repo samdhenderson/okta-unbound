@@ -37,6 +37,15 @@
  * `pinned` so the row wraps rather than overflowing them. Whatever the selection
  * size, the two leftmost controls cost at worst another click.
  *
+ * ## The search field lives in the band
+ *
+ * `subRow` puts it inside the strip, under the verbs. The rung used to freeze a
+ * whole toolbar zone above a nested list scroller — search, filters, strip — so
+ * nothing up there ever moved and the strip could not dock: a grey block bolted
+ * to the top of the page while every other strip in the app merges into the
+ * header as it parks. Now the rung scrolls in the panel's one scroller, the strip
+ * is sticky like every other, and the search field docks with it (ADR-0051 §5).
+ *
  * ## Why the open panel's trigger turns primary
  *
  * `ActionDescriptor` carries no JSX and no `className`, deliberately — a strip
@@ -56,6 +65,13 @@ export type ActivePanel = 'none' | 'bulk' | 'crossSearch' | 'collections' | 'cle
 
 /** Props for {@link GroupsListActionBar}. */
 interface GroupsListActionBarProps {
+  /**
+   * The rung's search field and filter toggle, rendered inside the band directly
+   * beneath the verbs. It is here rather than above the strip so the two dock as
+   * one surface: search stays reachable at any scroll offset, and the **More**
+   * tier opens below it rather than between the verbs and the field they filter.
+   */
+  search?: React.ReactNode;
   /** Number of currently selected groups. */
   selectedCount: number;
   /** Number of groups after filtering — the *Select all* count and the export denominator. */
@@ -112,6 +128,7 @@ interface GroupsListActionBarProps {
  * ```
  */
 const GroupsListActionBar: React.FC<GroupsListActionBarProps> = ({
+  search,
   selectedCount,
   filteredCount,
   activePanel,
@@ -247,10 +264,7 @@ const GroupsListActionBar: React.FC<GroupsListActionBarProps> = ({
     <ActionBar
       ariaLabel="Actions for the groups list"
       actions={actions}
-      /* The list rung is a fixed toolbar zone above its own scroller
-         (`GroupsTab`), so there is nothing here for the strip to pin against and
-         nothing to merge into. */
-      sticky={false}
+      subRow={search}
       testId="groups-list-action-bar"
     />
   );

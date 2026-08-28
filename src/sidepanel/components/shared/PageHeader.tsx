@@ -272,7 +272,23 @@ const PageHeader: React.FC<PageHeaderProps> = ({
               >
                 {title}
               </h1>
-              {subtitle && <p className="mt-0.5 text-sm text-neutral-600">{subtitle}</p>}
+              {/*
+                The subtitle collapses when the header pins, through the same
+                `.disclose` grid the identity region uses. It is orientation — what
+                this rung is for — and orientation is worth a line while you are
+                arriving and nothing once you are reading. A list rung has no
+                identity region to collapse, so without this its header pinned at
+                full height: on the Groups tab at 360px that measured 114px of
+                permanently parked header over 91px of chrome, and the subtitle
+                wrapping to three lines was most of it.
+              */}
+              {subtitle && (
+                <div className="disclose" data-open={pinned ? 'false' : 'true'}>
+                  <div>
+                    <p className="mt-0.5 text-sm text-neutral-600">{subtitle}</p>
+                  </div>
+                </div>
+              )}
 
               {/*
               Inside the title column rather than below the whole row, so the lines align

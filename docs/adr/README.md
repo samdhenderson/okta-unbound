@@ -58,7 +58,7 @@ convention; the specs in [`../`](../README.md) describe the _what_.
 | [0049](./0049-one-slab-and-a-sequenced-indicator.md)                 | One slab, and an indicator that slides before the label moves                     | Accepted | Amends 0028. Four band rules → one on the sticky `<nav>`. Indicator slides while labels are frozen, then is measured. New `Tooltip`.  |
 | [0050](./0050-the-chrome-leaves-the-scroller.md)                     | The chrome leaves the scroller                                                    | Accepted | Amends 0032 §3. Shell stops scrolling; chrome sits outside it so the ~15px bar spans content only. Rail un-sticks, `--rail-h` gone.   |
 
-| [0051](./0051-a-verb-strip-for-a-list-rung.md) | A verb strip for a list rung | Accepted | Discharges 0039's deferral. `GroupSelectionBar` → `GroupsListActionBar`. `primary` marks the open panel; the tier sorts by frequency. |
+| [0051](./0051-a-verb-strip-for-a-list-rung.md) | A verb strip for a list rung | Accepted | Discharges 0039's deferral. `GroupSelectionBar` → `GroupsListActionBar`. The leading position is a safety property; the rung drops its nested scroller so the strip docks; new `subRow` slot. |
 
 ## Adding an ADR
 
