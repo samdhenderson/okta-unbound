@@ -2366,3 +2366,32 @@ affects every scroll box in the app, on every platform.
   near the ~300-line bar, so extraction should reduce it rather than grow it.
 - **Status:** open
 - **Related:** `D-013c`
+
+### D-058 · Two modals hand-roll the eyebrow recipe `Eyebrow` exists to own
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/RuleConsolidationModal.tsx:151,162,186`,
+  `src/sidepanel/components/groups/GroupMergeModal.tsx:116` (the hand-rolled
+  eyebrow labels), `:127` (an off-scale `py-2.5`),
+  `src/sidepanel/components/shared/Eyebrow.tsx` (the primitive they should use)
+- **Verified:** 2026-08-28 — spotted by `ui-reviewer` while reviewing the
+  `D-013c` diff; both files confirmed **pre-existing** and untouched by that
+  change.
+- **Problem:** Four call sites across the two wizard modals build a section
+  eyebrow out of the `tracking-wider` recipe that `docs/design-system.md` bans in
+  favour of the shared `Eyebrow` component, which exists precisely so the
+  typography contract lives in one place. `GroupMergeModal.tsx:127` additionally
+  uses an off-scale `py-2.5`. Reported as advisory, not blocking, and
+  deliberately not folded into `D-013c`'s diff — that item added notice props to
+  these files and nothing else, and widening it would have broken the
+  one-concern-per-PR rule.
+- **Done when:** All four eyebrow labels render through `Eyebrow`, the `py-2.5`
+  moves onto the spacing scale, and both modals' existing stories stay green
+  without retargeting. Check whether the same recipe appears in other modals
+  before fixing only these two — enumerate, do not sample.
+- **Risk:** Low — presentational, behind two components that already have story
+  coverage.
+- **Status:** open
+- **Related:** `D-013c` (how it was found)
