@@ -89,6 +89,12 @@ const FindingRow: React.FC<{ finding: GroupFinding; onOpen: (id: string) => void
 }) => {
   const nameId = useId();
   return (
+    // Padding stays a raw `px-2 py-1.5` rather than the row roles: this is a
+    // nested row inside an already-padded disclosure panel, deliberately
+    // denser than a top-level row so the hierarchy reads. No `.press` on the
+    // row itself — `StretchedButton` carries the response layer's press
+    // feedback on its own `:active` (ADR-0046), since the overlay has no
+    // visible box for a scale to read on.
     <li className="relative flex items-center gap-2 rounded-sm px-2 py-1.5 transition-colors duration-(--dur-instant) hover:bg-white">
       <StretchedButton
         label="Open this group"
@@ -112,7 +118,7 @@ const ReportPanel: React.FC<{
   id: string;
   onOpenGroup: (id: string) => void;
 }> = ({ report, id, onOpenGroup }) => (
-  <div id={id} className="border-t border-neutral-100 bg-neutral-50 px-3 py-3">
+  <div id={id} className="border-t border-neutral-100 bg-neutral-50 p-(--sp-card)">
     <p className="text-xs text-neutral-600">{report.caveat}</p>
     <ul className="mt-2 space-y-px">
       {report.findings.map((finding) => (
@@ -150,7 +156,7 @@ const Report: React.FC<{ report: HomeReport; onOpenGroup: (id: string) => void }
 
   if (report.status === 'reading') {
     return (
-      <li className="px-3 py-2.5">
+      <li className="px-(--sp-row-x) py-(--sp-row-y)">
         <Skeleton variant="text" size="sm" width="w-3/4" label={`Reading ${report.label}`} />
       </li>
     );
@@ -161,7 +167,7 @@ const Report: React.FC<{ report: HomeReport; onOpenGroup: (id: string) => void }
   if (report.value === null || report.findings.length === 0) {
     return (
       <li
-        className={`flex items-stretch gap-3 px-3 py-2.5 ${
+        className={`flex items-stretch gap-3 px-(--sp-row-x) py-(--sp-row-y) ${
           report.value === null ? 'bg-neutral-50' : ''
         }`}
       >
@@ -173,12 +179,18 @@ const Report: React.FC<{ report: HomeReport; onOpenGroup: (id: string) => void }
 
   return (
     <li>
+      {/* `.press press-subtle` (ADR-0046): this button IS the row, so `:active`
+          applies directly — the same treatment `ListRow` now gives an
+          interactive row, and the `active:brightness-90` step `Button`/
+          `IconButton` add for the third, darker press state Odyssey specifies
+          beyond hover. Its own transition replaces `transition-colors` so the
+          two don't fight over the `transition` longhands. */}
       <button
         type="button"
         aria-expanded={isOpen}
         aria-controls={panelId}
         onClick={() => setIsOpen((open) => !open)}
-        className="flex w-full items-stretch gap-3 px-3 py-2.5 transition-colors duration-(--dur-instant) hover:bg-neutral-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+        className="press press-subtle flex w-full items-stretch gap-3 px-(--sp-row-x) py-(--sp-row-y) hover:bg-neutral-50 active:brightness-90 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
       >
         <FigureNumber value={report.value} />
         <ReportLines report={report} id={labelId} />

@@ -97,7 +97,7 @@ const CrossGroupSearch: React.FC<CrossGroupSearchProps> = ({
   return (
     <div className="border border-neutral-200 rounded-md bg-white overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between p-3 bg-neutral-50 border-b border-neutral-200">
+      <div className="flex items-center justify-between p-(--sp-card)">
         <div>
           <h4 className="text-sm font-semibold text-neutral-900">Cross-Group User Search</h4>
           <p className="text-xs text-neutral-500 mt-0.5">
@@ -110,7 +110,7 @@ const CrossGroupSearch: React.FC<CrossGroupSearchProps> = ({
       </div>
 
       {/* Search Input */}
-      <div className="p-3 border-b border-neutral-100">
+      <div className="p-(--sp-card) border-b border-neutral-100">
         <Input
           type="search"
           placeholder="Search by name, email, or login..."
@@ -131,7 +131,10 @@ const CrossGroupSearch: React.FC<CrossGroupSearchProps> = ({
       {groupedResults.length > 0 && (
         <div className="max-h-[300px] overflow-y-auto">
           {groupedResults.map(({ user, groups }) => (
-            <div key={user.id} className="p-3 border-b border-neutral-100 last:border-b-0">
+            <div
+              key={user.id}
+              className="px-(--sp-row-x) py-(--sp-row-y) border-b border-neutral-100 last:border-b-0"
+            >
               <div className="flex items-center justify-between mb-1.5">
                 <div>
                   <span className="text-sm font-medium text-neutral-900">
@@ -149,15 +152,16 @@ const CrossGroupSearch: React.FC<CrossGroupSearchProps> = ({
                   {user.status}
                 </span>
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-(--sp-inline)">
                 {groups.map(({ groupId, groupName }) => {
                   const key = `${user.id}_${groupId}`;
                   const isSelected = selectedRemovals.has(key);
                   return (
                     <button
                       key={groupId}
+                      type="button"
                       onClick={() => toggleRemoval(user.id, groupId)}
-                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                      className={`press inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium ${
                         isSelected
                           ? 'bg-danger-light text-danger-text border border-danger-light line-through'
                           : 'bg-neutral-50 text-neutral-700 border border-neutral-200 hover:border-neutral-400'
@@ -183,11 +187,11 @@ const CrossGroupSearch: React.FC<CrossGroupSearchProps> = ({
 
       {/* Footer Actions */}
       {selectedRemovals.size > 0 && (
-        <div className="flex items-center justify-between p-3 bg-danger-light border-t border-neutral-200">
+        <div className="flex items-center justify-between p-(--sp-card) bg-danger-light border-t border-neutral-200">
           <span className="text-xs font-medium text-danger-text">
             {selectedRemovals.size} removal{selectedRemovals.size !== 1 ? 's' : ''} selected
           </span>
-          <div className="flex gap-2">
+          <div className="flex gap-(--sp-field)">
             <Button variant="ghost" size="sm" onClick={() => setSelectedRemovals(new Set())}>
               Clear
             </Button>

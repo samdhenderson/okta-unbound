@@ -91,6 +91,20 @@
   --dur-move: 220ms; /* things arriving or leaving — rows, modal enter, popovers */
   --dur-travel: 320ms; /* panel-crossing — drawer, view push/pop */
   --dur-tell: 500ms; /* deliberately noticeable — count-up, success flash, progress */
+  /*
+   * Hover intent — how long a pointer must rest on a target before that counts as a
+   * deliberate enquiry rather than a pass-through. `Tooltip` is the only consumer.
+   *
+   * It sits apart from the scale above because it is not the length of an animation:
+   * nothing moves for these 400ms. It is a *threshold*, tuned against the icon rail,
+   * where nine targets sit ~40px apart — anything shorter and sweeping the pointer
+   * across the strip strobes a chip over every glyph on the way past.
+   *
+   * Mirrored in JS as `HOVER_INTENT_MS` in `shared/Tooltip.tsx`, for the same reason
+   * `useCountUp` mirrors `--dur-tell`: a delay is a `setTimeout`, not a transition,
+   * and jsdom parses no stylesheet to read the token back from.
+   */
+  --dur-hover-intent: 400ms;
 
   /* Easings */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1); /* the workhorse */
@@ -102,6 +116,23 @@
     0.4,
     1
   ); /* confirmation only — the one curve that overshoots */
+
+  /*
+   * The response layer (ADR-0046). `--dur-press` sits *below* `--dur-instant`
+   * deliberately: a press must resolve inside the click, not after it, and 80ms
+   * already reads as lag on a pointer-down. `--ease-press` is front-loaded with no
+   * overshoot — the depress is immediate; the release rides `--ease-affirm`.
+   */
+  --dur-press: 60ms;
+  --ease-press: cubic-bezier(0.2, 0, 0.1, 1);
+  /*
+   * The rail indicator's slide. A second overshoot curve, deliberately gentler than
+   * `--ease-affirm`'s 1.3: the underline travels a short distance directly under the
+   * pointer, where affirm's overshoot reads as a wobble rather than a confirmation.
+   * Not `--ease-standard`, because with the label unfurl sequenced behind it
+   * (ADR-0028) a slide with no overshoot at all reads as a teleport.
+   */
+  --ease-glide: cubic-bezier(0.3, 1.12, 0.5, 1);
 
   /* Keyframe-driven animation primitives */
   --animate-rise-in: rise-in var(--dur-move) var(--ease-entrance) both;
@@ -157,11 +188,26 @@
    * at 32px still 25%. At 16px it rests flat through ~7px of scroll, merges over
    * the next ~17, and reaches 100% on exactly the frame the strip parks.
    */
-  --merge-range: 16px;
+  /*
+   * MUST stay shorter than the gap the strip closes, or the merge is already part-done
+   * before the page has moved and the strip can never show its resting shape.
+   *
+   * That gap is the tab column's top padding, which ADR-0048 turned from a fixed 24px
+   * into `--sp-gutter` — 12px at compact. The old fixed 16px was calibrated against 24
+   * and is *larger* than the compact gutter, so below 400px the strip would have rested
+   * partially merged at scroll zero. It scales with the gutter now, holding the ratio
+   * the ADR-0038 measurements were taken at (16/24 = 2/3) rather than a new guess.
+   *
+   * Overridden per density below, alongside the `--sp-*` roles it derives from.
+   */
+  --merge-range: 10px;
   /* Fallback gutter, used until `useActionOverflow` publishes the measured
-     `--bar-bleed`. The literal is the tab content wrapper's `px-6`; the measured
-     value is exact and also survives a panel wider than `max-w-7xl`. */
-  --merge-bleed: 1.5rem;
+     `--bar-bleed`. It *is* the tab content wrapper's horizontal padding, so it now
+     derives from that role rather than restating it — before ADR-0048 the wrapper was
+     a fixed `px-6` and this was the literal `1.5rem`, which silently stopped being
+     true at every density. The measured value is still exact and also survives a panel
+     wider than `max-w-7xl`. */
+  --merge-bleed: var(--sp-gutter);
   --merge-radius: 0.375rem; /* the strip's resting corner — `rounded-md`, animated to 0 */
   /*
    * The one shadow on a non-overlay surface. `docs/design-system.md` reserves
@@ -169,6 +215,46 @@
    * scroll underneath it. It only exists at full merge; at rest it is `none`.
    */
   --shadow-dock: 0 7px 11px -9px rgb(16 24 40 / 0.1);
+
+  /*
+   * Interactive-card elevation (ADR-0047). Read from Odyssey, not invented: this is
+   * `DepthLow` from `odyssey-design-tokens/src/depth.json`. Odyssey's own `Card` carries
+   * `DepthMedium`
+   * at rest and deepens to `DepthHigh` on `.isClickable:hover` — so a shadow on a card
+   * is Odyssey's behaviour, not a departure from it. `DepthHigh` is deliberately not
+   * adopted: it is heavier than anything a 360px panel needs.
+   *
+   * Never transition `box-shadow` directly with these. Odyssey's own `labs/AppTile`
+   * pre-paints the shadow on an `::after` at `opacity: 0` and cross-fades the opacity;
+   * `.lift-on-hover` below does the same, for the same reason — animating a shadow
+   * repaints, animating an opacity composites.
+   */
+  --lift-1: 0 1px 2px 0 rgb(39 39 39 / 0.07);
+
+  /*
+   * Semantic spacing roles (ADR-0048). Six named roles on top of a 4px base;
+   * components consume the *role*, never a raw step — which is what stops eighteen
+   * copies drifting into four recipes, the same failure that forced `Eyebrow` to exist.
+   *
+   * The values here are the `default` density. The two other scopes are declared below
+   * this block, outside `@theme`, because a density scope is a *conditional* override
+   * and `@theme` emits one flat `:root`.
+   *
+   * Structural roles (`gutter`, `rung`, `card`) snap to 4px. The fine roles keep 2px
+   * granularity: `--sp-row-y: 10px` and `--sp-inline: 6px` are real, load-bearing
+   * half-steps that Tailwind itself ships (`py-2.5`, `gap-1.5`), and rounding them to
+   * the 4px grid collapses distinctions the row typography depends on.
+   *
+   * Density changes space only. Type never scales — a 360px panel and a 720px panel
+   * show the same font sizes; only the space between things moves.
+   */
+  --sp-gutter: 16px; /* panel horizontal padding */
+  --sp-rung: 16px; /* gap between stacked cards */
+  --sp-card: 16px; /* inside a DetailSection */
+  --sp-row-y: 10px; /* ListRow vertical padding */
+  --sp-row-x: 12px; /* ListRow horizontal padding */
+  --sp-inline: 8px; /* between chips, pills, icons */
+  --sp-field: 10px; /* between form controls */
 
   @keyframes rise-in {
     from {
@@ -275,7 +361,186 @@
   }
 }
 
+/*
+ * Density scopes — the two overrides on top of the `default` values declared in
+ * `@theme static` above.
+ *
+ * ## Why a media query and not a container query
+ *
+ * The design brief specifies a container query on the panel root. In a Chrome side
+ * panel the panel root *is* the viewport — there is no larger page around it, which is
+ * why `useIsNarrow` has always been able to read `window.innerWidth` and be right. A
+ * container query would additionally require an ancestor declaring `container-type`,
+ * and an element cannot respond to a container query on itself, so it would force a
+ * wrapper element to exist for no behavioural gain. The media query resolves against
+ * exactly the same measurement with none of that.
+ *
+ * It also survives Storybook: ADR-0014's `sidepanelCompact` (360) / `sidepanelDefault`
+ * (480) / `sidepanelWide` (720) presets resize the story iframe's viewport, so every
+ * story exercises the real breakpoints for free.
+ *
+ * ## Why `[data-density]` exists as well
+ *
+ * Density is *derived*, not chosen — there is no user setting and nothing to maintain.
+ * The attribute is an explicit escape hatch for stories and tests that need to pin one
+ * scope without resizing a viewport, and it deliberately wins over the media query so a
+ * pinned story is not silently reinterpreted by the runner's window size.
+ */
+@media (width < 400px) {
+  :root {
+    --sp-gutter: 12px;
+    --sp-rung: 12px;
+    --sp-card: 12px;
+    --sp-row-y: 8px;
+    --sp-row-x: 10px;
+    --sp-inline: 6px;
+    --sp-field: 8px;
+    --merge-range: 8px;
+  }
+}
+
+@media (width >= 560px) {
+  :root {
+    --sp-gutter: 20px;
+    --sp-rung: 24px;
+    --sp-card: 20px;
+    --sp-row-y: 12px;
+    --sp-row-x: 16px;
+    --sp-inline: 10px;
+    --sp-field: 12px;
+    --merge-range: 13px;
+  }
+}
+
+[data-density='compact'] {
+  --sp-gutter: 12px;
+  --sp-rung: 12px;
+  --sp-card: 12px;
+  --sp-row-y: 8px;
+  --sp-row-x: 10px;
+  --sp-inline: 6px;
+  --sp-field: 8px;
+  --merge-range: 8px;
+}
+
+[data-density='default'] {
+  --sp-gutter: 16px;
+  --sp-rung: 16px;
+  --sp-card: 16px;
+  --sp-row-y: 10px;
+  --sp-row-x: 12px;
+  --sp-inline: 8px;
+  --sp-field: 10px;
+  --merge-range: 10px;
+}
+
+[data-density='comfortable'] {
+  --sp-gutter: 20px;
+  --sp-rung: 24px;
+  --sp-card: 20px;
+  --sp-row-y: 12px;
+  --sp-row-x: 16px;
+  --sp-inline: 10px;
+  --sp-field: 12px;
+  --merge-range: 13px;
+}
+
 @layer components {
+  /*
+   * ## The response layer (ADR-0046)
+   *
+   * `docs/motion.md` covers *arrival* — things entering and leaving. These two classes
+   * cover *response*: what the interface does the instant you touch it. The rule that
+   * keeps this from becoming decoration is that response motion is only ever caused by
+   * the user's own input, so it cannot surprise them and cannot fire while they read.
+   *
+   * Both inherit the blanket reduced-motion freeze at the bottom of this file. Neither
+   * needs `.motion-exempt` — a frozen press is a press that simply resolves instantly,
+   * which is the correct behaviour, not a broken one.
+   */
+
+  /*
+   * Press. Odyssey's own press state is a third, darker background step
+   * (`hover → PalettePrimaryDark`, `active → PalettePrimaryDarker`) and it never uses
+   * `transform` — components carry that colour step themselves. The scale here is this
+   * panel's addition on top of it, not a replacement for it.
+   *
+   * The `:active` rule re-declares duration and easing rather than adding a property,
+   * so the depress runs at `--dur-press` and the *release* falls back to this rule's
+   * `--dur-quick`/`--ease-affirm`. That asymmetry is the whole effect: instant down,
+   * eased back up.
+   */
+  /*
+   * Both classes are self-sufficient: `.press-subtle` used alone behaves exactly like
+   * `.press` with a flatter scale, and `press press-subtle` together is equivalent.
+   *
+   * That is deliberate and was learned the hard way. The first cut defined the `:active`
+   * transform on `.press` only and let `.press-subtle` override the variable, so
+   * `.press-subtle` alone silently did nothing — it set a custom property no rule read.
+   * Eight call sites across five directories had already adopted it that way before the
+   * gap was caught, and *none* of them could fail a test: ADR-0023 bans asserting on
+   * class names, and the headless story runner loads no CSS, so an inert press class is
+   * invisible to every gate this repo has.
+   */
+  .press,
+  .press-subtle {
+    --press-scale: 0.955;
+    transition:
+      transform var(--dur-quick) var(--ease-affirm),
+      background-color var(--dur-instant) var(--ease-standard),
+      border-color var(--dur-instant) var(--ease-standard),
+      box-shadow var(--dur-instant) var(--ease-standard),
+      color var(--dur-instant) var(--ease-standard),
+      opacity var(--dur-instant) var(--ease-standard);
+  }
+
+  /*
+   * A row is a much wider target than a button, so the same ratio reads as a lurch.
+   * Scaled to travel roughly the same number of pixels at the edge instead. Declared
+   * after the shared rule above so it wins the variable.
+   */
+  .press-subtle {
+    --press-scale: 0.995;
+  }
+
+  .press:active:not(:disabled, [aria-disabled='true']),
+  .press-subtle:active:not(:disabled, [aria-disabled='true']) {
+    transform: scale(var(--press-scale));
+    transition-duration: var(--dur-press);
+    transition-timing-function: var(--ease-press);
+  }
+
+  /*
+   * Hover lift for *interactive* cards (ADR-0047).
+   *
+   * The shadow is pre-painted on an `::after` at `opacity: 0` and cross-faded, which is
+   * Odyssey's own technique in `labs/AppTile` — animating a `box-shadow` repaints every
+   * frame, animating an `opacity` composites. `border-radius: inherit` keeps the shadow
+   * on the card's real corner without the class needing to know what that corner is.
+   *
+   * Deliberately no `translateY`: it would collide with `.press`'s `transform` on any
+   * surface that is both liftable and pressable, which is most of them. The elevation
+   * change alone carries it, and that is also all Odyssey's `Card` does.
+   */
+  .lift {
+    position: relative;
+  }
+
+  .lift::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: var(--lift-1);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--dur-instant) var(--ease-standard);
+  }
+
+  .lift:hover::after {
+    opacity: 1;
+  }
+
   .tab-content {
     @apply hidden;
   }
@@ -307,11 +572,12 @@
    * Deliberately *not* on the panel's own scroll root (`app-scroll-root` in
    * `App`). That scroller is unstyled, so it keeps the platform scrollbar — an
    * overlay one on macOS, where `scrollbar-gutter` is a no-op regardless — and a
-   * gutter there would inset the full-bleed sticky bands (`ContextBar`,
-   * `PageHeader`), stopping their background and bottom border short of the panel
-   * edge. At the 360px narrow width, 6px inside a bordered list card reads as
-   * padding; a permanent ~15px stripe of canvas beside a white header band reads
-   * as a seam.
+   * gutter there would inset the full-bleed `PageHeader` inside it, stopping its
+   * background and bottom border short of the panel edge. At the 360px narrow
+   * width, 6px inside a bordered list card reads as padding; a permanent ~15px
+   * stripe of canvas beside a white header band reads as a seam. The top chrome
+   * is out of that scroller now precisely so its own bands never pay for the
+   * channel at all.
    */
   .scrollable-list {
     scrollbar-gutter: stable;
@@ -474,7 +740,7 @@
    * `ActionBar` renders immediately before the strip, so it sits at the strip's
    * **undocked** position and keeps moving after the strip itself has stopped.
    * Its view timeline is measured against a scrollport inset from the top by the
-   * two bands already parked there (`--rail-h + --header-h`), which puts
+   * band already parked there (`--header-h`), which puts
    * `cover 100%` exactly on the line where the strip docks. The animation then
    * runs over the last `--merge-range` before that line and holds at full merge
    * for the rest of the scroll (`both`).
@@ -589,9 +855,10 @@
     .dock-sentinel {
       view-timeline: --dock-progress block;
       /*
-       * Shrink the scrollport by the bands already parked at the top, so the
+       * Shrink the scrollport by the header already parked at the top, so the
        * timeline's end lands on the strip's parking line rather than on the
-       * scroller's own top edge.
+       * scroller's own top edge. The tab rail is not in this sum — it sits
+       * outside the scroller, so the scrollport already starts below it.
        *
        * Less `--dock-offset`, because the sentinel does not sit where it claims
        * to: the rung's `space-y-*` step lands on the *band* (the sentinel is the
@@ -600,8 +867,7 @@
        * finishing 28px before the strip parked. `useActionOverflow` publishes the
        * real distance.
        */
-      view-timeline-inset: calc(var(--rail-h, 0px) + var(--header-h, 0px) - var(--dock-offset, 0px))
-        0px;
+      view-timeline-inset: calc(var(--header-h, 0px) - var(--dock-offset, 0px)) 0px;
     }
 
     /*

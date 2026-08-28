@@ -94,6 +94,18 @@ interface PageHeaderProps {
   /**
    * Optional coloured mark rendered in the trailing cluster, immediately before
    * {@link PageHeaderProps.actions}. Defaults to `neutral`.
+   *
+   * For an **entity-identity rung** (a group or user detail view), this is reserved for
+   * the one status that must shout — `danger` (a deactivated or locked entity). Every
+   * calmer status is demoted to a dot-marked `status` fact inside
+   * {@link PageHeaderProps.identity} instead (see
+   * {@link sidepanel/components/shared/identityDescriptor.IdentityFact}'s `status` kind
+   * and the per-entity builders `groupIdentity`/`userIdentity`), so the header's height
+   * stops depending on how many statuses an entity carries — "demoted to facts", the
+   * chosen treatment for badges crowding the title. List-rung callers with no identity
+   * region (`GroupsTab`, `AppsTab`, `RulesTab`, `AuthPoliciesTab` passing counts like
+   * "412 Apps" or "3 Conflicts") are unaffected; this guidance is about entity status,
+   * not every use of the prop.
    */
   badge?: {
     text: string;
@@ -248,13 +260,8 @@ const PageHeader: React.FC<PageHeaderProps> = ({
         sticks to, the header is pinned. See `useStuck`.
       */}
       {sticky && <div ref={sentinelRef} aria-hidden="true" className="h-0" />}
-      <div
-        ref={headerRef}
-        className={`bg-white border-b border-neutral-200 ${
-          sticky ? 'sticky top-[var(--rail-h,0px)] z-20' : ''
-        }`}
-      >
-        <div className={`px-5 py-4 flex ${align} justify-between gap-4`}>
+      <div ref={headerRef} className={`bg-white ${sticky ? 'sticky top-0 z-20' : ''}`}>
+        <div className={`px-(--sp-gutter) py-(--sp-card) flex ${align} justify-between gap-4`}>
           <div className={`flex-1 min-w-0 flex ${align} gap-2`}>
             {leadingNode && <div className="shrink-0">{leadingNode}</div>}
             <div className="flex-1 min-w-0">
@@ -265,7 +272,23 @@ const PageHeader: React.FC<PageHeaderProps> = ({
               >
                 {title}
               </h1>
-              {subtitle && <p className="mt-0.5 text-sm text-neutral-600">{subtitle}</p>}
+              {/*
+                The subtitle collapses when the header pins, through the same
+                `.disclose` grid the identity region uses. It is orientation — what
+                this rung is for — and orientation is worth a line while you are
+                arriving and nothing once you are reading. A list rung has no
+                identity region to collapse, so without this its header pinned at
+                full height: on the Groups tab at 360px that measured 114px of
+                permanently parked header over 91px of chrome, and the subtitle
+                wrapping to three lines was most of it.
+              */}
+              {subtitle && (
+                <div className="disclose" data-open={pinned ? 'false' : 'true'}>
+                  <div>
+                    <p className="mt-0.5 text-sm text-neutral-600">{subtitle}</p>
+                  </div>
+                </div>
+              )}
 
               {/*
               Inside the title column rather than below the whole row, so the lines align

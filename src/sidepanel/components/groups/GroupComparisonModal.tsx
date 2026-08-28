@@ -131,18 +131,20 @@ const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
       )}
 
       {error && (
-        <div className="p-4 bg-danger-light text-danger-text rounded-md text-sm">{error}</div>
+        <div className="p-(--sp-card) bg-danger-light text-danger-text rounded-md text-sm">
+          {error}
+        </div>
       )}
 
       {result && (
-        <div className="space-y-5">
+        <div className="space-y-(--sp-rung)">
           {/* Summary Stats */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="p-3 bg-neutral-50 rounded-md border border-neutral-200 text-center">
+          <div className="grid grid-cols-2 gap-(--sp-field)">
+            <div className="p-(--sp-card) bg-neutral-50 rounded-md border border-neutral-200 text-center">
               <div className="text-2xl font-bold text-neutral-900">{result.totalUniqueUsers}</div>
               <div className="text-xs text-neutral-600 mt-0.5">Total Unique Users</div>
             </div>
-            <div className="p-3 bg-primary-light rounded-md border border-primary-highlight text-center">
+            <div className="p-(--sp-card) bg-primary-light rounded-md border border-primary-highlight text-center">
               <div className="text-2xl font-bold text-primary-text">
                 {result.intersection.length}
               </div>
@@ -151,56 +153,58 @@ const GroupComparisonModal: React.FC<GroupComparisonModalProps> = ({
           </div>
 
           {/* Per-Group Breakdown */}
-          <div className="space-y-2">
+          <div className="space-y-(--sp-inline)">
             <div className="text-xs font-semibold text-neutral-700 uppercase tracking-wide">
               Per-Group Breakdown
             </div>
-            {result.groups.map((group, i) => {
-              const uniqueCount = result.uniqueMembers[group.id]?.length || 0;
-              const sharedCount = group.memberCount - uniqueCount;
-              const overlapPct =
-                group.memberCount > 0 ? Math.round((sharedCount / group.memberCount) * 100) : 0;
+            <div className="space-y-(--sp-rung)">
+              {result.groups.map((group, i) => {
+                const uniqueCount = result.uniqueMembers[group.id]?.length || 0;
+                const sharedCount = group.memberCount - uniqueCount;
+                const overlapPct =
+                  group.memberCount > 0 ? Math.round((sharedCount / group.memberCount) * 100) : 0;
 
-              return (
-                <div
-                  key={group.id}
-                  className={`p-3 rounded-md border border-neutral-200 ${BG_COLORS[i] || 'bg-neutral-50'}`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`text-sm font-semibold ${COLORS[i] || 'text-neutral-900'}`}>
-                      {group.name}
-                    </span>
-                    <span className="text-xs text-neutral-600">{group.memberCount} members</span>
-                  </div>
-                  <div className="flex gap-4 text-xs">
-                    <div>
-                      <span className="font-medium text-neutral-700">{uniqueCount}</span>
-                      <span className="text-neutral-500 ml-1">unique</span>
+                return (
+                  <div
+                    key={group.id}
+                    className={`p-(--sp-card) rounded-md border border-neutral-200 ${BG_COLORS[i] || 'bg-neutral-50'}`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-sm font-semibold ${COLORS[i] || 'text-neutral-900'}`}>
+                        {group.name}
+                      </span>
+                      <span className="text-xs text-neutral-600">{group.memberCount} members</span>
                     </div>
-                    <div>
-                      <span className="font-medium text-neutral-700">{sharedCount}</span>
-                      <span className="text-neutral-500 ml-1">shared</span>
+                    <div className="flex gap-(--sp-field) text-xs">
+                      <div>
+                        <span className="font-medium text-neutral-700">{uniqueCount}</span>
+                        <span className="text-neutral-500 ml-1">unique</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-neutral-700">{sharedCount}</span>
+                        <span className="text-neutral-500 ml-1">shared</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-neutral-700">{overlapPct}%</span>
+                        <span className="text-neutral-500 ml-1">overlap</span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="font-medium text-neutral-700">{overlapPct}%</span>
-                      <span className="text-neutral-500 ml-1">overlap</span>
+                    {/* Overlap bar */}
+                    <div className="mt-2 h-1.5 bg-white/50 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary rounded-full transition-all duration-(--dur-move)"
+                        style={{ width: `${overlapPct}%` }}
+                      />
                     </div>
                   </div>
-                  {/* Overlap bar */}
-                  <div className="mt-2 h-1.5 bg-white/50 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-primary rounded-full transition-all duration-(--dur-move)"
-                      style={{ width: `${overlapPct}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
 
           {/* Overlap Matrix */}
           {result.groups.length > 2 && (
-            <div className="space-y-2">
+            <div className="space-y-(--sp-inline)">
               <div className="text-xs font-semibold text-neutral-700 uppercase tracking-wide">
                 Pairwise Overlap
               </div>

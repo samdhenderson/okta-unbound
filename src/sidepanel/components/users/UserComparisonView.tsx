@@ -152,7 +152,7 @@ const UserComparisonView: React.FC<UserComparisonViewProps> = ({
       )}
 
       {comparedUser && (
-        <div className="space-y-3">
+        <div className="space-y-(--sp-rung)">
           <div className="flex justify-end">
             <Button variant="ghost" size="sm" onClick={changeUser} icon="refresh">
               Change user

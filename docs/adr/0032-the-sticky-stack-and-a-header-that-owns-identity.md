@@ -1,6 +1,6 @@
 # ADR-0032: The sticky stack, and a header that owns entity identity
 
-- Status: Accepted (§3a amended by ADR-0038)
+- Status: Accepted (§3a amended by ADR-0038; §3's stack amended by ADR-0050)
 - Date: 2026-08-15
 - Amends: ADR-0030 (its identity-header section, and its deferral of a pinned title)
 - Relates to: ADR-0018 (every tab stays mounted), ADR-0027 (motion tokens),
@@ -109,6 +109,13 @@ consumes it in its own `top`. One owner per variable, every value measured.
 | `PageHeader`    | `sticky top-[var(--rail-h,0px)] z-20` | `--header-h` on its `TabPanel`  | `--rail-h`                                      |
 | `ActionBar`     | `sticky z-30`                         | —                               | `calc(var(--rail-h,0px) + var(--header-h,0px))` |
 
+> **Amended by ADR-0050.** The rail is no longer in the scroller and no longer a band:
+> it publishes nothing, `PageHeader` parks at `top-0` and `ActionBar` at
+> `var(--header-h,0px)`. Every consumer already read the rail's height through a
+> `var(--rail-h, 0px)` fallback, so the arithmetic below collapses rather than breaks.
+> The rest of this section — one owner per variable, `--header-h` scoped to the
+> `TabPanel`, `sticky` gated on `isActive`, and the stacking-context trap — is unchanged.
+
 **The `z-index` column only means anything inside one stacking context.** `ActionBar`'s
 `z-30` beats `PageHeader`'s `z-20` — which is what lets the merge's final `top: -1px`
 paint over the header's own bottom border — but only while the two resolve against the
@@ -180,7 +187,8 @@ block)` over the _first_ 64px of scroll. That is wrong whenever the strip does n
   publishes a `view-timeline` named `--dock-progress`. The sentinel sits at the strip's
   _undocked_ position and keeps moving after the strip has stopped, so it is what knows how
   far there is left to go. Its scrollport is inset from the top by
-  `calc(var(--rail-h,0px) + var(--header-h,0px))` — the two bands already parked there —
+  `var(--header-h,0px)` — the band already parked there (ADR-0050; it was the rail's height
+  plus the header's while the rail was still in the scroller) —
   which puts `cover 100%` exactly on the docking line; the animation runs
   `cover calc(100% - var(--merge-range))` → `cover 100%` and holds at full merge afterwards.
   The same two custom properties therefore drive both the strip's `top` and the moment its

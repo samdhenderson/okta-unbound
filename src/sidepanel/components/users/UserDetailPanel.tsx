@@ -218,7 +218,7 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
         ariaLabel="User detail sections"
       />
 
-      <div className="mt-6 overflow-hidden rounded-md border border-neutral-200 bg-white">
+      <div className="mt-(--sp-rung) overflow-hidden rounded-md border border-neutral-200 bg-white">
         <div
           role="tabpanel"
           aria-label="Groups"
@@ -241,7 +241,7 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
           role="tabpanel"
           aria-label="Apps"
           hidden={pane !== 'apps'}
-          className={pane === 'apps' ? 'px-4 py-3' : 'hidden'}
+          className={pane === 'apps' ? 'p-(--sp-card)' : 'hidden'}
         >
           <UserAppsList
             apps={apps}

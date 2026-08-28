@@ -227,8 +227,8 @@ const ComparisonAttributeRow: React.FC<ComparisonAttributeRowProps> = ({
   );
 
   return (
-    <li className="flex flex-col gap-1.5 px-3 py-2 hover:bg-neutral-50/70">
-      <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+    <li className="flex flex-col gap-1.5 px-(--sp-row-x) py-(--sp-row-y) hover:bg-neutral-50/70">
+      <span className="flex min-w-0 flex-wrap items-center gap-(--sp-inline)">
         <span
           className={`min-w-0 truncate text-sm text-neutral-800 ${showApiNames ? 'font-mono' : ''}`}
           // The other name, so switching `showApiNames` never costs the reader the
@@ -254,7 +254,9 @@ const ComparisonAttributeRow: React.FC<ComparisonAttributeRowProps> = ({
         {comparedCell?.dirty && <EditedBadge userName={comparedName} wouldBe={wouldBe} />}
       </span>
 
-      {/* Real equal thirds: grid TRACKS, not `flex-1` boxes. See the module header. */}
+      {/* Real equal thirds: grid TRACKS, not `flex-1` boxes. See the module header.
+          `gap-2` stays raw, not a spacing role — same reasoning as
+          `ComparisonDiffTab`'s parity strip, which this one is quoted from. */}
       <span className="grid grid-cols-[minmax(0,1fr)_2rem_minmax(0,1fr)] items-stretch gap-2">
         <ValueCell userName={contextName} row={row} value={row.contextValue} cell={contextCell} />
         {/* Not a button, not focusable: a status that borrows the silhouette. */}

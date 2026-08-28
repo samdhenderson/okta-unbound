@@ -16,7 +16,7 @@ interface RulesStatsGridProps {
 
 /** Renders the total/active/inactive/conflicts stat tiles for the Rules tab. */
 const RulesStatsGrid: React.FC<RulesStatsGridProps> = ({ stats }) => (
-  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+  <div className="grid grid-cols-2 md:grid-cols-4 gap-(--sp-rung)">
     <StatCard title="Total Rules" value={stats.total} color="neutral" icon="list" />
     <StatCard title="Active" value={stats.active} color="success" icon="check" />
     <StatCard title="Inactive" value={stats.inactive} color="neutral" icon="pause" />

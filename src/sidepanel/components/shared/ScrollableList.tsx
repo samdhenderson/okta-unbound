@@ -39,6 +39,20 @@ interface ScrollableListProps {
   /** If true (default), uses flex-grow to fill remaining space */
   fillAvailable?: boolean;
   /**
+   * If true (default), the populated branch is its own scroll box. Pass `false`
+   * where the list is meant to scroll the **page** instead — a rung that has
+   * given up its nested scroller so its sticky bands can actually dock
+   * (`GroupsListPanel`, ADR-0051). The loading and empty branches are unaffected;
+   * they never scrolled.
+   *
+   * A nested scroller is not free: nothing outside it can be `sticky` against the
+   * page, an inner scrollbar sits beside the outer one, and the box needs a height
+   * from somewhere — which is where `h-[calc(100vh-280px)]` magic numbers come
+   * from. Reach for one only when the list must stay put while something beside it
+   * scrolls.
+   */
+  scrolls?: boolean;
+  /**
    * Optional ref on the scrolling element itself. Only attached in the populated
    * state (the loading/empty branches render no scroll box), so a consumer that
    * reads `scrollTop` must tolerate `null`. Exists so a view can preserve scroll
@@ -81,6 +95,7 @@ const ScrollableList: React.FC<ScrollableListProps> = ({
   loadingMessage = 'Loading...',
   maxHeight,
   fillAvailable = true,
+  scrolls = true,
   skeleton,
   scrollRef,
   testId,
@@ -143,9 +158,10 @@ const ScrollableList: React.FC<ScrollableListProps> = ({
     <div
       ref={scrollRef}
       // `scrollable-list` styles the custom scrollbar, so it belongs only on the
-      // branch that actually has one — `GroupsTab`'s scroll-preservation test
-      // queries for it to find the real scroll container.
-      className={boxClasses('overflow-y-auto scrollable-list')}
+      // branch that actually has one — and only when this list is a scroller at
+      // all. With `scrolls={false}` the box keeps its class names and its ref and
+      // simply lets the page scroll it.
+      className={boxClasses(scrolls ? 'overflow-y-auto scrollable-list' : '')}
       style={containerStyle}
       data-testid={testId}
     >

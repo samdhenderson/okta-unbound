@@ -128,7 +128,7 @@ const ProfileDisplayModal: React.FC<ProfileDisplayModalProps> = ({
         </>
       }
     >
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-(--sp-rung)">
         <Tabs
           tabs={tabs}
           activeKey={activeTab}

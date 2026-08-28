@@ -145,12 +145,12 @@ const UserProfilePaneHeader: React.FC<UserProfilePaneHeaderProps> = ({
   // `flex-wrap` rather than a fixed row: at the 360px panel floor the sentence
   // and a three-control cluster do not share a line, and the cluster taking a
   // second row is better than either of them being squeezed.
-  <div className="flex flex-wrap items-start justify-between gap-3 px-4 py-3">
+  <div className="flex flex-wrap items-start justify-between gap-(--sp-inline) p-(--sp-card)">
     <p className="min-w-0 flex-1 text-xs text-neutral-600 text-pretty">
       {shown} of {total} attributes shown &middot; {ruleReadCount} read by rules that grant access
     </p>
 
-    <div className="flex shrink-0 items-center gap-2">
+    <div className="flex shrink-0 items-center gap-(--sp-field)">
       {edit?.isEditing ? (
         <>
           <EditStatus changeCount={edit.changeCount} hasInvalid={edit.hasInvalid} />

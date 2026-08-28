@@ -165,7 +165,7 @@ const UserProfilePane: React.FC<UserProfilePaneProps> = ({
         edit={edit}
       />
 
-      <div className="px-4 pb-3 space-y-2">
+      <div className="px-(--sp-card) pb-(--sp-card) space-y-(--sp-field)">
         <Input
           size="sm"
           value={filter}
@@ -187,7 +187,7 @@ const UserProfilePane: React.FC<UserProfilePaneProps> = ({
             ) : undefined
           }
         />
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-(--sp-inline)">
           <FilterPill active={!onlyRuleRead} onClick={() => setOnlyRuleRead(false)}>
             All attributes
           </FilterPill>
@@ -198,7 +198,7 @@ const UserProfilePane: React.FC<UserProfilePaneProps> = ({
       </div>
 
       {isLoading ? (
-        <div className="px-4 pb-4">
+        <div className="px-(--sp-card) pb-(--sp-card)">
           <Skeleton variant="row" size="md" count={4} label="Loading profile attributes" />
         </div>
       ) : blocks.length === 0 ? (
@@ -223,7 +223,7 @@ const UserProfilePane: React.FC<UserProfilePaneProps> = ({
             <section
               key={block.key}
               aria-label={block.name}
-              className="border-t border-neutral-200 px-4 py-3 first:border-t-0"
+              className="border-t border-neutral-200 p-(--sp-card) first:border-t-0"
             >
               <div className="flex items-baseline justify-between gap-2 mb-2">
                 <Eyebrow as="h3">{block.name}</Eyebrow>

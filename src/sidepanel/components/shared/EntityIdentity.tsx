@@ -17,10 +17,20 @@
  * header's title row, so the tab spreads those from the same descriptor rather than
  * nesting them here — that is what keeps all three on screen when the header is pinned and
  * this region is collapsed.
+ *
+ * ## The `status` fact
+ *
+ * A calmer-than-`danger` status is demoted here rather than living in the header's trailing
+ * badge column (`docs/design-system.md`'s "demoted to facts" treatment): a 6px dot in the
+ * status colour, then the label at the same secondary-text weight as every other fact. Same
+ * information as a badge, roughly a third of the visual weight, and — unlike a badge — it
+ * cannot push the header to a third line, because it wraps with the row instead of reserving
+ * a fixed trailing column.
  */
 import React from 'react';
 import Icon, { type IconType } from '../shared/Icon';
 import CopyableId from './CopyableId';
+import type { BadgeVariant } from './Badge';
 import type { IdentityFact, IdentityRow } from './identityDescriptor';
 
 /** Props for {@link EntityIdentity}. */
@@ -29,6 +39,21 @@ export interface EntityIdentityProps {
   rows: IdentityRow[];
 }
 
+/**
+ * A `status` fact's dot fill per {@link BadgeVariant}. Deliberately mirrors the background
+ * token {@link sidepanel/components/shared/Badge.Badge}'s solid treatment uses for the same
+ * variant, rather than a fifth badge palette — this codebase already paid once for four
+ * divergent copies of this exact vocabulary.
+ */
+const STATUS_DOT_BG: Record<BadgeVariant, string> = {
+  primary: 'bg-primary',
+  info: 'bg-primary',
+  success: 'bg-success',
+  warning: 'bg-warning',
+  danger: 'bg-danger',
+  neutral: 'bg-neutral-400',
+};
+
 /** A fact's leading glyph. Decorative — the fact's own text carries the meaning. */
 const FactIcon: React.FC<{ type: IconType }> = ({ type }) => (
   <span aria-hidden="true" className="flex shrink-0 text-neutral-400">
@@ -36,7 +61,7 @@ const FactIcon: React.FC<{ type: IconType }> = ({ type }) => (
   </span>
 );
 
-/** One fact: a count, a plain statement, or a copyable id. */
+/** One fact: a count, a plain statement, a copyable id, or a demoted status. */
 const Fact: React.FC<{ fact: IdentityFact }> = ({ fact }) => {
   if (fact.kind === 'id') {
     return <CopyableId value={fact.value} label={fact.copyLabel} />;
@@ -48,6 +73,27 @@ const Fact: React.FC<{ fact: IdentityFact }> = ({ fact }) => {
         <FactIcon type={fact.icon} />
         <span className="font-semibold text-neutral-900">{fact.value}</span>
         <span>{fact.label}</span>
+      </span>
+    );
+  }
+
+  if (fact.kind === 'status') {
+    return (
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT_BG[fact.variant]}`}
+        />
+        {/* Okta status names are long (`PASSWORD_EXPIRED`); without `min-w-0` the
+            flex item refuses to shrink and overruns the title column at 360px.
+            Truncating rather than wrapping is deliberate — a status that wraps puts
+            the header's height back under the entity's control, which is the whole
+            thing demoting badges to facts was meant to fix. `title` keeps the full
+            value reachable; assistive tech reads it regardless, since `truncate` is
+            purely visual. */}
+        <span className="truncate" title={fact.text}>
+          {fact.text}
+        </span>
       </span>
     );
   }
@@ -88,14 +134,19 @@ const EntityIdentity: React.FC<EntityIdentityProps> = ({ rows }) => {
           className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-neutral-600"
         >
           {row.map((fact, factIndex) => (
-            <React.Fragment key={factIndex}>
+            // The separator is bound to the fact that follows it, in one flex item,
+            // rather than sitting beside it as a sibling. A sibling separator wraps
+            // independently of its fact: when the row breaks, the middot stays behind
+            // and orphans at the end of the previous line with nothing after it. That
+            // was visible at 480px the moment a row carried three facts.
+            <span key={factIndex} className="inline-flex min-w-0 items-center gap-x-2">
               {factIndex > 0 && (
                 <span aria-hidden="true" className="text-neutral-300">
                   ·
                 </span>
               )}
               <Fact fact={fact} />
-            </React.Fragment>
+            </span>
           ))}
         </div>
       ))}

@@ -112,14 +112,14 @@ const UserAppsList: React.FC<UserAppsListProps> = ({
 
   if (isLoading) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-(--sp-rung)">
         <Skeleton variant="row" size="lg" count={4} label="Loading app assignments…" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-(--sp-rung)">
       {!complete && (
         // Deliberately not dismissible. The caveat describes the list itself, so
         // it must remain true for as long as the list is on screen.
@@ -143,7 +143,7 @@ const UserAppsList: React.FC<UserAppsListProps> = ({
         icon={<Icon type="search" size="sm" className="text-neutral-400" />}
       />
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-(--sp-inline)">
         {FILTER_ORDER.map((key) => (
           <FilterPill
             key={key}
@@ -173,7 +173,7 @@ const UserAppsList: React.FC<UserAppsListProps> = ({
           actions={[{ label: 'Clear filters', onClick: clearFilters, variant: 'secondary' }]}
         />
       ) : (
-        <ul className="space-y-3">
+        <ul className="space-y-(--sp-rung)">
           {visible.map((row) => (
             <UserAppRow key={row.id} row={row} oktaOrigin={oktaOrigin} />
           ))}

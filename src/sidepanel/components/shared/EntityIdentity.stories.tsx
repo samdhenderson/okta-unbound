@@ -17,6 +17,7 @@ const meta = {
         component:
           'Renders the `rows` of an `EntityIdentityDescriptor` to the secondary-text contract in the design system: `text-xs text-neutral-600`, with a `metric`’s value emphasised so the number reads before its unit, and an `id` through the shared `CopyableId`.\n\n' +
           'Facts inside a row wrap together and are separated by a middot. An **empty row is dropped** rather than rendered as blank space — that is how "Okta has not told us yet" collapses out of the layout instead of showing a zero.\n\n' +
+          "A `status` fact is a demoted badge: a small dot in the status colour, then the label at the same secondary-text weight as every other fact. `groupIdentity`/`userIdentity` reserve the header's loud trailing badge for `danger` only and route every calmer status here instead, so the header stops growing a third line at 360px just because an entity carries a status.\n\n" +
           'It renders rows only. The entity’s name, badge and Okta link belong to the header’s title row, which is what keeps all three on screen when the header is pinned and this region is collapsed.\n\n' +
           '**Related internals:** [Components](?path=/docs/internals-components--docs)',
       },
@@ -72,11 +73,18 @@ export const SingleMember: Story = {
   },
 };
 
-/** A user rung: the same vocabulary, a different builder. */
+/**
+ * A user rung: the same vocabulary, a different builder. `ACTIVE` is demoted to a
+ * dot-marked `status` fact rather than the header's badge column — a calm status never
+ * needed to shout.
+ */
 export const User: Story = {
   args: {
     rows: [
-      [{ kind: 'id', value: '00uFAKE9z8y7x6w5v', copyLabel: 'Copy user id' }],
+      [
+        { kind: 'status', variant: 'success', text: 'ACTIVE' },
+        { kind: 'id', value: '00uFAKE9z8y7x6w5v', copyLabel: 'Copy user id' },
+      ],
       [
         { kind: 'metric', icon: 'users', value: '42', label: 'groups' },
         { kind: 'metric', icon: 'bolt', value: '3', label: 'rules' },
@@ -87,6 +95,30 @@ export const User: Story = {
       ],
     ],
   },
+};
+
+/**
+ * Several statuses on one entity at once — the case treatment #2 exists for. Each is a
+ * dot-marked fact rather than a badge, so they wrap with the rest of the row instead of
+ * each reserving their own trailing column.
+ */
+export const MultipleStatuses: Story = {
+  args: {
+    rows: [
+      [
+        { kind: 'status', variant: 'success', text: 'ACTIVE' },
+        { kind: 'status', variant: 'warning', text: 'PASSWORD_EXPIRED' },
+        { kind: 'id', value: '00uFAKE9z8y7x6w5v', copyLabel: 'Copy user id' },
+      ],
+      [{ kind: 'metric', icon: 'users', value: '42', label: 'groups' }],
+    ],
+  },
+};
+
+/** The same several-status row at the narrowest supported width. */
+export const MultipleStatusesNarrow: Story = {
+  args: MultipleStatuses.args,
+  parameters: { viewport: { value: 'sidepanelCompact' } },
 };
 
 /** A user who has never signed in — a stated answer, not a missing one. */

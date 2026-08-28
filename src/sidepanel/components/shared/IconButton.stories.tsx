@@ -157,3 +157,11 @@ export const Hover: Story = {
 export const Focus: Story = {
   parameters: { pseudo: { focusVisible: true } },
 };
+
+/**
+ * Pressed state (forced via the pseudo-states addon): `.press`'s `scale(.955)`
+ * depress plus `active:brightness-90` (ADR-0046).
+ */
+export const Pressed: Story = {
+  parameters: { pseudo: { active: true } },
+};

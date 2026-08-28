@@ -148,7 +148,7 @@ const ComparisonDiffTab: React.FC<ComparisonDiffTabProps> = ({
     // collapse. `flex-1` is kept so a host that ever does give this a real height
     // wins over the minimum.
     <div className="flex min-h-[calc(100vh-22rem)] flex-1 flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-(--sp-inline)">
         {/* All leads the row; `differences` is still the filter that opens
             active (see `useState` above) — the lead pill is the widest
             selection, not the default one. */}
@@ -225,7 +225,7 @@ const ParityListRow: React.FC<{
   const matched = row.inContext && row.inCompared;
 
   return (
-    <li className="flex flex-col gap-1.5 px-3 py-2 hover:bg-neutral-50/70">
+    <li className="flex flex-col gap-1.5 px-(--sp-row-x) py-(--sp-row-y) hover:bg-neutral-50/70">
       {/* `min-w-0` + `items-start`: the label column truncates and the meta line
           hugs its text instead of stretching into a full-width bar (flex children
           stretch by default). */}
@@ -242,7 +242,12 @@ const ParityListRow: React.FC<{
 
       {/* Real equal thirds: grid TRACKS, not `flex-1` boxes — under flex a padded
           cell and a bare one differ by their own chrome, which is what knocked
-          the marker off the centre line. See the module header. */}
+          the marker off the centre line. See the module header.
+          `gap-2` is deliberately NOT a spacing role (ADR-0048): it is a track
+          gap applied once to a 3-column grid, so it is inherently symmetric at
+          any value, but this strip's exact geometry was hard-won (see above),
+          and none of the six roles names "gap inside a parity strip" — reusing
+          one would be a coincidence of value, not a match of meaning. */}
       <span className="grid grid-cols-[minmax(0,1fr)_2rem_minmax(0,1fr)] items-stretch gap-2">
         <SideCell
           held={row.inContext}

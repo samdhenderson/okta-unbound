@@ -638,3 +638,93 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Medium — it widens a contract every existing descriptor implements.
 - **Status:** open
 - **Related:** `I-019`, ADR-0030, ADR-0040
+
+### I-021 · Icon registry entries for the four glyphs `groups/` still hand-rolls
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Verified:** 2026-08-28
+- **Files:** `src/sidepanel/components/shared/Icon.tsx`,
+  `src/sidepanel/components/groups/GroupFilterToggle.tsx`,
+  `src/sidepanel/components/groups/GroupCollections.tsx`
+- **Problem:** `GroupFilterToggle` hand-rolls a funnel glyph and
+  `GroupCollections` hand-rolls upload, refresh and pencil-rename glyphs, as
+  inline `<svg>`. None has a matching entry in the `Icon` registry, so the
+  polish pass could not convert them the way it converted
+  `GroupExportModal`'s warning triangle (`Icon type="alert"`) and
+  `BulkOperationsPanel`'s chevron. `GroupCollections`' four icon-buttons were
+  deliberately left as a matched set rather than swapping only the one with
+  an exact registry match (`trash`), because mixing one `Icon`-sized glyph
+  into a row of custom-sized SVGs is visibly inconsistent.
+- **Done when:** `funnel`, `upload`, `refresh-cw` (or an agreed name) and
+  `pencil` exist in the `Icon` registry with stories; both files render them
+  through `Icon` at a registry size; no inline `<svg>` remains in either.
+- **Risk:** Low — the glyphs are decorative, both call sites already carry
+  their own `aria-label`.
+
+### I-022 · A spacing role for the toolbar cluster, or a documented refusal
+
+- **Category:** architecture
+- **Priority:** P3
+- **Size:** S
+- **Verified:** 2026-08-28
+- **Files:** `src/sidepanel/tailwind.css`,
+  `docs/adr/0048-spacing-roles-and-derived-density.md`,
+  `src/sidepanel/components/GroupsTab.tsx`, `src/sidepanel/components/AppsTab.tsx`,
+  `src/sidepanel/components/AuthPoliciesTab.tsx`
+- **Problem:** ADR-0048's six roles have no name for the gap inside a toolbar
+  cluster — search field + filter toggle + filter panel + selection bar. It
+  is not chips (`--sp-inline`), not form controls (`--sp-field`), not a card
+  interior (`--sp-card`), and calling it `--sp-rung` would erase the
+  deliberate distinction between the tighter toolbar zone and the roomier
+  card stack below it. Three tab roots therefore keep a raw `space-y-3` /
+  `space-y-2` with an inline comment explaining why, which is exactly the
+  per-component prose the ADR set out to eliminate — just honestly labelled.
+- **Done when:** either a seventh role exists (values across the three
+  density scopes, ADR amended, the three call sites converted), or ADR-0048
+  gains a short section stating that toolbar rhythm is deliberately outside
+  the role system and why, so the raw values stop reading as unfinished work.
+- **Risk:** Low — either outcome is additive or documentation-only.
+
+### I-023 · PolicyCard's header is not click-to-toggle like its siblings
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Verified:** 2026-08-28
+- **Files:** `src/sidepanel/components/policies/PolicyCard.tsx`
+- **Problem:** `AppListItem` and `RuleCard` both make the whole card header a
+  click target that toggles the disclosure. `PolicyCard` only toggles via its
+  trailing `IconButton`, so the same gesture that opens an app or a rule does
+  nothing on a policy. Pre-dates the polish pass; noticed while adding press
+  feedback, and deliberately not fixed there because it is a behaviour change
+  rather than a motion change.
+- **Done when:** `PolicyCard`'s header toggles on click the way
+  `AppListItem`'s does, keyboard-operable, with the trailing `IconButton`
+  either kept as a redundant affordance or removed — and the story covers
+  both the header click and the keyboard path.
+- **Risk:** Low — one component, existing pattern to copy from two siblings.
+
+### I-024 · Org-snapshot findings say "of 1 applications"
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Verified:** 2026-08-28
+- **Files:** `src/sidepanel/hooks/useOrgFigures.ts:186-187,209,226`,
+  `src/sidepanel/components/home/OrgSnapshotCard.tsx`
+- **Problem:** Each finding renders `of {count} {noun}` where `noun` is a
+  hardcoded plural (`'applications'`, `'group rules'`, `'groups'`), so a
+  single-item denominator reads "of 1 applications" and "of 1 group rules".
+  Visible on the Home tab, which is the panel's landing surface and the first
+  thing an admin sees — spotted by screenshotting it at 360px during the
+  ADR-0048 polish pass, not by any test.
+- **Done when:** the denominator pluralises on its count. Check whether a
+  pluralisation helper already exists before adding one — several surfaces
+  (`'N Policy/Policies'` in `AuthPoliciesTab`, the member counts in
+  `groupIdentity`) already solve this locally, and a fourth private
+  implementation is the drift `Eyebrow` and `ListRow` exist to prevent.
+- **Risk:** Low — display string only, no API or cache behaviour. Note
+  `useOrgFigures.test.tsx:130-131` asserts the current plural nouns and will
+  need retargeting to the new contract.

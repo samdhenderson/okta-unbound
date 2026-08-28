@@ -228,21 +228,22 @@ describe('UsersTab sub-navigation', () => {
 
     // Three regions now — search, detail, comparison — but the contract is
     // unchanged: they are laid out by the page rather than portalled over it, so
-    // all three are siblings inside the tab's own `max-w-7xl` content container
-    // and inherit its gutters and max width.
-    expect(view.parentElement).toHaveClass('max-w-7xl', 'mx-auto', 'px-6', 'py-6');
+    // all three are siblings inside the tab's own content container and inherit
+    // its gutters and max width. The container's own classes are a spacing-role
+    // recipe (ADR-0048), not something this test pins (ADR-0023) — siblinghood is
+    // the actual contract, asserted below.
     expect(detail.parentElement).toBe(view.parentElement);
     expect(detail).toContainElement(screen.getByRole('button', { name: /Compare/ }));
 
     // A region away carries `hidden` and NOTHING else. The class has to be swapped
     // wholesale: `hidden` alongside a layout class does not out-specify it.
-    expect(detail.className).toBe('space-y-6 focus:outline-none');
+    expect(detail.className).toBe('space-y-(--sp-rung) focus:outline-none');
     expect(view.className).toBe('hidden');
 
     await pushCompare(uev);
 
     expect(detail.className).toBe('hidden');
-    expect(view.className).toBe('space-y-6 focus:outline-none');
+    expect(view.className).toBe('space-y-(--sp-rung) focus:outline-none');
   });
 
   it('renders a breadcrumb trail back to the profile', async () => {

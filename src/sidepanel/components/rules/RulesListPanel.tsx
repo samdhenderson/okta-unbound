@@ -93,7 +93,7 @@ const RulesListPanel: React.FC<RulesListPanelProps> = ({
         }
       >
         {filteredRules.length > 0 && (
-          <div ref={setStaggerRef} className="space-y-3 rise-in-stagger">
+          <div ref={setStaggerRef} className="space-y-(--sp-rung) rise-in-stagger">
             {filteredRules.map((rule) => (
               <div key={rule.id} data-rule-id={rule.id}>
                 <RuleCard

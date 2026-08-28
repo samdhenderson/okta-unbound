@@ -44,21 +44,31 @@ describe('groupIdentity', () => {
     ['OKTA_GROUP', 'Okta group', 'primary'],
     ['APP_GROUP', 'App group', 'warning'],
     ['BUILT_IN', 'Built-in', 'neutral'],
-  ] as const)('badges a %s as "%s"', (type, text, variant) => {
-    expect(groupIdentity(makeGroup({ type })).badge).toEqual({ text, variant });
+  ] as const)('demotes a %s to a "%s" status fact rather than a badge', (type, text, variant) => {
+    // None of the three group types is `danger`, so the header's loud trailing badge is
+    // never used for a group today — the type mark lives in the identity row instead.
+    const identity = groupIdentity(makeGroup({ type }));
+
+    expect(identity.badge).toBeUndefined();
+    expect(identity.rows[0]).toContainEqual({ kind: 'status', variant, text });
   });
 
-  it('falls back to the built-in badge for a group type Okta added after this map', () => {
+  it('falls back to the built-in status fact for a group type Okta added after this map', () => {
     // The union is widened by the zod boundary before this map learns the new member, so
-    // the lookup has to survive a miss rather than emit `undefined` into the header.
-    expect(groupIdentity(makeGroup({ type: 'DIRECTORY_GROUP' as GroupType })).badge).toEqual({
-      text: 'Built-in',
+    // the lookup has to survive a miss rather than dropping the fact from the header.
+    const identity = groupIdentity(makeGroup({ type: 'DIRECTORY_GROUP' as GroupType }));
+
+    expect(identity.badge).toBeUndefined();
+    expect(identity.rows[0]).toContainEqual({
+      kind: 'status',
       variant: 'neutral',
+      text: 'Built-in',
     });
   });
 
-  it('opens with the copyable group id', () => {
+  it('opens with the type status fact, then the copyable group id', () => {
     expect(rowsOf(makeGroup()).identity).toEqual([
+      { kind: 'status', variant: 'primary', text: 'Okta group' },
       { kind: 'id', value: '00gFAKE1a2b3c4d5e6', copyLabel: 'Copy group id' },
     ]);
   });

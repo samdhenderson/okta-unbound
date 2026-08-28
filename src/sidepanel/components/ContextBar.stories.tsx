@@ -16,8 +16,8 @@ const meta = {
     docs: {
       description: {
         component:
-          'Slim, merged context header: app wordmark + entity identity + connection + refresh + pin.\n\n' +
-          'Shows the `Okta Unbound · {pageType}` eyebrow, a connection dot, the detected entity name and (copyable) id, and the two global context controls. Notable states: resolving (`Loading`), a connection/context failure with a reload-tab affordance (`ErrorState`), pinned to the current entity (`Pinned`), and pinned-but-the-live-tab-moved (`PinnedLiveChanged`). Presentational — pin/refresh behaviour and the live-vs-pinned comparison are owned by the caller (App).\n\n' +
+          'One line of top chrome: what the live Okta tab is on, plus Refresh and Pin.\n\n' +
+          "One line of chrome: a hue-coded connection dot, the live tab's entity name, and the two global context controls. It sits outside the panel's scroller and is therefore always on screen, which is why it carries no wordmark, no id chip and no *Pinned* badge — see the module note for what each of those was cut for. Notable states: resolving (`Loading`), a connection/context failure with a reload-tab affordance (`ErrorState`), pinned to the current entity (`Pinned`), and pinned-but-the-live-tab-moved (`PinnedLiveChanged`). Presentational — pin/refresh behaviour and the live-vs-pinned comparison are owned by the caller (App).\n\n" +
           '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs), ' +
           '[Shared utilities](?path=/docs/internals-shared-utilities--docs)',
       },
@@ -26,9 +26,6 @@ const meta = {
   argTypes: {
     pageType: { description: 'Detected page type; drives the label fallback and dot colour.' },
     entityName: { description: 'Display name of the detected (or pinned) entity, if resolved.' },
-    entityId: {
-      description: 'Okta id of the detected (or pinned) entity; gates the id chip + copy.',
-    },
     connectionStatus: { description: 'Connection state to the Okta tab.' },
     isLoading: { description: 'Whether page context is still resolving.' },
     error: { description: 'Connection/context error message, or `null` when healthy.' },
@@ -52,7 +49,6 @@ const meta = {
   args: {
     pageType: 'group',
     entityName: 'Engineering Team',
-    entityId: '00g1abcd2345EFGH6789',
     connectionStatus: 'connected',
     isLoading: false,
     error: null,
@@ -75,7 +71,6 @@ export const UserPage: Story = {
   args: {
     pageType: 'user',
     entityName: 'Jordan Rivera',
-    entityId: '00u9zyxw8765MNOP4321',
   },
 };
 
@@ -107,7 +102,6 @@ export const NotPinnable: Story = {
   args: {
     pageType: 'admin',
     entityName: undefined,
-    entityId: undefined,
     canPin: false,
   },
 };
@@ -118,7 +112,6 @@ export const Loading: Story = {
     isLoading: true,
     connectionStatus: 'connecting',
     entityName: undefined,
-    entityId: undefined,
     canPin: false,
   },
 };
@@ -127,7 +120,6 @@ export const Loading: Story = {
 export const ErrorState: Story = {
   args: {
     entityName: undefined,
-    entityId: undefined,
     error: 'Can’t reach the Okta tab — reload it to reconnect.',
     canPin: false,
   },

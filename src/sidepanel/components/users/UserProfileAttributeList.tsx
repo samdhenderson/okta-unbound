@@ -70,7 +70,15 @@ export interface UserProfileAttributeListProps {
   cells?: Readonly<Record<string, AttributeEditCell>>;
 }
 
-/** Outer list box: the gap between fields, and the grid track in `grid`. */
+/**
+ * Outer list box: the gap between fields, and the grid track in `grid`.
+ *
+ * Deliberately **not** an ADR-0048 role. `rows` vs. `compact` is a content-density
+ * choice the admin makes in `ProfileDisplayCategoriesTab` — same standing as
+ * `ListRow`'s own `density` prop, which the ADR says must not run in parallel with
+ * the viewport-driven scale. Collapsing `space-y-2`/`space-y-1` onto one role would
+ * erase the one distinction this lookup exists to keep.
+ */
 const listClasses: Record<ProfileAttributeLayout, string> = {
   rows: 'space-y-2',
   compact: 'space-y-1',
@@ -98,11 +106,16 @@ const labelClasses: Record<ProfileAttributeLayout, string> = {
   grid: 'block mb-1',
 };
 
-/** The value cell — also the flex line the rules chip shares with the value. */
+/**
+ * The value cell — also the flex line the rules chip shares with the value.
+ * One gap for all three layouts (unlike {@link listClasses}/{@link fieldClasses},
+ * which vary by content density on purpose): a value-to-chip pairing is the
+ * "chips, pills, icons" role regardless of which layout is chosen.
+ */
 const valueClasses: Record<ProfileAttributeLayout, string> = {
-  rows: 'min-w-0 flex-1 flex flex-wrap items-center gap-2',
-  compact: 'min-w-0 flex-1 flex flex-wrap items-center gap-2',
-  grid: 'flex flex-wrap items-center gap-2',
+  rows: 'min-w-0 flex-1 flex flex-wrap items-center gap-(--sp-inline)',
+  compact: 'min-w-0 flex-1 flex flex-wrap items-center gap-(--sp-inline)',
+  grid: 'flex flex-wrap items-center gap-(--sp-inline)',
 };
 
 /** The field-label type recipe from the design system, label-above-value form. */

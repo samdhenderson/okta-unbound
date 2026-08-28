@@ -63,6 +63,26 @@ export const WithTitle: Story = {
   args: { active: false, title: 'Click to toggle filter' },
 };
 
+/**
+ * Focus-visible state (forced via the pseudo-states addon). Previously missing
+ * entirely — `FilterPill` now carries the same ring `Button`/`IconButton` do
+ * (ADR-0046).
+ */
+export const Focus: Story = {
+  args: { active: false },
+  parameters: { pseudo: { focusVisible: true } },
+};
+
+/**
+ * Pressed state (forced via the pseudo-states addon): `.press`'s `scale(.955)`
+ * depress plus `active:brightness-90` (ADR-0046) — previously this pill had no
+ * duration token at all on its colour transition, let alone a press state.
+ */
+export const Pressed: Story = {
+  args: { active: true },
+  parameters: { pseudo: { active: true } },
+};
+
 /** Two pills side by side showing active/inactive pair. */
 export const ActiveInactivePair: Story = {
   args: { active: false },
@@ -82,10 +102,4 @@ export const ActiveInactivePair: Story = {
 export const Hover: Story = {
   args: { active: false },
   parameters: { pseudo: { hover: true } },
-};
-
-/** Focus-visible state (forced via the pseudo-states addon). */
-export const Focus: Story = {
-  args: { active: false },
-  parameters: { pseudo: { focusVisible: true } },
 };

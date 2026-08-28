@@ -106,8 +106,9 @@ const MetaLine: React.FC<{ label: string; value: string }> = ({ label, value }) 
 /**
  * One rule's effect, as a bordered `<li>`.
  *
- * Sits in a `space-y-3` list (ADR-0029's default separator pattern), so the row
- * owns its own border and adds no divider of its own.
+ * Sits in a `space-y-(--sp-rung)` list (ADR-0029's default separator pattern,
+ * spaced through the ADR-0048 role), so the row owns its own border and adds no
+ * divider of its own.
  *
  * @param props - See {@link BlastRadiusRuleRowProps}.
  */
@@ -123,7 +124,7 @@ const BlastRadiusRuleRow: React.FC<BlastRadiusRuleRowProps> = ({ effect }) => {
   return (
     <ListRow as="li" density="compact">
       <div className="flex min-w-0 flex-col gap-1">
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-(--sp-inline)">
           {presentation.icon && (
             // The badge beside it already says the direction in words.
             <Icon

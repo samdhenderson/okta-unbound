@@ -1,10 +1,11 @@
 /**
  * @module sidepanel/components/groups/GroupsListPanel
- * @description The scrollable, windowed groups list plus its mode-specific empty states.
+ * @description The windowed groups list plus its mode-specific empty states.
  *
  * Renders one {@link GroupListItem} per visible filtered group inside a shared
- * ScrollableList, and picks the appropriate empty state for live-search vs
- * cached-with-filters. Only the first `visibleCount` rows are mounted (the same
+ * `ScrollableList` — in its `scrolls={false}` mode, so the rows scroll the panel's
+ * one scroller rather than a box of their own (ADR-0051 §5) — and picks the
+ * appropriate empty state for live-search vs cached-with-filters. Only the first `visibleCount` rows are mounted (the same
  * incremental-window pattern as the member explorer's MemberList), growing via a
  * "Load more" footer and an IntersectionObserver sentinel so a 5000-group org
  * does not mount 5000 rich rows at once.
@@ -60,9 +61,9 @@ interface GroupsListPanelProps {
   /** Group id to highlight (deep-link target from the Rules tab). */
   highlightedGroupId?: string;
   /**
-   * Optional ref on the list's scroll container, so the tab shell can preserve
-   * `scrollTop` while the list is hidden behind a pushed detail view — see
-   * {@link sidepanel/hooks/useScrollPreservation.useScrollPreservation}.
+   * Optional ref on the list's box. No longer a scroll container — the rung gave
+   * that up so its strip could dock — but still handed down so a caller can find
+   * the rows' box without a query.
    */
   scrollRef?: React.Ref<HTMLDivElement>;
 }
@@ -159,7 +160,12 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
         skeleton={
           <Skeleton variant="row" size="sm" count={6} label="Loading groups from Okta..." />
         }
-        className="mt-4"
+        className="mt-(--sp-rung)"
+        /* The rung scrolls the panel's one scroller now, so this list is not a
+           scroll box of its own — that is what lets the strip above it dock and
+           merge like every other `ActionBar` (ADR-0051 §5). */
+        scrolls={false}
+        fillAvailable={false}
         scrollRef={scrollRef}
         emptyState={
           searchMode === 'live' && liveSearchQuery.trim() && !isLiveSearching ? (
@@ -192,7 +198,7 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
           swaps most keys, so that case intentionally re-enters as a fresh rise-in.
         */}
         {visibleGroups.length > 0 && (
-          <div ref={setStaggerRef} className="rise-in-stagger space-y-3">
+          <div ref={setStaggerRef} className="rise-in-stagger space-y-(--sp-rung)">
             {visibleGroups.map((group) => (
               <GroupListItem
                 key={group.id}
@@ -211,7 +217,7 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
       </ScrollableList>
 
       {hasMore && (
-        <div className="shrink-0 flex items-center justify-between pt-3 text-xs text-neutral-500">
+        <div className="shrink-0 flex items-center justify-between pt-(--sp-rung) text-xs text-neutral-500">
           <span>
             Showing {visibleGroups.length.toLocaleString()} of{' '}
             {filteredGroups.length.toLocaleString()}

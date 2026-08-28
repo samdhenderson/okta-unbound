@@ -23,6 +23,13 @@
  * Security: group names, rule names, user names, attribute names and attribute
  * values in this metadata are all tenant PII, rendered through React's escaping.
  * This component logs nothing.
+ *
+ * The disclosure toggle and Undo both carry `.press` (ADR-0046) directly —
+ * this row's `ListRow` has no `onHeaderClick` of its own (the description
+ * text isn't itself a control), so the two real controls are where the
+ * response has to live. Disclosure-body padding and the badge run consume
+ * the `--sp-row-x`/`--sp-row-y`/`--sp-inline` roles (ADR-0048), matching the
+ * row's own `compact` density rather than a card's.
  */
 import React, { useId } from 'react';
 import { Badge, Button, IconButton, ListRow } from './shared';
@@ -201,7 +208,7 @@ const AuditLogRow: React.FC<AuditLogRowProps> = ({
           inert={!isExpanded || undefined}
         >
           <div>
-            <div className="space-y-2 border-t border-neutral-200 px-3 pb-3 pt-2">
+            <div className="space-y-2 border-t border-neutral-200 px-(--sp-row-x) pb-(--sp-row-y) pt-2">
               {detailRows(action).map(([label, value]) => (
                 <DetailRow key={label} label={label} value={value} />
               ))}
@@ -227,10 +234,10 @@ const AuditLogRow: React.FC<AuditLogRowProps> = ({
         </div>
       }
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-(--sp-inline)">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-neutral-900">{action.description}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
+          <div className="mt-1 flex flex-wrap items-center gap-(--sp-inline)">
             <Badge>{TYPE_LABEL[action.type]}</Badge>
             {statusBadge && <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>}
             <span className="text-xs text-neutral-500">{formatActionTime(action.timestamp)}</span>

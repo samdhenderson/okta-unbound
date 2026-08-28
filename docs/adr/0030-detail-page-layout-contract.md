@@ -100,9 +100,11 @@ magic offset.
 > **Amended by [ADR-0032](./0032-the-sticky-stack-and-a-header-that-owns-identity.md).**
 > The deferral is resolved, but not by a shared container or a magic offset: each band
 > publishes its measured height as a CSS custom property and the band below consumes it.
-> `ActionBar` now parks at `calc(var(--rail-h,0px) + var(--header-h,0px))`, which also fixes
-> a pre-existing overlap — the strip and the rail were both `sticky top-0` in one scroller,
-> and the rail's `z-40` beat the strip's `z-10`.
+> `ActionBar` now parks at `var(--header-h,0px)`, which also fixes a pre-existing overlap —
+> the strip and the rail were both `sticky top-0` in one scroller, and the rail's `z-40`
+> beat the strip's `z-10`. (That offset was `calc(var(--rail-h,0px) + var(--header-h,0px))`
+> until [ADR-0050](./0050-the-chrome-leaves-the-scroller.md) moved the rail out of the
+> scroller, at which point the rail's term became structural and the variable went away.)
 
 ### 4. Cross-entity navigation is a context, not a prop
 

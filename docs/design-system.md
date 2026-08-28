@@ -35,10 +35,23 @@ Native-Okta model: a **gray canvas** with **white cards** floating on it.
 
 - `canvas` (`#f4f4f4`) — the page backdrop; applied once on the app shell (`App.tsx`).
   Never put content directly on it without a card.
-- Content cards / panels: `bg-white` + a **1px `border-neutral-200` border**. Elevation
-  comes from the border alone — **no drop shadow on cards** (Okta doesn't shadow them).
-  Hover feedback on interactive cards is a border shift (`hover:border-neutral-300`),
-  not a shadow.
+- **Static** content cards / panels: `bg-white` + a **1px `border-neutral-200` border**.
+  Elevation comes from the border alone — **no drop shadow on a card you cannot click**.
+  The reason is density, not orthodoxy: this panel stacks cards at 360px and a shadow on
+  every surface turns the stack to noise.
+
+  Note the rule used to be justified with "Okta doesn't shadow them." That is false —
+  Odyssey's `Card` ships `DepthMedium` at rest and deepens to `DepthHigh` on
+  `.isClickable:hover`. ADR-0047 corrects the premise and narrows the rule to static
+  cards; do not cite Odyssey when rejecting a card shadow.
+
+- **Interactive** cards — a card that is itself a click target — may carry a hover
+  elevation via the `.lift` class, which cross-fades `--lift-1` (Odyssey's `DepthLow`).
+  It cross-fades a pre-painted `::after` rather than transitioning `box-shadow`, because
+  animating a shadow repaints and animating an opacity composites — Odyssey's own
+  technique in `labs/AppTile`. It carries no `translateY`, so it never collides with
+  `.press`'s transform. A border shift (`hover:border-neutral-300`) remains fine and is
+  still the right choice for a row.
 - Shadows are reserved for **true overlays** that lift above the canvas — the `Modal`
   and dropdowns/popovers. The fixed `ActivityBar` sits on a top border, not a shadow.
   There is exactly **one** exception, and it is deliberately narrow: a sticky `ActionBar`
@@ -123,12 +136,38 @@ stop.
 
 ## Spacing
 
-Use the Tailwind scale. Dominant, preferred values: padding `p-3`/`px-4 py-2`,
-gaps `gap-2`/`gap-3`, radius `rounded-md`. Avoid one-off values (`px-2.5`,
-`py-0.5`, `px-5`) — snap to the scale. Component sizing goes through the size
-props, not ad-hoc padding. The scale is `sm|md|lg` for most primitives; `Icon`
-(`xs`…`xl`) and `LoadingSpinner` (`sm`…`2xl`) carry extra steps and share size names
-with each other — see `docs/components.md`.
+**Consume a role, never a raw step** (ADR-0048). Six semantic roles resolve against the
+panel's measured width, so the same class gets tighter at 360px and roomier at 720px
+without a prop, a setting, or a second code path:
+
+| Token                       | Role                        | Consume as            |
+| --------------------------- | --------------------------- | --------------------- |
+| `--sp-gutter`               | Panel horizontal padding    | `px-(--sp-gutter)`    |
+| `--sp-rung`                 | Gap between stacked cards   | `space-y-(--sp-rung)` |
+| `--sp-card`                 | Inside a `DetailSection`    | `p-(--sp-card)`       |
+| `--sp-row-y` / `--sp-row-x` | `ListRow` padding           | `py-(--sp-row-y)`     |
+| `--sp-inline`               | Between chips, pills, icons | `gap-(--sp-inline)`   |
+| `--sp-field`                | Between form controls       | `gap-(--sp-field)`    |
+
+`--sp-gutter` covers both axes — a tab root is `px-(--sp-gutter) py-(--sp-gutter)`.
+There is no separate vertical role; `gutter` and `card` resolve to the same value at
+every density, so a fourth would render identically and only invite disagreement.
+
+Three density scopes — `compact` below 400px, `default` 400–559, `comfortable` at 560+.
+**Density is derived from panel width, never chosen**, and it changes space only: type
+never scales. `[data-density='…']` pins a scope for a story or a test and wins over the
+width query.
+
+A raw `p-4` on a card is a defect the same way a raw `150ms` is (ADR-0027). Radius is
+still `rounded-md`. Component sizing goes through the size props, not ad-hoc padding:
+`sm|md|lg` for most primitives, with `Icon` (`xs`…`xl`) and `LoadingSpinner`
+(`sm`…`2xl`) carrying extra steps and sharing size names with each other — see
+`docs/components.md`.
+
+This replaces the old advice ("use the Tailwind scale, avoid one-off values"), which was
+the best available before a system existed. It is not the best available now: eight tab
+roots had independently hand-copied `px-6 py-6 space-y-6`, and `space-y-3` appeared 74
+times, because prose cannot enforce agreement.
 
 ## List rows
 

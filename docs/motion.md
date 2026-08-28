@@ -31,22 +31,56 @@ literal appearing in a diff is a regression rather than legacy debt.
 
 ## Durations
 
-| Token           | Value | Use for                                                     |
-| --------------- | ----- | ----------------------------------------------------------- |
-| `--dur-instant` | 80ms  | colour / opacity / focus rings / border shifts              |
-| `--dur-quick`   | 140ms | small transforms — chevrons, pills, modal exit              |
-| `--dur-move`    | 220ms | things arriving or leaving — rows, modal enter, popovers    |
-| `--dur-travel`  | 320ms | panel-crossing — drawer, view push/pop                      |
-| `--dur-tell`    | 500ms | deliberately noticeable — count-up, success flash, progress |
+| Token           | Value | Use for                                                      |
+| --------------- | ----- | ------------------------------------------------------------ |
+| `--dur-press`   | 60ms  | the depress on a pointer-down — below perception, on purpose |
+| `--dur-instant` | 80ms  | colour / opacity / focus rings / border shifts               |
+| `--dur-quick`   | 140ms | small transforms — chevrons, pills, modal exit               |
+| `--dur-move`    | 220ms | things arriving or leaving — rows, modal enter, popovers     |
+| `--dur-travel`  | 320ms | panel-crossing — drawer, view push/pop                       |
+| `--dur-tell`    | 500ms | deliberately noticeable — count-up, success flash, progress  |
 
 ## Easings
 
-| Token             | Curve                            | Use for                                               |
-| ----------------- | -------------------------------- | ----------------------------------------------------- |
-| `--ease-standard` | `cubic-bezier(0.2, 0, 0, 1)`     | the workhorse                                         |
-| `--ease-entrance` | `cubic-bezier(0, 0, 0, 1)`       | arriving                                              |
-| `--ease-exit`     | `cubic-bezier(0.3, 0, 1, 1)`     | leaving — always one step faster than entrance        |
-| `--ease-affirm`   | `cubic-bezier(0.2, 1.3, 0.4, 1)` | **confirmation only** — the one curve that overshoots |
+| Token             | Curve                             | Use for                                               |
+| ----------------- | --------------------------------- | ----------------------------------------------------- |
+| `--ease-standard` | `cubic-bezier(0.2, 0, 0, 1)`      | the workhorse                                         |
+| `--ease-entrance` | `cubic-bezier(0, 0, 0, 1)`        | arriving                                              |
+| `--ease-exit`     | `cubic-bezier(0.3, 0, 1, 1)`      | leaving — always one step faster than entrance        |
+| `--ease-affirm`   | `cubic-bezier(0.2, 1.3, 0.4, 1)`  | **confirmation only** — the one curve that overshoots |
+| `--ease-press`    | `cubic-bezier(0.2, 0, 0.1, 1)`    | the depress — front-loaded, no overshoot              |
+| `--ease-glide`    | `cubic-bezier(0.3, 1.12, 0.5, 1)` | the rail indicator's slide — a gentler overshoot      |
+
+## Arrival and response
+
+This document was, for a long time, about **arrival** — things entering and leaving.
+That is one half of motion. The other half is **response**: what the interface does the
+instant you touch something, before any work has finished. ADR-0046 added it.
+
+| Behaviour           | How                                                 | Where                                        |
+| ------------------- | --------------------------------------------------- | -------------------------------------------- |
+| Press               | `.press` / `.press-subtle`                          | every clickable surface                      |
+| Optimistic commit   | `animate-affirm-flash` via `ListRow`'s `flash` prop | a row that changed on click, not on response |
+| Values that changed | `useCountUp` + a `--dur-tell` tint                  | a refreshed count                            |
+| Coordinated cascade | `useStaggerReveal`                                  | a list or card stack arriving                |
+
+`.press` scales to `--press-scale` (0.955, or 0.995 via `.press-subtle` on wide targets)
+over `--dur-press`/`--ease-press`, and releases over `--dur-quick`/`--ease-affirm`. That
+asymmetry is the effect: instant down, eased back up.
+
+Press also carries a **colour** step — an `active:` background one stop darker than
+hover. That half is Odyssey's own specification (`hover → PalettePrimaryDark`,
+`active → PalettePrimaryDarker`) which this panel had simply never implemented; the scale
+is our addition on top. Keeping both matters under reduced motion, where the transform
+collapses and the colour step is the only press feedback left.
+
+### The rule that keeps response motion from becoming decoration
+
+Response motion is allowed to be expressive **precisely because it is caused by the
+user's own input** — it cannot surprise them and cannot fire while they are reading.
+Enthusiasm on the input side, restraint on the ambient side. A change that animates
+without the user having done something is not part of this layer and does not get to
+borrow its permission.
 
 ## Four rules
 
@@ -195,9 +229,11 @@ failure mode looks like a styling choice rather than a bug.
 
 .dock-sentinel {
   view-timeline: --dock-progress block;
-  /* the bands already parked at the top, less the rung margin between sentinel
-     and band — so `cover 100%` is exactly the docking line */
-  view-timeline-inset: calc(var(--rail-h, 0px) + var(--header-h, 0px) - var(--dock-offset, 0px)) 0px;
+  /* the band already parked at the top, less the rung margin between sentinel
+     and band — so `cover 100%` is exactly the docking line. The tab rail is not in
+     this sum: it sits outside the scroller, so the scrollport starts below it
+     already (ADR-0050). */
+  view-timeline-inset: calc(var(--header-h, 0px) - var(--dock-offset, 0px)) 0px;
 }
 
 :has(> .dock-sentinel) > .dock-band::before {

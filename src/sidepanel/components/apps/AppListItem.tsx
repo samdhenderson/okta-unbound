@@ -72,7 +72,7 @@ const AssignmentCounts: React.FC<{
   }
 
   return (
-    <div className="flex flex-wrap gap-2 text-xs">
+    <div className="flex flex-wrap gap-(--sp-inline) text-xs">
       <span className="px-2 py-0.5 rounded-md font-medium bg-primary-light text-primary-text border border-primary-highlight">
         {data.users.toLocaleString()} user{data.users === 1 ? '' : 's'}
       </span>
@@ -150,15 +150,12 @@ const AppListItem: React.FC<AppListItemProps> = memo(
                     />
                   </div>
 
-                  {app.signOnMode && (
-                    <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
-                      <div className="text-xs font-medium text-neutral-600 mb-0.5">
-                        Sign-on mode
-                      </div>
-                      <div className="text-xs text-neutral-900">{app.signOnMode}</div>
-                    </div>
-                  )}
-
+                  {/*
+                    No "Sign-on mode" tile here: once expanded, the collapsed
+                    header's badge (below, still visible above this grid) already
+                    states it. Restating it in a tile would be the same fact twice
+                    on screen at once for zero new information.
+                  */}
                   {app.created && (
                     <div className="p-2 bg-neutral-50 rounded-md border border-neutral-200">
                       <div className="text-xs font-medium text-neutral-600 mb-0.5">Created</div>
@@ -199,14 +196,14 @@ const AppListItem: React.FC<AppListItemProps> = memo(
             adjacent Expand/Collapse `IconButton`, and giving the row itself one
             means a `StretchedButton` overlay. Deliberately out of scope here.
           */}
-          <div className="flex-1 min-w-0 cursor-pointer" onClick={toggleExpanded}>
+          <div className="press-subtle flex-1 min-w-0 cursor-pointer" onClick={toggleExpanded}>
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-semibold text-neutral-900 truncate group-hover/item:text-primary-text transition-colors duration-(--dur-instant)">
                   {label}
                 </h3>
 
-                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                <div className="flex flex-wrap items-center gap-(--sp-inline) mt-1.5">
                   <span
                     className={`px-2 py-0.5 rounded-md text-xs font-medium border ${STATUS_BADGE[appStatusVariant(app.status)]}`}
                   >

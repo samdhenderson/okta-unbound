@@ -129,7 +129,7 @@ const GroupMembershipRow: React.FC<GroupMembershipRowProps> = ({
           inert={!expanded || undefined}
         >
           <div>
-            <div className="space-y-3 border-t border-neutral-200 px-3 pb-3 pt-2">
+            <div className="space-y-(--sp-rung) border-t border-neutral-200 px-(--sp-row-x) pb-3 pt-2">
               {/* 1. The caveat in full — the collapsed row only had room for its first clause. */}
               <p className="text-xs text-pretty text-neutral-600">{line.description}</p>
 
@@ -175,7 +175,7 @@ const GroupMembershipRow: React.FC<GroupMembershipRowProps> = ({
         </div>
       }
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-(--sp-inline)">
         <div className="min-w-0 flex-1">
           {/*
             Name, then verdict, then "On page" — the same order the other two
@@ -191,7 +191,7 @@ const GroupMembershipRow: React.FC<GroupMembershipRowProps> = ({
             characters. The `<h4>` keeps `truncate` so a single unbroken token
             still clips instead of overflowing the card.
           */}
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-(--sp-inline)">
             <h4 className="truncate text-sm font-semibold text-neutral-900">{groupName}</h4>
             <Badge variant={verdict.variant} title={verdict.title} className="shrink-0">
               {verdict.label}

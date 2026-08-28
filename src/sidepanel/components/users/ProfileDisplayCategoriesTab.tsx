@@ -141,10 +141,10 @@ const ProfileDisplayCategoriesTab: React.FC<ProfileDisplayCategoriesTabProps> = 
   };
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-(--sp-rung)">
       <section className="flex flex-col gap-2">
         <Eyebrow>Layout</Eyebrow>
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Layout">
+        <div className="flex flex-wrap gap-(--sp-inline)" role="group" aria-label="Layout">
           {LAYOUT_OPTIONS.map((option) => (
             <FilterPill
               key={option.value}
@@ -156,7 +156,7 @@ const ProfileDisplayCategoriesTab: React.FC<ProfileDisplayCategoriesTabProps> = 
           ))}
         </div>
 
-        <div className="mt-1 flex flex-col gap-2">
+        <div className="mt-1 flex flex-col gap-(--sp-field)">
           <Checkbox
             checked={config.showApiNames}
             onChange={(showApiNames) => onChange({ showApiNames })}
@@ -189,7 +189,7 @@ const ProfileDisplayCategoriesTab: React.FC<ProfileDisplayCategoriesTabProps> = 
 
         <div className="flex flex-col gap-2">
           {config.categories.map((category, index) => (
-            <div key={category.key} className="flex min-w-0 items-center gap-2">
+            <div key={category.key} className="flex min-w-0 items-center gap-(--sp-inline)">
               <div className="min-w-0 flex-1">
                 <Input
                   size="sm"
@@ -228,7 +228,7 @@ const ProfileDisplayCategoriesTab: React.FC<ProfileDisplayCategoriesTabProps> = 
             </div>
           ))}
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-(--sp-field)">
             <div className="min-w-0 flex-1">
               <Input
                 size="sm"

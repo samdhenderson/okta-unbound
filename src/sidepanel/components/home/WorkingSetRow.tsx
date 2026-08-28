@@ -52,6 +52,11 @@ const WorkingSetRow: React.FC<WorkingSetRowProps> = ({ entry, onOpen, pinned, on
   const age = seen && seen !== 'today' ? ` · ${seen}` : '';
 
   return (
+    // No `.press` here: `StretchedButton` itself now carries the response
+    // layer's press feedback (ADR-0046) — a faint state-layer wash on its own
+    // `:active`, since the overlay is invisible and has no box to depress the
+    // way `ListRow`'s own `.press` scale assumes. `ListRow` deliberately
+    // excludes it for the same reason on any row activated this way.
     <ListRow density="compact" className="relative">
       <StretchedButton
         label={`Open ${KIND_LABEL[entry.kind].toLowerCase()}`}

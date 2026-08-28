@@ -56,7 +56,7 @@ const MergeClusterRow: React.FC<{
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          className="press-subtle flex min-w-0 flex-1 items-center gap-2 text-left"
         >
           <svg
             className={`h-3.5 w-3.5 shrink-0 text-neutral-400 transition-transform duration-(--dur-instant) ${
@@ -96,7 +96,7 @@ const MergeClusterRow: React.FC<{
                   key={rule.id}
                   className="flex items-center justify-between gap-2 rounded border border-neutral-100 px-2 py-1.5"
                 >
-                  <div className="flex min-w-0 items-center gap-2">
+                  <div className="flex min-w-0 items-center gap-(--sp-inline)">
                     <StatusPill status={rule.status} />
                     <span className="truncate text-sm text-neutral-800">{rule.name}</span>
                     <span className="shrink-0 text-xs text-neutral-400">
@@ -141,7 +141,7 @@ const RulesMergeBanner: React.FC<RulesMergeBannerProps> = ({ clusters, onMerge, 
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center gap-2 px-4 py-3 text-left"
+        className="press-subtle flex w-full items-center gap-2 px-4 py-3 text-left"
       >
         <svg
           className={`h-4 w-4 shrink-0 text-primary-text transition-transform duration-(--dur-instant) ${
@@ -169,12 +169,12 @@ const RulesMergeBanner: React.FC<RulesMergeBannerProps> = ({ clusters, onMerge, 
       </button>
 
       {open && (
-        <div className="space-y-3 px-4 pb-4">
+        <div className="space-y-(--sp-rung) px-(--sp-card) pb-(--sp-card)">
           <p className="text-xs text-neutral-600">
             Each set below shares an identical condition. Merging one folds its rules into a single
             rule carrying the union of their target groups — no change to who is matched.
           </p>
-          <ul className="space-y-2">
+          <ul className="space-y-(--sp-rung)">
             {clusters.map((cluster) => (
               <MergeClusterRow
                 key={cluster.expression}

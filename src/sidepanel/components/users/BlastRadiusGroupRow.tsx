@@ -156,8 +156,9 @@ function effectSentence(effect: GroupEffect): string {
 /**
  * One group's predicted effect, as a bordered `<li>`.
  *
- * Sits in a `space-y-3` list (ADR-0029's default separator pattern), so the row
- * owns its own border and adds no divider of its own.
+ * Sits in a `space-y-(--sp-rung)` list (ADR-0029's default separator pattern,
+ * spaced through the ADR-0048 role), so the row owns its own border and adds no
+ * divider of its own.
  *
  * @param props - See {@link BlastRadiusGroupRowProps}.
  */
@@ -186,7 +187,7 @@ const BlastRadiusGroupRow: React.FC<BlastRadiusGroupRowProps> = ({ effect }) => 
         </span>
 
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <span className="flex min-w-0 flex-wrap items-center gap-(--sp-inline)">
             <span className="min-w-0 text-sm font-semibold break-words text-neutral-900">
               {effect.groupName}
             </span>

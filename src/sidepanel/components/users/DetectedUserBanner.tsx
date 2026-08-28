@@ -49,7 +49,7 @@ const DetectedUserBanner: React.FC<DetectedUserBannerProps> = ({
   onDismiss,
 }) => {
   return (
-    <div className="px-3 py-2 bg-primary-light border border-primary-highlight rounded-md flex items-center gap-2">
+    <div className="px-(--sp-row-x) py-(--sp-row-y) bg-primary-light border border-primary-highlight rounded-md flex items-center gap-(--sp-inline)">
       <Eyebrow className="shrink-0">Open in admin</Eyebrow>
       <span className="min-w-0 flex-1 truncate text-sm text-neutral-700">
         <strong className="font-semibold text-neutral-900">{userInfo.userName}</strong>

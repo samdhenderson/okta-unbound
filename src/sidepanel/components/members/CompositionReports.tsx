@@ -93,7 +93,7 @@ const CompositionReports: React.FC<CompositionReportsProps> = ({
 
   return (
     <CollapsibleSection title="Composition" defaultOpen={false}>
-      <div className="space-y-3">
+      <div className="space-y-(--sp-rung)">
         <Tabs
           variant="segmented"
           tabs={tabs}
@@ -108,7 +108,7 @@ const CompositionReports: React.FC<CompositionReportsProps> = ({
               No profile attributes (department, title, location…) are populated for this group.
             </p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-(--sp-rung)">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs text-neutral-500">Click any value to filter the members.</p>
                 {attributes.length > SEARCH_THRESHOLD && (

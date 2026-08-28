@@ -51,7 +51,7 @@ const EntityPicker: React.FC<EntityPickerProps> = ({ descriptors, onSelect }) =>
               onSelect(descriptor.id);
             }
           }}
-          className="group flex items-start gap-4 bg-white rounded-md border border-neutral-200 p-5 cursor-pointer transition-all duration-(--dur-instant) hover:border-neutral-500 focus:outline-2 focus:outline-offset-2 focus:outline-primary"
+          className="group press-subtle flex items-start gap-4 bg-white rounded-md border border-neutral-200 p-(--sp-card) cursor-pointer hover:border-neutral-500 focus:outline-2 focus:outline-offset-2 focus:outline-primary"
         >
           <div className="inline-flex items-center justify-center w-10 h-10 rounded-md bg-primary-light text-primary-text shrink-0">
             <Icon type={descriptor.icon} size="md" />

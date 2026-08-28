@@ -45,6 +45,7 @@ info`) — never `error`.
 `shared/`: `Button`, `IconButton`, `StretchedButton`, `FilterPill`, `SortPill`,
 `CopyButton`, `CopyableId`, `OpenInOktaLink`, `Modal`, `Input`, `Checkbox`, `Select`,
 `Textarea`, `PageHeader`, `EntityIdentity`, `EntityLink`, `Badge`, `Breadcrumbs`, `Tabs`,
+`Tooltip`,
 `CollapsibleSection`, `DetailSection`, `ActionBar`, `AlertMessage`, `EmptyState`,
 `Eyebrow`, `LoadingSpinner`, `Skeleton`, `ListRow`, `ScrollableList`, `SearchDropdown`,
 `SelectionChips`.
@@ -91,7 +92,7 @@ drill-in.
 `tabindex`, arrow-key nav) with three variants: `underline` (section nav),
 `segmented` (compact toggle) and `rail` (icon-first primary nav).
 
-The **`rail`** variant is what `TabNavigation` uses for the panel's eight
+The **`rail`** variant is what `TabNavigation` uses for the panel's nine
 top-level sections. Inactive tabs are icon-only (`TabItem.icon`, an `IconType`);
 the active tab's label unfurls via `grid-template-columns: 0fr → 1fr` at
 `--dur-move`, so the strip never toggles `display` to make room. What still
@@ -103,6 +104,62 @@ tab's `count` badge is therefore _not_ in its accessible name; see the JSDoc on
 `TabItem.label` before adding counts to the rail.) The measurement behind the
 edge state, the scroll-active-into-view and the sliding indicator lives in
 `hooks/useTabRail.ts`, not the component.
+
+The rail's interaction states are read from Odyssey rather than invented. Active
+is `Tabs`' marking — a 2px `--color-primary` underline plus a
+`--color-primary-text` (`TypographyColorAction`) label at `font-semibold`
+(`TypographyWeightBodyBold`, 600) — and never a filled block, which is `SideNav`'s
+pattern and belongs to a vertical rail. The `--color-neutral-50` hover wash and
+the **inset** focus ring (`box-shadow: inset 0 0 0 2px` with `outline: none`,
+Odyssey's `theme.mixins.insetFocusRing`) are `SideNav`'s, and are identical across
+both Odyssey navigations. Note the rail's focus recipe is deliberately _not_ the
+outset `ring-2` the `underline` and `segmented` variants use — which is why the
+weight and focus classes live per-variant rather than in `Tabs`' shared base.
+
+The underline slide and the label unfurl are **sequenced, not simultaneous**. The
+labels' `grid-template-columns` transition carries a `--dur-move` delay, so the
+strip is held still for one `--dur-move` window while the underline travels on
+`--ease-glide`; only then do the outgoing and incoming labels cross over, and
+across that second window the indicator has no transition at all and is measured
+per frame. `useTabRail`'s `sliding` flag is the line between the two phases. This
+amends ADR-0028, which forbade transitioning the indicator outright — the reason
+it gave (an indicator chasing a growing label) is exactly what the sequence
+removes.
+
+The rail carries **no border of its own**, and neither does `ContextBar`: they are
+bands of one top-chrome slab, and the single rule that closes that slab lives on
+`TabNavigation`'s `<nav>` — the last band, so the edge sits where the slab meets the
+content. Neither band is sticky: the whole slab sits **outside** the panel's scroller
+(ADR-0050), so it holds still without needing to, and the scrollbar spans the content
+region only. `ContextBar` is one line for the same reason — a band that never scrolls
+away spends its height permanently.
+Separation inside the slab is spacing and type weight. The `underline` variant
+keeps its `border-b` — there the rule is the indicator's own track.
+
+`Tooltip` is the **hover- and focus-triggered label chip**, and the reason no new
+code should reach for a native `title=`: `title` cannot be styled, fires on an
+uncontrollable delay, and never appears for a keyboard user at all. It opens on
+hover **and** on focus after `--dur-hover-intent` (400ms, mirrored in JS as
+`HOVER_INTENT_MS` the way `useCountUp` mirrors `--dur-tell`), carries
+`role="tooltip"` wired to its trigger with `aria-describedby`, closes on Escape,
+blur, pointer-leave or any scroll that would move the trigger, and traps no focus.
+
+A tooltip **describes; it does not name.** An icon-only control still needs its own
+`aria-label` — the rail's tabs keep theirs, and the chip is additive on top. It also
+renders **no wrapper element**: the trigger comes from a render prop and the chip is
+portalled to `document.body`, which is what lets it sit inside a `role="tablist"`
+(an intervening `<span>` fails axe's `aria-required-children`) and inside a scroll
+container that would otherwise clip it.
+
+```tsx
+<Tooltip label="Groups">
+  {(trigger) => (
+    <button type="button" aria-label="Groups" {...trigger}>
+      <Icon type="users" />
+    </button>
+  )}
+</Tooltip>
+```
 
 `Breadcrumbs` is the trail primitive for **in-tab push/pop sub-navigation**
 (`nav > ol`, ancestor crumbs are buttons, the last carries `aria-current="page"`).
@@ -178,7 +235,7 @@ one to be the first to disappear.
   its `aria-controls` target, and renders the control only when the tier has content.
   Leave the tier uncontrolled unless the page has to collapse it on a rung change.
 
-**A detail page never calls `<ActionBar>` directly — it wraps it in its own
+**No page calls `<ActionBar>` directly — it wraps it in its own
 `<Entity>ActionBar`** (`UserActionBar` is the reference shape), even for a single
 action; the wrapper is where the page's second verb goes, and retrofitting one onto
 an inline call site later means finding and migrating it. The wrapper decides where
@@ -187,6 +244,18 @@ the row (`flex`, or `pinned` for the page's one primary verb); a change to the
 entity's state with **no symmetric undo** — suspend, delete, deactivate — defaults
 to `tier`, behind a confirm `Modal` that states the consequence in plain language
 next to the control ("Blocks sign-in until reversed," not just "Suspend").
+A **list** rung reads the same rules with two additions (ADR-0051). With no single
+page-level verb, `variant: 'primary'` marks the one open inline panel — which also pins
+it, so the control that closes that panel can never overflow. And the tier may sort by
+**frequency** as well as consequence, though frequency may move a verb down, never up,
+and never brings a confirm `Modal` with it.
+
+Two traps that rung found the hard way. **A wizard in front of a verb does not move that
+verb into the row** — the test asks what the verb does, not what stands between the press
+and the doing. And where the set of verbs **varies with state**, the leading position must
+hold a control whose worst outcome is another click: a strip ordered purely by weight puts
+a different control under the same pixel as the state changes, which is how
+`GroupsListActionBar` briefly shipped _Merge_ where _Select all_ had been.
 **An `ActionDescriptor` is never declared for a handler that isn't wired yet** — an
 unimplemented verb is omitted, the same "absent is not zero" discipline ADR-0032
 applies to identity facts, not rendered `disabled` forever with a tooltip standing

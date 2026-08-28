@@ -2,11 +2,12 @@
  * @module sidepanel/hooks/useTabRail.test
  * @description Unit tests for the icon rail's overflow-affordance hook.
  *
- * Pins the four things the rail's usability depends on: the discrete edge state
+ * Pins the five things the rail's usability depends on: the discrete edge state
  * (so a scroll costs a comparison, not a style write), the measured indicator
  * geometry, the `block: 'nearest'` scroll-into-view contract that keeps the app's
- * shared root scroller still (ADR-0018), and the rAF throttle that keeps the
- * `ResizeObserver` out of a feedback loop.
+ * shared root scroller still (ADR-0018), the rAF throttle that keeps the
+ * `ResizeObserver` out of a feedback loop, and the `sliding` window that separates
+ * the underline's slide from the label unfurl so neither chases the other.
  *
  * jsdom implements neither layout nor `ResizeObserver`, so the element metrics are
  * defined explicitly and the observer is a controllable fake — which is also the
@@ -223,6 +224,41 @@ describe('useTabRail', () => {
     expect(scrollWidthReads).toBe(afterMount);
 
     await waitFor(() => expect(scrollWidthReads).toBe(afterMount + 1));
+  });
+
+  describe('the slide/unfurl sequence', () => {
+    it('never claims to be sliding on the first render', () => {
+      const { list } = makeStrip();
+      const { result } = renderRail(list);
+      expect(result.current.sliding).toBe(false);
+    });
+
+    it('slides for one --dur-move window after a selection change, then stops', () => {
+      vi.useFakeTimers();
+      try {
+        const { list } = makeStrip();
+        const { result, rerender } = renderRail(list);
+
+        act(() => rerender({ activeKey: 'export' }));
+        // Phase 1: the labels are held still by their delay, the underline travels.
+        expect(result.current.sliding).toBe(true);
+
+        act(() => {
+          vi.advanceTimersByTime(220);
+        });
+        // Phase 2: the labels move and the indicator goes back to being measured.
+        expect(result.current.sliding).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('never slides under reduced motion — there is nothing to sequence', () => {
+      const { list } = makeStrip();
+      const { result, rerender } = renderRail(list, { reducedMotion: true });
+      act(() => rerender({ activeKey: 'export' }));
+      expect(result.current.sliding).toBe(false);
+    });
   });
 
   it('detaches the scroll listener and the observer on unmount', () => {

@@ -11,6 +11,12 @@
  *
  * The response viewer defaults to the values-free Shape view; Redacted and Raw
  * are one click away (see `JsonViewer`/`redact.ts`/`shapeInference.ts`).
+ *
+ * The root's gap consumes `--sp-rung` (ADR-0048) rather than the raw `space-y-4`
+ * it shipped with — at the `default` density that role resolves to the same 16px
+ * this file already used, so the value is unchanged today and only starts moving
+ * with panel width, matching the other five tab roots' `--sp-rung` stack instead
+ * of standing apart from them by half a step.
  */
 import React from 'react';
 import { AlertMessage, Badge, Button, EmptyState, Input, JsonViewer, PageHeader } from './shared';
@@ -54,7 +60,7 @@ const ApiExplorerTab: React.FC<ApiExplorerTabProps> = ({ targetTabId, oktaOrigin
         subtitle="Fire a read-only GET request and inspect the response"
       />
 
-      <div className="max-w-7xl mx-auto px-6 py-6 space-y-4">
+      <div className="max-w-7xl mx-auto px-(--sp-gutter) py-(--sp-gutter) space-y-(--sp-rung)">
         <div className="flex items-center gap-2">
           <Badge variant="neutral" solid title="Read-only for now — writes are a future feature">
             GET

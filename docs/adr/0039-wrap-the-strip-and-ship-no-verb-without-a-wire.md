@@ -159,6 +159,15 @@ per-item failure a partial batch can't cleanly roll back — is a real open ques
 this ADR does not answer. That refinement is for whichever ADR ships
 `GroupSelectionBar`, not this one.
 
+> **Discharged by [ADR-0051](./0051-a-verb-strip-for-a-list-rung.md).** On a list rung
+> `primary` marks the **open inline panel** rather than a page-level verb; the tier sorts by
+> frequency as well as consequence; and because the set of verbs varies with the selection,
+> the **leading position** must hold a control whose worst outcome is another click. The
+> consequence test itself is unchanged, and ADR-0051 records getting it wrong once — a
+> wizard in front of a verb does not move that verb into the row. The batch question
+> narrows to a **partial** batch, where some items succeeded and "reversible" stops being a
+> property of the verb.
+
 ## Consequences
 
 - **`GroupDetailView` is the one current violator of rule 1**, and this ADR does

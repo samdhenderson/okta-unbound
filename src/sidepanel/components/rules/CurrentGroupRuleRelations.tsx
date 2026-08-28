@@ -63,7 +63,7 @@ const RuleRow: React.FC<{
 }> = ({ rule, showCondition = false, onFocusRule }) => (
   <li className="flex items-center justify-between gap-2 rounded-md border border-neutral-200 bg-white px-2.5 py-1.5">
     <div className="flex min-w-0 flex-col">
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 items-center gap-(--sp-inline)">
         <RuleStatusPill status={rule.status} />
         <span className="truncate text-sm text-neutral-900">{rule.name}</span>
       </div>
@@ -167,7 +167,7 @@ const CurrentGroupRuleRelations: React.FC<CurrentGroupRuleRelationsProps> = ({
       aria-labelledby="current-group-rule-relations-heading"
       className="rounded-md border border-neutral-200 bg-white"
     >
-      <div className="border-b border-neutral-100 px-4 py-3">
+      <div className="border-b border-neutral-100 p-(--sp-card)">
         <h3
           id="current-group-rule-relations-heading"
           className="text-sm font-semibold text-neutral-900"
@@ -180,7 +180,7 @@ const CurrentGroupRuleRelations: React.FC<CurrentGroupRuleRelationsProps> = ({
         </p>
       </div>
 
-      <div className="space-y-3 px-4 py-3">
+      <div className="space-y-(--sp-rung) p-(--sp-card)">
         <RelationList
           heading="Assigns members into this group"
           hint="These rules add users here — the group's automated intake."

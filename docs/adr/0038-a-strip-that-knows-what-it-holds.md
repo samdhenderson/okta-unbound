@@ -2,6 +2,11 @@
 
 - Status: Accepted
 - Date: 2026-08-20
+- Amended by: [ADR-0048](./0048-spacing-roles-and-derived-density.md), which makes
+  `--merge-range` and `--merge-bleed` density-aware. This ADR's §4 invariant —
+  `--merge-range` must stay shorter than the gap the strip closes — still holds, but
+  that gap stopped being a fixed 24px once the tab roots adopted `--sp-gutter`, and the
+  measured 16px was larger than the compact-density gutter
 - Amends: [ADR-0030](./0030-detail-page-layout-contract.md) §2, which says _where_ an
   action lives but never _how many_ fit; [ADR-0032](./0032-the-sticky-stack-and-a-header-that-owns-identity.md)
   §3a, whose merge was correct in description and inoperative in fact
@@ -209,7 +214,8 @@ reduced-motion fallback (a card that pins and never grows) safe at all.
 
 Rejected: a `useStuck`-driven `data-docked` flip. `useStuck` reads
 `getComputedStyle().top` once and re-arms only on `window.resize`, but this band's
-`top` is `calc(var(--rail-h) + var(--header-h))` and `--header-h` shrinks when
+`top` is `var(--header-h)` (`calc(var(--rail-h) + var(--header-h))` before ADR-0050)
+and `--header-h` shrinks when
 `PageHeader` collapses its identity region on pin, without any window resize. The
 observer would be stale exactly when it matters.
 
@@ -281,3 +287,6 @@ a request to disclose anything, so the tier is never auto-opened.
   variant.** `ActionDescriptor` is shaped so a `kind` discriminant can be added
   without breaking a call site; shipping an unused prop is dead API. The descriptor
   model is the extension point for `GroupSelectionBar` convergence when it comes.
+  (It came: [ADR-0051](./0051-a-verb-strip-for-a-list-rung.md). No `kind` discriminant
+  and no selection variant were needed — the counts went into the labels and the open
+  panel is marked with the existing `variant: 'primary'`.)

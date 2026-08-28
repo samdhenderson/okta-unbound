@@ -66,7 +66,7 @@ const ComparisonHero: React.FC<ComparisonHeroProps> = ({
   scopeNote,
   isLoading,
 }) => (
-  <div className="overflow-hidden rounded-md border border-neutral-200 bg-gradient-to-br from-white via-white to-primary-light/40 p-3">
+  <div className="overflow-hidden rounded-md border border-neutral-200 bg-gradient-to-br from-white via-white to-primary-light/40 p-(--sp-card)">
     <div className="flex items-center gap-2">
       <UserSide user={contextUser} name={contextName} label="Context" />
       <span className="shrink-0 text-sm text-neutral-400" aria-hidden>

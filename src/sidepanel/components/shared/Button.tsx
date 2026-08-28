@@ -10,6 +10,16 @@
  * as `IconButton` does — a labelled disclosure trigger (the user detail rung's
  * **Manage** tier) is still a disclosure, and hand-rolling a `<button>` to get
  * `aria-expanded` onto it is banned.
+ *
+ * ## Response motion (ADR-0046)
+ *
+ * Carries the shared `.press` class — a `scale(.955)` depress on `:active` that
+ * resolves inside `--dur-press` (60ms) and releases over `--dur-quick`/`--ease-affirm`
+ * — plus `active:brightness-90`, the third, darker background step Odyssey's own
+ * button carries beyond hover (`hover → Dark`, `active → Darker`). No variant here
+ * has a token for that third step on its own (`primary`/`danger`/`success` already
+ * spend their only darker token — `-dark`/`-text` — on `hover`), so the extra step
+ * comes from a brightness filter rather than a new colour token.
  */
 import React from 'react';
 import Icon, { type IconType } from '../shared/Icon';
@@ -117,7 +127,7 @@ const Button: React.FC<ButtonProps> = ({
 }) => {
   const baseClasses = `
     inline-flex items-center justify-center gap-2
-    rounded-md transition-all duration-(--dur-instant)
+    rounded-md press active:brightness-90
     disabled:cursor-not-allowed
     focus:outline-2 focus:outline-offset-2 focus:outline-primary
     ${variantClasses[variant]}

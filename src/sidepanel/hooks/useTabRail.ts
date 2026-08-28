@@ -3,7 +3,7 @@
  * @description Overflow affordances for the icon-rail tab strip: edge state,
  * scroll-active-into-view, and the sliding active indicator's geometry.
  *
- * The side panel's eight top-level tabs cannot all fit as text at 360px, so the
+ * The side panel's nine top-level tabs cannot all fit as text at 360px, so the
  * `rail` variant of the shared `Tabs` strip shows inactive tabs as icons and
  * unfurls only the active label. Even that can overflow, so the strip stays
  * horizontally scrollable — and a scrollable strip with no visible scrollbar
@@ -20,11 +20,30 @@
  *    would bank that offset as the active tab's own (ADR-0018). The `behavior`
  *    honours `prefers-reduced-motion` via a JS flag, because the CSS
  *    `scroll-behavior: auto !important` override cannot suppress a JS option.
- * 3. **The active indicator's `left`/`width`**, measured rather than transitioned.
- *    The active label is simultaneously growing from `0fr` to `1fr` over
- *    `--dur-move`; an indicator with its own CSS transition would chase a moving
- *    target and land out of sync. Measuring it every frame of the buttons' own
- *    reflow makes the slide fall out of the layout for free.
+ * 3. **The active indicator's `left`/`width`**, measured every frame — plus a
+ *    `sliding` flag naming the one window in which the indicator is allowed a CSS
+ *    transition of its own.
+ *
+ * ## The sequence (amends ADR-0028's "never transition the indicator")
+ *
+ * ADR-0028 left the indicator deliberately un-transitioned, and its reasoning holds
+ * as far as it goes: the active label grows from `0fr` to `1fr` over `--dur-move` at
+ * the same moment, so an indicator with its own transition chases a moving target
+ * and lands out of sync. The resolution is not to transition it anyway — it is to
+ * stop the two from ever overlapping:
+ *
+ * - **Phase 1, `0 → --dur-move`.** Layout is frozen: both labels hold their current
+ *   state, because the unfurl/collapse transition in `Tabs` carries a `--dur-move`
+ *   delay. The indicator transitions `left`/`width` on `--ease-glide` toward a
+ *   target that cannot move.
+ * - **Phase 2, `--dur-move → 2×--dur-move`.** The outgoing label collapses and the
+ *   incoming one unfurls. The indicator has no transition at all here and is
+ *   measured per frame, so it stays glued to the reflow exactly as ADR-0028
+ *   intended.
+ *
+ * `sliding` is what draws that line — `true` for phase 1 only. Nothing chases
+ * anything: the underline travels across a still strip, then the strip rearranges
+ * underneath a stationary underline.
  *
  * Measurement is driven by one `ResizeObserver` (over the strip and the active
  * button) whose callback is **rAF-throttled**. That throttle is load-bearing, not
@@ -75,7 +94,24 @@ export interface TabRailState {
   edge: TabRailEdge;
   /** Geometry for the absolutely-positioned indicator inside the strip. */
   indicator: TabRailIndicator;
+  /**
+   * `true` for the `--dur-move` window that follows a selection change — phase 1 of
+   * the sequence in this module's header. Apply the indicator's `left`/`width`
+   * transition **only** while this is set: outside it the geometry is tracking a
+   * live reflow, and a transition would lag behind it. Always `false` under reduced
+   * motion, where there is nothing to sequence.
+   */
+  sliding: boolean;
 }
+
+/**
+ * Length of the indicator's slide, mirroring `--dur-move` in `tailwind.css`
+ * (220ms). Hardcoded for the same reason `useCountUp`'s `COUNT_UP_MS` mirrors
+ * `--dur-tell`: this is a `setTimeout`, not a transition, and jsdom parses no
+ * stylesheet to read the token back from. Keep the two in step by hand — if they
+ * drift, phase 2 starts before or after the slide has landed.
+ */
+const SLIDE_MS = 220;
 
 /**
  * Sub-pixel slack. Browsers report fractional `scrollWidth`/`scrollLeft`, so an
@@ -104,18 +140,19 @@ function findActive(list: HTMLElement): HTMLElement | null {
  * Measure the overflow affordances for an icon-rail tab strip.
  *
  * All returned values are derived from the DOM the caller already rendered, so
- * the caller stays declarative: render `edge` as an attribute and `indicator` as
- * the indicator's `left`/`width`.
+ * the caller stays declarative: render `edge` as an attribute, `indicator` as the
+ * indicator's `left`/`width`, and `sliding` as whether the indicator carries its
+ * transition classes this render.
  *
  * @param options - See {@link UseTabRailOptions}.
- * @returns The current {@link TabRailState}. Both members are referentially
- * stable while their measured values are unchanged, so a scroll that does not
- * cross an edge boundary triggers no re-render.
+ * @returns The current {@link TabRailState}. `edge` and `indicator` are
+ * referentially stable while their measured values are unchanged, so a scroll that
+ * does not cross an edge boundary triggers no re-render.
  *
  * @example
  * ```tsx
  * const listRef = useRef<HTMLDivElement>(null);
- * const { edge, indicator } = useTabRail({
+ * const { edge, indicator, sliding } = useTabRail({
  *   listRef,
  *   activeKey,
  *   tabCount: tabs.length,
@@ -131,7 +168,28 @@ export function useTabRail({
 }: UseTabRailOptions): TabRailState {
   const [edge, setEdge] = useState<TabRailEdge>('none');
   const [indicator, setIndicator] = useState<TabRailIndicator>({ left: 0, width: 0 });
+  const [sliding, setSliding] = useState(false);
   const frameRef = useRef(0);
+  const lastKeyRef = useRef(activeKey);
+  const scrolledKeyRef = useRef<string | null>(null);
+
+  // Phase 1 of the sequence. Declared *before* the measuring effect below and as a
+  // layout effect so the flag and the freshly measured geometry land in the same
+  // pre-paint flush: a transition starts when the after-change style already carries
+  // `transition-property`, so applying the class and the new `left` together is what
+  // makes the slide run at all. Doing this in a passive effect would paint the
+  // indicator at its new position first and animate nothing.
+  //
+  // Skipped on mount (`lastKeyRef` seeds to the initial key), or the indicator would
+  // slide in from `left: 0, width: 0` the first time the rail renders.
+  useLayoutEffect(() => {
+    if (lastKeyRef.current === activeKey) return;
+    lastKeyRef.current = activeKey;
+    if (reducedMotion) return;
+    setSliding(true);
+    const timer = window.setTimeout(() => setSliding(false), SLIDE_MS);
+    return () => window.clearTimeout(timer);
+  }, [activeKey, reducedMotion]);
 
   // Seed synchronously before paint, then keep both values current from one
   // rAF-throttled observer plus a passive scroll listener.
@@ -197,9 +255,17 @@ export function useTabRail({
   // scrolls that ancestor, which `TabPanel` then banks as the tab's own offset
   // (ADR-0018). Optional-call guards match the repo's other call sites and cover
   // jsdom, which does not implement `scrollIntoView`.
+  //
+  // Guarded on the key it last scrolled for, not just on the dep list. `listRef` is
+  // a prop, so its identity is the caller's to control — and an incidental re-render
+  // that hands over a fresh ref object would otherwise re-scroll a tab that had not
+  // moved. That is now more than a theoretical waste: `sliding` above deliberately
+  // schedules an extra render on every selection change, so an unguarded effect
+  // fires twice for one click.
   useEffect(() => {
     const list = listRef.current;
-    if (!list) return;
+    if (!list || scrolledKeyRef.current === activeKey) return;
+    scrolledKeyRef.current = activeKey;
     findActive(list)?.scrollIntoView?.({
       inline: 'nearest',
       block: 'nearest',
@@ -207,5 +273,5 @@ export function useTabRail({
     });
   }, [listRef, activeKey, reducedMotion]);
 
-  return { edge, indicator };
+  return { edge, indicator, sliding };
 }

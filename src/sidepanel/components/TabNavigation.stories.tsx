@@ -14,7 +14,7 @@ const meta = {
         component:
           "Sticky top icon rail for switching between the side panel's main views.\n\n" +
           'Renders the tabs from the central `sidepanel/tabs` registry via the shared accessible `Tabs` strip (`rail` variant) and highlights the active one. Selection is reported via `onTabChange`; which tab is active is owned by the caller.\n\n' +
-          "Eight text tabs need roughly 590px of strip, but the panel opens at 480px and the user can drag it to 360px — so inactive tabs are icon-only and the active tab's label unfurls beside its glyph. What does not fit still scrolls, with edge fades marking the hidden side, the active tab scrolled into view, and an indicator sliding underneath. Compare the `Compact`, `Default` and `Wide` stories: the strip is complete at every width.",
+          "Nine text tabs need well past 590px of strip, but the panel opens at 480px and the user can drag it to 360px — so inactive tabs are icon-only and the active tab's label unfurls beside its glyph, with a tooltip naming any icon on hover or focus. What does not fit still scrolls, with edge fades marking the hidden side, the active tab scrolled into view, and a 2px underline sliding beneath. Compare the `Compact`, `Default` and `Wide` stories: the strip is complete at every width.\n\nThis `nav` is also the bottom of the top-chrome slab: `ContextBar` above it and a rung's `PageHeader` below are borderless, and the single rule closing the chrome lives here.",
       },
     },
   },
@@ -34,7 +34,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Overview tab active. */
+/** Home tab active. */
 export const Default: Story = {};
 
 /** Users tab active. */

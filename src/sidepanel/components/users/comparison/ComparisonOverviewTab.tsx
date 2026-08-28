@@ -87,7 +87,7 @@ const ComparisonOverviewTab: React.FC<ComparisonOverviewTabProps> = ({
   renderBlockingGroupAction,
   resolveGroupName,
 }) => (
-  <div className="space-y-4">
+  <div className="space-y-(--sp-rung)">
     <OverviewCard
       icon="users"
       heading="Group memberships"
@@ -167,7 +167,7 @@ const OverviewCard: React.FC<OverviewCardProps> = ({
   const total = onlyContext + shared + onlyCompared;
 
   return (
-    <div className="rounded-md border border-neutral-200 bg-white p-3">
+    <div className="rounded-md border border-neutral-200 bg-white p-(--sp-card)">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="rounded-md bg-neutral-100 p-1.5 text-neutral-700">
@@ -175,15 +175,16 @@ const OverviewCard: React.FC<OverviewCardProps> = ({
           </span>
           <h4 className="text-sm font-semibold text-neutral-900">{heading}</h4>
         </div>
+        {/* `.press`: a chromeless text link with no other pointer-down feedback.
+            Awaiting a shared `TextLink` primitive (docs/components.md) — this is
+            one of its three named future consumers. */}
         <button
           onClick={onJump}
-          className="flex items-center gap-1 text-xs font-semibold text-primary-text hover:text-primary-dark"
+          className="press flex items-center gap-1 rounded-sm text-xs font-semibold text-primary-text hover:text-primary-dark"
           style={{ fontFamily: 'var(--font-heading)' }}
         >
           View details
-          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-          </svg>
+          <Icon type="chevron-right" size="xs" />
         </button>
       </div>
 

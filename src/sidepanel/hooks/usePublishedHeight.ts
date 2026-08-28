@@ -47,9 +47,11 @@ export interface UsePublishedHeightOptions {
  *
  * @example
  * ```tsx
- * const railRef = useRef<HTMLElement>(null);
- * usePublishedHeight(railRef, '--rail-h');            // singleton: document root
+ * usePublishedHeight(bandRef, '--band-h');            // singleton: document root
  * usePublishedHeight(headerRef, '--header-h', { scopeSelector: '[data-header-scope]' });
+ * // The panel's only live caller is the second form: `PageHeader` publishes
+ * // `--header-h` per `TabPanel`. The document-root mode is kept for a future
+ * // singleton band — the tab rail used it until the chrome left the scroller.
  * ```
  */
 export function usePublishedHeight(

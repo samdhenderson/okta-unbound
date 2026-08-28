@@ -31,6 +31,17 @@
  * is the shared `flash` prop rather than a hand-applied `animate-affirm-flash`.
  * `affectsCurrentGroup` maps onto the shared `selected` state — it had its own
  * `border-primary` before, which was the same idea spelled differently.
+ *
+ * **The header presses, it does not lift.** The header is the click target
+ * (`onHeaderClick` toggles the disclosure), so it carries `.press-subtle`
+ * (ADR-0046) — the row-scale variant, since a button-scale press on a target
+ * this wide reads as a lurch. It does **not** carry `.lift`: `ListRow` clips
+ * an `overflow-hidden` onto any row that has a `body`, which this card always
+ * does, and `.lift`'s hover shadow is painted on an `::after` that would be
+ * clipped along with it — the shadow would compile but never render. Interior
+ * padding and inline chip/pill gaps consume the `--sp-card`/`--sp-inline`
+ * spacing roles (ADR-0048) so they resolve against the panel's measured width
+ * instead of a fixed step.
  */
 import React, { useState, useCallback, useEffect, useId, useRef, memo } from 'react';
 import type { FormattedRule } from '../../shared/types';
@@ -291,13 +302,13 @@ const RuleCard: React.FC<RuleCardProps> = memo(
         inert={!isExpanded || undefined}
       >
         <div>
-          <div className="px-4 pb-4 pt-2 space-y-4 bg-neutral-50 border-t border-neutral-100">
+          <div className="px-(--sp-card) pb-(--sp-card) pt-2 space-y-(--sp-card) bg-neutral-50 border-t border-neutral-100">
             {/* Condition */}
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-neutral-600 mb-2">
                 WHEN
               </div>
-              <div className="p-3 bg-white rounded-md border border-neutral-200">
+              <div className="p-(--sp-card) bg-white rounded-md border border-neutral-200">
                 <code className="text-sm text-neutral-900 font-mono block overflow-x-auto">
                   {renderConditionWithGroupBadges(
                     rule.conditionExpression || rule.condition,
@@ -313,7 +324,7 @@ const RuleCard: React.FC<RuleCardProps> = memo(
                 <div className="text-xs font-semibold uppercase tracking-wider text-neutral-600 mb-2">
                   USES ATTRIBUTES
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-(--sp-inline)">
                   {rule.userAttributes.map((attr) => (
                     <span
                       key={attr}
@@ -332,7 +343,7 @@ const RuleCard: React.FC<RuleCardProps> = memo(
                 <div className="text-xs font-semibold uppercase tracking-wider text-neutral-600 mb-2">
                   THEN ADD TO GROUPS
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-(--sp-inline)">
                   {rule.groupIds.map((groupId, index) => {
                     const groupName = rule.groupNames?.[index];
                     // A `groupNames` entry equal to the id is the upstream
@@ -369,7 +380,7 @@ const RuleCard: React.FC<RuleCardProps> = memo(
                   {rule.conflicts!.map((conflict, idx) => (
                     <div
                       key={idx}
-                      className="p-3 bg-warning-light rounded-md border border-warning-light"
+                      className="p-(--sp-card) bg-warning-light rounded-md border border-warning-light"
                     >
                       <div className="flex items-start gap-3">
                         <span
@@ -422,7 +433,12 @@ const RuleCard: React.FC<RuleCardProps> = memo(
             <div className="flex flex-wrap gap-2 pt-2">
               {rule.status === 'ACTIVE'
                 ? onDeactivate && (
-                    <Button variant="secondary" size="sm" onClick={handleDeactivate}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+
+                      onClick={handleDeactivate}
+                    >
                       Deactivate Rule
                     </Button>
                   )
@@ -432,12 +448,24 @@ const RuleCard: React.FC<RuleCardProps> = memo(
                     </Button>
                   )}
               {onPreviewImpact && rule.groupIds.length > 0 && (
-                <Button variant="secondary" size="sm" icon="users" onClick={handlePreviewImpact}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon="users"
+
+                  onClick={handlePreviewImpact}
+                >
                   Preview Impact
                 </Button>
               )}
               {onAddTargetGroup && (
-                <Button variant="secondary" size="sm" icon="plus" onClick={handleAddTargetGroup}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon="plus"
+
+                  onClick={handleAddTargetGroup}
+                >
                   Add Target Group
                 </Button>
               )}
@@ -445,6 +473,7 @@ const RuleCard: React.FC<RuleCardProps> = memo(
                 <Button
                   variant="secondary"
                   size="sm"
+
                   onClick={handleOpenInRulesTab}
                   title={`Open rule ${rule.name} in the Rules tab`}
                 >
@@ -456,24 +485,12 @@ const RuleCard: React.FC<RuleCardProps> = memo(
                   href={`${oktaOrigin}/admin/groups#rules`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-white text-neutral-900 border border-neutral-200 rounded-md hover:bg-neutral-50 hover:border-neutral-500 transition-colors duration-(--dur-instant)"
+                  className="press inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-white text-neutral-900 border border-neutral-200 rounded-md hover:bg-neutral-50 hover:border-neutral-500"
                   style={{ fontFamily: 'var(--font-heading)', minHeight: '36px' }}
                   title="Open Rules page in Okta Admin Console (you can search for this rule by name)"
                 >
                   <span>View in Okta</span>
-                  <svg
-                    className="w-3.5 h-3.5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                    />
-                  </svg>
+                  <Icon type="external-link" size="sm" />
                 </a>
               )}
             </div>
@@ -491,29 +508,29 @@ const RuleCard: React.FC<RuleCardProps> = memo(
         state={rule.affectsCurrentGroup ? 'selected' : 'default'}
         flash={isFlashing}
         body={expandedBody}
-        headerClassName="flex cursor-pointer items-center justify-between gap-4"
+        // `press-subtle` (ADR-0046) rather than `press`: the header is a wide
+        // click target, not a button, so the row's own scale ratio would read
+        // as a lurch — this is the same "row" case `ListRow`'s hover treatment
+        // already reasons about.
+        headerClassName="flex cursor-pointer items-center justify-between gap-4 press press-subtle"
         onHeaderClick={toggleExpanded}
       >
-        <div className="flex items-start gap-3 flex-1 min-w-0">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap mb-1">
-              <h3 className="font-semibold text-neutral-900 text-sm">{rule.name}</h3>
-              <Badge variant={rule.status === 'ACTIVE' ? 'success' : 'neutral'}>
-                {rule.status}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-(--sp-inline) flex-wrap mb-1">
+            <h3 className="font-semibold text-neutral-900 text-sm">{rule.name}</h3>
+            <Badge variant={rule.status === 'ACTIVE' ? 'success' : 'neutral'}>{rule.status}</Badge>
+            {rule.affectsCurrentGroup && (
+              <Badge variant="primary" solid>
+                Current Group
               </Badge>
-              {rule.affectsCurrentGroup && (
-                <Badge variant="primary" solid>
-                  Current Group
-                </Badge>
-              )}
-              {hasConflicts && (
-                <Badge variant="warning">
-                  {rule.conflicts!.length} Conflict{rule.conflicts!.length > 1 ? 's' : ''}
-                </Badge>
-              )}
-            </div>
-            <p className="text-sm text-neutral-600 truncate">{rule.condition}</p>
+            )}
+            {hasConflicts && (
+              <Badge variant="warning">
+                {rule.conflicts!.length} Conflict{rule.conflicts!.length > 1 ? 's' : ''}
+              </Badge>
+            )}
           </div>
+          <p className="text-sm text-neutral-600 truncate">{rule.condition}</p>
         </div>
         <IconButton
           label={`${isExpanded ? 'Collapse' : 'Expand'} ${rule.name}`}
@@ -523,14 +540,11 @@ const RuleCard: React.FC<RuleCardProps> = memo(
           controls={detailsId}
           className="shrink-0"
         >
-          <svg
-            className={`w-4 h-4 transition-transform duration-(--dur-instant) ${isExpanded ? 'rotate-90' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
+          <Icon
+            type="chevron-right"
+            size="sm"
+            className={`transition-transform duration-(--dur-instant) ${isExpanded ? 'rotate-90' : ''}`}
+          />
         </IconButton>
       </ListRow>
     );

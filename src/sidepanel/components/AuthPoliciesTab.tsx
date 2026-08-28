@@ -118,7 +118,7 @@ const AuthPoliciesTab: React.FC<AuthPoliciesTabProps> = ({ targetTabId, isActive
         }
       />
 
-      <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+      <div className="max-w-7xl mx-auto px-(--sp-gutter) py-(--sp-gutter) space-y-(--sp-rung)">
         {error && (
           <AlertMessage
             message={{ text: error, type: 'danger' }}
@@ -127,6 +127,9 @@ const AuthPoliciesTab: React.FC<AuthPoliciesTabProps> = ({ targetTabId, isActive
         )}
 
         {hasPolicies && (
+          // Raw `space-y-2`, not a role: this is a search input plus its own caption
+          // line, not a stack of cards (`--sp-rung`) or a row of controls
+          // (`--sp-field`) — none of ADR-0048's six roles names this relationship.
           <div className="space-y-2">
             <Input
               value={searchQuery}

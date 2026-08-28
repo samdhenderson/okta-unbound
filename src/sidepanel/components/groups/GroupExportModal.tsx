@@ -13,6 +13,7 @@ import Modal from '../shared/Modal';
 import Button from '../shared/Button';
 import AlertMessage from '../shared/AlertMessage';
 import LoadingSpinner from '../shared/LoadingSpinner';
+import Icon from '../shared/Icon';
 import { Checkbox } from '../shared';
 import type { GroupSummary, OktaUser } from '../../../shared/types';
 import {
@@ -263,7 +264,7 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
         </>
       }
     >
-      <div className="space-y-6">
+      <div className="space-y-(--sp-rung)">
         {/* Inline error notice (replaces the old alert() calls) */}
         {exportError && (
           <AlertMessage
@@ -275,14 +276,14 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
         {/* Column Selection */}
         <div>
           <h4 className="text-sm font-medium text-neutral-700 mb-3">Select columns to include:</h4>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-(--sp-field)">
             {columns.map((col) => (
               <Checkbox
                 key={col.id}
                 checked={col.enabled}
                 onChange={() => toggleColumn(col.id)}
                 label={col.label}
-                className="p-2 rounded-md hover:bg-neutral-50 transition-colors"
+                className="px-(--sp-row-x) py-(--sp-row-y) rounded-md hover:bg-neutral-50 transition-colors"
               />
             ))}
           </div>
@@ -298,13 +299,13 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
             onChange={setIncludeMemberList}
             label={<span className="font-medium">Include member list</span>}
             description="Generates a second CSV file with member details (Group ID, Group Name, User ID, Email, First Name, Last Name, Status)"
-            className="p-3 rounded-md border border-neutral-200 hover:border-neutral-300 transition-colors"
+            className="p-(--sp-card) rounded-md border border-neutral-200 hover:border-neutral-300 transition-colors"
           />
         </div>
 
         {/* Progress */}
         {exportProgress && (
-          <div className="flex items-center gap-2 p-3 bg-info-light rounded-md border border-primary/20">
+          <div className="flex items-center gap-(--sp-inline) p-(--sp-card) bg-info-light rounded-md border border-primary/20">
             <LoadingSpinner size="sm" />
             <span className="text-sm text-primary-text">{exportProgress}</span>
           </div>
@@ -312,20 +313,8 @@ const GroupExportModal: React.FC<GroupExportModalProps> = ({
 
         {/* Warning for large exports with members */}
         {includeMemberList && groups.length > 20 && (
-          <div className="flex items-start gap-2 p-3 bg-warning-light rounded-md border border-warning/20">
-            <svg
-              className="w-4 h-4 text-warning-text mt-0.5 shrink-0"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
+          <div className="flex items-start gap-(--sp-inline) p-(--sp-card) bg-warning-light rounded-md border border-warning/20">
+            <Icon type="alert" size="sm" className="text-warning-text mt-0.5 shrink-0" />
             <p className="text-sm text-warning-text">
               Exporting members for {groups.length} groups may take a while. Consider exporting
               fewer groups at a time.

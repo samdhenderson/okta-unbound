@@ -68,10 +68,10 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
   toggleSort,
   clearFilters,
 }) => (
-  <div className="p-4 bg-white rounded-md border border-neutral-200 space-y-4 animate-rise-in">
+  <div className="p-(--sp-card) bg-white rounded-md border border-neutral-200 space-y-(--sp-field) animate-rise-in">
     {/* Active Filters Chips */}
     {activeFilterCount > 0 && (
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-(--sp-inline)">
         <span className="text-xs font-medium text-neutral-500">Active:</span>
         {typeFilter && (
           <FilterChip
@@ -103,7 +103,7 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
         <button
           type="button"
           onClick={clearFilters}
-          className="text-xs text-primary-text hover:underline ml-1"
+          className="press text-xs text-primary-text hover:underline ml-1"
         >
           Clear all
         </button>
@@ -111,11 +111,11 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
     )}
 
     {/* Filter Grid */}
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-2 gap-(--sp-field)">
       {/* Type Filter */}
       <div>
         <label className="block text-xs font-medium text-neutral-600 mb-1.5">Group Type</label>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-(--sp-inline)">
           {[
             { value: '', label: 'All' },
             { value: 'OKTA_GROUP', label: 'Okta' },
@@ -136,7 +136,7 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
       {/* Size Filter */}
       <div>
         <label className="block text-xs font-medium text-neutral-600 mb-1.5">Group Size</label>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-(--sp-inline)">
           {[
             { value: '', label: 'All' },
             { value: 'empty', label: 'Empty' },
@@ -159,7 +159,7 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
       {/* Rule Filter */}
       <div>
         <label className="block text-xs font-medium text-neutral-600 mb-1.5">Rules</label>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-(--sp-inline)">
           {[
             { value: '' as RuleFilter, label: 'All' },
             { value: 'ruled' as RuleFilter, label: 'Fed by a rule' },
@@ -179,7 +179,7 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
       {/* Push Status Filter */}
       <div>
         <label className="block text-xs font-medium text-neutral-600 mb-1.5">Push Status</label>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-(--sp-inline)">
           {[
             { value: '' as PushFilter, label: 'All' },
             { value: 'pushed' as PushFilter, label: 'Pushed' },
@@ -201,7 +201,7 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
     {availablePushApps.length > 0 && (
       <div>
         <label className="block text-xs font-medium text-neutral-600 mb-1.5">Push Target App</label>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-(--sp-inline)">
           <FilterPill active={pushAppFilter.size === 0} onClick={() => setPushAppFilter(new Set())}>
             All
           </FilterPill>
@@ -228,7 +228,7 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
     {/* Sort Controls */}
     <div>
       <label className="block text-xs font-medium text-neutral-600 mb-1.5">Sort by</label>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-(--sp-inline)">
         {[
           { value: 'name' as SortField, label: 'Name' },
           { value: 'memberCount' as SortField, label: 'Size' },
@@ -260,7 +260,7 @@ const FilterChip: React.FC<{ label: string; onRemove: () => void }> = ({ label, 
       type="button"
       onClick={onRemove}
       aria-label={`Remove ${label}`}
-      className="p-0.5 hover:bg-primary-highlight rounded-full transition-colors"
+      className="press p-0.5 hover:bg-primary-highlight rounded-full"
     >
       <Icon type="close" size="xs" />
     </button>

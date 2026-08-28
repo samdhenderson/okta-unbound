@@ -196,7 +196,13 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
     // fix; hiding a duplicate border is not.
     <section aria-label="Group memberships">
       {hasMemberships && !isLoading && (
-        <div className="space-y-3 border-b border-neutral-200 bg-neutral-50 px-4 py-3">
+        // No band chrome. The pane's two siblings — Apps and Profile — put their
+        // own summary-and-filter zone on the shared card's plain white, and this
+        // one drew a grey stripe with a rule under it instead, so the same
+        // furniture read as a different kind of object depending on which pane
+        // you were on. Grouping here comes from the spacing below, which is what
+        // separates every other stack of controls in the panel.
+        <div className="space-y-(--sp-field) p-(--sp-card) pb-0">
           {/*
             The accounting line. Every bucket with rows in it is named; a bucket
             with none is omitted rather than printed as a zero.
@@ -226,7 +232,7 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
             }
           />
 
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-(--sp-inline)">
             <FilterPill active={bucket === 'all'} onClick={() => setBucket('all')}>
               All
             </FilterPill>
@@ -247,7 +253,7 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
       {isLoading ? (
         // The rows are a known height, so the placeholder previews them rather
         // than spinning, and nothing shifts when they land.
-        <div className="space-y-3 p-4">
+        <div className="space-y-(--sp-rung) p-(--sp-card)">
           <Skeleton variant="row" size="lg" count={4} label="Loading group memberships..." />
         </div>
       ) : !hasMemberships ? (
@@ -262,7 +268,7 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
           actions={[{ label: 'Clear filters', onClick: clearFilters, variant: 'secondary' }]}
         />
       ) : (
-        <div className="space-y-3 p-4">
+        <div className="space-y-(--sp-rung) p-(--sp-card)">
           {visible.map((membership) => (
             <GroupMembershipRow
               key={membership.group.id}

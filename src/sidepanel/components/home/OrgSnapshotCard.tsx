@@ -111,7 +111,7 @@ const Finding: React.FC<{
 
   if (subCount.status === 'reading') {
     return (
-      <li className="px-3 py-2.5">
+      <li className="px-(--sp-row-x) py-(--sp-row-y)">
         <Skeleton variant="text" size="sm" width="w-3/4" label={`Reading ${subCount.label}`} />
       </li>
     );
@@ -124,7 +124,7 @@ const Finding: React.FC<{
     // list that would disagree with the figure is the dead control ADR-0039
     // bans, wearing a different hat.
     return (
-      <li className="flex items-stretch gap-3 bg-neutral-50 px-3 py-2.5">
+      <li className="flex items-stretch gap-3 bg-neutral-50 px-(--sp-row-x) py-(--sp-row-y)">
         <FigureNumber value={null} />
         <FindingLines subCount={subCount} id={labelId} />
       </li>
@@ -132,7 +132,12 @@ const Finding: React.FC<{
   }
 
   return (
-    <li className="relative flex items-stretch gap-3 px-3 py-2.5 transition-colors duration-(--dur-instant) hover:bg-neutral-50">
+    // No `.press` on the row: `StretchedButton` itself carries the response
+    // layer's press feedback (ADR-0046) — a state-layer wash on its own
+    // `:active` — since the overlay has no visible box of its own for a scale
+    // to read on, the same reasoning `ListRow` now documents for any row
+    // activated this way.
+    <li className="relative flex items-stretch gap-3 px-(--sp-row-x) py-(--sp-row-y) transition-colors duration-(--dur-instant) hover:bg-neutral-50">
       <StretchedButton
         label="Open the filtered list"
         describedBy={labelId}
@@ -168,7 +173,7 @@ const OrgSnapshotCard: React.FC<OrgSnapshotCardProps> = ({
 
   return (
     <section aria-label="This org" className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-(--sp-inline)">
         <Eyebrow as="h3">This org</Eyebrow>
         {/*
           One control, not one per collection: `syncSnapshot` is org-wide — it
@@ -192,7 +197,7 @@ const OrgSnapshotCard: React.FC<OrgSnapshotCardProps> = ({
       </ul>
 
       {totals.length > 0 && (
-        <p className="flex flex-wrap items-baseline gap-1 text-xs text-neutral-600">
+        <p className="flex flex-wrap items-baseline gap-(--sp-inline) text-xs text-neutral-600">
           {totals.map((box, index) => (
             <React.Fragment key={box.key}>
               {index > 0 && (
@@ -204,12 +209,15 @@ const OrgSnapshotCard: React.FC<OrgSnapshotCardProps> = ({
                 §3 exception: chromeless text-link, the same one `GroupFilterPanel`'s
                 "Clear all" takes — there is no shared text-link primitive, and a
                 `Button` here would put three chunky pills under a dense list and
-                out-weigh the findings the card exists to lead with.
+                out-weigh the findings the card exists to lead with. `.press` (not
+                `-subtle`) because the target is small — a word, not a row —
+                and `active:brightness-90` for the same darker press step
+                `Button`/`IconButton` carry (ADR-0046).
               */}
               <button
                 type="button"
                 onClick={() => onOpenTab(box.tab)}
-                className="rounded-sm px-0.5 text-primary-text underline decoration-primary-highlight underline-offset-2 hover:bg-primary-light focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"
+                className="press rounded-sm px-0.5 text-primary-text underline decoration-primary-highlight underline-offset-2 hover:bg-primary-light active:brightness-90 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"
               >
                 {box.status === 'partial' ? 'at least ' : ''}
                 {box.value?.toLocaleString()} {box.noun}

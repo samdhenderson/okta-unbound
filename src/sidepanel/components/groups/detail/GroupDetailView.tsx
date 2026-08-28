@@ -300,12 +300,13 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
     // child of the `space-y-6` rhythm it has nothing to do with.
     <>
       {/*
-        `space-y-6`, the same step the Users detail rung uses. It was `space-y-3`,
-        which is the card-to-card gap and not the rung's step — the strip is a card
-        the width of the column like every section under it, so it takes the same
-        rhythm as the rest of the rung rather than a tighter one of its own.
+        `space-y-(--sp-rung)` (ADR-0048) — the gap-between-stacked-cards role. It
+        was `space-y-3`, which is the card-*interior* gap and not the rung's step
+        — the strip is a card the width of the column like every section under
+        it, so it takes the same rhythm as the rest of the rung rather than a
+        tighter one of its own.
       */}
-      <div className="space-y-6" data-testid="group-detail-view">
+      <div className="space-y-(--sp-rung)" data-testid="group-detail-view">
         <GroupActionBar
           group={group}
           targetTabId={targetTabId}
@@ -323,7 +324,7 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
             ariaLabel="Group detail sections"
           />
 
-          <div className="mt-6">
+          <div className="mt-(--sp-rung)">
             {activeTab === 'overview' && (
               <GroupOverviewPane
                 group={group}
@@ -372,7 +373,7 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
             )}
 
             {activeTab === 'access' && (
-              <div className="space-y-6" role="tabpanel" aria-label="Access">
+              <div className="space-y-(--sp-rung)" role="tabpanel" aria-label="Access">
                 <GroupAccessSection
                   oktaOrigin={oktaOrigin}
                   apps={accessGrants.apps}

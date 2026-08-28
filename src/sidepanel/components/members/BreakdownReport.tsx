@@ -49,6 +49,11 @@ const BreakdownReport: React.FC<BreakdownReportProps> = ({
         const clickable = isOther ? !!onShowOther : true;
 
         return (
+          // A row-shaped raw <button> (§3 data-viz exception): a proportion bar
+          // sized by percentage, not a plain list row — `ListRow` owns chrome
+          // only and has no slot for the absolutely-positioned fill underneath
+          // the label. `.press-subtle` for the same "wide target" reason
+          // ADR-0046 gives `ListRow` itself.
           <button
             key={row.value}
             type="button"
@@ -58,7 +63,7 @@ const BreakdownReport: React.FC<BreakdownReportProps> = ({
               else onRowClick(row);
             }}
             className={`
-              relative w-full text-left rounded-md px-2.5 py-1.5
+              press-subtle relative w-full text-left rounded-md px-2.5 py-1.5
               transition-colors duration-(--dur-instant)
               ${clickable ? 'cursor-pointer hover:bg-neutral-50' : 'cursor-default'}
               ${isActive ? 'ring-1 ring-primary bg-primary-light/40' : ''}

@@ -94,7 +94,9 @@ const ProfileDisplayAttributeRow: React.FC<ProfileDisplayAttributeRowProps> = ({
   // dense list inside one bordered container. A per-row `border-t` +
   // `first:border-t-0` is the same idea spelled the way that ADR bans, and it
   // drifts the moment a row is reordered or conditionally rendered.
-  <div className={`flex min-w-0 items-center gap-2 px-3 py-2 ${isHidden ? 'opacity-50' : ''}`}>
+  <div
+    className={`flex min-w-0 items-center gap-(--sp-inline) px-(--sp-row-x) py-(--sp-row-y) ${isHidden ? 'opacity-50' : ''}`}
+  >
     <Checkbox
       checked={!isHidden}
       onChange={(visible) => onToggleVisible(attribute.name, visible)}

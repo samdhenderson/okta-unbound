@@ -27,21 +27,20 @@
  *
  * ## Why it sticks
  *
- * The side panel has exactly one scroller: the `overflow-y-auto` app root
- * (`App.tsx`), which `TabPanel` shares and which the Users tab explicitly does
+ * The side panel has exactly one scroller: the `overflow-y-auto` content region
+ * of `App.tsx`, which `TabPanel` shares and which the Users tab explicitly does
  * not shadow with a scroll box of its own. `sticky` therefore pins against that
- * root, and no intermediate wrapper sets `overflow` to break it.
+ * region, and no intermediate wrapper sets `overflow` to break it.
  *
- * It is the third band of the sticky stack (ADR-0032), so it parks below the two
- * above it rather than at the top of the scroller: `top` resolves to the tab
- * rail's published height plus the page header's. Both default to `0px`, so a
- * story — or any surface with neither band — behaves as a `top-0` strip.
+ * It is the second band of the sticky stack (ADR-0032), so it parks below the
+ * page header rather than at the top of the scroller: `top` resolves to that
+ * header's published height. It defaults to `0px`, so a story — or any surface
+ * with no header — behaves as a `top-0` strip. The tab rail is not in that sum:
+ * it lives outside the scroller entirely, so the scroller's own top edge already
+ * begins beneath it.
  *
- * That offset also fixes a real overlap. This strip and the rail were both
- * `sticky top-0` in one scroller, and the rail's `z-40` beat this strip's, so a
- * pinned action strip rendered *underneath* the rail. The strip sits at `z-30`:
- * above the page header (`z-20`) so it can cover that header's bottom border as
- * it merges, and still below the rail.
+ * The strip sits at `z-30`, above the page header (`z-20`) so it can cover that
+ * header's bottom border as it merges.
  *
  * ## How it docks
  *
@@ -94,6 +93,10 @@
  * band's painted chrome (which is `inset: 0` of it) grows with it and the merge
  * carries it along; and it opens through the shared `.disclose` grid, so the
  * strip's height animates with no JS measurement.
+ *
+ * It opens below {@link ActionBarProps.subRow} when there is one, so on a list
+ * rung the disclosure appears under the search field rather than between the
+ * verbs and the thing they filter.
  *
  * It holds two things, in order: the actions that did not fit, which this
  * component owns and the caller never sees, and then
@@ -161,6 +164,21 @@ export interface ActionBarProps {
    * a story, where there is nothing to scroll), which also opts out of the merge.
    */
   sticky?: boolean;
+  /**
+   * Arbitrary caller UI rendered **inside the band, directly beneath the action
+   * row and above the disclosure tier**. Unlike {@link ActionBarProps.expansion}
+   * it is always visible, so it is for a control that belongs to the strip's
+   * surface rather than behind its disclosure — a list rung's search field is the
+   * case it exists for (ADR-0051).
+   *
+   * It rides the merge: whatever is here docks and goes full-bleed with the rest
+   * of the band, which is the point. Keep it to one row. A tall sub-row makes a
+   * tall pinned band, and the panel is 360px wide at its narrowest.
+   *
+   * Unlike a descriptor it may carry JSX, because it is never measured — the fit
+   * arithmetic only looks at the action row.
+   */
+  subRow?: React.ReactNode;
   /**
    * Arbitrary caller UI for the tier — an account-state block, a form, anything.
    * It is appended below any actions that overflowed there, and it is the reason
@@ -240,6 +258,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
   actions,
   ariaLabel,
   sticky = true,
+  subRow,
   expansion,
   tierOpen,
   defaultTierOpen = false,
@@ -311,7 +330,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
             // seam stayed visible at full merge. The two bands never overlap by more
             // than that 1px: the strip's `top` tracks `--header-h` live, so it stays
             // flush through the header's collapse.
-            'sticky top-[calc(var(--rail-h,0px)+var(--header-h,0px))] z-30'
+            'sticky top-[var(--header-h,0px)] z-30'
           : ''
       }
       ${className}
@@ -366,6 +385,13 @@ const ActionBar: React.FC<ActionBarProps> = ({
           </span>
         )}
       </div>
+
+      {subRow !== undefined && (
+        /* Same horizontal padding as the row above it and no rule between them:
+           the two are one surface, and a hairline here would read as the tier
+           opening. The tier's own `border-t` still separates *it* from this. */
+        <div className="px-2 pb-2">{subRow}</div>
+      )}
 
       {hasTier && (
         /*

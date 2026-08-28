@@ -50,20 +50,38 @@ describe('userIdentity', () => {
   });
 
   it.each([
+    ['LOCKED_OUT', 'danger'],
+    ['DEPROVISIONED', 'danger'],
+  ] as const)('keeps the loud badge for %s — the one status that must shout', (status, variant) => {
+    // The label stays the raw Okta string on purpose: those are the terms the Admin
+    // Console uses, so humanising them would make the panel and Okta disagree.
+    const identity = userIdentity(makeUser({}, status));
+
+    expect(identity.badge).toEqual({ text: status, variant });
+    expect(identity.rows[0]).not.toContainEqual(expect.objectContaining({ kind: 'status' }));
+  });
+
+  it.each([
     ['ACTIVE', 'success'],
     ['PROVISIONED', 'info'],
     ['STAGED', 'neutral'],
     ['SUSPENDED', 'warning'],
-    ['LOCKED_OUT', 'danger'],
-    ['DEPROVISIONED', 'danger'],
-  ] as const)('badges %s through the shared status vocabulary as %s', (status, variant) => {
-    // The label stays the raw Okta string on purpose: those are the terms the Admin
-    // Console uses, so humanising them would make the panel and Okta disagree.
-    expect(userIdentity(makeUser({}, status)).badge).toEqual({ text: status, variant });
+  ] as const)('demotes %s to a status fact rather than a badge', (status, variant) => {
+    const identity = userIdentity(makeUser({}, status));
+
+    expect(identity.badge).toBeUndefined();
+    expect(identity.rows[0]).toContainEqual({ kind: 'status', variant, text: status });
   });
 
-  it('opens with the copyable user id', () => {
+  it('opens with the status fact, then the copyable user id, for a calm status', () => {
     expect(rowsOf(makeUser()).identity).toEqual([
+      { kind: 'status', variant: 'success', text: 'ACTIVE' },
+      { kind: 'id', value: '00uFAKE9z8y7x6w5v', copyLabel: 'Copy user id' },
+    ]);
+  });
+
+  it('opens with only the copyable user id when the status is alarming enough to badge', () => {
+    expect(rowsOf(makeUser({}, 'LOCKED_OUT')).identity).toEqual([
       { kind: 'id', value: '00uFAKE9z8y7x6w5v', copyLabel: 'Copy user id' },
     ]);
   });

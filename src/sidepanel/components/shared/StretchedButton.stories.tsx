@@ -83,3 +83,14 @@ export const Disabled: Story = {
   ...Default,
   args: { disabled: true },
 };
+
+/**
+ * Pressed state (forced via the pseudo-states addon). The overlay paints nothing
+ * at rest, so `:active` shows a faint `--color-neutral-900` wash across the whole
+ * card instead of the `.press` transform every other primitive uses — a
+ * transform on an invisible box would be a no-op (ADR-0046).
+ */
+export const Pressed: Story = {
+  ...Default,
+  parameters: { pseudo: { active: true } },
+};

@@ -16,8 +16,10 @@ interface GroupFilterToggleProps {
 
 /**
  * The Filters toggle button with its active-filter count badge. Rendered next to the
- * search bar in cached mode only. Kept a raw <button> (documented §3 exception — the
- * primary-light active styling does not map cleanly onto a shared Button variant).
+ * search bar in cached mode only. Kept a raw `<button>` (documented §3 exception, the
+ * same shape `members/MemberFilterToggle` mirrors): the primary-light active styling
+ * does not map cleanly onto a shared `Button` variant, and the funnel glyph is not in
+ * the shared `Icon` registry.
  */
 const GroupFilterToggle: React.FC<GroupFilterToggleProps> = ({
   showFilters,
@@ -25,15 +27,23 @@ const GroupFilterToggle: React.FC<GroupFilterToggleProps> = ({
   onToggle,
 }) => (
   <button
+    type="button"
     onClick={onToggle}
-    className={`px-4 py-3 rounded-md border text-sm font-medium transition-all duration-(--dur-instant) flex items-center gap-2 ${
+    aria-pressed={showFilters}
+    className={`press px-4 py-3 rounded-md border text-sm font-medium flex items-center gap-(--sp-inline) ${
       showFilters || activeFilterCount > 0
         ? 'bg-primary-light border-primary text-primary-text'
         : 'bg-white border-neutral-200 text-neutral-700 hover:border-neutral-400'
     }`}
     title="Toggle filters"
   >
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg
+      className="w-4 h-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
       <path
         strokeLinecap="round"
         strokeLinejoin="round"

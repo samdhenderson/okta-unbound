@@ -86,7 +86,7 @@ describe('useStuck', () => {
 
   it("shifts the observer's top edge onto the sticky element's own offset", () => {
     // Read from the element rather than passed in, so a header that parks below the tab
-    // rail via `top: var(--rail-h)` works without this hook knowing the rail exists.
+    // header via `top: var(--header-h)` works without this hook knowing the header exists.
     setup(44);
 
     expect(armed[0].rootMargin).toBe('-44px 0px 0px 0px');

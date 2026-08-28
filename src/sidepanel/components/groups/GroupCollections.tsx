@@ -172,7 +172,7 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
   return (
     <div className="border border-neutral-200 rounded-md bg-white overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between p-3 bg-neutral-50 border-b border-neutral-200">
+      <div className="flex items-center justify-between p-(--sp-card)">
         <div>
           <h4 className="text-sm font-semibold text-neutral-900">Group Collections</h4>
           <p className="text-xs text-neutral-500 mt-0.5">
@@ -202,7 +202,7 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
 
       {/* Create Form */}
       {showCreate && (
-        <div className="p-3 border-b border-neutral-200 bg-primary-light space-y-2">
+        <div className="p-(--sp-card) border-b border-neutral-200 bg-primary-light space-y-(--sp-field)">
           <Input
             placeholder="Collection name..."
             value={newName}
@@ -219,7 +219,7 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
             <span className="text-xs text-primary-text">
               {selectedGroupIds.size} groups will be saved
             </span>
-            <div className="flex gap-2">
+            <div className="flex gap-(--sp-field)">
               <Button
                 variant="ghost"
                 size="sm"
@@ -250,7 +250,7 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
         {collections.map((col) => (
           <div
             key={col.id}
-            className={`p-3 border-b border-neutral-100 last:border-b-0 ${
+            className={`p-(--sp-card) border-b border-neutral-100 last:border-b-0 ${
               col.id === exitingId ? 'pointer-events-none animate-collapse-out' : ''
             }`}
             onAnimationEnd={() => {
@@ -258,7 +258,7 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
             }}
           >
             {editingId === col.id ? (
-              <div className="flex gap-2">
+              <div className="flex gap-(--sp-field)">
                 <Input
                   value={editName}
                   onChange={setEditName}
@@ -370,7 +370,7 @@ const GroupCollections: React.FC<GroupCollectionsProps> = ({
                 {col.description && (
                   <p className="text-xs text-neutral-500 mb-1.5">{col.description}</p>
                 )}
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-(--sp-inline)">
                   {col.groupIds.slice(0, 5).map((gid) => (
                     <span
                       key={gid}

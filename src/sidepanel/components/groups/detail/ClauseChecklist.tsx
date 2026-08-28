@@ -179,7 +179,7 @@ const ClauseRow: React.FC<ClauseRowProps> = ({ clause, resolveGroupName }) => {
   const presentation = statusPresentation[clause.status];
 
   return (
-    <li className="rounded-md border border-neutral-200 bg-white p-3">
+    <li className="rounded-md border border-neutral-200 bg-white p-(--sp-card)">
       <div className="flex items-start justify-between gap-3">
         <RuleExpressionText
           text={clause.expressionText}
@@ -289,7 +289,7 @@ const ClauseChecklist: React.FC<ClauseChecklistProps> = ({
     const reasonCode =
       summary.result.outcome === 'unevaluable' ? summary.result.reasonCode : undefined;
     return (
-      <div className="rounded-md border border-neutral-200 bg-white p-3">
+      <div className="rounded-md border border-neutral-200 bg-white p-(--sp-card)">
         <p className="text-xs text-neutral-700">
           This condition could not be checked clause by clause, so no part of it is shown as
           failing.

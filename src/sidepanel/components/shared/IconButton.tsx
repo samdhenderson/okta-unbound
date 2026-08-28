@@ -6,6 +6,10 @@
  * (reflected as `aria-pressed`) or as a disclosure trigger via `expanded` +
  * `controls` (`aria-expanded` + `aria-controls`). For text CTAs use `Button`; for
  * filter chips use `FilterPill`.
+ *
+ * Carries the shared `.press` class (response motion, ADR-0046) plus
+ * `active:brightness-90` for a third, darker background step beyond hover — see
+ * `Button`'s module docs for why a filter stands in for a colour token here.
  */
 import React from 'react';
 
@@ -92,7 +96,7 @@ const IconButton: React.FC<IconButtonProps> = ({
     aria-expanded={expanded}
     aria-controls={controls}
     title={title ?? label}
-    className={`inline-flex items-center justify-center rounded-md transition-colors duration-(--dur-instant) focus:outline-2 focus:outline-offset-2 focus:outline-primary disabled:opacity-50 disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+    className={`inline-flex items-center justify-center rounded-md press active:brightness-90 focus:outline-2 focus:outline-offset-2 focus:outline-primary disabled:opacity-50 disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
   >
     {children}
   </button>
