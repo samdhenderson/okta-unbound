@@ -54,27 +54,52 @@ cannot see what it holds cannot decide what fits — so this is also the only vo
 available for the state. The old bar expressed it with an ad-hoc `ring-2 ring-primary/20`
 on the trigger.
 
-### 2. The tier here sorts by frequency, because nothing in it sorts by consequence
+### 2. Position one is a safety property, and the tier sorts by both consequence and frequency
 
-ADR-0039's row-vs-tier test is consequence: reversible or read-only goes in the row, a
-state change with no symmetric undo goes behind **More** with a confirm `Modal`. Applied to
-this strip, the test returns _row_ for everything. _Compare_, _Cross-search_ and _Cleanup_
-read; _Collections_ writes to local storage; _Export_ writes a file; _Select all_ /
-_Deselect_ change nothing but the selection. The two verbs that could mutate Okta — _Merge_
-and _Bulk actions_ — do not mutate anything when pressed: they open a wizard and a panel,
-each with its own confirmation, so the strip never fires a batch write directly.
+> **This section was rewritten after review.** Its first version claimed the consequence
+> test returns _row_ for every verb here, on the grounds that _Merge_ and _Bulk actions_
+> "open a wizard and a panel, they don't write". That reasoning is wrong, and the strip it
+> produced was unsafe. It is left described here because the failure is the useful part.
 
-So the tier is used for a second, weaker reason: **frequency**. _Cleanup_ opens an
-org-wide triage panel and is the rarest verb on the rung, so it starts at
-`priority: 'tier'` rather than competing for row space with verbs pressed daily. That is a
-genuine refinement of ADR-0039, and it is narrow — frequency may move a verb to the tier,
-but only consequence may _require_ it there, and only consequence brings a confirm `Modal`
-with it.
+Every verb on this strip except the selection control **appears and disappears with the
+selection size**. That is not true of a detail rung, where the verbs are a property of the
+entity and the row is stable. It means the control in any given position _changes as you
+tick rows_, and the first cut of this strip ordered by weight — so at two selections the
+leading control became `Compare`, and at six it became `Merge`, directly under the pointer
+that had a moment ago been pressing `Select all`.
 
-**ADR-0039's batch question is therefore still open**, not answered: because no verb in
-this strip commits a batch write, nothing here tests whether "no symmetric undo" reads the
-same over _N_ items as over one. Whichever surface first puts a real batch mutation in a
-strip has to answer it.
+`Merge` copies members into a survivor and **empties the sources**. Sam's description of
+the failure mode: "a full wipe and a new mega group."
+
+Two rules follow.
+
+**Position one is always a selection control.** `Deselect all` leads the moment anything is
+ticked; `Select all (M)` follows, and both are `pinned`, so the row wraps rather than
+overflowing either. Whatever the selection size, the two leftmost controls cost at worst
+another click. `Select all (M)` stays visible — _disabled_ — once everything is taken,
+because `(M)` is the strip's only statement of how many rows the filter matches, and a
+count that disappears at full selection is a count you cannot check.
+
+**A wizard in front of a verb does not move it into the row.** ADR-0039's test asks what
+the verb _does_, not what stands between the press and the doing:
+
+- **`Merge`** empties the source groups. → tier.
+- **`Bulk actions`** offers _Clean inactive users_ and _Remove user from all_, which delete
+  memberships across every selected group. → tier.
+- **`Cleanup`** is a read-only triage report and passes the consequence test. It is in the
+  tier anyway, on **frequency**: it is the rarest verb on the rung and does not deserve row
+  width that `Compare` and `Export` want.
+
+So the tier holds both kinds, and frequency remains the weaker reason: it may move a verb
+down, never up, and never brings a confirm `Modal` with it. Consequence does. Each of the
+two consequential verbs owns its confirmation already — the merge wizard previews the
+member delta and what breaks before committing; the bulk panel reports per-group results —
+so nothing new was added, but neither starts in the row.
+
+**ADR-0039's batch question is narrowed, not answered.** _Bulk actions_ is a genuine batch
+mutation and it is in the tier, so the shape of the rule holds over _N_ items. What is
+still untested is the failure mode ADR-0039 actually raised: a partial batch, where some
+groups succeeded and some did not, and "reversible" stops being a property of the verb.
 
 ### 3. "No verb without a wire" extends to "no verb without an object"
 
@@ -128,3 +153,7 @@ on the rung is.
   a known open question**, raised by Sam when this landed and not addressed here.
 - **Frequency as a tier reason is now precedent.** It is bounded on purpose: it may move a
   verb down, never up, and never substitutes for the consequence test.
+- **A list rung's verb order is a safety surface, not a layout preference.** The general
+  rule this incident produced: where the set of verbs varies with state, the leading
+  position must be occupied by something whose worst outcome is another click. Any strip
+  whose contents are conditional inherits this.

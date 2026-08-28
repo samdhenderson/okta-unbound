@@ -17,11 +17,18 @@ const meta = {
           'three lines at 360px, giving *Cleanup* the same standing as *Compare* — and grey is ' +
           "the panel's inert wash, so a slab of controls above a white list read as switched " +
           'off.\n\n' +
+          '**Position one is a safety property.** Every other verb appears and disappears with ' +
+          'the selection size, so whatever sits first changes as you tick rows — and the first ' +
+          'cut of this strip put *Merge* there, under the pointer that had just been pressing ' +
+          '*Select all*. It is now *Deselect all* the moment anything is ticked and *Select all* ' +
+          'when nothing is, both `pinned`.\n\n' +
+          '*Merge* and *Bulk actions* start behind **More** on consequence (ADR-0039) — the ' +
+          'first empties the source groups, the second deletes memberships across the selection. ' +
+          '*Cleanup* is there on frequency alone.\n\n' +
           'Selection-scoped verbs are **omitted** below their threshold rather than shipped ' +
-          'disabled (ADR-0039): *Compare* appears for 2–5 selected, *Merge* / *Bulk actions* / ' +
-          '*Export (N)* / *Deselect* above 0. *Export list* is the one deliberate disabled state ' +
-          '— it acts on the filter, not the selection, so at zero filtered rows it is a live verb ' +
-          'with an empty result.\n\n' +
+          'disabled: *Compare* appears for 2–5 selected, *Export (N)* / *Merge* / *Bulk actions* ' +
+          'above 0. *Export list* is the one deliberate disabled state — it acts on the filter, ' +
+          'not the selection, so at zero filtered rows it is a live verb with an empty result.\n\n' +
           'The counts moved into the verbs that need them. The open inline panel is marked with ' +
           "`variant: 'primary'`, which `ActionBar` also treats as `priority: 'pinned'` — so the " +
           'control that closes an open panel can never overflow behind **More**.',
@@ -68,10 +75,26 @@ export const Default: Story = {
     await expect(canvas.queryByRole('button', { name: /^Merge/ })).not.toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: /^Compare/ })).not.toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'Select all (42)' })).toBeEnabled();
+    await expect(canvas.queryByRole('button', { name: 'Deselect all' })).not.toBeInTheDocument();
   },
 };
 
-/** Three selected — Compare, Merge, Bulk actions, Export (3) and Deselect all appear. */
+/**
+ * The safety property, asserted: with a selection large enough for *Merge* to
+ * exist, the strip's first control is still *Deselect all* — never the verb that
+ * empties groups.
+ */
+export const FirstControlIsAlwaysSelection: Story = {
+  args: { selectedCount: 3 },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const first = canvas.getAllByRole('button')[0];
+    await expect(first).toHaveAccessibleName('Deselect all');
+    await expect(canvas.getByRole('button', { name: /^Merge/ })).toBeInTheDocument();
+  },
+};
+
+/** Three selected — Compare and Export (3) join the row; Merge and Bulk sit in the tier. */
 export const WithSelection: Story = {
   args: { selectedCount: 3 },
   play: async ({ canvasElement }) => {
@@ -81,7 +104,7 @@ export const WithSelection: Story = {
   },
 };
 
-/** Twelve selected — past Compare's 2–5 window, so Compare is gone and Merge stays. */
+/** Twelve selected — past Compare's 2–5 window, so Compare is gone; Merge stays, in the tier. */
 export const LargeSelection: Story = {
   args: { selectedCount: 12 },
   play: async ({ canvasElement }) => {
@@ -96,7 +119,7 @@ export const WithCachedCrossSearch: Story = {
   args: { selectedCount: 3, crossSearchBadge: 5 },
 };
 
-/** Bulk panel open — its trigger is the strip's one primary and cannot overflow. */
+/** Bulk panel open — a tier verb pulled into the row, so the control that closes it is there. */
 export const BulkPanelOpen: Story = {
   args: { selectedCount: 4, activePanel: 'bulk' },
   play: async ({ canvasElement }) => {
@@ -111,6 +134,16 @@ export const BulkPanelOpen: Story = {
  */
 export const CleanupPanelOpen: Story = {
   args: { activePanel: 'cleanup' },
+};
+
+/** Everything taken — Select all stays for its count, disabled; Deselect all leads. */
+export const AllSelected: Story = {
+  args: { selectedCount: 42 },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getAllByRole('button')[0]).toHaveAccessibleName('Deselect all');
+    await expect(canvas.getByRole('button', { name: 'Select all (42)' })).toBeDisabled();
+  },
 };
 
 /** Nothing matches the filter — Export list is the one verb that stays, disabled. */

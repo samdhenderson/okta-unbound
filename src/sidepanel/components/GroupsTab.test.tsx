@@ -1387,8 +1387,9 @@ describe('selection', () => {
       await uev.click(screen.getByRole('checkbox', { name: `Select ${name}` }));
     }
     // RETARGETED: `GroupsListActionBar` replaced the `N of M selected` readout —
-    // the selected count is the header badge, the filtered denominator is what
-    // `Select all` offers to take. Same two numbers, same assertion.
+    // the selected count is the header badge, and the filtered denominator rides
+    // `Select all (M)`, which stays visible (disabled) once everything is taken
+    // precisely so the count survives. Same two numbers, same assertion.
     expect(screen.getByRole('button', { name: 'Select all (3)' })).toBeInTheDocument();
     expect(screen.getByText('3 Selected')).toBeInTheDocument();
 
@@ -1455,7 +1456,7 @@ describe('selection', () => {
     expect(screen.getByText('2 Selected')).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Select AppOne' })).not.toBeChecked();
 
-    await uev.click(screen.getByRole('button', { name: 'Deselect' }));
+    await uev.click(screen.getByRole('button', { name: 'Deselect all' }));
     expect(screen.queryByText(/\d+ Selected/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Select all (3)' })).toBeEnabled();
   });
@@ -1881,7 +1882,7 @@ describe('inline panels', () => {
     await uev.click(screen.getByRole('button', { name: 'Bulk actions' }));
     expect(screen.getByTestId('bulk-panel')).toBeInTheDocument();
 
-    await uev.click(screen.getByRole('button', { name: 'Deselect' }));
+    await uev.click(screen.getByRole('button', { name: 'Deselect all' }));
 
     expect(screen.queryByTestId('bulk-panel')).not.toBeInTheDocument();
   });

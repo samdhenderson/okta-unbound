@@ -26,6 +26,17 @@
  * press something. `GroupsListPanel` still prints its own `Showing X of Y`
  * beneath the list, so the filtered denominator has not gone anywhere either.
  *
+ * ## Position one is a safety property
+ *
+ * Every verb here except the selection control appears and disappears with the
+ * selection size, so whatever sits first *changes as you tick rows*. The first
+ * cut of this strip put `Merge` there at two selections — directly under the
+ * pointer that had just been pressing `Select all`, and one press from copying
+ * members into a survivor and emptying the sources. The two selection controls
+ * now lead, `Deselect all` first the moment anything is ticked, and both are
+ * `pinned` so the row wraps rather than overflowing them. Whatever the selection
+ * size, the two leftmost controls cost at worst another click.
+ *
  * ## Why the open panel's trigger turns primary
  *
  * `ActionDescriptor` carries no JSX and no `className`, deliberately — a strip
@@ -80,10 +91,14 @@ interface GroupsListActionBarProps {
  * is a live verb with an empty result, which is worth saying out loud rather
  * than hiding.
  *
- * *Cleanup* opens a triage panel that reads the whole org and is the rarest verb
- * here, so it starts behind **More** (`priority: 'tier'`) instead of competing
- * for row space — unless it is the open panel, in which case it is pinned like
- * any other open panel's trigger.
+ * Three verbs start behind **More**, for two different reasons. *Merge* and
+ * *Bulk actions* are there on **consequence** (ADR-0039): the first empties the
+ * source groups, the second deletes memberships across every selected group, and
+ * neither has a symmetric undo. *Cleanup* is there on **frequency** — it is a
+ * read-only triage report that would pass the consequence test, and simply does
+ * not deserve row width that *Compare* and *Export* want. An open panel's trigger
+ * is pulled back into the row regardless, so the control that closes it is always
+ * reachable.
  *
  * @example
  * ```tsx
@@ -128,6 +143,38 @@ const GroupsListActionBar: React.FC<GroupsListActionBarProps> = ({
   };
 
   const actions: ActionDescriptor[] = [
+    /*
+      Position one is always the selection control, and it is `pinned` so it can
+      never be pushed out of the row. This is a safety property, not a layout
+      preference: every other verb here appears and disappears with the selection
+      size, so whatever sits first changes as you tick rows. With `Merge` in the
+      row that meant the button under the pointer where `Select all` had been was
+      the one that empties groups. First is now `Deselect all` the moment anything
+      is ticked, and `Select all` when nothing is — two controls whose worst
+      outcome is that you have to click again.
+    */
+    ...(selectedCount > 0
+      ? [
+          {
+            id: 'deselect-all',
+            label: 'Deselect all',
+            onClick: onDeselectAll,
+            priority: 'pinned' as const,
+          },
+        ]
+      : []),
+    {
+      // Always present, disabled rather than omitted once there is nothing left
+      // to take — the same transient-disabled case as `Export list`, and the
+      // reason is the count: `(M)` is the strip's only statement of how many rows
+      // the current filter matches, so it has to survive a full selection.
+      id: 'select-all',
+      label: `Select all (${filteredCount})`,
+      onClick: onSelectAll,
+      disabled: filteredCount === 0 || selectedCount === filteredCount,
+      title: 'Select every group the current filter matches',
+      priority: 'pinned' as const,
+    },
     ...(selectedCount >= 2 && selectedCount <= 5
       ? [
           {
@@ -138,17 +185,6 @@ const GroupsListActionBar: React.FC<GroupsListActionBarProps> = ({
           },
         ]
       : []),
-    ...(selectedCount >= 2
-      ? [
-          {
-            id: 'merge',
-            label: `Merge (${selectedCount})`,
-            icon: 'link' as const,
-            onClick: onMerge,
-          },
-        ]
-      : []),
-    ...(selectedCount > 0 ? [panelAction('bulk', 'Bulk actions', 'list')] : []),
     ...(selectedCount > 0
       ? [
           {
@@ -158,16 +194,6 @@ const GroupsListActionBar: React.FC<GroupsListActionBarProps> = ({
             onClick: onExportSelection,
           },
         ]
-      : []),
-    {
-      id: 'select-all',
-      label: `Select all (${filteredCount})`,
-      onClick: onSelectAll,
-      disabled: filteredCount === 0 || selectedCount === filteredCount,
-      title: 'Select every group the current filter matches',
-    },
-    ...(selectedCount > 0
-      ? [{ id: 'deselect-all', label: 'Deselect', onClick: onDeselectAll }]
       : []),
     panelAction(
       'crossSearch',
@@ -183,6 +209,37 @@ const GroupsListActionBar: React.FC<GroupsListActionBarProps> = ({
       disabled: filteredCount === 0,
       title: 'Export the current groups list as CSV',
     },
+
+    /*
+      Behind **More** from the start, all three, for the two different reasons
+      ADR-0039 and ADR-0051 give.
+
+      Consequence, for the first two. `Merge` copies members into a survivor and
+      then **empties the sources** — a mega-group and a set of husks, with no
+      symmetric undo — and `Bulk actions` offers *Clean inactive users* and
+      *Remove user from all*, which delete memberships across every selected
+      group. Each owns a confirmation of its own (the merge wizard previews the
+      delta and what breaks; the bulk panel reports per-group results), but
+      ADR-0039 is about where a verb *starts*, and neither of these starts in the
+      row.
+
+      Frequency, for the third. `Cleanup` is a read-only triage report and could
+      sit in the row on consequence grounds; it is the rarest verb on the rung, so
+      it does not spend row width that `Compare` and `Export` want.
+    */
+    ...(selectedCount >= 2
+      ? [
+          {
+            id: 'merge',
+            label: `Merge (${selectedCount})`,
+            icon: 'link' as const,
+            onClick: onMerge,
+            priority: 'tier' as const,
+            title: 'Copies members into one survivor and empties the others',
+          },
+        ]
+      : []),
+    ...(selectedCount > 0 ? [panelAction('bulk', 'Bulk actions', 'list', 'tier')] : []),
     panelAction('cleanup', 'Cleanup', 'sparkles', 'tier'),
   ];
 
