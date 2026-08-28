@@ -228,4 +228,67 @@ describe('fetchGroupRulesRequest', () => {
 
     expect(result).toEqual({ success: false, error: 'scheduler down' });
   });
+
+  // D-050: the page is validated at the response boundary (ADR-0006). A row that
+  // fails `oktaGroupRuleSchema` is dropped by `parseOktaList`, and the rest of
+  // the page still reaches the five consumers of this fetch.
+  describe('boundary validation', () => {
+    it('drops a malformed row instead of poisoning the whole load', async () => {
+      // A non-string `conditions.expression.value` — the field `docs/security.md`
+      // names as end-user-controllable. Unvalidated it reached
+      // `formatRuleForDisplay`, whose string ops threw, failing the entire fetch.
+      const poison = rawRule({
+        id: 'rBAD',
+        name: 'Bad',
+        conditions: { expression: { value: 42 } },
+      });
+      const good = rawRule({ id: 'rOK', name: 'OK' });
+      const makeApiRequest = router([[/^\/api\/v1\/groups\/rules/, () => ok([poison, good])]]);
+
+      const result = await fetchGroupRulesRequest(makeApiRequest);
+
+      expect(result.success).toBe(true);
+      expect(result.rules?.map((r) => r.id)).toEqual(['rOK']);
+      expect(result.rawRules?.map((r) => r.id)).toEqual(['rOK']);
+      expect(result.stats).toEqual({ total: 1, active: 1, inactive: 0, conflicts: 0 });
+    });
+
+    it('keeps a non-string group id out of every consumer-facing shape', async () => {
+      // `actions.assignUserToGroups.groupIds` is the other end-user-controllable
+      // field. A non-string entry used to be concatenated straight through and
+      // rendered as a "group name".
+      const poison = rawRule({
+        id: 'rBAD',
+        name: 'Bad',
+        actions: { assignUserToGroups: { groupIds: [{ evil: true }] } },
+      });
+      const good = rawRule({ id: 'rOK', name: 'OK' });
+      const makeApiRequest = router([[/^\/api\/v1\/groups\/rules/, () => ok([poison, good])]]);
+
+      const result = await fetchGroupRulesRequest(makeApiRequest, undefined, { origin: ORIGIN });
+
+      expect(result.rawRules).toEqual([good]);
+      expect(result.rules?.flatMap((r) => r.groupNames)).toEqual(['gX']);
+      expect(result.rules?.flatMap((r) => r.groupIds)).toEqual(['gX']);
+      expect(result.stats?.total).toBe(1);
+    });
+
+    it('keeps paginating when every row on a page was dropped', async () => {
+      // The empty-page loop guard must read what Okta *returned*, not what
+      // survived validation — otherwise one bad page truncates the rule list.
+      const makeApiRequest = vi
+        .fn()
+        .mockResolvedValueOnce(
+          ok([rawRule({ id: 'rBAD', status: 'PENDING' })], {
+            link: '<https://acme.okta.com/api/v1/groups/rules?after=CUR&limit=200>; rel="next"',
+          }),
+        )
+        .mockResolvedValueOnce(ok([rawRule({ id: 'rOK', name: 'OK' })]));
+
+      const result = await fetchGroupRulesRequest(makeApiRequest);
+
+      expect(makeApiRequest).toHaveBeenCalledTimes(2);
+      expect(result.rules?.map((r) => r.id)).toEqual(['rOK']);
+    });
+  });
 });
