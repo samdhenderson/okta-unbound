@@ -2048,3 +2048,34 @@ describe('deep-link from the Rules tab', () => {
     expect(screen.getAllByText('Group ID')).toHaveLength(1);
   });
 });
+
+describe('a filtered view requested from Home', () => {
+  it('applies the one filter, clears the rest, and leaves the panel closed', async () => {
+    const onListViewConsumed = vi.fn();
+    await renderCached(
+      [
+        cachedGroup({ id: 'a', name: 'Empty one', memberCount: 0 }),
+        cachedGroup({ id: 'b', name: 'Populated', memberCount: 12 }),
+      ],
+      { listView: 'empty', onListViewConsumed },
+    );
+
+    await waitFor(() => expect(renderedGroupNames()).toEqual(['Empty one']));
+    // The badge on the collapsed toggle is what explains the short list. The
+    // panel itself stays shut: a reader who pressed a finding on Home asked for
+    // the list, not for the controls that produced it.
+    expect(screen.getByRole('button', { name: /^Filters/ }).textContent).toBe('Filters1');
+    expect(screen.queryByText('Sort by')).not.toBeInTheDocument();
+    expect(onListViewConsumed).toHaveBeenCalledTimes(1);
+  });
+
+  it('switches to cached mode, so a local filter has rows to apply to', async () => {
+    // The live search returns Okta's matches for a query and no local filter
+    // applies to them, so arriving in live mode would show the whole list.
+    await renderCached([cachedGroup({ id: 'a', name: 'Empty one', memberCount: 0 })], {
+      listView: 'no-rules',
+      onListViewConsumed: () => {},
+    });
+    await waitFor(() => expect(screen.getByText('1 Cached')).toBeInTheDocument());
+  });
+});

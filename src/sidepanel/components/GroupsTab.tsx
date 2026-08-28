@@ -295,13 +295,17 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
 
   // A pre-filtered view requested from the Home card.
   //
-  // Three things have to happen together or the arrival is a lie. The list must
-  // be in cached mode — the live search returns Okta's matches for a query, and
-  // no local filter applies to them. Every other axis is cleared, so the rows on
-  // screen are the population the figure counted rather than that population
-  // intersected with whatever was left selected. And the panel is opened, so the
-  // filter that is doing the work is visible and reversible instead of an
-  // unexplained short list.
+  // Two things have to happen together or the arrival is a lie. The list must be
+  // in cached mode — the live search returns Okta's matches for a query, and no
+  // local filter applies to them. And every other axis is cleared, so the rows
+  // on screen are the population the figure counted rather than that population
+  // intersected with whatever was left selected.
+  //
+  // The filter panel is deliberately NOT opened. A reader who pressed a finding
+  // asked for the list, not for the controls that produced it, and arriving on
+  // an expanded panel puts a wall of selects between them and the rows. What
+  // stops the short list being unexplained is the toggle's active-filter count,
+  // which is already on screen and is one press from the panel.
   //
   // Groups load on demand, so a request can arrive against an empty list; the
   // load is kicked once and the filter simply applies to the rows when they land.
@@ -319,7 +323,6 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
     filters.clearFilters();
     if (listView === 'empty') filters.setSizeFilter('empty');
     else filters.setRuleFilter('unruled');
-    setShowFilters(true);
 
     if (groups.length === 0 && !loading) void loadAllGroups();
     onListViewConsumed?.();
