@@ -2,6 +2,9 @@
 
 - Status: Accepted
 - Date: 2026-08-26
+- Superseded in part by [ADR-0045](./0045-capture-thin-compose-in-react.md), which
+  keeps the premise (film the real product; the script directs) and moves the camera,
+  the captions and every piece of furniture out of the browser into a compositor.
 
 ## Context
 
@@ -153,3 +156,163 @@ contents. Stills pulled with `frames.mjs` made all of it visible at once.
   follows from applying the demo org's own rule predicates to the pinned pair, so
   it changes when the rules change — the same discipline the memberships already
   hold themselves to.
+
+## Amendment, 2026-08-27: the camera
+
+The first amendment fixed what the frame contained. This one moves the frame.
+Every shot in the second cut was the same shot: the panel pinned right at a
+fixed size for the whole runtime, always shown whole, so the fine type that
+carries the argument was small and webm-soft. The decision is unchanged again —
+a scene is still a stage, the script is still the director — and everything
+below is the director gaining a camera.
+
+### The panel is 840px, and its geometry is a variable bus
+
+Nothing writes a longhand inline any more. The camera writes **custom
+properties** on `:root` and on `#storybook-root`, and one rule in
+`SHOWCASE_CSS` consumes them into `left`, `top`, `width`, `height`, `transform`,
+`clip-path`, `opacity` and `filter`. `sweepPanelWidth` was the other writer of
+`width` and now writes `--panel-w`, which also removes the inline
+`transition: width` that would have clobbered the camera's transition list.
+
+Three named frames — `panel-right`, `panel-left`, `centre` — each carry their
+layout variables **and** an `aperture`, `margin` and `control` rect. They are
+exported as one table, `FRAMES`, because both video guards import it. Duplicated
+geometry drifts, and a checker that disagrees with the camera is worse than no
+checker.
+
+**`animation: stage-panel-in` had to be deleted before any of this could work.**
+An animation declaration outranks author rules _and_ inline styles, and with
+`fill-mode: both` it pins its `to` values forever. Measured: the "recede" behind
+a chapter card had never dimmed or scaled — only the `filter: blur` was ever
+applied, because `opacity` and `transform` were pinned. Any camera writing
+`transform` would have been ignored just as silently. The deletion site carries a
+warning comment: re-adding an animation with `fill-mode: forwards`/`both` to
+`#storybook-root` kills the entire camera while every beat still reports `ok`.
+
+### Sharpness comes from animating the variable, not the transform
+
+Transitioning `--cam-s` is a **main-thread** animation: every frame gets a fresh
+style recalc and rasters at that frame's scale. Transitioning the `transform`
+longhand is a compositor animation that rasters once and reuses the texture. So
+the variable bus is not merely tidier, it is what keeps a 2.4x push crisp.
+For the same reason there is deliberately **no `will-change: transform`** on the
+panel: it pins raster scale and buys nothing here. `deviceScaleFactor: 2` with
+the video still at 1920x1080 supersamples every frame, not only the zoomed ones.
+
+### Two things a push silently breaks, both now enforced mechanically
+
+- **Modals.** `clip-path` _does_ clip `position: fixed` descendants, and a
+  modal's overlay centres on the panel box rather than on the aperture, so a
+  modal opened under a push is both clipped away and misplaced. A
+  `MutationObserver` on the modal layer auto-pulls and raises a warning the
+  runner prints. `camera.frame('centre')` is the supported way to enlarge a
+  modal in frame.
+- **Stagger reveals.** `useStaggerReveal` observes against the **viewport**, so
+  rows outside it under a push never reveal. `push()` refuses a target still
+  held by a live stagger gate.
+
+### A push may only aim at something that is on screen
+
+"Visible" cannot mean "non-zero box". Both rungs of a tab stay mounted
+(ADR-0016) and the rung behind is not hidden, it is _scrolled away_ — so its
+nodes report perfectly real boxes at coordinates outside the panel. Accepting one
+produced a crop of 358x-173 out of an 840x980 panel. A candidate now qualifies
+only if its **centre** lies inside the panel's box, which is what a viewer means
+by "on screen" and rules out the off-screen twin and the scrolled-past target in
+one test. Relatedly, every `return false` inside `push()` records a reason:
+several used to return in silence and surfaced to the runner as a useless "no
+match" over a selector that matched, was visible, and pushed fine a second later.
+
+### The pointer and the camera must not race
+
+The camera never rests — a continuous idle drift composed underneath any push,
+because a dead-still frame is the strongest tell of a screen recording. That
+drift broke **every click in the reel**, and not in the way it looks like it
+would. Playwright's actionability check refuses to act on a moving element, so
+`scrollIntoViewIfNeeded` failed with "element is not stable" after a five second
+timeout; `moveAndClick` swallowed that, measured a box still below the fold, and
+clicked into empty backdrop — returning `true`, because it _had_ dispatched a
+click. The group-detail rung silently never opened while every beat reported as
+landed.
+
+So **every pointer interaction freezes the drift for its whole duration**, in one
+place (`steadily()` in `helpers.mjs`), wrapping the scroll as well as the click.
+The drift's clock stops rather than keeps running, so releasing resumes from
+where it froze instead of snapping forward.
+
+### The white flash was Storybook's loading overlay, not the backdrop
+
+Three backdrop layers were built and all three verified working — a CDP
+`Emulation.setDefaultBackgroundColorOverride`, a two-phase init that installs the
+stage stylesheet via a `MutationObserver` as soon as any host element exists
+(measured: in `<head>` at 31ms, while `readyState` is still `loading`), and
+`color-scheme: dark`. The document background was ink from the first painted
+frame. The field still went fully white for ~500ms on every navigation.
+
+Sampling `elementFromPoint(6, 6)` frame by frame named it: a full-bleed
+`div.sb-preparing-story.sb-wrapper` with a hard-coded white background, painted
+on top of a backdrop that was never the problem. It is now dressed in ink rather
+than hidden, because `display: none` would also throw away Storybook's error
+display, and an error rendered invisibly during a shoot is worse than a flash.
+
+For the record, since both were tried: the launch switch
+`--default-background-color` is inert in current Chrome, and
+`Page.setDefaultBackgroundColorOverride` has been removed outright.
+
+### Two guards, each with falsifiability controls
+
+- **`check-open.mjs`** judges a 30px backdrop band around the field, **not** the
+  whole frame. The obvious global "what fraction is white" detector does not
+  work and a first run proved it: the panel is near-white and fills 40% of the
+  field by design, and the cold open legitimately reaches 61%, so any threshold
+  clearing that is one a partial flash hides under. The band is ink in every
+  named frame by construction, and it is derived from `PANEL` and `FRAMES` with a
+  drift allowance rather than written down. Controls: a **positive** control runs
+  the same maths over a synthetic all-white buffer and must exceed 0.99, and a
+  **negative** control reads the identical band mid-reel and must come back ink.
+  Both print before any verdict.
+- **`check-margin.mjs` is frame-aware.** Its rects used to be hard-coded to the
+  panel-right layout. Once the camera can put the panel on the left those numbers
+  land on the _panel_, so the check reports "populated" for a blank margin and
+  its control strip reads as content — both silent, both pointing the wrong way.
+  Each beat now records the frame it ended in and the checker derives its rects
+  from `FRAMES`. Marginless frames are exempt **by declaration**, not by a
+  threshold that happens to pass.
+
+**`npm run film-demo`** runs the reel and both guards in order, stopping at the
+first failure, and distinguishes exit 2 (a detector failed its own controls, so
+its verdict means nothing) from exit 1 (a bad take). `--reel` now exits non-zero
+when a beat does not land, so the gate has something to read.
+
+### The bloom is a deliberate reversal
+
+The first amendment said the backdrop is "flat, not a two-blob gradient". That
+rule was written against decorative background blobs and it stands for those. A
+soft radial bloom **anchored behind the panel and travelling with it** is a
+different thing: it is the light the panel implies, and it is what stops the ink
+field banding in webm. Recorded here as a reversal rather than quietly reverted.
+
+### The reel's contents changed again
+
+- **The bulk-operation scene is gone.** It narrated 48 membership writes over the
+  Users tab's search box with the ActivityBar's numbers typed in from the script,
+  and nothing was ever written. Its slot goes to **MFA coverage**, which drives
+  the real `scanGroupMfa`: one `GET /api/v1/users/{id}/factors` per member, the
+  single job in this app that no query parameter collapses, and therefore the one
+  place the scheduler's progress bar reports on work an administrator genuinely
+  waits for. Factor data is **derived** from each user's own status, employee type
+  and department, so the coverage figure is a consequence of the org — and
+  filtering the roster to the unenrolled returns exactly those people.
+- **A composition scene was added**, reading a group as a population: facets the
+  panel discovered for itself, filters that compose, and a sort over the same
+  roster.
+- **No caption states a figure the panel does not display, and that is now
+  enforced rather than remembered.** `readRoster()` reads the panel's own
+  "Members N of M" heading at run time and the proof line is built from it.
+- **The rule-impact scene is held out of the reel.** It narrates a product bug:
+  `ruleImpact` models deactivation as retracting membership, and Okta does not
+  work that way. Filed as `D-045`, not fixed here. When the fix lands the scene
+  returns arguing **both verbs side by side** — deactivate, where nobody moves
+  but N members become unattributed, and delete, where `removeUsers` chooses
+  irreversibly between removing them and keeping them as manual members.
