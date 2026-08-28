@@ -705,3 +705,26 @@ block says they mean — same vocabulary, one definition, defined there.
   either kept as a redundant affordance or removed — and the story covers
   both the header click and the keyboard path.
 - **Risk:** Low — one component, existing pattern to copy from two siblings.
+
+### I-024 · Org-snapshot findings say "of 1 applications"
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Verified:** 2026-08-28
+- **Files:** `src/sidepanel/hooks/useOrgFigures.ts:186-187,209,226`,
+  `src/sidepanel/components/home/OrgSnapshotCard.tsx`
+- **Problem:** Each finding renders `of {count} {noun}` where `noun` is a
+  hardcoded plural (`'applications'`, `'group rules'`, `'groups'`), so a
+  single-item denominator reads "of 1 applications" and "of 1 group rules".
+  Visible on the Home tab, which is the panel's landing surface and the first
+  thing an admin sees — spotted by screenshotting it at 360px during the
+  ADR-0048 polish pass, not by any test.
+- **Done when:** the denominator pluralises on its count. Check whether a
+  pluralisation helper already exists before adding one — several surfaces
+  (`'N Policy/Policies'` in `AuthPoliciesTab`, the member counts in
+  `groupIdentity`) already solve this locally, and a fourth private
+  implementation is the drift `Eyebrow` and `ListRow` exist to prevent.
+- **Risk:** Low — display string only, no API or cache behaviour. Note
+  `useOrgFigures.test.tsx:130-131` asserts the current plural nouns and will
+  need retargeting to the new contract.
