@@ -61,11 +61,11 @@ to park clear of the ones above it. Two of them are no longer in that scroller, 
 stack is two bands, and the offset the rail existed to publish is now structural — the
 scroller's own top edge already begins beneath the rail.
 
-| Band            | Position                       | Publishes                      | Consumes     |
-| --------------- | ------------------------------ | ------------------------------ | ------------ |
-| `TabNavigation` | static, outside the scroller   | —                              | —            |
-| `PageHeader`    | `sticky top-0 z-20`            | `--header-h` on its `TabPanel` | —            |
-| `ActionBar`     | `sticky top-[--header-h] z-30` | —                              | `--header-h` |
+| Band            | Position                                | Publishes                      | Consumes     |
+| --------------- | --------------------------------------- | ------------------------------ | ------------ |
+| `TabNavigation` | static, outside the scroller            | —                              | —            |
+| `PageHeader`    | `sticky top-0 z-20`                     | `--header-h` on its `TabPanel` | —            |
+| `ActionBar`     | `sticky top-[var(--header-h,0px)] z-30` | —                              | `--header-h` |
 
 Every consumer read the rail's height through a `var(--rail-h, 0px)` fallback, so the
 arithmetic collapses rather than breaks: `calc(var(--rail-h,0px) + var(--header-h,0px))`
@@ -86,7 +86,7 @@ work the `rootMargin` used to.
 
 A band that scrolls away can afford to be three lines tall. A band that never does cannot.
 `ContextBar` was ~74px — a wordmark eyebrow, the entity name with a _Pinned_ chip, and a
-copyable id. It is now a single ~44px row: a hue-coded connection dot, the entity name,
+copyable id. It is now a single 48px row: a hue-coded connection dot, the entity name,
 Refresh, and the Pin toggle.
 
 Each line was cut for its own reason rather than to hit a number, and all three reasons
@@ -107,9 +107,9 @@ asking two adjacent bands to be read carefully.
 The Pin control also stops being a hand-rolled `<button>` and becomes the shared `Button`,
 which CLAUDE.md required all along.
 
-### 3. Fixed chrome is a budget, and it is now ~87px
+### 3. Fixed chrome is a budget, and it is now 91px
 
-`ContextBar` (~44px) + the rail (~43px). That is the standing cost of the panel's chrome
+`ContextBar` (48px) + the rail (43px), measured in Chromium at both 360 and 480. That is the standing cost of the panel's chrome
 at every width, and it is the number to argue with when either band wants to grow. The old
 arrangement had no such number — the chrome's cost varied with scroll position, which is
 precisely why it was never counted.
@@ -119,7 +119,7 @@ precisely why it was never counted.
 - **The scrollbar starts where the content does.** The bands keep their full width and
   their full-bleed backgrounds; no gutter, no seam.
 - **`ContextBar` no longer scrolls away.** Connection state and the pin are always
-  reachable, which is the upside; ~44px is permanently spent, which is the price. It is
+  reachable, which is the upside; 48px is permanently spent, which is the price. It is
   paid back roughly one-for-one by what the bar stopped saying twice.
 - **Nested scrollers are unaffected.** `.scrollable-list` (the groups list, the member
   explorer) keeps its reserved 6px gutter and its own styled bar. The panel now has
@@ -128,6 +128,10 @@ precisely why it was never counted.
 - **`usePublishedHeight`'s document-root mode has no caller.** It is kept — the hook is
   general and its unit tests exercise both modes — but the panel's only live publisher is
   now `PageHeader`'s `TabPanel`-scoped one.
+- **A wrapping `PageHeader` is now the tallest thing above the fold.** Measured at 360px:
+  91px of chrome plus a 114px header on the Groups rung, whose subtitle wraps to three
+  lines. That is a header problem, not a chrome one and not addressed here — but the
+  chrome budget above is what makes it countable.
 - **Not verified here:** the `overflow-anchor: none` oscillation `App.tsx` documents. The
   header's parking line moved from `--rail-h` to `0`, which is the input to that loop, and
   confirming it needs `dist/` loaded against a live Okta session.
