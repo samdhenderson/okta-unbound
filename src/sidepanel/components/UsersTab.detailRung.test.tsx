@@ -54,12 +54,13 @@ vi.mock('../hooks/useUserContext', () => ({
   useUserContext: () => userContext.current,
 }));
 
-// RulesCache is chrome.storage-backed; stub it so the org rule inventory the
-// classifier reads is exactly what a test declares.
-const rulesCacheGet = vi.hoisted(() => vi.fn());
-const rulesCacheSet = vi.hoisted(() => vi.fn());
+// RulesCache is chrome.storage-backed; stub it so nothing under test reaches
+// real extension storage. It is no longer where the classifier's rule inventory
+// comes from — since D-029b that is the org snapshot, and with none seeded here
+// the hook falls through to the `/api/v1/groups/rules` listing the route table
+// below serves. The seeding moved to that route; the assertions did not.
 vi.mock('../../shared/rulesCache', () => ({
-  RulesCache: { get: rulesCacheGet, set: rulesCacheSet },
+  RulesCache: { get: vi.fn().mockResolvedValue(null), set: vi.fn() },
 }));
 
 // addUserToGroup logs an undo action on success; not under test here.
@@ -156,6 +157,25 @@ const RULE = {
 };
 
 /**
+ * `RULE` as Okta returns it, for the rules listing the panel formats in-panel.
+ *
+ * The rule inventory used to be declared directly in its display shape through
+ * the `RulesCache` stub. It now arrives raw, over the same scheduler path
+ * everything else here uses, and the panel derives the display shape from it —
+ * so this is the same rule, stated where it actually comes from (D-029b).
+ */
+const RAW_RULE = {
+  id: RULE.id,
+  name: RULE.name,
+  status: RULE.status,
+  type: 'group_rule',
+  created: '2026-01-01T00:00:00.000Z',
+  lastUpdated: '2026-01-01T00:00:00.000Z',
+  conditions: RULE.conditions,
+  actions: { assignUserToGroups: { groupIds: [gRuleFed.id] } },
+};
+
+/**
  * A membership shaped exactly as the real pipeline produces it, so the expected
  * prose can be **derived** from `membershipSourceLine` rather than hard-coded.
  * The wording is about to move surfaces; where it is worded is not this file's
@@ -230,11 +250,10 @@ beforeEach(() => {
   route(/^\/api\/v1\/users\?/, () => ({ success: true, data: [] }));
   route(new RegExp(`^/api/v1/users/${ADA_ID}$`), () => ({ success: true, data: ada() }));
   route(new RegExp(`^/api/v1/users/${ADA_ID}/groups`), () => ({ success: true, data: [] }));
-  route(/^\/api\/v1\/groups\/rules/, () => ({ success: true, data: [] }));
+  // The org rule inventory the classifier reads: one ACTIVE rule feeding
+  // `gRuleFed`, served raw from the listing the panel formats in-panel.
+  route(/^\/api\/v1\/groups\/rules/, () => ({ success: true, data: [RAW_RULE] }));
   route(/^\/api\/v1\/apps/, () => ({ success: true, data: [], headers: {} }));
-
-  rulesCacheGet.mockResolvedValue({ rules: [RULE] });
-  rulesCacheSet.mockResolvedValue(undefined);
 
   runtimeSendMessage.mockImplementation(async (msg: any) => {
     if (msg.action !== 'scheduleApiRequest') return { success: false };
@@ -294,7 +313,6 @@ describe('detail rung: memberships render with their source line', () => {
     const uev = userEvent.setup();
     // The only way to reach UNKNOWN from this surface: the rule inventory could
     // not be obtained, so nothing may be concluded about any group (ADR-0020).
-    rulesCacheGet.mockResolvedValue(null);
     route(/^\/api\/v1\/groups\/rules/, () => ({ success: false, error: 'rules unavailable' }));
     route(new RegExp(`^/api/v1/users/${ADA_ID}/groups`), () => ({
       success: true,

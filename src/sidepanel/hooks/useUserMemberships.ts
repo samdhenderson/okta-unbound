@@ -5,7 +5,8 @@
  * Okta's API does not report how a user landed in a group, so this module infers
  * it heuristically via `shared/utils/membershipAnalysis` (APP_GROUP → rule,
  * rule-exclusion → direct, matching active rules → rule, otherwise direct).
- * Group rules are read from the shared `RulesCache` and refetched on a miss.
+ * Group rules come from the background-owned org snapshot's `rules` collection
+ * and are refetched only when that collection has no completed walk for this org.
  *
  * ## This is the *heuristic-only* attribution path (ADR-0020)
  *
@@ -31,12 +32,29 @@
  * The same inventory is handed back to callers as {@link UseUserMembershipsReturn.rules},
  * as a {@link RuleInventoryState} that keeps three separate answers apart —
  * obtained, could-not-obtain, and not-resolved-yet (see the type's own doc comment).
+ *
+ * ## One source of rules, joined at read time (D-029b)
+ *
+ * The inventory used to come from `shared/rulesCache`, a `chrome.storage.local`
+ * slot with its own five-minute TTL. That made "why is this user in this group"
+ * and every other rule-derived answer on screen readable from two stores that
+ * could disagree, with nothing detecting or showing the disagreement. It now
+ * derives from the snapshot's raw rows the way `useGroupsLoader` does —
+ * `detectConflicts` once, then `formatRuleForDisplay` per row — because caching
+ * a join is only one more thing to invalidate.
  */
 
 import { useState, useCallback, useRef } from 'react';
-import type { OktaUser, GroupMembership, OktaGroup, FormattedRule } from '../../shared/types';
-import { RulesCache } from '../../shared/rulesCache';
-import { getOrFetch, peek, invalidate } from '../cache/entityCache';
+import type {
+  OktaUser,
+  GroupMembership,
+  OktaGroup,
+  OktaGroupRule,
+  FormattedRule,
+} from '../../shared/types';
+import { detectConflicts, formatRuleForDisplay } from '../../shared/ruleUtils';
+import { orgSnapshotStore } from '../../shared/snapshot/orgSnapshotStore';
+import { getOrFetch, peek, setEntry, invalidate } from '../cache/entityCache';
 import { cacheKeys } from '../cache/keys';
 import { analyzeMemberships, unclassifiedMemberships } from '../../shared/utils/membershipAnalysis';
 import { createLogger } from '../../shared/utils/logger';
@@ -55,9 +73,9 @@ const log = createLogger('useUserMemberships');
  * fetcher entirely — still end up holding the rules without paying a second fetch
  * per user.
  *
- * Deliberately not `RulesCache`: the rules fetched here are requested with
- * `resolveGroupNames: false`, so they carry ids where the Rules tab expects real
- * group names. Writing them into the shared cache would corrupt that surface.
+ * It also holds the derived join: `detectConflicts` is quadratic in the org's
+ * rule count, so paying it once per key rather than once per consumer is the
+ * point of publishing here rather than deriving in each caller.
  */
 const RULE_INVENTORY_KEY = 'groupRuleInventory';
 
@@ -91,6 +109,16 @@ interface UseUserMembershipsOptions {
   /** Tab whose content script fetches groups/rules; loading errors when undefined. */
   targetTabId: number | undefined;
   /**
+   * Connected org origin — what the org snapshot's `rules` collection is scoped
+   * by, and therefore where the rule inventory is read from.
+   *
+   * `null`/`undefined` before it resolves, which reads nothing rather than
+   * reading some other org's rules; the inventory then falls back to the
+   * paginated fetch below, exactly as a cold snapshot does. Omitting it is
+   * legal and costs one rules listing per cache TTL.
+   */
+  oktaOrigin?: string | null;
+  /**
    * Notified whenever the load error changes — `null` on start/success, the
    * message on failure. Lets an orchestrator mirror this into a single merged
    * error channel it owns (last-write-wins). Optional; consumers that read the
@@ -116,10 +144,12 @@ interface UseUserMembershipsReturn {
    * across all users rather than one per user. The two paths differ in what they
    * are allowed to do about a miss:
    *
-   * - A load that fetches resolves it fully, fetching the rules if no cache holds
-   *   them, and publishes `unavailable` if that attempt fails.
-   * - A **memberships cache hit** may only adopt an inventory already in hand: it
-   *   must issue no request. With nothing cached this stays `unresolved`.
+   * - A load that fetches resolves it fully, falling back to a rules listing
+   *   when the snapshot has no completed walk for this org, and publishes
+   *   `unavailable` if that attempt fails.
+   * - A **memberships cache hit** may only adopt an inventory already in hand —
+   *   the entity cache or the snapshot, both local: it must issue no request.
+   *   With neither holding rules this stays `unresolved`.
    *
    * Either way it resolves *after* the memberships land, so this can legitimately
    * read `unresolved` on the render that first shows them; consumers must render
@@ -150,7 +180,8 @@ interface UseUserMembershipsReturn {
  *
  * Features:
  * - Fetches user's groups from Okta API
- * - Uses cached rules when available
+ * - Derives the org rule inventory from the org snapshot, listing rules only
+ *   when the snapshot has no completed walk for the connected org
  * - Analyzes membership types (DIRECT vs RULE_BASED)
  *
  * @param options - See `UseUserMembershipsOptions`.
@@ -162,6 +193,7 @@ interface UseUserMembershipsReturn {
  */
 export function useUserMemberships({
   targetTabId,
+  oktaOrigin,
   onError,
   onLoadingChange,
 }: UseUserMembershipsOptions): UseUserMembershipsReturn {
@@ -184,6 +216,15 @@ export function useUserMemberships({
   const callbacksRef = useRef({ onError, onLoadingChange });
   callbacksRef.current = { onError, onLoadingChange };
 
+  // Held in a ref for the same reason, and it matters more here: the origin
+  // resolves a beat after mount, so keying the inventory callbacks on it would
+  // change `loadMemberships`'s identity mid-flight and re-run every caller's
+  // `[selectedUser, loadMemberships]` effect — one of which reloads with
+  // `{ force: true }`. Read at call time instead, which is also the value the
+  // load should be reading the org's rules for.
+  const oktaOriginRef = useRef(oktaOrigin);
+  oktaOriginRef.current = oktaOrigin;
+
   const reportError = useCallback((message: string | null) => {
     setError(message);
     callbacksRef.current.onError?.(message);
@@ -194,10 +235,43 @@ export function useUserMemberships({
   }, []);
 
   /**
+   * Derive the org's rule inventory from the snapshot, or `null` when the
+   * snapshot cannot answer for this org yet.
+   *
+   * The join is computed here rather than stored, following
+   * `useGroupsLoader`: `detectConflicts` over the raw rows once, then
+   * `formatRuleForDisplay(rule, undefined, conflicts)` per row. No
+   * `currentGroupId` is passed because the inventory is org-wide — baking one
+   * group's `affectsCurrentGroup` flag into it would be wrong for every other
+   * consumer (the reason `groupDiscovery` gives for the same call).
+   *
+   * The gate is the collection's `complete` flag, not "the snapshot returned
+   * rows" (D-038, ADR-0040 §7). A partial walk is a prefix of the org, and this
+   * inventory is load-bearing: a rule missing from it makes its target group
+   * look untargeted, which the classifier reports as a confident "added by
+   * hand". An org with genuinely zero rules is a real answer (`[]`), which the
+   * row count could not distinguish from a cold store.
+   *
+   * @returns The derived display rules, or `null` when no origin has resolved
+   * or the `rules` walk has not completed for it.
+   */
+  const deriveSnapshotRuleInventory = useCallback(async (): Promise<FormattedRule[] | null> => {
+    const origin = oktaOriginRef.current;
+    if (!origin) return null;
+    const meta = await orgSnapshotStore.getMeta('rules', origin);
+    if (!meta.complete) return null;
+    // Rows were zod-parsed against `oktaGroupRuleSchema` on write by the
+    // background walk (ADR-0006), so this is a read of already-validated data.
+    const rawRules = await orgSnapshotStore.getCollection<OktaGroupRule>('rules', origin);
+    const conflicts = detectConflicts(rawRules);
+    return rawRules.map((rule) => formatRuleForDisplay(rule, undefined, conflicts));
+  }, []);
+
+  /**
    * Adopt the rule inventory **only if it is already in hand**, issuing no request.
    *
-   * Both reads are local: the entity cache is in memory, and `RulesCache` is a
-   * `chrome.storage.local` slot. Neither touches the content script.
+   * Both reads are local: the entity cache is in memory, and the org snapshot is
+   * IndexedDB the background already filled. Neither touches the content script.
    *
    * Finding nothing deliberately leaves the state alone rather than writing
    * `unavailable` — "nobody has fetched these yet" is not "the fetch failed", and
@@ -209,9 +283,14 @@ export function useUserMemberships({
       setRuleInventory({ status: 'available', rules: cached });
       return;
     }
-    const cachedRules = await RulesCache.get();
-    if (cachedRules) setRuleInventory({ status: 'available', rules: cachedRules.rules });
-  }, []);
+    const derived = await deriveSnapshotRuleInventory();
+    if (!derived) return;
+    // Publish the join, not just the state: the next consumer — another user's
+    // load, or this hook after a remount — then peeks it instead of paying the
+    // quadratic conflict pass again.
+    setEntry(RULE_INVENTORY_KEY, derived);
+    setRuleInventory({ status: 'available', rules: derived });
+  }, [deriveSnapshotRuleInventory]);
 
   /**
    * Obtain the org rule inventory and publish it, returning what was obtained.
@@ -227,17 +306,18 @@ export function useUserMemberships({
    */
   const loadRuleInventory = useCallback(async (): Promise<FormattedRule[] | null> => {
     const rules = await getOrFetch<FormattedRule[] | null>(RULE_INVENTORY_KEY, async () => {
-      // Membership analysis matches only on group ids, condition expressions,
-      // and user attributes — never a resolved group name — so skip the
-      // per-referenced-group name fan-out (otherwise hundreds of wasted
-      // GET /groups/{id} calls just to load one user's memberships).
-      const cachedRules = await RulesCache.get();
-      if (cachedRules) {
-        log.debug('Using cached rules from global cache');
-        return cachedRules.rules;
+      const derived = await deriveSnapshotRuleInventory();
+      if (derived) {
+        log.debug('Deriving the rule inventory from the org snapshot', { count: derived.length });
+        return derived;
       }
 
-      log.debug('Cache miss - fetching rules (names not needed for analysis)');
+      // No completed walk for this org yet. Membership analysis matches only on
+      // group ids, condition expressions, and user attributes — never a
+      // resolved group name — so skip the per-referenced-group name fan-out
+      // (otherwise hundreds of wasted GET /groups/{id} calls just to load one
+      // user's memberships).
+      log.debug('Snapshot cold - fetching rules (names not needed for analysis)');
       const rulesResponse = await fetchGroupRulesRequest(makeApiRequest, undefined, {
         resolveGroupNames: false,
       });
@@ -246,9 +326,6 @@ export function useUserMemberships({
         log.warn('Could not fetch rules for analysis:', rulesResponse.error);
         return null;
       }
-      // Intentionally NOT populating RulesCache here: these rules carry
-      // ids-as-names (name resolution was skipped), and the Rules tab relies on
-      // the shared cache holding real group names.
       return rulesResponse.rules || [];
     });
 
@@ -256,7 +333,7 @@ export function useUserMemberships({
 
     setRuleInventory(rules === null ? { status: 'unavailable' } : { status: 'available', rules });
     return rules;
-  }, [makeApiRequest]);
+  }, [deriveSnapshotRuleInventory, makeApiRequest]);
 
   const loadMemberships = useCallback(
     async (user: OktaUser, options?: { force?: boolean }) => {
@@ -355,7 +432,8 @@ export function useUserMemberships({
       }
     },
     // Both inventory callbacks are keyed on stable values (`makeApiRequest`, and
-    // nothing at all), so this keeps the stable identity the auto-load guard
+    // the snapshot derive, which reads the origin from a ref rather than taking
+    // it as a dep), so this keeps the stable identity the auto-load guard
     // depends on.
     [
       targetTabId,

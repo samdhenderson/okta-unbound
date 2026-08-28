@@ -75,25 +75,43 @@ export function createRuleImpactOperations(
    * pagination at low priority so it never starves interactive requests.
    *
    * @remarks Served from the background-owned org snapshot's `rules` collection
-   * (`RULES_SPEC`) when it holds rows for this org, so opening the impact
-   * preview does not re-paginate `/api/v1/groups/rules` and cannot disagree with
-   * the rule attribution other surfaces derive from the same rows (D-029a). A
-   * cold snapshot — or no origin yet — falls through to the fetch below.
+   * (`RULES_SPEC`) when that collection's walk **completed** for this org, so
+   * opening the impact preview does not re-paginate `/api/v1/groups/rules` and
+   * cannot disagree with the rule attribution other surfaces derive from the
+   * same rows (D-029a). A cold or mid-walk snapshot — or no origin yet — falls
+   * through to the fetch below.
+   *
+   * The gate is `complete` from the collection's sync meta, not "the snapshot
+   * returned rows" (D-038). A partial walk is a prefix of the org, not the org
+   * (ADR-0040 §7): a rule already deleted in Okta can survive in it un-swept,
+   * and a surviving stale rule reads as "another active rule still covers this
+   * member", which **understates** who loses access — a confident wrong answer
+   * to an access question. The row-count heuristic also failed the opposite way,
+   * since an org with genuinely zero rules could never satisfy it and so
+   * re-listed the endpoint on every preview even when fully synced.
+   *
+   * ADR-0040 §7 points at the more informative remedy — carry the incompleteness
+   * through to the UI so the admin gets a caveated answer rather than a walk —
+   * and it remains the better end state. It is not taken here only because it
+   * reaches component files outside D-038's scope; refusing to serve is
+   * contained entirely within this module and can never serve a wrong answer.
    */
   const fetchRawRules = async (): Promise<OktaGroupRule[]> => {
     if (oktaOrigin) {
-      // Rows were zod-parsed against `oktaGroupRuleSchema` on write by the
-      // snapshot walk (ADR-0006), so this is a read of already-validated data;
-      // the widen through `unknown` is the same one the fetch path documents
-      // below, for the same passthrough reason.
-      const stored = await orgSnapshotStore.getCollection<OktaGroupRuleResponse>(
-        'rules',
-        oktaOrigin,
-      );
-      if (stored.length > 0) {
+      const meta = await orgSnapshotStore.getMeta('rules', oktaOrigin);
+      if (meta.complete) {
+        // Rows were zod-parsed against `oktaGroupRuleSchema` on write by the
+        // snapshot walk (ADR-0006), so this is a read of already-validated data;
+        // the widen through `unknown` is the same one the fetch path documents
+        // below, for the same passthrough reason.
+        const stored = await orgSnapshotStore.getCollection<OktaGroupRuleResponse>(
+          'rules',
+          oktaOrigin,
+        );
         log.debug('Serving raw rules from the org snapshot', { count: stored.length });
         return stored as unknown as OktaGroupRule[];
       }
+      log.debug('Org snapshot rules incomplete; paginating instead');
     }
 
     const rules = await fetchAllPages<OktaGroupRuleResponse>(

@@ -77,7 +77,7 @@ const UserOverview: React.FC<UserOverviewProps> = ({
     isLoading: isLoadingMemberships,
     error: membershipError,
     loadMemberships,
-  } = useUserMemberships({ targetTabId });
+  } = useUserMemberships({ targetTabId, oktaOrigin });
 
   const isLoading = isLoadingUser || isLoadingMemberships;
 

@@ -43,12 +43,13 @@ vi.mock('../hooks/useUserContext', () => ({
   useUserContext: () => userContext.current,
 }));
 
-// RulesCache is chrome.storage-backed; stub it so membership analysis is driven
-// purely by fixtures. Default: cache miss (forces the fetchGroupRules round-trip).
-const rulesCacheGet = vi.hoisted(() => vi.fn());
-const rulesCacheSet = vi.hoisted(() => vi.fn());
+// RulesCache is chrome.storage-backed; stub it so nothing under test reaches
+// real extension storage. It is no longer where membership analysis gets its
+// rule inventory — since D-029b that is the org snapshot, and with none seeded
+// here the hook falls through to the `/api/v1/groups/rules` listing, which the
+// route table already drives. Every case below declares its rules there.
 vi.mock('../../shared/rulesCache', () => ({
-  RulesCache: { get: rulesCacheGet, set: rulesCacheSet },
+  RulesCache: { get: vi.fn().mockResolvedValue(null), set: vi.fn() },
 }));
 
 // addUserToGroup logs an undo action on success.
@@ -145,13 +146,25 @@ function rawGroup(over: Record<string, any> = {}) {
   };
 }
 
+/**
+ * An ACTIVE rule feeding `g1`, raw — as the `/api/v1/groups/rules` listing
+ * returns it and the panel formats it in-panel.
+ *
+ * It used to be declared in the display shape and handed to the classifier
+ * through the `RulesCache` stub; the inventory now arrives over the same
+ * scheduler path as everything else here, so the fixture states the raw shape
+ * Okta actually sends (D-029b).
+ */
 function activeRule(over: Record<string, any> = {}) {
   return {
     id: 'r1',
     name: 'Eng auto-assign',
     status: 'ACTIVE',
-    groupIds: ['g1'],
+    type: 'group_rule',
+    created: '2026-01-01T00:00:00.000Z',
+    lastUpdated: '2026-01-01T00:00:00.000Z',
     conditions: { expression: { value: 'user.department == "Engineering"' } },
+    actions: { assignUserToGroups: { groupIds: ['g1'] } },
     ...over,
   };
 }
@@ -258,9 +271,6 @@ beforeEach(() => {
   // UsersTab makes no direct chrome.tabs.sendMessage calls after §8; the stub only
   // lets `tabCalls('searchUsers')` assert the old bypass is gone (always zero).
   tabsSendMessage.mockResolvedValue({ success: false, error: 'no direct tab calls' });
-
-  rulesCacheGet.mockResolvedValue(null); // cache miss by default
-  rulesCacheSet.mockResolvedValue(undefined);
 
   runtimeSendMessage.mockImplementation(async (msg: any) => {
     if (msg.action !== 'scheduleApiRequest') return { success: false };
@@ -492,7 +502,6 @@ describe('membership classification (in-file heuristic)', () => {
       success: true,
       data: [rawGroup({ id: 'g2', type: 'APP_GROUP', profile: { name: 'Salesforce' } })],
     }));
-    rulesCacheGet.mockResolvedValue({ rules: [] });
 
     render(<UsersTab targetTabId={1} />);
     // real-timer search (600ms) drives selection
@@ -509,7 +518,7 @@ describe('membership classification (in-file heuristic)', () => {
 
   it('classifies a group with a matching ACTIVE rule as RULE_BASED and shows the rule', async () => {
     route(USER_GROUPS, () => ({ success: true, data: [rawGroup()] }));
-    rulesCacheGet.mockResolvedValue({ rules: [activeRule()] });
+    route(GROUP_RULES, () => ({ success: true, data: [activeRule()] }));
 
     render(<UsersTab targetTabId={1} />);
     fireEvent.change(userSearchInput(), { target: { value: 'ada' } });
@@ -523,7 +532,6 @@ describe('membership classification (in-file heuristic)', () => {
 
   it('classifies a group with no active rules as DIRECT', async () => {
     route(USER_GROUPS, () => ({ success: true, data: [rawGroup()] }));
-    rulesCacheGet.mockResolvedValue({ rules: [] });
 
     render(<UsersTab targetTabId={1} />);
     fireEvent.change(userSearchInput(), { target: { value: 'ada' } });
@@ -538,20 +546,46 @@ describe('membership classification (in-file heuristic)', () => {
     expect(screen.getByText('Added directly')).toBeInTheDocument();
   });
 
-  it('classifies an excluded user as DIRECT even when an active rule targets the group', async () => {
-    // Behavior adopted from useUserMemberships: a user on the exclusion list of
-    // every matching rule is a manual add (DIRECT), not RULE_BASED.
+  // CHARACTERIZED (a real defect, flagged here and filed, not fixed): this case
+  // was titled "classifies an excluded user as DIRECT even when an active rule
+  // targets the group" and asserted the `Direct` badge with the rule unnamed.
+  // It was green only because its fixture reached the classifier as a rule
+  // object carrying `conditions.people.users.exclude` — a shape **no producer
+  // on this surface emits**. Both of the tab's rule sources hand the classifier
+  // `FormattedRule`s, and `formatRuleForDisplay` keeps `groupIds`,
+  // `conditionExpression` and `userAttributes` and drops `conditions` outright.
+  // `membershipAnalysis.isUserExcludedFromRule` documents that hole in so many
+  // words and deliberately leaves it to the *producer* to close.
+  //
+  // D-029b did not cause it and does not fix it: before the migration the
+  // inventory came from `RulesCache`, whose stored rules are the same formatted
+  // shape, so production has always answered this way. It only became visible
+  // when the seeding moved onto a path that formats what it is given, instead of
+  // injecting a hand-built object past the formatter.
+  //
+  // What stays covered (ADR-0022): the classifier's exclusion branch is pinned
+  // on the raw shape it actually reads by
+  // `shared/utils/membershipAnalysis.test.ts` ("classifies as DIRECT when the
+  // user is excluded from every matching rule", plus the partial-exclusion and
+  // candidate-set cases), and end-to-end against Okta's own attribution by
+  // `shared/membership/attributionParity.test.ts`. What is pinned here is what
+  // *this surface* really tells an admin today.
+  it('CHARACTERIZED (defect): over-attributes an excluded user to the rule that excludes them', async () => {
     route(USER_GROUPS, () => ({ success: true, data: [rawGroup()] }));
-    rulesCacheGet.mockResolvedValue({
-      rules: [activeRule({ conditions: { people: { users: { exclude: ['u1'] } } } })],
-    });
+    route(GROUP_RULES, () => ({
+      success: true,
+      data: [activeRule({ conditions: { people: { users: { exclude: ['u1'] } } } })],
+    }));
 
     render(<UsersTab targetTabId={1} />);
     fireEvent.change(userSearchInput(), { target: { value: 'ada' } });
     fireEvent.click(await screen.findByText('Ada Lovelace', {}, { timeout: 2000 }));
 
-    expect(within(await membershipRow('Engineering')).getByText('Direct')).toBeInTheDocument();
-    expect(screen.queryByText('Eng auto-assign')).not.toBeInTheDocument();
+    // The honest answer is `Direct`. The row says `Rule?` — hedged, because the
+    // exclusion the rule carries never reached the classifier.
+    const engineering = await membershipRow('Engineering');
+    expect(within(engineering).getByText('Rule?')).toBeInTheDocument();
+    expect(within(engineering).queryByText('Direct')).not.toBeInTheDocument();
   });
 
   // FLIPPED (ADR-0012): this case used to assert `expect(screen.getByText('DIRECT'))`
@@ -567,7 +601,6 @@ describe('membership classification (in-file heuristic)', () => {
   // degrades the answer, it does not fail the load.
   it('reports memberships as UNKNOWN, not a confident DIRECT, when rules cannot be fetched', async () => {
     route(USER_GROUPS, () => ({ success: true, data: [rawGroup()] }));
-    rulesCacheGet.mockResolvedValue(null);
     route(GROUP_RULES, () => ({ success: false, error: 'nope' }));
 
     render(<UsersTab targetTabId={1} />);

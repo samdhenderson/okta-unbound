@@ -18,6 +18,11 @@
  * Two cases the old source had no equivalent for are added: no origin yet, and
  * a snapshot holding a different org.
  *
+ * D-038 changed the gate from "the snapshot returned rows" to "the collection's
+ * walk completed", so `seedSnapshotRules` now also records the completion a real
+ * walk would, and two cases pin the two directions the row count got wrong: a
+ * mid-walk snapshot must not be served, and a complete-but-empty one must be.
+ *
  * Fixtures use only fake placeholders (`0prFAKE…`, `00gFAKE…`, `00uFAKE…`,
  * `example.com`) per CLAUDE.md.
  */
@@ -54,6 +59,8 @@ vi.mock('idb', () => ({ openDB: vi.fn(async () => fakeDB) }));
 
 import { createRuleImpactOperations } from './ruleImpact';
 import type { CoreApi } from './core';
+import { emptySyncMeta } from '../../../shared/snapshot/syncMeta';
+import type { SyncMeta } from '../../../shared/snapshot/types';
 import type { OktaGroupRule, OktaUser } from '../../../shared/types';
 import { OperationCancelledError } from '../../../shared/scheduler/cancellation';
 import { makeFakeCore, sequentialRunOperation } from '@/test/factories/coreApi';
@@ -164,6 +171,18 @@ function seedRulesCache(rawRules: OktaGroupRule[], ageMs = 0) {
   vi.mocked(chrome.storage.local.remove).mockResolvedValue(undefined as never);
 }
 
+/**
+ * Write the `rules` collection's sync bookkeeping, as the background walk would.
+ *
+ * Keyed `${origin}::rules` because the store reads it with the composite key
+ * `[origin, collection]`, which the IndexedDB fake joins with `::`.
+ */
+function seedRulesMeta(patch: Partial<SyncMeta>, origin = ORIGIN) {
+  const table = (idbTables.get('syncMeta') ?? new Map()) as Map<string, unknown>;
+  table.set(`${origin}::rules`, { ...emptySyncMeta(origin, 'rules'), ...patch });
+  idbTables.set('syncMeta', table);
+}
+
 /** Write rule rows into the snapshot the panel reads, as a completed walk would. */
 function seedSnapshotRules(rules: OktaGroupRule[], origin = ORIGIN) {
   const table = (idbTables.get('rules') ?? new Map()) as Map<string, unknown>;
@@ -171,6 +190,9 @@ function seedSnapshotRules(rules: OktaGroupRule[], origin = ORIGIN) {
     table.set(`${origin}::${entity.id}`, { origin, id: entity.id, entity, syncedAt: WALKED_AT });
   }
   idbTables.set('rules', table);
+  // A completed walk records its own completion; the rows alone are not the
+  // contract a reader is allowed to trust (ADR-0040 §7, D-038).
+  seedRulesMeta({ complete: true, lastFullWalkAt: WALKED_AT, itemCount: rules.length }, origin);
 }
 
 /** makeApiRequest that serves group meta but rejects any rules pagination. */
@@ -264,6 +286,8 @@ describe('fetchRawRules snapshot consultation', () => {
   });
 
   it('reads only the connected org, paginating when the snapshot holds another org', async () => {
+    // Rows and meta both land under the *other* origin, so this org's snapshot
+    // is cold: nothing stored and no completed walk recorded.
     seedSnapshotRules([cachedRawRule], 'https://other.okta.com');
     const makeApiRequest = vi.fn(async (endpoint: string) => {
       if (endpoint.startsWith('/api/v1/groups/rules')) {
@@ -330,5 +354,70 @@ describe('fetchRawRules snapshot consultation', () => {
       String(c[0]).startsWith('/api/v1/groups/rules'),
     );
     expect(rulesListings).toHaveLength(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // D-038: `complete`, not row count, is the gate
+  // -------------------------------------------------------------------------
+
+  it('does not serve a mid-walk snapshot as the org, paginating instead', async () => {
+    // Rows are present but the walk was interrupted mid-cursor, so the rows are
+    // a prefix of the org, not the org. Trusting them can leave a rule that Okta
+    // has already deleted in the set — which reads as "another active rule still
+    // covers this member" and understates the impact of a deactivation. The
+    // partial snapshot below holds exactly that ghost (`0prFAKE1`, targeting the
+    // same group) alongside the analyzed rule, while the authoritative listing
+    // shows the analyzed rule alone.
+    const analyzedRule: OktaGroupRule = { ...cachedRawRule, id: '0prFAKE9', name: 'Rule Nine' };
+    const staleGhostRule: OktaGroupRule = { ...cachedRawRule, id: '0prFAKE1' };
+    seedSnapshotRules([analyzedRule, staleGhostRule]);
+    seedRulesMeta({
+      complete: false,
+      cursor: '/api/v1/groups/rules?after=0prFAKE1',
+      lastFullWalkAt: null,
+    });
+    const makeApiRequest = vi.fn(async (endpoint: string) => {
+      if (endpoint.startsWith('/api/v1/groups/rules')) {
+        return { success: true, data: [analyzedRule], headers: {} };
+      }
+      return {
+        success: true,
+        data: { id: '00gFAKE1', profile: { name: 'Target Group' }, type: 'OKTA_GROUP' },
+      };
+    });
+    const core = makeCore({ makeApiRequest });
+    const getAllGroupMembers = vi.fn().mockResolvedValue([member]);
+    const { captureRuleImpact } = createRuleImpactOperations(core, getAllGroupMembers, ORIGIN);
+
+    const summary = await captureRuleImpact({ ...analyzedInput, id: '0prFAKE9' });
+
+    const rulesListings = makeApiRequest.mock.calls.filter((c) =>
+      String(c[0]).startsWith('/api/v1/groups/rules'),
+    );
+    expect(rulesListings).toHaveLength(1);
+    // Served from the authoritative listing: the analyzed rule is the only one
+    // covering the member, so deactivating it costs them access.
+    expect(summary.totalLosing).toBe(1);
+  });
+
+  it('serves a complete-but-empty snapshot without re-paginating', async () => {
+    // An org with genuinely zero group rules: the walk finished and stored
+    // nothing. A row-count gate can never be satisfied by that, so it re-listed
+    // `/api/v1/groups/rules` on every impact preview of a fully synced org.
+    seedRulesMeta({ complete: true, lastFullWalkAt: WALKED_AT, itemCount: 0 });
+    const makeApiRequest = routeMetaOnly();
+    const core = makeCore({ makeApiRequest });
+    const getAllGroupMembers = vi.fn().mockResolvedValue([member]);
+    const { captureRuleImpact } = createRuleImpactOperations(core, getAllGroupMembers, ORIGIN);
+
+    const summary = await captureRuleImpact(analyzedInput);
+
+    const rulesListings = makeApiRequest.mock.calls.filter((c) =>
+      String(c[0]).startsWith('/api/v1/groups/rules'),
+    );
+    expect(rulesListings).toHaveLength(0);
+    // No rule manages the member, so the analyzed rule's deactivation costs
+    // nobody access — the empty snapshot really was the answer used.
+    expect(summary.totalLosing).toBe(0);
   });
 });

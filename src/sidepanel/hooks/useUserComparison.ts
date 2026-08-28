@@ -216,7 +216,7 @@ export function useUserComparison({
     rules: ruleInventory,
     loadMemberships,
     clearMemberships,
-  } = useUserMemberships({ targetTabId });
+  } = useUserMemberships({ targetTabId, oktaOrigin });
 
   const [comparedUser, setComparedUser] = useState<OktaUser | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
