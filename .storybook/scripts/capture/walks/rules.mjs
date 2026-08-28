@@ -8,7 +8,7 @@
  * It ends on the one rule that is switched off, and on its expression. It stops
  * short of `Preview Impact` deliberately: that flow models deactivation as
  * retracting membership, which is not how Okta behaves, and a reel must not
- * narrate a bug as a feature (`D-045`).
+ * narrate a bug as a feature (`D-052`).
  *
  * @module
  */

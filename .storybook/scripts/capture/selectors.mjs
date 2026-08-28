@@ -515,7 +515,7 @@ export const loadRulesButton = (page) => page.getByRole('button', { name: /^Load
  * off-by-one there does not fail — it captions the wrong rule's number over a
  * modal that opened perfectly.
  *
- * Held out of the reel for now regardless: `ruleImpact` narrates `D-045`, where
+ * Held out of the reel for now regardless: `ruleImpact` narrates `D-052`, where
  * the app models deactivation as retracting membership and Okta does not.
  */
 export const previewImpactFor = (page, ruleId) =>

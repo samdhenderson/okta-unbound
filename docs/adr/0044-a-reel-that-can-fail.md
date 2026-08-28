@@ -235,7 +235,7 @@ that no file under `src/` is touched by this work:
 does the settle gate, which conceals a late-landing badge by waiting for it rather than
 by reserving room for it. The underlying product defects are a single class: an element
 whose size changes after mount sits beside text that then re-lays-out. They are filed as
-`D-046` and its seven sub-items so that hardening the reel does not quietly retire the
+`D-053` and its seven sub-items so that hardening the reel does not quietly retire the
 symptom it was hardening against.
 
 ### 7. The margin's claim belongs to the scene, and `check-margin` scans continuously
@@ -330,7 +330,7 @@ pushes is still fully covered by `check-settle`.
 Finally, the API sees the reported defect by name. Clicking a group row reports sources
 `DIV.flex-1.min-w-0` and `DIV.shrink-0.flex.items-center`: a `shrink-0` cluster widening
 beside a `flex-1 min-w-0` text column, which is exactly the "text adjusts as the element
-next to it shifts position" complaint, and exactly the shape every item under `D-046`
+next to it shifts position" complaint, and exactly the shape every item under `D-053`
 takes.
 
 ### The instrument failed before the subject did
@@ -386,7 +386,7 @@ the same rule for the same reason.
   `check-settle` red, and dropping the hit test turns a silent pass into a throw.
 - `reel.json` is at schema v2. Every v1 key keeps its name, type and meaning, so
   `check-open` and `check-margin` continue to read it untouched.
-- The class-C product defects survive this work by design. `D-046` holds them, and each
+- The class-C product defects survive this work by design. `D-053` holds them, and each
   sub-item says explicitly that the reel masks the symptom rather than fixing it.
 - The reel's declared-motion ratio is now a published number per chapter. If a future
   change needs to declare more than a third of a scene, that is a signal about the

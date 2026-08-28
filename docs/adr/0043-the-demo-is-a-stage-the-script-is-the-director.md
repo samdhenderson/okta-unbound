@@ -312,7 +312,7 @@ field banding in webm. Recorded here as a reversal rather than quietly reverted.
   "Members N of M" heading at run time and the proof line is built from it.
 - **The rule-impact scene is held out of the reel.** It narrates a product bug:
   `ruleImpact` models deactivation as retracting membership, and Okta does not
-  work that way. Filed as `D-045`, not fixed here. When the fix lands the scene
+  work that way. Filed as `D-052`, not fixed here. When the fix lands the scene
   returns arguing **both verbs side by side** — deactivate, where nobody moves
   but N members become unattributed, and delete, where `removeUsers` chooses
   irreversibly between removing them and keeping them as manual members.
