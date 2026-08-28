@@ -60,14 +60,16 @@ contract and deliberately drops the other half:
 
 ### Verifying the sticky stack
 
-The tab rail, the page header and a detail view's `ActionBar` each park below the one
-before it by publishing a measured height (`--rail-h`, `--header-h`). **None of this is
-checkable in jsdom or in a story** — neither has a scroller. It is a manual pass in the
-loaded extension:
+The page header and a detail view's `ActionBar` park below one another by publishing a
+measured height (`--header-h`). The tab rail is not part of that stack — it sits outside
+the scroller entirely, so the scroller's top edge already begins beneath it (ADR-0050).
+**None of this is checkable in jsdom or in a story** — neither has a scroller. It is a
+manual pass in the loaded extension:
 
 1. Drill into a group with a long member list and scroll. The header must collapse to
-   one line and pin **below** the rail, with the action strip flush beneath it — no
-   overlap, no gap, no jump at the moment it pins.
+   one line and pin at the **top of the content region**, directly under the fixed rail,
+   with the action strip flush beneath it — no overlap, no gap, no jump at the moment it
+   pins. The scrollbar must start at the rail's bottom edge, not at the top of the panel.
 2. Pop and drill into a different entity: the region morphs height and crossfades; the
    title swaps immediately.
 3. Switch tabs mid-scroll and back. `--header-h` is `TabPanel`-scoped, so a hidden tab

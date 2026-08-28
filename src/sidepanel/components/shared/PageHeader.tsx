@@ -260,10 +260,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
         sticks to, the header is pinned. See `useStuck`.
       */}
       {sticky && <div ref={sentinelRef} aria-hidden="true" className="h-0" />}
-      <div
-        ref={headerRef}
-        className={`bg-white ${sticky ? 'sticky top-[var(--rail-h,0px)] z-20' : ''}`}
-      >
+      <div ref={headerRef} className={`bg-white ${sticky ? 'sticky top-0 z-20' : ''}`}>
         <div className={`px-(--sp-gutter) py-(--sp-card) flex ${align} justify-between gap-4`}>
           <div className={`flex-1 min-w-0 flex ${align} gap-2`}>
             {leadingNode && <div className="shrink-0">{leadingNode}</div>}

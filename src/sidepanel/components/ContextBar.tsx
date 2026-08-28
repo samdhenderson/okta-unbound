@@ -1,17 +1,38 @@
 /**
  * @module sidepanel/components/ContextBar
- * @description Unified masthead: app wordmark + entity identity + connection + refresh + pin.
+ * @description One line of chrome: what the live Okta tab is on, and the two
+ * controls that act on it — Refresh and a Pin toggle.
  *
- * Merges the former standalone `Header` (app title + connection) into the context
- * header so the two share one bar. Shows the `Okta Unbound · {pageType}` wordmark
- * eyebrow, a connection dot, the detected entity's name and (copyable) id, and the
- * two global context controls — Refresh and a Pin toggle. Pinning freezes the panel
- * on the current entity so you can cross-reference another Okta page without losing
- * your place; when the live tab moves elsewhere while pinned, a subtle hint offers to
- * switch. The heavy per-entity identity (avatar, status) lives in the content below.
+ * Pinning freezes the panel on the current entity so you can cross-reference
+ * another Okta page without losing your place; when the live tab moves elsewhere
+ * while pinned, a hint below the row offers to switch.
+ *
+ * ## Why it is one line
+ *
+ * The bar used to be three stacked lines — an `Okta Unbound · {pageType}` wordmark
+ * eyebrow, the entity name with a *Pinned* chip, and a copyable id — about 74px
+ * tall. That was affordable while the bar scrolled away. It no longer does: the
+ * top chrome sits outside the panel's scroller so the scrollbar stops running
+ * beside it, which means every pixel here is permanently spent, on a panel the
+ * user can drag down to 360px.
+ *
+ * Each of the three lines was cut for its own reason, not to hit a number:
+ *
+ * - **The wordmark.** Chrome already prints the extension's name and icon in the
+ *   side panel's own title bar, directly above this row. Printing it again is the
+ *   panel telling the user what application they are looking at, twice.
+ * - **The copyable id.** `PageHeader`'s identity rows already carry an
+ *   `{ kind: 'id' }` fact with its own copy control (`groupIdentity`,
+ *   `userIdentity`), which is where ADR-0032 says a *fact about the entity*
+ *   belongs. This bar's subject is the live tab, not a record to transcribe.
+ * - **The *Pinned* chip.** The Pin button beside it already reads "Pinned" and
+ *   fills when it is on. The chip restated a state one control away from it.
+ *
+ * What is left is the subject (a hue-coded connection dot plus a name) and the two
+ * verbs. The heavy per-entity identity lives in the content below (ADR-0032).
  */
 import React from 'react';
-import { CopyableId, IconButton } from './shared';
+import { Button, IconButton } from './shared';
 import Icon from './shared/Icon';
 import type { ConnectionStatus } from '../hooks/useOktaTabContext';
 import type { PageType } from '../hooks/useOktaPageContext';
@@ -22,8 +43,6 @@ interface ContextBarProps {
   pageType: PageType;
   /** Display name of the detected (or pinned) entity, if resolved. */
   entityName?: string;
-  /** Okta id of the detected (or pinned) entity; gates the id chip + copy. */
-  entityId?: string;
   /** Connection state to the Okta tab. */
   connectionStatus: ConnectionStatus;
   /** Whether page context is still resolving. */
@@ -71,16 +90,6 @@ const NO_ENTITY_LABEL: Record<PageType, string> = {
   unknown: 'No context',
 };
 
-/** Wordmark-eyebrow suffix per page type ('' leaves the bare product name). */
-const PAGE_LABEL: Record<PageType, string> = {
-  group: 'Group',
-  user: 'User',
-  app: 'App',
-  policy: 'Policy',
-  admin: 'Admin',
-  unknown: '',
-};
-
 /**
  * Renders the slim merged context header. Presentational: pin/refresh behaviour and
  * the live-vs-pinned comparison are owned by the caller (App).
@@ -88,7 +97,6 @@ const PAGE_LABEL: Record<PageType, string> = {
 const ContextBar: React.FC<ContextBarProps> = ({
   pageType,
   entityName,
-  entityId,
   connectionStatus,
   isLoading,
   error,
@@ -118,77 +126,57 @@ const ContextBar: React.FC<ContextBarProps> = ({
       ? 'Connecting…'
       : 'Connected';
 
-  const wordmarkSuffix = PAGE_LABEL[pageType];
   const liveChanged = isPinned && liveContextChanged;
 
   return (
     // No border of its own: this is the first band of the top-chrome slab, not a
     // stripe. The rail beneath it carries the one rule that closes the whole slab
     // (see `TabNavigation`); separation *inside* the slab comes from spacing and
-    // type weight. Horizontal padding is `--sp-gutter`, so the masthead breathes
-    // with the panel's measured width instead of holding 20px at 360px.
-    <div className="bg-white z-40" style={{ fontFamily: 'var(--font-primary)' }}>
-      <div className="px-(--sp-gutter) py-3 flex items-center justify-between gap-3">
-        {/* Identity */}
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span
-            className={`w-2.5 h-2.5 rounded-full shrink-0 ${connectionStatus === 'connecting' || isLoading ? 'animate-pulse' : ''}`}
-            style={{ backgroundColor: dotColor }}
-            title={connectionText}
-            role="img"
-            aria-label={connectionText}
-          />
-          <div className="min-w-0">
-            <div
-              className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 leading-none mb-1"
-              style={{ fontFamily: 'var(--font-heading)' }}
-            >
-              Okta Unbound{wordmarkSuffix ? ` · ${wordmarkSuffix}` : ''}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-neutral-900 truncate">{displayName}</span>
-              {isPinned && (
-                <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wide bg-primary-light text-primary-text">
-                  <Icon type="pin" size="xs" />
-                  Pinned
-                </span>
-              )}
-            </div>
-            {error && onReconnect && (
-              <button
-                type="button"
-                onClick={onReconnect}
-                className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold text-primary-text hover:underline"
-                title="Reload the Okta tab to re-establish the connection"
-              >
-                <Icon type="refresh" size="xs" />
-                Reload tab to reconnect
-              </button>
-            )}
-            {entityId && !error && (
-              <CopyableId
-                value={entityId}
-                label={`Copy ${PAGE_LABEL[pageType].toLowerCase() || 'entity'} id`}
-                className="mt-0.5"
-              />
-            )}
-          </div>
-        </div>
+    // type weight. Horizontal padding is `--sp-gutter`, so the row breathes with
+    // the panel's measured width instead of holding 20px at 360px.
+    <div className="bg-white" style={{ fontFamily: 'var(--font-primary)' }}>
+      <div className="px-(--sp-gutter) py-1.5 flex items-center gap-2">
+        <span
+          className={`w-2.5 h-2.5 rounded-full shrink-0 ${connectionStatus === 'connecting' || isLoading ? 'animate-pulse' : ''}`}
+          style={{ backgroundColor: dotColor }}
+          title={connectionText}
+          role="img"
+          aria-label={connectionText}
+        />
+        <span className="min-w-0 truncate text-sm font-semibold text-neutral-900">
+          {displayName}
+        </span>
 
-        {/* Controls */}
-        <div className="flex items-center gap-1 shrink-0">
-          <IconButton
-            label="Refresh context"
-            onClick={onRefresh}
-            variant="ghost"
+        <div className="ms-auto flex items-center gap-1 shrink-0">
+          {error && onReconnect ? (
+            // Replaces Refresh rather than joining it: re-detecting the context is
+            // exactly what cannot work until the content script is back, so
+            // offering both would be offering a button that is known to fail.
+            <Button
+              variant="ghost"
+              size="sm"
+              icon="refresh"
+              onClick={onReconnect}
+              title="Reload the Okta tab to re-establish the connection"
+            >
+              Reconnect
+            </Button>
+          ) : (
+            <IconButton
+              label="Refresh context"
+              onClick={onRefresh}
+              variant="ghost"
+              size="sm"
+              disabled={isPinned}
+              title={isPinned ? 'Unpin to refresh live context' : 'Refresh context'}
+            >
+              <Icon type="refresh" size="sm" className={isLoading ? 'animate-spin' : ''} />
+            </IconButton>
+          )}
+          <Button
+            variant={isPinned ? 'primary' : 'secondary'}
             size="sm"
-            disabled={isPinned}
-            title={isPinned ? 'Unpin to refresh live context' : 'Refresh context'}
-          >
-            <Icon type="refresh" size="sm" className={isLoading ? 'animate-spin' : ''} />
-          </IconButton>
-          <button
-            type="button"
+            icon="pin"
             onClick={onTogglePin}
             disabled={!canPin && !isPinned}
             title={
@@ -198,16 +186,9 @@ const ContextBar: React.FC<ContextBarProps> = ({
                   ? 'Pin this context while you cross-reference another page'
                   : 'Navigate to a group or user page to pin it'
             }
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors duration-(--dur-instant) disabled:opacity-40 disabled:cursor-not-allowed ${
-              isPinned
-                ? 'bg-primary text-white hover:bg-primary-dark'
-                : 'bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-50 hover:border-neutral-500'
-            }`}
-            style={{ fontFamily: 'var(--font-heading)' }}
           >
-            <Icon type="pin" size="sm" />
-            <span>{isPinned ? 'Pinned' : 'Pin'}</span>
-          </button>
+            {isPinned ? 'Pinned' : 'Pin'}
+          </Button>
         </div>
       </div>
 

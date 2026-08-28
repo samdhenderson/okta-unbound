@@ -57,7 +57,7 @@
  * ## The two published variables
  *
  * Written imperatively through the refs, the way
- * {@link sidepanel/hooks/usePublishedHeight.usePublishedHeight} writes `--rail-h`.
+ * {@link sidepanel/hooks/usePublishedHeight.usePublishedHeight} writes `--header-h`.
  * **The component must never pass a `style` prop to the band**, or React will
  * clear these writes on its next render.
  *

@@ -27,21 +27,20 @@
  *
  * ## Why it sticks
  *
- * The side panel has exactly one scroller: the `overflow-y-auto` app root
- * (`App.tsx`), which `TabPanel` shares and which the Users tab explicitly does
+ * The side panel has exactly one scroller: the `overflow-y-auto` content region
+ * of `App.tsx`, which `TabPanel` shares and which the Users tab explicitly does
  * not shadow with a scroll box of its own. `sticky` therefore pins against that
- * root, and no intermediate wrapper sets `overflow` to break it.
+ * region, and no intermediate wrapper sets `overflow` to break it.
  *
- * It is the third band of the sticky stack (ADR-0032), so it parks below the two
- * above it rather than at the top of the scroller: `top` resolves to the tab
- * rail's published height plus the page header's. Both default to `0px`, so a
- * story — or any surface with neither band — behaves as a `top-0` strip.
+ * It is the second band of the sticky stack (ADR-0032), so it parks below the
+ * page header rather than at the top of the scroller: `top` resolves to that
+ * header's published height. It defaults to `0px`, so a story — or any surface
+ * with no header — behaves as a `top-0` strip. The tab rail is not in that sum:
+ * it lives outside the scroller entirely, so the scroller's own top edge already
+ * begins beneath it.
  *
- * That offset also fixes a real overlap. This strip and the rail were both
- * `sticky top-0` in one scroller, and the rail's `z-40` beat this strip's, so a
- * pinned action strip rendered *underneath* the rail. The strip sits at `z-30`:
- * above the page header (`z-20`) so it can cover that header's bottom border as
- * it merges, and still below the rail.
+ * The strip sits at `z-30`, above the page header (`z-20`) so it can cover that
+ * header's bottom border as it merges.
  *
  * ## How it docks
  *
@@ -311,7 +310,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
             // seam stayed visible at full merge. The two bands never overlap by more
             // than that 1px: the strip's `top` tracks `--header-h` live, so it stays
             // flush through the header's collapse.
-            'sticky top-[calc(var(--rail-h,0px)+var(--header-h,0px))] z-30'
+            'sticky top-[var(--header-h,0px)] z-30'
           : ''
       }
       ${className}

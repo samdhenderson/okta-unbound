@@ -572,11 +572,12 @@
    * Deliberately *not* on the panel's own scroll root (`app-scroll-root` in
    * `App`). That scroller is unstyled, so it keeps the platform scrollbar — an
    * overlay one on macOS, where `scrollbar-gutter` is a no-op regardless — and a
-   * gutter there would inset the full-bleed sticky bands (`ContextBar`,
-   * `PageHeader`), stopping their background and bottom border short of the panel
-   * edge. At the 360px narrow width, 6px inside a bordered list card reads as
-   * padding; a permanent ~15px stripe of canvas beside a white header band reads
-   * as a seam.
+   * gutter there would inset the full-bleed `PageHeader` inside it, stopping its
+   * background and bottom border short of the panel edge. At the 360px narrow
+   * width, 6px inside a bordered list card reads as padding; a permanent ~15px
+   * stripe of canvas beside a white header band reads as a seam. The top chrome
+   * is out of that scroller now precisely so its own bands never pay for the
+   * channel at all.
    */
   .scrollable-list {
     scrollbar-gutter: stable;
@@ -739,7 +740,7 @@
    * `ActionBar` renders immediately before the strip, so it sits at the strip's
    * **undocked** position and keeps moving after the strip itself has stopped.
    * Its view timeline is measured against a scrollport inset from the top by the
-   * two bands already parked there (`--rail-h + --header-h`), which puts
+   * band already parked there (`--header-h`), which puts
    * `cover 100%` exactly on the line where the strip docks. The animation then
    * runs over the last `--merge-range` before that line and holds at full merge
    * for the rest of the scroll (`both`).
@@ -854,9 +855,10 @@
     .dock-sentinel {
       view-timeline: --dock-progress block;
       /*
-       * Shrink the scrollport by the bands already parked at the top, so the
+       * Shrink the scrollport by the header already parked at the top, so the
        * timeline's end lands on the strip's parking line rather than on the
-       * scroller's own top edge.
+       * scroller's own top edge. The tab rail is not in this sum — it sits
+       * outside the scroller, so the scrollport already starts below it.
        *
        * Less `--dock-offset`, because the sentinel does not sit where it claims
        * to: the rung's `space-y-*` step lands on the *band* (the sentinel is the
@@ -865,8 +867,7 @@
        * finishing 28px before the strip parked. `useActionOverflow` publishes the
        * real distance.
        */
-      view-timeline-inset: calc(var(--rail-h, 0px) + var(--header-h, 0px) - var(--dock-offset, 0px))
-        0px;
+      view-timeline-inset: calc(var(--header-h, 0px) - var(--dock-offset, 0px)) 0px;
     }
 
     /*

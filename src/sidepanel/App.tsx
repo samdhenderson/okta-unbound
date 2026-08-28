@@ -200,17 +200,6 @@ const App: React.FC = () => {
           : effective.pageType === 'policy'
             ? (page.policyInfo?.policyName ?? undefined)
             : undefined;
-  const entityId =
-    effective.pageType === 'group'
-      ? (effective.groupInfo?.groupId ?? undefined)
-      : effective.pageType === 'user'
-        ? (effective.userInfo?.userId ?? undefined)
-        : effective.pageType === 'app'
-          ? (page.appInfo?.appId ?? undefined)
-          : effective.pageType === 'policy'
-            ? (page.policyInfo?.policyId ?? undefined)
-            : undefined;
-
   const handleTogglePin = () => {
     if (pinned) {
       setPinned(null);
@@ -385,29 +374,17 @@ const App: React.FC = () => {
       {/* Publishes the cross-entity jumps above to the whole tree, so an
           `EntityLink` at any depth can navigate without a prop chain (ADR-0030). */}
       <NavigationProvider handlers={navigationHandlers}>
-        {/* `h-screen` + `overflow-y-auto` make *this* div the scroller, not the
-          document — every root-scrolling tab shares it, which is why each
-          `TabPanel` needs the ref to preserve its own offset across a tab switch.
-
-          `overflow-anchor: none` because scroll anchoring and the sticky stack are
-          incompatible here (ADR-0032). A pinned `PageHeader` deliberately collapses its
-          identity region, losing ~72px *above* the viewport; Chrome's scroll anchoring
-          reads that as content shifting under the user and compensates by pulling
-          `scrollTop` back — far enough, on a small scroll, to un-pin the header, which
-          re-expands the region, which restores the height, which re-pins it. The panel
-          visibly grew and shrank in a loop for anyone scrolling slowly. Anchoring exists
-          to absorb *unintended* reflow above the fold; every height change in this
-          scroller is intentional and driven by scroll position, so there is nothing here
-          for it to usefully protect. */}
-        <div
-          ref={scrollRootRef}
-          data-testid="app-scroll-root"
-          className="flex flex-col h-screen overflow-y-auto [overflow-anchor:none] pb-14 bg-canvas"
-        >
+        {/* The shell does not scroll. It is a full-height flex column holding the
+          top chrome and, below it, the one scroller (ADR-0032 §"the chrome is not
+          in the scroller"). The scrollbar therefore starts where the content does
+          instead of running the full panel height beside `ContextBar` and the tab
+          rail — the classic-scrollbar channel a Chrome side panel gets is ~15px,
+          and reserving it across bands that never scroll took that width off every
+          band for nothing. */}
+        <div className="flex flex-col h-screen overflow-hidden bg-canvas">
           <ContextBar
             pageType={effective.pageType}
             entityName={entityName}
-            entityId={entityId}
             connectionStatus={connectionStatus}
             isLoading={isLoading}
             error={error}
@@ -421,98 +398,123 @@ const App: React.FC = () => {
 
           <TabNavigation activeTab={activeTab} onTabChange={handleTabChange} />
 
-          {/* Each tab mounts on first activation and is hidden — never unmounted —
-            thereafter, so its local state survives leaving the tab. */}
-          {renderTabPanel('home', (isActive) => (
-            <HomeTab
-              isActive={isActive}
-              targetTabId={tabContext.targetTabId ?? null}
-              oktaOrigin={tabContext.oktaOrigin ?? undefined}
-              onOpenListView={handleOpenListView}
-              onOpenTab={handleOpenTab}
-            />
-          ))}
-          {renderTabPanel('rules', (isActive) => (
-            <RulesTab
-              isActive={isActive}
-              targetTabId={tabContext.targetTabId ?? undefined}
-              currentGroupId={tabContext.currentGroupId}
-              oktaOrigin={tabContext.oktaOrigin ?? undefined}
-              selectedRuleId={selectedRuleId}
-              onRuleSelected={() => setSelectedRuleId(null)}
-              onNavigateToGroup={handleNavigateToGroup}
-              listView={viewFor(listViewRequest, 'rules')}
-              onListViewConsumed={clearListViewRequest}
-            />
-          ))}
-          {renderTabPanel('users', (isActive) => (
-            <UsersTab
-              isActive={isActive}
-              targetTabId={tabContext.targetTabId ?? undefined}
-              currentGroupId={tabContext.currentGroupId}
-              selectedUserId={selectedUserId}
-              onUserSelected={() => setSelectedUserId(null)}
-            />
-          ))}
-          {renderTabPanel('groups', (isActive) => (
-            <GroupsTab
-              isActive={isActive}
-              targetTabId={tabContext.targetTabId ?? null}
-              oktaOrigin={tabContext.oktaOrigin ?? undefined}
-              onNavigateToRule={handleNavigateToRule}
-              selectedGroupId={selectedGroupId}
-              onGroupSelected={() => setSelectedGroupId(null)}
-              // The descriptor-driven Export Engine route (ADR-0030). Without
-              // it the drilled-in group's "Export members" greys itself out.
-              onExportGroup={handleExportGroup}
-              listView={viewFor(listViewRequest, 'groups')}
-              onListViewConsumed={clearListViewRequest}
-            />
-          ))}
-          {renderTabPanel('apps', (isActive) => (
-            <AppsTab
-              isActive={isActive}
-              targetTabId={tabContext.targetTabId ?? null}
-              oktaOrigin={tabContext.oktaOrigin ?? undefined}
-              listView={viewFor(listViewRequest, 'apps')}
-              onListViewConsumed={clearListViewRequest}
-            />
-          ))}
-          {renderTabPanel('policies', (isActive) => (
-            <AuthPoliciesTab
-              isActive={isActive}
-              targetTabId={tabContext.targetTabId ?? undefined}
-              oktaOrigin={tabContext.oktaOrigin ?? undefined}
-            />
-          ))}
-          {renderTabPanel('export', (isActive) => (
-            <ExportTab
-              isActive={isActive}
-              targetTabId={tabContext.targetTabId ?? undefined}
-              oktaOrigin={tabContext.oktaOrigin ?? undefined}
-              exportRequest={exportRequest}
-              onExportRequestConsumed={() => setExportRequest(null)}
-            />
-          ))}
-          {renderTabPanel('explorer', () => (
-            <ApiExplorerTab
-              targetTabId={tabContext.targetTabId ?? null}
-              oktaOrigin={tabContext.oktaOrigin ?? undefined}
-            />
-          ))}
-          {renderTabPanel('history', (isActive) => (
-            <div
-              className="tab-content active"
-              style={{ fontFamily: 'var(--font-primary)', padding: 0 }}
-            >
-              <PageHeader title="Audit Log" subtitle="View history of actions performed" />
-              <div className="max-w-7xl mx-auto px-6 py-6">
-                <AuditLogViewer isActive={isActive} targetTabId={tabContext.targetTabId ?? null} />
-              </div>
-            </div>
-          ))}
+          {/* `flex-1 min-h-0` + `overflow-y-auto` make *this* div the scroller, not
+            the document and not the shell — every root-scrolling tab shares it,
+            which is why each `TabPanel` needs the ref to preserve its own offset
+            across a tab switch. `min-h-0` because a flex item's default
+            `min-height: auto` would let it grow past the shell rather than scroll.
 
-          <ActivityBar />
+            `overflow-anchor: none` because scroll anchoring and the sticky stack are
+            incompatible here (ADR-0032). A pinned `PageHeader` deliberately collapses its
+            identity region, losing ~72px *above* the viewport; Chrome's scroll anchoring
+            reads that as content shifting under the user and compensates by pulling
+            `scrollTop` back — far enough, on a small scroll, to un-pin the header, which
+            re-expands the region, which restores the height, which re-pins it. The panel
+            visibly grew and shrank in a loop for anyone scrolling slowly. Anchoring exists
+            to absorb *unintended* reflow above the fold; every height change in this
+            scroller is intentional and driven by scroll position, so there is nothing here
+            for it to usefully protect. */}
+          <div
+            ref={scrollRootRef}
+            data-testid="app-scroll-root"
+            className="flex flex-col flex-1 min-h-0 overflow-y-auto [overflow-anchor:none] pb-14"
+          >
+            {/* Each tab mounts on first activation and is hidden — never unmounted —
+              thereafter, so its local state survives leaving the tab. */}
+            {renderTabPanel('home', (isActive) => (
+              <HomeTab
+                isActive={isActive}
+                targetTabId={tabContext.targetTabId ?? null}
+                oktaOrigin={tabContext.oktaOrigin ?? undefined}
+                onOpenListView={handleOpenListView}
+                onOpenTab={handleOpenTab}
+              />
+            ))}
+            {renderTabPanel('rules', (isActive) => (
+              <RulesTab
+                isActive={isActive}
+                targetTabId={tabContext.targetTabId ?? undefined}
+                currentGroupId={tabContext.currentGroupId}
+                oktaOrigin={tabContext.oktaOrigin ?? undefined}
+                selectedRuleId={selectedRuleId}
+                onRuleSelected={() => setSelectedRuleId(null)}
+                onNavigateToGroup={handleNavigateToGroup}
+                listView={viewFor(listViewRequest, 'rules')}
+                onListViewConsumed={clearListViewRequest}
+              />
+            ))}
+            {renderTabPanel('users', (isActive) => (
+              <UsersTab
+                isActive={isActive}
+                targetTabId={tabContext.targetTabId ?? undefined}
+                currentGroupId={tabContext.currentGroupId}
+                selectedUserId={selectedUserId}
+                onUserSelected={() => setSelectedUserId(null)}
+              />
+            ))}
+            {renderTabPanel('groups', (isActive) => (
+              <GroupsTab
+                isActive={isActive}
+                targetTabId={tabContext.targetTabId ?? null}
+                oktaOrigin={tabContext.oktaOrigin ?? undefined}
+                onNavigateToRule={handleNavigateToRule}
+                selectedGroupId={selectedGroupId}
+                onGroupSelected={() => setSelectedGroupId(null)}
+                // The descriptor-driven Export Engine route (ADR-0030). Without
+                // it the drilled-in group's "Export members" greys itself out.
+                onExportGroup={handleExportGroup}
+                listView={viewFor(listViewRequest, 'groups')}
+                onListViewConsumed={clearListViewRequest}
+              />
+            ))}
+            {renderTabPanel('apps', (isActive) => (
+              <AppsTab
+                isActive={isActive}
+                targetTabId={tabContext.targetTabId ?? null}
+                oktaOrigin={tabContext.oktaOrigin ?? undefined}
+                listView={viewFor(listViewRequest, 'apps')}
+                onListViewConsumed={clearListViewRequest}
+              />
+            ))}
+            {renderTabPanel('policies', (isActive) => (
+              <AuthPoliciesTab
+                isActive={isActive}
+                targetTabId={tabContext.targetTabId ?? undefined}
+                oktaOrigin={tabContext.oktaOrigin ?? undefined}
+              />
+            ))}
+            {renderTabPanel('export', (isActive) => (
+              <ExportTab
+                isActive={isActive}
+                targetTabId={tabContext.targetTabId ?? undefined}
+                oktaOrigin={tabContext.oktaOrigin ?? undefined}
+                exportRequest={exportRequest}
+                onExportRequestConsumed={() => setExportRequest(null)}
+              />
+            ))}
+            {renderTabPanel('explorer', () => (
+              <ApiExplorerTab
+                targetTabId={tabContext.targetTabId ?? null}
+                oktaOrigin={tabContext.oktaOrigin ?? undefined}
+              />
+            ))}
+            {renderTabPanel('history', (isActive) => (
+              <div
+                className="tab-content active"
+                style={{ fontFamily: 'var(--font-primary)', padding: 0 }}
+              >
+                <PageHeader title="Audit Log" subtitle="View history of actions performed" />
+                <div className="max-w-7xl mx-auto px-6 py-6">
+                  <AuditLogViewer
+                    isActive={isActive}
+                    targetTabId={tabContext.targetTabId ?? null}
+                  />
+                </div>
+              </div>
+            ))}
+
+            <ActivityBar />
+          </div>
         </div>
 
         {/* Rendered outside the scroll root: it is a viewport-fixed overlay, not

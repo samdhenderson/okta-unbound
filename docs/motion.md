@@ -229,9 +229,11 @@ failure mode looks like a styling choice rather than a bug.
 
 .dock-sentinel {
   view-timeline: --dock-progress block;
-  /* the bands already parked at the top, less the rung margin between sentinel
-     and band — so `cover 100%` is exactly the docking line */
-  view-timeline-inset: calc(var(--rail-h, 0px) + var(--header-h, 0px) - var(--dock-offset, 0px)) 0px;
+  /* the band already parked at the top, less the rung margin between sentinel
+     and band — so `cover 100%` is exactly the docking line. The tab rail is not in
+     this sum: it sits outside the scroller, so the scrollport starts below it
+     already (ADR-0050). */
+  view-timeline-inset: calc(var(--header-h, 0px) - var(--dock-offset, 0px)) 0px;
 }
 
 :has(> .dock-sentinel) > .dock-band::before {

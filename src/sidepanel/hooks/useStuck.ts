@@ -12,8 +12,11 @@
  * the user scrolls, and nothing needs a reference to the shared scroller.
  *
  * The sticky line is read from the element's own resolved `top`, not from any knowledge of
- * what is above it. So a header that sticks below the tab rail via
- * `top: var(--rail-h)` reports correctly without this hook knowing the rail exists.
+ * what is above it. So a strip that parks below a header via `top: var(--header-h)` reports
+ * correctly without this hook knowing the header exists — and a header that parks at the
+ * top of the panel's scroller reports correctly with `top: 0`, because the scroller clips
+ * the sentinel at exactly that line and an `IntersectionObserver` honours the clip rects of
+ * every ancestor between the target and the root.
  */
 import { useEffect, useState, type RefObject } from 'react';
 
