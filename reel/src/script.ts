@@ -162,8 +162,7 @@ export const SCRIPT: Scene[] = [
     plan: [
       { beat: 'open', speed: 'natural', easeMs: 350 },
       { beat: 'filter', speed: 'half', easeMs: 400, holdMs: 400 },
-      { beat: 'sort', speed: 'natural', easeMs: 350, holdMs: 500 },
-      { beat: 'scan', speed: 'dwell', easeMs: 350, holdMs: 500, tailMs: 1500 },
+      { beat: 'sort', speed: 'natural', easeMs: 350, holdMs: 500, tailMs: 1500 },
     ],
     marks: [
       {

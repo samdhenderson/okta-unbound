@@ -38,9 +38,4 @@ export async function walk({ page, drive, beat }) {
     await drive.click(appSort(page, 'Status'));
     await drive.settle(1600);
   });
-
-  await beat('scan', async () => {
-    await drive.scrollBy(520, 1700);
-    await drive.settle(1000);
-  });
 }
