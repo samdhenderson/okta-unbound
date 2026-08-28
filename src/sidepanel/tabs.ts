@@ -50,7 +50,7 @@ export interface TabDef {
  * and deliberately unchanged.
  */
 export const TAB_DEFS: ReadonlyArray<TabDef> = [
-  { id: 'home', label: 'Home', icon: 'search' },
+  { id: 'home', label: 'Home', icon: 'home' },
   { id: 'overview', label: 'Overview', icon: 'chart' },
   { id: 'users', label: 'Users', icon: 'user' },
   { id: 'groups', label: 'Groups', icon: 'users' },

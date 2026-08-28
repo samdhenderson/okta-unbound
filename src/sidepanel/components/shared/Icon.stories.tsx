@@ -109,6 +109,7 @@ export const AllIcons: Story = {
       'chart',
       'app',
       'building',
+      'home',
       'lock',
       'refresh',
       'download',
