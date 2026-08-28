@@ -162,7 +162,7 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
         // wrapper — it scopes the row-body overlay to the header, leaving the
         // expanded preview freely clickable. Controls inside the header sit above
         // the overlay via `relative z-10`.
-        headerClassName="relative flex items-start gap-2"
+        headerClassName="relative flex items-start gap-(--sp-field)"
         body={
           /*
             `.disclose` animates `grid-template-rows` (0fr closed → 1fr open)
@@ -204,7 +204,7 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-(--sp-inline)">
             <h3
               id={nameId}
               className="min-w-0 truncate text-sm font-semibold text-neutral-900 group-hover/row:text-primary-text"

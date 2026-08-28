@@ -86,7 +86,7 @@ const MemberFilterPanel: React.FC<MemberFilterPanelProps> = ({
   const realStatusRows = statusRows.filter((r) => r.count > 0);
 
   return (
-    <div className="p-4 bg-white rounded-md border border-neutral-200 space-y-4 animate-rise-in">
+    <div className="p-(--sp-card) bg-white rounded-md border border-neutral-200 space-y-(--sp-rung) animate-rise-in">
       {/* Active filter chips */}
       <ActiveFilterChips filters={filters} onRemove={onRemoveFilter} onClearAll={onClearAll} />
 
@@ -94,7 +94,7 @@ const MemberFilterPanel: React.FC<MemberFilterPanelProps> = ({
       {realStatusRows.length > 0 && (
         <div>
           <label className="block text-xs font-medium text-neutral-600 mb-1.5">Status</label>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-(--sp-inline)">
             <FilterPill active={statusActive.size === 0} onClick={onClearStatus}>
               All
             </FilterPill>
@@ -130,9 +130,9 @@ const MemberFilterPanel: React.FC<MemberFilterPanelProps> = ({
             Scan the group to filter by enrolled factors (1 API call per member).
           </p>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-(--sp-field)">
             {/* Quick count-based toggles */}
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-(--sp-inline)">
               <FilterPill
                 active={mfaActive.has('none')}
                 onClick={() => onToggleMfaValue('none', 'No factors enrolled')}
@@ -159,7 +159,7 @@ const MemberFilterPanel: React.FC<MemberFilterPanelProps> = ({
                       <span className="text-xs text-neutral-700 truncate" title={label}>
                         {label}
                       </span>
-                      <div className="flex flex-shrink-0 gap-1.5">
+                      <div className="flex flex-shrink-0 gap-(--sp-inline)">
                         <FilterPill
                           active={mode === 'has'}
                           onClick={() => onSetFactorMode(label, mode === 'has' ? 'off' : 'has')}
@@ -191,7 +191,7 @@ const MemberFilterPanel: React.FC<MemberFilterPanelProps> = ({
       {/* Sort controls */}
       <div>
         <label className="block text-xs font-medium text-neutral-600 mb-1.5">Sort by</label>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-(--sp-inline)">
           <SortPill
             field="name"
             label="Name"

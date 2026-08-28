@@ -128,7 +128,7 @@ const CauseWorklistRow: React.FC<CauseWorklistRowProps> = ({
   renderBlockingGroupAction,
   resolveGroupName,
 }) => (
-  <li className="rounded-md border border-neutral-200 bg-white p-3">
+  <li className="rounded-md border border-neutral-200 bg-white p-(--sp-card)">
     <p className="text-sm font-semibold break-words text-neutral-900" title={cause.groupName}>
       {cause.groupName}
     </p>

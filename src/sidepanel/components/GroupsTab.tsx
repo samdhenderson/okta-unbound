@@ -428,7 +428,7 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
         }
       />
 
-      <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+      <div className="max-w-7xl mx-auto px-(--sp-gutter) py-(--sp-gutter) space-y-(--sp-rung)">
         {/*
           Hidden, never unmounted: `visibleCount`, per-row `expanded` and the focus
           target the view stack restores to all live inside this subtree. The class
@@ -448,7 +448,14 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
               : 'hidden'
           }
         >
-          {/* Fixed Header Section */}
+          {/*
+            Fixed Header Section. Deliberately tighter than the rung above (raw
+            `space-y-3`, not `--sp-rung`): search, filters, selection and alerts read
+            as one toolbar zone, and none of ADR-0048's six roles names "gap inside a
+            toolbar cluster" — forcing it into `--sp-field` or `--sp-inline` would
+            misdescribe the relationship. Matching the rung here would also erase the
+            visual distinction between this zone and the card stack below it.
+          */}
           <div className="shrink-0 space-y-3">
             {/* Search Bar + Filter Toggle */}
             <div className="flex gap-2">

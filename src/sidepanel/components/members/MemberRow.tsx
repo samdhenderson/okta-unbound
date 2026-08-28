@@ -49,17 +49,24 @@
  * `users/GroupMembershipsList`, and for the same reason: filtering a row out and
  * back in must not close it. That matters more here, where every filter pill
  * click re-filters the list under the reader.
+ *
+ * ## The restraint pass (2026-08-28)
+ *
+ * The login line renders **only when it differs from the email** above it. Most
+ * Okta orgs provision `login === email`, so the header used to print the same
+ * string twice on every row in the list — a real admin tool needs to see the
+ * login *when it is a different fact*, not restate one it already stated. The
+ * value is never dropped: when the two match, the email line already carries it
+ * verbatim.
+ *
+ * The status badge and the MFA factor/"No MFA" tags now go through the shared
+ * {@link sidepanel/components/shared/Badge} rather than a hand-rolled
+ * `<span>` + local colour map — the same recipe drift `Badge`'s own module doc
+ * describes, just not yet converged here.
  */
 import React, { useId } from 'react';
 import type { GroupMembership, OktaUser, MemberMfaResult } from '../../../shared/types';
-import {
-  Badge,
-  IconButton,
-  ListRow,
-  OpenInOktaLink,
-  userStatusVariant,
-  type UserStatusVariant,
-} from '../shared';
+import { Badge, IconButton, ListRow, OpenInOktaLink, userStatusVariant } from '../shared';
 import Icon from '../shared/Icon';
 import MembershipRuleEvidence from '../users/MembershipRuleEvidence';
 import MembershipProofAction, {
@@ -110,15 +117,6 @@ interface MemberRowProps {
   onProve?: (membership: GroupMembership, rowKey: string) => void;
 }
 
-/** Per-variant badge color classes (token palette, keyed by the shared variant map). */
-const VARIANT_CLASSES: Record<UserStatusVariant, string> = {
-  success: 'bg-success-light text-success-text',
-  info: 'bg-primary-light text-primary-text',
-  warning: 'bg-warning-light text-warning-text',
-  danger: 'bg-danger-light text-danger-text',
-  neutral: 'bg-neutral-100 text-neutral-700',
-};
-
 /**
  * The member's browseable profile attributes — the same set the composition
  * facets offer, so a value that looks wrong in a row is a value the reader can
@@ -157,7 +155,6 @@ const MemberRow: React.FC<MemberRowProps> = ({
   proofOutcome,
   onProve,
 }) => {
-  const badgeClass = VARIANT_CLASSES[userStatusVariant(user.status)];
   // The shared helper, not a local `first + last || login`: the remove control's
   // accessible name is what a caller's test pins, and it has to be the same
   // string the header shows.
@@ -169,6 +166,10 @@ const MemberRow: React.FC<MemberRowProps> = ({
   const attributes = browseableAttributes(user);
   const line = membership ? membershipSourceLine(membership) : null;
   const verdict = membership ? membershipVerdict(membership) : null;
+  // Most Okta orgs provision `login === email` — see the module doc's restraint
+  // note. An exact-string compare so any real difference (case, a suffix) still
+  // shows both lines.
+  const loginDiffersFromEmail = user.profile.login !== user.profile.email;
 
   return (
     <ListRow
@@ -186,7 +187,7 @@ const MemberRow: React.FC<MemberRowProps> = ({
           inert={!expanded || undefined}
         >
           <div>
-            <div className="space-y-3 border-t border-neutral-200 px-3 pb-3 pt-2">
+            <div className="space-y-3 border-t border-neutral-200 px-(--sp-row-x) pb-3 pt-2">
               {/* 1. The caveat in full — the header line only had room for its first clause. */}
               {line && <p className="text-xs text-pretty text-neutral-600">{line.description}</p>}
 
@@ -237,7 +238,11 @@ const MemberRow: React.FC<MemberRowProps> = ({
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold text-neutral-900">{fullName}</div>
           <div className="truncate text-xs text-neutral-600">{user.profile.email}</div>
-          <div className="truncate font-mono text-xs text-neutral-500">{user.profile.login}</div>
+          {/* Most orgs provision login === email; printing both would restate the
+              same fact twice on every row of a list that can run to thousands. */}
+          {loginDiffersFromEmail && (
+            <div className="truncate font-mono text-xs text-neutral-500">{user.profile.login}</div>
+          )}
           {/*
             One source line, not three. The caption stays its own node so it is
             findable as a phrase and so a label expecting a value ("Added by
@@ -251,25 +256,20 @@ const MemberRow: React.FC<MemberRowProps> = ({
             </p>
           )}
           {mfaScanned && (
-            <div className="mt-1.5 flex flex-wrap gap-1">
+            <div className="mt-1.5 flex flex-wrap gap-(--sp-inline)">
               {mfa && mfa.factorLabels.length > 0 ? (
                 mfa.factorLabels.map((label) => (
-                  <span
-                    key={label}
-                    className="rounded-md bg-primary-light px-2 py-0.5 text-xs font-medium text-primary-text"
-                  >
+                  <Badge key={label} variant="info">
                     {label}
-                  </span>
+                  </Badge>
                 ))
               ) : (
-                <span className="rounded-md bg-danger-light px-2 py-0.5 text-xs font-medium text-danger-text">
-                  No MFA
-                </span>
+                <Badge variant="danger">No MFA</Badge>
               )}
             </div>
           )}
         </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-(--sp-inline)">
           {/*
             `flex-wrap` because this is a side panel: at the 360px floor the
             verdict and the status no longer fit one line beside a long name, and
@@ -280,9 +280,7 @@ const MemberRow: React.FC<MemberRowProps> = ({
               {verdict.label}
             </Badge>
           )}
-          <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
-            {user.status}
-          </span>
+          <Badge variant={userStatusVariant(user.status)}>{user.status}</Badge>
           {onRemove && (
             /* In the header, beside the chevron — not inside the disclosure. A
                destructive verb a reader has to expand a row to find is worse UX

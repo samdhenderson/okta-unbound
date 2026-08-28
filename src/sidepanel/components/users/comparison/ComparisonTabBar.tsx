@@ -79,7 +79,13 @@ const ComparisonTabBar: React.FC<ComparisonTabBarProps> = ({
             role="tab"
             aria-selected={active}
             onClick={() => onChange(t.key)}
-            className={`relative flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-(--dur-instant) ${
+            // `.press-subtle` only overrides `--press-scale`; the `:active`
+            // rule that reads it lives on `.press`, so both classes are
+            // required together. `-subtle`, because the button stretches to
+            // fill its grid column (`justify-items: stretch`, this grid's
+            // unoverridden default), so at the panel's wider densities it is
+            // a row-width target rather than a compact button one.
+            className={`press press-subtle relative flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold ${
               active
                 ? 'bg-white text-neutral-900 shadow-sm'
                 : 'text-neutral-600 hover:text-neutral-900'

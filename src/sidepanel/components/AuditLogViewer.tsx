@@ -21,6 +21,11 @@
  * Security: every string in this history — user names, emails, group and rule
  * names, attribute names and values — is tenant PII. It is rendered through
  * React's escaping and this component logs nothing at all.
+ *
+ * The top-level stack, the summary bar's interior and the row list's own gap
+ * all consume the `--sp-rung`/`--sp-card` spacing roles (ADR-0048): each row
+ * is its own small card, so the gap between them is card-to-card (`rung`),
+ * not the tighter chip/pill gap.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { UndoAction } from '../../shared/undoTypes';
@@ -176,7 +181,7 @@ const AuditLogViewer: React.FC<AuditLogViewerProps> = ({ targetTabId, isActive =
       : `${actions.length} action${actions.length === 1 ? '' : 's'} logged`;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-(--sp-rung)">
       {notice && <AlertMessage message={notice} onDismiss={() => setNotice(null)} />}
 
       <Checkbox
@@ -198,14 +203,19 @@ const AuditLogViewer: React.FC<AuditLogViewerProps> = ({ targetTabId, isActive =
         />
       ) : (
         <>
-          <div className="flex items-center justify-between gap-3 rounded-md border border-neutral-200 bg-neutral-50 p-3">
+          <div className="flex items-center justify-between gap-3 rounded-md border border-neutral-200 bg-neutral-50 p-(--sp-card)">
             <span className="text-sm font-medium text-neutral-700">{historyCountLabel}</span>
-            <Button variant="secondary" size="sm" onClick={() => setIsClearOpen(true)}>
+            <Button
+              variant="secondary"
+              size="sm"
+
+              onClick={() => setIsClearOpen(true)}
+            >
               Clear History
             </Button>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-(--sp-rung)">
             {historyItems.map((item) =>
               item.kind === 'action' ? (
                 <AuditLogRow

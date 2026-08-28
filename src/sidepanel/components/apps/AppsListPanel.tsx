@@ -98,7 +98,7 @@ const AppsListPanel: React.FC<AppsListPanelProps> = memo(function AppsListPanel(
       }
     >
       {apps.length > 0 && (
-        <div ref={setStaggerRef} className="space-y-3 rise-in-stagger">
+        <div ref={setStaggerRef} className="space-y-(--sp-rung) rise-in-stagger">
           {apps.map((app) => (
             <AppListItem
               key={app.id}

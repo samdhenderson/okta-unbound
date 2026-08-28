@@ -129,7 +129,7 @@ const ExportTab: React.FC<ExportTabProps> = ({
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
       <PageHeader title="Export" subtitle="Download reports across your org" />
 
-      <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+      <div className="max-w-7xl mx-auto px-(--sp-gutter) py-(--sp-gutter) space-y-(--sp-rung)">
         {!tab.hasConnectedTab && (
           <AlertMessage message={{ type: 'danger', text: 'Connect an Okta tab to export.' }} />
         )}
@@ -144,7 +144,7 @@ const ExportTab: React.FC<ExportTabProps> = ({
         {tab.phase === 'pick' || !descriptor ? (
           <EntityPicker descriptors={tab.descriptors} onSelect={tab.selectEntity} />
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-(--sp-rung)">
             <Button variant="secondary" size="sm" icon="minus" onClick={tab.backToPick}>
               All exports
             </Button>

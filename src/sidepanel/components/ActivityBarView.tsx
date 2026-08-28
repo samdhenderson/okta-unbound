@@ -32,6 +32,12 @@
  * the bar's top edge — the exact reflow ADR-0008 forbids. The swap is driven by the
  * user dragging the panel across 640px, which is already a layout change they are
  * causing directly and can see; a transition would be decoration, not explanation.
+ *
+ * The bar's own horizontal inset consumes `--sp-gutter` and the gap between its
+ * status/metric/action clusters consumes `--sp-inline` (ADR-0048), so the docked
+ * band narrows and widens with the same rule the scrolling content follows. The
+ * two `.motion-exempt` sites (the busy pulse dot, the progress track's width) are
+ * untouched by that — they encode live state, not layout.
  */
 import React from 'react';
 import { Button, IconButton } from './shared';
@@ -132,6 +138,7 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({
     <Button
       variant="danger"
       size="sm"
+
       disabled={!view.canCancel || view.isCancelling}
       onClick={onCancel}
       title="Cancel the current operation and clear the queue"
@@ -145,6 +152,7 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({
       label={collapsed ? 'Show all activity stats' : 'Hide extra activity stats'}
       variant="subtle"
       size="sm"
+
       active={!collapsed}
       onClick={onToggleCollapse}
     >
@@ -189,7 +197,7 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({
         className={barClasses}
         style={{ fontFamily: 'var(--font-primary)' }}
       >
-        <div className="flex items-center gap-3 px-5 py-2.5 text-xs">
+        <div className="flex items-center gap-(--sp-inline) px-(--sp-gutter) py-2.5 text-xs">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             {statusDot}
             {view.operationActive && view.operationName ? (
@@ -260,7 +268,7 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({
       style={{ fontFamily: 'var(--font-primary)' }}
     >
       <div
-        className={`flex items-center gap-3 px-5 py-2.5 text-xs ${collapsible ? 'flex-wrap' : ''}`}
+        className={`flex items-center gap-(--sp-inline) px-(--sp-gutter) py-2.5 text-xs ${collapsible ? 'flex-wrap' : ''}`}
       >
         {/* Status region — always present */}
         <div className="flex min-w-[8rem] items-center gap-2">

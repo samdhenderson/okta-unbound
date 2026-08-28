@@ -37,6 +37,23 @@
  * bar is the first thing in the scroller. `TabPanel` already supplies
  * `data-header-scope` and the app scroller already carries
  * `[overflow-anchor:none]`, so the shell contract needs nothing from here.
+ *
+ * ## The card stack arrives together
+ *
+ * The four regions below — the jump bar, the working set, the org card, the
+ * reports card — are one `.rise-in-stagger` group driven by
+ * {@link module:sidepanel/hooks/useStaggerReveal}, not four independent
+ * entrances. Without it each card pops in on its own mount, which reads as the
+ * tab arriving piecemeal rather than as one surface; the hook coalesces them
+ * onto a single `--dur-travel` budget so the stack cascades once, in order.
+ *
+ * ## Spacing is roles, not steps
+ *
+ * The root padding and the gap between cards consume `--sp-gutter` and
+ * `--sp-rung` (ADR-0048) rather than a hand-copied `px-6 py-6 space-y-6` — the
+ * same recipe seven other tab roots independently arrived at. The two roles
+ * both resolve to the panel's measured width, so the stack sits tighter at
+ * 360px and roomier at 720px with no prop threaded down.
  */
 import React, { useMemo, useState } from 'react';
 import JumpBar from './home/JumpBar';
@@ -49,6 +66,7 @@ import { useWorkingSet } from '../hooks/useWorkingSet';
 import { useOrgFigures } from '../hooks/useOrgFigures';
 import { useHomeReports } from '../hooks/useHomeReports';
 import { useJumpResolver, type JumpResult } from '../hooks/useJumpResolver';
+import { useStaggerReveal } from '../hooks/useStaggerReveal';
 import { useEntityNavigation } from '../contexts/NavigationContext';
 import { navigationTarget } from './home/jumpDestinations';
 import type { OktaIdKind } from '../../shared/utils/oktaId';
@@ -181,6 +199,11 @@ const HomeTab: React.FC<HomeTabProps> = ({
 
   const jump = useJumpResolver({ index, searchers, fetchers, enabled: isActive });
 
+  // Holds the four cards until the stack scrolls into view, then cascades them
+  // on one `--dur-travel` budget rather than letting each pop in on its own
+  // mount — see the module header's "The card stack arrives together".
+  const setStaggerRef = useStaggerReveal();
+
   const handleSelect = (result: JumpResult) => {
     nav.navigateTo({ type: navigationTarget(result.kind), id: result.id });
   };
@@ -191,7 +214,11 @@ const HomeTab: React.FC<HomeTabProps> = ({
 
   return (
     <div className="tab-content active">
-      <div className="w-full max-w-7xl mx-auto px-6 py-6 space-y-6">
+      <div
+        ref={setStaggerRef}
+        data-testid="home-card-stack"
+        className="w-full max-w-7xl mx-auto px-(--sp-gutter) py-(--sp-gutter) space-y-(--sp-rung) rise-in-stagger"
+      >
         <JumpBar
           jump={jump}
           onSelect={handleSelect}

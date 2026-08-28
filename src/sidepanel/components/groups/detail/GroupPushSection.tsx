@@ -79,7 +79,7 @@ const GroupPushSection: React.FC<GroupPushSectionProps> = ({ mappings }) => (
         {mappings.map((mapping) => (
           <li
             key={mapping.mappingId}
-            className="flex items-center justify-between gap-3 rounded-md border border-neutral-200 px-3 py-2"
+            className="flex items-center justify-between gap-3 rounded-md border border-neutral-200 px-(--sp-row-x) py-(--sp-row-y)"
           >
             <span className="flex min-w-0 flex-col items-start">
               {mapping.appName ? (

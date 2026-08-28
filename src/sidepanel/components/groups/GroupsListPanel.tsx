@@ -159,7 +159,7 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
         skeleton={
           <Skeleton variant="row" size="sm" count={6} label="Loading groups from Okta..." />
         }
-        className="mt-4"
+        className="mt-(--sp-rung)"
         scrollRef={scrollRef}
         emptyState={
           searchMode === 'live' && liveSearchQuery.trim() && !isLiveSearching ? (
@@ -192,7 +192,7 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
           swaps most keys, so that case intentionally re-enters as a fresh rise-in.
         */}
         {visibleGroups.length > 0 && (
-          <div ref={setStaggerRef} className="rise-in-stagger space-y-3">
+          <div ref={setStaggerRef} className="rise-in-stagger space-y-(--sp-rung)">
             {visibleGroups.map((group) => (
               <GroupListItem
                 key={group.id}
@@ -211,7 +211,7 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
       </ScrollableList>
 
       {hasMore && (
-        <div className="shrink-0 flex items-center justify-between pt-3 text-xs text-neutral-500">
+        <div className="shrink-0 flex items-center justify-between pt-(--sp-rung) text-xs text-neutral-500">
           <span>
             Showing {visibleGroups.length.toLocaleString()} of{' '}
             {filteredGroups.length.toLocaleString()}

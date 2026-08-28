@@ -63,7 +63,7 @@ class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="min-h-screen flex items-center justify-center bg-danger-light p-6">
           <div className="max-w-2xl w-full bg-white rounded-md border border-danger overflow-hidden">
-            <div className="bg-danger px-6 py-4">
+            <div className="bg-danger px-(--sp-card) py-(--sp-card)">
               <div className="flex items-center gap-3">
                 <svg
                   className="w-6 h-6 text-white"
@@ -82,18 +82,18 @@ class ErrorBoundary extends Component<Props, State> {
               </div>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-(--sp-card) space-y-(--sp-card)">
               <p className="text-neutral-700">
                 The application encountered an error and couldn't continue. This has been logged for
                 debugging.
               </p>
 
               {this.state.error && (
-                <details className="mt-4">
+                <details>
                   <summary className="cursor-pointer text-sm font-semibold text-neutral-700 hover:text-neutral-900 select-none">
                     Error Details
                   </summary>
-                  <div className="mt-3 p-4 bg-neutral-50 rounded-md border border-neutral-200 overflow-auto">
+                  <div className="mt-3 p-(--sp-card) bg-neutral-50 rounded-md border border-neutral-200 overflow-auto">
                     <div className="text-sm font-mono text-danger-text mb-2">
                       {this.state.error.toString()}
                     </div>
@@ -106,11 +106,15 @@ class ErrorBoundary extends Component<Props, State> {
                 </details>
               )}
 
-              <div className="flex gap-3 pt-4">
+              <div className="flex gap-3">
                 <Button variant="primary" onClick={this.handleReset}>
                   Try Again
                 </Button>
-                <Button variant="secondary" onClick={() => window.location.reload()}>
+                <Button
+                  variant="secondary"
+
+                  onClick={() => window.location.reload()}
+                >
                   Reload Extension
                 </Button>
               </div>

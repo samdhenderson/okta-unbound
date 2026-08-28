@@ -110,7 +110,7 @@ const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <div className="mb-1 flex flex-wrap items-center gap-2">
+          <div className="mb-1 flex flex-wrap items-center gap-(--sp-inline)">
             <h3 className="text-sm font-semibold text-neutral-900">{name}</h3>
             <span
               className={`rounded-md border px-2 py-0.5 text-xs font-medium ${policyStatusClasses(policy.status)}`}

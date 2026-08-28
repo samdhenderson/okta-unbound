@@ -54,8 +54,8 @@ const GroupSelectionBar: React.FC<GroupSelectionBarProps> = ({
   onExportSelection,
   onExportGroupsList,
 }) => (
-  <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-neutral-50 rounded-md border border-neutral-200">
-    <div className="flex items-center gap-3">
+  <div className="flex flex-wrap items-center justify-between gap-(--sp-field) p-(--sp-card) bg-neutral-50 rounded-md border border-neutral-200">
+    <div className="flex items-center gap-(--sp-field)">
       <span className="text-sm font-medium text-neutral-700">
         {selectedCount} of {filteredCount} selected
       </span>
@@ -66,7 +66,7 @@ const GroupSelectionBar: React.FC<GroupSelectionBarProps> = ({
         Deselect All
       </Button>
     </div>
-    <div className="flex items-center gap-2 flex-wrap">
+    <div className="flex items-center gap-(--sp-inline) flex-wrap">
       {/* Compare Button */}
       {selectedCount >= 2 && selectedCount <= 5 && (
         <Button variant="secondary" size="sm" icon="chart" onClick={onCompare}>

@@ -101,7 +101,7 @@ const ExportPreviewTable: React.FC<ExportPreviewTableProps> = ({
               {columns.map((column) => (
                 <th
                   key={column.id}
-                  className="p-2 text-left font-semibold text-neutral-700 whitespace-nowrap"
+                  className="px-(--sp-row-x) py-(--sp-row-y) text-left font-semibold text-neutral-700 whitespace-nowrap"
                 >
                   {column.label}
                 </th>
@@ -118,7 +118,10 @@ const ExportPreviewTable: React.FC<ExportPreviewTableProps> = ({
                       ? oktaAdminEntityUrl(oktaOrigin, linkify.entityType, value)
                       : null;
                   return (
-                    <td key={column.id} className="p-2 text-neutral-700 whitespace-nowrap">
+                    <td
+                      key={column.id}
+                      className="px-(--sp-row-x) py-(--sp-row-y) text-neutral-700 whitespace-nowrap"
+                    >
                       {href ? (
                         <a
                           href={href}

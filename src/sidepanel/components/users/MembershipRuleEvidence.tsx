@@ -149,13 +149,13 @@ const MembershipRuleEvidence: React.FC<RuleEvidenceProps> = ({ rule, user, group
   const attributes = conditionAttributes(expression);
 
   return (
-    <div className="rounded-md border border-neutral-200 bg-canvas p-3">
+    <div className="rounded-md border border-neutral-200 bg-canvas p-(--sp-card)">
       <EntityLink type="rule" id={rule.id} name={rule.name} />
 
       {attributes.length > 0 && (
         <div className="mt-2">
           <Eyebrow className="mb-1 block">Reads</Eyebrow>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-(--sp-inline)">
             {attributes.map((attribute) => (
               <Badge key={attribute} variant="neutral" className="font-mono">
                 {attribute}

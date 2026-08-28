@@ -37,7 +37,7 @@ const GroupListItemSignal: React.FC<GroupListItemSignalProps> = ({ model }) => {
   const { source, memberCount, memberNoun, facts } = model;
 
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500">
+    <div className="mt-1 flex flex-wrap items-center gap-(--sp-inline) text-xs text-neutral-500">
       {source.kind === 'computed' && (
         <span
           aria-hidden="true"

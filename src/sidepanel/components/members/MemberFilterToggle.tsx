@@ -1,11 +1,16 @@
 /**
- * @module sidepanel/components/groups/GroupFilterToggle
- * @description The "Filters" toggle button with its active-filter count badge, shown
- * beside the search bar in cached mode.
+ * @module sidepanel/components/members/MemberFilterToggle
+ * @description The "Filters" toggle button with its active-filter count badge,
+ * shown beside {@link MemberSearchBar} in the member explorer.
+ *
+ * Extracted from an inline `<button>` in `MemberExplorer` — the same shape
+ * `groups/GroupFilterToggle` already carries for the mirror-image case, so the
+ * two entry points read as one control rather than two hand-copied ones.
  */
 import React from 'react';
 
-interface GroupFilterToggleProps {
+/** Props for {@link MemberFilterToggle}. */
+interface MemberFilterToggleProps {
   /** Whether the filter panel is currently expanded (drives the active styling). */
   showFilters: boolean;
   /** Active-filter count shown in the badge (hidden at 0). */
@@ -15,13 +20,12 @@ interface GroupFilterToggleProps {
 }
 
 /**
- * The Filters toggle button with its active-filter count badge. Rendered next to the
- * search bar in cached mode only. Kept a raw `<button>` (documented §3 exception, the
- * same shape `members/MemberFilterToggle` mirrors): the primary-light active styling
- * does not map cleanly onto a shared `Button` variant, and the funnel glyph is not in
- * the shared `Icon` registry.
+ * The Filters toggle button with its active-filter count badge. Kept a raw
+ * `<button>` (documented §3 exception, same as `groups/GroupFilterToggle`): the
+ * primary-light active styling does not map cleanly onto a shared `Button`
+ * variant, and the funnel glyph is not in the shared `Icon` registry.
  */
-const GroupFilterToggle: React.FC<GroupFilterToggleProps> = ({
+const MemberFilterToggle: React.FC<MemberFilterToggleProps> = ({
   showFilters,
   activeFilterCount,
   onToggle,
@@ -30,7 +34,7 @@ const GroupFilterToggle: React.FC<GroupFilterToggleProps> = ({
     type="button"
     onClick={onToggle}
     aria-pressed={showFilters}
-    className={`press px-4 py-3 rounded-md border text-sm font-medium flex items-center gap-(--sp-inline) ${
+    className={`press flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium ${
       showFilters || activeFilterCount > 0
         ? 'bg-primary-light border-primary text-primary-text'
         : 'bg-white border-neutral-200 text-neutral-700 hover:border-neutral-400'
@@ -60,4 +64,4 @@ const GroupFilterToggle: React.FC<GroupFilterToggleProps> = ({
   </button>
 );
 
-export default GroupFilterToggle;
+export default MemberFilterToggle;

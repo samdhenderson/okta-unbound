@@ -69,7 +69,7 @@ const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, 
 
 /** Renders the row's inline preview of the group record. */
 const GroupListItemDetails: React.FC<GroupListItemDetailsProps> = ({ group, breakdown }) => (
-  <div className="space-y-3 border-t border-neutral-200 px-3 py-3">
+  <div className="space-y-(--sp-rung) border-t border-neutral-200 p-(--sp-card)">
     {group.description?.trim() && (
       <Field label="Description">
         <p className="text-neutral-700">{group.description}</p>
@@ -83,19 +83,15 @@ const GroupListItemDetails: React.FC<GroupListItemDetailsProps> = ({ group, brea
       </div>
     )}
 
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-(--sp-field) sm:grid-cols-2">
       <Field label="Group ID">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-(--sp-inline)">
           <code className="min-w-0 flex-1 truncate font-mono text-xs text-neutral-900">
             {group.id}
           </code>
           <CopyButton label="Copy ID" getText={() => group.id} />
         </div>
       </Field>
-
-      {group.type === 'APP_GROUP' && group.sourceAppName && (
-        <Field label="Source application">{group.sourceAppName}</Field>
-      )}
 
       {group.created && <Field label="Created">{formatDate(group.created)}</Field>}
       {group.lastUpdated && <Field label="Last updated">{formatDate(group.lastUpdated)}</Field>}
@@ -104,11 +100,11 @@ const GroupListItemDetails: React.FC<GroupListItemDetailsProps> = ({ group, brea
     {group.pushMappings && group.pushMappings.length > 0 && (
       <div>
         <div className="mb-1.5 text-xs font-medium text-neutral-600">Push mappings</div>
-        <ul className="space-y-1.5">
+        <ul className="space-y-(--sp-inline)">
           {group.pushMappings.map((mapping) => (
             <li
               key={mapping.mappingId}
-              className="flex items-center justify-between gap-3 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1.5"
+              className="flex items-center justify-between gap-(--sp-field) rounded-md border border-neutral-200 bg-neutral-50 px-(--sp-row-x) py-(--sp-row-y)"
             >
               <div className="min-w-0">
                 {mapping.appName ? (

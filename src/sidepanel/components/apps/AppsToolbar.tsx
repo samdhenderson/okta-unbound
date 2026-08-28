@@ -82,7 +82,7 @@ const AppsToolbar: React.FC<AppsToolbarProps> = ({
   resultCount,
   totalCount,
 }) => (
-  <div className="space-y-3">
+  <div className="space-y-(--sp-field)">
     <Input
       type="search"
       value={searchQuery}
@@ -92,8 +92,12 @@ const AppsToolbar: React.FC<AppsToolbarProps> = ({
       icon={<Icon type="search" size="md" />}
     />
 
-    <div className="flex flex-wrap items-center gap-3">
-      <div className="flex items-center gap-1.5" role="group" aria-label="Filter by status">
+    <div className="flex flex-wrap items-center gap-(--sp-field)">
+      <div
+        className="flex items-center gap-(--sp-inline)"
+        role="group"
+        aria-label="Filter by status"
+      >
         <span className="text-xs font-medium text-neutral-600">Status</span>
         {STATUS_OPTIONS.map((option) => (
           <FilterPill
@@ -106,7 +110,11 @@ const AppsToolbar: React.FC<AppsToolbarProps> = ({
         ))}
       </div>
 
-      <div className="flex items-center gap-1.5" role="group" aria-label="Filter by group push">
+      <div
+        className="flex items-center gap-(--sp-inline)"
+        role="group"
+        aria-label="Filter by group push"
+      >
         <span className="text-xs font-medium text-neutral-600">Group push</span>
         {GROUPS_OPTIONS.map((option) => (
           <FilterPill
@@ -119,7 +127,11 @@ const AppsToolbar: React.FC<AppsToolbarProps> = ({
         ))}
       </div>
 
-      <div className="flex items-center gap-1.5" role="group" aria-label="Sort applications">
+      <div
+        className="flex items-center gap-(--sp-inline)"
+        role="group"
+        aria-label="Sort applications"
+      >
         <span className="text-xs font-medium text-neutral-600">Sort</span>
         {SORT_OPTIONS.map((option) => (
           <SortPill

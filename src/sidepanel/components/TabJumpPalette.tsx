@@ -231,6 +231,11 @@ const TabJumpPalette: React.FC<TabJumpPaletteProps> = ({
                   neither `tabIndex` nor a ref, and the difference is structural
                   rather than stylistic, so a variant would not discharge it. See
                   docs/components.md.
+
+                  `press-subtle` (ADR-0046), not `press`: the row spans the full
+                  palette width, so a button-scale depress would read as a lurch.
+                  Padding and the icon/label gap consume the `--sp-row-x`/
+                  `--sp-row-y`/`--sp-inline` roles (ADR-0048).
                 */}
                 <button
                   type="button"
@@ -241,7 +246,7 @@ const TabJumpPalette: React.FC<TabJumpPaletteProps> = ({
                   aria-current={isCurrent ? 'page' : undefined}
                   onClick={() => handleSelect(result.id)}
                   onKeyDown={(event) => handleRowKeyDown(event, index)}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left text-sm
+                  className={`press press-subtle w-full flex items-center gap-(--sp-inline) px-(--sp-row-x) py-(--sp-row-y) rounded-md text-left text-sm
                     transition-colors duration-(--dur-instant)
                     focus:outline-2 focus:outline-offset-2 focus:outline-primary
                     ${

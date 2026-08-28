@@ -22,7 +22,7 @@ const RulesMetaRow: React.FC<RulesMetaRowProps> = ({ apiCost, lastFetchTime, has
   if (apiCost === null && !(lastFetchTime && hasRules)) return null;
 
   return (
-    <div className="flex gap-3 flex-wrap">
+    <div className="flex gap-(--sp-inline) flex-wrap">
       {apiCost !== null && (
         <div className="px-3 py-1.5 bg-neutral-50 border border-neutral-200 rounded-md flex items-center gap-2">
           <span className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">

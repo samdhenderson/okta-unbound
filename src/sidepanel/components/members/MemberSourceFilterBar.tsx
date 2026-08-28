@@ -90,7 +90,7 @@ const MemberSourceFilterBar: React.FC<MemberSourceFilterBarProps> = ({
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-(--sp-inline)">
         <FilterPill
           active={activeKeys.size === 0}
           onClick={onClearAll}

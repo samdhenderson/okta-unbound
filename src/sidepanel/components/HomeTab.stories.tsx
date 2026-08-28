@@ -432,3 +432,18 @@ export const OrgFiguresAreFree: Story = {
     await waitFor(() => expect(syncRequests).toBe(0));
   },
 };
+
+/**
+ * The four regions arrive as one cascade, not four independent pops.
+ * `useStaggerReveal` marks its container `data-stagger-reveal="on"` only once
+ * the `IntersectionObserver` it uses to release the hold actually exists — so
+ * seeing the attribute here is proof the hook engaged, not just that a class
+ * was typed. `test:storybook` runs this in a real Chromium, where
+ * `IntersectionObserver` is real; there is nothing to stub.
+ */
+export const CardStackCascades: Story = {
+  play: async ({ canvasElement }) => {
+    const stack = await within(canvasElement).findByTestId('home-card-stack');
+    await waitFor(() => expect(stack).toHaveAttribute('data-stagger-reveal', 'on'));
+  },
+};

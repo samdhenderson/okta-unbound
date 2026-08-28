@@ -207,7 +207,7 @@ const ProfileDisplayAttributesTab: React.FC<ProfileDisplayAttributesTabProps> = 
   };
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-(--sp-field)">
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-xs text-neutral-600">
           Tick to show it, choose its category, reorder within it
@@ -227,7 +227,7 @@ const ProfileDisplayAttributesTab: React.FC<ProfileDisplayAttributesTabProps> = 
         icon={<Icon type="search" size="sm" />}
       />
 
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Attribute filters">
+      <div className="flex flex-wrap gap-(--sp-inline)" role="group" aria-label="Attribute filters">
         {buckets.map((option) => (
           <FilterPill
             key={option.key}
@@ -251,7 +251,7 @@ const ProfileDisplayAttributesTab: React.FC<ProfileDisplayAttributesTabProps> = 
       */}
       <div className="scrollable-list max-h-[300px] divide-y divide-neutral-100 overflow-y-auto rounded-md border border-neutral-200">
         {visibleRows.length === 0 ? (
-          <p className="px-3 py-6 text-center text-sm text-neutral-600">
+          <p className="px-(--sp-row-x) py-6 text-center text-sm text-neutral-600">
             No attributes match this filter.
           </p>
         ) : (

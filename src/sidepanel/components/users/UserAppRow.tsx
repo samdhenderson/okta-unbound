@@ -52,13 +52,13 @@ const UserAppRow: React.FC<UserAppRowProps> = ({ row, oktaOrigin }) => {
     // announced until it is opened.
     <div id={detailId} className="disclose" data-open={open} inert={!open || undefined}>
       <div>
-        <div className="space-y-3 border-t border-neutral-200 px-3 py-3">
+        <div className="space-y-(--sp-rung) border-t border-neutral-200 px-(--sp-row-x) py-(--sp-row-y)">
           {/* The caveat in full. The row above shows the same sentence truncated
               to one line; this is where it is actually readable. */}
           <p className="text-pretty text-xs text-neutral-600">{row.caveat}</p>
 
           {row.grantGroupName && (
-            <div className="rounded-md border border-neutral-200 bg-canvas p-3">
+            <div className="rounded-md border border-neutral-200 bg-canvas p-(--sp-card)">
               <Eyebrow as="div" className="mb-2">
                 Granted through
               </Eyebrow>
@@ -79,11 +79,11 @@ const UserAppRow: React.FC<UserAppRowProps> = ({ row, oktaOrigin }) => {
 
   return (
     <ListRow as="li" density="compact" body={disclosure}>
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-(--sp-inline)">
         <Icon type="app" size="sm" className="mt-0.5 shrink-0 text-neutral-400" />
 
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 items-center gap-(--sp-inline)">
             <span className="truncate text-sm font-semibold text-neutral-900">{row.label}</span>
             {row.isPrivileged && (
               <Badge

@@ -165,7 +165,7 @@ const CauseWorklist: React.FC<CauseWorklistProps> = ({
 }) => (
   <section
     aria-labelledby="cause-worklist-heading"
-    className="rounded-md border border-neutral-200 bg-white p-3"
+    className="rounded-md border border-neutral-200 bg-white p-(--sp-card)"
   >
     <div className="flex items-center gap-2">
       <span className="rounded-md bg-neutral-100 p-1.5 text-neutral-700">
@@ -190,7 +190,7 @@ const CauseWorklist: React.FC<CauseWorklistProps> = ({
         body={`${comparedName} has no group access ${contextName} is missing.`}
       />
     ) : (
-      <div className="mt-3 space-y-3">
+      <div className="mt-3 space-y-(--sp-rung)">
         {groupCausesByRemedy(causes).map(({ remedy, causes: rows }) => (
           <RemedyGroup
             key={remedy}
@@ -210,7 +210,7 @@ const CauseWorklist: React.FC<CauseWorklistProps> = ({
 
 /** A neutral panel note — used for both "not computed" and "nothing found". */
 const WorklistNote: React.FC<{ title: string; body: string }> = ({ title, body }) => (
-  <div className="mt-3 rounded-md border border-neutral-200 bg-neutral-50 p-3">
+  <div className="mt-3 rounded-md border border-neutral-200 bg-neutral-50 p-(--sp-card)">
     <p className="text-sm font-medium text-neutral-900">{title}</p>
     <p className="mt-1 text-xs text-neutral-600">{body}</p>
   </div>
@@ -249,7 +249,7 @@ const RemedyGroup: React.FC<RemedyGroupProps> = ({
   return (
     <section
       aria-labelledby={`remedy-${remedy}`}
-      className={`rounded-md border p-3 ${presentation.groupClass}`}
+      className={`rounded-md border p-(--sp-card) ${presentation.groupClass}`}
     >
       <div className="flex items-start gap-2">
         <span aria-hidden="true" className="mt-0.5 inline-flex shrink-0">

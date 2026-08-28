@@ -72,7 +72,7 @@ const GroupSection: React.FC<{ title: string; effects: readonly GroupEffect[] }>
   effects.length === 0 ? null : (
     <section className="flex flex-col gap-2">
       <Eyebrow as="h3">{title}</Eyebrow>
-      <ul className="space-y-3">
+      <ul className="space-y-(--sp-rung)">
         {effects.map((effect) => (
           <BlastRadiusGroupRow key={effect.groupId} effect={effect} />
         ))}
@@ -88,7 +88,7 @@ const RuleSection: React.FC<{ title: string; effects: readonly RuleEffect[] }> =
   effects.length === 0 ? null : (
     <section className="flex flex-col gap-2">
       <Eyebrow as="h3">{title}</Eyebrow>
-      <ul className="space-y-3">
+      <ul className="space-y-(--sp-rung)">
         {effects.map((effect) => (
           <BlastRadiusRuleRow key={effect.ruleId} effect={effect} />
         ))}
@@ -157,7 +157,7 @@ const BlastRadiusReport: React.FC<BlastRadiusReportProps> = ({ report, className
 
   if (groupCount === 0 && ruleCount === 0) {
     return (
-      <div className={`flex flex-col gap-3 ${className}`}>
+      <div className={`flex flex-col gap-(--sp-rung) ${className}`}>
         <EmptyState
           icon="check"
           title="No group changes predicted"
@@ -169,8 +169,12 @@ const BlastRadiusReport: React.FC<BlastRadiusReportProps> = ({ report, className
   }
 
   return (
-    <div className={`flex flex-col gap-3 ${className}`}>
-      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Report view">
+    <div className={`flex flex-col gap-(--sp-rung) ${className}`}>
+      <div
+        className="flex flex-wrap items-center gap-(--sp-inline)"
+        role="group"
+        aria-label="Report view"
+      >
         <FilterPill active={view === 'groups'} onClick={() => setView('groups')}>
           Groups {groupCount}
         </FilterPill>
@@ -180,7 +184,7 @@ const BlastRadiusReport: React.FC<BlastRadiusReportProps> = ({ report, className
       </div>
 
       {view === 'groups' ? (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-(--sp-rung)">
           {groupCount === 0 ? (
             <p className="text-sm text-neutral-600">
               No membership is predicted to change, even though rules below move.
@@ -194,7 +198,7 @@ const BlastRadiusReport: React.FC<BlastRadiusReportProps> = ({ report, className
           )}
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-(--sp-rung)">
           {ruleCount === 0 ? (
             <p className="text-sm text-neutral-600">
               No rule&rsquo;s verdict about this user moves.

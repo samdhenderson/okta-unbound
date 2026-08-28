@@ -77,7 +77,7 @@ const UserSearchPanel: React.FC<UserSearchPanelProps> = ({
   return (
     <>
       {/* Search Section */}
-      <div className="space-y-3">
+      <div className="space-y-(--sp-rung)">
         <UserSearchBar
           searchQuery={searchQuery}
           onSearchChange={onSearchQueryChange}

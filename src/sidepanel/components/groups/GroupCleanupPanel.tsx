@@ -52,8 +52,8 @@ const GroupCleanupPanel: React.FC<GroupCleanupPanelProps> = ({
   const overflow = report.entries.length - preview.length;
 
   return (
-    <div className="bg-white rounded-md border border-neutral-200 p-4 space-y-4">
-      <div className="flex items-center justify-between gap-3">
+    <div className="bg-white rounded-md border border-neutral-200 p-(--sp-card) space-y-(--sp-rung)">
+      <div className="flex items-center justify-between gap-(--sp-field)">
         <div>
           <h3 className="text-sm font-semibold text-neutral-900">Cleanup triage</h3>
           <p className="text-xs text-neutral-500">
@@ -75,7 +75,7 @@ const GroupCleanupPanel: React.FC<GroupCleanupPanelProps> = ({
       ) : (
         <>
           {/* Category tiles double as selectors — mirrors the Overview stat grid. */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-(--sp-field)">
             <StatCard
               title="Empty"
               value={report.categories.empty.length}
@@ -126,17 +126,17 @@ const GroupCleanupPanel: React.FC<GroupCleanupPanelProps> = ({
           </div>
 
           {/* Ranked preview of the most review-worthy groups */}
-          <div className="space-y-2">
+          <div className="space-y-(--sp-inline)">
             {preview.map((entry) => (
               <div
                 key={entry.group.id}
-                className="flex items-center justify-between gap-3 rounded-md border border-neutral-200 px-3 py-2"
+                className="flex items-center justify-between gap-(--sp-field) rounded-md border border-neutral-200 px-(--sp-row-x) py-(--sp-row-y)"
               >
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-neutral-900 truncate">
                     {entry.group.name}
                   </p>
-                  <div className="mt-1 flex flex-wrap gap-1.5">
+                  <div className="mt-1 flex flex-wrap gap-(--sp-inline)">
                     {entry.reasons.map((reason) => (
                       <span
                         key={reason}
@@ -147,7 +147,7 @@ const GroupCleanupPanel: React.FC<GroupCleanupPanelProps> = ({
                     ))}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-(--sp-inline) shrink-0">
                   <span
                     className={`px-2 py-0.5 rounded-md text-xs font-bold border ${reviewScoreColor(
                       entry.reviewScore,

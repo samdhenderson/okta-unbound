@@ -108,7 +108,7 @@ const GroupMergeModal: React.FC<GroupMergeModalProps> = ({
 
       {/* Step 1 — choose survivor */}
       {showSelect && (
-        <div className="space-y-3">
+        <div className="space-y-(--sp-field)">
           <p className="text-sm text-neutral-600">
             Members of the other groups are copied into the <strong>survivor</strong>, then those
             groups are emptied. Nothing is deleted — delete the emptied groups in Okta afterward.
@@ -116,7 +116,11 @@ const GroupMergeModal: React.FC<GroupMergeModalProps> = ({
           <div className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
             Survivor
           </div>
-          <div className="space-y-2" role="radiogroup" aria-label="Choose the survivor group">
+          <div
+            className="space-y-(--sp-inline)"
+            role="radiogroup"
+            aria-label="Choose the survivor group"
+          >
             {selectedGroups.map((g) => (
               <button
                 key={g.id}
@@ -124,7 +128,7 @@ const GroupMergeModal: React.FC<GroupMergeModalProps> = ({
                 role="radio"
                 aria-checked={survivorId === g.id}
                 onClick={() => setPicked(g.id)}
-                className={`w-full flex items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
+                className={`press press-subtle w-full flex items-center justify-between gap-(--sp-field) rounded-md border px-(--sp-row-x) py-(--sp-row-y) text-left ${
                   survivorId === g.id
                     ? 'border-primary bg-primary-light'
                     : 'border-neutral-200 bg-white hover:border-neutral-400'
@@ -142,8 +146,8 @@ const GroupMergeModal: React.FC<GroupMergeModalProps> = ({
 
       {/* Step 2 — preview */}
       {phase === 'preview' && plan && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-(--sp-rung)">
+          <div className="grid grid-cols-2 gap-(--sp-field)">
             <StatCard
               title="Members to copy"
               value={plan.totalCopies}
@@ -164,17 +168,17 @@ const GroupMergeModal: React.FC<GroupMergeModalProps> = ({
             <strong>{plan.survivor.name}</strong>, then these groups will be emptied:
           </p>
 
-          <ul className="space-y-2">
+          <ul className="space-y-(--sp-inline)">
             {plan.sources.map((s) => (
               <li
                 key={s.id}
-                className={`rounded-md border px-3 py-2 ${
+                className={`rounded-md border px-(--sp-row-x) py-(--sp-row-y) ${
                   s.hasActiveFeedingRule
                     ? 'border-danger-light bg-danger-light'
                     : 'border-neutral-200'
                 }`}
               >
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center justify-between gap-(--sp-field)">
                   <span className="text-sm font-medium text-neutral-900 truncate">{s.name}</span>
                   <span className="text-xs text-neutral-500 shrink-0">
                     {s.membersToRemove.length.toLocaleString()} members
@@ -210,11 +214,11 @@ const GroupMergeModal: React.FC<GroupMergeModalProps> = ({
 
       {/* Step 4 — done / error */}
       {(phase === 'done' || phase === 'error') && results && (
-        <div className="space-y-3">
+        <div className="space-y-(--sp-field)">
           {phase === 'error' && (
             <p className="text-sm text-danger-text">{error || 'The merge did not complete.'}</p>
           )}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-(--sp-field)">
             <StatCard title="Copied" value={results.copied} color="success" icon="check" />
             <StatCard title="Emptied" value={results.removed} color="neutral" icon="minus" />
           </div>

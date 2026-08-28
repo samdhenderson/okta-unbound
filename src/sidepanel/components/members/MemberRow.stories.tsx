@@ -8,6 +8,17 @@ const activeUser = mockUsers.find((u) => u.status === 'ACTIVE')!;
 const suspendedUser = mockUsers.find((u) => u.status === 'SUSPENDED')!;
 const deprovisionedUser = mockUsers.find((u) => u.status === 'DEPROVISIONED')!;
 
+/**
+ * The fixture's `login` matches its `email`, which is also the common case in a
+ * real org — so it is the one used by every other story here, and the login
+ * line the restraint pass added a condition around never renders in them. This
+ * fixture forces the two apart to keep that line under coverage.
+ */
+const userWithDistinctLogin = {
+  ...activeUser,
+  profile: { ...activeUser.profile, login: 'jdoe' },
+};
+
 const enrolledMfa: MemberMfaResult = {
   userId: activeUser.id,
   factors: [],
@@ -59,7 +70,7 @@ const deducedMembership: GroupMembership = {
   attribution: 'inferred',
 };
 
-/** Single member card: name, email, login, status badge, and (once scanned) MFA factor tags. */
+/** Single member card: name, email, login when distinct, status badge, and (once scanned) MFA factor tags. */
 const meta = {
   title: 'Members/MemberRow',
   component: MemberRow,
@@ -69,11 +80,14 @@ const meta = {
     docs: {
       description: {
         component:
-          'Single member card: name, email, login, a status badge, MFA factor tags, and a ' +
+          'Single member card: name, email, login (only when it differs from the email — ' +
+          "most orgs provision the two identically, and restating a login that's already " +
+          'the email above it is the same fact twice), a status badge, MFA factor tags, and a ' +
           "disclosure carrying the member's profile attributes and an Okta deep link.\n\n" +
-          'Memoized for large lists. The status badge maps the user status to a semantic ' +
-          'token set (success / warning / danger, neutral fallback). Factor tags — or a ' +
-          '"No MFA" badge for 0-factor users — render only once a scan has completed.\n\n' +
+          'Memoized for large lists. The status badge and the factor/"No MFA" tags all go ' +
+          'through the shared `Badge`, which maps the user status to a semantic token set ' +
+          '(success / warning / danger, neutral fallback). Factor tags — or "No MFA" for a ' +
+          '0-factor user — render only once a scan has completed.\n\n' +
           '**The row is not a link.** It used to become one whenever an org origin was ' +
           "known, which foreclosed the disclosure: a chevron inside an anchor is axe's " +
           '`nested-interactive`. The deep link now lives inside the disclosure, where ' +
@@ -137,6 +151,19 @@ export const Suspended: Story = {
 /** Deprovisioned member — danger-colored status badge. */
 export const Deprovisioned: Story = {
   args: { user: deprovisionedUser },
+};
+
+/**
+ * Most Okta orgs provision `login === email`, so the header states the login
+ * only when it disagrees with the email above it — otherwise the two lines
+ * would repeat the same string. Every other story in this file uses the shared
+ * fixture, where the two match, so this is the one place the login line renders.
+ */
+export const LoginDiffersFromEmail: Story = {
+  args: { user: userWithDistinctLogin },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('jdoe')).toBeInTheDocument();
+  },
 };
 
 /** MFA scan complete and this member has enrolled factors — factor tags render. */

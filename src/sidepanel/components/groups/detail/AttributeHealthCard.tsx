@@ -62,7 +62,7 @@ const AttributeHealthCard: React.FC<AttributeHealthCardProps> = ({
   const values = summary.rows.filter((row) => row.count > 0);
 
   return (
-    <div className="space-y-3 rounded-md border border-neutral-200 bg-white p-4">
+    <div className="space-y-3 rounded-md border border-neutral-200 bg-white p-(--sp-card)">
       <div className="flex items-baseline justify-between gap-2">
         <code
           className="truncate font-mono text-sm font-semibold text-neutral-900"

@@ -61,7 +61,7 @@ const BreakdownDetailsModal: React.FC<BreakdownDetailsModalProps> = ({
         </Button>
       }
     >
-      <div className="space-y-3">
+      <div className="space-y-(--sp-rung)">
         <div className="flex items-start justify-between gap-3">
           <p className="text-sm text-neutral-600">
             All {realValues.length.toLocaleString()} values. Click any value to filter the member

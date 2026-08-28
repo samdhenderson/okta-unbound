@@ -157,7 +157,7 @@ const GroupInsightsPane: React.FC<GroupInsightsPaneProps> = ({
   }, [summaries, ruleIndex]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-(--sp-rung)">
       <DetailSection
         title="Attribute spread"
         description="Blank rate and value spread for every profile attribute across this group's members. The ones a feeding rule depends on come first."
@@ -198,7 +198,7 @@ const GroupInsightsPane: React.FC<GroupInsightsPaneProps> = ({
             or unique per member.
           </p>
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-(--sp-rung) sm:grid-cols-2">
             {cards.map(({ summary, rules }) => (
               <AttributeHealthCard
                 key={summary.key}

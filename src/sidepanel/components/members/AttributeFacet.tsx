@@ -60,7 +60,7 @@ const AttributeFacet: React.FC<AttributeFacetProps> = ({
 
   return (
     <div
-      className={`group rounded-lg border bg-white p-3 transition-colors duration-(--dur-instant) ${
+      className={`group rounded-lg border bg-white p-(--sp-card) transition-colors duration-(--dur-instant) ${
         hasActive
           ? 'border-primary-highlight ring-1 ring-primary-highlight'
           : 'border-neutral-200 hover:border-neutral-300'
@@ -98,6 +98,9 @@ const AttributeFacet: React.FC<AttributeFacetProps> = ({
           const clickable = row.value !== OTHER_VALUE;
           return (
             // Raw <button> (§3 data-viz-bar exception): a spread-bar segment sized by flex-grow/count; not restyled.
+            // `.press-subtle` — a bar segment is a cluster of adjacent narrow
+            // targets, the same "much wider than one button" reasoning ADR-0046
+            // gives `ListRow`, so the full `.press` scale would read as a lurch.
             <button
               key={row.value}
               type="button"
@@ -105,7 +108,7 @@ const AttributeFacet: React.FC<AttributeFacetProps> = ({
               onClick={() => (clickable ? onToggleValue(row) : onExpand())}
               title={`${row.label} — ${row.count.toLocaleString()} (${row.pct.toFixed(0)}%)`}
               aria-label={`${label}: ${row.label}, ${row.count.toLocaleString()} members`}
-              className={`h-full min-w-[3px] transition-opacity duration-(--dur-instant) focus:outline-none focus:relative focus:z-10 focus:ring-2 focus:ring-primary ${
+              className={`press-subtle h-full min-w-[3px] focus:outline-none focus:relative focus:z-10 focus:ring-2 focus:ring-primary ${
                 clickable ? 'cursor-pointer' : 'cursor-default'
               } ${dimmed ? 'opacity-35 hover:opacity-70' : 'hover:opacity-80'}`}
               style={{ flexGrow: row.count, flexBasis: 0, background: color }}
@@ -115,7 +118,7 @@ const AttributeFacet: React.FC<AttributeFacetProps> = ({
       </div>
 
       {/* Legend: leading values as quick filters */}
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+      <div className="mt-2 flex flex-wrap items-center gap-x-(--sp-inline) gap-y-1">
         {legend.map(({ row, color }) => {
           const isActive = activeValues.has(row.value);
           const clickable = row.value !== OTHER_VALUE;
@@ -126,7 +129,7 @@ const AttributeFacet: React.FC<AttributeFacetProps> = ({
               type="button"
               disabled={!clickable}
               onClick={() => onToggleValue(row)}
-              className={`inline-flex items-center gap-1.5 text-[11px] transition-colors ${
+              className={`press-subtle inline-flex items-center gap-1.5 text-[11px] ${
                 clickable ? 'cursor-pointer' : 'cursor-default'
               }`}
               aria-pressed={clickable ? isActive : undefined}

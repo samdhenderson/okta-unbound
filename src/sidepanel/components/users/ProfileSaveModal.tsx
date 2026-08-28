@@ -107,8 +107,8 @@ const Value: React.FC<{ text: string; side: 'before' | 'after' }> = ({ text, sid
  * spoken equivalent beside it; the values wrap rather than truncating.
  */
 const ChangeRow: React.FC<{ change: DraftChange }> = ({ change }) => (
-  <li className="px-3 py-2">
-    <div className="flex flex-wrap items-center justify-between gap-2">
+  <li className="px-(--sp-row-x) py-(--sp-row-y)">
+    <div className="flex flex-wrap items-center justify-between gap-(--sp-inline)">
       <p className="text-sm font-semibold text-neutral-900">{change.label}</p>
       {change.changesSignIn && <Badge variant="danger">Sign-in</Badge>}
     </div>
@@ -188,7 +188,7 @@ const ProfileSaveModal: React.FC<ProfileSaveModalProps> = ({
         </>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-(--sp-rung)">
         {error !== undefined && <AlertMessage message={{ type: 'danger', text: error }} />}
 
         <AlertMessage

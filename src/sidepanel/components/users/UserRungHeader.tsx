@@ -125,9 +125,11 @@ const UserRungHeader: React.FC<UserRungHeaderProps> = ({
       identityKey={identity?.key}
       identity={identity ? <EntityIdentity rows={identity.rows} /> : undefined}
       badge={
-        // On the detail rung the badge becomes the user's Okta status and the
-        // group count moves into the region below it; elsewhere the count stays
-        // the badge.
+        // On the detail rung the badge is reserved for the alarming statuses
+        // (`LOCKED_OUT`, `DEPROVISIONED`) — `userIdentity` already decided that
+        // and left every calmer status as a `status` fact in the identity rows
+        // instead, so most detail views carry no badge at all. Elsewhere the
+        // group count stays the badge.
         identity
           ? identity.badge
           : selectedUser

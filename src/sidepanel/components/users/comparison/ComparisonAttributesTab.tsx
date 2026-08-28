@@ -255,7 +255,7 @@ const ComparisonAttributesTab: React.FC<ComparisonAttributesTabProps> = ({
           <div className="scrollable-list min-h-0 flex-1 divide-y divide-neutral-100 overflow-y-auto">
             {blocks.map((block) => (
               <section key={block.key}>
-                <Eyebrow as="div" className="px-3 pt-3 pb-1">
+                <Eyebrow as="div" className="px-(--sp-row-x) pt-3 pb-1">
                   {block.name}
                 </Eyebrow>
                 <ul aria-label={block.name} className="divide-y divide-neutral-100">

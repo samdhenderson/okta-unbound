@@ -78,7 +78,7 @@ const PoliciesListPanel: React.FC<PoliciesListPanelProps> = memo(function Polici
         }
       >
         {policies.length > 0 && (
-          <div ref={setStaggerRef} className="space-y-3 rise-in-stagger">
+          <div ref={setStaggerRef} className="space-y-(--sp-rung) rise-in-stagger">
             {policies.map((policy) => (
               <PolicyCard key={policy.id} policy={policy} loadRules={loadRules} />
             ))}

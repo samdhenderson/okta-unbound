@@ -130,7 +130,9 @@ const AddGroupMemberModal: React.FC<AddGroupMemberModalProps> = ({
                 <button
                   key={user.id}
                   onClick={() => onSelectUser(user)}
-                  className="w-full text-left px-3 py-2 hover:bg-neutral-50 border-b border-neutral-100 last:border-0"
+                  /* `press press-subtle` (ADR-0046): a wide list row, not a button-weight
+                     target, so it takes the subtle press scale. */
+                  className="press press-subtle w-full text-left px-(--sp-row-x) py-(--sp-row-y) hover:bg-neutral-50 border-b border-neutral-100 last:border-0"
                 >
                   <div className="text-sm font-medium text-neutral-900">
                     {userDisplayName(user)}
@@ -144,7 +146,7 @@ const AddGroupMemberModal: React.FC<AddGroupMemberModalProps> = ({
 
         {/* Selected user display */}
         {selectedUser && (
-          <div className="flex items-center justify-between p-3 bg-primary-light border border-primary-highlight rounded-md">
+          <div className="flex items-center justify-between p-(--sp-card) bg-primary-light border border-primary-highlight rounded-md">
             <div>
               <div className="text-sm font-medium text-neutral-900">
                 {userDisplayName(selectedUser)}
