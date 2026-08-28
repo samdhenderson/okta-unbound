@@ -196,7 +196,13 @@ const GroupMembershipsList: React.FC<GroupMembershipsListProps> = ({
     // fix; hiding a duplicate border is not.
     <section aria-label="Group memberships">
       {hasMemberships && !isLoading && (
-        <div className="space-y-(--sp-field) border-b border-neutral-200 bg-neutral-50 p-(--sp-card)">
+        // No band chrome. The pane's two siblings — Apps and Profile — put their
+        // own summary-and-filter zone on the shared card's plain white, and this
+        // one drew a grey stripe with a rule under it instead, so the same
+        // furniture read as a different kind of object depending on which pane
+        // you were on. Grouping here comes from the spacing below, which is what
+        // separates every other stack of controls in the panel.
+        <div className="space-y-(--sp-field) p-(--sp-card) pb-0">
           {/*
             The accounting line. Every bucket with rows in it is named; a bucket
             with none is omitted rather than printed as a zero.
