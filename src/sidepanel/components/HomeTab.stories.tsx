@@ -7,10 +7,12 @@ import {
   resetSyncSnapshotResponder,
   resetStorageSeed,
   setStorageSeed,
+  setSyncSnapshotResponder,
 } from '../../../.storybook/mocks/chrome';
 import { orgSnapshotStore } from '../../shared/snapshot/orgSnapshotStore';
 import { WORKING_SET_STORAGE_KEY } from '../../shared/storage/workingSetStore';
 import type { RawOktaGroup } from './groups/groupSummary';
+import type { OktaAppListItem } from '../../shared/schemas/okta';
 import type { OktaGroupRule } from '../../shared/types';
 
 /** The org these stories render against; the snapshot is scoped by origin. */
@@ -43,6 +45,10 @@ const sampleRules = [
   },
 ] as OktaGroupRule[];
 
+const sampleApps = [
+  { id: '0oaFAKE0000000000001', name: 'salesforce', label: 'Salesforce', status: 'ACTIVE' },
+] as OktaAppListItem[];
+
 /**
  * Put rows in the org snapshot the way a completed background walk would
  * (ADR-0040). Home resolves ids out of IndexedDB rather than fetching them, so a
@@ -72,10 +78,24 @@ async function seedSnapshot({ complete = true }: { complete?: boolean } = {}): P
     lastFullWalkAt: complete ? Date.now() : null,
     itemCount: sampleGroups.length,
   });
+  await orgSnapshotStore.upsertMany(
+    'apps',
+    ORIGIN,
+    sampleApps.map((entity) => ({ id: entity.id, entity })),
+    Date.now(),
+  );
   await orgSnapshotStore.patchMeta('rules', ORIGIN, {
     complete,
     lastFullWalkAt: complete ? Date.now() : null,
     itemCount: sampleRules.length,
+  });
+  // Apps are seeded complete even in the incomplete case: that story is about
+  // one interrupted collection, and leaving a second one unwalked would make
+  // the org snapshot card top up and muddy what the story is showing.
+  await orgSnapshotStore.patchMeta('apps', ORIGIN, {
+    complete: true,
+    lastFullWalkAt: Date.now(),
+    itemCount: sampleApps.length,
   });
 }
 
@@ -112,6 +132,9 @@ function makeOps() {
 }
 
 let ops = makeOps();
+
+/** How many `syncSnapshot` messages the panel sent during a story. */
+let syncRequests = 0;
 
 /** The jump field, by the label a screen reader would use to find it. */
 const field = (canvasElement: HTMLElement) =>
@@ -359,5 +382,32 @@ export const WithWorkingSet: Story = {
 export const ColdWorkingSet: Story = {
   play: async ({ canvasElement }) => {
     await expect(await within(canvasElement).findByText(/Nothing pinned yet/)).toBeInTheDocument();
+  },
+};
+
+/**
+ * The org snapshot region, end to end. The counts come from the rows already on
+ * disk, so a warm org renders them **without asking the background for
+ * anything** — the assertion that no `syncSnapshot` was issued is what makes
+ * that claim testable rather than decorative.
+ *
+ * Home only asks for a top-up when the figures are older than
+ * `ORG_FIGURES_MAX_AGE_MS`, and even then it is `sync(false)` — the 0-to-1
+ * request ladder, never a walk.
+ */
+export const OrgFiguresAreFree: Story = {
+  beforeEach: async () => {
+    setSyncSnapshotResponder(async () => {
+      syncRequests += 1;
+      return { success: true };
+    });
+    syncRequests = 0;
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText('Groups')).toBeInTheDocument();
+    await expect(await canvas.findByText('2')).toBeInTheDocument();
+    await expect(await canvas.findByText('Rules paused')).toBeInTheDocument();
+    await waitFor(() => expect(syncRequests).toBe(0));
   },
 };

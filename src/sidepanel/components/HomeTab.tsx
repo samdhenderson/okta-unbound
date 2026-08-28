@@ -33,9 +33,11 @@
 import React, { useMemo, useState } from 'react';
 import JumpBar from './home/JumpBar';
 import WorkingSet from './home/WorkingSet';
+import OrgSnapshotCard from './home/OrgSnapshotCard';
 import { useOktaApi } from '../hooks/useOktaApi';
 import { useOrgEntityIndex } from '../hooks/useOrgEntityIndex';
 import { useWorkingSet } from '../hooks/useWorkingSet';
+import { useOrgFigures } from '../hooks/useOrgFigures';
 import { useJumpResolver, type JumpResult } from '../hooks/useJumpResolver';
 import { useEntityNavigation } from '../contexts/NavigationContext';
 import { navigationTarget } from './home/jumpDestinations';
@@ -67,6 +69,11 @@ const HomeTab: React.FC<HomeTabProps> = ({ isActive, targetTabId, oktaOrigin }) 
 
   const index = useOrgEntityIndex({ oktaOrigin, targetTabId, enabled: isActive });
   const workingSet = useWorkingSet(oktaOrigin);
+  const orgFigures = useOrgFigures({
+    index,
+    enabled: isActive,
+    connected: targetTabId !== null,
+  });
 
   // Captured once, at mount. React applies `autoFocus` on mount only, and the
   // tab is never unmounted, so this cannot re-steal focus from the rail button
@@ -170,6 +177,14 @@ const HomeTab: React.FC<HomeTabProps> = ({ isActive, targetTabId, oktaOrigin }) 
           onOpen={handleOpenEntry}
           onUnpin={(entry) => workingSet.forget(entry.kind, entry.id)}
           onForget={(entry) => workingSet.forget(entry.kind, entry.id)}
+        />
+
+        <OrgSnapshotCard
+          figures={orgFigures.figures}
+          readAt={orgFigures.readAt}
+          isRefreshing={orgFigures.isRefreshing}
+          onRefresh={orgFigures.refresh}
+          canRefresh={orgFigures.canRefresh}
         />
       </div>
     </div>
