@@ -49,7 +49,7 @@
  */
 import React from 'react';
 import { Checkbox, Input, Select } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import type { AttributeDescriptor } from './profileAttributes';
 import type { AttributeEditability, EditOption } from './profileEditability';
 

@@ -26,7 +26,7 @@
  */
 import React, { useId } from 'react';
 import { Badge, Button, IconButton, ListRow } from './shared';
-import Icon from './overview/shared/Icon';
+import Icon from './shared/Icon';
 import { formatActionTime } from '../../shared/undoManager';
 import type { ActionType, CapturedAttribute, UndoAction } from '../../shared/undoTypes';
 import type { UseUndoActionReturn } from '../hooks/useUndoAction';

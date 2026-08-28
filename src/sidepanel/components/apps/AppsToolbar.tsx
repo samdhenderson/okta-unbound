@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import { FilterPill, Input, SortPill } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import type { AppSortField, AppStatusFilter } from './appFilters';
 
 /** The status buckets offered, in display order. */

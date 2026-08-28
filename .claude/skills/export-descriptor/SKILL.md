@@ -88,7 +88,7 @@ Admin Console entity. Set `maxRows` only to override the 50k default.
   Returning a value that is already quoted double-escapes it.
 - **`icon` must be a member of the shared `IconType` registry** — `users`, `user`,
   `app`, `building`, `lock`, `key`, `shield`, `list`, `link`, `chart`, `settings`, and
-  the rest in `overview/shared/Icon.tsx`. Adding a glyph is a separate concern from
+  the rest in `shared/Icon.tsx`. Adding a glyph is a separate concern from
   adding an export.
 - **Fake placeholders only** in tests and docstrings — `00uFAKE`, `00gFAKE`,
   `user@example.com`. Never a real org URL or id.

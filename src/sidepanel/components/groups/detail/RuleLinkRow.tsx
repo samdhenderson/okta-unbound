@@ -8,7 +8,7 @@
  * inert markup.
  */
 import React from 'react';
-import Icon from '../../overview/shared/Icon';
+import Icon from '../../shared/Icon';
 
 /** Props for {@link RuleLinkRow}. */
 interface RuleLinkRowProps {

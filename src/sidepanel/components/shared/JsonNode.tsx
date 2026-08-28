@@ -11,7 +11,7 @@
  * response in scroll.
  */
 import React, { useState } from 'react';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 
 interface JsonNodeProps {
   /** Object key or array index this node is nested under; omitted for the root. */

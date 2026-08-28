@@ -21,7 +21,7 @@
 import React, { useMemo } from 'react';
 import AlertMessage from '../shared/AlertMessage';
 import LoadingSpinner from '../shared/LoadingSpinner';
-import StatCard from './shared/StatCard';
+import StatCard from '../shared/StatCard';
 import { useOktaApi } from '../../hooks/useOktaApi';
 import { useEntityQuery } from '../../cache/useEntityQuery';
 import type { OktaPolicyRule } from '@/shared/schemas/okta';

@@ -31,7 +31,7 @@
  */
 import React, { useMemo, useState } from 'react';
 import { AlertMessage, EmptyState, FilterPill, Input, Skeleton } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import UserAppRow from './UserAppRow';
 import { summarizeAppSources, type AppSourceBucket } from './appSourceSummary';
 import type { GroupMembership } from '../../../shared/types';

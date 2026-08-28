@@ -29,7 +29,7 @@
  */
 import React, { useId } from 'react';
 import { Badge, IconButton, ListRow, OpenInOktaLink } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import MembershipRuleEvidence from './MembershipRuleEvidence';
 import MembershipProofAction, { type MembershipProofOutcome } from './GroupMembershipsListProof';
 import { membershipVerdict } from './membershipVerdict';

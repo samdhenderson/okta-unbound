@@ -13,7 +13,7 @@
  */
 import React, { memo, useCallback, useId, useState } from 'react';
 import { CopyableId, IconButton, ListRow, LoadingSpinner, OpenInOktaLink } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import { useEntityQuery } from '../../cache/useEntityQuery';
 import { cacheKeys } from '../../cache/keys';
 import type { AppAssignmentCounts } from '../../hooks/useOktaApi/appOperations';

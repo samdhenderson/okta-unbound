@@ -1,5 +1,5 @@
 /**
- * @module sidepanel/components/overview/shared/Icon
+ * @module sidepanel/components/shared/Icon
  * @description Inline SVG icon registry shared across the Overview tab components.
  *
  * A single stateless component that maps an {@link IconType} name to a

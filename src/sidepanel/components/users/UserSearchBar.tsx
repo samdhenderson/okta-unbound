@@ -8,7 +8,7 @@
  */
 import React, { useRef } from 'react';
 import { IconButton, Input, LoadingSpinner } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 
 /** Props for {@link UserSearchBar}. */
 interface UserSearchBarProps {

@@ -8,7 +8,7 @@
 import React from 'react';
 import Input from '../shared/Input';
 import { IconButton } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 
 /** Props for {@link MemberSearchBar}. */
 interface MemberSearchBarProps {

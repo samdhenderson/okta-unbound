@@ -14,8 +14,8 @@
  */
 import React from 'react';
 import { Button } from '../shared';
-import Icon from './shared/Icon';
-import StatCard from './shared/StatCard';
+import Icon from '../shared/Icon';
+import StatCard from '../shared/StatCard';
 import { useAppOverviewData } from '../../hooks/useAppOverviewData';
 
 /** Props for {@link AppOverview}. */

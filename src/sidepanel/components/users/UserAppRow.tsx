@@ -26,7 +26,7 @@
  */
 import React, { useId, useState } from 'react';
 import { Badge, EntityLink, Eyebrow, IconButton, ListRow, OpenInOktaLink } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import type { AppSourceRow } from './appSourceSummary';
 
 /** Props for {@link UserAppRow}. */

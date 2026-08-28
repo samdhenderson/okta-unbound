@@ -5,7 +5,7 @@ import Icon, { type IconType } from './Icon';
  * Inline SVG icon registry — maps icon names to Tailwind-sized, currentColor-stroked SVGs.
  */
 const meta = {
-  title: 'Overview/Shared/Icon',
+  title: 'Shared/Icon',
   component: Icon,
   tags: ['autodocs'],
   parameters: {

@@ -6,7 +6,7 @@ import StatCard from './StatCard';
  * Single metric tile (title, value, optional icon) used in the Overview stat grids.
  */
 const meta = {
-  title: 'Overview/Shared/StatCard',
+  title: 'Shared/StatCard',
   component: StatCard,
   tags: ['autodocs'],
   parameters: {

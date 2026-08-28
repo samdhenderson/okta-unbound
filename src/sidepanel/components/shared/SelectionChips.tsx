@@ -5,7 +5,7 @@
  * Generic over the item type `T`; `getKey`/`getLabel` project each item. Shows
  * `emptyMessage` when empty, and a "Clear all" link when more than one is selected.
  */
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 
 interface SelectionChipsProps<T> {
   /** Selected items to render as chips. */

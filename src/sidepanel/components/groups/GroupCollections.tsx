@@ -10,7 +10,7 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button, IconButton, Input } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import type { GroupCollection, GroupSummary } from '../../../shared/types';
 import { createLogger } from '../../../shared/utils/logger';
 import { formatDateShort } from '../../../shared/utils/dateFormat';

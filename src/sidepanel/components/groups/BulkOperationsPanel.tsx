@@ -8,7 +8,7 @@
  */
 import React, { useState, useCallback } from 'react';
 import { Button, IconButton, Input, LoadingSpinner } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import type { GroupSummary, BulkOperation, BulkOperationResult } from '../../../shared/types';
 
 /** The bulk operations this panel can launch. */

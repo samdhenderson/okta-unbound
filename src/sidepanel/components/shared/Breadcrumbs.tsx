@@ -11,7 +11,7 @@
  * straight through — but it takes a plain item list, so any caller can use it.
  */
 import React from 'react';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 
 /** Density of the trail. `sm` is the compact side-panel default; `md` matches body text. */
 export type BreadcrumbsSize = 'sm' | 'md';

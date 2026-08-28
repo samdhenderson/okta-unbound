@@ -107,7 +107,7 @@
  */
 import React, { useCallback, useId, useRef, useState } from 'react';
 import Button, { type ButtonVariant } from './Button';
-import type { IconType } from '../overview/shared/Icon';
+import type { IconType } from '../shared/Icon';
 import { useActionOverflow } from './useActionOverflow';
 
 /**

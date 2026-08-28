@@ -36,7 +36,7 @@ import React, { useState, useCallback, useEffect, useId, useRef, memo } from 're
 import type { FormattedRule } from '../../shared/types';
 import { timeAgo } from '../../shared/ruleUtils';
 import { Badge, Button, CopyableId, EntityLink, IconButton, ListRow } from './shared';
-import Icon from './overview/shared/Icon';
+import Icon from './shared/Icon';
 
 /**
  * Upper bound on the arrival-flash hold, in milliseconds. Mirrors `--dur-tell`

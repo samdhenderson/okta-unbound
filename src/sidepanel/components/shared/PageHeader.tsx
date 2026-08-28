@@ -32,7 +32,7 @@
  * happen.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import IconButton from './IconButton';
 import Badge, { type BadgeVariant } from './Badge';
 import { useReducedMotion } from '../../hooks/useReducedMotion';

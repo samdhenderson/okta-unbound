@@ -9,7 +9,7 @@
  * launcher.
  */
 import React, { useState, useEffect, useMemo } from 'react';
-import StatCard from './shared/StatCard';
+import StatCard from '../shared/StatCard';
 import { UserIdentityCard, UserComparisonModal } from '../users';
 import { formatDateShort, getRelativeTime } from '../../../shared/utils/dateFormat';
 import { useUserMemberships } from '../../hooks/useUserMemberships';

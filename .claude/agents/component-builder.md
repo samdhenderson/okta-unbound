@@ -39,7 +39,7 @@ You build and edit React components for this Chrome MV3 side panel to spec.
 These primitives exist and are routinely bypassed — check before hand-rolling:
 `Input`, `Button`, `IconButton`, `Modal`, `LoadingSpinner`, `EmptyState`,
 `ScrollableList`, `AlertMessage`, `Tabs` (all in `components/shared/`), and the
-`Icon` registry (`overview/shared/Icon.tsx`). `MemberSearchBar.tsx` is the reference
+`Icon` registry (`shared/Icon.tsx`). `MemberSearchBar.tsx` is the reference
 for a search input done correctly — `Input` + `Icon`, no raw `<input>`, no inline
 `<svg>`.
 

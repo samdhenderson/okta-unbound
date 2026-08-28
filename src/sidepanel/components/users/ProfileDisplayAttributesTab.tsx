@@ -24,7 +24,7 @@
  */
 import React, { useMemo, useState } from 'react';
 import { FilterPill, Input } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import type { ProfileDisplayConfig } from '../../../shared/storage/profileDisplayStore';
 import type { AttributeDescriptor } from './profileAttributes';
 import ProfileDisplayAttributeRow, {

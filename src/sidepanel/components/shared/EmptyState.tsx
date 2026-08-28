@@ -6,7 +6,7 @@
  * renders as a shared {@link Button}.
  */
 import React from 'react';
-import Icon, { type IconType } from '../overview/shared/Icon';
+import Icon, { type IconType } from '../shared/Icon';
 import Button from './Button';
 
 /** A button rendered beneath the empty-state copy (e.g. "Clear filters"). */

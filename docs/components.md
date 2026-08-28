@@ -1,7 +1,6 @@
 # Components
 
-Shared UI lives in [`src/sidepanel/components/shared/`](../src/sidepanel/components/shared/)
-and [`src/sidepanel/components/overview/shared/`](../src/sidepanel/components/overview/shared/).
+Shared UI lives in [`src/sidepanel/components/shared/`](../src/sidepanel/components/shared/).
 Feature components live under `components/{groups,users,overview}/`.
 
 ## Hard rules
@@ -15,7 +14,7 @@ Feature components live under `components/{groups,users,overview}/`.
 2. **Import from the barrel** `components/shared` — not deep paths. The barrel
    exports every shared component (see below).
 3. **No raw hex / no ad-hoc spacing** — see [design-system.md](./design-system.md).
-4. **Icons come from the `Icon` registry** (`overview/shared/Icon.tsx`, 31 typed
+4. **Icons come from the `Icon` registry** (`shared/Icon.tsx`, 31 typed
    icons, `currentColor`). Don't inline `<svg>` in feature code.
 
 ## The variant/size convention
@@ -206,8 +205,6 @@ because the loads are gated on it (see
 [state-management.md](./state-management.md)) — and a pane's tab shows **no count**
 until a walk has returned, tested by a `hasLoaded` flag rather than `items.length`
 ("Unknown is not zero", below). The panel composes and does not fetch.
-
-`overview/shared/`: `Icon`, `StatCard`.
 
 ## Documented raw-control exceptions
 

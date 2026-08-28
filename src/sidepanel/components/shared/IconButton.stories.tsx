@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import IconButton from './IconButton';
 
 /** Icon-only button primitive — three variants and two sizes, optionally a toggle. */

@@ -17,7 +17,7 @@ import { useProgress } from '../../contexts/ProgressContext';
 import { useMemberMfaScan } from '../../hooks/useMemberMfaScan';
 import AlertMessage, { type AlertMessageData } from '../shared/AlertMessage';
 import { Button, Modal, Skeleton } from '../shared';
-import StatCard from './shared/StatCard';
+import StatCard from '../shared/StatCard';
 import MemberExplorer from '../members/MemberExplorer';
 import type { OktaUser } from '../../../shared/types';
 import { createLogger } from '../../../shared/utils/logger';

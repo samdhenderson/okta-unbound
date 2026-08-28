@@ -42,7 +42,7 @@
  */
 import React, { useState, useCallback, useMemo, memo } from 'react';
 import { Checkbox, IconButton, ListRow, StretchedButton } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import GroupListItemSignal from './GroupListItemSignal';
 import GroupListItemDetails from './GroupListItemDetails';
 import { summarizeGroupRow } from './groupSourceSummary';

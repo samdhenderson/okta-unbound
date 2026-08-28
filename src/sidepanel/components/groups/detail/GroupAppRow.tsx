@@ -33,7 +33,7 @@ import {
   ListRow,
   OpenInOktaLink,
 } from '../../shared';
-import Icon from '../../overview/shared/Icon';
+import Icon from '../../shared/Icon';
 import { formatDate } from '../../../../shared/utils/dateFormat';
 import type { GroupAppRowModel } from '../groupAppSource';
 

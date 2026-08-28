@@ -1,5 +1,5 @@
 /**
- * @module sidepanel/components/overview/shared/StatCard
+ * @module sidepanel/components/shared/StatCard
  * @description Single metric tile (title, value, optional icon) used in the Overview stat grids.
  *
  * Presentational only: a colored, optionally clickable card. Numeric values are
@@ -12,7 +12,7 @@
  */
 import React from 'react';
 import Icon, { type IconType } from './Icon';
-import { useCountUp } from '../../../hooks/useCountUp';
+import { useCountUp } from '../../hooks/useCountUp';
 
 /** Props for {@link StatCard}. */
 interface StatCardProps {

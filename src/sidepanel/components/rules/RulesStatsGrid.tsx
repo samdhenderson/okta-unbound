@@ -6,7 +6,7 @@
  * the Overview tab's stat grids.
  */
 import React from 'react';
-import StatCard from '../overview/shared/StatCard';
+import StatCard from '../shared/StatCard';
 import type { RuleStats } from '../../../shared/types';
 
 interface RulesStatsGridProps {

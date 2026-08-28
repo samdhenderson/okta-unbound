@@ -8,7 +8,7 @@
  * top-level section (e.g. Applications, Authentication Policies) means adding
  * one entry here — the navigation bar and persistence-restore pick it up.
  */
-import type { IconType } from './components/overview/shared/Icon';
+import type { IconType } from './components/shared/Icon';
 
 /** Identifier for each top-level side-panel tab. */
 export type TabType =

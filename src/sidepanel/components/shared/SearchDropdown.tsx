@@ -10,7 +10,7 @@ import React, { useRef } from 'react';
 import Input from './Input';
 import IconButton from './IconButton';
 import LoadingSpinner from './LoadingSpinner';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 
 interface SearchDropdownProps<T> {
   placeholder?: string;

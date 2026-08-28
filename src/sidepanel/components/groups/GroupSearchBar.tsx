@@ -4,7 +4,7 @@
  */
 import React from 'react';
 import { Input, LoadingSpinner } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 
 interface GroupSearchBarProps {
   /** `live` queries Okta directly; `cached` filters the loaded list. */

@@ -10,7 +10,7 @@ import React from 'react';
 import FilterPill from '../shared/FilterPill';
 import Select from '../shared/Select';
 import Input from '../shared/Input';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import { RULE_SORT_LABELS, type RuleSortMode } from '../../../shared/rules/similarity';
 
 /** Client-side filter applied on top of the text search over loaded rules. */

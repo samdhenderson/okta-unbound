@@ -8,7 +8,7 @@
 import React from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { FilterPill, SortPill } from '../shared';
-import Icon from '../overview/shared/Icon';
+import Icon from '../shared/Icon';
 import type { SortField, PushFilter } from './groupFilters';
 
 interface GroupFilterPanelProps {

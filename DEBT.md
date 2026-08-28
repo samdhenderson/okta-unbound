@@ -1594,7 +1594,7 @@ origin)` imperatively rather than `useOrgSnapshot` —
 - **Size:** M
 - **Files:** `src/sidepanel/components/RuleCard.tsx`,
   `src/sidepanel/components/shared/OpenInOktaLink.tsx` (the primitive it should
-  be using), `src/sidepanel/components/overview/shared/Icon.tsx`
+  be using), `src/sidepanel/components/shared/Icon.tsx`
 - **Verified:** 2026-08-26 — measured by the `I-003` writer; ~490 lines before
   that item, ~530 after.
 - **Problem:** Three separate house rules, all in one file:
@@ -1621,7 +1621,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Category:** standards
 - **Priority:** P3
 - **Size:** S
-- **Files:** `src/sidepanel/components/overview/shared/Icon.tsx`,
+- **Files:** `src/sidepanel/components/shared/Icon.tsx`,
   `src/sidepanel/components/shared/EntityLink.tsx`,
   `src/sidepanel/components/shared/CopyableId.tsx`
 - **Verified:** 2026-08-26 — raised by `ui-reviewer` on the `I-003` diff, which
@@ -2045,7 +2045,7 @@ patches:
 
 - A numeric readout that changes width renders with `tabular-nums`. The
   precedent and its rationale are already written down in
-  `src/sidepanel/components/overview/shared/StatCard.tsx:10` and
+  `src/sidepanel/components/shared/StatCard.tsx:10` and
   `src/sidepanel/hooks/useCountUp.ts:70`.
 - A `shrink-0` element whose content can change length reserves its widest state,
   by `min-w-` or by a fixed basis, so its neighbour never has to move.

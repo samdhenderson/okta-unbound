@@ -35,7 +35,7 @@
  */
 import React from 'react';
 import { Badge, ListRow, type BadgeVariant } from '../shared';
-import Icon, { type IconType } from '../overview/shared/Icon';
+import Icon, { type IconType } from '../shared/Icon';
 import { unevaluableReasonText } from '../../../shared/rules/unevaluableReasonText';
 import type { RuleEffect, RuleTransition } from '../../../shared/membership/blastRadiusTypes';
 

@@ -17,7 +17,7 @@ import Button from './shared/Button';
 import Input from './shared/Input';
 import AlertMessage from './shared/AlertMessage';
 import PoliciesListPanel from './policies/PoliciesListPanel';
-import Icon from './overview/shared/Icon';
+import Icon from './shared/Icon';
 import { useOktaApi } from '../hooks/useOktaApi';
 import type { OperationResult } from '../hooks/useOktaApi/types';
 import { useOwedLoad } from '../hooks/useOwedLoad';

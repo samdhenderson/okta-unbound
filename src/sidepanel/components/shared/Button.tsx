@@ -12,7 +12,7 @@
  * `aria-expanded` onto it is banned.
  */
 import React from 'react';
-import Icon, { type IconType } from '../overview/shared/Icon';
+import Icon, { type IconType } from '../shared/Icon';
 
 /** Visual treatments: `secondary` is the default; `danger`/`success` carry semantic colour; `ghost` is chromeless. */
 export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'success';
