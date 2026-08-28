@@ -110,8 +110,36 @@ it for the `button-name` rule.
 - The tooltip and the active label both stay. They answer different questions — "what is
   this?" on demand versus "where am I?" permanently — so keeping both is not redundancy.
   Dropping the label would make the current section knowable only by colour.
-- The full transition is now ~440ms rather than ~220ms. That is the price of never
+- The full transition is now ~340ms rather than ~220ms. That is the price of never
   desyncing, and it applies only to a deliberate nav hop.
+
+  Measured in Chromium at 400px on the `RailMotion` story, sampling the indicator's
+  `left`/`width` every 20ms across a nine-tab hop (`groups` → the last tab, 288px of
+  travel):
+
+  | t (ms)  | phase                                     | `left`    | `width` |
+  | ------- | ----------------------------------------- | --------- | ------- |
+  | 0–200   | 1 — slide, strip frozen                   | 139 → 427 | 82 → 46 |
+  | 200–340 | 2 — labels cross over, measured per frame | 427 → 384 | 46 → 88 |
+
+  Two things worth pinning, because both are easy to misread later:
+
+  **The easing overshoot is ~1px, not the 43px a naive peak-minus-final reading
+  reports.** Phase 1 peaks at 427.2 and settles to 426.0 — 0.4% of travel, which is
+  what `--ease-glide`'s 1.12 control point predicts. The 43px is phase 2: the outgoing
+  label collapsing and shifting the whole strip left. Anyone measuring "how far does it
+  overslide" without splitting the phases will conclude the curve is far springier than
+  it is and flatten a token that is already correct.
+
+  **The series is monotonic across the handoff** — 427 → 405 → 394 → 387 → 384, no
+  reversal. That is the assertion that matters: the two phases read as one continuous
+  motion, which is the whole claim this ADR makes.
+
+  Phase 1's geometry is settled by ~140ms but `sliding` holds to `SLIDE_MS` (200ms), so
+  there is a ~60ms still frame before the labels move. Left as is: the slack guarantees
+  the transition has finished before the class is dropped, and removing it would put the
+  handoff back inside the window where the indicator is still easing.
+
 - `Tabs.tsx` is 318 lines against the ~300 guidance, 118 of them comments. Splitting the
   rail tab into its own file would mean a new shared component with its own story and
   barrel entry; that was judged worse than 18 lines over.
