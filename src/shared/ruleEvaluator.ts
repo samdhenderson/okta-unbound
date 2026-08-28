@@ -256,6 +256,26 @@ export const RULE_CONNECTIVE_OPERATORS: ReadonlySet<string> = new Set([
   ...OR_OPERATORS,
 ]);
 
+/**
+ * The conjunctive connectives alone.
+ *
+ * A rule's independently-reportable *requirements* are the leaves you reach by
+ * descending through these and stopping at a disjunction, because the parts of
+ * an OR are alternatives rather than requirements: only one has to hold. See
+ * {@link RULE_CONNECTIVE_OPERATORS} for the full set, which is still what the
+ * evaluator itself walks.
+ */
+export const RULE_CONJUNCTIVE_OPERATORS: ReadonlySet<string> = new Set([...AND_OPERATORS]);
+
+/**
+ * The disjunctive connectives alone.
+ *
+ * The parts either side of one of these are *alternatives*: only one has to
+ * hold. Explanation surfaces use this to keep an OR group whole as a single
+ * requirement while still naming what it offers.
+ */
+export const RULE_DISJUNCTIVE_OPERATORS: ReadonlySet<string> = new Set([...OR_OPERATORS]);
+
 /** Every binary operator this evaluator understands. Anything else is unevaluable. */
 const SUPPORTED_BINARY_OPERATORS: ReadonlySet<string> = new Set([
   ...EQUALITY_OPERATORS,
