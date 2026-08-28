@@ -760,7 +760,9 @@ describe('UserComparisonModal', () => {
       await selectComparedUser();
 
       expect(await screen.findByText('··')).toBeInTheDocument();
-      expect(screen.getByText('— —')).toBeInTheDocument();
+      // The scope label's placeholder. It was an em dash pair until the reel
+      // put this surface on camera and the no-dash rule reached it.
+      expect(screen.getByText('· ·')).toBeInTheDocument();
       expect(screen.queryByText('Match')).not.toBeInTheDocument();
 
       releaseGroups({ success: true, data: scenario.comparedGroups });

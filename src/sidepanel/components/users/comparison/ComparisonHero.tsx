@@ -77,7 +77,7 @@ const ComparisonHero: React.FC<ComparisonHeroProps> = ({
 
     <div className="mt-3 flex items-baseline justify-between gap-2">
       <span className="min-w-0 truncate text-xs font-semibold text-neutral-500 uppercase tracking-wide">
-        {isLoading ? '— —' : scopeNote ? `Match · ${scopeNote}` : 'Match'}
+        {isLoading ? '· ·' : scopeNote ? `Match · ${scopeNote}` : 'Match'}
       </span>
       <span
         className="font-mono text-sm leading-none font-bold"
@@ -143,7 +143,7 @@ const UserSide: React.FC<{
         </div>
         <div
           className="truncate text-xs font-semibold text-neutral-900"
-          title={`${name} — ${contact}`}
+          title={`${name} · ${contact}`}
         >
           {name}
         </div>

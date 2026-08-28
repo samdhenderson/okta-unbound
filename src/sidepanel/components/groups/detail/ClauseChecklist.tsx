@@ -168,7 +168,7 @@ const ResolvedValue: React.FC<{ value: RuleExprValue | undefined }> = ({ value }
     ) : (
       <>
         <code className="font-mono break-words text-neutral-900">{formatResolvedValue(value)}</code>
-        {value === null && <span> — the attribute resolved, and its value is null</span>}
+        {value === null && <span>, and the attribute resolved to null</span>}
       </>
     )}
   </p>
@@ -202,6 +202,29 @@ const ClauseRow: React.FC<ClauseRowProps> = ({ clause, resolveGroupName }) => {
         <p className="mt-1 text-xs text-neutral-600">
           {UNEVALUABLE_REASON_TEXT[clause.reasonCode]}
         </p>
+      )}
+
+      {clause.alternatives && (
+        <div className="mt-2 border-l-2 border-neutral-200 pl-3">
+          <p className="text-xs font-medium text-neutral-600">Any one of these satisfies it:</p>
+          <ul className="mt-1 space-y-1">
+            {clause.alternatives.map((alternative, index) => (
+              <li
+                key={`${index}-${alternative.expressionText}`}
+                className="flex items-start justify-between gap-2"
+              >
+                <RuleExpressionText
+                  text={alternative.expressionText}
+                  resolveGroupName={resolveGroupName}
+                  className="min-w-0 flex-1 font-mono text-xs break-words whitespace-pre-wrap text-neutral-700"
+                />
+                <span className="shrink-0 text-xs text-neutral-600">
+                  {statusPresentation[alternative.status].label}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </li>
   );

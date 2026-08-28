@@ -1937,3 +1937,295 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Risk:** Low. Console output changes; nothing else.
 - **Status:** open
 - **Related:** `D-029b`, `D-038`
+
+### D-052 · `ruleImpact` models rule deactivation as retracting membership
+
+- **Category:** correctness
+- **Priority:** P1
+- **Size:** M
+- **Files:** `src/shared/membership/ruleImpact.ts` (`classifyGroupImpact`
+  :114-118, and the module/function docs at :5-6, :132, :153),
+  `src/sidepanel/components/rules/RulesListPanel.tsx` (:41-42, the deactivate
+  gate), the Preview Impact modal's copy, `ruleImpact`'s tests, and
+  `.claude/skills/okta-api/references/groups-and-rules.md` (:154, :311, and the
+  `[verified: shared/membership/ruleImpact]` citation on that section)
+- **Verified:** 2026-08-26 — raised by Sam while reviewing the demo reel's
+  rule-impact scene, then checked against Okta's documentation.
+- **Problem:** `classifyGroupImpact` puts every member held **only** by the
+  subject rule into `losing`, and the module documents itself as answering "who
+  loses access if this rule is deactivated?". Okta does not work that way.
+  Deactivating a group rule removes nobody: per _Impact of Deactivating and
+  Deleting Okta Group Rules_, "Okta does not remove users that the rule added to
+  a group. The group membership remains, but the rule no longer applies to new
+  users." The choice to retract exists only on **delete**, where the admin picks
+  between leaving the users as now-unmanaged members and removing them
+  outright — surfaced as the `removeUsers` query parameter on
+  `DELETE /api/v1/groups/rules/{ruleId}`, and irreversible either way.
+
+  So the set `losing` computes is the correct answer to _delete with
+  `removeUsers=true`_ and the wrong answer to _deactivate_, where the answer is
+  always nobody. The repo already disagrees with itself about this:
+  `groups-and-rules.md:154` states that former members "remain in the group —
+  deactivation does not retract membership", and `:311` warns that "a 'what
+  breaks' report that assumes retraction overstates the impact" — while the
+  surrounding section cites `[verified: shared/membership/ruleImpact]` as its
+  evidence. The skill is vouching for a module that contradicts it.
+
+  It escaped notice because the hero rule's `losing` set happens to be empty, so
+  every screenshot and every test of the happy path shows `0` either way.
+
+  Docs:
+  - https://support.okta.com/help/s/article/Impact-of-Deactivating-and-Deleting-Okta-Group-Rules
+  - https://developer.okta.com/docs/api/openapi/okta-management/management/tag/GroupRule/#tag/GroupRule/operation/deleteGroupRule
+
+- **Done when:** The module names the case it actually computes rather than
+  conflating two verbs. `losing` is renamed for the delete-with-removal case;
+  deactivate reports the set that genuinely changes, which is the members who
+  become **unattributed** (still in the group, no longer explained by any rule)
+  rather than members who leave. Every consumer is audited against the new
+  names: the Preview Impact modal's copy, `RulesListPanel.tsx`'s deactivate
+  gate, and the tests. `groups-and-rules.md`'s `[verified:]` citation is correct
+  once module and skill agree.
+- **Risk:** Medium. This changes a contract and user-facing claims, so it is
+  **architecturally significant** and goes through the plan-and-approval gate as
+  its own PR. Do not fold it into unrelated work.
+- **Status:** blocked:needs-human
+- **Related:** ADR-0043 (the demo reel's rule-impact chapter is held out of the
+  reel until this lands; when it returns it argues **both verbs side by side** —
+  deactivate, where nobody moves but N members become unattributed, and delete,
+  where N are removed or N are kept as now-manual members, with `removeUsers` as
+  the irreversible choice between them)
+
+### D-053 · Late-landing content re-lays-out the text beside it
+
+**One defect in seven places, filed as a cluster because the remedy is one
+convention rather than seven fixes.** In each case an element changes size after
+mount — a chip whose label swaps, a count badge that only appears once a fetch
+resolves, a button whose label runs through three lengths — while sitting in a
+flex or grid row beside text that is `min-w-0` and therefore free to absorb the
+change. The neighbour re-truncates, re-wraps, or changes its line count, and the
+row visibly re-lays-out under the reader's eye.
+
+**How it was found.** Filming the demo reel (ADR-0043) put the panel on camera at
+2.6x, where the reflow is unmissable. The Layout Instability API names the shape
+directly: clicking a group row reports sources `DIV.flex-1.min-w-0` and
+`DIV.shrink-0.flex.items-center`, a `shrink-0` cluster widening beside a
+`flex-1 min-w-0` column. The measurement and the reasoning are in
+[ADR-0044](docs/adr/0044-a-reel-that-can-fail.md).
+
+**Why the reel does not close it.** The reel absorbs the symptom reel-side and
+touches no file under `src/`: a settle gate waits for the page to go quiet before
+each beat, and `SHOWCASE_CSS` sets `scrollbar-gutter: stable`. Waiting conceals a
+late-landing badge; it does not reserve room for one. Real users get neither the
+gate nor the gutter. These items exist so the workaround does not retire the
+symptom it was written against.
+
+**The convention the fixes should converge on**, rather than seven ad-hoc
+patches:
+
+- A numeric readout that changes width renders with `tabular-nums`. The
+  precedent and its rationale are already written down in
+  `src/sidepanel/components/overview/shared/StatCard.tsx:10` and
+  `src/sidepanel/hooks/useCountUp.ts:70`.
+- A `shrink-0` element whose content can change length reserves its widest state,
+  by `min-w-` or by a fixed basis, so its neighbour never has to move.
+- A late-arriving badge occupies its slot before it has a value, or the row is
+  laid out so that its arrival cannot change any other track's width.
+
+`D-053g` is the one that is not per-component and is worth doing first: it
+affects every scroll box in the app, on every platform.
+
+### D-053a · The match percentage goes from 2 characters to 4, beside a truncating label
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/users/comparison/ComparisonHero.tsx:78-88`
+- **Verified:** 2026-08-27 — read against the file while writing ADR-0044; this is
+  the symptom Sam reported verbatim from the reel.
+- **Problem:** The row is `flex items-baseline justify-between gap-2`. The right
+  span renders a two-glyph placeholder while loading and `${similarity}%` after,
+  so it goes from two characters to three or four, in a proportional font, with no
+  `tabular-nums`, no reserved width and no `shrink-0`. The left span is
+  `min-w-0 truncate text-xs …` and additionally swaps its own placeholder for
+  `Match · ${scopeNote}`, so both sides change at once and the label re-truncates
+  at whatever width the percentage leaves it. Because the digits are proportional,
+  it keeps twitching afterwards: `9%` and `100%` are different widths and so are
+  `11%` and `88%`.
+- **Done when:** The percentage cannot change the label's available width. It
+  carries `tabular-nums` and `shrink-0`, and it reserves the width of its widest
+  state (`100%`) so the loading placeholder occupies the same box as the value.
+  `ComparisonHero.stories.tsx` already has `Default` and `Loading`; the fix is
+  checkable by flipping between them at side-panel width and seeing the label's
+  truncation point stay put. Per ADR-0023 that stays a visual check rather than a
+  class assertion.
+- **Risk:** Low. One row, no behaviour.
+- **Status:** open
+- **Related:** `D-053`, ADR-0044. The reel masks this with a settle gate; the
+  defect is unchanged for real users.
+
+### D-053b · A status chip swings between 4 and 13 characters beside a wrapping mono expression
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/groups/detail/ClauseChecklist.tsx:183-197`
+  (the clause row), `:238-248` (the summary row), `:126,132,138` (the labels)
+- **Verified:** 2026-08-27 — read against the file while writing ADR-0044.
+- **Problem:** `ClauseRow` is `flex items-start justify-between gap-3` holding a
+  `min-w-0 flex-1 font-mono … break-words whitespace-pre-wrap` expression beside a
+  `shrink-0` chip. The chip's label is `Pass` (4 characters), `Fail` (4) or
+  `Not evaluated` (13), and which one it is flips when `groupContext` resolves and
+  an `isMemberOf*` clause stops being unevaluable. The chip is `shrink-0`, so the
+  whole difference comes out of the expression column, which is set to wrap: the
+  row changes line count, and every row below it moves. `ChecklistSummary`
+  (`:238-248`) has the same shape with `Rule matches this user` /
+  `Rule does not match` / `Cannot be determined`, 22 characters against 18 against
+  20, beside a counts sentence that also changes.
+- **Done when:** The chip column has a stable width across all three labels, so
+  resolving group context changes the chip's contents and nothing else. Either the
+  chip reserves the width of its longest label, or the row is a two-track grid
+  with a fixed chip track rather than `justify-between`. Note `D-036` already has
+  this file over the 300-line bar; do not land the two together.
+- **Risk:** Low. Presentation only.
+- **Status:** open
+- **Related:** `D-053`, `D-036` (same file, over the line bar), ADR-0044. The reel
+  masks this with a settle gate.
+
+### D-053c · A group-count badge takes width out of a multi-line description
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/users/comparison/CauseWorklist.tsx:254-267`
+- **Verified:** 2026-08-27 — read against the file while writing ADR-0044.
+- **Problem:** The remedy header is `flex items-start gap-2` holding an icon, a
+  `min-w-0 flex-1` column (heading plus a wrapping description) and a `shrink-0`
+  `{n} group` / `{n} groups` badge. The badge appears with the causes, so it goes
+  from absent to present, and its width then depends on the digit count and on the
+  singular/plural swap. Every one of those changes comes out of the `flex-1`
+  column, which wraps, so the description re-flows each time.
+- **Done when:** The badge's slot is reserved before it has a value, or the header
+  is laid out so the badge cannot change the description's width (its own track,
+  or the badge dropped below the heading). The count carries `tabular-nums`.
+- **Risk:** Low. Presentation only.
+- **Status:** open
+- **Related:** `D-053`, ADR-0044. The reel masks this with a settle gate.
+
+### D-053d · The MFA scan paragraph re-wraps three times as the button label changes
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:**
+  `src/sidepanel/components/groups/detail/GroupMfaCoverageSection.tsx:72-86`,
+  `src/sidepanel/components/members/MfaScanButton.tsx:47` (the three labels).
+  The same button is also hosted by
+  `src/sidepanel/components/members/MemberFilterPanel.tsx:118` and
+  `src/sidepanel/components/members/CompositionReports.tsx:150`; check whether
+  their rows have the same shape before fixing only one.
+- **Verified:** 2026-08-27 — read against the file while writing ADR-0044.
+- **Problem:** The row is `flex flex-wrap items-center justify-between gap-3` with
+  a `<p>` that carries no `flex-1` and no `min-w-0`, beside `MfaScanButton`. The
+  button's label runs `Run MFA scan` (12 characters) then `Scanning…` (9, plus a
+  loading spinner) then `Rescan` (6), and it changes variant, so it takes three
+  different widths during one scan. The paragraph's own text also swaps from the
+  instruction to the result sentence when the scan completes. Because the
+  paragraph is a plain flex item with no basis, it sizes off its content and gets
+  re-wrapped at each of those transitions, and on a narrow panel the row can
+  `flex-wrap` and unwrap mid-scan.
+- **Done when:** The paragraph is `min-w-0 flex-1` and the button reserves the
+  width of its widest label, so a scan changes what the row says and not how it is
+  laid out.
+- **Risk:** Low. Presentation only.
+- **Status:** open
+- **Related:** `D-053`, ADR-0044. The reel masks this with a settle gate.
+
+### D-053e · Three tab labels slide sideways when their count badges materialise
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/users/comparison/ComparisonTabBar.tsx:82-99`
+- **Verified:** 2026-08-27 — read against the file while writing ADR-0044.
+- **Problem:** Each tab is `flex items-center justify-center gap-1.5` holding an
+  icon, a label and an optional badge rendered only when
+  `t.badge !== undefined && t.badge > 0`. The badge lands when the comparison
+  resolves, and because the cell is `justify-center`, adding it pushes the icon and
+  the label left within the cell rather than appending to their right. Three of the
+  four tabs (Groups, Apps, Attributes) do it in the same frame, so the whole rail
+  appears to shuffle.
+- **Done when:** The badge's arrival does not move the icon or the label. Either
+  the badge occupies a reserved slot from first render, or the cell's content is
+  left-aligned with the badge pushed to the trailing edge so it grows into empty
+  space. The badge carries `tabular-nums`.
+- **Risk:** Low. Presentation only, though it touches the tab rail's alignment, so
+  check the four-tab and two-column (`sm:grid-cols-4`) breakpoints both.
+- **Status:** open
+- **Related:** `D-053`, ADR-0044. The reel masks this with a settle gate.
+
+### D-053f · The Filters button shrinks the search field, and the member count grows in place
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/members/MemberExplorer.tsx:346-374` (the
+  search row and the Filters button), `:415-422` (the member count)
+- **Verified:** 2026-08-27 — read against the file while writing ADR-0044.
+- **Problem:** Two instances in one component. The search row is `flex gap-2` with
+  a `flex-1` search box beside a Filters button that has neither a basis nor
+  `shrink-0`; when `activeFilterCount` becomes non-zero the button gains a count
+  pill, so the button grows and the search field shrinks under a typing user.
+  Separately, the member count at `:418-421` renders `sorted.length` and appends
+  ` of ${members.length}` only while a filter is active, so `250` becomes
+  `47 of 250` in a `justify-between` row: the heading widens and the Copy button
+  beside it moves.
+- **Done when:** The Filters button is `shrink-0` and reserves the width of its
+  badged state, so filtering never resizes the search field; and the count either
+  reserves its widest form or renders both parts from first paint (`250 of 250`),
+  with `tabular-nums` either way.
+- **Risk:** Low. Presentation only.
+- **Status:** open
+- **Related:** `D-053`, ADR-0044. The reel masks this with a settle gate.
+
+### D-053g · Classic scrollbars take 6px out of content width the instant a list overflows
+
+- **Category:** standards
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/tailwind.css:297-313` (the
+  `.scrollable-list::-webkit-scrollbar` rules). Consumers:
+  `src/sidepanel/components/shared/Modal.tsx:273` (every modal body),
+  `src/sidepanel/components/shared/ScrollableList.tsx:148`,
+  `src/sidepanel/components/users/comparison/ComparisonDiffTab.tsx:180` (whose
+  `grid-cols-[minmax(0,1fr)_2rem_minmax(0,1fr)]` tracks at `:246` truncate against
+  the width it takes),
+  `src/sidepanel/components/users/comparison/ComparisonAttributesTab.tsx:255`,
+  `src/sidepanel/components/users/ProfileDisplayAttributesTab.tsx:252`,
+  `src/sidepanel/components/RuleImpactModal.tsx:152`,
+  `src/sidepanel/components/RuleConsolidationModal.tsx:112`
+- **Verified:** 2026-08-27 — `grep -rn scrollbar-gutter src/` returns nothing;
+  consumer list enumerated, not sampled.
+- **Problem:** Styling `::-webkit-scrollbar` opts a box out of Chrome's overlay
+  scrollbars entirely and gives it a classic one, whose width comes out of the
+  content box. Nothing anywhere in the repo sets `scrollbar-gutter`, so every
+  `.scrollable-list` box loses 6px of content width at the exact moment it crosses
+  from fitting to overflowing — a row arriving from a fetch, a disclosure opening,
+  a filter clearing — and every string under a `truncate` or a wrap inside it
+  re-lays-out. This is the one member of `D-053` that is not waitable: there is no
+  quiet period to sit through, the available width simply changes. It applies on
+  every platform, because the `::-webkit-scrollbar` rules override the overlay
+  behaviour macOS would otherwise give.
+- **Done when:** `.scrollable-list` sets `scrollbar-gutter: stable`, so the channel
+  is reserved whether or not the bar is showing and the transition costs nothing.
+  Check the app's own scroll root at the same time: the panel is 360px wide at its
+  narrowest and 6px of permanently reserved gutter is a real trade, so confirm the
+  reserved variant reads better than the reflow before shipping it everywhere
+  rather than assuming it does.
+- **Risk:** Low to change, but it is a one-line rule affecting every scroll box in
+  the app, so land it alone and look at the narrow breakpoint.
+- **Status:** open
+- **Related:** `D-053`, ADR-0044. **The reel works around this by setting
+  `scrollbar-gutter: stable` in `SHOWCASE_CSS`, which is reel-side only and does
+  nothing for real users.** When this lands, that rule becomes a harmless
+  restatement rather than a mask.

@@ -1,0 +1,27 @@
+{
+  "name": "okta-unbound-reel",
+  "private": true,
+  "version": "0.0.0",
+  "description": "The demo reel's composition. A standalone project on purpose \u2014 see ADR-0045.",
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts reel ../clips/okta-unbound-reel.mp4 --muted --timeout=120000",
+    "still": "remotion still src/index.ts reel ../clips/poster.png --frame=90 --timeout=120000",
+    "type-check": "tsc --noEmit",
+    "chapter": "remotion render src/index.ts --muted --timeout=120000"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.518",
+    "@remotion/google-fonts": "^4.0.518",
+    "@remotion/media-utils": "^4.0.518",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "remotion": "^4.0.518"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "typescript": "^7.0.2"
+  }
+}

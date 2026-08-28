@@ -94,14 +94,20 @@ describe('clauses that need group context', () => {
   });
 
   it('counts every group-membership flavour toward needsGroupContext', () => {
-    const { summary } = explainRuleExpression(
+    const { clauses, summary } = explainRuleExpression(
       'isMemberOfGroupName("Engineering") || isMemberOfAnyGroup("00gFAKE1", "00gFAKE2") || user.city == "San Francisco"',
       user,
     );
 
-    expect(summary.totalClauses).toBe(3);
-    expect(summary.needsGroupContext).toBe(2);
-    expect(summary.passedClauses).toBe(1);
+    // One requirement now: the three are alternatives of a single disjunction.
+    expect(summary.totalClauses).toBe(1);
+    expect(summary.needsGroupContext).toBe(1);
+    // Which half of the rule holds is still reported, on the alternatives.
+    expect(clauses[0].alternatives?.map((alt) => alt.status)).toEqual([
+      'not-evaluated',
+      'not-evaluated',
+      'pass',
+    ]);
     // The rule-level verdict is conservative by design (pinned behaviour): the
     // grammar gate rejects the whole expression before the Kleene walk can use
     // the matching operand. The clause rows are exactly what makes that
@@ -186,19 +192,41 @@ describe('clauses the grammar gate rejects', () => {
 });
 
 describe('nesting, parentheses and negation', () => {
-  it('flattens parenthesised groups into their leaf clauses', () => {
+  it('keeps a parenthesised OR group whole and names its alternatives', () => {
     const { clauses, summary } = explainRuleExpression(
       '(user.department == "Engineering" || user.department == "Sales") && user.city == "Berlin"',
       user,
     );
 
-    expect(clauses.map((clause) => clause.expressionText)).toEqual([
+    // Two REQUIREMENTS, not three clauses. This used to flatten to three, which
+    // stated that the user had to be in Engineering AND in Sales.
+    expect(clauses).toHaveLength(2);
+    expect(clauses[1].expressionText).toBe('user.city == "Berlin"');
+    expect(clauses.map((clause) => clause.status)).toEqual(['pass', 'fail']);
+
+    // The detail the flattening used to provide is still here, one level down.
+    expect(clauses[0].alternatives?.map((alt) => alt.expressionText)).toEqual([
       'user.department == "Engineering"',
       'user.department == "Sales"',
-      'user.city == "Berlin"',
     ]);
-    expect(clauses.map((clause) => clause.status)).toEqual(['pass', 'fail', 'fail']);
+    expect(clauses[0].alternatives?.map((alt) => alt.status)).toEqual(['pass', 'fail']);
+    expect(clauses[1].alternatives).toBeUndefined();
+
     expect(summary.result).toEqual({ outcome: 'no-match' });
+  });
+
+  it('flattens a nested OR into one list of alternatives', () => {
+    const { clauses } = explainRuleExpression(
+      'user.city == "Berlin" || (user.city == "Paris" || user.city == "Seattle")',
+      user,
+    );
+
+    expect(clauses).toHaveLength(1);
+    expect(clauses[0].alternatives?.map((alt) => alt.expressionText)).toEqual([
+      'user.city == "Berlin"',
+      'user.city == "Paris"',
+      'user.city == "Seattle"',
+    ]);
   });
 
   it('keeps a negated group whole rather than inverting its parts', () => {
@@ -279,9 +307,24 @@ describe('nothing is short-circuited', () => {
       user,
     );
 
-    expect(clauses.map((clause) => clause.status)).toEqual(['pass', 'fail']);
-    // A failing clause under `||` is not a failing rule — the summary decides.
+    // The disjunction is one clause, and it passes. Nothing is short-circuited:
+    // the alternative that did NOT hold is still evaluated and reported.
+    expect(clauses).toHaveLength(1);
+    expect(clauses[0].status).toBe('pass');
+    expect(clauses[0].alternatives?.map((alt) => alt.status)).toEqual(['pass', 'fail']);
     expect(summary.result).toEqual({ outcome: 'match' });
+  });
+
+  it('evaluates both sides of an && whose left side already failed', () => {
+    const { clauses, summary } = explainRuleExpression(
+      'user.department == "Sales" && user.city == "Berlin"',
+      user,
+    );
+
+    // Two conjuncts, both reported. A short-circuiting walk would leave the
+    // second unevaluated once the first decided the rule.
+    expect(clauses.map((clause) => clause.status)).toEqual(['fail', 'fail']);
+    expect(summary.result).toEqual({ outcome: 'no-match' });
   });
 });
 

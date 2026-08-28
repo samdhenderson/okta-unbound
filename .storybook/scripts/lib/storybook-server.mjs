@@ -2,10 +2,10 @@
  * Acquire a Storybook dev server, reusing one if it is already up.
  *
  * Extracted verbatim from `shoot-stories.mjs`, which grew it first and now
- * imports it. `film-scenes.mjs` needs exactly the same lifecycle — reuse :6006
- * when a human already has it running, otherwise start a throwaway server on a
- * free port and take it down on exit — and two copies of a process-group kill is
- * one copy too many.
+ * imports it. `capture/capture.mjs` and `capture/probe.mjs` need exactly the
+ * same lifecycle — reuse :6006 when a human already has it running, otherwise
+ * start a throwaway server on a free port and take it down on exit — and three
+ * copies of a process-group kill is two copies too many.
  */
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';

@@ -66,6 +66,7 @@ storybook-static
 .storybook/generated
 shots/
 clips/
+takes/
 
 # design-sync (claude.ai/design) — transient build + verification state
 .design-sync/sb-reference/
@@ -84,3 +85,8 @@ designDocs/
 # org URL and API token from the environment only.
 seed/data/
 seed/.state/
+
+# Demo reel: shot footage and the composition workspace.
+# Clips are large and reproducible from `npm run capture`.
+captures/
+reel/node_modules/

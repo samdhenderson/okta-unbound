@@ -156,13 +156,42 @@ route each container to where it belongs:
 - **`Sidepanel/`** — app-shell chrome that isn't feature-specific (`ActivityBar`,
   `ActivityBarView`, `TabNavigation`, `ContextBar`, `ErrorBoundary`,
   `AuditLogViewer`).
-- **`Demo/`** — the demo reel's scenes (ADR-0043). These are **not component
-  stories and not tested surfaces**: each mounts the whole `App` against the
-  seeded demo org in `src/sidepanel/demo/`, carries `tags: ['!test']` with `a11y`
-  and `actions` disabled, and holds **no `play` function** — the choreography
-  lives in `.storybook/scripts/film-scenes.mjs`, which drives them from
-  Playwright. Run `npm run film` to record them, `npm run film -- --reel` for one
-  continuous 16:9 cut. Do not copy this shape for a component story.
+- **`Demo/`** — the demo reel's stages (ADR-0043, ADR-0045). These are **not
+  component stories and not tested surfaces**: each mounts the whole `App` against
+  the seeded demo org in `src/sidepanel/demo/`, carries `tags: ['!test']` with `a11y`
+  and `actions` disabled, and holds **no `play` function**. Playwright walks them;
+  the walks live in `.storybook/scripts/capture/walks/`. Do not copy this shape for a
+  component story.
+
+  The reel is two halves that meet at `captures/`. Playwright records short clips of
+  the real panel and writes a manifest beside each; React composes the film. Nothing
+  about how the reel _reads_ is in the browser, so a caption, a speed or a diagram
+  changes with no re-shoot at all.
+
+  | Command                         | What it does                                                       |
+  | ------------------------------- | ------------------------------------------------------------------ |
+  | `npm run capture`               | Film every chapter whose walk, driver or demo data changed         |
+  | `npm run capture -- groups`     | One chapter, by id                                                 |
+  | `npm run capture -- --all`      | Ignore the staleness cache                                         |
+  | `npm run probe -- <chapter>`    | Report what is on the stage, under the real capture geometry       |
+  | `npm run capture:check`         | Judge the footage: settle, scroller, opening frame                 |
+  | `npm run capture:check:fixture` | Prove the guard can fail, by planting one defect per control       |
+  | **`npm run studio`**            | **Remotion studio. Scrub, edit `reel/src/script.ts`, hot reload.** |
+  | `npm run reel`                  | Render `clips/okta-unbound-reel.mp4`                               |
+
+  `capture:check` distinguishes a bad take (exit 1) from **a detector that could not
+  look** (exit 2) — a guard that cannot see what it is looking for reports a clean
+  run over the exact defect it exists to catch, so its verdict is treated as
+  meaningless rather than as a pass. It does not replace watching the reel end to
+  end: a caption that narrates something the panel never showed is not mechanically
+  detectable, and that failure has shipped twice.
+
+  **Where to change what.** Editorial decisions — chapter order, what a beat is played
+  at, what the margin says, which figure a diagram enlarges — all live in
+  `reel/src/script.ts`. Selector facts and app-driving live in
+  `.storybook/scripts/capture/selectors.mjs` and `drive.mjs`. The two never mix: a
+  caption change must never require opening a browser, and a selector fix must never
+  require re-rendering.
 
 The `Introduction.mdx` landing page is titled **`Getting Started`** so it sorts
 as its own root rather than colliding with the `Overview/*` component group.

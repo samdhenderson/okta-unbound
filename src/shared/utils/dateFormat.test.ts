@@ -53,4 +53,14 @@ describe('getRelativeTime', () => {
     expect(getRelativeTime('2026-06-28T12:00:00Z')).toBe('2 weeks ago');
     expect(getRelativeTime('2026-05-14T12:00:00Z')).toBe('2 months ago');
   });
+
+  it('says one week, not one weeks', () => {
+    // Every bucket past `days` floors a division, so each has a reachable band
+    // that lands on exactly one: 7 to 13 days, 30 to 59 days, 365 to 729.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-14T12:00:00Z'));
+    expect(getRelativeTime('2026-07-05T12:00:00Z')).toBe('1 week ago');
+    expect(getRelativeTime('2026-06-04T12:00:00Z')).toBe('1 month ago');
+    expect(getRelativeTime('2025-06-14T12:00:00Z')).toBe('1 year ago');
+  });
 });

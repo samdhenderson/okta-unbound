@@ -14,7 +14,16 @@ export default [
     // at runtime. They are compiled by esbuild for the design bundle and never
     // enter the extension build, so linting them to `src/` rules would force a
     // pointless divergence from the generator they must stay in step with.
-    ignores: ['dist/**', 'node_modules/**', '.github/**', 'docs/**', '.design-sync/**'],
+    //
+    // `reel/**` is the demo reel's Remotion composition: a separate npm project
+    // with its own React, its own TypeScript and its own `type-check` script,
+    // deliberately outside the extension's graphs so a Remotion upgrade cannot
+    // break the build (ADR-0045). `npm run lint` only ever walks `src`, so this
+    // line changes nothing there; it is here because `lint-staged` passes
+    // explicit paths and would otherwise judge a Remotion composition by the
+    // side panel's React rules. `react-hooks/immutability` already flagged a
+    // local accumulator inside a `useMemo` that renders no component at all.
+    ignores: ['dist/**', 'node_modules/**', '.github/**', 'docs/**', '.design-sync/**', 'reel/**'],
   },
   {
     files: ['**/*.{ts,tsx}'],

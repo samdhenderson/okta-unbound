@@ -171,7 +171,7 @@ describe('ClauseChecklist', () => {
   it('distinguishes a value that could not be read from one that resolved to null', () => {
     render(
       <ClauseChecklist
-        expression={'isMemberOfGroup("00gFAKE1") || user.projectCode == "Platform"'}
+        expression={'isMemberOfGroup("00gFAKE1") && user.projectCode == "Platform"'}
         user={user}
       />,
     );
@@ -182,14 +182,37 @@ describe('ClauseChecklist', () => {
 
     const resolvedNull = rowFor('user.projectCode == "Platform"');
     expect(within(resolvedNull).getByText('null')).toBeInTheDocument();
-    expect(within(resolvedNull).getByText(/its value is null/)).toBeInTheDocument();
+    expect(within(resolvedNull).getByText(/resolved to null/)).toBeInTheDocument();
     expect(within(resolvedNull).queryByText(/no value could be read/)).not.toBeInTheDocument();
+  });
+
+  it('shows an OR group as one requirement with its alternatives named', () => {
+    // The shape that reached camera: a conjunct plus a three-way country OR.
+    // Flattened, it rendered `countryCode == "GB"` and `countryCode == "DE"` as
+    // sibling failing clauses, which describes a rule nobody can ever satisfy.
+    render(
+      <ClauseChecklist
+        expression={
+          'user.employeeType == "CONTRACTOR" && (user.countryCode == "GB" || user.countryCode == "DE" || user.countryCode == "IE")'
+        }
+        user={user}
+      />,
+    );
+
+    // Two requirements, not four clauses.
+    expect(screen.getByText(/2 of 2 clauses evaluated/)).toBeInTheDocument();
+    expect(screen.getByText('Any one of these satisfies it:')).toBeInTheDocument();
+
+    // The alternatives are still named, so nothing is hidden by grouping them.
+    for (const country of ['GB', 'DE', 'IE']) {
+      expect(screen.getByText(`user.countryCode == "${country}"`)).toBeInTheDocument();
+    }
   });
 
   it('discloses truncation instead of showing a silent partial list', () => {
     render(
       <ClauseChecklist
-        expression={'user.department == "A" || user.department == "B" || user.department == "C"'}
+        expression={'user.department == "A" && user.department == "B" && user.department == "C"'}
         user={user}
         maxClauses={2}
       />,

@@ -56,7 +56,8 @@
 
 import type jsep from 'jsep';
 import {
-  RULE_CONNECTIVE_OPERATORS,
+  RULE_CONJUNCTIVE_OPERATORS,
+  RULE_DISJUNCTIVE_OPERATORS,
   checkRuleNodeSupport,
   evaluateParsedRule,
   evaluateRuleNode,
@@ -167,6 +168,21 @@ export interface ClauseExplanation {
    * individual groups.
    */
   readonly groupRequirement?: ClauseGroupRequirement;
+  /**
+   * Present exactly when this clause is a **disjunction**: the alternatives it
+   * offers, each explained in its own right, in source order.
+   *
+   * The clause itself is the whole OR group, because its parts are alternatives
+   * rather than requirements and listing them as siblings of a conjunct claims
+   * that every one of them must hold. That is what this field exists to avoid
+   * having to do: the row stays honest about being one requirement, and the
+   * detail underneath is still available to anything that wants to show which
+   * alternative holds.
+   *
+   * Never empty when present, and never nested more than one level: an OR
+   * inside an OR is flattened by the same walk that collects these.
+   */
+  readonly alternatives?: readonly ClauseExplanation[];
 }
 
 /** Per-rule counts the UI renders above the clause list. */
@@ -351,12 +367,28 @@ interface ClauseCollection {
 }
 
 /**
- * Split a condition into clauses by descending through boolean connectives only.
+ * Split a condition into clauses by descending through **conjunctions only**.
  *
- * `a && (b || c)` yields three clauses; `!(a && b)` yields one, because the
- * negation applies to the *combination* and reporting its parts separately would
- * invert their meaning. Parentheses leave no node in jsep's AST, so grouping is
- * already normalised away by the time we get here.
+ * `a && (b || c)` yields TWO clauses, `a` and `b || c`; `!(a && b)` yields one,
+ * because the negation applies to the *combination* and reporting its parts
+ * separately would invert their meaning.
+ *
+ * Descending through `||` as well used to yield three, and that was wrong in a
+ * way that reached the screen. The parts of a disjunction are alternatives, not
+ * requirements, so listing them as siblings of a conjunct states that all of
+ * them must hold. A real tenant rule of the shape
+ *
+ *     user.employeeType == "CONTRACTOR" && (countryCode == "GB" || "DE" || "IE")
+ *
+ * rendered as four flat failing clauses including `countryCode == "GB"` and
+ * `countryCode == "DE"` side by side, which describes a rule that can never
+ * match anybody. It also inflated every failing-clause count by the width of
+ * each OR group.
+ *
+ * Keeping the disjunction whole makes one clause whose text is the group, whose
+ * status is the group's own result, and whose resolved value is the attribute
+ * they all read. Parentheses leave no node in jsep's AST, so the reconstructed
+ * text is normalised rather than byte-identical.
  */
 function collectClauseNodes(
   node: jsep.Expression,
@@ -364,7 +396,7 @@ function collectClauseNodes(
   limit: number,
 ): void {
   const binary = asBinaryExpression(node);
-  if (binary && RULE_CONNECTIVE_OPERATORS.has(binary.operator)) {
+  if (binary && RULE_CONJUNCTIVE_OPERATORS.has(binary.operator)) {
     collectClauseNodes(binary.left, collection, limit);
     collectClauseNodes(binary.right, collection, limit);
     return;
@@ -502,6 +534,23 @@ function groupClauseFactsOf(
 }
 
 /**
+ * The leaves of a disjunction, in source order.
+ *
+ * Descends through OR connectives only, so nested disjunctions flatten into one
+ * list of alternatives while anything else (including a conjunction inside an
+ * OR) is left whole as a single alternative.
+ */
+function collectAlternativeNodes(node: jsep.Expression, into: jsep.Expression[]): void {
+  const binary = asBinaryExpression(node);
+  if (binary && RULE_DISJUNCTIVE_OPERATORS.has(binary.operator)) {
+    collectAlternativeNodes(binary.left, into);
+    collectAlternativeNodes(binary.right, into);
+    return;
+  }
+  into.push(node);
+}
+
+/**
  * Explain one clause: grammar gate first, then evaluation, then the
  * "is it actually a condition?" gate.
  *
@@ -520,12 +569,24 @@ function explainClause(
   // Attached to every outcome, including the unevaluated ones: naming the groups
   // a clause asks about is useful even when we could not answer it.
   const groupFacts = groupClauseFactsOf(node, groups);
+  // A disjunction keeps its parts as alternatives. Explained before the support
+  // and evaluation gates below so they survive an unevaluable group: knowing
+  // WHICH alternative could not be read is most of the value.
+  const disjunction = asBinaryExpression(node);
+  let alternatives: ClauseExplanation[] | undefined;
+  if (disjunction && RULE_DISJUNCTIVE_OPERATORS.has(disjunction.operator)) {
+    const nodes: jsep.Expression[] = [];
+    collectAlternativeNodes(node, nodes);
+    alternatives = nodes.map((alt) => explainClause(alt, user, groups));
+  }
+
   const base = {
     expressionText,
     resolvedValue,
     ...(groupFacts
       ? { groupReferences: groupFacts.references, groupRequirement: groupFacts.requirement }
       : {}),
+    ...(alternatives ? { alternatives } : {}),
   };
 
   const support = checkRuleNodeSupport(node, { hasGroupContext: groups !== undefined });

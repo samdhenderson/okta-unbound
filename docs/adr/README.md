@@ -49,6 +49,9 @@ convention; the specs in [`../`](../README.md) describe the _what_.
 | [0040](./0040-the-background-owns-the-org.md)                        | The background owns the org, and a drift check keeps it honest                    | Accepted | Org inventory in IndexedDB, scoped by origin; opportunistic sync; delta catches edits, `x-total-count` catches deletes.             |
 | [0041](./0041-read-only-api-explorer-and-pattern-based-redaction.md) | A read-only API Explorer, and redaction by pattern instead of by field name       | Accepted | GET-only, no new transport; `redact.ts` is pattern- not field-name-based; the values-free Shape view is the default.                |
 | [0042](./0042-verbose-api-request-audit-log.md)                      | A verbose API request audit log, grouped by reason, capped at 50                  | Accepted | `reason` required at the `makeApiRequest` call-site API; captured/grouped at the scheduler; flushed on scheduler idle, not a timer. |
+| [0043](./0043-the-demo-is-a-stage-the-script-is-the-director.md)     | The demo is a stage; the script is the director                                   | Accepted | Scenes carry no `play`; the film script directs. Amended twice in file (the margin, then the camera), then by 0044.                 |
+| [0044](./0044-a-reel-that-can-fail.md)                               | A reel that can fail                                                              | Accepted | Amends 0043. Declared motion from the camera's own writer; a shift ledger; a mark that throws; two manifest-only guards.            |
+| [0045](./0045-capture-thin-compose-in-react.md)                      | Capture thin, compose in React                                                    | Accepted | Amends 0043/0044. Playwright records the walk only; Remotion composes. Panel-sized viewport, capture-time retiming, one clock.      |
 
 ## Adding an ADR
 

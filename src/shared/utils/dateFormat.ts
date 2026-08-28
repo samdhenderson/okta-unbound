@@ -54,6 +54,18 @@ export function formatDateShort(date: DateInput): string {
 }
 
 /**
+ * One bucket of relative time, correctly pluralised.
+ *
+ * Every bucket below the day one divides down to a floor, so each could and did
+ * produce a count of exactly one: 7 to 13 days rendered "1 weeks ago" and 30 to
+ * 59 days rendered "1 months ago". Both are reachable from ordinary data and
+ * both were user visible.
+ */
+function plural(count: number, unit: string): string {
+  return `${count} ${unit}${count === 1 ? '' : 's'} ago`;
+}
+
+/**
  * Coarse relative time from now, bucketed by days/weeks/months/years.
  *
  * Buckets: `'today'`, `'yesterday'`, then `N days ago`, `N weeks ago`,
@@ -74,10 +86,10 @@ export function getRelativeTime(dateString: string | null | undefined): string |
 
     if (diffDays === 0) return 'today';
     if (diffDays === 1) return 'yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-    return `${Math.floor(diffDays / 365)} years ago`;
+    if (diffDays < 7) return plural(diffDays, 'day');
+    if (diffDays < 30) return plural(Math.floor(diffDays / 7), 'week');
+    if (diffDays < 365) return plural(Math.floor(diffDays / 30), 'month');
+    return plural(Math.floor(diffDays / 365), 'year');
   } catch {
     return null;
   }

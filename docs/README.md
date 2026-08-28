@@ -5,6 +5,7 @@ the same routing `CLAUDE.md` enforces, to keep context lean.
 
 | Doc                                                  | Read it when you are…                                                             |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------- |
+| [product.md](./product.md)                           | Scoping a feature, adding a tab, or judging whether a write verb earns its place  |
 | [architecture.md](./architecture.md)                 | Understanding the message-passing pipeline, contexts, or `useOktaApi/`            |
 | [security.md](./security.md)                         | Reviewing the security posture, threat model, controls, or residual risks         |
 | [design-system.md](./design-system.md)               | Touching colors, spacing, typography, or tokens                                   |

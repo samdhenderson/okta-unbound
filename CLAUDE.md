@@ -25,6 +25,10 @@ npm run knip             # unused files/exports/deps  (knip:production, knip:cir
 npm run docs             # TypeDoc → Markdown for the Storybook Internals section
 npm run storybook        # component + docs explorer dev server (:6006)
 npm run build-storybook  # static docs site (components + Internals + Documentation)
+npm run capture          # film the demo chapters that changed (ADR-0045)
+npm run capture:check    # judge the footage: settle, scroller, opening frame
+npm run studio           # Remotion studio - edit the reel with no re-shoot
+npm run reel             # render clips/okta-unbound-reel.mp4
 ```
 
 ## Message-passing model (the one thing to know)
@@ -128,6 +132,7 @@ be reviewed with `security-logging-reviewer`.
 
 | If the task is…                                | Read                                               | Consider delegating to      |
 | ---------------------------------------------- | -------------------------------------------------- | --------------------------- |
+| Scoping a feature / adding a tab / a new verb  | `docs/product.md`, then `docs/features-plan.md`    | `feature-ideator`           |
 | Styling / colors / tokens / typography         | `docs/design-system.md`                            | `ui-reviewer`               |
 | Building / using a shared component            | `docs/components.md`, `docs/design-system.md`      | `component-builder`         |
 | Building / exploring a component visually      | `docs/component-explorer.md`                       | `component-builder`         |
