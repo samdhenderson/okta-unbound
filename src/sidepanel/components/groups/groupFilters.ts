@@ -16,6 +16,16 @@ export { parseRegexQuery } from '../../../shared/utils/regexQuery';
 export type SortField = 'name' | 'memberCount' | 'lastUpdated';
 /** Push-status filter (`''` = all). */
 export type PushFilter = '' | 'pushed' | 'not_pushed';
+/**
+ * Rule-attribution filter (`''` = all).
+ *
+ * `unruled` is the interesting one, and the reason this axis exists: a group no
+ * rule assigns anyone to is a group whose membership is maintained by hand, and
+ * it will drift as people change roles. It does **not** mean unused — Okta
+ * Workflows, SCIM, and direct API calls all add members without a group rule,
+ * and none of them are visible from here.
+ */
+export type RuleFilter = '' | 'ruled' | 'unruled';
 
 /** The full cached-mode filter/sort state driving {@link filterAndSortGroups}. */
 export interface GroupFilterState {
@@ -24,6 +34,7 @@ export interface GroupFilterState {
   sizeFilter: string;
   pushFilter: PushFilter;
   pushAppFilter: Set<string>;
+  ruleFilter: RuleFilter;
   sortBy: SortField;
   sortDesc: boolean;
 }
@@ -134,6 +145,13 @@ export function filterAndSortGroups(
     });
   }
 
+  if (state.ruleFilter) {
+    // `hasRules` counts rules that ASSIGN users to the group, not rules that
+    // merely mention it in a condition (`usedInRuleCount`). A group used to
+    // decide someone else's rule still has nothing filling it.
+    filtered = filtered.filter((g) => (state.ruleFilter === 'ruled' ? g.hasRules : !g.hasRules));
+  }
+
   filtered.sort((a, b) => {
     const cmp = compareGroupsBy(a, b, state.sortBy);
     return state.sortDesc ? -cmp : cmp;
@@ -143,16 +161,19 @@ export function filterAndSortGroups(
 }
 
 /**
- * Badge count for the Filters toggle: the 3 scalar filters (counted via
+ * Badge count for the Filters toggle: the 4 scalar filters (counted via
  * `.filter(Boolean)`) plus 1 if any push-target app is selected. `searchQuery` is
  * deliberately NOT counted — do not "harmonize" this with `handleClearFilters`,
  * which DOES clear the search query.
  */
 export function computeActiveFilterCount(
-  state: Pick<GroupFilterState, 'typeFilter' | 'sizeFilter' | 'pushFilter' | 'pushAppFilter'>,
+  state: Pick<
+    GroupFilterState,
+    'typeFilter' | 'sizeFilter' | 'pushFilter' | 'pushAppFilter' | 'ruleFilter'
+  >,
 ): number {
   return (
-    [state.typeFilter, state.sizeFilter, state.pushFilter].filter(Boolean).length +
-    (state.pushAppFilter.size > 0 ? 1 : 0)
+    [state.typeFilter, state.sizeFilter, state.pushFilter, state.ruleFilter].filter(Boolean)
+      .length + (state.pushAppFilter.size > 0 ? 1 : 0)
   );
 }

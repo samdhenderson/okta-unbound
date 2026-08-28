@@ -53,6 +53,7 @@ import type { OperationResult } from '../hooks/useOktaApi/types';
 import { useGroupsLoader } from '../hooks/useGroupsLoader';
 import { useGroupLiveSearch } from '../hooks/useGroupLiveSearch';
 import { useGroupFilters } from '../hooks/useGroupFilters';
+import type { GroupsListView } from '../listViewRequest';
 import { useGroupSelection } from '../hooks/useGroupSelection';
 import { useGroupMembersCache } from '../hooks/useGroupMembersCache';
 import { useGroupMerge } from '../hooks/useGroupMerge';
@@ -102,6 +103,14 @@ interface GroupsTabProps {
    * is gated on it. Defaults to `true` for standalone use.
    */
   isActive?: boolean;
+  /**
+   * A pre-filtered view requested from another tab (the Home card's group
+   * sub-counts). Applied once on arrival, then cleared via
+   * {@link GroupsTabProps.onListViewConsumed}.
+   */
+  listView?: GroupsListView | null;
+  /** Invoked once {@link GroupsTabProps.listView} has been applied. */
+  onListViewConsumed?: () => void;
 }
 
 /** Breadcrumb label for a group pushed onto the view stack. */
@@ -123,6 +132,8 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
   onGroupSelected,
   isActive = true,
   onExportGroup,
+  listView,
+  onListViewConsumed,
 }) => {
   // Shell-owned state: error has three producers (loader, live search, useOktaApi
   // onResult) so it stays here; searchMode is read by three hooks so it stays above
@@ -282,6 +293,42 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedGroupId, groups, loading]);
 
+  // A pre-filtered view requested from the Home card.
+  //
+  // Three things have to happen together or the arrival is a lie. The list must
+  // be in cached mode — the live search returns Okta's matches for a query, and
+  // no local filter applies to them. Every other axis is cleared, so the rows on
+  // screen are the population the figure counted rather than that population
+  // intersected with whatever was left selected. And the panel is opened, so the
+  // filter that is doing the work is visible and reversible instead of an
+  // unexplained short list.
+  //
+  // Groups load on demand, so a request can arrive against an empty list; the
+  // load is kicked once and the filter simply applies to the rows when they land.
+  const listViewHandledRef = useRef<GroupsListView | null>(null);
+  useEffect(() => {
+    if (!listView) {
+      listViewHandledRef.current = null;
+      return;
+    }
+    if (listViewHandledRef.current === listView) return;
+    listViewHandledRef.current = listView;
+
+    nav.reset();
+    setSearchMode('cached');
+    filters.clearFilters();
+    if (listView === 'empty') filters.setSizeFilter('empty');
+    else filters.setRuleFilter('unruled');
+    setShowFilters(true);
+
+    if (groups.length === 0 && !loading) void loadAllGroups();
+    onListViewConsumed?.();
+    // `filters` and `nav` are recreated every render; depending on them would
+    // re-run this on every keystroke. The ref above is what makes it once-per
+    // request, exactly as the `selectedGroupId` deep-link below does.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listView, groups.length, loading]);
+
   const handleExportSelection = useCallback(() => {
     if (selectedGroupIds.size === 0) {
       setError('Please select at least one group');
@@ -427,6 +474,8 @@ const GroupsTab: React.FC<GroupsTabProps> = ({
                 setSizeFilter={filters.setSizeFilter}
                 pushFilter={filters.pushFilter}
                 setPushFilter={filters.setPushFilter}
+                ruleFilter={filters.ruleFilter}
+                setRuleFilter={filters.setRuleFilter}
                 pushAppFilter={filters.pushAppFilter}
                 setPushAppFilter={filters.setPushAppFilter}
                 availablePushApps={filters.availablePushApps}

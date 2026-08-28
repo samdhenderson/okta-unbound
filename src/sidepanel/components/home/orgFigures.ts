@@ -1,8 +1,15 @@
 /**
  * @module sidepanel/components/home/orgFigures
- * @description Turns three org-snapshot reads into the four figures the Home
- * tab's snapshot card shows — and, more importantly, decides which of them may
- * be shown as a number at all.
+ * @description Turns org-snapshot reads into the findings the Home tab's
+ * snapshot card lists — and, more importantly, decides which of their numbers
+ * may be shown at all.
+ *
+ * The card leads with what is worth acting on and demotes the totals to a
+ * caption. `214 groups` is trivia; `31 groups with no members` is a morning's
+ * work. Each finding carries the filtered list it opens (see
+ * {@link module:sidepanel/listViewRequest}) so a figure and its destination
+ * cannot drift apart, and each one is phrased as a sentence rather than a
+ * fragment, so the row still reads when its number is an em dash.
  *
  * React-free and pure, because the rules here are the deliverable and they are
  * worth testing without rendering anything.
@@ -41,6 +48,7 @@
  * says only what is known.
  */
 import type { IconType } from '../shared/Icon';
+import type { ListViewRequest, ListViewTab } from '../../listViewRequest';
 
 /** What is known about one figure. See the table in the module header. */
 export type OrgFigureStatus = 'reading' | 'ok' | 'partial' | 'unavailable';
@@ -108,8 +116,8 @@ function unavailableNote(label: string, error: string | null | undefined): strin
  * @param label - Card title, also used in the failure sentence.
  * @param icon - Glyph.
  * @param source - What the snapshot read reports.
- * @param count - The figure's number, which is not always `source.count` — the
- * paused-rules figure counts a subset of the same collection.
+ * @param count - The figure's number, which is not always `source.count` — a
+ * finding counts a subset of the collection it reads.
  * @returns The figure descriptor.
  */
 export function buildFigure(
@@ -136,11 +144,181 @@ export function buildFigure(
 }
 
 /**
+ * A collection, paired with the plural noun the card calls it by.
+ *
+ * The noun lives here rather than being derived from a title because it appears
+ * inside sentences — *of 214 groups*, *Needs group rules, which have not been
+ * read* — and a lowercased title is not reliably the right word in one.
+ */
+export interface NamedSource {
+  /** The snapshot read. */
+  source: FigureSource;
+  /** Plural, lowercase: `groups`, `applications`, `group rules`. */
+  noun: string;
+}
+
+/**
+ * One finding: an actionable count, and the filtered list it opens.
+ *
+ * A finding with no `value` renders as text rather than as a control.
+ * ADR-0039's "no verb without a wire" applies to a link into a list that cannot
+ * be trusted just as much as to a button with no handler.
+ */
+export interface OrgSubCount {
+  /** Stable key, for React and for tests. */
+  key: string;
+  /**
+   * The finding, as a sentence you could act on — *Groups with no members*, not
+   * *empty*. A fragment only parses beside its number; a sentence still reads
+   * when the number is an em dash.
+   */
+  label: string;
+  /** See {@link subCountStatus}. */
+  status: OrgFigureStatus;
+  /** The count, or `null` when nothing behind it can support one. */
+  value: number | null;
+  /**
+   * The line under the finding: what the count is out of when there is one
+   * (`of 214 groups`), and why there is not when there is not.
+   */
+  note?: string;
+  /** The filtered list this finding opens. */
+  request: ListViewRequest;
+}
+
+/** One collection: its total, the tab it opens, and the findings drawn from it. */
+export interface OrgBox extends OrgFigure {
+  /** The tab the total opens, unfiltered. */
+  tab: ListViewTab;
+  /** Plural, lowercase — how the totals caption names this collection. */
+  noun: string;
+  /** The findings drawn from it. May be empty. */
+  subCounts: OrgSubCount[];
+}
+
+/**
+ * Classify a finding from the collection it counts and the collections it
+ * consults to *exclude* rows.
+ *
+ * The asymmetry between the two is the whole rule, and it is the same one
+ * `useOrgEntityIndex` applies to a jump-bar miss: **a positive reading survives
+ * an unfinished walk; a negative one does not.**
+ *
+ * - `counted` may be `partial`. "31 groups with no members" out of an
+ *   interrupted group walk is a floor — the pages that never arrived can only
+ *   add more — and the card says "at least".
+ * - `gates` may not. "Groups no rule fills" is computed by subtracting the
+ *   groups some rule targets, so a rule list missing half its pages does not
+ *   under-report; it reports every group those missing rules fed as unfilled.
+ *   That is not a floor with a caveat, it is a wrong number, and there is no
+ *   honest way to label it. So a gate that is anything but `ok` suppresses the
+ *   count entirely.
+ *
+ * @param counted - The collection the rows are counted from.
+ * @param gates - Collections consulted to exclude rows. Usually empty.
+ * @returns The finding's status.
+ */
+export function subCountStatus(counted: FigureSource, gates: FigureSource[]): OrgFigureStatus {
+  const own = figureStatus(counted);
+  if (own === 'reading' || gates.some((gate) => figureStatus(gate) === 'reading')) return 'reading';
+  if (gates.some((gate) => figureStatus(gate) !== 'ok')) return 'unavailable';
+  return own;
+}
+
+/** Everything one finding row needs to be built. */
+export interface SubCountInput {
+  /** Stable key. */
+  key: string;
+  /** The finding, as a sentence. */
+  label: string;
+  /** The collection the rows are counted from. */
+  counted: NamedSource;
+  /**
+   * Collections consulted to *exclude* rows; see {@link subCountStatus} for why
+   * these are held to a stricter bar. Usually empty.
+   */
+  gates?: NamedSource[];
+  /** The number, used only when the status supports one. */
+  count: number;
+  /** The filtered list this finding opens. */
+  request: ListViewRequest;
+}
+
+/**
+ * The line under a finding: what the number is out of, or why there is none.
+ *
+ * The unavailable branch names the collection that is missing, and which one it
+ * is matters — "needs group rules" points somewhere different from "groups have
+ * not been read". A bare "not read" would leave a reader guessing between them.
+ */
+function subCountNote(
+  status: OrgFigureStatus,
+  counted: NamedSource,
+  gates: NamedSource[],
+): string | undefined {
+  if (status === 'reading') return undefined;
+  if (status === 'ok') return `of ${counted.source.count.toLocaleString()} ${counted.noun}`;
+  if (status === 'partial') return `At least — the last read of ${counted.noun} did not finish.`;
+
+  const blocking = gates.find((gate) => figureStatus(gate.source) !== 'ok');
+  return blocking
+    ? `Needs ${blocking.noun}, which have not been read.`
+    : `${counted.noun[0].toUpperCase()}${counted.noun.slice(1)} have not been read yet.`;
+}
+
+/**
+ * Build one finding row.
+ *
+ * @param input - See {@link SubCountInput}.
+ * @returns The finding descriptor.
+ */
+export function buildSubCount({
+  key,
+  label,
+  counted,
+  gates = [],
+  count,
+  request,
+}: SubCountInput): OrgSubCount {
+  const status = subCountStatus(
+    counted.source,
+    gates.map((gate) => gate.source),
+  );
+  const hasValue = status === 'ok' || status === 'partial';
+  return {
+    key,
+    label,
+    status,
+    value: hasValue ? count : null,
+    note: subCountNote(status, counted, gates),
+    request,
+  };
+}
+
+/**
+ * Attach a tab, a noun and findings to a collection's total.
+ *
+ * @param figure - The total, from {@link buildFigure}.
+ * @param tab - The tab the total opens.
+ * @param noun - Plural, lowercase.
+ * @param subCounts - The findings drawn from this collection.
+ * @returns The box descriptor.
+ */
+export function buildBox(
+  figure: OrgFigure,
+  tab: ListViewTab,
+  noun: string,
+  subCounts: OrgSubCount[],
+): OrgBox {
+  return { ...figure, tab, noun, subCounts };
+}
+
+/**
  * The freshest fact the card can state about its own age: the **oldest**
  * finished walk across the collections it shows.
  *
- * Oldest rather than newest on purpose — the card presents one stamp for four
- * figures, and quoting the newest would date the whole card by its most
+ * Oldest rather than newest on purpose — the card presents one stamp for every
+ * figure on it, and quoting the newest would date the whole card by its most
  * recently refreshed corner.
  *
  * @param sources - The collections the card is showing.

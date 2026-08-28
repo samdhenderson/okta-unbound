@@ -40,6 +40,7 @@ import { useCommandPalette } from './hooks/useCommandPalette';
 import { migrateLegacyTabId, type TabType } from './tabs';
 import HomeTab from './components/HomeTab';
 import type { ExportRequest } from './components/export';
+import { viewFor, type ListViewRequest, type ListViewTab } from './listViewRequest';
 import ActivityBar from './components/ActivityBar';
 
 // Code-split the non-default tabs so the initial side-panel load only ships the
@@ -86,6 +87,7 @@ const App: React.FC = () => {
   // A one-shot request to open the Export tab pre-scoped (e.g. from the group
   // Overview's "Export Members"); cleared by the tab once consumed.
   const [exportRequest, setExportRequest] = useState<ExportRequest | null>(null);
+  const [listViewRequest, setListViewRequest] = useState<ListViewRequest | null>(null);
   // A one-shot request to scope the Rules tab to a group on arrival (from the
   // group Overview's "View Rules"); cleared by the tab once consumed.
   const [scopeRulesToGroupId, setScopeRulesToGroupId] = useState<string | null>(null);
@@ -329,6 +331,33 @@ const App: React.FC = () => {
   const handleExportApp = (descriptorId: string, appId: string, appName: string) =>
     handleNavigateToExport({ descriptorId, contextId: appId, contextLabel: appName });
 
+  /**
+   * Open a list tab with one filter already applied — how the Home card's
+   * sub-counts ("31 empty", "4 paused") turn into the list they describe.
+   *
+   * Stable, because `HomeTab` holds it across renders. The tab clears the
+   * request through its own `onListViewConsumed`, so nothing here persists.
+   */
+  const handleOpenListView = useCallback((request: ListViewRequest) => {
+    setListViewRequest(request);
+    setActiveTab(request.tab);
+    chrome.storage.local.set({ [SELECTED_TAB_KEY]: request.tab });
+  }, []);
+
+  const clearListViewRequest = useCallback(() => setListViewRequest(null), []);
+
+  /**
+   * Open a list tab unfiltered — the org card's headline counts. Deliberately
+   * clears any pending request: pressing "214 groups" asks for the whole list,
+   * and arriving on a filter left over from a sub-count press would be the
+   * opposite of what was asked for.
+   */
+  const handleOpenTab = useCallback((tab: ListViewTab) => {
+    setListViewRequest(null);
+    setActiveTab(tab);
+    chrome.storage.local.set({ [SELECTED_TAB_KEY]: tab });
+  }, []);
+
   // "View Rules" from a group Overview: open the Rules tab scoped to that group.
   const handleViewGroupRules = (groupId: string) => {
     setScopeRulesToGroupId(groupId);
@@ -402,6 +431,8 @@ const App: React.FC = () => {
               isActive={isActive}
               targetTabId={tabContext.targetTabId ?? null}
               oktaOrigin={tabContext.oktaOrigin ?? undefined}
+              onOpenListView={handleOpenListView}
+              onOpenTab={handleOpenTab}
             />
           ))}
           {renderTabPanel('overview', () => (
@@ -437,6 +468,8 @@ const App: React.FC = () => {
               onNavigateToGroup={handleNavigateToGroup}
               scopeToGroupId={scopeRulesToGroupId}
               onScopeConsumed={() => setScopeRulesToGroupId(null)}
+              listView={viewFor(listViewRequest, 'rules')}
+              onListViewConsumed={clearListViewRequest}
             />
           ))}
           {renderTabPanel('users', (isActive) => (
@@ -460,6 +493,8 @@ const App: React.FC = () => {
               // Overview's "Export Members" already takes. Without this the
               // drilled-in group's action greys itself out.
               onExportGroup={handleExportGroup}
+              listView={viewFor(listViewRequest, 'groups')}
+              onListViewConsumed={clearListViewRequest}
             />
           ))}
           {renderTabPanel('apps', (isActive) => (
@@ -467,6 +502,8 @@ const App: React.FC = () => {
               isActive={isActive}
               targetTabId={tabContext.targetTabId ?? null}
               oktaOrigin={tabContext.oktaOrigin ?? undefined}
+              listView={viewFor(listViewRequest, 'apps')}
+              onListViewConsumed={clearListViewRequest}
             />
           ))}
           {renderTabPanel('policies', (isActive) => (

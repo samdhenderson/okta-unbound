@@ -2,7 +2,7 @@
  * @module sidepanel/hooks/useGroupFilters
  * @description Owns the Groups tab filter/sort state and derives the visible group list.
  *
- * Holds the five filter axes (search, type, size, push, push-app) plus sort
+ * Holds the six filter axes (search, type, size, push, push-app, rule) plus sort
  * field/direction, and produces `filteredGroups` — either the live-search results
  * (live mode) or the locally filtered+sorted cached list (cached mode).
  */
@@ -14,6 +14,7 @@ import {
   computeActiveFilterCount,
   type SortField,
   type PushFilter,
+  type RuleFilter,
 } from '../components/groups/groupFilters';
 
 /** Inputs to {@link useGroupFilters}. */
@@ -27,11 +28,11 @@ interface UseGroupFiltersOptions {
 }
 
 /**
- * Owns the five-axis filter/sort state and derives `filteredGroups`.
+ * Owns the six-axis filter/sort state and derives `filteredGroups`.
  *
  * CHARACTERIZED: the live-mode branch returns `liveSearchResults` BY REFERENCE
  * (uncopied) — only the cached path copies before sorting. `activeFilterCount`
- * counts the 3 scalar filters + any push-app selection but NOT `searchQuery`, while
+ * counts the 4 scalar filters + any push-app selection but NOT `searchQuery`, while
  * `clearFilters` DOES clear `searchQuery`. This inconsistency is intentional; do not
  * harmonize it.
  *
@@ -44,6 +45,7 @@ export function useGroupFilters({ groups, searchMode, liveSearchResults }: UseGr
   const [sizeFilter, setSizeFilter] = useState<string>('');
   const [pushFilter, setPushFilter] = useState<PushFilter>('');
   const [pushAppFilter, setPushAppFilter] = useState<Set<string>>(new Set());
+  const [ruleFilter, setRuleFilter] = useState<RuleFilter>('');
   const [sortBy, setSortBy] = useState<SortField>('name');
   const [sortDesc, setSortDesc] = useState(false);
 
@@ -52,6 +54,7 @@ export function useGroupFilters({ groups, searchMode, liveSearchResults }: UseGr
     sizeFilter,
     pushFilter,
     pushAppFilter,
+    ruleFilter,
   });
 
   const filteredGroups = useMemo(() => {
@@ -63,6 +66,7 @@ export function useGroupFilters({ groups, searchMode, liveSearchResults }: UseGr
       sizeFilter,
       pushFilter,
       pushAppFilter,
+      ruleFilter,
       sortBy,
       sortDesc,
     });
@@ -75,6 +79,7 @@ export function useGroupFilters({ groups, searchMode, liveSearchResults }: UseGr
     sizeFilter,
     pushFilter,
     pushAppFilter,
+    ruleFilter,
     sortBy,
     sortDesc,
   ]);
@@ -100,6 +105,7 @@ export function useGroupFilters({ groups, searchMode, liveSearchResults }: UseGr
     setSizeFilter('');
     setPushFilter('');
     setPushAppFilter(new Set());
+    setRuleFilter('');
     setSearchQuery('');
   }, []);
 
@@ -126,6 +132,8 @@ export function useGroupFilters({ groups, searchMode, liveSearchResults }: UseGr
     setPushFilter,
     pushAppFilter,
     setPushAppFilter,
+    ruleFilter,
+    setRuleFilter,
     sortBy,
     sortDesc,
     filteredGroups,

@@ -27,6 +27,7 @@ function makeIndex(answers: Partial<Record<string, LocalLookup>> = {}): OrgEntit
     groups: {} as OrgEntityIndex['groups'],
     rules: {} as OrgEntityIndex['rules'],
     apps: {} as OrgEntityIndex['apps'],
+    appGroups: {} as OrgEntityIndex['appGroups'],
   };
 }
 

@@ -1,7 +1,8 @@
 /**
  * @module sidepanel/hooks/useOrgEntityIndex
  * @description The Home tab's one read of the background-owned org snapshot
- * (ADR-0040): an id → entity lookup over groups, rules and apps.
+ * (ADR-0040): an id → entity lookup over groups, rules and apps, plus the
+ * app-group assignments the snapshot card joins against.
  *
  * Home asks the org two questions, and this hook is the single place either is
  * answered from:
@@ -10,7 +11,15 @@
  *   rules and apps are already stored locally, so the answer costs **zero
  *   requests**; only a miss falls through to Okta.
  * - **"How big is this org?"** — the snapshot card's counts, which are
- *   `rows.length` over the same three collections.
+ *   `rows.length` over the same three collections, plus the sub-counts joined
+ *   from them and from `appGroups`.
+ *
+ * `appGroups` is the one collection here that is not an entity kind: nothing
+ * resolves to an app-group assignment, and {@link OrgEntityIndex.lookup} never
+ * looks in it. It is mounted here anyway because it is read for the same reason
+ * and at the same moment as the other three, and a second hook reading it would
+ * open a second IndexedDB read and register a second broadcast listener for one
+ * number.
  *
  * Both are served from one mount. Two hooks each calling `useOrgSnapshot` for
  * the same collection would open two IndexedDB reads and register two
@@ -34,7 +43,7 @@ import { useCallback, useMemo } from 'react';
 import { useOrgSnapshot, type UseOrgSnapshotResult } from '../cache/useOrgSnapshot';
 import type { OktaIdKind } from '../../shared/utils/oktaId';
 import type { OktaGroupRule } from '../../shared/types';
-import type { OktaAppListItem } from '../../shared/schemas/okta';
+import type { OktaAppGroupAssignment, OktaAppListItem } from '../../shared/schemas/okta';
 import type { RawOktaGroup } from '../components/groups/groupSummary';
 
 /** The collections this index covers. `user` is deliberately absent — see below. */
@@ -87,6 +96,13 @@ export interface OrgEntityIndex {
   groups: UseOrgSnapshotResult<RawOktaGroup>;
   rules: UseOrgSnapshotResult<OktaGroupRule>;
   apps: UseOrgSnapshotResult<OktaAppListItem>;
+  /**
+   * App-group assignments, keyed `${appId}::${groupId}`. Read through
+   * {@link UseOrgSnapshotResult.records}, never `rows` — Okta returns only the
+   * group's id on an assignment, so which app it belongs to exists in the key
+   * alone.
+   */
+  appGroups: UseOrgSnapshotResult<OktaAppGroupAssignment>;
 }
 
 /** Options for {@link useOrgEntityIndex}. */
@@ -134,6 +150,9 @@ export function useOrgEntityIndex({
   const groups = useOrgSnapshot<RawOktaGroup>('groups', oktaOrigin, targetTabId, { enabled });
   const rules = useOrgSnapshot<OktaGroupRule>('rules', oktaOrigin, targetTabId, { enabled });
   const apps = useOrgSnapshot<OktaAppListItem>('apps', oktaOrigin, targetTabId, { enabled });
+  const appGroups = useOrgSnapshot<OktaAppGroupAssignment>('appGroups', oktaOrigin, targetTabId, {
+    enabled,
+  });
 
   // One pass per collection per change, rather than a linear scan per keystroke.
   // The jump bar resolves on Enter, so this is not hot — but the Maps are also
@@ -200,5 +219,5 @@ export function useOrgEntityIndex({
     [groupsById, rulesById, appsById, isAuthoritative],
   );
 
-  return { lookup, isAuthoritative, groups, rules, apps };
+  return { lookup, isAuthoritative, groups, rules, apps, appGroups };
 }

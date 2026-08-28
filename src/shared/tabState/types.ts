@@ -29,7 +29,9 @@ export interface BaseTabState {
 /** Persisted state for the Rules tab (search, filter, sort, and cached rules). */
 export interface RulesTabState extends BaseTabState {
   searchQuery: string;
-  activeFilter: 'all' | 'active' | 'conflicts' | 'current-group';
+  // Mirrors `RulesFilterType` in the side panel — duplicated rather than imported
+  // because `src/shared/` must not depend on `src/sidepanel/`.
+  activeFilter: 'all' | 'active' | 'paused' | 'conflicts' | 'current-group';
   sortMode: RuleSortMode;
   cachedRules: FormattedRule[] | null;
   cachedStats: RuleStats | null;

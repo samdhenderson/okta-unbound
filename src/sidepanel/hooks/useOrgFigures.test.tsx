@@ -22,16 +22,23 @@ interface StubOptions {
   isReading?: boolean;
   complete?: boolean;
   ruleStatuses?: Array<'ACTIVE' | 'INACTIVE'>;
+  /** Overrides applied to the rules handle only, so one collection can lag. */
+  rulesOver?: Partial<StubOptions>;
 }
 
 let syncs: { collection: string; force: boolean }[] = [];
 
 /** A snapshot handle with a recording `sync`. */
-function stub(collection: string, rows: unknown[], options: StubOptions) {
+function stub(
+  collection: string,
+  rows: unknown[],
+  options: StubOptions,
+  records: { id: string }[] = [],
+) {
   const { lastFullWalkAt = NOW, isReading = false, complete = true } = options;
   return {
     rows,
-    records: [],
+    records,
     isReading,
     complete,
     lastFullWalkAt,
@@ -44,19 +51,43 @@ function stub(collection: string, rows: unknown[], options: StubOptions) {
   };
 }
 
+/**
+ * Two groups: one with a member, one empty. One rule feeds `g1` and nothing
+ * feeds `g2`, so `empty` and `no rules` are both 1 and are not the same group —
+ * a stub where they coincided could not tell the two joins apart.
+ */
 function makeIndex(options: StubOptions = {}): OrgEntityIndex {
   const rules = (options.ruleStatuses ?? ['ACTIVE', 'INACTIVE', 'INACTIVE']).map((status, i) => ({
     id: `0prFAKE000000000000${i}`,
     status,
+    actions: i === 0 ? { assignUserToGroups: { groupIds: ['g1'] } } : undefined,
   }));
+  const groups = [
+    { id: 'g1', _embedded: { stats: { usersCount: 7 } } },
+    { id: 'g2', _embedded: { stats: { usersCount: 0 } } },
+  ];
+  // One active push app with an assignment stored, one with none (the finding),
+  // and one plain app that is deactivated.
+  const apps = [
+    { id: 'a1', status: 'ACTIVE', features: ['GROUP_PUSH'] },
+    { id: 'a2', status: 'ACTIVE', features: ['GROUP_PUSH'] },
+    { id: 'a3', status: 'INACTIVE' },
+  ];
   return {
     lookup: () => ({ status: 'unknown' }),
     isAuthoritative: () => true,
-    groups: stub('groups', [{ id: 'g1' }, { id: 'g2' }], options),
-    rules: stub('rules', rules, options),
-    apps: stub('apps', [{ id: 'a1' }], options),
+    groups: stub('groups', groups, options),
+    rules: stub('rules', rules, { ...options, ...options.rulesOver }),
+    apps: stub('apps', apps, options),
+    appGroups: stub('appGroups', [], options, [{ id: 'a1::g1' }]),
   } as unknown as OrgEntityIndex;
 }
+
+/** Find one finding by key. */
+const sub = (
+  boxes: { subCounts: { key: string; value: number | null; note?: string }[] }[],
+  key: string,
+) => boxes.flatMap((box) => box.subCounts).find((s) => s.key === key);
 
 /**
  * Render through the real lifecycle: one commit while the snapshot reads are in
@@ -89,16 +120,58 @@ describe('useOrgFigures', () => {
     vi.spyOn(Date, 'now').mockReturnValue(NOW);
   });
 
-  it('derives four figures from three collections', () => {
+  it('derives one entry per collection from what is already mounted', () => {
     const { result } = render(makeIndex());
-    expect(result.current.figures.map((f) => f.key)).toEqual(['groups', 'apps', 'rules', 'paused']);
-    expect(result.current.figures.map((f) => f.value)).toEqual([2, 1, 3, 2]);
+    expect(result.current.boxes.map((b) => b.key)).toEqual(['groups', 'apps', 'rules']);
+    expect(result.current.boxes.map((b) => b.value)).toEqual([2, 3, 3]);
+    expect(result.current.boxes.map((b) => b.tab)).toEqual(['groups', 'apps', 'rules']);
+    expect(result.current.boxes.map((b) => b.noun)).toEqual([
+      'groups',
+      'applications',
+      'group rules',
+    ]);
   });
 
-  it('counts paused rules out of the rows already held — no extra read', () => {
-    const { result } = render(makeIndex({ ruleStatuses: ['ACTIVE', 'ACTIVE'] }));
-    expect(result.current.figures.find((f) => f.key === 'paused')?.value).toBe(0);
+  it('derives every finding from rows already held — no extra read', () => {
+    const { result } = render(makeIndex());
+    const { boxes } = result.current;
+    expect(sub(boxes, 'groups-empty')?.value).toBe(1);
+    expect(sub(boxes, 'groups-unruled')?.value).toBe(1);
+    expect(sub(boxes, 'apps-inactive')?.value).toBe(1);
+    expect(sub(boxes, 'apps-idle-push')?.value).toBe(1);
+    expect(sub(boxes, 'rules-paused')?.value).toBe(2);
     expect(syncs).toEqual([]);
+  });
+
+  it('counts paused rules out of the rows already held', () => {
+    const { result } = render(makeIndex({ ruleStatuses: ['ACTIVE', 'ACTIVE'] }));
+    expect(sub(result.current.boxes, 'rules-paused')?.value).toBe(0);
+  });
+
+  it('carries each finding’s filtered destination with it', () => {
+    const { result } = render(makeIndex());
+    const requests = result.current.boxes.flatMap((box) =>
+      box.subCounts.map((subCount) => subCount.request),
+    );
+    expect(requests).toEqual([
+      { tab: 'groups', view: 'empty' },
+      { tab: 'groups', view: 'no-rules' },
+      { tab: 'apps', view: 'inactive' },
+      { tab: 'apps', view: 'pushes-nothing' },
+      { tab: 'rules', view: 'paused' },
+    ]);
+  });
+
+  it('suppresses a subtracting finding when the collection it subtracts was never walked', () => {
+    // Groups walked cleanly; rules never did. "Empty" is still exact — it reads
+    // only the group rows — but "no rules" must not report both groups as unfed
+    // on the strength of a rule list that does not exist.
+    const { result } = render(makeIndex({ rulesOver: { lastFullWalkAt: null, complete: false } }));
+    expect(sub(result.current.boxes, 'groups-empty')?.value).toBe(1);
+    expect(sub(result.current.boxes, 'groups-unruled')?.value).toBeNull();
+    expect(sub(result.current.boxes, 'groups-unruled')?.note).toBe(
+      'Needs group rules, which have not been read.',
+    );
   });
 
   it('spends nothing when the figures are fresh', async () => {
@@ -108,26 +181,26 @@ describe('useOrgFigures', () => {
     await waitFor(() => expect(syncs).toEqual([]));
   });
 
-  it('tops up once when they are older than the floor', async () => {
+  it('tops up with ONE sync when they are older than the floor', async () => {
     render(makeIndex({ lastFullWalkAt: NOW - ORG_FIGURES_MAX_AGE_MS - 1 }));
-    await waitFor(() => expect(syncs).toHaveLength(3));
-    // `sync(false)` — the 0-to-1-request ladder, never a walk.
-    expect(syncs.every((s) => s.force === false)).toBe(true);
-    expect(syncs.map((s) => s.collection).sort()).toEqual(['apps', 'groups', 'rules']);
+    await waitFor(() => expect(syncs).toHaveLength(1));
+    // One, not one per collection: `syncSnapshot` is org-wide and walks every
+    // collection, so four calls would be four messages answered by one run.
+    expect(syncs).toEqual([{ collection: 'groups', force: false }]);
   });
 
   it('tops up when a collection has never been walked', async () => {
     render(makeIndex({ lastFullWalkAt: null, complete: false }));
-    await waitFor(() => expect(syncs).toHaveLength(3));
+    await waitFor(() => expect(syncs).toHaveLength(1));
   });
 
   it('tops up at most once per mount', async () => {
     const index = makeIndex({ lastFullWalkAt: null, complete: false });
     const { rerender } = render(index);
-    await waitFor(() => expect(syncs).toHaveLength(3));
+    await waitFor(() => expect(syncs).toHaveLength(1));
     rerender({ index });
     rerender({ index });
-    expect(syncs).toHaveLength(3);
+    expect(syncs).toHaveLength(1);
   });
 
   it('spends nothing from a hidden tab', async () => {
@@ -182,8 +255,7 @@ describe('useOrgFigures', () => {
     await act(async () => {
       result.current.refresh();
     });
-    expect(syncs).toHaveLength(3);
-    expect(syncs.every((s) => s.force === true)).toBe(true);
+    expect(syncs).toEqual([{ collection: 'groups', force: true }]);
   });
 
   it('quotes the oldest walk behind the card', () => {

@@ -152,7 +152,10 @@ describe('useOrgEntityIndex', () => {
     // Home mounts them once.
     stage();
     const collections = useOrgSnapshot.mock.calls.map((call) => call[0]);
-    expect([...new Set(collections)].sort()).toEqual(['apps', 'groups', 'rules']);
+    // `appGroups` joins the other three: nothing resolves to an assignment, but
+    // the snapshot card joins against it for "apps pushing nothing", and reading
+    // it here is what keeps that a single mount.
+    expect([...new Set(collections)].sort()).toEqual(['appGroups', 'apps', 'groups', 'rules']);
     for (const call of useOrgSnapshot.mock.calls) {
       expect(call[1]).toBe(ORIGIN);
       expect(call[3]).toEqual({ enabled: true });

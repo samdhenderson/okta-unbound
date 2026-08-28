@@ -9,7 +9,7 @@ import React from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { FilterPill, SortPill } from '../shared';
 import Icon from '../shared/Icon';
-import type { SortField, PushFilter } from './groupFilters';
+import type { SortField, PushFilter, RuleFilter } from './groupFilters';
 
 interface GroupFilterPanelProps {
   /** Number of active filters (drives the active-chips row). */
@@ -23,6 +23,9 @@ interface GroupFilterPanelProps {
   /** Push-status filter. */
   pushFilter: PushFilter;
   setPushFilter: (value: PushFilter) => void;
+  /** Rule-attribution filter. */
+  ruleFilter: RuleFilter;
+  setRuleFilter: (value: RuleFilter) => void;
   /** Set of push-target app ids to filter by (empty = all). */
   pushAppFilter: Set<string>;
   setPushAppFilter: Dispatch<SetStateAction<Set<string>>>;
@@ -39,9 +42,9 @@ interface GroupFilterPanelProps {
 }
 
 /**
- * The expandable filter panel: active-filter chips, the type/size/push grid, the
- * push-target-app row, and the sort row. The four filter/toggle groups (type,
- * size, push status, push-target app) route through the shared `FilterPill`, and
+ * The expandable filter panel: active-filter chips, the type/size/push/rule grid,
+ * the push-target-app row, and the sort row. The five filter/toggle groups (type,
+ * size, push status, rule, push-target app) route through the shared `FilterPill`, and
  * the sort row through the shared `SortPill` (§3). Two controls stay raw as
  * documented exceptions: the "Clear all" text-link (no shared text-link
  * primitive) and the active-filter chip's close button (a bespoke `rounded-full`
@@ -55,6 +58,8 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
   setSizeFilter,
   pushFilter,
   setPushFilter,
+  ruleFilter,
+  setRuleFilter,
   pushAppFilter,
   setPushAppFilter,
   availablePushApps,
@@ -79,6 +84,12 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
         )}
         {pushFilter && (
           <FilterChip label={`Push: ${pushFilter}`} onRemove={() => setPushFilter('')} />
+        )}
+        {ruleFilter && (
+          <FilterChip
+            label={ruleFilter === 'unruled' ? 'No rules' : 'Fed by a rule'}
+            onRemove={() => setRuleFilter('')}
+          />
         )}
         {pushAppFilter.size > 0 && (
           <FilterChip
@@ -138,6 +149,26 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
               key={opt.value}
               active={sizeFilter === opt.value}
               onClick={() => setSizeFilter(opt.value)}
+            >
+              {opt.label}
+            </FilterPill>
+          ))}
+        </div>
+      </div>
+
+      {/* Rule Filter */}
+      <div>
+        <label className="block text-xs font-medium text-neutral-600 mb-1.5">Rules</label>
+        <div className="flex flex-wrap gap-1.5">
+          {[
+            { value: '' as RuleFilter, label: 'All' },
+            { value: 'ruled' as RuleFilter, label: 'Fed by a rule' },
+            { value: 'unruled' as RuleFilter, label: 'No rules' },
+          ].map((opt) => (
+            <FilterPill
+              key={opt.value}
+              active={ruleFilter === opt.value}
+              onClick={() => setRuleFilter(opt.value)}
             >
               {opt.label}
             </FilterPill>

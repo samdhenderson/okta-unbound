@@ -8,7 +8,15 @@
  * so every branch gets a case.
  */
 import { describe, it, expect } from 'vitest';
-import { figureStatus, buildFigure, oldestWalkAt, type FigureSource } from './orgFigures';
+import {
+  buildBox,
+  buildFigure,
+  buildSubCount,
+  figureStatus,
+  oldestWalkAt,
+  subCountStatus,
+  type FigureSource,
+} from './orgFigures';
 
 const WALK_AT = 1_800_000_000_000;
 
@@ -111,6 +119,115 @@ describe('buildFigure', () => {
     // collection's trustworthiness rather than being judged on its own count.
     const figure = buildFigure('paused', 'Rules paused', 'pause', source({ count: 40 }), 3);
     expect(figure).toMatchObject({ status: 'ok', value: 3 });
+  });
+});
+
+/** A named collection, for the sub-count builders. */
+const named = (over: Partial<FigureSource> = {}, noun = 'groups') => ({
+  source: source(over),
+  noun,
+});
+
+describe('subCountStatus', () => {
+  it('inherits the counted collection when nothing gates it', () => {
+    expect(subCountStatus(source(), [])).toBe('ok');
+    expect(subCountStatus(source({ complete: false }), [])).toBe('partial');
+  });
+
+  it('lets a partial COUNTED collection through as a floor', () => {
+    // "At least 31 empty groups" out of an interrupted group walk is true: the
+    // pages that never arrived can only add more.
+    expect(subCountStatus(source({ complete: false }), [source()])).toBe('partial');
+  });
+
+  it('suppresses the count when a GATE walk did not finish', () => {
+    // The asymmetry, and the reason this function exists. "Groups no rule feeds"
+    // is computed by subtracting the rules that were read, so a rule list
+    // missing half its pages does not under-report — it reports every group
+    // those missing rules fed as unfed. That is a wrong number, not a floor.
+    expect(subCountStatus(source(), [source({ complete: false })])).toBe('unavailable');
+    expect(
+      subCountStatus(source(), [source({ complete: false, lastFullWalkAt: null, count: 0 })]),
+    ).toBe('unavailable');
+  });
+
+  it('reads as reading while either side is still loading', () => {
+    expect(subCountStatus(source({ isReading: true }), [source()])).toBe('reading');
+    expect(subCountStatus(source(), [source({ isReading: true })])).toBe('reading');
+  });
+});
+
+describe('buildSubCount', () => {
+  const request = { tab: 'groups', view: 'empty' } as const;
+  const base = {
+    key: 'groups-empty',
+    label: 'Groups with no members',
+    counted: named({ count: 214 }),
+    count: 31,
+    request,
+  };
+
+  it('carries its number, its destination and what it is out of', () => {
+    expect(buildSubCount(base)).toMatchObject({
+      status: 'ok',
+      value: 31,
+      request,
+      note: 'of 214 groups',
+    });
+  });
+
+  it('marks a floor when the counted walk did not finish', () => {
+    const floor = buildSubCount({ ...base, counted: named({ count: 214, complete: false }) });
+    expect(floor).toMatchObject({ status: 'partial', value: 31 });
+    expect(floor.note).toBe('At least — the last read of groups did not finish.');
+  });
+
+  it('withholds the number rather than shipping a wrong one, and names the gap', () => {
+    // `value: null` is what makes the card render a row with an em dash instead
+    // of a control — a link into a list that would disagree with the figure is
+    // the dead control ADR-0039 bans, wearing a different hat. And the note
+    // names the collection that is missing: "needs group rules" points
+    // somewhere different from "groups have not been read".
+    const suppressed = buildSubCount({
+      ...base,
+      key: 'groups-unruled',
+      label: 'Groups no rule fills',
+      gates: [named({ complete: false }, 'group rules')],
+      count: 214,
+      request: { tab: 'groups', view: 'no-rules' },
+    });
+    expect(suppressed.value).toBeNull();
+    expect(suppressed.note).toBe('Needs group rules, which have not been read.');
+  });
+
+  it('names its own collection when that is what is missing', () => {
+    const suppressed = buildSubCount({
+      ...base,
+      counted: named({ complete: false, lastFullWalkAt: null, count: 0 }),
+    });
+    expect(suppressed.value).toBeNull();
+    expect(suppressed.note).toBe('Groups have not been read yet.');
+  });
+
+  it('shows no note while reading — the skeleton is the message', () => {
+    const reading = buildSubCount({ ...base, counted: named({ isReading: true }) });
+    expect(reading).toMatchObject({ status: 'reading', value: null, note: undefined });
+  });
+});
+
+describe('buildBox', () => {
+  it('pairs a total with its tab, its noun and its findings', () => {
+    const box = buildBox(buildFigure('groups', 'Groups', 'users', source()), 'groups', 'groups', [
+      buildSubCount({
+        key: 'groups-empty',
+        label: 'Groups with no members',
+        counted: named(),
+        count: 31,
+        request: { tab: 'groups', view: 'empty' },
+      }),
+    ]);
+    expect(box).toMatchObject({ key: 'groups', tab: 'groups', noun: 'groups', value: 42 });
+    expect(box.subCounts.map((s) => s.value)).toEqual([31]);
   });
 });
 

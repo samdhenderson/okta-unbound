@@ -43,6 +43,7 @@ import { useEntityNavigation } from '../contexts/NavigationContext';
 import { navigationTarget } from './home/jumpDestinations';
 import type { OktaIdKind } from '../../shared/utils/oktaId';
 import type { WorkingSetRef } from '../../shared/storage/workingSetStore';
+import type { ListViewRequest, ListViewTab } from '../listViewRequest';
 
 /** Props for {@link HomeTab}. */
 export interface HomeTabProps {
@@ -56,6 +57,13 @@ export interface HomeTabProps {
   targetTabId: number | null;
   /** Okta org origin, for deep links and for scoping the org snapshot. */
   oktaOrigin?: string | null;
+  /**
+   * Open a list tab with one filter already applied — what the org card's
+   * sub-counts do. See {@link module:sidepanel/listViewRequest}.
+   */
+  onOpenListView: (request: ListViewRequest) => void;
+  /** Open a list tab unfiltered — what an org card headline does. */
+  onOpenTab: (tab: ListViewTab) => void;
 }
 
 /**
@@ -63,7 +71,13 @@ export interface HomeTabProps {
  *
  * @param props - See {@link HomeTabProps}.
  */
-const HomeTab: React.FC<HomeTabProps> = ({ isActive, targetTabId, oktaOrigin }) => {
+const HomeTab: React.FC<HomeTabProps> = ({
+  isActive,
+  targetTabId,
+  oktaOrigin,
+  onOpenListView,
+  onOpenTab,
+}) => {
   const api = useOktaApi({ targetTabId, oktaOrigin });
   const nav = useEntityNavigation();
 
@@ -180,11 +194,13 @@ const HomeTab: React.FC<HomeTabProps> = ({ isActive, targetTabId, oktaOrigin }) 
         />
 
         <OrgSnapshotCard
-          figures={orgFigures.figures}
+          boxes={orgFigures.boxes}
           readAt={orgFigures.readAt}
           isRefreshing={orgFigures.isRefreshing}
           onRefresh={orgFigures.refresh}
           canRefresh={orgFigures.canRefresh}
+          onOpenTab={onOpenTab}
+          onOpenListView={onOpenListView}
         />
       </div>
     </div>
