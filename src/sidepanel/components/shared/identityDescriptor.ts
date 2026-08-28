@@ -43,7 +43,17 @@ export type IdentityFact =
   /** A plain fact: `Created 12 Mar 2021`. */
   | { kind: 'text'; icon?: IconType; text: string; title?: string }
   /** The entity's Okta id, rendered with an inline copy control. */
-  | { kind: 'id'; value: string; copyLabel: string };
+  | { kind: 'id'; value: string; copyLabel: string }
+  /**
+   * A status demoted out of the header's trailing badge column: a small dot in the
+   * status colour, followed by the label at the same secondary-text weight as every
+   * other fact — "demoted to facts", the chosen treatment for the badges-crowd-the-title
+   * problem. A builder reserves the loud {@link EntityIdentityDescriptor.badge} for
+   * `danger` only (a deactivated or locked entity should shout) and routes every calmer
+   * status through this kind instead, so the header's height stops depending on how many
+   * statuses an entity carries.
+   */
+  | { kind: 'status'; variant: BadgeVariant; text: string };
 
 /**
  * Facts that share one line, separated by a middot and wrapping together.

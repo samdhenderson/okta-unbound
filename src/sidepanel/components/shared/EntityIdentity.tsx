@@ -17,10 +17,20 @@
  * header's title row, so the tab spreads those from the same descriptor rather than
  * nesting them here — that is what keeps all three on screen when the header is pinned and
  * this region is collapsed.
+ *
+ * ## The `status` fact
+ *
+ * A calmer-than-`danger` status is demoted here rather than living in the header's trailing
+ * badge column (`docs/design-system.md`'s "demoted to facts" treatment): a 6px dot in the
+ * status colour, then the label at the same secondary-text weight as every other fact. Same
+ * information as a badge, roughly a third of the visual weight, and — unlike a badge — it
+ * cannot push the header to a third line, because it wraps with the row instead of reserving
+ * a fixed trailing column.
  */
 import React from 'react';
 import Icon, { type IconType } from '../shared/Icon';
 import CopyableId from './CopyableId';
+import type { BadgeVariant } from './Badge';
 import type { IdentityFact, IdentityRow } from './identityDescriptor';
 
 /** Props for {@link EntityIdentity}. */
@@ -29,6 +39,21 @@ export interface EntityIdentityProps {
   rows: IdentityRow[];
 }
 
+/**
+ * A `status` fact's dot fill per {@link BadgeVariant}. Deliberately mirrors the background
+ * token {@link sidepanel/components/shared/Badge.Badge}'s solid treatment uses for the same
+ * variant, rather than a fifth badge palette — this codebase already paid once for four
+ * divergent copies of this exact vocabulary.
+ */
+const STATUS_DOT_BG: Record<BadgeVariant, string> = {
+  primary: 'bg-primary',
+  info: 'bg-primary',
+  success: 'bg-success',
+  warning: 'bg-warning',
+  danger: 'bg-danger',
+  neutral: 'bg-neutral-400',
+};
+
 /** A fact's leading glyph. Decorative — the fact's own text carries the meaning. */
 const FactIcon: React.FC<{ type: IconType }> = ({ type }) => (
   <span aria-hidden="true" className="flex shrink-0 text-neutral-400">
@@ -36,7 +61,7 @@ const FactIcon: React.FC<{ type: IconType }> = ({ type }) => (
   </span>
 );
 
-/** One fact: a count, a plain statement, or a copyable id. */
+/** One fact: a count, a plain statement, a copyable id, or a demoted status. */
 const Fact: React.FC<{ fact: IdentityFact }> = ({ fact }) => {
   if (fact.kind === 'id') {
     return <CopyableId value={fact.value} label={fact.copyLabel} />;
@@ -48,6 +73,18 @@ const Fact: React.FC<{ fact: IdentityFact }> = ({ fact }) => {
         <FactIcon type={fact.icon} />
         <span className="font-semibold text-neutral-900">{fact.value}</span>
         <span>{fact.label}</span>
+      </span>
+    );
+  }
+
+  if (fact.kind === 'status') {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT_BG[fact.variant]}`}
+        />
+        <span>{fact.text}</span>
       </span>
     );
   }

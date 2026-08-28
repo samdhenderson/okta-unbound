@@ -9,6 +9,12 @@
  * Tailwind hues (`bg-emerald-50`, `bg-amber-50`) rather than tokens.
  *
  * Pure by design: an `OktaUser` in, plain data out, no JSX and no `oktaOrigin`.
+ *
+ * The header's loud trailing badge is reserved for `danger` — `LOCKED_OUT` and
+ * `DEPROVISIONED` — because a locked or deactivated user should shout. Every calmer status
+ * (`ACTIVE`, `PROVISIONED`, `STAGED`, `SUSPENDED`, `RECOVERY`, `PASSWORD_EXPIRED`) is demoted
+ * to a dot-marked `status` fact in the identity rows instead, so the header no longer varies
+ * in height depending on how alarming a user's status is.
  */
 import type { OktaUser } from '../../../shared/types';
 import { userDisplayName } from '../../../shared/utils/userDisplay';
@@ -74,6 +80,7 @@ const metric = (
  *   groupCount: memberships.length,
  *   appCount: apps?.length, // `undefined` until the apps request resolves
  * });
+ * // rows → [[● ACTIVE · id], [42 groups], [Last login 2 days ago]]
  * ```
  */
 export function userIdentity(
@@ -81,6 +88,17 @@ export function userIdentity(
   options: UserIdentityOptions = {},
 ): EntityIdentityDescriptor {
   const { groupCount, appCount } = options;
+
+  // The raw Okta status string is the label on purpose: `SUSPENDED` and `LOCKED_OUT` are
+  // the terms the Admin Console uses, so a humanised version would make the panel and
+  // Okta disagree about what a user's state is called.
+  const statusVariant = userStatusVariant(user.status);
+  const isAlarming = statusVariant === 'danger';
+
+  const identityRow: IdentityRow = isAlarming
+    ? []
+    : [{ kind: 'status', variant: statusVariant, text: user.status }];
+  identityRow.push({ kind: 'id', value: user.id, copyLabel: 'Copy user id' });
 
   const counts: IdentityRow = [];
   if (groupCount !== undefined) {
@@ -110,11 +128,8 @@ export function userIdentity(
   return {
     key: user.id,
     name: userDisplayName(user),
-    // The raw Okta status string is the label on purpose: `SUSPENDED` and `LOCKED_OUT` are
-    // the terms the Admin Console uses, so a humanised version would make the panel and
-    // Okta disagree about what a user's state is called.
-    badge: { text: user.status, variant: userStatusVariant(user.status) },
-    rows: [[{ kind: 'id', value: user.id, copyLabel: 'Copy user id' }], counts, timestamps],
+    badge: isAlarming ? { text: user.status, variant: statusVariant } : undefined,
+    rows: [identityRow, counts, timestamps],
     link: { entityType: 'user', entityId: user.id },
   };
 }

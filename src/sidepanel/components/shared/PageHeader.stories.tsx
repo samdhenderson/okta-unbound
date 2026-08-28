@@ -21,6 +21,7 @@ const meta = {
         component:
           'Top-of-view header bar rendered at the top of a tab/view — title with optional subtitle, status badge, leading slot, breadcrumb trail, and trailing actions.\n\n' +
           'The optional badge renders through the shared `Badge` primitive, so it speaks the canonical vocabulary — `danger`, never `error` (ADR-0002). Actions are right-aligned.\n\n' +
+          'For an entity-identity rung, the badge column is reserved for `danger` only — a deactivated or locked entity should shout. Every calmer status is demoted to a dot-marked `status` fact inside the identity region instead ("demoted to facts"), which is what keeps the header a constant height regardless of how many statuses an entity carries. `groupIdentity`/`userIdentity` make that call; list-rung callers passing `badge` for a plain count (`GroupsTab`, `AppsTab`) are unaffected.\n\n' +
           'The leading-slot props (`onBack`, `leading`, `breadcrumbs`) are additive and optional — omitting them renders the original layout unchanged. They exist so a tab driven by `useViewStack` keeps **one** header mounted whose contents swap in place as views are pushed and popped, rather than each view rendering its own header.\n\n' +
           '`identity` extends that downward: an expanding region describing the entity you are browsing, so a detail view no longer opens with a card repeating the title. Changing `identityKey` crossfades it; the `<h1>` and its badge never do.\n\n' +
           '`cornerAction` parks a small control in the bottom-right corner, below the actions — a different weight of thing from a page verb, kept out of `actions` so it does not read as one. It is in flow, not absolutely positioned, so it cannot land on top of a long identity region at 360px.\n\n' +
@@ -156,18 +157,24 @@ export const WithBreadcrumbs: Story = {
  * The drilled-in shape this region exists for: the header describes the group, so the
  * detail body below it opens on real content instead of an identity card repeating the
  * title.
+ *
+ * `groupIdentity` never populates `badge` for a group — none of the three group types is
+ * `danger` — so the type mark ("Okta group") is a dot-marked `status` fact in the
+ * identity row instead of a header badge.
  */
 export const WithIdentity: Story = {
   args: {
     title: 'Engineering',
-    badge: { text: 'Okta group', variant: 'primary' },
     onBack: fn(),
     backLabel: 'Back to groups',
     identityKey: '00gFAKE1a2b3c4d5e6',
     identity: (
       <EntityIdentity
         rows={[
-          [{ kind: 'id', value: '00gFAKE1a2b3c4d5e6', copyLabel: 'Copy group id' }],
+          [
+            { kind: 'status', variant: 'primary', text: 'Okta group' },
+            { kind: 'id', value: '00gFAKE1a2b3c4d5e6', copyLabel: 'Copy group id' },
+          ],
           [
             { kind: 'metric', icon: 'users', value: '1,284', label: 'members' },
             { kind: 'metric', icon: 'bolt', value: '2', label: 'rules' },
@@ -223,8 +230,9 @@ export const CornerActionWithoutIdentity: Story = {
 };
 
 /**
- * The same header at the narrowest supported width, where the badge and the action share
- * the trailing cluster and the facts wrap within their rows (ADR-0014).
+ * The same header at the narrowest supported width. With no badge in the trailing
+ * cluster, the title gets the full width and the identity facts simply wrap within
+ * their rows (ADR-0014) — the property "demoted to facts" buys.
  */
 export const WithIdentityNarrow: Story = {
   args: WithIdentity.args,
@@ -234,11 +242,42 @@ export const WithIdentityNarrow: Story = {
 /**
  * A user rung. Two entity kinds, one component — the difference lives entirely in the
  * descriptor each tab builds.
+ *
+ * `ACTIVE` is not `danger`, so `userIdentity` demotes it to a dot-marked `status` fact
+ * in the identity row rather than the header's trailing badge column — no `badge` prop
+ * is passed here at all.
  */
 export const WithIdentityUser: Story = {
   args: {
     title: 'Priya Raman',
-    badge: { text: 'ACTIVE', variant: 'success' },
+    onBack: fn(),
+    backLabel: 'Back to search',
+    identityKey: '00uFAKE9z8y7x6w5v',
+    identity: (
+      <EntityIdentity
+        rows={[
+          [
+            { kind: 'status', variant: 'success', text: 'ACTIVE' },
+            { kind: 'id', value: '00uFAKE9z8y7x6w5v', copyLabel: 'Copy user id' },
+          ],
+          [{ kind: 'metric', icon: 'users', value: '42', label: 'groups' }],
+          [{ kind: 'text', icon: 'clock', text: 'Last login 2 days ago' }],
+        ]}
+      />
+    ),
+    actions: <Button icon="external-link">Open in Okta</Button>,
+  },
+};
+
+/**
+ * A `LOCKED_OUT` user — the one status that keeps the loud badge, because a locked
+ * entity should shout. Contrast with {@link WithIdentityUser}: same shape, but the
+ * badge column is populated and the identity row carries only the id.
+ */
+export const WithIdentityUserLockedOut: Story = {
+  args: {
+    title: 'Priya Raman',
+    badge: { text: 'LOCKED_OUT', variant: 'danger' },
     onBack: fn(),
     backLabel: 'Back to search',
     identityKey: '00uFAKE9z8y7x6w5v',
@@ -253,6 +292,37 @@ export const WithIdentityUser: Story = {
     ),
     actions: <Button icon="external-link">Open in Okta</Button>,
   },
+};
+
+/**
+ * The property treatment #2 buys: two statuses on the same entity at once, both demoted
+ * to facts, at the narrowest supported width. Contrast with
+ * {@link WithIdentityUserLockedOut}, where a single `danger` badge already reserves a
+ * trailing column at the same width — two of *those* would leave the title well under
+ * 200px.
+ */
+export const WithMultipleStatusFactsNarrow: Story = {
+  args: {
+    title: 'Priya Raman',
+    onBack: fn(),
+    backLabel: 'Back to search',
+    identityKey: '00uFAKE9z8y7x6w5v',
+    identity: (
+      <EntityIdentity
+        rows={[
+          [
+            { kind: 'status', variant: 'success', text: 'ACTIVE' },
+            { kind: 'status', variant: 'warning', text: 'PASSWORD_EXPIRED' },
+            { kind: 'id', value: '00uFAKE9z8y7x6w5v', copyLabel: 'Copy user id' },
+          ],
+          [{ kind: 'metric', icon: 'users', value: '42', label: 'groups' }],
+          [{ kind: 'text', icon: 'clock', text: 'Last login 2 days ago' }],
+        ]}
+      />
+    ),
+    actions: <Button icon="external-link">Open in Okta</Button>,
+  },
+  parameters: { viewport: { value: 'sidepanelCompact' } },
 };
 
 /**

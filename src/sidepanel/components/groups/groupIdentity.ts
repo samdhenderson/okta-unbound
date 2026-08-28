@@ -11,6 +11,12 @@
  * Pure by design: a `GroupSummary` in, plain data out, no JSX and no `oktaOrigin`. That is
  * what lets the badge choice, the pluralisation and the omission rules be unit-tested
  * without rendering.
+ *
+ * The type mark itself is demoted to a dot-marked `status` fact in the identity rows rather
+ * than the header's loud trailing badge — none of the three group types is `danger`, so a
+ * group descriptor never populates {@link EntityIdentityDescriptor.badge} today, but the
+ * check is written generically against the variant rather than hard-coded to "never", so a
+ * future group type Okta ships as genuinely alarming would still earn the loud treatment.
  */
 import type { GroupSummary, GroupType } from '../../../shared/types';
 import type {
@@ -63,14 +69,20 @@ const metric = (
  * @example
  * ```ts
  * const identity = groupIdentity(group);
- * // rows → [[id], [1,284 members · 2 rules], [Created 12 Mar 2021 · Updated 4 days ago]]
+ * // rows → [[● Okta group · id], [1,284 members · 2 rules], [Created 12 Mar 2021 · Updated 4 days ago]]
  * ```
  */
 export function groupIdentity(group: GroupSummary): EntityIdentityDescriptor {
   // An unrecognised type is possible: `type` comes from an Okta response, and while zod
   // validates the shape at the boundary, a new Okta group type would widen the union
   // before this map knows about it.
-  const badge = TYPE_BADGES[group.type] ?? TYPE_BADGES.BUILT_IN;
+  const typeMark = TYPE_BADGES[group.type] ?? TYPE_BADGES.BUILT_IN;
+  const isAlarming = typeMark.variant === 'danger';
+
+  const identityRow: IdentityRow = isAlarming
+    ? []
+    : [{ kind: 'status', variant: typeMark.variant, text: typeMark.text }];
+  identityRow.push({ kind: 'id', value: group.id, copyLabel: 'Copy group id' });
 
   const counts: IdentityRow = [metric('users', group.memberCount, 'member')];
   if (group.ruleCount > 0) {
@@ -108,8 +120,8 @@ export function groupIdentity(group: GroupSummary): EntityIdentityDescriptor {
   return {
     key: group.id,
     name: group.name,
-    badge,
-    rows: [[{ kind: 'id', value: group.id, copyLabel: 'Copy group id' }], counts, timestamps],
+    badge: isAlarming ? typeMark : undefined,
+    rows: [identityRow, counts, timestamps],
     link: { entityType: 'group', entityId: group.id },
   };
 }
