@@ -58,6 +58,9 @@ const meta = {
           'deliberately not stored (ADR-0040 §5), so a user id always costs one. The design specified a ' +
           'fixed "1 request", which the snapshot makes untrue about half the time — a cost line that is ' +
           'sometimes wrong is worse than none.\n\n' +
+          'There is no explanatory line under the field. It sat between the bar and its results, ' +
+          'pushing the rest of Home down to describe a distinction the placeholder states and the ' +
+          'bar demonstrates on first use.\n\n' +
           'Rows rise in via `.rise-in-stagger`, the app’s existing CSS-only stagger. No raw `ms` or ' +
           'inline `cubic-bezier()` reaches shipped code.',
       },
@@ -80,12 +83,12 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Resting state. The helper line explains the two behaviours before either runs. */
+/** Resting state. The placeholder names what the field reaches; nothing else does. */
 export const Idle: Story = {};
 
 /**
- * A well-formed id has been pasted. The helper line switches to name the action,
- * and — critically — **no request has been issued**. Nothing happens until Enter.
+ * A well-formed id has been pasted, and — critically — **no request has been
+ * issued**. Nothing happens until Enter.
  */
 export const IdTyped: Story = {
   args: { jump: jumpState({ query: '00gFAKE0000000000001', isIdQuery: true }) },

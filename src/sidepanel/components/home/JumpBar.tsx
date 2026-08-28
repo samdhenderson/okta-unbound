@@ -15,11 +15,18 @@
  * specified a fixed "1 request"; the snapshot makes that untrue about half the
  * time, and a cost line that is sometimes wrong is worse than none.
  *
- * ## No `PageHeader`
+ * ## No `PageHeader`, and no helper line
  *
  * Home deliberately has no page header — one could only say "Home" — so this bar
- * is the first thing in the scroller, and its helper line does the work a header
- * subtitle would.
+ * is the first thing in the scroller.
+ *
+ * It carried a line under it explaining the two behaviours ("ids resolve
+ * exactly · names and emails search the org"). That line was removed: it sat
+ * between the field and its results, pushing the working set and the org
+ * findings down the panel to explain a distinction the placeholder now states
+ * and the bar demonstrates on first use. Nothing is lost that the reader needed
+ * *before* typing — an id still resolves on Enter, a name still searches, and
+ * the cost footnote still reports what a resolution actually spent.
  */
 import React, { useRef } from 'react';
 import { IconButton, Input, LoadingSpinner } from '../shared';
@@ -82,8 +89,8 @@ const JumpBar: React.FC<JumpBarProps> = ({
         value={jump.query}
         onChange={jump.setQuery}
         onKeyDown={handleKeyDown}
-        ariaLabel="Paste an id, name, or email"
-        placeholder="Paste an id, name, or email…"
+        ariaLabel="Search groups, apps, users, rules"
+        placeholder="Search groups, apps, users, rules, etc."
         size="lg"
         autoFocus={autoFocus}
         icon={<Icon type="search" size="md" />}
@@ -99,12 +106,6 @@ const JumpBar: React.FC<JumpBarProps> = ({
         }
         trailingInteractive={jump.query.length > 0}
       />
-
-      <p className="text-xs text-neutral-600">
-        {jump.isIdQuery
-          ? 'Press Enter to open this id'
-          : 'Ids resolve exactly · names and emails search the org'}
-      </p>
 
       {/* Announced rather than shown: the results below are visual, and a
           screen-reader user gets no equivalent from a list appearing. */}

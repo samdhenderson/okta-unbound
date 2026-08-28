@@ -138,7 +138,7 @@ let syncRequests = 0;
 
 /** The jump field, by the label a screen reader would use to find it. */
 const field = (canvasElement: HTMLElement) =>
-  within(canvasElement).getByLabelText('Paste an id, name, or email');
+  within(canvasElement).getByLabelText('Search groups, apps, users, rules');
 
 const meta = {
   title: 'Home/HomeTab',
@@ -206,13 +206,20 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Resting state: one field, and a line saying what it does before it does it. */
+/**
+ * Resting state: one empty field, and the placeholder naming what it reaches.
+ *
+ * The explanatory line that used to sit under the field is gone — it pushed the
+ * working set and the org findings down the panel to explain a distinction the
+ * bar demonstrates on first use.
+ */
 export const Default: Story = {
   play: async ({ canvasElement }) => {
     await expect(field(canvasElement)).toHaveValue('');
-    await expect(
-      within(canvasElement).getByText('Ids resolve exactly · names and emails search the org'),
-    ).toBeInTheDocument();
+    await expect(field(canvasElement)).toHaveAttribute(
+      'placeholder',
+      'Search groups, apps, users, rules, etc.',
+    );
   },
 };
 
@@ -304,14 +311,16 @@ export const NameSearch: Story = {
 /**
  * A well-formed id **while still typing**. Every intermediate prefix of an id
  * matches nothing, so searching one would spend a request per keystroke to be
- * told so; the bar waits for Enter and says as much.
+ * told so; the bar waits for Enter.
+ *
+ * The two absences below are the whole story, and they are what it always
+ * actually pinned — the copy that used to say so out loud went with the helper
+ * line.
  */
 export const IdTypedNotYetSubmitted: Story = {
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
     await userEvent.type(field(canvasElement), ENG_ID);
 
-    await expect(await canvas.findByText('Press Enter to open this id')).toBeInTheDocument();
     await expect(ops.searchGroups).not.toHaveBeenCalled();
     await expect(ops.getGroupById).not.toHaveBeenCalled();
   },

@@ -67,10 +67,16 @@ export interface OrgSnapshotCardProps {
 /**
  * The number column.
  *
- * A fixed `2.6ch` of `tabular-nums` so the left edge of the sentences beside it
+ * At least `2.6ch` of `tabular-nums` so the left edge of the sentences beside it
  * never twitches between a `4` and a `214` — and so an em dash occupies the same
  * space a number would, which is what lets a missing value sit in the list
- * without the row looking broken.
+ * without the row looking broken. A minimum rather than a fixed width: a
+ * four-digit org must widen the column, not spill out of it.
+ *
+ * Sized and centred to the full height of the two lines beside it, so the number
+ * reads as the row's subject rather than as a caption sitting on the first line.
+ * `self-stretch` takes the height from the text block rather than asserting one,
+ * so the column stays matched if a note ever wraps to a second line.
  *
  * A missing value dims to `text-neutral-400` at normal weight: the row is still
  * there and still readable, but nothing about it competes with the findings that
@@ -79,11 +85,15 @@ export interface OrgSnapshotCardProps {
 const FigureNumber: React.FC<{ value: number | null }> = ({ value }) => (
   <span
     aria-hidden={value === null ? 'true' : undefined}
-    className={`w-[2.6ch] shrink-0 text-right text-xl leading-tight tabular-nums ${
-      value === null ? 'font-normal text-neutral-400' : 'font-semibold text-neutral-900'
-    }`}
+    className="flex shrink-0 items-center self-stretch"
   >
-    {value === null ? '—' : value.toLocaleString()}
+    <span
+      className={`min-w-[2.6ch] text-right text-3xl leading-none tabular-nums ${
+        value === null ? 'font-normal text-neutral-400' : 'font-semibold text-neutral-900'
+      }`}
+    >
+      {value === null ? '—' : value.toLocaleString()}
+    </span>
   </span>
 );
 
@@ -146,7 +156,7 @@ const Finding: React.FC<{
     // list that would disagree with the figure is the dead control ADR-0039
     // bans, wearing a different hat.
     return (
-      <li className="flex items-start gap-2.5 bg-neutral-50 px-3 py-2.5">
+      <li className="flex items-stretch gap-3 bg-neutral-50 px-3 py-2.5">
         <FigureNumber value={null} />
         <FindingLines subCount={subCount} id={labelId} />
       </li>
@@ -154,7 +164,7 @@ const Finding: React.FC<{
   }
 
   return (
-    <li className="relative flex items-start gap-2.5 px-3 py-2.5 transition-colors duration-(--dur-instant) hover:bg-neutral-50">
+    <li className="relative flex items-stretch gap-3 px-3 py-2.5 transition-colors duration-(--dur-instant) hover:bg-neutral-50">
       <StretchedButton
         label="Open the filtered list"
         describedBy={labelId}
@@ -162,7 +172,7 @@ const Finding: React.FC<{
       />
       <FigureNumber value={subCount.value} />
       <FindingLines subCount={subCount} id={labelId} />
-      <Icon type="chevron-right" size="xs" className="mt-1.5 shrink-0 text-neutral-400" />
+      <Icon type="chevron-right" size="xs" className="shrink-0 self-center text-neutral-400" />
     </li>
   );
 };
