@@ -1,6 +1,11 @@
 # ADR-0028: Icon-rail navigation
 
 - Status: Accepted
+- Amended by: [ADR-0049](./0049-one-slab-and-a-sequenced-indicator.md). The
+  "measured, not transitioned" rationale below still holds _while the label is
+  moving_ — the indicator is now transitioned only during a first phase in which the
+  labels are deliberately frozen, so it never chases a moving target. The rail also
+  loses its `border-b` there, as part of merging the top chrome into one slab.
 - Date: 2026-08-04
 - Relates to: `docs/components.md` (`Tabs`, "documented raw-control exceptions"),
   `docs/motion.md`, ADR-0008 (stable layout, values swap in place)

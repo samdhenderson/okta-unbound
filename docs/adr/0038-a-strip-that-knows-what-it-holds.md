@@ -2,6 +2,11 @@
 
 - Status: Accepted
 - Date: 2026-08-20
+- Amended by: [ADR-0048](./0048-spacing-roles-and-derived-density.md), which makes
+  `--merge-range` and `--merge-bleed` density-aware. This ADR's §4 invariant —
+  `--merge-range` must stay shorter than the gap the strip closes — still holds, but
+  that gap stopped being a fixed 24px once the tab roots adopted `--sp-gutter`, and the
+  measured 16px was larger than the compact-density gutter
 - Amends: [ADR-0030](./0030-detail-page-layout-contract.md) §2, which says _where_ an
   action lives but never _how many_ fit; [ADR-0032](./0032-the-sticky-stack-and-a-header-that-owns-identity.md)
   §3a, whose merge was correct in description and inoperative in fact

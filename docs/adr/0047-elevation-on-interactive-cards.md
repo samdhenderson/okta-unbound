@@ -44,17 +44,18 @@ surface floats. The rule stays for cards you cannot click.
 elevation.** This is now _aligned with_ Odyssey rather than a departure from it, and the
 ADR should be read as a correction toward the system we mirror.
 
-Two tokens, taken from Odyssey rather than invented:
+One token, taken from Odyssey rather than invented:
 
 ```css
 --lift-1: 0 1px 2px 0 rgb(39 39 39 / 0.07); /* Odyssey DepthLow */
---lift-2:
-  0 1px 4px 0 rgb(39 39 39 / 0.08), 0 4px 6px 0 rgb(39 39 39 / 0.01),
-  0 5px 15px 0 rgb(39 39 39 / 0.05); /* Odyssey DepthMedium */
 ```
 
-`DepthHigh` is deliberately **not** adopted. It is built for a full-page console, and it
-is heavier than anything a 360px side panel needs.
+`DepthMedium` and `DepthHigh` are deliberately **not** adopted. Both are built for a
+full-page console and are heavier than anything a 360px side panel needs. A second step
+was drafted and then removed before this ADR was accepted: nothing consumed it, and an
+elevation scale with one real user and one aspirational rung is just a dead token that
+`knip` cannot see, since it does not read CSS custom properties. If a deeper step is ever
+genuinely needed it is one line, taken from the same source.
 
 ### The shadow is cross-faded, never transitioned
 

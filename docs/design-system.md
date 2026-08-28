@@ -149,6 +149,10 @@ without a prop, a setting, or a second code path:
 | `--sp-inline`               | Between chips, pills, icons | `gap-(--sp-inline)`   |
 | `--sp-field`                | Between form controls       | `gap-(--sp-field)`    |
 
+`--sp-gutter` covers both axes — a tab root is `px-(--sp-gutter) py-(--sp-gutter)`.
+There is no separate vertical role; `gutter` and `card` resolve to the same value at
+every density, so a fourth would render identically and only invite disagreement.
+
 Three density scopes — `compact` below 400px, `default` 400–559, `comfortable` at 560+.
 **Density is derived from panel width, never chosen**, and it changes space only: type
 never scales. `[data-density='…']` pins a scope for a story or a test and wins over the

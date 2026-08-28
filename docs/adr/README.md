@@ -55,6 +55,7 @@ convention; the specs in [`../`](../README.md) describe the _what_.
 | [0046](./0046-the-response-layer.md)                                 | The response layer                                                                | Accepted | `--dur-press` (60ms, below `--dur-instant`) + `--ease-press`; `.press`/`.press-subtle`. Expressive on input, restrained ambient.      |
 | [0047](./0047-elevation-on-interactive-cards.md)                     | Elevation on interactive cards, and the premise that was wrong                    | Accepted | "Okta doesn't shadow cards" was false — Odyssey's `Card` ships `DepthMedium`. Rule narrowed to static cards; `--lift-*` from Odyssey. |
 | [0048](./0048-spacing-roles-and-derived-density.md)                  | Spacing roles, and a density nobody chooses                                       | Accepted | Six semantic `--sp-*` roles over three width-derived scopes. Media query, not container query — the panel root _is_ the viewport.     |
+| [0049](./0049-one-slab-and-a-sequenced-indicator.md)                 | One slab, and an indicator that slides before the label moves                     | Accepted | Amends 0028. Four band rules → one on the sticky `<nav>`. Indicator slides while labels are frozen, then is measured. New `Tooltip`.  |
 
 ## Adding an ADR
 

@@ -54,6 +54,12 @@ would just be Tailwind's scale renamed, and would drift again the moment two com
 disagreed about whether a card gap is `3` or `4`. A role has one right answer per
 density, and a reviewer can see a wrong one.
 
+`--sp-gutter` covers the panel's padding on **both** axes. There is deliberately no
+separate vertical role: `gutter` and `card` resolve to identical pixel values at every
+density, so a fourth structural role would be a distinction with no rendered difference
+and one more thing for two components to disagree about. A tab root is
+`px-(--sp-gutter) py-(--sp-gutter)`.
+
 Structural roles (`gutter`, `rung`, `card`) snap to a 4px grid. The fine roles keep 2px
 granularity: `--sp-row-y: 10px` and `--sp-inline: 6px` are load-bearing half-steps that
 Tailwind itself ships (`py-2.5`, `gap-1.5`), and rounding them to 4px collapses
@@ -103,6 +109,33 @@ consumed through arbitrary-value shorthands (`px-(--sp-gutter)`), which do not t
 namespace-based utility generation, so a plain `@theme` block would tree-shake it out of
 production while compiling fine in dev. Verified against a real production build: all
 seven roles are present in the emitted CSS.
+
+### The docking band's geometry had to follow
+
+ADR-0038 pins `--merge-range` — the scroll distance over which a sticky `ActionBar`
+merges into the header — with an explicit invariant: it **must be shorter than the gap
+the strip closes**, or the merge is already part-done before the page has moved and the
+strip can never show its resting shape. That gap is the tab column's top padding, and
+the ADR's measured value (16px) was calibrated against a fixed `py-6` of 24px.
+
+Converting the tab roots to `py-(--sp-gutter)` makes that gap **12px at compact
+density** — smaller than the 16px range. Below 400px the strip would have rested
+partially merged at scroll zero: exactly the failure ADR-0038 exists to prevent.
+
+`--merge-range` and `--merge-bleed` therefore move under the density scopes too:
+
+- `--merge-bleed` now _derives_ from `--sp-gutter` rather than restating it as a
+  literal. It was documented as "the tab content wrapper's `px-6`", which silently
+  stopped being true at every density the moment the wrapper became a role.
+- `--merge-range` scales with the gutter at the 2/3 ratio the ADR-0038 measurements were
+  taken at (16/24) — 8px / 10px / 13px against gutters of 12 / 16 / 20 — rather than a
+  fresh guess. The invariant holds at all three.
+
+This is worth stating plainly because **no test catches it.** jsdom and the headless
+story runner load no CSS, ADR-0038 itself notes the sticky mechanism is unverifiable in
+jsdom, and ADR-0023 bans the class assertions that might otherwise have flagged the
+change. It was found by tracing the geometry by hand. Any future change to a gutter has
+to re-check this invariant the same way.
 
 ## Consequences
 

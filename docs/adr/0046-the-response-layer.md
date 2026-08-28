@@ -57,9 +57,23 @@ Two component classes in `tailwind.css` carry it to call sites:
 
 - `.press` — `scale(var(--press-scale))` on `:active`, defaulting to `0.955`, skipping
   `:disabled` and `[aria-disabled='true']`.
-- `.press-subtle` — overrides `--press-scale` to `0.995`. A row is a much wider target
-  than a button, so the same ratio reads as a lurch; the subtle value travels roughly
-  the same number of pixels at the edge.
+- `.press-subtle` — the same behaviour with `--press-scale` flattened to `0.995`. A row
+  is a much wider target than a button, so the button ratio reads as a lurch; the subtle
+  value travels roughly the same number of pixels at the edge.
+
+**Both classes are self-sufficient.** `.press-subtle` alone behaves like `.press` with a
+flatter scale; `press press-subtle` together is equivalent. The first cut of this got it
+wrong — the `:active` transform lived on `.press` only and `.press-subtle` merely
+overrode a custom property, so `.press-subtle` alone set a variable no rule read and did
+nothing at all. Eight call sites across five directories adopted it that way before the
+gap was found, and **not one of them could have failed a gate**: ADR-0023 bans asserting
+on class names and the headless story runner loads no CSS, so an inert utility class is
+invisible to every check this repo runs. It was caught by driving a real browser and
+watching for the transform on pointer-down.
+
+The general lesson, worth carrying to the next component class: a class whose only job is
+to set a custom property consumed by a _different_ class is a footgun, because the
+failure mode is silence.
 
 **The scale is layered on top of Odyssey's colour step, not instead of it.** Components
 gain both: the darker `active:` background Odyssey specifies and never got implemented
