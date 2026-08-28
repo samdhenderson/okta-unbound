@@ -27,6 +27,27 @@
  * The radius, the resting border, the hover border and the transition are fixed.
  * A row that wants a different hover colour is the problem this component exists
  * to solve, so there is no prop for it.
+ *
+ * ## Response motion (ADR-0046)
+ *
+ * A row whose `as`/`onClick` makes it the click target itself carries `.press`
+ * `.press-subtle` — a `scale(.995)` depress, flattened from a button's `.955`
+ * because a row is a much wider target and the same ratio would read as a lurch.
+ * A row activated instead by an internal `StretchedButton` (the invisible
+ * full-bleed overlay pattern — see {@link sidepanel/components/shared/StretchedButton})
+ * does not get it here: the overlay has no visible box of its own to depress, and
+ * that pattern already carries its own focus ring, matching how `interactive`
+ * (below) has always excluded it. `flash` is the other half of response motion —
+ * a one-shot `--dur-tell` background/border confirmation for a row that just
+ * committed a change optimistically.
+ *
+ * ## Spacing (ADR-0048)
+ *
+ * `density`'s two padding recipes resolve against the `--sp-*` spacing roles
+ * rather than fixed pixel values, so a row's padding still tightens at 360px and
+ * relaxes at 720px exactly like every other spacing-role consumer — see
+ * {@link ListRowDensity} for why the prop survives that system rather than being
+ * replaced by it.
  */
 import React from 'react';
 
@@ -36,6 +57,15 @@ import React from 'react';
  * `compact` is a dense scanning list (`GroupListItem`, `MemberRow`); `comfortable`
  * is a rich card with badges and a meta line (`AppListItem`, `RuleCard`,
  * `PolicyCard`). Rows that previously sat between the two round to the nearer one.
+ *
+ * This is a **content-density** selector, not a width one — it survives the
+ * `--sp-*` spacing system (ADR-0048) rather than being replaced by it. "This list
+ * is for dense scanning" versus "these are rich cards" is a property of what the
+ * row holds, and the panel's measured width cannot know that; the two systems
+ * compose instead of competing. `compact` resolves to the dedicated row role
+ * (`--sp-row-y`/`--sp-row-x`) and `comfortable` reuses the card role (`--sp-card`)
+ * a rich row already resembles — both still move together as the panel resizes,
+ * so there is exactly one padding system, not two running in parallel.
  */
 export type ListRowDensity = 'compact' | 'comfortable';
 
@@ -52,8 +82,8 @@ export type ListRowState = 'default' | 'selected' | 'highlighted';
 export type ListRowAs = 'div' | 'li' | 'a' | 'button';
 
 const densityClasses: Record<ListRowDensity, string> = {
-  compact: 'px-3 py-2',
-  comfortable: 'p-4',
+  compact: 'py-(--sp-row-y) px-(--sp-row-x)',
+  comfortable: 'p-(--sp-card)',
 };
 
 const stateClasses: Record<ListRowState, string> = {
@@ -62,12 +92,33 @@ const stateClasses: Record<ListRowState, string> = {
   highlighted: 'border-primary bg-primary-light ring-2 ring-primary ring-offset-2',
 };
 
+/** The chrome every row shares — radius and border only; the transition is picked below. */
+const baseClasses = 'rounded-md border';
+
 /**
- * The chrome every row shares. `transition-colors` (not `transition-all`) so a
- * row's hover animates its border and nothing else — several rows previously used
- * `transition-all` and animated layout properties by accident.
+ * A static row's hover-border transition. `transition-colors` (not
+ * `transition-all`) so hover animates the border and nothing else — several rows
+ * previously used `transition-all` and animated layout properties by accident.
+ *
+ * Interactive rows use `.press` instead (below), never both: `.press` already
+ * transitions `border-color`/`background-color`/`color` at the same
+ * `--dur-instant`, and a Tailwind `transition-*` utility sits in a later cascade
+ * layer than `.press`'s `@layer components` rule, so keeping this utility on an
+ * interactive row would silently win over `.press`'s tuned `:active` timing
+ * (`--dur-press` in, `--dur-quick`/`--ease-affirm` out) rather than layering with it.
  */
-const baseClasses = 'rounded-md border transition-colors duration-(--dur-instant)';
+const restingTransitionClass = 'transition-colors duration-(--dur-instant)';
+
+/**
+ * Response motion for a whole-row activation (ADR-0046) — `.press` for the
+ * depress mechanics, `.press-subtle` to flatten its scale from `.955` to `.995`,
+ * since a row is a much wider target than a button and the same ratio reads as a
+ * lurch. Applied only when the row is itself the click target — the same
+ * `interactive` check computed in the component body below — not when activation
+ * comes from an internal `StretchedButton`, which is invisible and has no box of
+ * its own to visibly depress.
+ */
+const pressClasses = 'press press-subtle';
 
 /**
  * The one hover treatment, and the reason `state` gates it.
@@ -228,6 +279,7 @@ const ListRow: React.FC<ListRowProps> = ({
 
   const classes = [
     baseClasses,
+    interactive ? pressClasses : restingTransitionClass,
     hasBody ? 'overflow-hidden' : densityClasses[density],
     stateClasses[state],
     state === 'default' ? hoverBorderClass : '',

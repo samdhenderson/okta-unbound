@@ -4,6 +4,11 @@
  *
  * A two-state toggle button that reflects its state as `aria-pressed`. For
  * icon-only buttons use `IconButton`; for text CTAs use `Button`.
+ *
+ * Carries the shared `.press` class (response motion, ADR-0046) — a `scale(.955)`
+ * depress on `:active` — plus `active:brightness-90` for a third, darker
+ * background step beyond hover, and a focus ring matching `Button`/`IconButton`
+ * (this primitive previously had neither).
  */
 import React from 'react';
 
@@ -46,7 +51,7 @@ const FilterPill: React.FC<FilterPillProps> = ({
     title={title}
     aria-pressed={active}
     disabled={disabled}
-    className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+    className={`px-2.5 py-1.5 rounded-md text-xs font-medium press active:brightness-90 focus:outline-2 focus:outline-offset-2 focus:outline-primary disabled:opacity-50 disabled:cursor-not-allowed ${
       active ? 'bg-primary text-white' : inactiveClassName
     }`}
   >

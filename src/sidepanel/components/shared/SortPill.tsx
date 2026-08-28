@@ -46,7 +46,7 @@ function SortPill<T extends string>({
         {label}
         {active && (
           <svg
-            className={`w-3 h-3 transition-transform ${descending ? 'rotate-180' : ''}`}
+            className={`w-3 h-3 transition-transform duration-(--dur-instant) ${descending ? 'rotate-180' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"

@@ -1,7 +1,8 @@
 /**
  * @module sidepanel/hooks/useCountUp
  * @description Interpolates a metric towards its new value over `--dur-tell`, so a
- * stat card *counts to* its number instead of snapping to it.
+ * stat card *counts to* its number instead of snapping to it — and flags the brief
+ * window right after, so the card can tint the settled figure (ADR-0046).
  *
  * A number that appears fully formed reads as "this was always here"; a number that
  * counts up reads as "this just resolved". That is the only reason this exists —
@@ -59,29 +60,52 @@ export interface UseCountUpOptions {
   enabled?: boolean;
 }
 
+/** What {@link useCountUp} returns each render. */
+export interface UseCountUpResult {
+  /** The value to display this frame. */
+  value: number;
+  /**
+   * True for `--dur-tell` immediately after `target` changes to a new value —
+   * never on the initial mount, since nothing "just resolved" against a number
+   * that has not been shown before. A card renders this as a brief
+   * `text-success-text` tint that eases back to its resting colour over the same
+   * `--dur-tell` (`transition-colors duration-(--dur-tell)`), so a metric that
+   * silently swapped instead visibly tells you it changed. Mirrors `enabled`,
+   * not `target`'s own animation: a card that opted out of counting the digits
+   * (`enabled: false`) opts out of this tint too, since both answer the same
+   * question — "should this card narrate its own changes?"
+   */
+  justResolved: boolean;
+}
+
 /**
- * Count a metric up to `target` over `--dur-tell` on an ease-out curve.
+ * Count a metric up to `target` over `--dur-tell` on an ease-out curve, and flag
+ * the brief window right after it lands.
  *
- * The returned value is always an integer and always lands exactly on `target`.
- * A new animation starts only when `target` changes, so a component that
- * re-renders for unrelated reasons (a progress tick, a parent state change) shows
- * a perfectly still number.
+ * `value` is always an integer and always lands exactly on `target`. A new
+ * animation starts only when `target` changes, so a component that re-renders for
+ * unrelated reasons (a progress tick, a parent state change) shows a perfectly
+ * still number.
  *
- * Render the result with `tabular-nums` — proportional digits change width as they
+ * Render `value` with `tabular-nums` — proportional digits change width as they
  * count, which makes the card twitch.
  *
  * @param target - The value to count towards. Intermediate frames are rounded; the
  * final frame is the exact `target`.
  * @param options - See {@link UseCountUpOptions}.
- * @returns The value to display this frame.
+ * @returns See {@link UseCountUpResult}.
  *
  * @example
  * ```tsx
- * const shown = useCountUp(members.length);
- * return <p className="tabular-nums">{shown.toLocaleString()}</p>;
+ * const { value, justResolved } = useCountUp(members.length);
+ * return (
+ *   <p className={`tabular-nums transition-colors duration-(--dur-tell) ${justResolved ? 'text-success-text' : ''}`}>
+ *     {value.toLocaleString()}
+ *   </p>
+ * );
  * ```
  */
-export function useCountUp(target: number, options: UseCountUpOptions = {}): number {
+export function useCountUp(target: number, options: UseCountUpOptions = {}): UseCountUpResult {
   const { enabled = true } = options;
   const reduced = useReducedMotion();
   const animates = enabled && !reduced && motionAvailable();
@@ -90,6 +114,7 @@ export function useCountUp(target: number, options: UseCountUpOptions = {}): num
   // the first painted frame is already the real number.
   const [display, setDisplay] = useState(() => (animates ? 0 : target));
   const [seenTarget, setSeenTarget] = useState(target);
+  const [justResolved, setJustResolved] = useState(false);
 
   // Mirrors `display` so the animation effect can read where the count is *now*
   // without depending on it — a `display` dependency would restart it every frame.
@@ -104,6 +129,9 @@ export function useCountUp(target: number, options: UseCountUpOptions = {}): num
   if (target !== seenTarget) {
     setSeenTarget(target);
     if (!animates) setDisplay(target);
+    // Only a real change tells; the first render (where `seenTarget` already
+    // equals `target`, so this branch never runs) has nothing to compare against.
+    if (enabled) setJustResolved(true);
   }
 
   // Declared before the animation effect so that effect always sees the value that
@@ -140,5 +168,17 @@ export function useCountUp(target: number, options: UseCountUpOptions = {}): num
     return () => cancelAnimationFrame(frame);
   }, [target, animates]);
 
-  return display;
+  // Clears the tint `COUNT_UP_MS` after it was set, independent of whether the
+  // digits themselves animated — an instant swap still gets the same window to
+  // tell the user it changed. A fresh `target` change while the window is still
+  // open keeps the existing timer rather than restarting it; both end at
+  // "roughly `--dur-tell` after the most recent change", which is the effect this
+  // is standing in for.
+  useEffect(() => {
+    if (!justResolved) return undefined;
+    const timer = setTimeout(() => setJustResolved(false), COUNT_UP_MS);
+    return () => clearTimeout(timer);
+  }, [justResolved]);
+
+  return { value: display, justResolved };
 }

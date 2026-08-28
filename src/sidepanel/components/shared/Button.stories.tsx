@@ -98,6 +98,16 @@ export const Focus: Story = {
   parameters: { pseudo: { focusVisible: true } },
 };
 
+/**
+ * Pressed state (forced via the pseudo-states addon): `.press`'s `scale(.955)`
+ * depress plus `active:brightness-90`, the third, darker background step beyond
+ * hover (ADR-0046).
+ */
+export const Pressed: Story = {
+  args: { variant: 'primary' },
+  parameters: { pseudo: { active: true } },
+};
+
 /** The three size steps side by side. */
 export const Sizes: Story = {
   render: (args) => (

@@ -35,6 +35,15 @@
  *   </div>
  * </div>
  * ```
+ *
+ * ## Response motion (ADR-0046)
+ *
+ * The overlay paints nothing, so the shared `.press` scale — built for a surface
+ * with a visible box to depress — would be a no-op here. Instead the button
+ * itself gains a faint `--color-neutral-900` wash on `:active`, a "state layer"
+ * over the whole card rather than a transform on an invisible one; it eases in and
+ * out over `--dur-instant` and, like `.press`, fires only on the user's own
+ * pointer-down.
  */
 import React from 'react';
 
@@ -76,7 +85,7 @@ const StretchedButton: React.FC<StretchedButtonProps> = ({
     title={title ?? label}
     onClick={onClick}
     disabled={disabled}
-    className={`absolute inset-0 z-0 h-full w-full rounded-md focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed ${className}`}
+    className={`absolute inset-0 z-0 h-full w-full rounded-md transition-colors duration-(--dur-instant) active:bg-neutral-900/5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed ${className}`}
   />
 );
 

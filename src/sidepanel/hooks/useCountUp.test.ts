@@ -1,15 +1,19 @@
 /**
- * Tests for useCountUp — the stat-card "count to" interpolator.
+ * Tests for useCountUp — the stat-card "count to" interpolator, and the
+ * `justResolved` flag a card renders as a brief success tint (ADR-0046).
  *
- * Two shapes are exercised. First the **instant** path, which is what jsdom gets for
- * free (no stylesheet, so the `--dur-tell` capability probe finds nothing) and what
- * every other unit test in the repo therefore relies on: the hook must yield the
- * final number in the same render the target changes, not one commit later. Then the
- * **animated** path, enabled by declaring the token on `document.documentElement`
- * and driven by a hand-pumped `requestAnimationFrame`, to pin that the count starts
- * at zero, moves monotonically, lands exactly on the target, and — the rule that
- * keeps the Overview from looking like a slot machine — does not restart when the
- * component re-renders with an unchanged target.
+ * Three shapes are exercised. First the **instant** path, which is what jsdom gets
+ * for free (no stylesheet, so the `--dur-tell` capability probe finds nothing) and
+ * what every other unit test in the repo therefore relies on: the hook must yield
+ * the final number in the same render the target changes, not one commit later.
+ * Then the **animated** path, enabled by declaring the token on
+ * `document.documentElement` and driven by a hand-pumped `requestAnimationFrame`,
+ * to pin that the count starts at zero, moves monotonically, lands exactly on the
+ * target, and — the rule that keeps the Overview from looking like a slot machine —
+ * does not restart when the component re-renders with an unchanged target. Then
+ * **`justResolved`**, driven by a real (faked) timer rather than the rAF clock,
+ * since it clears on a plain `setTimeout` independent of whether the digits
+ * themselves animate.
  */
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
@@ -60,17 +64,17 @@ describe('useCountUp', () => {
   describe('instant path', () => {
     it('returns the target on the first render when the motion scale is absent', () => {
       const { result } = renderHook(() => useCountUp(1250));
-      expect(result.current).toBe(1250);
+      expect(result.current.value).toBe(1250);
     });
 
     it('tracks a changed target in the same render, not a commit later', () => {
       const { result, rerender } = renderHook(({ n }) => useCountUp(n), {
         initialProps: { n: 3 },
       });
-      expect(result.current).toBe(3);
+      expect(result.current.value).toBe(3);
 
       rerender({ n: 9 });
-      expect(result.current).toBe(9);
+      expect(result.current.value).toBe(9);
     });
 
     it('stays instant when disabled even though the motion scale is loaded', () => {
@@ -79,7 +83,7 @@ describe('useCountUp', () => {
 
       const { result } = renderHook(() => useCountUp(42, { enabled: false }));
 
-      expect(result.current).toBe(42);
+      expect(result.current.value).toBe(42);
       expect(frames).toHaveLength(0);
     });
 
@@ -90,7 +94,7 @@ describe('useCountUp', () => {
 
       const { result } = renderHook(() => useCountUp(42));
 
-      expect(result.current).toBe(42);
+      expect(result.current.value).toBe(42);
       expect(frames).toHaveLength(0);
     });
   });
@@ -103,23 +107,23 @@ describe('useCountUp', () => {
 
     it('starts at zero and lands exactly on the target', () => {
       const { result } = renderHook(() => useCountUp(100));
-      expect(result.current).toBe(0);
+      expect(result.current.value).toBe(0);
 
       advance(250);
-      expect(result.current).toBeGreaterThan(0);
-      expect(result.current).toBeLessThan(100);
+      expect(result.current.value).toBeGreaterThan(0);
+      expect(result.current.value).toBeLessThan(100);
 
       advance(250);
-      expect(result.current).toBe(100);
+      expect(result.current.value).toBe(100);
     });
 
     it('counts monotonically upwards', () => {
       const { result } = renderHook(() => useCountUp(1000));
-      const seen: number[] = [result.current];
+      const seen: number[] = [result.current.value];
 
       for (let i = 0; i < 5; i += 1) {
         advance(100);
-        seen.push(result.current);
+        seen.push(result.current.value);
       }
 
       expect(seen[0]).toBe(0);
@@ -135,10 +139,10 @@ describe('useCountUp', () => {
       });
 
       advance(500);
-      expect(result.current).toBe(100);
+      expect(result.current.value).toBe(100);
 
       rerender({ n: 100 });
-      expect(result.current).toBe(100);
+      expect(result.current.value).toBe(100);
       expect(frames).toHaveLength(0);
     });
 
@@ -148,16 +152,16 @@ describe('useCountUp', () => {
       });
 
       advance(500);
-      expect(result.current).toBe(100);
+      expect(result.current.value).toBe(100);
 
       act(() => {
         rerender({ n: 200 });
       });
       // Still showing the old number until the next frame — never a jump back to 0.
-      expect(result.current).toBe(100);
+      expect(result.current.value).toBe(100);
 
       advance(500);
-      expect(result.current).toBe(200);
+      expect(result.current.value).toBe(200);
     });
 
     it('stops animating and cancels its frame on unmount', () => {
@@ -168,6 +172,71 @@ describe('useCountUp', () => {
       unmount();
 
       expect(cancel).toHaveBeenCalled();
+    });
+  });
+
+  describe('justResolved', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('is false on the initial render — nothing has "just resolved" against a first number', () => {
+      const { result } = renderHook(() => useCountUp(1250, { enabled: true }));
+      expect(result.current.justResolved).toBe(false);
+    });
+
+    it('turns true the render a target changes, and clears itself after --dur-tell', () => {
+      const { result, rerender } = renderHook(({ n }) => useCountUp(n, { enabled: true }), {
+        initialProps: { n: 100 },
+      });
+      expect(result.current.justResolved).toBe(false);
+
+      rerender({ n: 200 });
+      expect(result.current.justResolved).toBe(true);
+
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(result.current.justResolved).toBe(false);
+    });
+
+    it('never turns true for a card that opted out via enabled: false', () => {
+      const { result, rerender } = renderHook(({ n }) => useCountUp(n, { enabled: false }), {
+        initialProps: { n: 100 },
+      });
+
+      rerender({ n: 200 });
+      expect(result.current.justResolved).toBe(false);
+
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(result.current.justResolved).toBe(false);
+    });
+
+    it('does not restart its window on a second change while the first is still open', () => {
+      const { result, rerender } = renderHook(({ n }) => useCountUp(n, { enabled: true }), {
+        initialProps: { n: 100 },
+      });
+
+      rerender({ n: 200 });
+      expect(result.current.justResolved).toBe(true);
+
+      act(() => {
+        vi.advanceTimersByTime(250);
+      });
+      rerender({ n: 300 });
+      expect(result.current.justResolved).toBe(true);
+
+      // The window the *first* change opened still closes on schedule.
+      act(() => {
+        vi.advanceTimersByTime(250);
+      });
+      expect(result.current.justResolved).toBe(false);
     });
   });
 });

@@ -32,7 +32,10 @@ const meta = {
   argTypes: {
     children: { description: "The row's content, owned by the feature." },
     density: {
-      description: 'Padding scale: `compact` (px-3 py-2) or `comfortable` (p-4).',
+      description:
+        'Content-density selector, not a viewport one: `compact` resolves the row ' +
+        'spacing role (`--sp-row-y`/`--sp-row-x`) and `comfortable` the card role ' +
+        '(`--sp-card`) — both still move together as the panel resizes (ADR-0048).',
     },
     state: { description: 'Resting appearance: `default`, `selected`, or `highlighted`.' },
     flash: { description: 'One-shot success confirmation via `animate-affirm-flash`.' },
@@ -77,8 +80,10 @@ export const Default: Story = {
 /**
  * Both densities together — the comparison that makes drift visible.
  *
- * These are the only two values. Rows that previously sat between them (`p-3`,
- * `px-2.5 py-1.5`, `p-5`) round to the nearer one.
+ * These are the only two values, and both resolve against the `--sp-*` spacing
+ * roles (ADR-0048) rather than a fixed pixel value, so this comparison still
+ * holds at every panel width — `compact` just always reads tighter than
+ * `comfortable`, whichever density scope the panel is currently in.
  */
 export const Densities: Story = {
   args: {
@@ -87,10 +92,10 @@ export const Densities: Story = {
   render: () => (
     <div className="space-y-3">
       <ListRow density="compact">
-        <RowBody title="compact — px-3 py-2" meta="Dense scanning list" />
+        <RowBody title="compact — py-(--sp-row-y) px-(--sp-row-x)" meta="Dense scanning list" />
       </ListRow>
       <ListRow density="comfortable">
-        <RowBody title="comfortable — p-4" meta="Rich card with badges and a meta line" />
+        <RowBody title="comfortable — p-(--sp-card)" meta="Rich card with badges and a meta line" />
       </ListRow>
     </div>
   ),
@@ -123,7 +128,9 @@ export const States: Story = {
 };
 
 /**
- * Interactive rows carry a pointer cursor and a focus ring.
+ * Interactive rows carry a pointer cursor, a focus ring, and — since ADR-0046 —
+ * `.press`/`.press-subtle`: a `scale(.995)` depress on `:active`, flattened from a
+ * button's `.955` because a full-width row reads a lurch at the same ratio.
  *
  * Tab to this row: the ring is `focus-visible`, so it appears for keyboard users
  * and not on click. This is the affordance five components were missing entirely
@@ -143,6 +150,20 @@ export const Interactive: Story = {
       </ListRow>
     </div>
   ),
+};
+
+/**
+ * Pressed state of an interactive row (forced via the pseudo-states addon):
+ * `.press-subtle`'s `scale(.995)` depress (ADR-0046).
+ */
+export const Pressed: Story = {
+  args: {
+    children: <RowBody title="Pressed" meta="scale(.995) — subtle, for a wide target" />,
+  },
+  render: (args) => (
+    <ListRow {...args} as="button" onClick={() => {}} ariaLabel="Open Engineering" />
+  ),
+  parameters: { pseudo: { active: true } },
 };
 
 /**
