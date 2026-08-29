@@ -35,6 +35,29 @@ import { FPS, startScreencast } from './screencast.mjs';
 import { PANEL, RENDER_SCALE, RETIME, stageInit, verifyStage } from './stage.mjs';
 import { READY, SCROLL_ROOT } from './selectors.mjs';
 
+/**
+ * How long the panel must hold still before the camera rolls, and how long to
+ * wait for that.
+ *
+ * The quiet period is longer than the 220ms a per-beat wait uses because this
+ * one is covering a font swap and everything that re-measures behind it, and it
+ * is paid once per chapter rather than once per beat. The budget is sized to
+ * fail on a genuinely unsettleable panel rather than to accommodate a slow one:
+ * the shell's own settle is about 780ms, so 4s is room for it to roughly
+ * quadruple before anyone has to look at this number again.
+ */
+const PREROLL_QUIET_MS = 300;
+/**
+ * Ceiling on waiting for the shell's own animations, in ms.
+ *
+ * A cap and not a timeout to fail on: an animation that never finishes is a
+ * product defect worth filming rather than a reason to refuse the take, and the
+ * quiet gate immediately after this is what actually decides whether the panel
+ * is fit to roll on.
+ */
+const PREROLL_ANIMATION_CAP_MS = 3000;
+const PREROLL_BUDGET_MS = 4000;
+
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(`--${name}`);
 const filters = argv.filter((a) => !a.startsWith('--'));
@@ -179,11 +202,55 @@ async function filmChapter(browser, url, chapter) {
       throw new Error(`stage is wrong:\n    - ${stage.problems.join('\n    - ')}`);
     }
 
-    // Settle before rolling, so the clip opens on a still panel rather than on
-    // the tail of the stagger the navigation kicked off.
-    await hold(600);
-
     recorder = await startScreencast(page, clip);
+
+    // Settle AFTER rolling, and finish the shell's animations before trusting
+    // the fact that it is still. Both halves are load-bearing.
+    //
+    // Every chapter used to open on the same three or four undeclared shifts of
+    // 3 to 12px. Identical magnitudes across chapters with different first
+    // actions, because the mover is the shell: `Tabs` runs the rail's active tab
+    // through a two-phase sequence, sliding the underline and then unfurling the
+    // label behind a `delay-(--dur-move)`.
+    //
+    // A quiet gate cannot see through that delay. The page is *genuinely* still
+    // while phase 2 waits its turn, so `settled` reports quiet, the camera rolls,
+    // and the label unfurls into the first beat. Lengthening the wait does not
+    // help and made it worse: it pushed the burst later into the clip rather
+    // than ahead of it. Stillness is not the same fact as finished, and this is
+    // the case that separates them.
+    //
+    // So the animations are awaited directly, and only then is quiet asked for.
+    // Scoped to the panel and to the document timeline: a scroll-driven
+    // `.dock-band` has a `finished` that resolves at 100% range progress and
+    // never before, which is the hang ADR-0045 refused Storybook's own
+    // `waitForAnimations` over. Filtering by timeline keeps that trap out while
+    // still covering every ordinary transition.
+    await page
+      .evaluate(async (cap) => {
+        const root = document.getElementById('storybook-root');
+        if (!root) return;
+        const running = root
+          .getAnimations({ subtree: true })
+          .filter((a) => a.timeline === document.timeline);
+        await Promise.race([
+          Promise.allSettled(running.map((a) => a.finished)),
+          new Promise((r) => setTimeout(r, cap)),
+        ]);
+      }, PREROLL_ANIMATION_CAP_MS)
+      .catch(() => {});
+
+    const preroll = await page.evaluate((opts) => window.__CAP__.settled(opts), {
+      quiet: PREROLL_QUIET_MS,
+      budget: PREROLL_BUDGET_MS,
+    });
+    if (!preroll.quiet) {
+      throw new Error(
+        `the panel never went still: ${PREROLL_BUDGET_MS}ms after the camera rolled and ` +
+          'something was still moving, so the first beat would open mid-animation',
+      );
+    }
+
     const drive = createDriver(page, { scale: RENDER_SCALE, panel: PANEL, now, trace });
 
     /** Record one named beat and the window it occupied. */
