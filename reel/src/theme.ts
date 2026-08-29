@@ -71,6 +71,4 @@ export const TYPE = {
   label: 19,
   unit: 16,
   figure: 108,
-  /** A figure printed in the margin. Smaller than `figure`: several may share a row. */
-  readout: 76,
 } as const;
