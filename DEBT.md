@@ -2567,3 +2567,53 @@ affects every scroll box in the app, on every platform.
 - **Risk:** Low. One component, one branch, already storied.
 - **Related:** ADR-0043 (no dashes on camera), ADR-0040 §7 (a collection can
   honestly be incomplete)
+
+### D-064 · A profile write invalidated the memberships and never re-read them
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useUsersTabProfileEdit.ts`,
+  `src/sidepanel/hooks/useUsersTabState.ts`
+- **Verified:** 2026-08-28 — found by filming it. The reel's Users chapter saves
+  a corrected `department`, switches to the Groups pane, and waits for the group
+  the rule then fills. The row never arrived; the capture refused the take.
+- **Problem:** `useProfileEdit` invalidates `cacheKeys.userMemberships(userId)`
+  on a confirmed save, on explicit grounds recorded in its own comment: a group
+  rule reads profile attributes, so a write to one can move a membership.
+  Invalidating was all it did. The Groups pane stays mounted (ADR-0018) and
+  holds the analysis it last loaded, so dropping the cache behind it changed
+  nothing on screen and the pane went on showing the memberships from before the
+  write until something else happened to reload them.
+
+  The remedy already existed and was already wired for the two neighbouring
+  paths. `useUsersTabState.refreshSelectedUserMemberships` invalidates _and_
+  re-loads with `{ force: true }`, and both the add-to-group flow and the
+  compare-copy flow call it. The profile-write path was the one that did not.
+
+  Worse than a stale count: the save modal's blast-radius report had, seconds
+  earlier, named the exact groups the edit would move. So the panel predicted
+  the change, wrote it, and then declined to show it arriving — which reads as
+  the prediction having been wrong.
+
+  And the reload has to be handed **the user the write produced**. Membership
+  analysis classifies each group by evaluating the org's rules against the
+  user's attributes, so a reload given the pre-write user re-fetches the right
+  groups and then decides none of them are rule-fed - the corrected attribute is
+  the very thing the rule reads. That failure is louder than the one above: the
+  group arrives carrying a `Direct` badge, which is a confident wrong answer
+  rather than a stale one. Caught in a still from the reel, where the row the
+  chapter had just narrated as a rule applying was labelled `Added directly`.
+
+- **Done when:** a confirmed save, and an undo of one, both re-read the selected
+  user's memberships, classified against the profile the write produced. Unit
+  tests cover that a `failed` outcome does not refresh at all.
+- **Risk:** Low. One callback threaded through a hook that already takes four.
+- **Related:** ADR-0035 (the three-state write), ADR-0018 (tabs stay mounted),
+  ADR-0052 (the writable demo org that made this filmable)
+
+- **Fixed:** 2026-08-28 on `feat/demo-org-writes`, as its own commit. Filed here
+  rather than folded into the reel commit that found it (CLAUDE.md), and kept in
+  the ledger because the finding is the useful part: an `invalidate` with no
+  reload beside it is invisible on a surface that does not remount, and this
+  codebase has three of them.
