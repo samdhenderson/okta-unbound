@@ -33,6 +33,21 @@ export interface Mark {
   /** Frames after the beat starts. Lets two marks share one beat. */
   offset?: number;
   /**
+   * Cue this mark at the moment a figure was read off the panel, plus `offset`.
+   *
+   * The honest way to hold a proof line back. `figure()` guarantees a number
+   * came off the panel; it cannot guarantee the frame it is printed over is
+   * showing it, and a line that states what a lookup cost while the field still
+   * reads `00` is asserting a result before the result exists. Every figure in a
+   * manifest carries the clip ms it was read at, so the frame is a lookup
+   * (`frameAtClipMs`) rather than arithmetic somebody did once - and it stays
+   * right when the beat is retimed, which the arithmetic does not.
+   *
+   * Named beats still decide *which* beat a mark belongs to. This decides where
+   * inside it.
+   */
+  after?: string;
+  /**
    * Margin copy. Bands accumulate down the chapter; they do not replace.
    *
    * A line may be a function of the capture, and a proof line usually is: that
@@ -121,9 +136,11 @@ interface CoverageRow {
  * had already finished with. A chapter now holds every scenario its tab has,
  * which is what acts are for.
  *
- * `compare`, `attributes` and `reporting` are still their own chapters and are
- * still out of rail order. They are the captures waiting to be folded into
- * Users and Groups as acts; until they are, they run where they always did.
+ * Users is the first chapter to be three acts on one tab, and the `compare`
+ * chapter is gone into it: the comparison was never a place, it was how the gap
+ * gets diagnosed. `attributes` and `reporting` are still their own chapters and
+ * still out of rail order - they are the two captures waiting to be folded into
+ * Groups the same way, and until they are they run where they always did.
  */
 export const SCRIPT: Scene[] = [
   {
@@ -147,20 +164,18 @@ export const SCRIPT: Scene[] = [
           {
             beat: 'jump',
             /*
-             * Held back until the id has actually resolved.
+             * Held until the id has actually resolved.
              *
-             * With no offset this line was on screen while the field still read
-             * `00`, so the film asserted what the lookup cost before the lookup had
-             * happened. `figure()` guarantees the number came off the panel; it
-             * cannot guarantee the frame it is printed over shows it.
+             * With no cue this line was on screen while the field still read
+             * `00`, so the film asserted what the lookup cost before the lookup
+             * had happened. `figure()` guarantees the number came off the
+             * panel; it cannot guarantee the frame it is printed over shows it.
              *
-             * 530 frames is where the footnote appears, worked from the manifest
-             * rather than guessed: the beat opens at 714ms and the read lands at
-             * 13401ms, so 12687ms of footage plays at `half` against a retime of 3,
-             * which is a rate of 1.5 and 8458ms of composition, or 507 frames, plus
-             * the 42 frames of `holdMs` that precede the beat's own footage.
+             * This used to be a hand-worked frame number with six lines of
+             * arithmetic under it. `after` reads the moment off the figure
+             * itself, so it cannot drift when the beat is retimed.
              */
-            offset: 530,
+            after: 'jumpCost',
             lines: [
               {
                 register: 'proof',
@@ -214,32 +229,143 @@ export const SCRIPT: Scene[] = [
     title: 'Users',
     acts: [
       {
-        capture: 'users',
+        capture: 'users-gap',
+        label: 'The gap',
         plan: [
-          { beat: 'search', speed: 'half', easeMs: 300 },
-          { beat: 'open', speed: 'half', easeMs: 400, holdMs: 500 },
-          { beat: 'groups', speed: 'dwell', easeMs: 400, holdMs: 600, tailMs: 1400 },
+          { beat: 'arrive', speed: 'sprint', easeMs: 300 },
+          { beat: 'gap', speed: 'dwell', easeMs: 400, holdMs: 700, tailMs: 1600 },
         ],
         marks: [
           {
-            beat: 'search',
+            beat: 'arrive',
             stage: 'home',
-            lines: [{ register: 'note', text: 'Type a few letters. The list narrows as you go.' }],
-          },
-          {
-            beat: 'groups',
             lines: [
               {
-                register: 'note',
-                text: 'Open someone and the whole panel re-points at them, memberships first.',
+                register: 'claim',
+                text: 'A new hire was set up on Monday. By Wednesday she still cannot get into anything her team can.',
               },
             ],
-            diagram: (m, plot, from) =>
-              React.createElement(Tally, {
-                plot,
-                from,
-                entries: [{ label: 'group memberships', value: figure<number>(m, 'groupCount') }],
-              }),
+          },
+          {
+            beat: 'gap',
+            lines: [
+              {
+                register: 'evidence',
+                text: (m) =>
+                  `Four groups. Her whole membership list fits on one screen, and the one her team ` +
+                  `lives in is not on it. ${figure<number>(m, 'groups')} groups is the number to hold on to.`,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        capture: 'users-cause',
+        label: 'The cause',
+        plan: [
+          { beat: 'subject', speed: 'sprint', easeMs: 300 },
+          { beat: 'against', speed: 'brisk', easeMs: 400, holdMs: 400 },
+          { beat: 'difference', speed: 'half', easeMs: 400, holdMs: 700 },
+          { beat: 'cause', speed: 'dwell', easeMs: 400, holdMs: 800, tailMs: 2000 },
+        ],
+        marks: [
+          {
+            beat: 'subject',
+            stage: 'home',
+            lines: [
+              {
+                register: 'claim',
+                text: 'Against someone who does the same job on the same team, and can.',
+              },
+            ],
+          },
+          {
+            beat: 'difference',
+            lines: [
+              {
+                register: 'evidence',
+                text: (m) => {
+                  const t = figure<{ groups: number; apps: number; attributes: number }>(
+                    m,
+                    'tallies',
+                  );
+                  return (
+                    `${t.groups} groups apart, ${t.apps} apps apart, ${t.attributes} attributes ` +
+                    'apart. Every tool can tell you that much.'
+                  );
+                },
+              },
+            ],
+          },
+          {
+            /*
+             * Held until the worklist row is legible.
+             *
+             * The clause and the value beside it are the whole chapter, and a
+             * line stating them over a section still scrolling into place would
+             * be asserting a reading the viewer has not been given yet.
+             */
+            beat: 'cause',
+            after: 'cause',
+            lines: [
+              {
+                register: 'proof',
+                text: (m) => {
+                  const cause = figure<{ clause: string; resolved: string }>(m, 'cause');
+                  return `The rule wanted ${cause.clause}. Her profile says ${cause.resolved}. Somebody mistyped it the day the account was made.`;
+                },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        capture: 'users-fix',
+        label: 'The fix',
+        plan: [
+          { beat: 'open', speed: 'sprint', easeMs: 300 },
+          { beat: 'edit', speed: 'brisk', easeMs: 400, holdMs: 500 },
+          { beat: 'predict', speed: 'half', easeMs: 400, holdMs: 700 },
+          { beat: 'land', speed: 'half', easeMs: 400, holdMs: 600, tailMs: 2200 },
+        ],
+        marks: [
+          {
+            beat: 'open',
+            stage: 'home',
+            lines: [{ register: 'claim', text: 'So correct it here.' }],
+          },
+          {
+            beat: 'predict',
+            lines: [
+              {
+                register: 'evidence',
+                text: 'Before it writes anything, it evaluates every rule that reads the attribute against the drafted profile.',
+              },
+            ],
+          },
+          {
+            beat: 'predict',
+            after: 'added',
+            lines: [
+              {
+                register: 'proof',
+                text: (m) =>
+                  `It names them: ${figure<string[]>(m, 'added').join(' and ')}. That is the ` +
+                  'prediction, made before the write, not a report afterwards.',
+              },
+            ],
+          },
+          {
+            beat: 'land',
+            after: 'groupsAfter',
+            lines: [
+              {
+                register: 'proof',
+                text: (m) =>
+                  `${figure<string>(m, 'saved')} The rule applied and the group arrived, without ` +
+                  'a reload and without leaving the tab.',
+              },
+            ],
           },
         ],
       },
@@ -365,68 +491,6 @@ export const SCRIPT: Scene[] = [
                 ],
               });
             },
-          },
-        ],
-      },
-    ],
-  },
-
-  {
-    id: 'compare',
-    title: 'Compare',
-    acts: [
-      {
-        capture: 'compare',
-        plan: [
-          { beat: 'subject', speed: 'half', easeMs: 400 },
-          // Typing a second name into an empty comparison panel is a wait, not a
-          // demonstration. Played fast: the shot is the result, not the search.
-          { beat: 'compare', speed: 'natural', easeMs: 500, holdMs: 400 },
-          { beat: 'tallies', speed: 'dwell', easeMs: 300, holdMs: 900 },
-          { beat: 'memberships', speed: 'half', easeMs: 450, holdMs: 500 },
-          { beat: 'worklist', speed: 'half', easeMs: 400, holdMs: 900, tailMs: 2000 },
-        ],
-        marks: [
-          {
-            beat: 'subject',
-            stage: 'home',
-            lines: [
-              {
-                register: 'claim',
-                text: 'Two people who should have the same access, and do not.',
-              },
-            ],
-          },
-          {
-            beat: 'tallies',
-            lines: [
-              {
-                register: 'evidence',
-                text: 'The panel diffs their groups, their apps and every profile attribute at once.',
-              },
-            ],
-            diagram: (m, plot, from) => {
-              const t = figure<{ groups: number; apps: number; attributes: number }>(m, 'tallies');
-              return React.createElement(Tally, {
-                plot,
-                from,
-                entries: [
-                  { label: 'groups differ', value: t.groups },
-                  { label: 'apps differ', value: t.apps },
-                  { label: 'attributes differ', value: t.attributes },
-                ],
-              });
-            },
-          },
-          {
-            beat: 'worklist',
-            stage: 'home',
-            lines: [
-              {
-                register: 'proof',
-                text: 'Each app difference is traced back to the group that grants it, so the fix is a membership rather than a guess.',
-              },
-            ],
           },
         ],
       },

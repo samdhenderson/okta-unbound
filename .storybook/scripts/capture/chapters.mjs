@@ -38,13 +38,32 @@ export const CHAPTERS = [
     story: 'demo-scenes--home',
     walk: () => import('./walks/home.mjs'),
   },
+  // Users is three acts on one tab (ADR-0053): the gap, the cause, the fix.
+  // Three captures rather than one long walk, so a caption change stays free
+  // and a beat that misses ends its act rather than the whole argument.
   {
-    id: 'users',
+    id: 'users-gap',
     title: 'Users',
     tab: 'users',
-    kind: 'tour',
+    kind: 'deep',
     story: 'demo-scenes--user-comparison',
-    walk: () => import('./walks/users.mjs'),
+    walk: () => import('./walks/users-gap.mjs'),
+  },
+  {
+    id: 'users-cause',
+    title: 'Users',
+    tab: 'users',
+    kind: 'deep',
+    story: 'demo-scenes--user-comparison',
+    walk: () => import('./walks/users-cause.mjs'),
+  },
+  {
+    id: 'users-fix',
+    title: 'Users',
+    tab: 'users',
+    kind: 'deep',
+    story: 'demo-scenes--user-comparison',
+    walk: () => import('./walks/users-fix.mjs'),
   },
   {
     id: 'groups',
@@ -74,14 +93,6 @@ export const CHAPTERS = [
     // then films the empty state anyway.
     ready: 'text=Load Rules',
     walk: () => import('./walks/rules.mjs'),
-  },
-  {
-    id: 'compare',
-    title: 'Compare',
-    tab: 'users',
-    kind: 'deep',
-    story: 'demo-scenes--user-comparison',
-    walk: () => import('./walks/compare.mjs'),
   },
   {
     id: 'attributes',

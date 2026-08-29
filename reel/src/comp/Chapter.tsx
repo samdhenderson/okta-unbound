@@ -196,8 +196,22 @@ const ActFilm: React.FC<ActProps> = ({ chapter, index }) => {
       const wasCrop = crop;
       if (mark.stage) stage = mark.stage;
       crop = mark.crop ? fitCrop(mark.crop, PANEL_RECT) : bare;
+      // A mark cued to a figure lands where the panel was showing it. Resolved
+      // here so an unknown key fails the render rather than silently cueing at
+      // the beat's own start, which is the drift this exists to stop.
+      let base = cue.from;
+      if (mark.after !== undefined) {
+        const read = manifest.figures[mark.after];
+        if (!read) {
+          throw new Error(
+            `${act.capture}: mark cued after figure "${mark.after}", which was never read. ` +
+              `Read: ${Object.keys(manifest.figures).join(', ') || '(none)'}`,
+          );
+        }
+        base = ramp.frameAtClipMs(read.at);
+      }
       return {
-        from: cue.from + (mark.offset ?? 0),
+        from: base + (mark.offset ?? 0),
         stage,
         crop,
         // Whether the camera *moved*, not whether the mark mentioned it. A mark

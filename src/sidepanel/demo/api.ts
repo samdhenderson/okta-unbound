@@ -20,6 +20,7 @@
  *   memberships instead of asserting counts.
  */
 import type { MemberMfaResult, OktaGroup, OktaUser } from '../../shared/types';
+import type { OktaUserProfileSchema } from '../../shared/schemas/okta';
 import type { RawOktaGroup } from '../components/groups/groupSummary';
 import { summarizeFactors } from '../../shared/utils/mfaUtils';
 import {
@@ -34,6 +35,7 @@ import {
 } from '../../shared/membership/ruleImpact';
 import { republishDemoGroups, type DemoControls } from './control';
 import { demoFactorsFor } from './factors';
+import { DEMO_USER_PROFILE_SCHEMA } from './profileSchema';
 import { demoGroupMembers, demoUserGroups } from './memberships';
 import { applyProfilePatch, currentUserById, currentUsers, type DemoProfilePatch } from './state';
 import { currentGroups, currentGroupsById, demoApps, demoRules } from './snapshot';
@@ -289,6 +291,17 @@ export async function demoSearchUsers(query: string): Promise<FlatUser[]> {
 export async function demoGetUserById(userId: string): Promise<FlatUser | null> {
   const user = currentUserById(userId);
   return user ? flatten(user) : null;
+}
+
+/**
+ * The org's user profile schema.
+ *
+ * Fixture rather than absence: the edit gate is deny-by-default, so an org that
+ * answers `null` here has no editable attribute anywhere. See
+ * {@link module:sidepanel/demo/profileSchema}.
+ */
+export async function demoGetUserProfileSchema(): Promise<OktaUserProfileSchema> {
+  return DEMO_USER_PROFILE_SCHEMA;
 }
 
 /** The whole validated user, profile included — what a profile editor needs. */

@@ -712,6 +712,145 @@ export const compareButton = (page) => page.getByRole('button', { name: /^Compar
 export const causeWorklist = (page) =>
   page.locator('section[aria-labelledby="cause-worklist-heading"]');
 
+/**
+ * A remedy group inside the worklist, by its heading.
+ *
+ * `RemedyGroup` labels its `<section>` with `aria-labelledby="remedy-<key>"`
+ * and prints the human heading in an `h5`. Scoped through the heading rather
+ * than the key, because the key is an internal enum and the heading is what is
+ * on camera; if the two ever diverge, the one the film asserts should be the
+ * one a viewer can read.
+ */
+export const worklistRemedy = (page, heading) =>
+  causeWorklist(page)
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { name: attr(heading), level: 5 }) });
+
+/**
+ * A failing clause inside a remedy group: the expression, as the panel prints it.
+ *
+ * `FailingClauses` renders each clause through `RuleExpressionText` in a
+ * `font-mono` block. There is no test id, and the text is org data, so this
+ * matches the mono block by its class - the one place in these selectors that
+ * reaches for a class, because the alternative is matching the expression by
+ * its own text, which is the thing being read.
+ */
+export const worklistClause = (page, heading) =>
+  worklistRemedy(page, heading).locator('.font-mono').first();
+
+/**
+ * Read one remedy group's first failing clause and the value that failed it.
+ *
+ * Two facts, read together and deliberately: an expression on its own is a rule
+ * anyone could have written down, and it is the *resolved value* beside it that
+ * makes the row evidence about one person. A chapter that narrated the clause
+ * without the value would be showing a rule, not a diagnosis.
+ *
+ * @returns {Promise<{clause: string, resolved: string|null}>}
+ */
+export async function readWorklistCause(page, heading) {
+  const group = worklistRemedy(page, heading);
+  const clause = (await worklistClause(page, heading).innerText()).trim();
+  const value = group.getByText(/^Resolved value:/).first();
+  // The label is stripped, so a caption states the value rather than quoting the
+  // panel's own row label back at the viewer beside it.
+  const resolved =
+    (await value.count()) > 0
+      ? (await value.innerText()).replace(/^Resolved value:\s*/, '').trim()
+      : null;
+  return { clause, resolved };
+}
+
+/** How many groups a remedy group accounts for, off its own count chip. */
+export async function readWorklistGroupCount(page, heading) {
+  const chip = worklistRemedy(page, heading)
+    .getByText(/^\d+ groups?$/)
+    .first();
+  return Number(/(\d+)/.exec(await chip.innerText())?.[1]);
+}
+
+/* --- The profile editor -------------------------------------------------- */
+
+/**
+ * The Profile pane's `Edit`.
+ *
+ * **It is absent, not disabled, when nothing is editable.** `canEdit` runs
+ * `hasEditableAttribute`, and the gate is deny-by-default: an org whose profile
+ * schema this panel never fetched has no editable attribute at all, so the
+ * button is not rendered. That is why the demo org serves a schema
+ * (`demo/profileSchema.ts`) - without one there is no verb here to film.
+ */
+export const profileEditButton = (page) => page.getByRole('button', { name: /^Edit$/ });
+
+/**
+ * One editable attribute's control, by the label the schema gave it.
+ *
+ * `ProfileEditCell` sets `aria-label={attribute.label}`, which is the schema's
+ * `title` when the org supplied one. So the demo schema's `title: 'Department'`
+ * is the accessible name here, not the attribute's `department` key.
+ */
+export const profileField = (page, label) => page.getByLabel(attr(label), { exact: true });
+
+/** The Profile pane's `Save`, which opens the confirmation rather than writing. */
+export const profileSaveButton = (page) => page.getByRole('button', { name: /^Save$/ });
+
+/**
+ * The save confirmation modal, and the two controls that matter inside it.
+ *
+ * `Save` on the pane header does not write. It opens `ProfileSaveModal`, which
+ * states the diff both ways round, warns that this is a live write, and offers
+ * a prediction of what group access moves. `Save changes` is the write.
+ */
+export const saveModal = (page) => page.getByRole('dialog');
+export const analyzeBlastRadius = (page) =>
+  saveModal(page).getByRole('button', { name: /^Analyze blast radius$/ });
+export const confirmSave = (page) => saveModal(page).getByRole('button', { name: /^Save changes$/ });
+
+/**
+ * The blast-radius report's group count, off its own pill.
+ *
+ * The pill reads `Groups N`, and `N` is `report.groups.length` - every effect,
+ * including the ones the panel declines to predict. Read it, then read the
+ * `Likely added` rows separately: a prediction that counts three effects and
+ * commits to none is a different statement from one that adds three groups,
+ * and a chapter must not print the first while narrating the second.
+ */
+export const blastRadiusPill = (page, label) =>
+  saveModal(page).getByRole('button', { name: new RegExp(`^${rx(label)} \\d+$`) });
+
+export async function readBlastRadiusCount(page, label) {
+  return Number(/(\d+)/.exec(await blastRadiusPill(page, label).innerText())?.[1]);
+}
+
+/** The rows under one of the report's headings: `Likely added`, `Likely removed`. */
+export const blastRadiusSection = (page, title) =>
+  saveModal(page)
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { name: attr(title) }) })
+    .locator('li');
+
+/**
+ * The banner a completed write leaves behind.
+ *
+ * Matched on the panel's own sentence (`Saved N attributes on <name>.`) rather
+ * than on the banner's box, because the box is also what a failure and an
+ * `unknown` outcome render into. Waiting on the container would pass on a take
+ * where the write did not land and the panel said so.
+ */
+export const saveConfirmation = (page) => page.getByText(/^Saved \d+ attributes? on /);
+
+/**
+ * A group row in the user detail rung's Groups pane, by the group's name.
+ *
+ * Anchored on `data-group-id`, which `GroupMembershipRow` sets on every row,
+ * rather than on `role=listitem`: `ListRow`'s element is chosen per call site
+ * and a role query that silently matches nothing is indistinguishable from a
+ * group the user is not in - which is the exact claim this selector is used to
+ * make, in both directions.
+ */
+export const membershipRow = (page, name) =>
+  page.locator('[data-group-id]').filter({ hasText: name });
+
 /* --- Rules --------------------------------------------------------------- */
 
 /**

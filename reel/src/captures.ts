@@ -11,12 +11,13 @@
 import { staticFile } from 'remotion';
 import apps from '../../captures/apps.json';
 import attributes from '../../captures/attributes.json';
-import compare from '../../captures/compare.json';
 import groups from '../../captures/groups.json';
 import home from '../../captures/home.json';
 import reporting from '../../captures/reporting.json';
 import rules from '../../captures/rules.json';
-import users from '../../captures/users.json';
+import usersCause from '../../captures/users-cause.json';
+import usersFix from '../../captures/users-fix.json';
+import usersGap from '../../captures/users-gap.json';
 
 /** The manifest schema this composition understands. Asserted, never branched on. */
 export const SCHEMA = 4;
@@ -51,6 +52,15 @@ export interface Manifest {
   id: string;
   title: string;
   tab: string;
+  /**
+   * Capture-time hint only.
+   *
+   * The composition stopped reading this when a chapter became several acts
+   * (ADR-0053): `tour` / `deep` named nothing once every chapter was an
+   * argument about a job. `capture.mjs` still writes it, because it is what
+   * decides how long a walk runs and how much it reads off the panel, and
+   * dropping it from the type would make this interface a lie about the file.
+   */
   kind: 'tour' | 'deep';
   file: string;
   ok: boolean;
@@ -66,7 +76,17 @@ export interface Manifest {
   figures: Record<string, Figure>;
 }
 
-const MANIFESTS = { home, users, groups, apps, rules, compare, attributes, reporting } as const;
+const MANIFESTS = {
+  home,
+  'users-gap': usersGap,
+  'users-cause': usersCause,
+  'users-fix': usersFix,
+  groups,
+  apps,
+  rules,
+  attributes,
+  reporting,
+} as const;
 
 /** A chapter id with footage behind it. */
 export type CaptureId = keyof typeof MANIFESTS;

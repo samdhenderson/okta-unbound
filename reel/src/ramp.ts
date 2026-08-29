@@ -91,6 +91,19 @@ export interface Ramp {
   cues: Record<string, { from: number; durationInFrames: number }>;
   /** Clip ms at a given composition frame, for cueing anything read from the clip. */
   clipMsAt: (frame: number) => number;
+  /**
+   * The composition frame a given clip moment plays at. The inverse of
+   * {@link clipMsAt}.
+   *
+   * This is what lets a mark be cued to a *figure* rather than to a number
+   * somebody worked out. Every figure in a manifest carries the clip ms it was
+   * read at, so "put this line on screen once the panel is showing it" becomes a
+   * lookup instead of arithmetic - and it stays correct when the beat is
+   * retimed, which hand-worked arithmetic does not. The first version of the
+   * Home chapter printed what a lookup cost while the field still read `00`,
+   * and the repair was a comment six lines long showing the multiplication.
+   */
+  frameAtClipMs: (ms: number) => number;
 }
 
 const round = (n: number) => Math.max(1, Math.round(n));
@@ -207,5 +220,22 @@ export function buildRamp(manifest: Manifest, plan: BeatPlan[], fps: number): Ra
     return (carried / manifest.fps) * 1000;
   };
 
-  return { segments, durationInFrames: out, cues, clipMsAt };
+  const frameAtClipMs = (ms: number): number => {
+    const wanted = (ms / 1000) * manifest.fps;
+    for (const segment of segments) {
+      // A frozen segment consumes no source, so it holds one clip moment for its
+      // whole length. It can never be the answer to "when does this play",
+      // except degenerately, and dividing by its rate would be a division by
+      // zero rather than a near miss.
+      if (segment.playbackRate <= 0) continue;
+      const spans = segment.durationInFrames * segment.playbackRate;
+      if (wanted < segment.trimBefore + spans) {
+        const into = Math.max(0, wanted - segment.trimBefore);
+        return segment.from + Math.round(into / segment.playbackRate);
+      }
+    }
+    return out;
+  };
+
+  return { segments, durationInFrames: out, cues, clipMsAt, frameAtClipMs };
 }
