@@ -83,19 +83,66 @@ export interface SchedulerState {
 }
 
 /**
- * Request execution result
+ * A request that reached Okta and came back with a response the transport
+ * considered successful (`response.ok`).
+ *
+ * @see {@link RequestResult}
  */
-export interface RequestResult {
-  success: boolean;
+export interface RequestSuccess {
+  /** Discriminant. */
+  success: true;
   // Raw transport payload — the scheduler is response-shape-agnostic; the actual
   // Okta JSON is validated at the content-script zod boundary before use.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data?: any;
-  error?: string;
+  /** Response headers (the rate-limit and `link` headers are read off these). */
   headers?: Record<string, string>;
+  /** HTTP status of the successful response, when the producer supplied one. */
   status?: number;
+  /** Reserved for a future response cache; no producer sets it today. */
   fromCache?: boolean;
 }
+
+/**
+ * A request that did not succeed — and that can say *how* it failed.
+ *
+ * `status` is **not optional here**: every failure carries either the real HTTP
+ * status Okta returned (401, 404, 429, 500…) or `NO_HTTP_STATUS` (`shared/scheduler/requestResult`) when the
+ * request never produced an HTTP response at all (a transport throw, or a
+ * boundary guard rejecting the request before it was sent). A caller that has
+ * narrowed to this arm therefore always has a status to branch on, instead of
+ * every failure mode reading identically at the type level.
+ *
+ * @see {@link RequestResult}
+ */
+export interface RequestFailure {
+  /** Discriminant. */
+  success: false;
+  /**
+   * HTTP status, or `NO_HTTP_STATUS` (`shared/scheduler/requestResult`) when there was no HTTP response.
+   * Always present — that is the point of this arm.
+   */
+  status: number;
+  /** Human-readable failure summary. Never a response body or PII. */
+  error?: string;
+  // Error payload as returned by Okta, when it parsed as JSON. Same untrusted
+  // status as `RequestSuccess['data']` — validate before reading.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data?: any;
+  /** Response headers, when the failure came with a response. */
+  headers?: Record<string, string>;
+}
+
+/**
+ * Request execution result: a discriminated union on `success`.
+ *
+ * Narrowing on `success` is the supported way to read one. `!result.success`
+ * gives you a {@link RequestFailure} with a guaranteed `status`; `result.success`
+ * gives you a {@link RequestSuccess}. Use
+ * `isSessionExpired` (`shared/scheduler/requestResult`) rather than comparing
+ * `status` to 401 by hand.
+ */
+export type RequestResult = RequestSuccess | RequestFailure;
 
 /**
  * Scheduler metrics for debugging

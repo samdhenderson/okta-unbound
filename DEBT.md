@@ -201,7 +201,7 @@ heuristic and no allow-list of endpoints.
 - **Risk:** Low. Touches the shape every API caller reads, so it is wide, but the
   compiler finds every site. Route through `security-logging-reviewer` anyway:
   it is the request path.
-- **Status:** open
+- **Status:** done:#102
 - **Related:** absorbs what `D-027` wanted before that item was overtaken.
 
 ### D-007b · One expired session, not thirty failed requests
@@ -209,10 +209,18 @@ heuristic and no allow-list of endpoints.
 - **Category:** correctness
 - **Priority:** P2
 - **Size:** M
-- **Files:** `docs/adr/0041-a-401-is-a-session-not-a-request.md` (to be created),
+- **Files:** `docs/adr/0050-a-401-is-a-session-not-a-request.md` (to be created),
   `src/shared/scheduler/apiScheduler.ts`, `src/sidepanel/App.tsx`
-- **Verified:** 2026-08-24 — `CONVENTIONS.md`'s Session-expiry section still
-  describes the live behavior correctly.
+- **Verified:** 2026-08-29 — still holds, but on narrower ground than the
+  original filing: `D-007a` shipped `isSessionExpired` (401 only), so a 401 is
+  now _distinguishable_. Exactly one surface consumes it (`getAppById` →
+  HomeTab's jump bar); the scheduler still drains a queue into the same 401 and
+  no global signal exists, which is the whole of what this item asks for.
+  **Renumbered:** this item reserved `docs/adr/0041-…`, but ADR-0041 has been
+  taken since by the read-only API explorer decision — next free is 0050. The
+  original `Verified` line (2026-08-24) cited `CONVENTIONS.md`'s Session-expiry
+  section as evidence; that section was rewritten tonight, so it no longer
+  supports the claim and the code was re-read instead.
 - **Problem:** When the admin's Okta session ends mid-use — signed out in
   another tab, or simply timed out — the panel does not notice. Every queued
   request fails with an ordinary "request failed" error, so a user sees a dozen
@@ -1147,7 +1155,21 @@ more expensive the day an audit viewer ships.
 - **Risk:** None to ship — this is a read-only audit. The risk is in _not_
   doing it: every item above is currently an argument rather than an
   observation.
-- **Status:** open
+- **Status:** blocked:needs-live-org
+- **Why blocked (2026-08-29):** this was the night's top-priority candidate by
+  sort order — the only open P1 on either ledger — and it was picked up before
+  anything else. Every one of its ten checks is defined as _a verdict against a
+  real org_: a live delta probe, a real `x-total-count` header, an org with >200
+  groups, a known push-enabled app, a suspended MV3 worker, an observed
+  `X-Rate-Limit-Remaining`. An unattended sandbox session has no Okta org and no
+  browser session to one, so it cannot produce a single one of those verdicts.
+  It can only re-read the same code the item was written against, which is not
+  what the item asks for and would produce exactly the false confidence the
+  filing exists to prevent ("no part of it has run against real Okta").
+  Gated rather than left `open` so it stops presenting as the highest-priority
+  available work to every future run that cannot do it either. **This needs
+  Sam, or any session with a real org; it is not a breakdown problem and
+  splitting it further will not help.**
 
 ### D-029 · Retire `shared/rulesCache` — the last hand-rolled cache
 
@@ -2317,7 +2339,7 @@ affects every scroll box in the app, on every platform.
   expression. A test pins whichever guarantee is chosen.
 - **Risk:** Low to investigate. The defect it protects against is a whole-surface
   outage from a single malformed row, which is why this is P2 and not P3.
-- **Status:** open
+- **Status:** done:#102
 - **Related:** `D-050`
 
 ### D-056 · `AlertMessage` hand-rolls two raw buttons inside `components/shared`
@@ -2429,7 +2451,7 @@ affects every scroll box in the app, on every platform.
   whatever is decided about `appLabel` is stated in the handler's doc comment
   rather than left to be rediscovered.
 - **Risk:** Low — one handler, already covered by `content/index.test.ts`.
-- **Status:** open
+- **Status:** done:#102
 - **Related:** the Overview-tab removal (which promoted this from harmless to
   per-page), `D-007a`
 
@@ -2534,3 +2556,263 @@ affects every scroll box in the app, on every platform.
 - **Status:** research:awaiting-review
 - **Related:** `D-059` (the other traffic cost the re-gate exposed), ADR-0018,
   ADR-0026
+
+### D-062 · `handleGetAppInfo` reads an Okta response with no zod boundary
+
+- **Category:** security
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/content/index.ts` (`handleGetAppInfo`, the `response.data.name`
+  / `response.data.label` reads), `src/content/index.test.ts` (whose existing
+  case title already admits it: "no zod validation here")
+- **Verified:** 2026-08-29 — raised independently by the `D-059` writer and by
+  `security-logging-reviewer` on the same diff; both read the handler directly.
+- **Problem:** ADR-0006 says every Okta response is validated at the
+  content-script boundary before it is rendered or branched on. `handleGetAppInfo`
+  does not: it reads `.name` and `.label` off `response.data` raw. Its two
+  neighbours in the same file do the opposite — `handleGetGroupInfo` parses with
+  `oktaGroupSchema`, `handleGetPolicyInfo` with `oktaPolicyListItemSchema` — so
+  this is a gap in an otherwise consistent boundary, not an undecided question.
+- **Bounded, and worth stating:** `D-059` made the fetch conditional, so this
+  path now runs strictly less often (only when the page heading is missing).
+  Exposure is reduced, not closed — the reviewer's words.
+- **Done when:** `handleGetAppInfo` parses its response with a lenient schema the
+  same way `handleGetPolicyInfo` does, degrading rather than throwing on a
+  validation miss, and the test whose title concedes the gap is retargeted.
+- **Risk:** Low — one handler, already covered by `content/index.test.ts`.
+- **Status:** open
+- **Related:** `D-059`, ADR-0006
+
+### D-063 · `AppInfo` is declared twice, verbatim, in two files
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/shared/types.ts` (the shared declaration),
+  `src/sidepanel/hooks/useOktaPageContext.ts` (a verbatim local copy it also
+  re-exports)
+- **Verified:** 2026-08-29 — enumerated by the `D-059` writer while tracing every
+  consumer of `AppInfo.appLabel`; both declarations read in full, not grepped.
+- **Problem:** The content script imports the shared `AppInfo`; the hook declares
+  its own identical copy and re-exports that. Nothing links them, so a field
+  added to one is invisible to the other and no type error anywhere says so. The
+  two are in sync today purely by coincidence of having been written together.
+- **Done when:** One declaration survives, in `shared/types.ts`, and the hook
+  imports it. Any re-export it needs is a re-export of that type.
+- **Risk:** Low — mechanical, and the compiler proves the merge.
+- **Status:** open
+- **Related:** `D-059`
+
+### D-064 · A non-ok response drops its headers, so a 429 arrives with no rate-limit headers
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/content/apiRequest.ts` (the `!response.ok` return, which omits
+  `headers` although the function has already built them),
+  `src/shared/scheduler/rateLimitDetector.ts` (the consumer that needs them),
+  `src/content/index.test.ts` (which already pins the drop as a `BUG (pinned)`)
+- **Verified:** 2026-08-29 — surfaced by the `D-007a` writer and confirmed
+  directly against the file: `headers` is populated from `response.headers` and
+  then included on the success return and on the `DELETE` return, but not on the
+  `!response.ok` return.
+- **Problem:** `RateLimitDetector` exists to read `X-Rate-Limit-Remaining` /
+  `-Limit` / `-Reset` off Okta responses, and `CONVENTIONS.md` describes cooldowns
+  driven by them. A 429 is exactly the response whose headers matter most — and
+  it is a `!response.ok` response, so its headers never leave the content script.
+  Rate limiting is therefore steered only by the headers of requests that
+  succeeded, and the one response that says "you are being throttled, here is
+  when to come back" tells the scheduler nothing.
+- **Why it is filed now:** it directly limits `D-007c`. That item routes a
+  retryable resolved failure into `retryRequest` with backoff; honest backoff
+  wants `X-Rate-Limit-Reset`, which under this defect is not there to read.
+  `D-007c` should not be started before this is fixed or consciously accepted.
+- **Done when:** the `!response.ok` return carries `headers` like its siblings,
+  the pinned `BUG (pinned)` case in `content/index.test.ts` is retargeted to
+  assert the headers survive, and `RateLimitDetector` is shown to observe them on
+  a 429.
+- **Risk:** Low to fix. The behavior change is that the scheduler starts seeing
+  headers it currently cannot, which is the point.
+- **Status:** open
+- **Related:** `D-007a`, `D-007c`
+
+### D-065 · `fetchAndCacheAllGroupRules` walks a whole endpoint with no boundary schema
+
+- **Category:** security
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaApi/groupDiscovery.ts`
+  (`fetchAndCacheAllGroupRules`), `src/shared/utils/oktaPagination.ts` (the
+  `schema`-less branch that casts `response.data` straight to `T[]`)
+- **Verified:** 2026-08-29 — found by the `D-055` writer while enumerating that
+  item's callers; the pagination cast was read directly, not inferred.
+- **Problem:** `fetchAllPages<OktaGroupRule>(…)` is called with **no `schema`
+  option**, so `oktaPagination.ts` casts the raw page straight to `OktaGroupRule[]`
+  and unvalidated rows flow into `RulesCache` and on to every consumer. This is
+  the second half of what `D-050` closed on `fetchGroupRulesRequest`'s path.
+  `D-055` stopped the specific outage (a non-string expression no longer throws
+  out of a `.map`), but malformed `groupIds` and other fields still reach
+  consumers unchecked. The path is live: `ensureGroupRulesLoaded` →
+  `useGroupRuleReferences`, and `getGroupRulesForGroup` → `useGroupSource`,
+  `useGroupMerge`.
+- **Done when:** the walk passes `{ schema: oktaGroupRuleSchema, context: 'GET
+/api/v1/groups/rules' }` — `fetchAllPages` already supports it — and what
+  happens to a row that fails validation is a stated decision, since this changes
+  what reaches the cache.
+- **Risk:** Medium — it changes what gets cached, so a row Okta sends that the
+  schema rejects would stop appearing. That is the intended effect but it is a
+  behavior change, not a pure hardening.
+- **Status:** open
+- **Related:** `D-050`, `D-055`, ADR-0006
+
+### D-066 · `groupIdsReferencedBy` carries the identical unguarded expression read `D-055` just fixed
+
+- **Category:** correctness
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/fetchGroupRulesRequest.ts` (`groupIdsReferencedBy`)
+- **Verified:** 2026-08-29 — spotted by the `D-055` writer while fixing the twin
+  in `src/shared/ruleUtils.ts`.
+- **Problem:** It runs the same `expression.match(…)` shape on a condition
+  expression it does not check is a string. It is safe **today** only because its
+  single caller validates upstream at the boundary `D-050` closed — so it is a
+  latent copy of `D-055`'s defect rather than a live one, and it becomes live the
+  moment a second caller arrives that does not validate.
+- **Done when:** it reads its expression through the same string-or-`''` guard
+  `ruleUtils.ts` now uses, or the two share one helper.
+- **Risk:** Low — no behavior change for any well-formed rule.
+- **Status:** open
+- **Related:** `D-055`, `D-050`
+
+### D-067 · No story reaches any arm of HomeTab's jump-bar app lookup
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/HomeTab.stories.tsx` (its `makeOps()`
+  never overrides `getAppById`), `.storybook/mocks/useOktaApi.mock.ts` (whose
+  default answers `{ kind: 'missing' }`)
+- **Verified:** 2026-08-29 — raised by `ui-reviewer` against the `D-007a` diff
+  and left deliberately unfixed there rather than widening a nightly diff.
+- **Problem:** `D-007a` gave the jump bar's app fetcher four outcomes
+  (`found | missing | session-expired | failed`), two of which throw
+  user-facing copy. No story types an app id, and no story overrides
+  `getAppById`, so **none** of the four branches is exercised through `HomeTab` —
+  not even the pre-existing `found`/`missing` pair. The generic machinery is
+  covered elsewhere (`useJumpResolver.test.tsx` pins throw → `mode: 'error'`,
+  `JumpBar.stories.tsx`'s `Failed` story pins the error render), but the specific
+  copy these arms throw is asserted nowhere.
+- **Done when:** stories mirroring `IdResolvesWithoutARequest` /
+  `UserIdCostsOneRequest` override `getAppById` to return `{ kind:
+'session-expired' }` and `{ kind: 'failed', status: 500 }` and assert the exact
+  message each renders; axe-clean per ADR-0014.
+- **Risk:** Low — stories only, no `src/` behavior.
+- **Status:** open
+- **Related:** `D-007a`, ADR-0010, ADR-0014
+
+### D-068 · `createSchedulerPageRequest` drops the status the walk now has
+
+- **Category:** correctness
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/shared/utils/oktaPagination.ts` (`createSchedulerPageRequest`
+  and the `PageRequest` shape it fills),
+  `src/sidepanel/components/home/orgFigures.ts` (whose module header names this
+  as the blocker for its 403-specific copy)
+- **Verified:** 2026-08-29 — raised by the `D-007a` writer; `orgFigures.ts`'s own
+  header documents the dependency.
+- **Problem:** The snapshot walk's `PageRequest` shape discards the failure
+  status. `orgFigures.ts` says in prose that this is what stops it telling an
+  admin "you are not allowed to read this" apart from "this failed". Before
+  `D-007a` there was no guaranteed status to thread; now there is, so the item is
+  actionable where it previously was not.
+- **Done when:** the failure status survives into `PageRequest`, and
+  `orgFigures.ts` either uses it for the 403 case or its header stops citing the
+  gap.
+- **Risk:** Low to thread, medium to present — a permissions claim to an admin is
+  a strong claim and needs the honesty rules re-checked.
+- **Status:** open
+- **Related:** `D-007a`, ADR-0040
+
+### D-069 · Two dead remnants around the app-lookup path
+
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/cache/appAssignmentsSharing.test.tsx` (a
+  `getAppById` mock nothing under test calls), `src/shared/scheduler/types.ts`
+  (`RequestSuccess.fromCache`)
+- **Verified:** 2026-08-29 — both enumerated by the `D-007a` writer while
+  tracing `getAppById`'s callers and rebuilding `RequestResult`.
+- **Problem:** Two small untruths. The test file mocks `getAppById`, but the
+  enumeration showed no subject under test in that file reaches it — so the mock
+  documents a dependency that is not there, and had to be updated by `D-007a` for
+  no behavioral reason. Separately, `RequestSuccess.fromCache` has **zero
+  producers** repo-wide (`grep` returns only the declaration); it was carried
+  through the union rewrite unchanged rather than removed, because removing it is
+  a separate decision.
+- **Done when:** the dead mock is removed and `fromCache` is either removed or
+  given the producer it implies, each verified with the `okta-claim-check` skill
+  rather than a grep for the name.
+- **Risk:** Low. `knip` is advisory here and will not catch either.
+- **Status:** open
+- **Related:** `D-007a`
+
+### D-070 · `handleGetPolicyInfo`'s "mirrors handleGetAppInfo" is no longer true
+
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/content/index.ts` (`handleGetPolicyInfo`'s doc comment, and the
+  unconditional fetch it describes)
+- **Verified:** 2026-08-29 — noticed by the `D-059` writer immediately after
+  making the app handler conditional.
+- **Problem:** The policy handler's doc comment says it mirrors
+  `handleGetAppInfo`. After `D-059` it does not: the app handler fetches only
+  when the DOM comes up empty, the policy handler still fetches every time. The
+  cross-reference now points at a shape that changed out from under it.
+- **Second half, worth deciding rather than assuming:** the policy handler fetches
+  for `policyStatus`, which the DOM genuinely cannot supply — so unlike `D-059`
+  the request may well be earned. But nobody has enumerated `policyStatus`'s
+  consumers, which is exactly the check that turned `D-059` from a guess into a
+  decision.
+- **Done when:** the doc comment describes what the handler actually does, and
+  `policyStatus`'s consumers are enumerated so the unconditional fetch is either
+  justified in the comment or filed as its own perf item.
+- **Risk:** Low — a comment, plus an enumeration that may produce a follow-up.
+- **Status:** open
+- **Related:** `D-059`
+
+### D-071 · Two stale claims in `CONVENTIONS.md`'s messaging sections
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `CONVENTIONS.md` (the "Messaging conventions" bullet on direct
+  `sendMessage` reads, and the "SPA route-change handling" section's file
+  locations), `src/content/groupHandlers.ts`, `src/content/userHandlers.ts`
+- **Verified:** 2026-08-29 — both found by `docs-maintainer` while rewriting the
+  Session-expiry section, and both left alone as outside that task's scope.
+- **Problem:** Two claims a nightly run is told to trust are not accurate.
+  1. "Messaging conventions" says a direct `sendMessage` page-context read
+     "carries no Okta API traffic and doesn't touch the scheduler." The second
+     half is true; the first is not. `handleGetGroupInfo`, `handleGetAppInfo` and
+     `handleGetPolicyInfo` all fall back to `handleMakeApiRequest` when the DOM
+     comes up empty — a real Okta call that bypasses the scheduler. That is a
+     deliberate, documented design, but the sentence as written denies it exists,
+     which matters because the surrounding rule is the one forbidding
+     scheduler-bypassing traffic. `D-059` made this fallback _less_ frequent, not
+     absent.
+  2. "SPA route-change handling" locates `handleGetGroupInfo` /
+     `handleGetUserInfo` in `src/content/index.ts`. They moved to
+     `groupHandlers.ts` / `userHandlers.ts` in PR #45; `index.ts` only routes to
+     them now. The cited path still resolves, so `lint:cited-paths` cannot catch
+     this — it is a prose claim, not a broken link.
+- **Done when:** Both claims describe what the code does. The first should say
+  plainly that these reads may fall back to an unscheduled Okta call and why that
+  is acceptable, rather than implying they never call Okta.
+- **Risk:** None — documentation only. The risk is in leaving it: `CONVENTIONS.md`
+  is what an unattended run is told to match, so a wrong claim there propagates
+  into code.
+- **Status:** open
+- **Related:** `D-059`

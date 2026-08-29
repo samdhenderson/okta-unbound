@@ -76,15 +76,41 @@ pattern.
 
 ## Session-expiry handling
 
-**Decision (new — this was previously undefined):** there is currently no
-code anywhere in the scheduler or content-script path that distinguishes an
-expired-session 401 from any other failed request (confirmed — zero hits
-searching for `401`/session-expiry handling). Nightly runs should **not**
-improvise a fix inline; this needs scoping first. Filed as `D-007` in
-`DEBT.md`, `blocked:needs-breakdown`. Until it's scoped and implemented, an
-expired session surfaces as an ordinary failed-request error state — that's
-the current (undesirable but real) behavior; don't paper over it with a
-one-off try/catch in whatever file a nightly run happens to be touching.
+**There is now one predicate that decides a session is gone, and only one.**
+`isSessionExpired(result)` (`src/shared/scheduler/requestResult.ts`) matches
+**401 only** — deliberately not 403 (a permission the admin genuinely lacks;
+re-authenticating is a dead end), not 429 (a live session being throttled), and
+not the module's `NO_HTTP_STATUS` sentinel, which means nothing is known about
+the session. It can be trusted because `RequestResult`
+(`src/shared/scheduler/types.ts`) is a discriminated union whose failure arm
+carries a **non-optional** `status`, and `ApiScheduler.makeApiCall`
+(`src/shared/scheduler/apiScheduler.ts`) pipes every content-script reply
+through `normalizeRequestResult`, so that promise holds at runtime and not
+only in the type. Failures that never produced an HTTP response — a transport
+throw, a boundary-guard rejection in `src/content/apiRequest.ts` — carry
+`NO_HTTP_STATUS` (`0`) instead of omitting the field. It is falsy: compare it
+with `===`, never for truthiness. (`D-007a`)
+
+The old instruction still stands in spirit — don't improvise session handling
+inline, in whatever file a nightly run happens to be touching. What changed is
+that there is now something to call instead of improvising: use
+`isSessionExpired`, never a hand-rolled `status === 401` or a one-off
+try/catch.
+
+Two things remain unsolved, so don't read the predicate as the whole fix:
+
+- **Exactly one surface distinguishes an expired session.** `getAppById`
+  (`src/sidepanel/hooks/useOktaApi/appOperations.ts`) returns an `AppLookup`
+  of `found | missing | session-expired | failed{status}`, and HomeTab's jump
+  bar is its only consumer. There is **no app-wide session-expiry UX**:
+  everywhere else, an expired session still surfaces as an ordinary
+  failed-request error state. That is `D-007b`, and it is gated on an accepted
+  ADR before any `src/` change.
+- **Retry behavior is unchanged.** `makeApiCall` still _resolves_ a failure
+  rather than throwing, so a 429 takes the success path in `executeRequest` and
+  is never routed into `retryRequest` — backoff still covers transport throws
+  and timeouts only. That is `D-007c`'s job, not a side-effect to fold into
+  unrelated work.
 
 ## Test expectations
 

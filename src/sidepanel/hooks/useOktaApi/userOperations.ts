@@ -422,7 +422,7 @@ export function createUserOperations(coreApi: CoreApi) {
       method: 'POST',
       reason: 'Suspend user',
     });
-    return { success: result.success, error: result.error };
+    return result.success ? { success: true } : { success: false, error: result.error };
   };
 
   /**
@@ -437,7 +437,7 @@ export function createUserOperations(coreApi: CoreApi) {
       method: 'POST',
       reason: 'Unsuspend user',
     });
-    return { success: result.success, error: result.error };
+    return result.success ? { success: true } : { success: false, error: result.error };
   };
 
   /**
@@ -453,7 +453,7 @@ export function createUserOperations(coreApi: CoreApi) {
       `/api/v1/users/${userId}/lifecycle/reset_password?sendEmail=true`,
       { method: 'POST', reason: 'Reset user password' },
     );
-    return { success: result.success, error: result.error };
+    return result.success ? { success: true } : { success: false, error: result.error };
   };
 
   return {
