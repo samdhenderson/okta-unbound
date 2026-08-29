@@ -765,6 +765,70 @@ describe('ruleUtils', () => {
       const formatted = formatRuleForDisplay(rule);
       expect(formatted.condition).toContain('is member of group');
     });
+
+    // D-055: this function is exported and reachable from callers that do NOT
+    // validate their rules at an Okta boundary — `groupDiscovery`'s
+    // `fetchAndCacheAllGroupRules` walks `/api/v1/groups/rules` with
+    // `fetchAllPages` and no schema, so the raw response reaches here as-is.
+    // `conditions.expression.value` is end-user-controllable (`docs/security.md`),
+    // and every caller formats a whole page inside a `.map`, so a throw on one
+    // row is a whole-surface outage. The guarantee: a non-string expression
+    // degrades that one field exactly as a missing one does, and never throws.
+    describe('a non-string condition expression (D-055)', () => {
+      /** A rule whose `conditions.expression.value` is not a string. */
+      const poisonedRule = (value: unknown): OktaGroupRule =>
+        ({
+          id: 'rBAD',
+          name: 'Bad Rule',
+          status: 'ACTIVE',
+          type: 'group_rule',
+          created: '2024-01-01T00:00:00Z',
+          lastUpdated: '2024-01-01T00:00:00Z',
+          conditions: { expression: { value, type: 'urn:okta:expression:1.0' } },
+          actions: { assignUserToGroups: { groupIds: ['group1'] } },
+        }) as unknown as OktaGroupRule;
+
+      it.each([
+        ['a number', 42],
+        ['an object', { $ne: 1 }],
+        ['an array', ['user.department']],
+        ['null', null],
+        ['a boolean', true],
+      ])('degrades rather than throwing when the expression is %s', (_label, value) => {
+        const formatted = formatRuleForDisplay(poisonedRule(value));
+
+        expect(formatted.condition).toBe('No condition specified');
+        expect(formatted.conditionExpression).toBe('No condition specified');
+        expect(formatted.userAttributes).toEqual([]);
+        // Everything the row does carry still comes through.
+        expect(formatted.id).toBe('rBAD');
+        expect(formatted.groupIds).toEqual(['group1']);
+      });
+
+      it('costs one row, not the whole page, when formatted in a map', () => {
+        const good: OktaGroupRule = {
+          id: 'rOK',
+          name: 'Good Rule',
+          status: 'ACTIVE',
+          type: 'group_rule',
+          created: '2024-01-01T00:00:00Z',
+          lastUpdated: '2024-01-01T00:00:00Z',
+          conditions: {
+            expression: {
+              value: "user.department == 'Engineering'",
+              type: 'urn:okta:expression:1.0',
+            },
+          },
+        };
+
+        const page = [poisonedRule(42), good];
+        const formatted = page.map((rule) => formatRuleForDisplay(rule, undefined, []));
+
+        expect(formatted.map((r) => r.id)).toEqual(['rBAD', 'rOK']);
+        expect(formatted[1].condition).toBe("department == 'Engineering'");
+        expect(formatted[1].userAttributes).toEqual(['department']);
+      });
+    });
   });
 
   describe('timeAgo', () => {
