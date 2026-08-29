@@ -824,17 +824,18 @@ describe('getUserInfo', () => {
 });
 
 describe('getAppInfo', () => {
-  it('is page-WINS: a scraped name beats the API name (opposite of getUserInfo)', async () => {
+  it('is page-WINS and issues NO request when the DOM supplies the name', async () => {
     setPageUrl(`/admin/app/${APP_ID}`);
     document.body.innerHTML = '<span data-se="app-name">Page App</span>';
     routeFetch([[`/api/v1/apps/${APP_ID}`, () => res({ name: 'api_app', label: 'API Label' })]]);
 
     await expect(send({ action: 'getAppInfo' }).response).resolves.toEqual({
       success: true,
-      data: { appId: APP_ID, appName: 'Page App', appLabel: 'API Label' },
+      // `appLabel` is deliberately undefined here: the DOM cannot supply it and the
+      // fetch that could is skipped, because nothing reads the field (D-059).
+      data: { appId: APP_ID, appName: 'Page App', appLabel: undefined },
     });
-    // The API is still called even though the page already won.
-    expect(fetchedEndpoints()).toEqual([`/api/v1/apps/${APP_ID}`]);
+    expect(fetchedEndpoints()).toEqual([]);
   });
 
   it('falls back to the API name, then label, then "Unknown" (no zod validation here)', async () => {
@@ -845,6 +846,9 @@ describe('getAppInfo', () => {
       success: true,
       data: { appId: APP_ID, appName: 'Only Label', appLabel: 'Only Label' },
     });
+    // The fallback path is the ONLY one that issues a request — and the only one
+    // that can populate `appLabel`.
+    expect(fetchedEndpoints()).toEqual([`/api/v1/apps/${APP_ID}`]);
   });
 
   it('API success with an empty payload → appName "Unknown"', async () => {

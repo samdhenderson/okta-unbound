@@ -170,6 +170,25 @@ if (!isDuplicateInjection) {
   chrome.runtime.onMessage.addListener(handleMessage);
 }
 
+/**
+ * Resolve the current page's app ID and name.
+ *
+ * The id comes from the URL and the name from the page heading; a single
+ * `GET /api/v1/apps/{id}` read runs **only when the DOM came up empty**, in the
+ * same shape as {@link handleGetGroupInfo}. This handler is on the `ContextBar`
+ * masthead's feed, which re-detects on every navigation of the live Okta tab, so
+ * an unconditional read cost one request per app page visited (D-059).
+ *
+ * **`appLabel` is deliberately best-effort and only populated on that fallback
+ * path.** The DOM cannot supply it, and as of this change nothing in `src/` reads
+ * `AppInfo.appLabel` — the only consumer of app page context is `App.tsx`, which
+ * reads `appName` for the masthead's entity name. So when the page heading answers,
+ * `appLabel` is left `undefined` rather than spending a request to fill a field no
+ * one renders. A future consumer that genuinely needs the label must re-introduce
+ * the fetch on its own terms (and say why), not rely on it arriving by accident.
+ *
+ * @returns A response carrying {@link AppInfo}, or an error when not on an app page.
+ */
 async function handleGetAppInfo(): Promise<MessageResponse<AppInfo>> {
   log.debug('Processing getAppInfo request');
 
@@ -191,20 +210,22 @@ async function handleGetAppInfo(): Promise<MessageResponse<AppInfo>> {
     let appLabel: string | undefined;
     log.debug('Extracted appName from page', { found: Boolean(appName) });
 
-    // Fetch app details from API
-    log.debug('Fetching app details from API');
-    try {
-      const response = await handleMakeApiRequest(`/api/v1/apps/${appId}`, 'GET');
-      if (response.success && response.data) {
-        appName = appName || response.data.name || response.data.label || 'Unknown';
-        appLabel = response.data.label;
-        log.debug('Fetched app details from API', {
-          hasName: Boolean(appName),
-          hasLabel: Boolean(appLabel),
-        });
+    // Fallback: fetch from API if not found in DOM
+    if (!appName) {
+      log.debug('Fetching app details from API');
+      try {
+        const response = await handleMakeApiRequest(`/api/v1/apps/${appId}`, 'GET');
+        if (response.success && response.data) {
+          appName = response.data.name || response.data.label || 'Unknown';
+          appLabel = response.data.label;
+          log.debug('Fetched app details from API', {
+            hasName: Boolean(appName),
+            hasLabel: Boolean(appLabel),
+          });
+        }
+      } catch (e) {
+        log.warn('Failed to fetch app details from API', e);
       }
-    } catch (e) {
-      log.warn('Failed to fetch app details from API', e);
     }
 
     const result = {
