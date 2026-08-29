@@ -302,7 +302,6 @@ export const SCRIPT: Scene[] = [
       { beat: 'facets', speed: 'dwell', easeMs: 500, holdMs: 2000 },
       { beat: 'filter', speed: 'half', easeMs: 400, holdMs: 500 },
       { beat: 'compose', speed: 'half', easeMs: 350, holdMs: 700 },
-      { beat: 'sort', speed: 'natural', easeMs: 400, holdMs: 400 },
       { beat: 'roster', speed: 'dwell', easeMs: 350, holdMs: 800, tailMs: 1800 },
     ],
     marks: [

@@ -47,15 +47,6 @@ import { READY, SCROLL_ROOT } from './selectors.mjs';
  * quadruple before anyone has to look at this number again.
  */
 const PREROLL_QUIET_MS = 300;
-/**
- * Ceiling on waiting for the shell's own animations, in ms.
- *
- * A cap and not a timeout to fail on: an animation that never finishes is a
- * product defect worth filming rather than a reason to refuse the take, and the
- * quiet gate immediately after this is what actually decides whether the panel
- * is fit to roll on.
- */
-const PREROLL_ANIMATION_CAP_MS = 3000;
 const PREROLL_BUDGET_MS = 4000;
 
 const argv = process.argv.slice(2);
@@ -220,26 +211,8 @@ async function filmChapter(browser, url, chapter) {
     // than ahead of it. Stillness is not the same fact as finished, and this is
     // the case that separates them.
     //
-    // So the animations are awaited directly, and only then is quiet asked for.
-    // Scoped to the panel and to the document timeline: a scroll-driven
-    // `.dock-band` has a `finished` that resolves at 100% range progress and
-    // never before, which is the hang ADR-0045 refused Storybook's own
-    // `waitForAnimations` over. Filtering by timeline keeps that trap out while
-    // still covering every ordinary transition.
-    await page
-      .evaluate(async (cap) => {
-        const root = document.getElementById('storybook-root');
-        if (!root) return;
-        const running = root
-          .getAnimations({ subtree: true })
-          .filter((a) => a.timeline === document.timeline);
-        await Promise.race([
-          Promise.allSettled(running.map((a) => a.finished)),
-          new Promise((r) => setTimeout(r, cap)),
-        ]);
-      }, PREROLL_ANIMATION_CAP_MS)
-      .catch(() => {});
-
+    // `settled` awaits the shell's animations before asking for quiet, for
+    // exactly this reason, so the pre-roll is the same call every beat makes.
     const preroll = await page.evaluate((opts) => window.__CAP__.settled(opts), {
       quiet: PREROLL_QUIET_MS,
       budget: PREROLL_BUDGET_MS,
