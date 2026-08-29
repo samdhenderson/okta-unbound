@@ -227,7 +227,7 @@ heuristic and no allow-list of endpoints.
   unrelated surfaces break at once and concludes the extension is broken rather
   than that they need to sign in again. There is also nothing to stop the
   scheduler draining a full queue into the same 401 thirty times over.
-- **Done when:** `docs/adr/0041-a-401-is-a-session-not-a-request.md` exists at
+- **Done when:** `docs/adr/0054-a-401-is-a-session-not-a-request.md` exists at
   Status: Proposed and answers, at minimum: **where** the signal surfaces (the
   scheduler sees every request and is the only layer that can pause the queue —
   that is the argument for it over the content script); **what** the panel
@@ -238,6 +238,11 @@ heuristic and no allow-list of endpoints.
   way — the `D-013` policy and this one meet there.
 - **Risk:** None to write. Medium to implement, which is why the ADR comes first.
 - **Status:** research:awaiting-review
+- **ADR written 2026-08-29** (`chore/unstick-backlog`), at Status: Proposed:
+  `docs/adr/0054-a-401-is-a-session-not-a-request.md`. The number this item reserved on 2026-08-24 had been taken by an
+  unrelated ADR before the item was picked up, so the proposal is **ADR-0054** — see
+  `D-072`. Status stays `research:awaiting-review` deliberately: only Sam's
+  acceptance moves it to `open`, never the session that wrote it.
 
 ### D-007c · A 429 is never retried, because it is not an error
 
@@ -1147,6 +1152,21 @@ more expensive the day an audit viewer ships.
       disagree. Confirm no surface reads one while another reads the other
       within a single view.
 
+  11. **An expired session really returns 401.** ADR-0054 rests entirely on
+      `isSessionExpired()` firing, which requires Okta to answer an expired
+      admin session with HTTP 401 rather than a 302 to a sign-in page. If these
+      endpoints redirect instead, the whole suspension mechanism sits idle and
+      the panel behaves exactly as it does today. Sign out in a second tab and
+      watch what the next queued request actually receives.
+  12. **`String.substring` out-of-range behaviour.** ADR-0055 refuses to
+      implement it because Okta's clamp-versus-throw behaviour at the boundary
+      is undocumented, and the disagreement is silent. Write a rule using it
+      with an out-of-range index and record which it does.
+  13. **Relative time-window boundaries.** Also ADR-0055: whether a "within N
+      days" condition is inclusive or exclusive, and whether it evaluates
+      against org time or UTC. A rule granting access for 30 days that the
+      panel reads as 31 is a security claim the panel got wrong.
+
 - **Done when:** Each numbered item above has a recorded verdict against a
   real org — confirmed, refuted, or not-reachable — with any refuted item
   filed as its own `DEBT.md` entry. Assumptions that turn out to be wrong are
@@ -1170,6 +1190,13 @@ more expensive the day an audit viewer ships.
   available work to every future run that cannot do it either. **This needs
   Sam, or any session with a real org; it is not a breakdown problem and
   splitting it further will not help.**
+- **Confirmed 2026-08-29 by Sam**, and two additions. The re-gate above is
+  right and stands. `I-014` is blocked from the other direction on the same
+  missing thing — its sparse-patch-merge blocker also cannot be closed from the
+  repo — so if a live-org session happens, run both in it. And items 11–13 were
+  appended by `chore/unstick-backlog`: each is a question one of ADR-0054 /
+  ADR-0055 rests on and cannot answer from the repo, which is exactly the shape
+  of thing this item collects.
 
 ### D-029 · Retire `shared/rulesCache` — the last hand-rolled cache
 
@@ -1271,10 +1298,37 @@ origin)` imperatively rather than `useOrgSnapshot` —
   refresh semantics, all of which mean "I fetch on demand" and have to be
   re-expressed against a store that syncs in the background. Four test files
   mock `RulesCache` for this path.
-- **Done when:** Not checkable yet — needs Sam on what `force` and the API-cost
-  readout should mean once the panel no longer initiates the walk.
-- **Risk:** Medium. This is the slice that changes what the Rules tab _is_.
-- **Status:** blocked:needs-human
+- **Decided 2026-08-29 by Sam — `force` and the cost readout both go.** The tab
+  becomes a pure reader of the snapshot store. There is no refresh button and no
+  API-cost number; freshness is stated instead, as a "synced N minutes ago" line
+  sourced from `useOrgSnapshot`'s `lastFullWalkAt`.
+
+  The reasoning, recorded so the implementer does not have to re-derive it: once
+  the background owns the walk, **both readouts become lies.** `force` would
+  promise the admin a fetch this tab no longer performs, and an API-cost number
+  scoped to a tab that issues no requests is either zero or someone else's
+  spend — and the version that reports someone else's spend is worse, because it
+  looks like an answer. A timestamp is the honest replacement: it is the thing
+  the admin actually wants to know (is this current?) and it is a fact the tab
+  can state without owning anything.
+
+  This deletes behaviour rather than porting it. That is the point — the item is
+  the slice that changes what the Rules tab _is_, and what it becomes is a view.
+
+- **Done when:** `useRulesData` no longer fetches, no longer reports progress or
+  `apiCost`, and exposes no `force`. `stats` is derived from the snapshot's raw
+  rules (the four-line reduce whose shape already exists at
+  `groupDiscovery.ts:94-99`), `conflicts` from `detectConflicts(rawRules)`, and
+  the tab header's timestamp from `lastFullWalkAt`. The Rules tab renders a
+  freshness line in place of the refresh control and the cost readout. The four
+  test files that mock `RulesCache` for this path are retargeted
+  assertion-by-assertion per ADR-0022, with a PR note saying what stays covered;
+  any assertion pinning the refresh button or the cost number is removed under
+  the "subject was deleted" carve-out, not weakened.
+- **Risk:** Medium. This is the slice that changes what the Rules tab _is_. It
+  removes a control admins can see, so it is user-visible and wants a line in
+  the PR description, not just a commit message.
+- **Status:** open
 
 ### D-029d · Delete the duplicate walk, then the cache
 
@@ -1301,8 +1355,13 @@ origin)` imperatively rather than `useOrgSnapshot` —
   carries an ADR-0022 note. ADR-0040 §6's Status paragraph is updated to say the
   retirement is complete — and not before.
 - **Risk:** Medium. Land last, after `D-029a`–`c`.
-- **Status:** blocked:needs-human
-- **Depends on:** `D-029a`, `D-029b`, `D-029c`
+- **Status:** blocked:D-029c
+- **Re-gated 2026-08-29 by Sam.** This was `blocked:needs-human`, but the human
+  question was never in this item — it was `D-029c`'s, and it is now answered
+  there. What remains is an ordering constraint, not a judgment call, so the
+  gate word now names the real blocker. It becomes `open` the moment `D-029c`
+  lands; no further decision from Sam is needed or should be waited for.
+- **Depends on:** `D-029a` (done:#95), `D-029b` (done:#97), `D-029c` (open)
 
 ### D-030 · `lint:cited-paths` is red on `main` right now
 
@@ -2017,7 +2076,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   every screenshot and every test of the happy path shows `0` either way.
 
   Docs:
-  - https://support.okta.com/help/s/article/Impact-of-Deactivating-and-Deleting-Okta-Group-Rules
+  - https://support.okta.com/help/s/article/what-happens-if-group-rules-are-deactivated-and-deleted?language=en_US
   - https://developer.okta.com/docs/api/openapi/okta-management/management/tag/GroupRule/#tag/GroupRule/operation/deleteGroupRule
 
 - **Done when:** The module names the case it actually computes rather than
@@ -2031,7 +2090,50 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Risk:** Medium. This changes a contract and user-facing claims, so it is
   **architecturally significant** and goes through the plan-and-approval gate as
   its own PR. Do not fold it into unrelated work.
-- **Status:** blocked:needs-human
+- **Status:** open
+- **Approved 2026-08-29 by Sam**, conditional on establishing what Okta actually
+  does on delete. That was done before approving; the verdict is below and the
+  item is now scoped enough to implement without re-researching it.
+
+  **The three cases, verified against Okta's own documentation:**
+
+  | Verb | What happens to existing members | Reversible? |
+  | --- | --- | --- |
+  | **Deactivate** | Nobody moves. "Okta does not remove users that the rule added to a group. The group membership remains, but the rule no longer applies to new users." | Yes — reactivate. |
+  | **Delete, `removeUsers=false`** (or omitted) | "Users remain members of the group, but the rule no longer manages the membership." They become ordinary manual members. | **No.** |
+  | **Delete, `removeUsers=true`** | "Okta removes the users from the group entirely." | **No.** |
+
+  Okta states the delete choice plainly: *"The choice an administrator makes when
+  deleting a group rule is permanent and irreversible."* Recreating the rule
+  afterwards does not undo either branch — it re-evaluates against the directory
+  as it is now, which is a different set.
+
+  `removeUsers` is an **optional Boolean** query parameter on
+  `DELETE /api/v1/groups/rules/{ruleId}`, documented as "Indicates whether to
+  keep or remove users from groups assigned by this rule". **Omitting it keeps
+  the users.** Any UI this item produces must send the parameter explicitly
+  rather than relying on that default, because the safe default and the
+  destructive one differ by a single absent query string.
+
+  **Two corrections to this item's own filing, found while verifying it:**
+
+  1. The support-article URL it cited 404s. The live article is
+     `what-happens-if-group-rules-are-deactivated-and-deleted`, and the citation
+     above has been repointed. The quotes in the original filing are accurate —
+     only the link had rotted.
+  2. `.claude/skills/okta-api/references/groups-and-rules.md` documents the
+     deactivate case correctly at `:154` and `:311` but **says nothing about
+     `removeUsers` at all** — the delete endpoint is listed at `:163` with no
+     mention of the parameter or the choice it encodes. That is the same blind
+     spot the module has, in the reference that is supposed to catch it. Filed
+     as `D-073`.
+
+  **Scope confirmation:** implement as the **Done when** above already states —
+  rename `losing` for the delete-with-removal case, have deactivate report the
+  newly-**unattributed** set, audit all three consumers, fix the `[verified:]`
+  citation. No preliminary ADR: the semantics are now documented facts rather
+  than a design space, and the two-verb model is Okta's, not ours to choose. It
+  remains its own PR and must not be folded into unrelated work.
 - **Related:** ADR-0043 (the demo reel's rule-impact chapter is held out of the
   reel until this lands; when it returns it argues **both verbs side by side** —
   deactivate, where nobody moves but N members become unattributed, and delete,
@@ -2529,7 +2631,7 @@ affects every scroll box in the app, on every platform.
 - **Category:** perf
 - **Priority:** P2
 - **Size:** M
-- **Files:** `docs/adr/0047-one-context-engine.md` (to be created); read-only for
+- **Files:** `docs/adr/0058-one-context-engine.md` (to be created); read-only for
   reference: `src/sidepanel/hooks/useOktaTabContext.ts`,
   `src/sidepanel/hooks/useGroupContext.ts`,
   `src/sidepanel/hooks/useOktaPageContext.ts`, `src/sidepanel/App.tsx`
@@ -2554,6 +2656,11 @@ affects every scroll box in the app, on every platform.
   interacts with a single engine. **Zero files under `src/`.**
 - **Risk:** n/a — research only.
 - **Status:** research:awaiting-review
+- **ADR written 2026-08-29** (`chore/unstick-backlog`), at Status: Proposed:
+  `docs/adr/0058-one-context-engine.md`. The number this item reserved on 2026-08-28 had been taken by an
+  unrelated ADR before the item was picked up, so the proposal is **ADR-0058** — see
+  `D-072`. Status stays `research:awaiting-review` deliberately: only Sam's
+  acceptance moves it to `open`, never the session that wrote it.
 - **Related:** `D-059` (the other traffic cost the re-gate exposed), ADR-0018,
   ADR-0026
 
@@ -2816,3 +2923,82 @@ affects every scroll box in the app, on every platform.
   into code.
 - **Status:** open
 - **Related:** `D-059`
+
+### D-072 · A backlog item that reserves an ADR number always loses it
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `DEBT.md`, `IMPROVEMENTS.md`, `docs/adr/README.md` (the "Adding an
+  ADR" section)
+- **Verified:** 2026-08-29 — enumerated, not sampled. **All five**
+  `research:awaiting-review` items named an ADR filename in their **Files**
+  list, and **all five numbers had been taken** by an unrelated ADR before the
+  item was picked up: `D-007b` reserved 0041 (taken by the API explorer),
+  `I-008` reserved 0042 (audit log), `I-012` reserved 0043 (the reel's stage),
+  `I-018` reserved 0046 (the response layer), `D-062` reserved 0047 (elevation).
+  Five for five.
+- **Problem:** The convention is that a research item names the ADR it will
+  produce, filename and all. But an ADR number is claimed by whoever *writes*
+  one, and feature branches write them continuously — `0041`–`0053` all landed
+  in the five days after these items were filed. A backlog item can sit for
+  weeks. So the reservation is a claim on a shared sequence made by the party
+  least able to act on it, and it is not merely unreliable: **it failed every
+  single time it was tried.**
+
+  The failure is quiet in the way that matters. `lint:cited-paths` only checks
+  that cited paths *resolve*, so a reserved-but-not-yet-written filename is
+  invisible to it while the item waits, and once the number is taken the item
+  now points at a real file about a completely different subject. `I-018`'s
+  reserved `0046` resolves today — to the response-layer ADR. A reader
+  following that citation lands somewhere plausible and wrong, which is worse
+  than a broken link.
+- **Done when:** The item template stops reserving numbers. A research item
+  names its ADR by **title only** ("an ADR on how deep the snapshot goes"), and
+  the number is assigned when the file is written. `docs/adr/README.md`'s
+  "Adding an ADR" section says so explicitly, since that is where "number
+  sequentially" is already stated and is where the next person will look. Any
+  remaining reserved filename in either ledger is converted to a title.
+- **Risk:** None — a convention change plus a handful of prose edits. The five
+  affected items were repointed by hand on `chore/unstick-backlog`; this item
+  is about stopping the sixth.
+- **Status:** open
+- **Related:** `D-030` (the other way a citation goes stale without failing a
+  gate)
+
+### D-073 · The `okta-api` skill documents rule deletion without `removeUsers`
+
+- **Category:** standards
+- **Priority:** P2
+- **Size:** S
+- **Files:** `.claude/skills/okta-api/references/groups-and-rules.md:163,297-311`
+- **Verified:** 2026-08-29 — found while verifying `D-052` against Okta's docs.
+- **Problem:** The skill's group-rule section lists
+  `DELETE /api/v1/groups/rules/{ruleId}` at `:163` with no mention of the
+  `removeUsers` query parameter, and its "Rule impact: blast radius before a
+  change" section at `:297-311` explains the **deactivate** case correctly
+  ("Deactivating a rule does not remove existing members") while never stating
+  what **delete** does.
+
+  That is the same blind spot `D-052` records in `shared/membership/ruleImpact`,
+  sitting in the reference that exists to catch exactly this. Worse, `:311`
+  carries a `[verified: shared/membership/ruleImpact]` marker — so the skill
+  vouches for the module using the module, and a reader consulting the skill
+  before touching rule impact is told the half of the story that is already
+  right and nothing about the half that is wrong.
+
+  The missing facts, established under `D-052`: `removeUsers` is an optional
+  Boolean; omitting it **keeps** users as now-unmanaged members; `true` removes
+  them from the group entirely; both delete branches are irreversible, unlike
+  deactivate.
+- **Done when:** `groups-and-rules.md` documents the three-way distinction
+  (deactivate / delete-keep / delete-remove) with its reversibility, names
+  `removeUsers` on the endpoint listing, and carries a `[docs]` marker with the
+  live support-article URL. The `[verified:]` marker at `:311` is only correct
+  once `D-052` has landed, so this item states the API fact independently of the
+  module rather than citing it.
+- **Risk:** None to the app — skill documentation only. The risk in leaving it
+  is that the skill is what a future session reads *before* implementing
+  `D-052`, and it currently omits the parameter that item turns on.
+- **Status:** open
+- **Related:** `D-052` (the module-side defect this reference failed to catch)
