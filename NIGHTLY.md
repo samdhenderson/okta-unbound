@@ -119,7 +119,7 @@ code anywhere ... zero hits searching for 401", which `D-007a` falsified. The
 rewrite deliberately does not overclaim — 429 retry is still absent (`D-007c`),
 and exactly one surface consumes `isSessionExpired`.
 
-**PR:** #PRNUM
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/102 — three items, not merged.
 
 **Backlog after:** 57 open / 107 status-carrying items (115 headed
 entries, 8 of which are umbrella parents that carry no status of their own:

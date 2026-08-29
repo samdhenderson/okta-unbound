@@ -201,7 +201,7 @@ heuristic and no allow-list of endpoints.
 - **Risk:** Low. Touches the shape every API caller reads, so it is wide, but the
   compiler finds every site. Route through `security-logging-reviewer` anyway:
   it is the request path.
-- **Status:** claimed:claude/stoic-gates-cw3s8y
+- **Status:** done:#102
 - **Related:** absorbs what `D-027` wanted before that item was overtaken.
 
 ### D-007b · One expired session, not thirty failed requests
@@ -2339,7 +2339,7 @@ affects every scroll box in the app, on every platform.
   expression. A test pins whichever guarantee is chosen.
 - **Risk:** Low to investigate. The defect it protects against is a whole-surface
   outage from a single malformed row, which is why this is P2 and not P3.
-- **Status:** claimed:claude/stoic-gates-cw3s8y
+- **Status:** done:#102
 - **Related:** `D-050`
 
 ### D-056 · `AlertMessage` hand-rolls two raw buttons inside `components/shared`
@@ -2451,7 +2451,7 @@ affects every scroll box in the app, on every platform.
   whatever is decided about `appLabel` is stated in the handler's doc comment
   rather than left to be rediscovered.
 - **Risk:** Low — one handler, already covered by `content/index.test.ts`.
-- **Status:** claimed:claude/stoic-gates-cw3s8y
+- **Status:** done:#102
 - **Related:** the Overview-tab removal (which promoted this from harmless to
   per-page), `D-007a`
 
