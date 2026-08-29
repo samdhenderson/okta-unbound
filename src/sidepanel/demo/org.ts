@@ -79,15 +79,28 @@ export class SeededRandom {
 /**
  * Format an Okta-shaped id with a `FAKE` infix.
  *
- * Real Okta ids are 20 characters of base-62 after a two-or-three character
- * type prefix. These keep the prefix (so anything that branches on it behaves)
- * and make the rest obviously synthetic.
+ * Real Okta ids are a three-character type prefix followed by 17 more, and
+ * `shared/utils/oktaId.ts` enforces exactly that: `oktaIdKind` returns `null`
+ * for anything of a different length, and the jump bar uses it to decide
+ * whether a query is an id at all.
+ *
+ * **The width is load-bearing, not cosmetic.** These ids were padded to four
+ * digits, making them 11 characters, which no code path ever complained about
+ * because nothing measured them — until the Home chapter pasted one into the
+ * jump bar and the panel classified it as a name search. It found nothing, and
+ * it was right to: an 11-character string is not an Okta id. The fixture had
+ * been wrong for as long as it had existed and only a feature that validates
+ * ids could reveal it.
+ *
+ * The prefix is kept so anything that branches on it behaves, and the rest
+ * stays obviously synthetic.
  *
  * @param prefix - The Okta type prefix, e.g. `00u` for a user.
- * @param n - A per-entity ordinal, zero-padded to four digits.
+ * @param n - A per-entity ordinal, zero-padded so `FAKE` plus the digits fill
+ * the 17 characters a real id carries after its prefix.
  */
 export function fakeId(prefix: string, n: number): string {
-  return `${prefix}FAKE${String(n).padStart(4, '0')}`;
+  return `${prefix}FAKE${String(n).padStart(13, '0')}`;
 }
 
 /** One department and the titles that exist inside it. */
