@@ -60,6 +60,7 @@ convention; the specs in [`../`](../README.md) describe the _what_.
 
 | [0051](./0051-a-verb-strip-for-a-list-rung.md) | A verb strip for a list rung | Accepted | Discharges 0039's deferral. `GroupSelectionBar` → `GroupsListActionBar`. The leading position is a safety property; the rung drops its nested scroller so the strip docks; new `subRow` slot. |
 | [0052](./0052-the-demo-org-can-be-written-to.md) | The demo org can be written to | Proposed | Amends 0043. Patch overlay in `demo/state.ts`, not a mutated seed; memberships re-derive on write except `HAND_MANAGED`'s frozen sample; re-seeds the snapshot and fires `snapshotUpdated`; a walk refuses the take if the named group's row does not appear. |
+| [0053](./0053-a-chapter-is-several-acts-on-one-tab.md) | A chapter is several acts on one tab | Proposed | Amends 0045. `Scene` → `{ id, title, acts: Act[] }`; `chapterTab` asserts one tab per chapter; `kind` drops out of `FilmIndex` for the act's `label`, stays in the capture manifest; typed change, no re-shoot. |
 
 ## Adding an ADR
 
