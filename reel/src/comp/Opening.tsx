@@ -14,20 +14,14 @@
  * tab, and that claim is worth more stated once, up front, than demonstrated
  * seven times without ever being said.
  *
- * ## Why this does not use `Margin`
+ * ## It uses the same slide as every chapter
  *
- * It very nearly does — the premise is three accumulating bands, which is
- * exactly what a chapter's register is. But `Margin`'s `proof` band stamps
- * `Read off the panel` above itself, and that is not decoration: it is the
- * promise `figure()` enforces, that the number beside it came off the panel
- * during capture. Nothing here has been read off anything. There is no panel on
- * screen yet.
- *
- * So the trust line gets `proof`'s weight and colour without `proof`'s stamp,
- * and the honest way to have that is to not reach for the component whose whole
- * job is making that stamp inseparable from that styling. The type scale and the
- * palette are shared from {@link module:reel/theme}, which is where the design
- * language actually lives.
+ * A headline and a couple of points, hung off the same left rule, arriving on
+ * the same spring. The premise is not a different kind of statement from the
+ * ones the chapters make, so it should not look like one. It used to have its
+ * own copy of the band code, because the margin's `proof` band stamped
+ * `Read off the panel` above itself and nothing here has been read off
+ * anything. The stamp is gone, so the duplication can go with it.
  */
 import React from 'react';
 import {
@@ -39,6 +33,7 @@ import {
   useVideoConfig,
 } from 'remotion';
 import { Backdrop } from './Backdrop';
+import { Margin } from './Margin';
 import { FRAME, INTER, STAGE, TYPE } from '../theme';
 
 /** The title card: the product's name and what it is. */
@@ -51,12 +46,11 @@ export const PREMISE_FRAMES = 660;
 export const OPENING_FRAMES = TITLE_FRAMES + PREMISE_FRAMES;
 
 /**
- * When each premise band arrives, in frames from the start of the premise.
+ * When the headline and its two points arrive, in frames from the premise.
  *
- * Spaced by reading time rather than evenly. The first band is the longest
- * sentence and lands alone; the second is the consequence of it and can follow
- * closely; the third changes subject, from what the job is to what the tool
- * does about it, so it gets the widest gap in front of it.
+ * Spaced by reading time rather than evenly, and spaced generously: this is the
+ * first thing anyone sees and there is no narration to carry them through it.
+ * Three and a bit seconds between points is enough to read one and look up.
  */
 const BAND_AT = [0, 200, 400] as const;
 
@@ -103,8 +97,7 @@ const Title: React.FC = () => {
               color: STAGE.inkDim,
             }}
           >
-            Group and user administration in the side panel, beside the org you are already signed
-            in to.
+            Group and user admin in a side panel, beside the org you are already signed in to.
           </div>
           <div
             style={{
@@ -116,8 +109,7 @@ const Title: React.FC = () => {
               color: STAGE.inkDim,
             }}
           >
-            The questions you would otherwise take to a script and a spreadsheet, answered without
-            leaving the tab.
+            No server. Nothing leaves the tab.
           </div>
         </div>
       </AbsoluteFill>
@@ -125,90 +117,27 @@ const Title: React.FC = () => {
   );
 };
 
-interface BandProps {
-  from: number;
-  style: React.CSSProperties;
-  children: React.ReactNode;
-}
-
-/** One premise band, arriving on the same spring the margin's bands use. */
-const Band: React.FC<BandProps> = ({ from, style, children }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const enter = spring({ frame: frame - from, fps, config: { damping: 200, mass: 0.6 } });
-  return (
-    <div
-      style={{
-        opacity: interpolate(enter, [0, 1], [0, 1]),
-        transform: `translateY(${(1 - enter) * 22}px)`,
-        ...style,
-      }}
-    >
-      {children}
-    </div>
-  );
-};
-
 const Premise: React.FC = () => {
   const out = useExit(PREMISE_FRAMES);
-
   return (
     <AbsoluteFill style={{ fontFamily: INTER, opacity: out }}>
       <Backdrop focusX={FRAME.width / 2} />
-      <AbsoluteFill style={{ alignItems: 'center', justifyContent: 'center' }}>
-        <div
-          style={{
-            width: 1240,
-            // The same left rule every chapter's margin hangs from, so the film
-            // opens in the voice it is going to keep.
-            borderLeft: `2px solid ${STAGE.rule}`,
-            paddingLeft: 46,
-          }}
-        >
-          <Band
-            from={BAND_AT[0]}
-            style={{
-              fontSize: TYPE.claim,
-              fontWeight: 600,
-              color: STAGE.ink,
-              lineHeight: 1.18,
-            }}
-          >
-            Nobody&rsquo;s org is clean. RBAC was half rolled out, attributes are typed by whoever
-            created the account, and last quarter&rsquo;s reorg left values behind that no rule
-            agrees with.
-          </Band>
-          <Band
-            from={BAND_AT[1]}
-            style={{
-              marginTop: 40,
-              fontSize: TYPE.body,
-              fontWeight: 400,
-              color: STAGE.inkDim,
-              lineHeight: 1.5,
-            }}
-          >
-            So the job is corrections. Who is missing what, why the rule did not fire, and a list of
-            names by Friday.
-          </Band>
-          <Band
-            from={BAND_AT[2]}
-            style={{
-              marginTop: 38,
-              fontSize: TYPE.body,
-              fontWeight: 600,
-              color: STAGE.accent,
-              lineHeight: 1.4,
-            }}
-          >
-            {/* Deliberately not "nothing is exported anywhere": there is a CSV
-                export, and the accurate sentence is stronger than the
-                approximate one. What is true is that nothing is sent anywhere. */}
-            There is no server in this. The panel reads the Okta tab you are signed in to, and
-            nothing goes anywhere else.
-          </Band>
-        </div>
-      </AbsoluteFill>
+      <Margin
+        box={{ x: 340, y: 400, width: 1240 }}
+        lines={[
+          { kind: 'headline', text: "Nobody's org is clean.", from: BAND_AT[0] },
+          {
+            kind: 'point',
+            text: 'Rules half rolled out. Attributes typed by hand.',
+            from: BAND_AT[1],
+          },
+          {
+            kind: 'point',
+            text: 'Last quarter\u2019s reorg, still sitting in the data.',
+            from: BAND_AT[2],
+          },
+        ]}
+      />
     </AbsoluteFill>
   );
 };

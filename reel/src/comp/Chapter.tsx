@@ -66,7 +66,7 @@ interface Cue {
   crop: Crop;
   /** Did this mark move the camera? A diagram's lifetime ends at the next one that did. */
   movesCamera: boolean;
-  lines: { register: Line['register']; text: string }[];
+  lines: { kind: Line['kind']; text: string }[];
   diagram?: (manifest: Manifest, plot: Rect, from: number) => React.ReactNode;
 }
 
@@ -219,10 +219,15 @@ const ActFilm: React.FC<ActProps> = ({ chapter, index }) => {
         // a move would end the diagram beside it for nothing — which is what
         // happened the moment every chapter started by naming its home stage.
         movesCamera: stage !== wasStage || crop !== wasCrop,
-        lines: (mark.lines ?? []).map((line) => ({
-          register: line.register,
-          text: typeof line.text === 'function' ? line.text(manifest) : line.text,
-        })),
+        lines: [
+          ...(mark.headline === undefined
+            ? []
+            : [{ kind: 'headline' as const, text: mark.headline }]),
+          ...(mark.points ?? []).map((point) => ({
+            kind: 'point' as const,
+            text: typeof point === 'function' ? point(manifest) : point,
+          })),
+        ],
         diagram: mark.diagram,
       };
     });
@@ -305,9 +310,26 @@ const ActFilm: React.FC<ActProps> = ({ chapter, index }) => {
   const marginBox =
     STAGES[!moving || age >= MARGIN_CLEAR_FRAMES ? active.stage : previous.stage].margin;
 
-  /** Every line that has arrived, in order. Bands accumulate; they never replace. */
-  const lines: Line[] = cues
-    .filter((cue) => frame >= cue.from)
+  /**
+   * The slide on screen: the most recent headline, plus the points cued since.
+   *
+   * Slides replace rather than accumulate. The old margin let every band stay
+   * for the rest of the chapter, on the reasoning that a claim which scrolls
+   * away takes its evidence's subject with it - true of a band, false of a
+   * slide, because a slide carries its own subject in its headline. What
+   * accumulation actually produced was six lines by the end of a chapter with
+   * the newest at the bottom, which is the opposite of where the eye goes.
+   *
+   * Points cued before the first headline still show. A chapter is allowed to
+   * open on a point; it just has nothing to clear.
+   */
+  const arrived = cues.filter((cue) => frame >= cue.from);
+  const lastHeadline = arrived.reduce(
+    (found, cue, i) => (cue.lines.some((line) => line.kind === 'headline') ? i : found),
+    -1,
+  );
+  const lines: Line[] = arrived
+    .slice(Math.max(0, lastHeadline))
     .flatMap((cue) => cue.lines.map((line) => ({ ...line, from: cue.from })));
 
   /**
