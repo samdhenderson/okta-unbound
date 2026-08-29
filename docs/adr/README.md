@@ -60,6 +60,12 @@ convention; the specs in [`../`](../README.md) describe the _what_.
 
 | [0051](./0051-a-verb-strip-for-a-list-rung.md) | A verb strip for a list rung | Accepted | Discharges 0039's deferral. `GroupSelectionBar` → `GroupsListActionBar`. The leading position is a safety property; the rung drops its nested scroller so the strip docks; new `subRow` slot. |
 
+| [0054](./0054-a-401-is-a-session-not-a-request.md) | A 401 is a session, not a request | Proposed | Scopes `D-007b`. Scheduler owns suspension, per origin; queued work fails fast and is never auto-retried; one global `danger` banner, not nine; clears on admin action or tab reload, never a timer; interrupted vs not-attempted audit outcomes. |
+| [0055](./0055-what-the-evaluator-refuses-to-guess.md) | What the evaluator refuses to guess | Proposed | Scopes `I-008`. Extends 0017's allow-list by argument, not by appetite: implement / refuse / uncomputable buckets; date-time gated on an explicit offset; four security constraints per addition; refusals are asserted by test. |
+| [0056](./0056-how-deep-the-snapshot-goes.md) | How deep the snapshot goes | Proposed | Extends 0040. Three cumulative per-origin levels (Essential / Standard / Extended); default drops below today's wiring; every level priced in requests *and* rows; lowering a level deletes rows in the same transaction; membership is never a level. |
+| [0057](./0057-a-keyboard-route-into-the-panel.md) | A keyboard route into the panel | Proposed | Scopes `I-018`. One `_execute_action` command, `⌘⇧K` — no listener, no message, no permission. The chord is suggested not assumed; UI reads it back from `chrome.commands.getAll()`. In-panel ⌘K unchanged. |
+| [0058](./0058-one-context-engine.md) | One context engine | Proposed | Scopes `D-062`. `useGroupContext` becomes a selector over a single `useOktaPageContext`. The two failure semantics stay distinct — a failed probe reports `unknown`, not `admin`, which is the behaviour change to test. |
+
 ## Adding an ADR
 
 Number sequentially, use the Context / Decision / Consequences shape, and set
