@@ -178,11 +178,19 @@ still has a reader, `chapters.mjs`'s own capture step, so it stays.
   or three.
 - `reel/src/comp/Chapter.tsx`: renders a `<Series>` of acts instead of one capture's
   body directly. `chapterLength` sums per-act `buildRamp(...).durationInFrames`.
-  `chapterTab` asserts a single tab across `scene.acts` and throws naming every tab it
-  found if that fails. Chapter-wide state — the margin's accumulation — is scoped to
-  the chapter's `<Series>`, not reset per act, so a claim from act one can still be
-  on screen when act two's evidence arrives if the script wants that; a hard cut is
-  the default because each act still opens on whatever its own first mark declares.
+  `chapterTab` asserts a single tab across `scene.acts` and throws naming the stray
+  act and its tab if that fails.
+- **The margin starts clean at each act, and this is a correction to what was first
+  proposed here.** The intent was to scope band accumulation to the chapter's
+  `<Series>` so a claim from act one could still be standing when act two's evidence
+  arrived. Implementation showed that to be wrong on the only ground that matters:
+  bands stack rather than replace, so a three-act Groups chapter would argue its third
+  scenario underneath six lines about the first two, in a margin that is one column
+  wide. An act _is_ a scenario, and a scenario's evidence belongs to it. Each act
+  therefore resolves its own cues from its own marks and its own clock, which is also
+  what makes an act independently renderable and independently re-shootable. A claim
+  that genuinely spans two acts is restated by the second act, on camera, where a
+  viewer can read it.
 - `reel/src/comp/Reel.tsx`: `CHAPTERS` still derives `at`, `tab`, `from`, `length` per
   chapter from `chapterTab`/`chapterLength`, unchanged in shape — those functions keep
   their chapter-level signature, so `Band` and `FilmIndex`'s across-chapter slide need

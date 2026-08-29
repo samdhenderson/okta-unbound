@@ -1,6 +1,12 @@
 /**
  * @module reel/comp/Chapter
- * @description One chapter: a retimed walk, and the argument beside it.
+ * @description One chapter: one tab, one or more acts, and the argument beside them.
+ *
+ * A chapter is a `<Series>` of acts and an act is one capture (ADR-0053). A
+ * chapter that carries three scenarios is three clips, so a walk change
+ * re-films the twenty seconds it touched rather than the whole chapter, and a
+ * beat that misses ends its act rather than the argument either side of it. A
+ * one-act chapter is the degenerate case and needs no special handling.
  *
  * The whole assembly is derived from two inputs — the capture's manifest and
  * the chapter's entry in `script.ts` — and nothing here holds state. Change the
@@ -13,7 +19,7 @@
  * the beat means the caption follows.
  */
 import React, { useMemo } from 'react';
-import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
+import { AbsoluteFill, Series, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import { capture, clip, type Manifest } from '../captures';
 import { buildRamp } from '../ramp';
 import {
@@ -26,7 +32,7 @@ import {
   type Rect,
   type StageName,
 } from '../layout';
-import { SCRIPT, type Scene } from '../script';
+import { SCRIPT, type Act, type Scene } from '../script';
 import { Backdrop } from './Backdrop';
 import { TAB_DEFS } from '../../../src/sidepanel/tabs';
 import { FilmIndex } from './FilmIndex';
@@ -64,9 +70,16 @@ interface Cue {
   diagram?: (manifest: Manifest, plot: Rect, from: number) => React.ReactNode;
 }
 
+/** How long each act runs, in order. The chapter's own layout, and the band's. */
+export function actLengths(scene: Scene): number[] {
+  return scene.acts.map(
+    (act) => buildRamp(capture(act.capture), act.plan, FRAME.fps).durationInFrames,
+  );
+}
+
 /** How long a whole chapter runs. Needed before rendering to lay out the series. */
 export function chapterLength(scene: Scene): number {
-  return buildRamp(capture(scene.id), scene.plan, FRAME.fps).durationInFrames;
+  return actLengths(scene).reduce((total, length) => total + length, 0);
 }
 
 /**
@@ -74,9 +87,24 @@ export function chapterLength(scene: Scene): number {
  *
  * The registry is the source, not a transcription, so a renamed or reordered
  * tab cannot silently desync the film's index from the product's navigation.
+ *
+ * **And every act in a chapter has to film the same tab.** That is the one
+ * invariant acts exist to hold: a chapter is a tab, visited once, and a second
+ * act shot somewhere else would put the film's rail back where the restructure
+ * took it from - moving backwards inside a chapter, with the band still naming
+ * the tab it left. Checked here rather than trusted, because the tab is a
+ * property of the footage and nothing in the script states it.
  */
 export function chapterTab(scene: Scene): number {
-  const { tab } = capture(scene.id);
+  const tabs = scene.acts.map((act) => capture(act.capture).tab);
+  const [tab] = tabs;
+  const stray = scene.acts.find((act, i) => tabs[i] !== tab);
+  if (stray) {
+    throw new Error(
+      `Chapter "${scene.id}" films tab "${tab}" but its act "${stray.capture}" films ` +
+        `"${capture(stray.capture).tab}". A chapter is one tab (ADR-0053).`,
+    );
+  }
   const index = TAB_DEFS.findIndex((t) => t.id === tab);
   if (index < 0) {
     throw new Error(`Chapter "${scene.id}" films tab "${tab}", which is not in TAB_DEFS.`);
@@ -84,46 +112,63 @@ export function chapterTab(scene: Scene): number {
   return index;
 }
 
-type ChapterProps = {
-  id: string;
-  /**
-   * Draw the rail.
-   *
-   * `Reel` sets this false and draws one continuous rail of its own across
-   * every chapter, which is the only way the highlight can slide *between*
-   * them. A chapter rendered on its own draws a static one, so the per-chapter
-   * compositions still look like the film.
-   */
-  rail?: boolean;
-};
+/** The act running at a frame within a chapter, and where it started. */
+export function actAt(scene: Scene, frame: number): { act: Act; index: number; from: number } {
+  const lengths = actLengths(scene);
+  let from = 0;
+  for (const [index, length] of lengths.entries()) {
+    if (frame < from + length || index === lengths.length - 1) {
+      return { act: scene.acts[index]!, index, from };
+    }
+    from += length;
+  }
+  /* istanbul ignore next - unreachable: acts is non-empty and the loop returns on the last. */
+  throw new Error(`Chapter "${scene.id}" has no acts.`);
+}
 
-/**
- * A chapter is addressed by id, never handed its own `Scene`.
- *
- * That is a Remotion constraint with teeth: `defaultProps` on a `<Composition>`
- * are serialized to JSON so the studio can edit them, and **every function in
- * them is silently dropped**. Passing the scene object through props therefore
- * delivered a chapter with its captions intact and every `diagram` and every
- * computed proof line quietly missing — a render that succeeded and showed less
- * than it was asked to. Resolving from `SCRIPT` here keeps the functions.
- */
-export const Chapter: React.FC<ChapterProps> = ({ id, rail = true }) => {
+/** Look a chapter up, or fail naming what the film does have. */
+function sceneById(id: string): Scene {
   const scene = SCRIPT.find((s) => s.id === id);
   if (!scene) {
     throw new Error(`No chapter "${id}" in SCRIPT. Known: ${SCRIPT.map((s) => s.id).join(', ')}`);
   }
+  return scene;
+}
+
+type ActProps = {
+  /** The chapter this act belongs to. Resolved from `SCRIPT`, never passed. */
+  chapter: string;
+  /** Which act, by position. */
+  index: number;
+};
+
+/**
+ * One act: one clip, retimed, with its own margin and its own camera.
+ *
+ * The margin accumulates *within* an act and starts clean at the next one.
+ * That is deliberate rather than a limit of the sequencing: bands stack, and a
+ * three-act chapter that never cleared would be arguing its third scenario
+ * underneath six lines about the first two. An act is a scenario, and a
+ * scenario's evidence belongs to it.
+ */
+const ActFilm: React.FC<ActProps> = ({ chapter, index }) => {
+  const scene = sceneById(chapter);
+  const act = scene.acts[index];
+  if (!act) {
+    throw new Error(`Chapter "${chapter}" has no act ${index}; it has ${scene.acts.length}.`);
+  }
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const manifest = capture(scene.id);
+  const manifest = capture(act.capture);
 
   if (manifest.panel.width !== 840 || manifest.panel.height !== 980) {
     throw new Error(
-      `${scene.id}: captured at ${manifest.panel.width}x${manifest.panel.height}, ` +
+      `${act.capture}: captured at ${manifest.panel.width}x${manifest.panel.height}, ` +
         'but the composition lays out for 840x980.',
     );
   }
 
-  const ramp = useMemo(() => buildRamp(manifest, scene.plan, fps), [manifest, scene.plan, fps]);
+  const ramp = useMemo(() => buildRamp(manifest, act.plan, fps), [manifest, act.plan, fps]);
 
   /**
    * Marks resolved to frames, with the stage and crop carried forward.
@@ -139,12 +184,12 @@ export const Chapter: React.FC<ChapterProps> = ({ id, rail = true }) => {
   const cues = useMemo<Cue[]>(() => {
     let stage: StageName = WORKING_STAGE;
     let crop = bare;
-    return scene.marks.map((mark) => {
+    return act.marks.map((mark) => {
       const cue = ramp.cues[mark.beat];
       if (!cue) {
         throw new Error(
-          `${scene.id}: mark on beat "${mark.beat}", which the plan does not include. ` +
-            `Planned: ${scene.plan.map((p) => p.beat).join(', ')}`,
+          `${act.capture}: mark on beat "${mark.beat}", which the plan does not include. ` +
+            `Planned: ${act.plan.map((p) => p.beat).join(', ')}`,
         );
       }
       const wasStage = stage;
@@ -167,7 +212,7 @@ export const Chapter: React.FC<ChapterProps> = ({ id, rail = true }) => {
         diagram: mark.diagram,
       };
     });
-  }, [bare, manifest, ramp, scene]);
+  }, [act, bare, manifest, ramp]);
 
   // The active cue is the last one that has arrived, and the camera eases from
   // the one before it. Two cues, one interpolation: no state, no accumulation.
@@ -322,7 +367,13 @@ export const Chapter: React.FC<ChapterProps> = ({ id, rail = true }) => {
     <AbsoluteFill style={{ fontFamily: INTER, color: STAGE.ink }}>
       <Backdrop focusX={focusX} />
 
-      <Panel src={clip(scene.id)} ramp={ramp} pose={panel} crop={crop} reveal={reveal * panelOn} />
+      <Panel
+        src={clip(act.capture)}
+        ramp={ramp}
+        pose={panel}
+        crop={crop}
+        reveal={reveal * panelOn}
+      />
       {panelOn > 0.02 && (
         <div style={{ opacity: panelOn }}>
           <Cursor
@@ -345,14 +396,58 @@ export const Chapter: React.FC<ChapterProps> = ({ id, rail = true }) => {
           {entry.cue.diagram?.(manifest, STAGES[entry.cue.stage].plot, entry.cue.from)}
         </div>
       ))}
+    </AbsoluteFill>
+  );
+};
 
+type ChapterProps = {
+  id: string;
+  /**
+   * Draw the rail.
+   *
+   * `Reel` sets this false and draws one continuous rail of its own across
+   * every chapter, which is the only way the highlight can slide *between*
+   * them. A chapter rendered on its own draws a static one, so the per-chapter
+   * compositions still look like the film.
+   */
+  rail?: boolean;
+};
+
+/**
+ * A chapter is addressed by id, never handed its own `Scene`.
+ *
+ * That is a Remotion constraint with teeth: `defaultProps` on a `<Composition>`
+ * are serialized to JSON so the studio can edit them, and **every function in
+ * them is silently dropped**. Passing the scene object through props therefore
+ * delivered a chapter with its captions intact and every `diagram` and every
+ * computed proof line quietly missing — a render that succeeded and showed less
+ * than it was asked to. Resolving from `SCRIPT` here keeps the functions.
+ *
+ * The band is drawn here rather than inside each act, and reads the running
+ * act's label off the chapter's own clock. Inside an act it would remount at
+ * every act boundary, and the counter is a property of the film.
+ */
+export const Chapter: React.FC<ChapterProps> = ({ id, rail = true }) => {
+  const scene = sceneById(id);
+  const frame = useCurrentFrame();
+  const lengths = actLengths(scene);
+
+  return (
+    <AbsoluteFill style={{ fontFamily: INTER, color: STAGE.ink }}>
+      <Series>
+        {scene.acts.map((act, index) => (
+          <Series.Sequence key={`${act.capture}-${index}`} durationInFrames={lengths[index]!}>
+            <ActFilm chapter={scene.id} index={index} />
+          </Series.Sequence>
+        ))}
+      </Series>
       {rail && (
         <FilmIndex
           at={SCRIPT.findIndex((s) => s.id === scene.id)}
           tab={chapterTab(scene)}
           count={SCRIPT.length}
           title={scene.title}
-          kind={manifest.kind}
+          label={actAt(scene, frame).act.label}
         />
       )}
     </AbsoluteFill>

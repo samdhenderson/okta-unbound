@@ -14,9 +14,8 @@
  */
 import React from 'react';
 import { AbsoluteFill, Series, interpolate, useCurrentFrame } from 'remotion';
-import { capture } from '../captures';
 import { SCRIPT } from '../script';
-import { Chapter, chapterLength, chapterTab } from './Chapter';
+import { Chapter, actAt, chapterLength, chapterTab } from './Chapter';
 import { FilmIndex } from './FilmIndex';
 import { END_CARD_FRAMES, EndCard } from './EndCard';
 import { OPENING_FRAMES, Opening } from './Opening';
@@ -29,7 +28,6 @@ const CHAPTERS = SCRIPT.map((scene, i) => ({
   scene,
   at: i,
   tab: chapterTab(scene),
-  kind: capture(scene.id).kind,
   from: SCRIPT.slice(0, i).reduce((total, earlier) => total + chapterLength(earlier), 0),
   length: chapterLength(scene),
 }));
@@ -82,7 +80,7 @@ const Band: React.FC = () => {
         tab={before.tab + (current.tab - before.tab) * slide}
         count={CHAPTERS.length}
         title={shown.scene.title}
-        kind={shown.kind}
+        label={actAt(shown.scene, frame - shown.from).act.label}
       />
     </div>
   );

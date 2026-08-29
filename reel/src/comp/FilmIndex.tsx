@@ -14,7 +14,7 @@
  * - **This band is the presentation.** It is full-bleed across the top of the
  *   frame, on the film's dark backdrop, at nearly twice the size, and it says
  *   things the product never says: which chapter this is, how many there are,
- *   and whether the chapter is a tour stop or an argument. It is narration.
+ *   and which act of it is running. It is narration.
  *
  * The first cut had only this one, and cropped the app's `ContextBar` and rail
  * off every capture so the reconstruction could stand in their place. That was
@@ -75,8 +75,16 @@ interface FilmIndexProps {
   count: number;
   /** The film's name for the current chapter. */
   title: string;
-  /** `deep` chapters announce themselves as an argument rather than as a stop. */
-  kind: 'tour' | 'deep';
+  /**
+   * The running act's short name, when the chapter has more than one.
+   *
+   * This slot used to read `The tour` or `In depth`, from the manifest's
+   * `kind`. That split stopped meaning anything once every chapter became an
+   * argument about a job rather than a stop on a walk, and a label that is true
+   * of every chapter tells a viewer nothing. A chapter with one act says
+   * nothing here; a chapter with three says which movement is running.
+   */
+  label?: string;
 }
 
 /* --- Metrics -----------------------------------------------------------------
@@ -90,7 +98,7 @@ const GAP = 16;
 /** One chapter's segment in the progress rule. */
 const SEG = { width: 56, gap: 12, height: 5 };
 
-export const FilmIndex: React.FC<FilmIndexProps> = ({ at, tab, count, title, kind }) => {
+export const FilmIndex: React.FC<FilmIndexProps> = ({ at, tab, count, title, label }) => {
   // Whole for all but the half second of a chapter change, so the title is
   // simply in place rather than perpetually animating.
   const settle = 1 - Math.min(1, Math.abs(at - Math.round(at)) * 2);
@@ -203,9 +211,7 @@ export const FilmIndex: React.FC<FilmIndexProps> = ({ at, tab, count, title, kin
           }}
         >
           {`Chapter ${shown} of ${count}`}
-          <span style={{ color: STAGE.accent, paddingLeft: 14 }}>
-            {kind === 'deep' ? 'In depth' : 'The tour'}
-          </span>
+          {label && <span style={{ color: STAGE.accent, paddingLeft: 14 }}>{label}</span>}
         </div>
         <div style={{ position: 'relative', marginTop: 14, height: SEG.height, width: run }}>
           {Array.from({ length: count }, (_, i) => {
