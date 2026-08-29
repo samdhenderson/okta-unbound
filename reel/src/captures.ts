@@ -13,6 +13,7 @@ import apps from '../../captures/apps.json';
 import attributes from '../../captures/attributes.json';
 import compare from '../../captures/compare.json';
 import groups from '../../captures/groups.json';
+import home from '../../captures/home.json';
 import reporting from '../../captures/reporting.json';
 import rules from '../../captures/rules.json';
 import users from '../../captures/users.json';
@@ -65,7 +66,7 @@ export interface Manifest {
   figures: Record<string, Figure>;
 }
 
-const MANIFESTS = { users, groups, apps, rules, compare, attributes, reporting } as const;
+const MANIFESTS = { home, users, groups, apps, rules, compare, attributes, reporting } as const;
 
 /** A chapter id with footage behind it. */
 export type CaptureId = keyof typeof MANIFESTS;

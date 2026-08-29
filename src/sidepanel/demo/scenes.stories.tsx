@@ -43,6 +43,9 @@ import {
 
 import { DEMO_HERO_GROUP_ID, currentGroupsById } from './snapshot';
 import { DEMO_COMPARISON_PAIR, demoUsersById } from './users';
+import { DEMO_ORIGIN, fakeId } from './org';
+import { GROUP } from './memberships';
+import { WORKING_SET_STORAGE_KEY, type WorkingSetRef } from '../../shared/storage/workingSetStore';
 import {
   demoBatchGetUserDetails,
   demoCaptureRuleImpact,
@@ -320,5 +323,92 @@ export const AccessCauses: Story = {
 export const ActionBarShowcase: Story = {
   beforeEach: async () => {
     await stage({ tab: 'groups', latency: 200, context: heroGroupContext });
+  },
+};
+
+/**
+ * The Home tab's working set, seeded so **Pinned** and **Recent** both arrive
+ * with rows rather than the tab's own empty-state copy.
+ *
+ * Reuses the same hero entities the other scenes already made interesting —
+ * {@link DEMO_HERO_GROUP_ID} (Engineering - All) and the
+ * {@link DEMO_COMPARISON_PAIR} — so a jump-bar id lookup for one of these rows
+ * resolves against data the panel already has opinions about, rather than
+ * against an entity invented for this scene alone. `Sales - All` fills out the
+ * fourth row so neither list is a single entry.
+ *
+ * Deliberately respects {@link WorkingSetRef}'s actual shape: `kind`, `id`,
+ * `name`, an optional `lastPane`, and `lastSeenAt` — no email, no status, no
+ * membership, matching what `workingSetStore`'s own module header says this
+ * storage is allowed to hold. One row omits `lastPane` on purpose, so the row
+ * exercises `WorkingSetRow`'s fallback to the bare kind label rather than
+ * `<Kind> · left on <pane>` on every row.
+ */
+function homeWorkingSetSeed(): {
+  version: 1;
+  origins: Record<string, { pinned: WorkingSetRef[]; recent: WorkingSetRef[] }>;
+} {
+  const now = Date.now();
+  const hour = 60 * 60 * 1000;
+  const day = 24 * hour;
+
+  const engineeringGroup = currentGroupsById().get(DEMO_HERO_GROUP_ID);
+  const salesId = fakeId('00g', GROUP.sales);
+  const salesGroup = currentGroupsById().get(salesId);
+  const left = demoUsersById.get(DEMO_COMPARISON_PAIR.left);
+  const right = demoUsersById.get(DEMO_COMPARISON_PAIR.right);
+
+  const pinned: WorkingSetRef[] = [
+    {
+      kind: 'group',
+      id: DEMO_HERO_GROUP_ID,
+      name: engineeringGroup?.profile?.name ?? 'Engineering - All',
+      lastPane: 'Attributes',
+      lastSeenAt: now - 5 * hour,
+    },
+    {
+      kind: 'user',
+      id: DEMO_COMPARISON_PAIR.left,
+      name: left ? `${left.profile.firstName} ${left.profile.lastName}` : 'Amara Okonkwo',
+      lastPane: 'Groups',
+      lastSeenAt: now - 2 * day,
+    },
+  ];
+
+  const recent: WorkingSetRef[] = [
+    {
+      kind: 'user',
+      id: DEMO_COMPARISON_PAIR.right,
+      name: right ? `${right.profile.firstName} ${right.profile.lastName}` : 'Tomas Lindqvist',
+      lastPane: 'Apps',
+      lastSeenAt: now - 30 * 60 * 1000,
+    },
+    {
+      // No `lastPane`: exercises the row's fallback to the bare kind label,
+      // which a rung with no view stack (the truth for a group opened but not
+      // drilled into a pane) actually produces.
+      kind: 'group',
+      id: salesId,
+      name: salesGroup?.profile?.name ?? 'Sales - All',
+      lastSeenAt: now - 3 * day,
+    },
+  ];
+
+  return { version: 1, origins: { [DEMO_ORIGIN]: { pinned, recent } } };
+}
+
+/**
+ * Scene 6 — the Home tab: search the org, pick up where you left off, and see
+ * what needs fixing.
+ *
+ * The jump bar, the org findings and the reports card all read the org
+ * snapshot the same way the other scenes' tabs do, so this stage needs nothing
+ * bespoke for them — `stage()` already seeds it. The one thing no other scene
+ * seeds is the working set, so this one does, via {@link homeWorkingSetSeed}.
+ */
+export const Home: Story = {
+  beforeEach: async () => {
+    await stage({ tab: 'home', latency: 300 });
+    setStorageSeed({ [WORKING_SET_STORAGE_KEY]: homeWorkingSetSeed() });
   },
 };

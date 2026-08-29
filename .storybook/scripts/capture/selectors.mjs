@@ -39,8 +39,9 @@ const startsWith = (value) => new RegExp(`^${rx(value)}`);
  * so the accessible name is the label whether or not it is visually unfurled.
  * That is the only reason this works while the rail is collapsed to glyphs.
  *
- * The nine labels, from `src/sidepanel/tabs.ts`: Overview, Users, Groups, Apps,
- * Rules, Policies, Export, Explorer, History. There is no "Home".
+ * The nine labels, from `src/sidepanel/tabs.ts`: Home, Users, Groups, Apps,
+ * Rules, Policies, Export, Explorer, History. Home replaced Overview — it is the
+ * first tab now, not a missing one.
  */
 export const railTab = (page, label) => page.getByRole('tab', { name: label, exact: true });
 
@@ -58,6 +59,225 @@ export const railTab = (page, label) => page.getByRole('tab', { name: label, exa
  * {@link mfaRescanButton}, which change text only when the state does.
  */
 export const progressBar = (page) => page.locator('[role="progressbar"]');
+
+/* --- Home ------------------------------------------------------------------ */
+
+/**
+ * The jump bar's own scope.
+ *
+ * `JumpBar.tsx` wraps the field and its results in `<section aria-label="Jump
+ * to an entity">`, so every lookup inside it can be scoped through this rather
+ * than through the field's own accessible name — useful once the results list
+ * is on screen and rows need disambiguating from the working set below them,
+ * which sits in its own unrelated `<section>`.
+ */
+export const jumpBarSection = (page) => page.getByRole('region', { name: 'Jump to an entity' });
+
+/**
+ * The jump bar's text field.
+ *
+ * `Input`'s `ariaLabel` prop lands on the native `<input>` as `aria-label`, so
+ * the accessible name is exactly `"Search groups, apps, users, rules"` — one
+ * word short of the field's own placeholder (`"…rules, etc."`), which is a
+ * separate string and not what the accessible name resolves to.
+ *
+ * **There is no submit button.** `JumpBar` wires only `onKeyDown`: Enter calls
+ * `jump.submit()`, Escape clears. A chapter that types an id must press Enter
+ * on the field itself — there is nothing else to click.
+ */
+export const jumpBarInput = (page) =>
+  page.getByRole('textbox', { name: 'Search groups, apps, users, rules' });
+
+/**
+ * The jump bar's clear control.
+ *
+ * Rendered only once `jump.query` is non-empty (`IconButton label="Clear"`
+ * beside the field). Absent on a cold bar — waiting on it before typing
+ * anything times out.
+ */
+export const jumpBarClear = (page) => page.getByRole('button', { name: 'Clear' });
+
+/**
+ * The footnote under an id resolution.
+ *
+ * **Quote it exactly; do not paraphrase.** `JumpBar.tsx` renders one of two
+ * literal strings, and only once `jump.resolution` is set (an id query that
+ * resolved, never a name/email search):
+ *
+ * - `"Exact id match · no request"` — the snapshot answered locally.
+ * - `"Exact id match · 1 request"` — Okta had to be asked.
+ *
+ * The separator is a middle dot (`·`, U+00B7) with a space on each side, not a
+ * hyphen. There is no `data-testid` on this `<p>`; it is matched by its own
+ * text, which is why the two variants are spelled out here rather than
+ * inferred from `cost`.
+ */
+export const jumpResolutionFootnote = (page) => page.getByText(/^Exact id match ·/);
+
+/**
+ * A jump-bar result row, reachable in this build.
+ *
+ * `JumpResultRow` gives a reachable result `ListRow as="button"` with
+ * `ariaLabel={`${name} — open in ${destinationLabel(kind)}`}` (an em dash,
+ * U+2014, not a hyphen), so the accessible name starts with the entity's own
+ * name — `startsWith` is enough, the same trick {@link personRow} uses.
+ *
+ * **An unreachable kind renders no button at all.** `onSelect` is omitted for
+ * a kind `NavigationContext.canNavigateTo` refuses, which drops `ListRow` to
+ * `as="div"` and swaps the row's trailing mark for an `OpenInOktaLink` — a
+ * real anchor, not a disabled control. This selector only ever finds the
+ * reachable form; an "Open in Okta" row is a link, matched by its own name
+ * (`OpenInOktaLink`'s own accessible text), not by this.
+ */
+export const jumpResultRow = (page, name) =>
+  jumpBarSection(page).getByRole('button', { name: startsWith(name) });
+
+/**
+ * The working set's own scope: `Pinned` or `Recent`.
+ *
+ * `WorkingSet.tsx` renders each as its own `<section aria-label="…">` — two
+ * siblings, not one list with a heading each — so a row lookup has to be
+ * scoped to the right one. `Recent` does not exist in the DOM at all until it
+ * has rows (`WorkingSet.tsx`'s `recent.length > 0` gate); `Pinned` is always
+ * present, empty or not, because its empty state is the affordance that
+ * teaches pinning.
+ */
+export const workingSetSection = (page, label) => page.getByRole('region', { name: label });
+
+/**
+ * A working-set row, scoped to `Pinned` or `Recent`.
+ *
+ * **Not distinguishable by its own accessible name.** `WorkingSetRow` names its
+ * `StretchedButton` `Open group` or `Open user` — the kind, not the entity —
+ * so every pinned group row shares one accessible name with every other pinned
+ * group row. The row's real name sits in a plain `<p>` beside the button, so
+ * this filters the `<li>` by that text first and only then looks for the
+ * (single, unambiguous once filtered) `Open …` button inside it — the same
+ * move {@link previewImpactFor} makes for rule cards.
+ *
+ * @param section - `'Pinned'` or `'Recent'`, passed through {@link workingSetSection}.
+ */
+export const workingSetRow = (page, section, name) =>
+  workingSetSection(page, section)
+    .locator('li')
+    .filter({ hasText: name })
+    .getByRole('button', { name: /^Open (group|user)$/ });
+
+/** The org findings card's own scope. */
+export const orgSnapshotCard = (page) => page.getByRole('region', { name: 'This org' });
+
+/**
+ * One finding row in the org card, by its label text — `Groups with no
+ * members`, `Groups no rule fills`, `Deactivated applications`, `Push apps
+ * pushing nothing`, `Paused group rules`.
+ *
+ * **Not distinguishable by its own accessible name either**, and for the same
+ * reason as {@link workingSetRow}: every finding's `StretchedButton` is named
+ * `Open the filtered list`, identically, so this filters the row's `<li>` by
+ * its label first. The number sits in a sibling span the button's
+ * `aria-label` does not include, so nothing here needs to parse it out.
+ */
+export const orgFinding = (page, label) =>
+  orgSnapshotCard(page)
+    .locator('li')
+    .filter({ hasText: label })
+    .getByRole('button', { name: 'Open the filtered list' });
+
+/**
+ * The reports card's own scope.
+ *
+ * Directly beneath {@link orgSnapshotCard} and built from the same row idiom,
+ * but its rows are disclosures rather than links to another tab — see
+ * {@link reportDisclosure}.
+ */
+export const reportsCard = (page) => page.getByRole('region', { name: 'Reports' });
+
+/**
+ * A report row's disclosure control, by its label — `Empty groups nothing
+ * fills`, `App access no rule maintains`.
+ *
+ * **Unlike a working-set or org-card row, this button carries a real, useful
+ * accessible name — just not a clean one.** `Report.tsx` wraps the whole row
+ * (the `FigureNumber` *and* the label) in one `<button aria-expanded>`, and
+ * `FigureNumber` renders its digits as visible text rather than hiding them,
+ * so the computed name is the count and the label run together with no
+ * separator — `"12Empty groups nothing fills"`, the identical whitespace trap
+ * {@link readMfaBreakdown} documents for the MFA breakdown rows.
+ *
+ * **Unanchored on both sides, and the trailing end is the one that matters.**
+ * This was first written anchored to the end of the name, on the reasoning that
+ * the count is a prefix and the label finishes the string. It does not:
+ * `ReportLines` renders the report's `note` inside the same button, after the
+ * label, so the real name runs on into a sentence about Workflows and SCIM. The
+ * anchored form matched nothing and failed as "no element", which reads like a
+ * report that is not rendering rather than a name that is longer than expected.
+ * The two labels are distinct strings, so a substring match is still unique.
+ *
+ * **A report can legitimately have no button at all.** `Report.tsx` renders a
+ * plain `<li>` when `value === null` or `findings.length === 0` — there is
+ * nothing to disclose. A chapter that cannot find this control should check
+ * whether the report has any findings before assuming the selector is wrong.
+ */
+export const reportDisclosure = (page, label) =>
+  reportsCard(page).getByRole('button', { name: new RegExp(rx(label)) });
+
+/**
+ * Every named group inside an opened report.
+ *
+ * Same trap as {@link workingSetRow} and {@link orgFinding}: `FindingRow`'s
+ * `StretchedButton` is named `Open this group` on every row of every report, so
+ * the name identifies the kind and not the entity. That makes it useless for
+ * picking one row and exactly right for counting them, which is what the Home
+ * chapter needs — it checks the number on the disclosure against the number of
+ * rows behind it rather than against a group name someone typed into a walk.
+ */
+export const reportRows = (page) =>
+  reportsCard(page).getByRole('button', { name: 'Open this group' });
+
+/**
+ * Read one org-card finding's number off the panel.
+ *
+ * The label and the figure are siblings inside the row rather than one string,
+ * and the row's accessible name is the identical `Open the filtered list` on
+ * every finding, so neither can be read from the name. The row's text is taken
+ * whole and the integer pulled out of it.
+ *
+ * Returns `null` when the row shows no number. That is a real state, not a
+ * failure: `FigureNumber` renders a placeholder for a `subCount` whose
+ * collection has not resolved, and a chapter that quietly turned that into `0`
+ * would put a finding on camera claiming an org is clean when the truth is that
+ * nobody has looked yet.
+ */
+export async function readOrgFinding(page, label) {
+  const text = await orgSnapshotCard(page).locator('li').filter({ hasText: label }).innerText();
+  const match = text.replace(/,/g, '').match(/\d+/);
+  return match ? Number(match[0]) : null;
+}
+
+/**
+ * Read one report's number off its disclosure.
+ *
+ * Straight off the control's own text, which `Report.tsx` composes as the count
+ * and the label run together with no separator (see {@link reportDisclosure}).
+ * That is a trap for matching and a gift for reading: the digits are the prefix.
+ */
+export async function readReportCount(page, label) {
+  const text = await reportDisclosure(page, label).innerText();
+  const match = text.replace(/,/g, '').match(/\d+/);
+  return match ? Number(match[0]) : null;
+}
+
+/**
+ * How many rows the working set is holding, by section.
+ *
+ * Counted rather than asserted, because the seed is story-side and the cap is
+ * app-side: `useWorkingSet` keeps at most five per section and expires entries
+ * at fourteen days, so what a scene seeds and what the panel shows are two
+ * different numbers and only one of them is on camera.
+ */
+export async function readWorkingSetCount(page, section) {
+  return workingSetSection(page, section).locator('li').count();
+}
 
 /* --- Groups -------------------------------------------------------------- */
 
@@ -537,8 +757,7 @@ export const ruleExpand = (page, name) =>
   page.getByRole('button', { name: `Expand ${attr(name)}` });
 
 /** The Rules toolbar's buckets: `All Rules`, `Active Only`, `Conflicts (N)`. */
-export const ruleFilter = (page, label) =>
-  page.getByRole('button', { name: startsWith(label) });
+export const ruleFilter = (page, label) => page.getByRole('button', { name: startsWith(label) });
 
 /**
  * Read the `RulesStatsGrid` cards: `Total Rules`, `Active`, `Inactive`,
@@ -568,7 +787,9 @@ export async function readRuleStats(page) {
     return out;
   });
   if (!('Total Rules' in stats)) {
-    throw new Error(`readRuleStats: no stats grid on screen (saw ${Object.keys(stats).join(', ')})`);
+    throw new Error(
+      `readRuleStats: no stats grid on screen (saw ${Object.keys(stats).join(', ')})`,
+    );
   }
   return stats;
 }
@@ -587,7 +808,9 @@ export const appStatusFilter = (page, label) =>
 
 /** The Apps toolbar's sort fields: `Name`, `Status`, `Created`. Scoped for the same reason. */
 export const appSort = (page, label) =>
-  page.getByRole('group', { name: 'Sort applications' }).getByRole('button', { name: startsWith(label) });
+  page
+    .getByRole('group', { name: 'Sort applications' })
+    .getByRole('button', { name: startsWith(label) });
 
 /** The Apps search box. Note its own placeholder is not a stable target; the aria label is. */
 export const appSearch = (page) => page.getByLabel('Search applications');

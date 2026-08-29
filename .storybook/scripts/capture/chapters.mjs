@@ -17,18 +17,27 @@
 /**
  * Not filmed yet, and deliberately.
  *
- * `overview` is being renamed Home and repurposed, so a chapter built against it
- * today films a tab that is about to stop existing in that form. `policies`,
- * `export`, `explorer` and `history` are blocked on demo fixtures rather than on
- * design — see the plan's chapter checklist for what each one needs.
+ * `policies`, `export`, `explorer` and `history` are blocked on demo fixtures
+ * rather than on design — see the plan's chapter checklist for what each one
+ * needs. `overview` is **not** on this list: that tab no longer exists —
+ * `home` replaced it, both in position and in job — so there is nothing left
+ * to defer.
  *
  * Kept here as a list rather than as commented-out entries so the gap is a
  * statement instead of an oversight.
  */
-export const DEFERRED = ['overview', 'policies', 'export', 'explorer', 'history'];
+export const DEFERRED = ['policies', 'export', 'explorer', 'history'];
 
 /** Chapters in reel order. The composition may sequence a subset; it may not reorder. */
 export const CHAPTERS = [
+  {
+    id: 'home',
+    title: 'Home',
+    tab: 'home',
+    kind: 'tour',
+    story: 'demo-scenes--home',
+    walk: () => import('./walks/home.mjs'),
+  },
   {
     id: 'users',
     title: 'Users',

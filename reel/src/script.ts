@@ -93,6 +93,84 @@ interface CoverageRow {
  */
 export const SCRIPT: Scene[] = [
   {
+    id: 'home',
+    title: 'Home',
+    plan: [
+      { beat: 'jump', speed: 'half', easeMs: 300, holdMs: 700, tailMs: 1800 },
+      { beat: 'working-set', speed: 'natural', easeMs: 350, holdMs: 500 },
+      { beat: 'findings', speed: 'half', easeMs: 400, holdMs: 900 },
+      { beat: 'report', speed: 'half', easeMs: 350, holdMs: 500, tailMs: 2000 },
+    ],
+    marks: [
+      {
+        beat: 'jump',
+        stage: 'home',
+        lines: [{ register: 'claim', text: 'A ticket gives you an id, not a name.' }],
+      },
+      {
+        beat: 'jump',
+        /*
+         * Held back until the id has actually resolved.
+         *
+         * With no offset this line was on screen while the field still read
+         * `00`, so the film asserted what the lookup cost before the lookup had
+         * happened. `figure()` guarantees the number came off the panel; it
+         * cannot guarantee the frame it is printed over shows it.
+         *
+         * 530 frames is where the footnote appears, worked from the manifest
+         * rather than guessed: the beat opens at 714ms and the read lands at
+         * 13401ms, so 12687ms of footage plays at `half` against a retime of 3,
+         * which is a rate of 1.5 and 8458ms of composition, or 507 frames, plus
+         * the 42 frames of `holdMs` that precede the beat's own footage.
+         */
+        offset: 530,
+        lines: [
+          {
+            register: 'proof',
+            text: (m) => `The org was already in hand. ${figure<string>(m, 'jumpCost')}.`,
+          },
+        ],
+      },
+      {
+        beat: 'working-set',
+        lines: [
+          {
+            register: 'evidence',
+            text: 'Where you were last time, per org, capped and expiring. An id, a name and a pane, because local storage is plain text and that is all a row needs to redraw.',
+          },
+        ],
+      },
+      {
+        beat: 'findings',
+        lines: [
+          {
+            register: 'claim',
+            text: 'And the other half of the question: what is wrong here, before anybody asks.',
+          },
+          {
+            register: 'proof',
+            text: (m) =>
+              `${figure<number>(m, 'unruled')} groups no rule fills. ` +
+              `${figure<number>(m, 'emptyGroups')} with nobody in them. ` +
+              `${figure<number>(m, 'pausedRules')} rule switched off and left there.`,
+          },
+        ],
+      },
+      {
+        beat: 'report',
+        lines: [
+          {
+            register: 'proof',
+            text: (m) =>
+              `${figure<number>(m, 'reportCount')} groups hold app access no rule maintains, ` +
+              `and pressing the number names all ${figure<number>(m, 'reportNamed')} without leaving Home.`,
+          },
+        ],
+      },
+    ],
+  },
+
+  {
     id: 'users',
     title: 'Users',
     plan: [
