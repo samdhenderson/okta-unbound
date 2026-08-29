@@ -17,6 +17,105 @@ Entry format:
 
 ---
 
+## 2026-08-29 (b) — an attended session, clearing the gated shelf
+
+**Not a nightly.** Sam ran this one directly, after merging PR #102. It is logged
+here because it changes the state of nine backlog items and the next unattended
+run needs to know what moved and why.
+
+**Baseline:** not re-run. This session touches `docs/`, `DEBT.md`,
+`IMPROVEMENTS.md` and `NIGHTLY.md` only — **zero files under `src/`** — so the
+code gates are the ones PR #102 already passed on this exact head (`82a5ce4`).
+`lint:cited-paths`, `lint:control-chars` and `format:check` were run, because
+those are the three this diff can actually break.
+
+**Worked in a detached worktree** off `82a5ce4`, on branch
+`chore/unstick-backlog`. Sam had another agent live in the primary checkout with
+uncommitted reel changes on `feat/demo-org-writes`; a worktree was the only way
+to do this without contending for that tree.
+
+**The problem addressed.** Nine items were gated, and the gates had stopped being
+a queue and become a shelf. Five sat at `research:awaiting-review`, each waiting
+on a Proposed ADR that no unattended session had written, some since 2026-08-24.
+Three sat at `blocked:needs-human`. One (`D-028`) had been skipped by six
+consecutive nights. None of it was going to change on its own: every item was
+waiting on either a human decision or a docs-only deliverable that the item's own
+rules permitted but no night had picked up.
+
+**Items moved:** `D-007b`, `I-008`, `I-012`, `I-018`, `D-062` (ADRs written);
+`D-029c`, `D-029d`, `D-052` (decided by Sam); `I-014` (re-gated); `D-028`
+(extended). Two new items filed: `D-072`, `D-073`.
+
+**Five ADRs written, all at Status: Proposed** — 0054 (a 401 is a session, not a
+request), 0055 (what the evaluator refuses to guess), 0056 (how deep the snapshot
+goes), 0057 (a keyboard route into the panel), 0058 (one context engine). **Their
+five items stay at `research:awaiting-review` on purpose**: the status legend says
+Sam moves a research item to `open` by accepting the ADR and the session that
+wrote it never does. Writing the ADR does not exempt this session from that. The
+deliverable moved from "unwritten" to "on Sam's desk"; the gate word is unchanged
+and still accurate.
+
+**Three decisions Sam made, recorded in the items so nobody re-derives them:**
+
+- `D-029c` — the Rules tab's `force` refresh and its API-cost readout both go,
+  replaced by a freshness timestamp. Once the background owns the walk both
+  readouts are lies: `force` promises a fetch the tab no longer performs, and a
+  per-tab cost number is either zero or someone else's spend. Now `open`, with a
+  checkable **Done when** it did not have before.
+- `D-029d` — was `blocked:needs-human`, but **the human question was never in this
+  item**; it was `D-029c`'s. Re-gated to `blocked:D-029c` — an ordering
+  constraint, not a judgment call. It opens when `D-029c` lands, with no further
+  input from Sam.
+- `D-052` — approved, conditional on establishing what Okta actually does. That
+  research was done before approving and is now in the item as a three-row table:
+  deactivate moves nobody and is reversible; delete with `removeUsers=false`
+  leaves users as unmanaged members; `removeUsers=true` removes them; **both
+  delete branches are irreversible**. No preliminary ADR — the two-verb model is
+  Okta's, not ours to choose.
+
+**`D-028` was already re-gated by PR #102's own session** to
+`blocked:needs-live-org`, with a thorough note. That call is right and stands;
+this session only appended **audit items 11–13**, each a question one of the new
+ADRs rests on and cannot answer from the repo: whether an expired session really
+returns 401 (ADR-0054 is inert if Okta redirects instead), `String.substring`
+out-of-range behaviour, and relative time-window boundaries (both ADR-0055
+refusals). `I-014` was re-gated to the same `blocked:needs-live-org`, since its
+own **Risk** paragraph already said its blocker cannot be closed from the repo.
+
+**Notes:**
+
+_The reserved-ADR-number habit failed five times out of five._ Every one of the
+five research items named an ADR **filename** in its **Files** list, and every one
+of those numbers had been taken by an unrelated ADR before the item was picked up
+— 0041, 0042, 0043, 0046 and 0047 all went to feature branches in the five days
+after the items were filed. The proposals landed as 0054–0058 instead. This is not
+bad luck: a number is claimed by whoever writes an ADR, feature branches write them
+continuously, and a backlog item waits weeks. Worse, it fails *quietly* —
+`lint:cited-paths` only checks that a path resolves, so `I-018`'s reserved `0046`
+resolves today, to the response-layer ADR. A reader following that citation lands
+somewhere plausible and wrong. Filed as `D-072`; the fix is to name ADRs by title
+in the ledger and assign the number at write time.
+
+_A dead URL in a filing, found only by following it._ `D-052` cited an Okta support
+article that 404s. The quotes in the filing were accurate — the slug had rotted; it
+was repointed. Nothing in the gate ladder checks external links, and this one was
+load-bearing: it was the evidence for the item's central claim.
+
+_A skill vouching for the module it should have corrected._ Verifying `D-052`
+turned up that `okta-api`'s `groups-and-rules.md` documents the deactivate case
+correctly and says **nothing** about `removeUsers` — the same blind spot as the
+module, in the reference meant to catch it, under a `[verified:]` marker pointing
+back at that module. Filed as `D-073`.
+
+_For the next unattended run._ Do not re-select `D-028` or `I-014`; both are
+`blocked:needs-live-org` and that is now a real gate word. The five ADR items are
+not available either — they need Sam's acceptance, not another session. `D-029c`
+is newly `open` with a real **Done when** and is a good pick, but note it deletes
+a user-visible control and retargets four test files, so it wants the ADR-0022
+note. `D-052` is newly `open`, fully scoped, and must stay its own PR.
+
+---
+
 ## 2026-08-29 — three items shipped, one P1 gated as unreachable
 
 **Baseline:** green, all nine gates, against `main` at `f15d109` before any work.
