@@ -2534,3 +2534,36 @@ affects every scroll box in the app, on every platform.
 - **Status:** research:awaiting-review
 - **Related:** `D-059` (the other traffic cost the re-gate exposed), ADR-0018,
   ADR-0026
+
+### D-063 · A null figure on Home renders an em dash, on camera
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/home/FigureNumber.tsx`
+- **Verified:** 2026-08-28 — line 48 renders the literal `'—'` when `value` is
+  `null`, confirmed by reading the component while building the reel's Home
+  chapter.
+- **Problem:** `FigureNumber` prints an em dash as its placeholder for a figure
+  that has not resolved. ADR-0043 bans em and en dashes on camera, and Home is
+  about to become the reel's first chapter, so this glyph is one incomplete
+  collection away from being in the film.
+
+  It is latent rather than live: under a complete demo snapshot every figure
+  resolves and the branch is never taken. But "never taken under the fixtures we
+  happen to ship" is not the same as safe — a collection left `complete: false`
+  (ADR-0040 §7 makes that a real state, not a hypothetical) puts one on screen,
+  and it would be discovered in footage rather than in review.
+
+  Not folded into the reel work that found it: the placeholder glyph for an
+  unresolved figure is a design-system decision about the product, not about the
+  film, and the film is the wrong reason to change it. Whatever replaces it
+  wants to be the same choice everywhere a figure can be absent.
+
+- **Done when:** `FigureNumber`'s null placeholder is a glyph the design system
+  names, applied consistently wherever a figure can be absent, with the
+  `aria-hidden` behaviour it already has preserved. A story covers the null
+  case.
+- **Risk:** Low. One component, one branch, already storied.
+- **Related:** ADR-0043 (no dashes on camera), ADR-0040 §7 (a collection can
+  honestly be incomplete)
