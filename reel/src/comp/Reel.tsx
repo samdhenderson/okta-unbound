@@ -19,6 +19,7 @@ import { SCRIPT } from '../script';
 import { Chapter, chapterLength, chapterTab } from './Chapter';
 import { FilmIndex } from './FilmIndex';
 import { END_CARD_FRAMES, EndCard } from './EndCard';
+import { OPENING_FRAMES, Opening } from './Opening';
 
 /** Frames the index band takes to hand over from one chapter to the next. */
 const SLIDE_FRAMES = 30;
@@ -33,11 +34,21 @@ const CHAPTERS = SCRIPT.map((scene, i) => ({
   length: chapterLength(scene),
 }));
 
-export const REEL_FRAMES = CHAPTERS.reduce((total, c) => total + c.length, 0) + END_CARD_FRAMES;
+export const REEL_FRAMES =
+  OPENING_FRAMES + CHAPTERS.reduce((total, c) => total + c.length, 0) + END_CARD_FRAMES;
 
-/** The band, driven by the film's own clock rather than any chapter's. */
+/**
+ * The band, driven by the film's own clock rather than any chapter's.
+ *
+ * Its clock starts at the first chapter, not at the first frame. `CHAPTERS`
+ * offsets are relative to the start of the series of chapters, and the opening
+ * sits in front of them — so the opening's frames are subtracted here rather
+ * than added to every offset above. The band is also hidden across the opening
+ * outright: it counts chapters, and the opening is not one.
+ */
 const Band: React.FC = () => {
-  const frame = useCurrentFrame();
+  const frame = useCurrentFrame() - OPENING_FRAMES;
+  if (frame < 0) return null;
   const index = Math.max(
     0,
     CHAPTERS.reduce((found, c, i) => (frame >= c.from ? i : found), 0),
@@ -80,6 +91,9 @@ const Band: React.FC = () => {
 export const Reel: React.FC = () => (
   <AbsoluteFill>
     <Series>
+      <Series.Sequence durationInFrames={OPENING_FRAMES}>
+        <Opening />
+      </Series.Sequence>
       {CHAPTERS.map(({ scene, length }) => (
         <Series.Sequence key={scene.id} durationInFrames={length}>
           <Chapter id={scene.id} rail={false} />

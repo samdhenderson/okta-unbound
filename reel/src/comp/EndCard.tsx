@@ -5,6 +5,11 @@
  * One line and the product's name. Deliberately not a feature list: everything
  * worth listing was just shown, and a reel that ends by summarising itself is
  * telling the viewer it did not trust the previous ninety seconds.
+ *
+ * The line used to be the description that now opens the film, which made
+ * ending on it a reprint. So the close pays off the through-line instead. Three
+ * words that mean nothing cold and everything after three minutes of watching an
+ * org get read, compared, scanned and corrected without a single tab change.
  */
 import React from 'react';
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
@@ -47,8 +52,7 @@ export const EndCard: React.FC = () => {
               maxWidth: 820,
             }}
           >
-            Group and user administration in the side panel, against the org you are already signed
-            in to.
+            Nothing left the tab.
           </div>
         </div>
       </AbsoluteFill>
