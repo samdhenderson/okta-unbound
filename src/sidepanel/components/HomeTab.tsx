@@ -180,9 +180,31 @@ const HomeTab: React.FC<HomeTabProps> = ({
           }
         : null;
     },
+    // The only fetcher that can tell "Okta says no such app" apart from "we
+    // never got an answer" (`AppLookup`, D-007a). `null` here means the jump bar
+    // reports an authoritative absence, so only a real 404 may return it —
+    // a throttled or unauthenticated lookup throws instead, and `useJumpResolver`
+    // renders it as the error it is rather than as a missing app.
     app: async (id) => {
-      const app = await getAppById(id);
-      return app ? { kind: 'app', id: app.id, name: app.label || app.name || app.id } : null;
+      const lookup = await getAppById(id);
+      switch (lookup.kind) {
+        case 'found':
+          return {
+            kind: 'app',
+            id: lookup.app.id,
+            name: lookup.app.label || lookup.app.name || lookup.app.id,
+          };
+        case 'missing':
+          return null;
+        case 'session-expired':
+          throw new Error('Your Okta session has expired. Sign in again on the Okta tab.');
+        case 'failed':
+          // Deliberately not "could not reach Okta": this arm also covers 403 and
+          // 429, where Okta answered and the answer was no. Say only what is true
+          // of every arm — the lookup did not complete — rather than asserting a
+          // connectivity failure that did not happen.
+          throw new Error('Could not look that app up. Try again.');
+      }
     },
     rule: async (id) => {
       const rule = await getRawGroupRule(id);

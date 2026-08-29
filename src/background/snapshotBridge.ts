@@ -108,12 +108,11 @@ export function createSchedulerPageRequest(scheduler: ApiScheduler, tabId: numbe
   return async (url, reason) => {
     try {
       const result = await scheduler.scheduleRequest(url, 'GET', undefined, tabId, 'low', reason);
-      return {
-        success: result.success,
-        data: result.data,
-        headers: result.headers,
-        error: result.error,
-      };
+      // `error` lives only on the failure arm of `RequestResult`, so narrow
+      // before projecting into the walk's page shape.
+      return result.success
+        ? { success: true, data: result.data, headers: result.headers }
+        : { success: false, data: result.data, headers: result.headers, error: result.error };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Request failed' };
     }

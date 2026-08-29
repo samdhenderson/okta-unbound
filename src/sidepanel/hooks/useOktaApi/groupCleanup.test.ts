@@ -10,6 +10,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createGroupCleanupOperations } from './groupCleanup';
 import type { CoreApi } from './core';
+import type { RequestResult } from '@/shared/scheduler/types';
 import { makeFakeCore } from '@/test/factories/coreApi';
 
 vi.mock('../../../shared/undoManager', () => ({
@@ -66,7 +67,7 @@ describe('removeDeprovisioned boundary validation', () => {
     // DEPROVISIONED but missing the required `profile` — if this row survived
     // validation it would be selected for removal and crash the bookkeeping.
     const malformedDeprovisioned = { id: '00uFAKE2', status: 'DEPROVISIONED' };
-    const makeApiRequest = vi.fn(async (endpoint: string) => {
+    const makeApiRequest = vi.fn(async (endpoint: string): Promise<RequestResult> => {
       if (endpoint === '/api/v1/groups/00gFAKE1') {
         return { success: true, data: { type: 'OKTA_GROUP', profile: { name: 'Fake Group' } } };
       }

@@ -17,12 +17,29 @@
  */
 
 import type { ApiResponse } from '../shared/types';
+import { NO_HTTP_STATUS } from '../shared/scheduler/requestResult';
 import { createLogger } from '../shared/utils/logger';
 
 const log = createLogger('Content');
 
 /** HTTP methods the content script is permitted to send to the Okta origin. */
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
+
+/**
+ * Build a failure response that never had an HTTP status to report — a rejected
+ * boundary guard, or a `fetch` that threw.
+ *
+ * The `status` argument is required rather than defaulted so this file cannot
+ * grow a status-less failure by omission: the scheduler's `RequestFailure` arm
+ * promises every failure carries one, and this is the producer that keeps it.
+ *
+ * @param error - Human-readable summary. Never a response body, token, or PII.
+ * @param status - Almost always {@link NO_HTTP_STATUS}.
+ * @returns The normalized failure response.
+ */
+function failure(error: string, status: number): ApiResponse {
+  return { success: false, error, status };
+}
 
 /**
  * Read the XSRF token from the page DOM.
@@ -64,7 +81,10 @@ export function isSameOriginPath(endpoint: string): boolean {
  * @param endpoint - Same-origin API path (must start with a single `/`).
  * @param method - HTTP method; defaults to `GET`.
  * @param body - Optional JSON body (ignored for `GET`).
- * @returns A normalized success/error response with headers and status.
+ * @returns A normalized success/error response with headers and status. Every
+ * failure carries a `status` — the real one when Okta answered, else
+ * {@link NO_HTTP_STATUS} — so the scheduler's `RequestFailure` arm can promise
+ * one is always there.
  */
 export async function handleMakeApiRequest(
   endpoint: string,
@@ -79,13 +99,13 @@ export async function handleMakeApiRequest(
 
   if (!isSameOriginPath(endpoint)) {
     log.warn('Rejected API request: endpoint is not a same-origin path');
-    return { success: false, error: 'Rejected request: endpoint must be a same-origin path' };
+    return failure('Rejected request: endpoint must be a same-origin path', NO_HTTP_STATUS);
   }
 
   const normalizedMethod = (method || 'GET').toUpperCase();
   if (!ALLOWED_METHODS.has(normalizedMethod)) {
     log.warn('Rejected API request: unsupported HTTP method', { method: normalizedMethod });
-    return { success: false, error: 'Rejected request: unsupported HTTP method' };
+    return failure('Rejected request: unsupported HTTP method', NO_HTTP_STATUS);
   }
 
   try {
@@ -173,9 +193,9 @@ export async function handleMakeApiRequest(
     };
   } catch (error) {
     log.error('makeApiRequest error', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    // The fetch never produced a response (offline, DNS, reset, CORS refusal),
+    // so there is no HTTP status to report — say that explicitly rather than
+    // omitting the field and leaving the caller nothing to branch on.
+    return failure(error instanceof Error ? error.message : 'Unknown error', NO_HTTP_STATUS);
   }
 }

@@ -27,6 +27,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import type { MessageRequest, MessageResponse, OktaUser } from '../shared/types';
+import { NO_HTTP_STATUS } from '../shared/scheduler/requestResult';
 
 // ============================================================================
 // Harness
@@ -443,13 +444,21 @@ describe('makeApiRequest response shapes', () => {
     expect(result.status).toBe(429);
   });
 
-  it('fetch rejects → success:false with the message, and NO status, NO headers, NO data', async () => {
+  // UPDATED (D-007a): these two pinned the absent `status` that made a transport
+  // failure indistinguishable from every other failure at the type level. The
+  // failure arm of `RequestResult` now guarantees a status, so a throw reports
+  // the explicit no-HTTP-response sentinel instead of omitting the field.
+  // Headers and data are still absent — that half is unchanged.
+  it('fetch rejects → success:false with the message and the no-HTTP-status sentinel', async () => {
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
 
     const result = await call();
 
-    expect(result).toEqual({ success: false, error: 'Failed to fetch' });
-    expect(result).not.toHaveProperty('status');
+    expect(result).toEqual({
+      success: false,
+      error: 'Failed to fetch',
+      status: NO_HTTP_STATUS,
+    });
     expect(result).not.toHaveProperty('headers');
     expect(result).not.toHaveProperty('data');
   });
@@ -457,7 +466,11 @@ describe('makeApiRequest response shapes', () => {
   it('fetch rejects with a non-Error → "Unknown error"', async () => {
     fetchMock.mockRejectedValue('a string');
 
-    await expect(call()).resolves.toEqual({ success: false, error: 'Unknown error' });
+    await expect(call()).resolves.toEqual({
+      success: false,
+      error: 'Unknown error',
+      status: NO_HTTP_STATUS,
+    });
   });
 });
 
