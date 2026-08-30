@@ -43,6 +43,8 @@ export const DUR = {
   move: '220ms',
   travel: '320ms',
   tell: '500ms',
+  'hover-intent': '400ms',
+  press: '60ms',
 } as const;
 
 export const EASE = {
@@ -50,6 +52,8 @@ export const EASE = {
   entrance: 'cubic-bezier(0, 0, 0, 1)',
   exit: 'cubic-bezier(0.3, 0, 1, 1)',
   affirm: 'cubic-bezier(\n    0.2,\n    1.3,\n    0.4,\n    1\n  )',
+  press: 'cubic-bezier(0.2, 0, 0.1, 1)',
+  glide: 'cubic-bezier(0.3, 1.12, 0.5, 1)',
 } as const;
 
 export const FONT = {

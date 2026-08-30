@@ -60,7 +60,7 @@ function parseBezier(name: string, raw: string): BezierTuple {
 }
 
 /**
- * The four curves as numeric tuples, parsed once at import time.
+ * Every `EASE` token as a numeric tuple, parsed once at import time.
  *
  * `affirm`'s `y1` is `1.3` - it deliberately overshoots past `1`, which is the
  * point (`count`'s roll settles past its final value before easing back). That
@@ -75,10 +75,19 @@ export const BEZIER = {
   entrance: parseBezier('entrance', EASE.entrance),
   exit: parseBezier('exit', EASE.exit),
   affirm: parseBezier('affirm', EASE.affirm),
+  // `press` and `glide` arrived in the app's token set with the response layer
+  // (PR #101) and no verb in this film uses either. They are parsed anyway,
+  // because the `satisfies` below is the thing that noticed they existed: it
+  // makes mirroring every app curve mandatory rather than optional, so a token
+  // the product adds cannot sit unmirrored while the film quietly diverges from
+  // it. The cost of an unused parse is nothing; the cost of a silent gap is a
+  // reel whose motion is a shade off the product's and nobody can say why.
+  press: parseBezier('press', EASE.press),
+  glide: parseBezier('glide', EASE.glide),
 } as const satisfies Record<keyof typeof EASE, BezierTuple>;
 
 /**
- * The same four curves as Remotion `Easing.bezier` functions, ready to hand to
+ * The same curves as Remotion `Easing.bezier` functions, ready to hand to
  * `interpolate()`. Built from {@link BEZIER}, not from `EASE` a second time, so
  * there is exactly one parse to get wrong.
  */
@@ -87,6 +96,8 @@ export const EASING = {
   entrance: Easing.bezier(...BEZIER.entrance),
   exit: Easing.bezier(...BEZIER.exit),
   affirm: Easing.bezier(...BEZIER.affirm),
+  press: Easing.bezier(...BEZIER.press),
+  glide: Easing.bezier(...BEZIER.glide),
 } as const;
 
 /** Parse a `DUR` token like `'220ms'` into milliseconds, once, at import time. */

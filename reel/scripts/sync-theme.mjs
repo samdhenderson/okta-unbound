@@ -17,6 +17,7 @@
  * @module
  */
 import { readFile, writeFile } from 'node:fs/promises';
+import prettier from 'prettier';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -64,14 +65,29 @@ ${emit('DUR', durations)}
 ${emit('EASE', eases)}
 ${emit('FONT', fonts)}`;
 
+// Formatted before it is written *and* before it is compared, because the
+// alternative is a gate that can never be green. `npm run format` prettifies
+// everything under the repo, `theme.generated.ts` included, so raw generator
+// output and the committed file differ in quotes and key quoting from the first
+// time anybody runs it. `--check` then reports "stale" forever, on a file whose
+// tokens are identical - and a gate that is always red is worth exactly as much
+// as one that is always green. Measured: it had been red since PR #101, which
+// is also how four real missing tokens went unnoticed underneath the noise.
+// `resolveConfig` explicitly, not just `filepath`: `format()` takes the parser
+// from the path but does *not* read `.prettierrc` on its own, so without this
+// the generator formats to prettier's defaults and `npm run format` immediately
+// reformats it back - the same permanent-red loop, one layer down.
+const prettierOptions = await prettier.resolveConfig(DEST);
+const formatted = await prettier.format(out, { ...prettierOptions, filepath: DEST });
+
 if (process.argv.includes('--check')) {
   const existing = await readFile(DEST, 'utf8').catch(() => '');
-  if (existing !== out) {
+  if (existing !== formatted) {
     console.error('reel/src/theme.generated.ts is stale — run `node scripts/sync-theme.mjs`');
     process.exit(1);
   }
   console.log('theme is in sync');
 } else {
-  await writeFile(DEST, out);
+  await writeFile(DEST, formatted);
   console.log(`${colors.length} colours, ${durations.length} durations → src/theme.generated.ts`);
 }
