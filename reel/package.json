@@ -10,6 +10,7 @@
     "still": "remotion still src/index.ts reel ../clips/poster.png --frame=90 --timeout=120000",
     "type-check": "tsc --noEmit",
     "chapter": "remotion render src/index.ts --muted --timeout=120000",
+    "draft": "remotion render src/index.ts reel ../clips/draft.mp4 --muted --image-format=jpeg --crf=28 --scale=0.5 --timeout=120000",
     "check-verbs": "node scripts/check-verbs.mjs"
   },
   "dependencies": {
