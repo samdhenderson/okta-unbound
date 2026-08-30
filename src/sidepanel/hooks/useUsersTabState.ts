@@ -411,11 +411,28 @@ export function useUsersTabState({
   // cached analysis and reload their memberships in place. Crucially this does NOT
   // touch `selectedUser` or the modal's open state, so adding a group never closes
   // the comparison or resets the tab — you can keep adding.
+  /**
+   * Drop the cached analysis for one user and load it again from their *current*
+   * profile.
+   *
+   * Takes the user rather than reading `selectedUser`, because the caller that
+   * needs it most has just changed the profile: a profile write's reload has to
+   * classify against the attributes it wrote, and `selectedUser` is whatever the
+   * render this callback was created in closed over. Same id, older attributes,
+   * and the rules are evaluated against the attributes.
+   */
+  const refreshMembershipsFor = useCallback(
+    (user: OktaUser) => {
+      invalidate(cacheKeys.userMemberships(user.id));
+      void loadMemberships(user, { force: true });
+    },
+    [loadMemberships],
+  );
+
   const refreshSelectedUserMemberships = useCallback(() => {
     if (!selectedUser) return;
-    invalidate(cacheKeys.userMemberships(selectedUser.id));
-    void loadMemberships(selectedUser, { force: true });
-  }, [selectedUser, loadMemberships]);
+    refreshMembershipsFor(selectedUser);
+  }, [selectedUser, refreshMembershipsFor]);
 
   // Load the user detected on the page — only when the banner's Load button is
   // clicked. The raw `getUserDetails` read path (a §8-preserved scheduler bypass)
@@ -575,6 +592,7 @@ export function useUsersTabState({
     targetTabId,
     enabled: isActive && panes.pane === 'profile',
     onUserUpdated: setSelectedUser,
+    onMembershipsChanged: refreshMembershipsFor,
     onResult: publishResult,
   });
 

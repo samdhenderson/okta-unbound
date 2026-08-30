@@ -16,12 +16,10 @@ import {
   compositionSection,
   compositionTab,
   facetSegment,
-  filtersSection,
   groupRow,
   membershipCard,
   readFacets,
   readRosterCounts,
-  sortPill,
 } from '../selectors.mjs';
 
 const HERO = 'Engineering - All';
@@ -46,7 +44,8 @@ function choose(facets, match, skip = []) {
   const facet =
     usable.find((f) => match.test(f.attribute) && !skip.includes(f.attribute)) ??
     usable.find((f) => !skip.includes(f.attribute));
-  if (!facet) throw new Error(`no multi-valued facet left to filter on (skipping ${skip.join(', ')})`);
+  if (!facet)
+    throw new Error(`no multi-valued facet left to filter on (skipping ${skip.join(', ')})`);
   // `Other` is rendered disabled and opens the distribution modal instead of
   // filtering — see `readFacets`. Aiming at it mid-take would open a dialog the
   // rest of the walk then clicks behind.
@@ -109,16 +108,6 @@ export async function walk({ page, drive, beat }) {
     if (composed.shown === 0) {
       throw new Error(`${first.value} ∩ ${second.value} is empty — pick a broader second facet`);
     }
-  });
-
-  await beat('sort', async () => {
-    // With Filters shut, the `Sort by` pills sit in the DOM at a zero box, so
-    // this disclosure has to be opened before there is anything to click.
-    await drive.scrollTo(filtersSection(page));
-    await drive.click(filtersSection(page));
-    await drive.settle(1000);
-    await drive.click(sortPill(page, 'Status'));
-    await drive.settle(1300);
   });
 
   await beat('roster', async () => {

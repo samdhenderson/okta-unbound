@@ -2,14 +2,16 @@
   "name": "okta-unbound-reel",
   "private": true,
   "version": "0.0.0",
-  "description": "The demo reel's composition. A standalone project on purpose \u2014 see ADR-0045.",
+  "description": "The demo reel's composition. A standalone project on purpose — see ADR-0045.",
   "type": "module",
   "scripts": {
     "studio": "remotion studio src/index.ts",
-    "render": "remotion render src/index.ts reel ../clips/okta-unbound-reel.mp4 --muted --timeout=120000",
-    "still": "remotion still src/index.ts reel ../clips/poster.png --frame=90 --timeout=120000",
+    "render": "remotion render src/index.ts reel-delivery ../clips/okta-unbound-reel.mp4 --muted --crf=16 --pixel-format=yuv420p --timeout=120000",
+    "still": "remotion still src/index.ts reel-delivery ../clips/poster.png --frame=90 --timeout=120000",
     "type-check": "tsc --noEmit",
-    "chapter": "remotion render src/index.ts --muted --timeout=120000"
+    "chapter": "remotion render src/index.ts --muted --timeout=120000",
+    "draft": "remotion render src/index.ts reel ../clips/draft.mp4 --muted --image-format=jpeg --crf=28 --scale=0.5 --timeout=120000",
+    "check-verbs": "node scripts/check-verbs.mjs"
   },
   "dependencies": {
     "@remotion/cli": "^4.0.518",

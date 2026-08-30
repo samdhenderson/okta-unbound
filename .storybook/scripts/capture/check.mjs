@@ -70,8 +70,25 @@ function checkSettle(manifest) {
     return { ran: false, why: 'this Chrome does not deliver layout-shift entries' };
   }
   const declared = (t) => instrument.motion.some((m) => t >= m.from && t <= m.to);
+  /*
+   * The window that reaches the reel, which starts at the first beat and not at
+   * the first frame.
+   *
+   * `buildRamp` builds every segment's `trimBefore` from a beat's `at`, so the
+   * footage before the first beat is trimmed and no viewer ever sees it. The
+   * camera rolls before then on purpose — `Page.startScreencast` re-composites
+   * the page, the tab rail's active indicator re-measures and slides, and the
+   * runner waits that out with the camera already running rather than trying to
+   * outlast a disturbance it has not caused yet. Judging those frames reported
+   * a dozen violations per chapter for motion that is not in the film, which is
+   * worse than useless: it buries the real ones.
+   *
+   * Only the head is excluded. The tail is still judged, because a chapter's
+   * closing hold IS in the reel by way of `tailMs`.
+   */
+  const from = manifest.beats?.length ? manifest.beats[0].at : 0;
   const violations = instrument.shifts
-    .filter((s) => s.px >= SHIFT_EPS_PX && s.at >= 0 && s.at <= manifest.durationMs)
+    .filter((s) => s.px >= SHIFT_EPS_PX && s.at >= from && s.at <= manifest.durationMs)
     .filter((s) => !declared(s.at))
     .map((s) => ({
       at: s.at,
@@ -139,11 +156,17 @@ async function checkOpen(manifest) {
     ({ stderr } = await run(
       'ffmpeg',
       [
-        '-v', 'info',
-        '-i', clip,
-        '-frames:v', String(OPEN_FRAMES),
-        '-vf', 'signalstats,metadata=print',
-        '-f', 'null', '-',
+        '-v',
+        'info',
+        '-i',
+        clip,
+        '-frames:v',
+        String(OPEN_FRAMES),
+        '-vf',
+        'signalstats,metadata=print',
+        '-f',
+        'null',
+        '-',
       ],
       { maxBuffer: 8 * 1024 * 1024 },
     ));
@@ -153,7 +176,10 @@ async function checkOpen(manifest) {
   const mins = [...stderr.matchAll(/lavfi\.signalstats\.YMIN=(\d+)/g)].map((m) => Number(m[1]));
   const maxes = [...stderr.matchAll(/lavfi\.signalstats\.YMAX=(\d+)/g)].map((m) => Number(m[1]));
   if (mins.length === 0) {
-    return { ran: false, why: 'ffmpeg reported no signalstats — is this build missing the filter?' };
+    return {
+      ran: false,
+      why: 'ffmpeg reported no signalstats — is this build missing the filter?',
+    };
   }
   const violations = mins
     .map((min, i) => ({ frame: i, range: (maxes[i] ?? min) - min }))
@@ -175,7 +201,9 @@ const files = (await readdir(OUT).catch(() => []))
   .filter((f) => filters.length === 0 || filters.some((id) => f.startsWith(id)));
 
 if (files.length === 0) {
-  console.error(`no manifests in captures/${filters.length ? ` matching ${filters.join(', ')}` : ''}. Run \`npm run capture\` first.`);
+  console.error(
+    `no manifests in captures/${filters.length ? ` matching ${filters.join(', ')}` : ''}. Run \`npm run capture\` first.`,
+  );
   process.exit(2);
 }
 

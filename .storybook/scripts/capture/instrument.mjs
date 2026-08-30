@@ -187,9 +187,40 @@ export const instrumentInit = (renderScale) => `
      * Declared motion does not count against quiet — otherwise every beat after
      * a scroll would burn its whole budget waiting out footage we asked for.
      */
-    settled({ quiet = 220, budget = 1500 } = {}) {
+    async settled({ quiet = 220, budget = 1500 } = {}) {
+      const begun = Date.now();
+      /*
+       * Finished first, still second. They are not the same fact.
+       *
+       * A CSS transition with a \`transition-delay\` leaves the page genuinely
+       * motionless while it waits its turn, so a quiet gate reports quiet and
+       * whatever comes next lands after the caller believed it was safe. The
+       * rail's active tab does exactly this: the underline slides, and the
+       * label unfurls behind a \`delay-(--dur-move)\`. Waiting longer does not
+       * help, because the wait ends inside the gap rather than after it.
+       *
+       * Scoped to the document timeline. A scroll-driven \`.dock-band\` has a
+       * \`finished\` that resolves only at 100% range progress, which is the hang
+       * ADR-0045 refused Storybook's \`waitForAnimations\` over; filtering by
+       * timeline keeps it out while still covering every ordinary transition.
+       *
+       * Bounded by the caller's budget, so this stays budgeted rather than
+       * additive: a page with nothing running pays one microtask.
+       */
+      const root = panel();
+      if (root) {
+        const running = root
+          .getAnimations({ subtree: true })
+          .filter((a) => a.timeline === document.timeline);
+        if (running.length) {
+          await Promise.race([
+            Promise.allSettled(running.map((a) => a.finished)),
+            new Promise((r) => setTimeout(r, Math.max(0, budget - (Date.now() - begun)))),
+          ]);
+        }
+      }
       return new Promise((resolve) => {
-        const started = Date.now();
+        const started = begun;
         const tick = () => {
           const now = Date.now();
           const last = shifts.length ? shifts[shifts.length - 1] : null;

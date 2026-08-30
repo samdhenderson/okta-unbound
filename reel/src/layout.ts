@@ -83,15 +83,26 @@ export const INDEX = { x: 76, y: 44, width: 1768 } as const;
  * drew is on screen, not that the panel reaches the top and bottom of a 16:9
  * frame. It cannot do both, because the panel is 6:7.
  *
- * Held below 1:1 (656 drawn from 840 captured), so the footage is downsampled
- * rather than magnified. Emphasis comes from the vector overlays, which are
- * drawn at frame resolution.
+ * ## Why 720 and why it starts at 196
+ *
+ * The band above it ends around y=180 and the panel used to start at 240, which
+ * left a full-width empty stripe under the chapter title doing nothing. The
+ * panel takes it: 44px up the frame and 64px wider, which is the whole of the
+ * reclaimed space rather than a token of it.
+ *
+ * The width is a sharpness decision as much as a size one. The capture is 840px
+ * of real pixels and no more (`stage.mjs` documents why that ceiling cannot be
+ * raised), so how big the panel is drawn decides whether the footage is
+ * downsampled or magnified. At the 1440p master this composition renders to,
+ * 720 frame-px lands 960 device-px on an 840-px source: a 1.14x magnification,
+ * which is invisible on flat product UI and buys a panel a third larger in
+ * area. Past about 780 it starts to show on hairlines.
  */
 export const PANEL_RECT: Rect = {
   x: INDEX.x,
-  y: 240,
-  width: 656,
-  height: Math.round((656 * PANEL.height) / PANEL.width),
+  y: 196,
+  width: 720,
+  height: Math.round((720 * PANEL.height) / PANEL.width),
 };
 
 /** The default crop: the whole capture. */
@@ -133,8 +144,8 @@ export const STAGES = {
   /** The panel in its column, the argument to its right. */
   home: {
     showsPanel: true,
-    margin: { x: 816, y: 260, width: 1028 },
-    plot: { x: 816, y: 620, width: 1028, height: 385 },
+    margin: { x: 880, y: 220, width: 964 },
+    plot: { x: 880, y: 600, width: 964, height: 436 },
   },
   /** The panel gone, and a showcase in its place. */
   focus: {

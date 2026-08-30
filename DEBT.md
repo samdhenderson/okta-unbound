@@ -3002,3 +3002,96 @@ affects every scroll box in the app, on every platform.
   `D-052`, and it currently omits the parameter that item turns on.
 - **Status:** open
 - **Related:** `D-052` (the module-side defect this reference failed to catch)
+
+### D-074 · A null figure on Home renders an em dash, on camera
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/home/FigureNumber.tsx`
+- **Verified:** 2026-08-28 — line 48 renders the literal `'—'` when `value` is
+  `null`, confirmed by reading the component while building the reel's Home
+  chapter.
+- **Problem:** `FigureNumber` prints an em dash as its placeholder for a figure
+  that has not resolved. ADR-0043 bans em and en dashes on camera, and Home is
+  about to become the reel's first chapter, so this glyph is one incomplete
+  collection away from being in the film.
+
+  It is latent rather than live: under a complete demo snapshot every figure
+  resolves and the branch is never taken. But "never taken under the fixtures we
+  happen to ship" is not the same as safe — a collection left `complete: false`
+  (ADR-0040 §7 makes that a real state, not a hypothetical) puts one on screen,
+  and it would be discovered in footage rather than in review.
+
+  Not folded into the reel work that found it: the placeholder glyph for an
+  unresolved figure is a design-system decision about the product, not about the
+  film, and the film is the wrong reason to change it. Whatever replaces it
+  wants to be the same choice everywhere a figure can be absent.
+
+- **Done when:** `FigureNumber`'s null placeholder is a glyph the design system
+  names, applied consistently wherever a figure can be absent, with the
+  `aria-hidden` behaviour it already has preserved. A story covers the null
+  case.
+- **Risk:** Low. One component, one branch, already storied.
+- **Related:** ADR-0043 (no dashes on camera), ADR-0040 §7 (a collection can
+  honestly be incomplete)
+- **Renumbered:** filed as `D-063` on `feat/demo-org-writes` while `main` gave that
+  number to a different item. Main's numbering is the published one, so this moved
+  rather than main's. Exactly the failure `D-072` describes for ADR numbers, one
+  ledger over.
+
+
+### D-075 · A profile write invalidated the memberships and never re-read them
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useUsersTabProfileEdit.ts`,
+  `src/sidepanel/hooks/useUsersTabState.ts`
+- **Verified:** 2026-08-28 — found by filming it. The reel's Users chapter saves
+  a corrected `department`, switches to the Groups pane, and waits for the group
+  the rule then fills. The row never arrived; the capture refused the take.
+- **Problem:** `useProfileEdit` invalidates `cacheKeys.userMemberships(userId)`
+  on a confirmed save, on explicit grounds recorded in its own comment: a group
+  rule reads profile attributes, so a write to one can move a membership.
+  Invalidating was all it did. The Groups pane stays mounted (ADR-0018) and
+  holds the analysis it last loaded, so dropping the cache behind it changed
+  nothing on screen and the pane went on showing the memberships from before the
+  write until something else happened to reload them.
+
+  The remedy already existed and was already wired for the two neighbouring
+  paths. `useUsersTabState.refreshSelectedUserMemberships` invalidates _and_
+  re-loads with `{ force: true }`, and both the add-to-group flow and the
+  compare-copy flow call it. The profile-write path was the one that did not.
+
+  Worse than a stale count: the save modal's blast-radius report had, seconds
+  earlier, named the exact groups the edit would move. So the panel predicted
+  the change, wrote it, and then declined to show it arriving — which reads as
+  the prediction having been wrong.
+
+  And the reload has to be handed **the user the write produced**. Membership
+  analysis classifies each group by evaluating the org's rules against the
+  user's attributes, so a reload given the pre-write user re-fetches the right
+  groups and then decides none of them are rule-fed - the corrected attribute is
+  the very thing the rule reads. That failure is louder than the one above: the
+  group arrives carrying a `Direct` badge, which is a confident wrong answer
+  rather than a stale one. Caught in a still from the reel, where the row the
+  chapter had just narrated as a rule applying was labelled `Added directly`.
+
+- **Done when:** a confirmed save, and an undo of one, both re-read the selected
+  user's memberships, classified against the profile the write produced. Unit
+  tests cover that a `failed` outcome does not refresh at all.
+- **Risk:** Low. One callback threaded through a hook that already takes four.
+- **Related:** ADR-0035 (the three-state write), ADR-0018 (tabs stay mounted),
+  ADR-0052 (the writable demo org that made this filmable)
+
+- **Fixed:** 2026-08-28 on `feat/demo-org-writes`, as its own commit. Filed here
+  rather than folded into the reel commit that found it (CLAUDE.md), and kept in
+  the ledger because the finding is the useful part: an `invalidate` with no
+  reload beside it is invisible on a surface that does not remount, and this
+  codebase has three of them.
+- **Renumbered:** filed as `D-064` on `feat/demo-org-writes` while `main` gave that
+  number to a different item. Main's numbering is the published one, so this moved
+  rather than main's. Exactly the failure `D-072` describes for ADR numbers, one
+  ledger over.
+

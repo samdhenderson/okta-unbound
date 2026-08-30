@@ -17,25 +17,53 @@
 /**
  * Not filmed yet, and deliberately.
  *
- * `overview` is being renamed Home and repurposed, so a chapter built against it
- * today films a tab that is about to stop existing in that form. `policies`,
- * `export`, `explorer` and `history` are blocked on demo fixtures rather than on
- * design — see the plan's chapter checklist for what each one needs.
+ * `policies`, `export`, `explorer` and `history` are blocked on demo fixtures
+ * rather than on design — see the plan's chapter checklist for what each one
+ * needs. `overview` is **not** on this list: that tab no longer exists —
+ * `home` replaced it, both in position and in job — so there is nothing left
+ * to defer.
  *
  * Kept here as a list rather than as commented-out entries so the gap is a
  * statement instead of an oversight.
  */
-export const DEFERRED = ['overview', 'policies', 'export', 'explorer', 'history'];
+export const DEFERRED = ['policies', 'export', 'explorer', 'history'];
 
 /** Chapters in reel order. The composition may sequence a subset; it may not reorder. */
 export const CHAPTERS = [
   {
-    id: 'users',
+    id: 'home',
+    title: 'Home',
+    tab: 'home',
+    kind: 'tour',
+    story: 'demo-scenes--home',
+    walk: () => import('./walks/home.mjs'),
+  },
+  // Users is three acts on one tab (ADR-0053): the gap, the cause, the fix.
+  // Three captures rather than one long walk, so a caption change stays free
+  // and a beat that misses ends its act rather than the whole argument.
+  {
+    id: 'users-gap',
     title: 'Users',
     tab: 'users',
-    kind: 'tour',
+    kind: 'deep',
     story: 'demo-scenes--user-comparison',
-    walk: () => import('./walks/users.mjs'),
+    walk: () => import('./walks/users-gap.mjs'),
+  },
+  {
+    id: 'users-cause',
+    title: 'Users',
+    tab: 'users',
+    kind: 'deep',
+    story: 'demo-scenes--user-comparison',
+    walk: () => import('./walks/users-cause.mjs'),
+  },
+  {
+    id: 'users-fix',
+    title: 'Users',
+    tab: 'users',
+    kind: 'deep',
+    story: 'demo-scenes--user-comparison',
+    walk: () => import('./walks/users-fix.mjs'),
   },
   {
     id: 'groups',
@@ -65,14 +93,6 @@ export const CHAPTERS = [
     // then films the empty state anyway.
     ready: 'text=Load Rules',
     walk: () => import('./walks/rules.mjs'),
-  },
-  {
-    id: 'compare',
-    title: 'Compare',
-    tab: 'users',
-    kind: 'deep',
-    story: 'demo-scenes--user-comparison',
-    walk: () => import('./walks/compare.mjs'),
   },
   {
     id: 'attributes',

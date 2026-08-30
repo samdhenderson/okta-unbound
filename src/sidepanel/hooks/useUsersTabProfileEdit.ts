@@ -205,6 +205,31 @@ export interface UseUsersTabProfileEditOptions {
   /** Lifts a refreshed user into the tab's state. See the module header for why this is mandatory. */
   onUserUpdated: (user: OktaUser) => void;
   /**
+   * Re-reads the user's group memberships, because a profile write may have
+   * moved them.
+   *
+   * `useProfileEdit` already **invalidates** the cached analysis on a confirmed
+   * save, on exactly these grounds: group rules read profile attributes, so a
+   * write to one can add or remove a membership. Invalidating is not enough on
+   * its own. The Groups pane stays mounted (ADR-0018) and holds the analysis it
+   * last loaded, so dropping the cache behind it left the pane showing the
+   * memberships the user had *before* the write until something else happened to
+   * reload them.
+   *
+   * That was worse than a stale number. The save modal's blast-radius report had
+   * just predicted, by name, which groups the edit would move - so the panel
+   * stated the change was coming and then declined to show it arriving.
+   *
+   * **Takes the user the write produced, not the one on screen.** Membership
+   * analysis classifies each group by evaluating the org's rules against the
+   * user's *attributes*, so a reload handed the pre-write user re-fetches the
+   * right groups and then decides none of them are rule-fed - the corrected
+   * `department` is the very thing the rule reads. The visible result is the
+   * group arriving with a `Direct` badge on it, which is a more confident kind
+   * of wrong than the stale list was.
+   */
+  onMembershipsChanged: (user: OktaUser) => void;
+  /**
    * Publishes the tab's result banner. The optional second argument is the
    * banner's inline action — there is no toast primitive in this panel, and
    * `AlertMessage`'s action slot is where an inline Undo belongs.
@@ -245,6 +270,7 @@ export function useUsersTabProfileEdit({
   targetTabId,
   enabled,
   onUserUpdated,
+  onMembershipsChanged,
   onResult,
   oktaOrigin,
 }: UseUsersTabProfileEditOptions): UserProfileEditing {
@@ -285,6 +311,9 @@ export function useUsersTabProfileEdit({
           // replaced.
           const restored = await getUserRaw(userId);
           if (restored) onUserUpdated(restored);
+          // An undo is a write like any other and moves membership back. Only
+          // when the re-read gave us the restored profile to classify against.
+          if (restored) onMembershipsChanged(restored);
 
           const text =
             outcome.skipped > 0
@@ -317,7 +346,7 @@ export function useUsersTabProfileEdit({
           return;
       }
     },
-    [undo, onResult, getUserRaw, onUserUpdated],
+    [undo, onResult, getUserRaw, onUserUpdated, onMembershipsChanged],
   );
 
   const handleConfirmSave = useCallback(async (): Promise<void> => {
@@ -344,6 +373,10 @@ export function useUsersTabProfileEdit({
     }
 
     const saved = outcome.user;
+    // The write landed, so the memberships the pane is holding are the ones from
+    // before it. Passed `saved`, never the user in scope. See
+    // `onMembershipsChanged`.
+    onMembershipsChanged(saved);
     const message: AlertMessageData = {
       type: 'success',
       text: `Saved ${attributeCountLabel(count)} on ${userDisplayName(saved)}.`,
@@ -364,7 +397,7 @@ export function useUsersTabProfileEdit({
         void runUndo(recorded, saved.id);
       },
     });
-  }, [pendingSave, confirmSave, onResult, runUndo]);
+  }, [pendingSave, confirmSave, onResult, onMembershipsChanged, runUndo]);
 
   return useMemo(
     () => ({
