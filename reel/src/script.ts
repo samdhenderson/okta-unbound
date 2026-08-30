@@ -264,6 +264,12 @@ export const SCRIPT: Scene[] = [
            */
         ],
       },
+      // B3, the unpacking. It follows `findings` and reads that beat's own
+      // figures, so the proportion it draws is the one the panel was showing
+      // when the camera left it. Home's footage plus its own set piece is one
+      // movement, not two, so neither act carries a label and the band keeps
+      // saying the same thing across the join.
+      { kind: 'piece', piece: 'unpacking', from: 'home' },
     ],
   },
 

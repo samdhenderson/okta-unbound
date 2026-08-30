@@ -33,6 +33,7 @@ import type { Manifest } from '../captures';
 import type { Rect } from '../layout';
 import { ExplodedPlates, EXPLODED_PLATES_FRAMES } from './ExplodedPlates';
 import { Ledger, LEDGER_FRAMES } from './Ledger';
+import { Unpacking, UNPACKING_FRAMES } from './Unpacking';
 import { Placeholder, PLACEHOLDER_FRAMES } from './Placeholder';
 
 /** What every set piece is handed. */
@@ -68,6 +69,7 @@ export const PIECES = {
   /** B1, after the Users chapter's `cause` beat: the cause card, exploded. */
   'exploded-plates': { component: ExplodedPlates, frames: EXPLODED_PLATES_FRAMES },
   ledger: { component: Ledger, frames: LEDGER_FRAMES },
+  unpacking: { component: Unpacking, frames: UNPACKING_FRAMES },
   /** Still registered: the slots B2 and B3 will take are placeholders until they are built. */
   placeholder: { component: Placeholder, frames: PLACEHOLDER_FRAMES },
 } as const satisfies Record<string, Piece>;
