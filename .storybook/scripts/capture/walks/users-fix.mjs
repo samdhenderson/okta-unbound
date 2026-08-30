@@ -137,7 +137,15 @@ export async function walk({ page, drive, beat }) {
     });
     await drive.settle(1100);
 
-    const predicted = await drive.read('predicted', () => readBlastRadiusCount(page, 'Groups'));
+    // "Groups N" and "Rules N" are not the same claim and the ledger set piece
+    // must not conflate them. Groups is report.groups.length - every effect
+    // the panel evaluated, including the ones it declines to predict
+    // ("not-predicted"). Rules is starts + stops + undetermined only -
+    // unaffected rules are excluded and reported separately in the report's
+    // own footnote line. Renamed from `predicted`: the ledger wants the two
+    // pill counts read as the pair they are.
+    const groups = await drive.read('groups', () => readBlastRadiusCount(page, 'Groups'));
+    const rules = await drive.read('rules', () => readBlastRadiusCount(page, 'Rules'));
     const added = await drive.read('added', () =>
       blastRadiusSection(page, 'Likely added')
         .allInnerTexts()
@@ -153,9 +161,22 @@ export async function walk({ page, drive, beat }) {
           'act would narrate a rule applying that the panel did not predict',
       );
     }
-    if (!predicted) {
+    if (!groups) {
       throw new Error('the report predicts no group effect at all');
     }
+
+    // GroupSection renders null for an empty effects list, so "Likely removed"
+    // is not a row that reads zero - it is a section that does not exist. A
+    // count of 0 here is indistinguishable from "the modal never opened",
+    // which is exactly why this read comes after the positive wait on "Likely
+    // added" above: that wait is what makes a 0 here mean "checked and empty"
+    // rather than "never looked". Same discipline walks/users-gap.mjs uses to
+    // assert a group is absent from a list. Recorded as a count, not asserted
+    // to be zero - if a removal ever appears, the ledger prints it rather than
+    // lying with a hardcoded 0.
+    const removed = await drive.read('removed', () =>
+      blastRadiusSection(page, 'Likely removed').count(),
+    );
     await drive.settle(900);
   });
 
