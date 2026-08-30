@@ -24,7 +24,7 @@ type-check, lint (0 errors / 164 pre-existing warnings), `format:check`,
 `test:coverage` (240 files), `knip:circular`, `lint:control-chars`,
 `lint:cited-paths`, and `test:storybook` (170 files, 1223 tests, 1 skipped).
 **Items worked:** `D-052`
-**PR:** PR_PLACEHOLDER
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/106
 **Backlog after:** see below — 3 new items filed (`D-080`, `D-081`, `D-082`),
 1 new improvement (`I-029`), 1 existing item widened (`D-058`)
 **Notes:**

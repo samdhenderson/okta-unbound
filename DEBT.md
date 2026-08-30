@@ -2090,7 +2090,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Risk:** Medium. This changes a contract and user-facing claims, so it is
   **architecturally significant** and goes through the plan-and-approval gate as
   its own PR. Do not fold it into unrelated work.
-- **Status:** claimed:claude/stoic-gates-pvs6hq
+- **Status:** done:#106
 - **Approved 2026-08-29 by Sam**, conditional on establishing what Okta actually
   does on delete. That was done before approving; the verdict is below and the
   item is now scoped enough to implement without re-researching it.
