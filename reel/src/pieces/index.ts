@@ -31,6 +31,7 @@
 import type { FC } from 'react';
 import type { Manifest } from '../captures';
 import type { Rect } from '../layout';
+import { ExplodedPlates, EXPLODED_PLATES_FRAMES } from './ExplodedPlates';
 import { Placeholder, PLACEHOLDER_FRAMES } from './Placeholder';
 
 /** What every set piece is handed. */
@@ -64,6 +65,7 @@ export interface Piece {
 /** Every set piece the script may name. */
 export const PIECES = {
   /** B1, after the Users chapter's `cause` beat: the cause card, exploded. */
+  'exploded-plates': { component: ExplodedPlates, frames: EXPLODED_PLATES_FRAMES },
   /** Still registered: the slots B2 and B3 will take are placeholders until they are built. */
   placeholder: { component: Placeholder, frames: PLACEHOLDER_FRAMES },
 } as const satisfies Record<string, Piece>;

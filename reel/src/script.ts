@@ -343,6 +343,12 @@ export const SCRIPT: Scene[] = [
           },
         ],
       },
+      // B1, the film's payoff. It follows `cause` and reads that beat's own
+      // figure, so it dramatises the card the camera has just left rather than
+      // a card it is about to reach: `from` is `users-cause`, whose `cause`
+      // figure carries both of the strings the piece holds up against each
+      // other.
+      { kind: 'piece', piece: 'exploded-plates', from: 'users-cause' },
       /*
        * The fix, in two acts around a set piece.
        *
