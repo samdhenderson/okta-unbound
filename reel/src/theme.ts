@@ -7,11 +7,20 @@
  * brand blue one shade off the product's is worse than none. Everything added
  * here is reel-only: the stage the panel sits on has no counterpart in a
  * side panel, so there is no token to inherit.
+ *
+ * `DUR` and `EASE` are re-exported raw alongside their parsed, verb-ready form
+ * from `verbs/ease`, so this file stays the one front door: nothing outside
+ * `verbs/` needs to import `theme.generated` directly, and nothing outside
+ * `verbs/` should — a raw `EASE.affirm` string is a bezier to parse, not a
+ * curve to feed `interpolate()` with, and `BEZIER` / `EASING` / `FRAMES`
+ * already did that parsing once at module scope.
  */
 import { loadFont } from '@remotion/google-fonts/Inter';
-import { COLOR, FONT } from './theme.generated';
+import { FRAME } from './frame';
+import { COLOR, DUR, EASE, FONT } from './theme.generated';
+import { BEZIER, EASING, FRAMES } from './verbs/ease';
 
-export { COLOR, FONT };
+export { COLOR, DUR, EASE, FONT, BEZIER, EASING, FRAMES, FRAME };
 
 /**
  * Inter, loaded rather than named.
@@ -54,9 +63,6 @@ export const STAGE = {
   /** Where a figure is a gap rather than a win. */
   alert: '#ff7a5c',
 } as const;
-
-/** The frame. 1080p because that is what every surface this gets posted to wants. */
-export const FRAME = { width: 1920, height: 1080, fps: 60 } as const;
 
 /**
  * The type scale, in px at 1080p.

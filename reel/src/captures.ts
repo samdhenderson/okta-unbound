@@ -136,3 +136,27 @@ export function figure<T>(manifest: Manifest, key: string): T {
   }
   return found.value as T;
 }
+
+/**
+ * A numeric figure read off the panel, or a thrown error naming what is missing
+ * or what came back instead of a number.
+ *
+ * `figure<T>` proves a key was read during capture; it does not prove the value
+ * is a number, because `T` is an unchecked cast supplied by the caller. A
+ * caption that does `` `${figure<number>(m, 'foo')} groups` `` on a key whose
+ * capture actually recorded a string, or `null` because the read-back failed
+ * silently, gets `NaN groups` on screen - a rendered claim nobody measured,
+ * which is the exact failure the manifest schema and `figure()`'s own refusal
+ * exist to catch. This closes that gap for arithmetic call sites: delegate to
+ * `figure()` for the existence check, then refuse anything that is not a finite
+ * number before it reaches a caption.
+ */
+export function figureNumber(manifest: Manifest, key: string): number {
+  const value = figure<unknown>(manifest, key);
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(
+      `${manifest.id}: figure "${key}" is not a finite number - got ${JSON.stringify(value)}.`,
+    );
+  }
+  return value;
+}
