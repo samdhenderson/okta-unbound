@@ -19,6 +19,7 @@ import { Chapter, actLabelAt, chapterLength, chapterTab } from './Chapter';
 import { FilmIndex } from './FilmIndex';
 import { END_CARD_FRAMES, EndCard } from './EndCard';
 import { OPENING_FRAMES, Opening } from './Opening';
+import { Seam } from './Seam';
 
 /** Frames the index band takes to hand over from one chapter to the next. */
 const SLIDE_FRAMES = 30;
@@ -86,6 +87,30 @@ const Band: React.FC = () => {
   );
 };
 
+/**
+ * The last chapter's final frame, in the film's own absolute frames.
+ *
+ * The seam needs this and `Band` already computes the same number for its own
+ * fade, but chapter-relative. Hoisting it here rather than passing `Band`'s
+ * copy keeps the two from drifting when a chapter is retimed.
+ */
+const CHAPTERS_CLOSE = OPENING_FRAMES + CHAPTERS.reduce((total, c) => total + c.length, 0);
+
+/**
+ * The film, with its two pieces of furniture drawn over the top of it.
+ *
+ * `Band` and `Seam` are both outside the `<Series>` for the same reason: they
+ * belong to the film rather than to a chapter, and a component rendered inside
+ * a chapter cannot slide from one into the next. The seam additionally cannot
+ * be drawn by both sides of a cut, because the cut into chapter one comes from
+ * the premise card, whose exit fades its whole fill to zero, while a chapter's
+ * own panel opacity is already 1 at its frame 0. A seam driven by either would
+ * jump on the cut. Hoisted, it has one clock and no boundary to match.
+ */
+const SeamOverFilm: React.FC = () => (
+  <Seam frame={useCurrentFrame()} arriveAt={0} recedeAt={CHAPTERS_CLOSE} />
+);
+
 export const Reel: React.FC = () => (
   <AbsoluteFill>
     <Series>
@@ -102,5 +127,6 @@ export const Reel: React.FC = () => (
       </Series.Sequence>
     </Series>
     <Band />
+    <SeamOverFilm />
   </AbsoluteFill>
 );
