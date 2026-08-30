@@ -393,7 +393,7 @@ export const SCRIPT: Scene[] = [
       // The ledger's slot. A placeholder until the piece itself is built, and
       // visibly one on camera, so an empty slot cannot be mistaken for a piece
       // that rendered nothing.
-      { kind: 'piece', piece: 'placeholder', from: 'users-fix' },
+      { kind: 'piece', piece: 'ledger', from: 'users-fix' },
       {
         capture: 'users-fix',
         label: 'The fix',
