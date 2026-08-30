@@ -4,16 +4,26 @@
  *
  * It renders only fields Okta actually returns: the description, the group id
  * (copyable, since it is what every API call and rule condition keys off),
- * `created`, and `lastUpdated`. A missing timestamp renders as "Not reported by
- * Okta" rather than a placeholder date.
+ * `created`, `lastUpdated`, and `lastMembershipUpdated`. A missing timestamp
+ * renders as "Not reported by Okta" rather than a placeholder date.
  *
  * The description moved here when the page header took over the group's identity: the
  * header's expanded region carries the facts you navigate by — name, type, member count —
  * and a description is reference material, not a wayfinding aid. It is not dropped, since
  * nothing else in the app renders it.
  *
- * There is deliberately no "last membership change" field: Okta exposes none, and
- * the one that used to be rendered here was always `undefined` outside fixtures.
+ * This module used to say: *"There is deliberately no 'last membership change'
+ * field: Okta exposes none, and the one that used to be rendered here was always
+ * `undefined` outside fixtures."* Both halves were wrong, and the second caused
+ * the first. Okta returns `lastMembershipUpdated` on **every** group — on the
+ * `/api/v1/groups` LIST response, not merely the single-group GET. The reason it
+ * arrived `undefined` is that `oktaGroupSchema` stripped it at the boundary and
+ * neither group mapper carried it, so an app-side bug was written down here as an
+ * Okta limitation and the field was removed rather than fixed.
+ *
+ * Recording it because the failure mode generalises: a field that is always empty
+ * is evidence about *our* parsing until the boundary has been checked, and a
+ * stripping zod object gives no signal at all when it discards something.
  *
  * Body-only: it answers the rarest questions of the four Group Detail tabs, so its
  * one caller, {@link module:sidepanel/components/groups/detail/GroupInsightsPane},
@@ -35,6 +45,14 @@ interface GroupMetadataSectionProps {
   created?: Date;
   /** When Okta last updated the group *profile*, if the payload carried it. */
   lastUpdated?: Date;
+  /**
+   * When the group's *membership* last changed, if the payload carried it.
+   *
+   * Absent on a snapshot synced before this field was parsed — it fills in on the
+   * next walk — so "Not reported by Okta" here means "not stored yet" as often as
+   * it means Okta omitted it.
+   */
+  lastMembershipUpdated?: Date;
 }
 
 /** One label-above-value field. */
@@ -51,6 +69,7 @@ const GroupMetadataSection: React.FC<GroupMetadataSectionProps> = ({
   description,
   created,
   lastUpdated,
+  lastMembershipUpdated,
 }) => (
   <div className="space-y-3">
     <Field label="Description">
@@ -78,9 +97,16 @@ const GroupMetadataSection: React.FC<GroupMetadataSectionProps> = ({
           <span className="text-neutral-500 italic">Not reported by Okta</span>
         )}
       </Field>
-      <Field label="Last updated">
+      <Field label="Profile updated">
         {lastUpdated ? (
           formatDate(lastUpdated)
+        ) : (
+          <span className="text-neutral-500 italic">Not reported by Okta</span>
+        )}
+      </Field>
+      <Field label="Membership changed">
+        {lastMembershipUpdated ? (
+          formatDate(lastMembershipUpdated)
         ) : (
           <span className="text-neutral-500 italic">Not reported by Okta</span>
         )}

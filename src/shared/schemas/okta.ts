@@ -91,14 +91,39 @@ export const oktaUserSchema = z.object({
   profile: oktaProfileSchema,
 });
 
-/** A group as returned by GET /api/v1/groups/{id}. */
-export const oktaGroupSchema = z.object({
-  id: z.string(),
-  profile: z.object({
-    name: z.string(),
-    description: z.string().nullish(),
-  }),
-});
+/**
+ * A group as returned by `GET /api/v1/groups/{id}`.
+ *
+ * `.passthrough()`, unlike the stripping object this used to be. Zod's default
+ * object strips unknown keys silently, and every timestamp Okta returns on a
+ * group — `created`, `lastUpdated`, and `lastMembershipUpdated` — was being
+ * discarded here rather than merely unread. That is the failure mode ADR-0006
+ * names: the boundary decided what the app was allowed to know, and nothing
+ * downstream could tell the difference between "Okta did not send it" and "we
+ * threw it away".
+ *
+ * The dates are typed rather than left to passthrough because
+ * `lastMembershipUpdated` is load-bearing (see {@link OktaGroup} in
+ * `shared/types`) and a named field is reachable from TypeScript. All three are
+ * `.nullish()` — Okta documents none of them as required, and a group that has
+ * never been modified may omit `lastMembershipUpdated` entirely.
+ */
+export const oktaGroupSchema = z
+  .object({
+    id: z.string(),
+    // Spelled out rather than reusing `groupTypeSchema`, which is declared below
+    // this point in the file and is therefore not yet initialised here.
+    type: z.enum(['OKTA_GROUP', 'APP_GROUP', 'BUILT_IN']).optional(),
+    created: z.string().nullish(),
+    lastUpdated: z.string().nullish(),
+    /** When the group's *membership* last changed — not its profile. */
+    lastMembershipUpdated: z.string().nullish(),
+    profile: z.object({
+      name: z.string(),
+      description: z.string().nullish(),
+    }),
+  })
+  .passthrough();
 
 /**
  * A group rule as returned by `POST`/`GET /api/v1/groups/rules`. Only the fields

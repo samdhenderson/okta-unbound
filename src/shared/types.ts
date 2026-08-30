@@ -602,6 +602,30 @@ export interface GroupSummary {
   type: GroupType;
   memberCount: number;
   lastUpdated?: Date;
+  /**
+   * When this group's *membership* last changed, per Okta's
+   * `lastMembershipUpdated`.
+   *
+   * Distinct from {@link GroupSummary.lastUpdated}, which moves only when the
+   * group's **profile** is edited. A group renamed yesterday whose roster has not
+   * moved in three years has a fresh `lastUpdated` and a three-year-old
+   * `lastMembershipUpdated`, and it is the latter that answers "is anyone still
+   * using this".
+   *
+   * It is also the only signal in the app that sees the maintainers nothing else
+   * does: Workflows, SCIM, HR provisioning, direct API writes and IdP sync all
+   * bump it, none of them leave a group rule behind (see `ruleOrphans`'
+   * `INVISIBLE_MAINTAINERS`).
+   *
+   * What it does NOT carry: no actor, no direction (add vs remove), no magnitude.
+   * It is one timestamp. Attribution needs the System Log, whose retention is 90
+   * days.
+   *
+   * Optional because Okta does not document it as required and a never-modified
+   * group may omit it — and because a snapshot synced before the field was parsed
+   * has no value stored for it until the next walk.
+   */
+  lastMembershipUpdated?: Date;
   /** Whether at least one rule assigns users to this group (a feeding/target rule). */
   hasRules: boolean;
   /** Number of rules that assign users to this group (its feeding/target set). */

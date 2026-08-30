@@ -23,6 +23,13 @@ export interface RawOktaGroup {
   _links?: { apps?: { href?: string } };
   source?: { id: string; name?: string };
   lastUpdated?: string;
+  /**
+   * Okta's `lastMembershipUpdated` — when the roster last changed, as opposed to
+   * `lastUpdated`, which moves on profile edits. Present on the `/api/v1/groups`
+   * LIST response (not only the single-group GET), so it rides the walks this app
+   * already makes at no extra request. See {@link GroupSummary.lastMembershipUpdated}.
+   */
+  lastMembershipUpdated?: string;
   created?: string;
 }
 
@@ -61,6 +68,9 @@ export function toGroupSummary(group: RawOktaGroup): GroupSummary {
     type: group.type,
     memberCount,
     lastUpdated: group.lastUpdated ? new Date(group.lastUpdated) : undefined,
+    lastMembershipUpdated: group.lastMembershipUpdated
+      ? new Date(group.lastMembershipUpdated)
+      : undefined,
     created: group.created ? new Date(group.created) : undefined,
     hasRules: false,
     ruleCount: 0,
@@ -86,6 +96,9 @@ export function liveSearchToGroupSummary(group: RawOktaGroup): GroupSummary {
     type: group.type,
     memberCount: group._embedded?.stats?.usersCount ?? 0,
     lastUpdated: group.lastUpdated ? new Date(group.lastUpdated) : undefined,
+    lastMembershipUpdated: group.lastMembershipUpdated
+      ? new Date(group.lastMembershipUpdated)
+      : undefined,
     created: group.created ? new Date(group.created) : undefined,
     hasRules: false,
     ruleCount: 0,

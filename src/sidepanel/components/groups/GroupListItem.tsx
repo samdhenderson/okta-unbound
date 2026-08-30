@@ -297,6 +297,7 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
     prev.group.sourceAppName === next.group.sourceAppName &&
     prev.group.created === next.group.created &&
     prev.group.lastUpdated === next.group.lastUpdated &&
+    prev.group.lastMembershipUpdated === next.group.lastMembershipUpdated &&
     prev.group.pushMappings === next.group.pushMappings &&
     prev.selected === next.selected &&
     prev.oktaOrigin === next.oktaOrigin &&

@@ -12,8 +12,17 @@ import { parseRegexQuery } from '../../../shared/utils/regexQuery';
 // re-exported here so existing consumers (and groupFilters.test.ts) stay put.
 export { parseRegexQuery } from '../../../shared/utils/regexQuery';
 
-/** Field the groups list can be sorted by. */
-export type SortField = 'name' | 'memberCount' | 'lastUpdated';
+/**
+ * Field the groups list can be sorted by.
+ *
+ * `lastUpdated` and `lastMembershipUpdated` are two different clocks and sorting
+ * by the wrong one answers a different question: the former moves on a rename,
+ * the latter when the roster changes. Sorting happens locally rather than through
+ * Okta's `sortBy` because Okta accepts `sortBy` only alongside `search`, and
+ * group `search` has no ordering operators — the range and the ordering cannot be
+ * asked for in the same call.
+ */
+export type SortField = 'name' | 'memberCount' | 'lastUpdated' | 'lastMembershipUpdated';
 /** Push-status filter (`''` = all). */
 export type PushFilter = '' | 'pushed' | 'not_pushed';
 /**
@@ -104,6 +113,10 @@ export function compareGroupsBy(a: GroupSummary, b: GroupSummary, sortBy: SortFi
       if (!a.lastUpdated) return 1;
       if (!b.lastUpdated) return -1;
       return a.lastUpdated.getTime() - b.lastUpdated.getTime();
+    case 'lastMembershipUpdated':
+      if (!a.lastMembershipUpdated) return 1;
+      if (!b.lastMembershipUpdated) return -1;
+      return a.lastMembershipUpdated.getTime() - b.lastMembershipUpdated.getTime();
     default:
       return 0;
   }

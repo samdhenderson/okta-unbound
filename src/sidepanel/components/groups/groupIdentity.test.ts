@@ -119,12 +119,42 @@ describe('groupIdentity', () => {
     expect(counts.map((fact) => ('label' in fact ? fact.label : fact.kind))).toEqual(['members']);
   });
 
-  it('renders created as an absolute date and last-updated as recency', () => {
-    const { timestamps } = rowsOf(makeGroup({ created: daysAgo(1600), lastUpdated: daysAgo(4) }));
+  it('renders created as an absolute date and both update clocks as recency', () => {
+    const { timestamps } = rowsOf(
+      makeGroup({
+        created: daysAgo(1600),
+        lastUpdated: daysAgo(4),
+        lastMembershipUpdated: daysAgo(900),
+      }),
+    );
 
     expect(timestamps[0]).toMatchObject({ kind: 'text', icon: 'clock' });
     expect((timestamps[0] as { text: string }).text).toMatch(/^Created /);
-    expect(timestamps[1]).toMatchObject({ kind: 'text', text: 'Updated 4 days ago' });
+    expect(timestamps[1]).toMatchObject({ kind: 'text', text: 'Profile 4 days ago' });
+    expect(timestamps[2]).toMatchObject({ kind: 'text', text: 'Membership 2 years ago' });
+  });
+
+  it('names which clock each chip reports, so a fresh profile cannot read as a fresh roster', () => {
+    // The regression this pins: the profile chip used to say a bare "Updated",
+    // which invites reading a rename as activity. This group was renamed four days
+    // ago and has not gained or lost a member in nearly three years — the two
+    // chips must not be confusable.
+    const { timestamps } = rowsOf(
+      makeGroup({ lastUpdated: daysAgo(4), lastMembershipUpdated: daysAgo(900) }),
+    );
+
+    const texts = timestamps.map((fact) => ('text' in fact ? fact.text : ''));
+    expect(texts).toEqual(['Profile 4 days ago', 'Membership 2 years ago']);
+  });
+
+  it('omits the membership chip when Okta reported no membership date', () => {
+    // A snapshot synced before the field was parsed carries no value; the chip is
+    // dropped rather than rendered as an absence.
+    const { timestamps } = rowsOf(makeGroup({ lastUpdated: daysAgo(4) }));
+
+    expect(timestamps.map((fact) => ('text' in fact ? fact.text : ''))).toEqual([
+      'Profile 4 days ago',
+    ]);
   });
 
   it('leaves the timestamp row empty when Okta reported neither date', () => {

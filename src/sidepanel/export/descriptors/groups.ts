@@ -25,6 +25,8 @@ import type { EntityExport, ExportColumn } from '../types';
 export const groupWithStatsSchema = oktaGroupListItemSchema.extend({
   created: z.string().nullish(),
   lastUpdated: z.string().nullish(),
+  /** When the roster last changed. Nullish: Okta documents no guarantee it is set. */
+  lastMembershipUpdated: z.string().nullish(),
   _embedded: z
     .object({
       stats: z
@@ -70,6 +72,19 @@ export const groupColumns: ExportColumn<GroupWithStats>[] = [
     group: 'base',
     defaultEnabled: false,
     accessor: (g) => g.lastUpdated,
+    format: (v) => formatDateForCSV(v as string | null | undefined),
+  },
+  {
+    // Okta's `lastMembershipUpdated`: when the roster last changed, as opposed to
+    // `lastUpdated` above, which moves only on a profile edit. Off by default like
+    // its sibling dates, but it is the one an access review actually wants — it is
+    // the only column here that sees membership written by Workflows, SCIM, HR
+    // provisioning or IdP sync, none of which leave a group rule behind.
+    id: 'lastMembershipUpdated',
+    label: 'Membership Changed',
+    group: 'base',
+    defaultEnabled: false,
+    accessor: (g) => g.lastMembershipUpdated,
     format: (v) => formatDateForCSV(v as string | null | undefined),
   },
   {

@@ -86,6 +86,51 @@ describe('oktaGroupSchema', () => {
       /GET \/groups\/\{id\}/,
     );
   });
+
+  it('keeps every timestamp Okta returns, including lastMembershipUpdated', () => {
+    // The regression this pins: this schema was a stripping `z.object`, so it
+    // silently discarded all three timestamps. `lastMembershipUpdated` in
+    // particular then read as `undefined` everywhere downstream, and the app
+    // recorded that as "Okta exposes no such field" — an app-side parsing bug
+    // canonised as an API limitation.
+    const group = parseOkta(
+      oktaGroupSchema,
+      {
+        id: '00gFAKE1',
+        type: 'OKTA_GROUP',
+        profile: { name: 'AWS Prod - Admin', description: null },
+        created: '2021-03-12T00:00:00.000Z',
+        lastUpdated: '2026-08-01T00:00:00.000Z',
+        lastMembershipUpdated: '2023-01-15T00:00:00.000Z',
+      },
+      'test',
+    );
+
+    expect(group.created).toBe('2021-03-12T00:00:00.000Z');
+    expect(group.lastUpdated).toBe('2026-08-01T00:00:00.000Z');
+    expect(group.lastMembershipUpdated).toBe('2023-01-15T00:00:00.000Z');
+    expect(group.type).toBe('OKTA_GROUP');
+  });
+
+  it('accepts a group carrying none of the timestamps', () => {
+    // Okta documents none of them as required, and a never-modified group may
+    // omit lastMembershipUpdated entirely — absence must parse, not throw.
+    const group = parseOkta(
+      oktaGroupSchema,
+      { id: '00gFAKE2', profile: { name: 'Legal' } },
+      'test',
+    );
+    expect(group.lastMembershipUpdated).toBeUndefined();
+  });
+
+  it('preserves unknown fields rather than stripping them', () => {
+    const group = parseOkta(
+      oktaGroupSchema,
+      { id: '00gFAKE3', profile: { name: 'Eng' }, objectClass: ['okta:user_group'] },
+      'test',
+    );
+    expect((group as Record<string, unknown>).objectClass).toEqual(['okta:user_group']);
+  });
 });
 
 describe('oktaAppUserSchema', () => {
