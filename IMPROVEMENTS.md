@@ -760,3 +760,73 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Low — display string only, no API or cache behaviour. Note
   `useOrgFigures.test.tsx:130-131` asserts the current plural nouns and will
   need retargeting to the new contract.
+
+### I-025 · A snapshot cannot ask for a field it did not used to store
+
+- **Category:** architecture
+- **Priority:** P3
+- **Size:** M
+- **Verified:** 2026-08-29
+- **Files:** `src/shared/snapshot/orgSnapshotStore.ts:33`,
+  `src/shared/snapshot/snapshotSync.ts:394`, `src/shared/snapshot/types.ts:69`
+- **Problem:** `orgSnapshotStore` stores whole entity rows and is deliberately
+  content-agnostic (`DB_VERSION = 1`, `keyPath: ['origin','id']`), and the
+  freshness machinery reasons entirely about _counts_ and _watermarks_. Neither
+  has any notion of "which fields this row was stored with". So when the app
+  starts parsing a field it previously ignored, already-synced orgs keep serving
+  rows without it until some unrelated cause triggers a full or delta walk, and
+  nothing anywhere can tell that they are incomplete rather than simply
+  unpopulated.
+
+  Encountered concretely when `lastMembershipUpdated` was parsed (`0247c9f`):
+  the value had been arriving and being persisted (the list schema is
+  `.passthrough()`), but only for orgs synced after the mapper learned to read
+  it. The chosen mitigation was graceful degradation — the UI renders "Not
+  reported by Okta" and staleness falls back to `lastUpdated` — which is correct
+  for one field and does not generalise. The next field added will make the same
+  decision from scratch.
+
+- **Done when:** a snapshot carries a schema/parse version alongside its sync
+  metadata, and a bump forces the affected collection to re-walk once. The
+  interesting design question is scope: per-collection is probably right (a new
+  group field should not invalidate the apps inventory), and the version should
+  describe _what the app knows how to read_, not the DB layout, since
+  `DB_VERSION` already covers the latter and does not need to move.
+- **Risk:** Medium. Getting it wrong in the eager direction re-walks every
+  collection on every release, which is exactly the cost ADR-0040 exists to
+  avoid. Wants an ADR before code.
+
+### I-026 · Dormant access: the report `lastMembershipUpdated` actually unlocks
+
+- **Category:** feature
+- **Priority:** P2
+- **Size:** M
+- **Verified:** 2026-08-29
+- **Files:** `src/sidepanel/components/groups/ruleOrphans.ts`,
+  `src/sidepanel/hooks/useHomeReports.ts:132`
+- **Problem:** `findUnmaintainedAppAccess` finds groups that hold an app open
+  and that no rule fills — "whoever is in one of these is in it because a person
+  put them there, and nothing will take them out again". True, but it cannot
+  distinguish a group a human or a Workflow curates carefully every week from
+  one nobody has touched since 2021. Both are "unmanaged"; only the second is
+  abandoned, and only the second is the finding worth acting on.
+
+  `lastMembershipUpdated` separates them, and does so for free — it is on rows
+  the snapshot already holds. It is also the _only_ signal in the app that sees
+  the write paths `INVISIBLE_MAINTAINERS` warns about: Workflows, SCIM, HR
+  provisioning, direct API writes and IdP sync all bump it and none leave a rule
+  behind. So this report can say something the rule-based ones structurally
+  cannot: not "we see nothing filling this", but "nothing filled it".
+
+- **Done when:** a `findDormantAccess` in `ruleOrphans.ts` plus a fourth
+  `buildReport` in `useHomeReports`, reusing the existing
+  `counted`/`gates`/`caveat` completeness machinery. Zero API cost. Two things
+  to get right: `INVISIBLE_MAINTAINERS` must be **narrowed** for this report
+  rather than pasted — repeating "anything could be filling this invisibly"
+  under a finding that specifically rules that out would undersell it; and
+  `APP_GROUP` rows must be labelled or excluded, since a quiet app group means
+  the upstream directory is quiet.
+- **Risk:** Low to build, but it is a new security-relevant report and the
+  claims it makes are stronger than the existing ones, so it wants an ADR
+  fixing the wording before the code. Depends on `D-074` for the numbers to be
+  trustworthy on a long-lived snapshot.

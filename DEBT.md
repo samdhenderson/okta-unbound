@@ -2097,14 +2097,14 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 
   **The three cases, verified against Okta's own documentation:**
 
-  | Verb | What happens to existing members | Reversible? |
-  | --- | --- | --- |
-  | **Deactivate** | Nobody moves. "Okta does not remove users that the rule added to a group. The group membership remains, but the rule no longer applies to new users." | Yes — reactivate. |
-  | **Delete, `removeUsers=false`** (or omitted) | "Users remain members of the group, but the rule no longer manages the membership." They become ordinary manual members. | **No.** |
-  | **Delete, `removeUsers=true`** | "Okta removes the users from the group entirely." | **No.** |
+  | Verb                                         | What happens to existing members                                                                                                                      | Reversible?       |
+  | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+  | **Deactivate**                               | Nobody moves. "Okta does not remove users that the rule added to a group. The group membership remains, but the rule no longer applies to new users." | Yes — reactivate. |
+  | **Delete, `removeUsers=false`** (or omitted) | "Users remain members of the group, but the rule no longer manages the membership." They become ordinary manual members.                              | **No.**           |
+  | **Delete, `removeUsers=true`**               | "Okta removes the users from the group entirely."                                                                                                     | **No.**           |
 
-  Okta states the delete choice plainly: *"The choice an administrator makes when
-  deleting a group rule is permanent and irreversible."* Recreating the rule
+  Okta states the delete choice plainly: _"The choice an administrator makes when
+  deleting a group rule is permanent and irreversible."_ Recreating the rule
   afterwards does not undo either branch — it re-evaluates against the directory
   as it is now, which is a different set.
 
@@ -2134,6 +2134,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   citation. No preliminary ADR: the semantics are now documented facts rather
   than a design space, and the two-verb model is Okta's, not ours to choose. It
   remains its own PR and must not be folded into unrelated work.
+
 - **Related:** ADR-0043 (the demo reel's rule-impact chapter is held out of the
   reel until this lands; when it returns it argues **both verbs side by side** —
   deactivate, where nobody moves but N members become unattributed, and delete,
@@ -2939,7 +2940,7 @@ affects every scroll box in the app, on every platform.
   `I-018` reserved 0046 (the response layer), `D-062` reserved 0047 (elevation).
   Five for five.
 - **Problem:** The convention is that a research item names the ADR it will
-  produce, filename and all. But an ADR number is claimed by whoever *writes*
+  produce, filename and all. But an ADR number is claimed by whoever _writes_
   one, and feature branches write them continuously — `0041`–`0053` all landed
   in the five days after these items were filed. A backlog item can sit for
   weeks. So the reservation is a claim on a shared sequence made by the party
@@ -2947,12 +2948,13 @@ affects every scroll box in the app, on every platform.
   single time it was tried.**
 
   The failure is quiet in the way that matters. `lint:cited-paths` only checks
-  that cited paths *resolve*, so a reserved-but-not-yet-written filename is
+  that cited paths _resolve_, so a reserved-but-not-yet-written filename is
   invisible to it while the item waits, and once the number is taken the item
   now points at a real file about a completely different subject. `I-018`'s
   reserved `0046` resolves today — to the response-layer ADR. A reader
   following that citation lands somewhere plausible and wrong, which is worse
   than a broken link.
+
 - **Done when:** The item template stops reserving numbers. A research item
   names its ADR by **title only** ("an ADR on how deep the snapshot goes"), and
   the number is assigned when the file is written. `docs/adr/README.md`'s
@@ -2991,6 +2993,7 @@ affects every scroll box in the app, on every platform.
   Boolean; omitting it **keeps** users as now-unmanaged members; `true` removes
   them from the group entirely; both delete branches are irreversible, unlike
   deactivate.
+
 - **Done when:** `groups-and-rules.md` documents the three-way distinction
   (deactivate / delete-keep / delete-remove) with its reversibility, names
   `removeUsers` on the endpoint listing, and carries a `[docs]` marker with the
@@ -2998,7 +3001,130 @@ affects every scroll box in the app, on every platform.
   once `D-052` has landed, so this item states the API fact independently of the
   module rather than citing it.
 - **Risk:** None to the app — skill documentation only. The risk in leaving it
-  is that the skill is what a future session reads *before* implementing
+  is that the skill is what a future session reads _before_ implementing
   `D-052`, and it currently omits the parameter that item turns on.
 - **Status:** open
 - **Related:** `D-052` (the module-side defect this reference failed to catch)
+
+### D-074 · The org snapshot's delta cannot see a membership change
+
+- **Verified:** 2026-08-29 — found while parsing `lastMembershipUpdated`
+  (`0247c9f`), by reading `deltaUrl` against the field's documented semantics.
+- **Problem:** `shared/snapshot/snapshotSync.ts` builds every collection's delta
+  as `search=lastUpdated gt "<watermark>"` (`deltaUrl`), and advances the
+  watermark from `identify()`, which reads `record.lastUpdated` and nothing else.
+
+  For groups that is the wrong clock. Okta bumps `lastUpdated` when a group's
+  **profile** is edited and `lastMembershipUpdated` when its **membership**
+  changes — the two move independently. So a group that gained or lost fifty
+  members, but was not renamed, has an unchanged `lastUpdated`, is excluded from
+  every subsequent delta, and its stored row is never rewritten. The row carries
+  `_embedded.stats.usersCount`, so **the cached member count silently rots**.
+
+  Nothing detects it. The drift check (`checkDrift` → `driftVerdict`) compares
+  the collection's _total row count_ against `x-total-count`, and membership
+  churn does not change how many groups exist. ADR-0040 pairs delta with drift
+  because "a delta cannot see a deletion"; this is a second hole in the same
+  argument, and drift does not close it either.
+
+  Consequence: every surface reading a group's member count off the snapshot —
+  the Groups list, the size filter, `analyzeClutter`'s `empty` signal,
+  `findCleanupCandidates`, `findUnmaintainedAppAccess`, the Home reports — can
+  be reporting a figure that is arbitrarily old, while the panel says the
+  snapshot is fresh. An empty group that has since been filled still reads as
+  empty, and it is one click from the bulk machinery.
+
+- **Done when:** the groups delta reflects membership changes. The shape that
+  fits the existing code is to OR both clocks into the query
+  (`lastUpdated gt "W" or lastMembershipUpdated gt "W"`) and to advance the
+  watermark from whichever of the two is later, per row. Three things need
+  checking before that is written:
+  1. Group `search` documents only `sw`/`eq`/`co`, yet `deltaUrl` already relies
+     on `gt`. `probeDeltaSupport` is what makes that safe — it demands a
+     _proven_ zero count and falls back to a full walk otherwise. Any new query
+     shape must be probed the same way, including the `or`, or an org that
+     ignores the predicate silently skips real changes.
+  2. `identify()` is shared by every collection. Only groups carry
+     `lastMembershipUpdated`; reading an absent field elsewhere is harmless, but
+     the per-collection asymmetry should be deliberate and documented.
+  3. Whether Okta's `filter` (which documents `lastMembershipUpdated`) is the
+     better instrument than `search` here — `filter` supports the field and the
+     ordering operators, `search` supports neither reliably.
+- **Risk:** Medium. This is the sync contract and it touches ADR-0040's
+  reasoning, so it wants an ADR rather than a direct edit. The failure mode it
+  fixes is silent and affects numbers admins act on, which argues for doing it
+  soon; the fix itself can widen a delta into a near-full walk if the query is
+  wrong, which argues for the probe being right first.
+- **Status:** research:awaiting-review
+- **Related:** `0247c9f` (parses the field this needs), ADR-0040 (the sync
+  design this amends)
+
+### D-075 · `STALE_AGE_DAYS` was tuned for the wrong clock
+
+- **Verified:** 2026-08-29 — filed from `3b6ba65`, which changed the signal
+  beneath this threshold without moving the threshold.
+- **Problem:** `clutterAnalysis.STALE_AGE_DAYS` is 365, and the rationale
+  recorded for that number was that a 3- or 6-month cutoff "would flag ordinary,
+  healthy groups". That reasoning was about the _profile_ clock, where it holds
+  — nobody renames a healthy group, so a year of silence there is weak evidence
+  and a shorter window would be noise. The signal now reads
+  `lastMembershipUpdated`, where it holds much less: a year with no joiner and
+  no leaver is genuinely unusual for a live team, so 365 is probably far too
+  conservative and the Dormant bucket under-reports.
+- **Done when:** the threshold is re-derived against the membership clock,
+  against a real org's distribution rather than by intuition, and the constant's
+  docblock records the new rationale. Splitting it into two constants (one per
+  clock, since the fallback path still reads the profile one) is worth
+  considering and rejecting explicitly.
+- **Risk:** Low, but it changes what admins are shown, so it wants a real
+  distribution behind it rather than a guess.
+- **Status:** open
+- **Related:** `3b6ba65`, `D-074`
+
+### D-076 · The `okta-api` skill denies a field Okta returns
+
+- **Verified:** 2026-08-29 — read directly against Okta's OpenAPI reference for
+  `listGroups`/`getGroup`.
+- **Problem:** `.claude/skills/okta-api/SKILL.md:134` states "**Okta exposes no
+  group-membership timestamp**" and
+  `references/groups-and-rules.md:98` states "**There is no membership
+  timestamp**". Both are correct about the _per-member_ question — Okta really
+  does not say when a given user joined a given group, and only the System Log
+  answers that within 90 days. But both read as a blanket denial, and Okta does
+  return a group-level `lastMembershipUpdated` on every group, on the LIST
+  response as well as the single GET.
+
+  This is not hypothetical harm: the app went without the field for its whole
+  history, and `GroupMetadataSection` had recorded the same false belief in its
+  own header (corrected in `0247c9f`). The skill is what a future session reads
+  _before_ touching group staleness, and it currently tells them the field does
+  not exist.
+
+- **Done when:** both passages keep the per-member point and add the
+  group-level field: that it is default-returned on `/api/v1/groups`, that it is
+  one of only four `filter`-able group properties (`id`, `type`, `lastUpdated`,
+  `lastMembershipUpdated`), that `created` is _not_ filterable on groups, and
+  that `sortBy` works only alongside `search` while group `search` carries no
+  ordering operators — so a range and an ordering cannot be requested in one
+  call. Marked `[docs]` with the OpenAPI URL.
+- **Risk:** None to the app — skill documentation only.
+- **Status:** open
+- **Related:** `0247c9f`, `D-073` (the other stale claim in the same skill)
+
+### D-077 · `expand=stats` embeds `hasAdminPrivlege`, spelled Okta's way
+
+- **Verified:** 2026-08-29 — from Okta's OpenAPI schema for the group `stats`
+  embed.
+- **Problem:** The `okta-api` skill writes `hasAdminPrivileges`. Okta's field is
+  `hasAdminPrivlege` — missing the `i`, and singular. Any code or guidance built
+  on the skill's spelling reads `undefined` forever and fails open, silently.
+  Separately, the field has a known accuracy defect for custom admin roles, so
+  it should carry a "do not report from this" warning rather than merely being
+  spelled correctly.
+- **Done when:** the skill uses Okta's spelling, notes it is a misspelling in
+  the API itself so nobody "corrects" it back, and warns against reporting from
+  it. Nothing in `src/` reads it today; this is pre-emptive.
+- **Risk:** None today. It is a trap laid for whoever adds admin-privilege
+  reporting.
+- **Status:** open
+- **Related:** `D-076`
