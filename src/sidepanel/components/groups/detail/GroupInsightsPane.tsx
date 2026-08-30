@@ -106,6 +106,8 @@ interface GroupInsightsPaneProps {
   created?: Date;
   /** When Okta last updated the group profile, if the payload carried it. */
   lastUpdated?: Date;
+  /** When the group's membership last changed, if the payload carried it. */
+  lastMembershipUpdated?: Date;
 }
 
 /**
@@ -130,6 +132,7 @@ const GroupInsightsPane: React.FC<GroupInsightsPaneProps> = ({
   description,
   created,
   lastUpdated,
+  lastMembershipUpdated,
 }) => {
   const rosterReady = memberStatus === 'done' && members !== null;
 
@@ -248,6 +251,7 @@ const GroupInsightsPane: React.FC<GroupInsightsPaneProps> = ({
           description={description}
           created={created}
           lastUpdated={lastUpdated}
+          lastMembershipUpdated={lastMembershipUpdated}
         />
       </CollapsibleSection>
     </div>

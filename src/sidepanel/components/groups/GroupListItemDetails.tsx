@@ -94,7 +94,10 @@ const GroupListItemDetails: React.FC<GroupListItemDetailsProps> = ({ group, brea
       </Field>
 
       {group.created && <Field label="Created">{formatDate(group.created)}</Field>}
-      {group.lastUpdated && <Field label="Last updated">{formatDate(group.lastUpdated)}</Field>}
+      {group.lastUpdated && <Field label="Profile updated">{formatDate(group.lastUpdated)}</Field>}
+      {group.lastMembershipUpdated && (
+        <Field label="Membership changed">{formatDate(group.lastMembershipUpdated)}</Field>
+      )}
     </div>
 
     {group.pushMappings && group.pushMappings.length > 0 && (

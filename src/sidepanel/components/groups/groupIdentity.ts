@@ -108,12 +108,24 @@ export function groupIdentity(group: GroupSummary): EntityIdentityDescriptor {
     });
   }
   if (group.lastUpdated) {
-    // Recency answers "has anyone touched this lately?", which is the question an admin
-    // actually asks here; the exact timestamp lives in the About section below.
+    // Relative rather than absolute: the exact timestamp lives in the About
+    // section below, and recency is what is read at a glance.
+    //
+    // Labelled "Profile" rather than the bare "Updated" this used to say, because
+    // that is all `lastUpdated` covers on a group — a rename or a description
+    // edit. It does NOT answer "has anyone touched this lately?", which is the
+    // question an admin actually asks; the membership chip below answers that.
     const relative = getRelativeTime(group.lastUpdated.toISOString());
     timestamps.push({
       kind: 'text',
-      text: `Updated ${relative ?? formatDateShort(group.lastUpdated)}`,
+      text: `Profile ${relative ?? formatDateShort(group.lastUpdated)}`,
+    });
+  }
+  if (group.lastMembershipUpdated) {
+    const relative = getRelativeTime(group.lastMembershipUpdated.toISOString());
+    timestamps.push({
+      kind: 'text',
+      text: `Membership ${relative ?? formatDateShort(group.lastMembershipUpdated)}`,
     });
   }
 

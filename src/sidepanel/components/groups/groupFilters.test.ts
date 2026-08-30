@@ -128,6 +128,40 @@ describe('compareGroupsBy', () => {
     expect(compareGroupsBy(noDate, withDate, 'lastUpdated')).toBe(1);
     expect(compareGroupsBy(withDate, noDate, 'lastUpdated')).toBe(-1);
   });
+
+  it('sorts a missing lastMembershipUpdated last, matching the lastUpdated rule', () => {
+    const withDate = g({ id: 'a', lastMembershipUpdated: new Date('2026-01-01') });
+    const noDate = g({ id: 'b' });
+    expect(compareGroupsBy(noDate, withDate, 'lastMembershipUpdated')).toBe(1);
+    expect(compareGroupsBy(withDate, noDate, 'lastMembershipUpdated')).toBe(-1);
+  });
+
+  it('orders by the roster clock, not the profile clock, when asked for membership', () => {
+    // The two axes must not be interchangeable: this pair is deliberately ordered
+    // one way on `lastUpdated` and the opposite way on `lastMembershipUpdated`, so
+    // a comparator reading the wrong field cannot pass both assertions.
+    const renamedRecentlyFrozenRoster = g({
+      id: 'a',
+      lastUpdated: new Date('2026-08-01'),
+      lastMembershipUpdated: new Date('2023-01-01'),
+    });
+    const untouchedProfileLiveRoster = g({
+      id: 'b',
+      lastUpdated: new Date('2024-01-01'),
+      lastMembershipUpdated: new Date('2026-08-01'),
+    });
+
+    expect(
+      compareGroupsBy(renamedRecentlyFrozenRoster, untouchedProfileLiveRoster, 'lastUpdated'),
+    ).toBeGreaterThan(0);
+    expect(
+      compareGroupsBy(
+        renamedRecentlyFrozenRoster,
+        untouchedProfileLiveRoster,
+        'lastMembershipUpdated',
+      ),
+    ).toBeLessThan(0);
+  });
 });
 
 describe('filterAndSortGroups', () => {

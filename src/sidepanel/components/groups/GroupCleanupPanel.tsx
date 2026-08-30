@@ -3,7 +3,7 @@
  * @description Read-only directory-clutter triage panel for the Groups tab.
  *
  * Runs the local {@link analyzeClutter} classifier over the already-loaded group
- * list and surfaces the triage categories (empty, duplicate-name, stale) as
+ * list and surfaces the triage categories (empty, duplicate-name, dormant) as
  * one-click selectors that feed the existing selection → bulk/export machinery,
  * plus a ranked preview of the most review-worthy groups. No API calls and no
  * mutations of its own — it only helps the admin decide what to look at.
@@ -70,7 +70,7 @@ const GroupCleanupPanel: React.FC<GroupCleanupPanelProps> = ({
         <EmptyState
           icon="check"
           title="No clutter detected"
-          description="No empty, duplicate-named, or stale groups in the loaded list."
+          description="No empty, duplicate-named, or dormant groups in the loaded list."
         />
       ) : (
         <>
@@ -101,11 +101,11 @@ const GroupCleanupPanel: React.FC<GroupCleanupPanelProps> = ({
               }
             />
             <StatCard
-              title="Stale"
+              title="Dormant"
               value={report.categories.stale.length}
               color="warning"
               icon="pause"
-              subtitle="not updated in 1+ year"
+              subtitle="no membership change in 1+ year"
               onClick={
                 report.categories.stale.length > 0
                   ? () => onSelectGroups(report.categories.stale)

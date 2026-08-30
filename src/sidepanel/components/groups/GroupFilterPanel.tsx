@@ -232,7 +232,8 @@ const GroupFilterPanel: React.FC<GroupFilterPanelProps> = ({
         {[
           { value: 'name' as SortField, label: 'Name' },
           { value: 'memberCount' as SortField, label: 'Size' },
-          { value: 'lastUpdated' as SortField, label: 'Last Updated' },
+          { value: 'lastUpdated' as SortField, label: 'Profile Updated' },
+          { value: 'lastMembershipUpdated' as SortField, label: 'Membership Changed' },
         ].map((opt) => (
           <SortPill
             key={opt.value}

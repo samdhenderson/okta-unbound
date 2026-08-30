@@ -22,21 +22,42 @@ describe('toGroupSummary', () => {
     expect(s).toMatchObject({ hasRules: false, ruleCount: 0, selected: false });
   });
 
-  it('revives lastUpdated/created ISO strings into Date instances', () => {
+  it('revives lastUpdated/created/lastMembershipUpdated ISO strings into Date instances', () => {
     const s = toGroupSummary({
       ...base,
       lastUpdated: '2026-01-02T03:04:05Z',
       created: '2025-01-01T00:00:00Z',
+      lastMembershipUpdated: '2026-02-03T04:05:06Z',
     });
     expect(s.lastUpdated).toBeInstanceOf(Date);
     expect(s.created).toBeInstanceOf(Date);
+    expect(s.lastMembershipUpdated).toBeInstanceOf(Date);
     expect(s.lastUpdated?.toISOString()).toBe('2026-01-02T03:04:05.000Z');
+    expect(s.lastMembershipUpdated?.toISOString()).toBe('2026-02-03T04:05:06.000Z');
+  });
+
+  it('keeps the two update clocks separate rather than aliasing one to the other', () => {
+    // The regression this pins: `lastMembershipUpdated` was never mapped at all,
+    // so every consumer saw `undefined` and the app concluded Okta did not send
+    // it. A group's profile clock and roster clock move independently and the
+    // mapper must carry both, distinctly.
+    const s = toGroupSummary({
+      ...base,
+      lastUpdated: '2026-08-01T00:00:00Z',
+      lastMembershipUpdated: '2023-01-01T00:00:00Z',
+    });
+    expect(s.lastUpdated?.toISOString()).toBe('2026-08-01T00:00:00.000Z');
+    expect(s.lastMembershipUpdated?.toISOString()).toBe('2023-01-01T00:00:00.000Z');
   });
 
   it('leaves the date fields undefined when absent', () => {
     const s = toGroupSummary(base);
     expect(s.lastUpdated).toBeUndefined();
     expect(s.created).toBeUndefined();
+    // Absent rather than defaulted: a snapshot synced before this field was
+    // parsed carries no value, and inventing one would date a roster that was
+    // never reported.
+    expect(s.lastMembershipUpdated).toBeUndefined();
   });
 
   it('for APP_GROUP: derives sourceAppId from the _links.apps href', () => {
@@ -89,6 +110,7 @@ describe('liveSearchToGroupSummary', () => {
       ...base,
       _embedded: { stats: { usersCount: 7 } },
       lastUpdated: '2026-01-02T00:00:00Z',
+      lastMembershipUpdated: '2026-03-04T00:00:00Z',
     });
     expect(s).toMatchObject({
       id: 'g1',
@@ -99,6 +121,9 @@ describe('liveSearchToGroupSummary', () => {
       selected: false,
     });
     expect(s.lastUpdated).toBeInstanceOf(Date);
+    // The live-search mapper is narrower than `toGroupSummary` by design, but not
+    // on the timestamps — a live hit must carry the roster clock too.
+    expect(s.lastMembershipUpdated?.toISOString()).toBe('2026-03-04T00:00:00.000Z');
   });
 
   it('never populates sourceAppId/sourceAppName even for an APP_GROUP', () => {

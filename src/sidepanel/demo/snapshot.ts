@@ -37,13 +37,29 @@ import { demoRevision } from './state';
  * @param n - Ordinal, which becomes the `00gFAKE…` id.
  * @param name - Display name.
  * @param description - The one-line description the list row shows.
- * @param options - Group type and, for `APP_GROUP`s, the sourcing app.
+ * @param options - Group type, the sourcing app for `APP_GROUP`s, and
+ * `membershipDaysAgo` to move the roster clock independently of the profile one.
  */
 function group(
   n: number,
   name: string,
   description: string,
-  options: { type?: RawOktaGroup['type']; source?: { id: string; name: string } } = {},
+  options: {
+    type?: RawOktaGroup['type'];
+    source?: { id: string; name: string };
+    /**
+     * Days since the roster last changed. Defaults to a value near
+     * `lastUpdated`, which is the ordinary case — most groups are edited and
+     * filled in the same era.
+     *
+     * Set it explicitly to build the case the two clocks exist to tell apart: a
+     * group whose profile was edited last week but whose membership has not moved
+     * in years reads as fresh on `lastUpdated` and dormant on this one. Without at
+     * least one such fixture the distinction is untestable and invisible in the
+     * demo.
+     */
+    membershipDaysAgo?: number;
+  } = {},
 ): RawOktaGroup {
   return {
     id: fakeId('00g', n),
@@ -54,6 +70,7 @@ function group(
       : {}),
     created: isoDaysAgo(600 + n),
     lastUpdated: isoDaysAgo(n * 3 + 2),
+    lastMembershipUpdated: isoDaysAgo(options.membershipDaysAgo ?? n * 3 + 5),
   };
 }
 
@@ -77,10 +94,17 @@ const groupTemplates: readonly RawOktaGroup[] = [
   group(GROUP.security, 'Security - All', 'Rule-assigned by department'),
   group(GROUP.data, 'Data - All', 'Rule-assigned by department'),
   group(GROUP.legal, 'Legal - All', 'Rule-assigned by department'),
+  // The case the two clocks exist to tell apart, and deliberately the org's most
+  // privileged group: the quarterly review keeps editing the description, so
+  // `lastUpdated` is always days old and the group reads as well-tended — while
+  // nobody has actually joined or left it in over three years. On the profile
+  // clock alone it is invisible; on the membership clock it is the first thing an
+  // access review should look at.
   group(
     GROUP.awsProdAdmin,
     'AWS Prod - Admin',
     'Production AWS console access. Reviewed quarterly.',
+    { membershipDaysAgo: 1180 },
   ),
   group(GROUP.awsProdReadOnly, 'AWS Prod - ReadOnly', 'Read-only production AWS access'),
   group(GROUP.vpnUsers, 'VPN Users', 'Rule-assigned to every active employee'),
@@ -90,7 +114,11 @@ const groupTemplates: readonly RawOktaGroup[] = [
   group(GROUP.onCallEngineering, 'On-Call - Engineering', 'Paged rotation. Managed by hand.'),
   group(GROUP.releaseManagers, 'Release Managers', 'Can promote a build to production'),
   group(GROUP.incidentResponse, 'Security - Incident Response', 'IR pager rotation'),
-  group(GROUP.interns, 'Interns 2026', 'Summer cohort. Expires at the end of the season.'),
+  // A cohort that should have been emptied at the end of the season and never
+  // was — nothing has touched the roster since the intake.
+  group(GROUP.interns, 'Interns 2026', 'Summer cohort. Expires at the end of the season.', {
+    membershipDaysAgo: 430,
+  }),
   group(GROUP.dormant, 'Dormant - 120d', 'No sign-in in 120 days. Review for deactivation.'),
   group(GROUP.executiveStaff, 'Executive Staff', 'Leadership team'),
   group(GROUP.londonOffice, 'London Office', 'Rule-assigned by city'),
