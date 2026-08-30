@@ -62,6 +62,12 @@ convention; the specs in [`../`](../README.md) describe the _what_.
 | [0052](./0052-the-demo-org-can-be-written-to.md) | The demo org can be written to | Proposed | Amends 0043. Patch overlay in `demo/state.ts`, not a mutated seed; memberships re-derive on write except `HAND_MANAGED`'s frozen sample; re-seeds the snapshot and fires `snapshotUpdated`; a walk refuses the take if the named group's row does not appear. |
 | [0053](./0053-a-chapter-is-several-acts-on-one-tab.md) | A chapter is several acts on one tab | Proposed | Amends 0045. `Scene` → `{ id, title, acts: Act[] }`; `chapterTab` asserts one tab per chapter; `kind` drops out of `FilmIndex` for the act's `label`, stays in the capture manifest; typed change, no re-shoot. |
 
+| [0054](./0054-a-401-is-a-session-not-a-request.md) | A 401 is a session, not a request | Proposed | Scopes `D-007b`. Scheduler owns suspension, per origin; queued work fails fast and is never auto-retried; one global `danger` banner, not nine; clears on admin action or tab reload, never a timer; interrupted vs not-attempted audit outcomes. |
+| [0055](./0055-what-the-evaluator-refuses-to-guess.md) | What the evaluator refuses to guess | Proposed | Scopes `I-008`. Extends 0017's allow-list by argument, not by appetite: implement / refuse / uncomputable buckets; date-time gated on an explicit offset; four security constraints per addition; refusals are asserted by test. |
+| [0056](./0056-how-deep-the-snapshot-goes.md) | How deep the snapshot goes | Proposed | Extends 0040. Three cumulative per-origin levels (Essential / Standard / Extended); default drops below today's wiring; every level priced in requests *and* rows; lowering a level deletes rows in the same transaction; membership is never a level. |
+| [0057](./0057-a-keyboard-route-into-the-panel.md) | A keyboard route into the panel | Proposed | Scopes `I-018`. One `_execute_action` command, `⌘⇧K` — no listener, no message, no permission. The chord is suggested not assumed; UI reads it back from `chrome.commands.getAll()`. In-panel ⌘K unchanged. |
+| [0058](./0058-one-context-engine.md) | One context engine | Proposed | Scopes `D-062`. `useGroupContext` becomes a selector over a single `useOktaPageContext`. The two failure semantics stay distinct — a failed probe reports `unknown`, not `admin`, which is the behaviour change to test. |
+
 ## Adding an ADR
 
 Number sequentially, use the Context / Decision / Consequences shape, and set

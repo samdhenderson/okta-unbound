@@ -153,7 +153,10 @@ export function makeUseOktaApiValue(overrides: UseOktaApiValue = {}): UseOktaApi
     updateUserProfile: asyncFn({ outcome: 'saved' }),
 
     // App inventory operations (read-only: Apps tab + app Overview enrichment)
-    getAppById: asyncFn(null),
+    // `AppLookup`, not a nullable app (D-007a): `missing` is the neutral default
+    // — Okta positively answering "no such app" — and is what the previous
+    // `null` meant to every caller.
+    getAppById: asyncFn({ kind: 'missing' }),
     getAppAssignmentCounts: asyncFn(null),
     // Fallback for naming an app's granting group when the `expand=user/{id}`
     // embed named none. Linear in app count, so it is gated behind an explicit

@@ -209,7 +209,7 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Category:** feature-completeness
 - **Priority:** P2
 - **Size:** L
-- **Files:** `docs/adr/0042-what-the-evaluator-refuses-to-guess.md` (to be
+- **Files:** `docs/adr/0055-what-the-evaluator-refuses-to-guess.md` (to be
   created), `src/shared/ruleEvaluator.ts:298-320` (read-only, for reference)
 - **Verified:** 2026-08-24 — `SUPPORTED_FUNCTIONS` still holds seven entries.
 - **Problem:** The evaluator implements seven `String.*` functions and nothing
@@ -218,7 +218,7 @@ block says they mean — same vocabulary, one definition, defined there.
   "why is this person in this group" gets no answer for exactly the rules that
   are hardest to reason about by hand. Sam wants broader coverage both for
   rule-display fidelity and as groundwork for future policy evaluation.
-- **Done when:** `docs/adr/0042-what-the-evaluator-refuses-to-guess.md` exists
+- **Done when:** `docs/adr/0055-what-the-evaluator-refuses-to-guess.md` exists
   at Status: Proposed. **This item ships no code** — its PR touches `docs/`
   only. The proposal must:
   1. Enumerate the OEL functions reachable inside a **group-rule condition**
@@ -242,6 +242,11 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** None to write. High if implemented without this scoping — it is a
   security-relevant evaluator.
 - **Status:** research:awaiting-review
+- **ADR written 2026-08-29** (`chore/unstick-backlog`), at Status: Proposed:
+  `docs/adr/0055-what-the-evaluator-refuses-to-guess.md`. The number this item reserved on 2026-08-24 had been taken by an
+  unrelated ADR before the item was picked up, so the proposal is **ADR-0055** — see
+  `D-072`. Status stays `research:awaiting-review` deliberately: only Sam's
+  acceptance moves it to `open`, never the session that wrote it.
 
 ### I-009 · EntityLink's default copy-id label collides when two entities share a name
 
@@ -341,7 +346,7 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Category:** feature-completeness
 - **Priority:** P2
 - **Size:** L
-- **Files:** `docs/adr/0043-how-deep-the-snapshot-goes.md` (to be created);
+- **Files:** `docs/adr/0056-how-deep-the-snapshot-goes.md` (to be created);
   read-only for reference: `docs/adr/0040-the-background-owns-the-org.md`,
   `src/shared/snapshot/snapshotSync.ts` (the `CollectionSpec` / `ShardProvider`
   model), `src/shared/snapshot/types.ts:9-25`,
@@ -364,7 +369,7 @@ block says they mean — same vocabulary, one definition, defined there.
   org actions**, which need breadth (several collections joined) far more than
   they need any single expensive call.
 
-- **Done when:** `docs/adr/0043-how-deep-the-snapshot-goes.md` exists at
+- **Done when:** `docs/adr/0056-how-deep-the-snapshot-goes.md` exists at
   Status: Proposed. **This item ships no code** — its PR touches `docs/` only.
   It must define named depth levels, what each level walks, what each level
   makes answerable, and how an admin moves between them, plus two hard
@@ -388,6 +393,11 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** None to write. Medium once implemented — the design commits the
   storage schema and the sync budget to a shape later levels must live inside.
 - **Status:** research:awaiting-review
+- **ADR written 2026-08-29** (`chore/unstick-backlog`), at Status: Proposed:
+  `docs/adr/0056-how-deep-the-snapshot-goes.md`. The number this item reserved on 2026-08-24 had been taken by an
+  unrelated ADR before the item was picked up, so the proposal is **ADR-0056** — see
+  `D-072`. Status stays `research:awaiting-review` deliberately: only Sam's
+  acceptance moves it to `open`, never the session that wrote it.
 
 ### I-013 · Create a feeding rule from the Group Detail action bar
 
@@ -453,7 +463,24 @@ block says they mean — same vocabulary, one definition, defined there.
   client-side filter the admin cannot audit row by row, and one of its two
   blockers **cannot be closed from the repo** — verifying the endpoint needs a
   live org.
-- **Status:** blocked:sparse-patch-merge-unverified
+- **Status:** blocked:needs-live-org
+- **Re-gated 2026-08-29 by Sam.** The status was
+  `blocked:sparse-patch-merge-unverified`, which named the symptom rather than
+  what is actually missing. The item's own **Risk** paragraph already says it:
+  one of its two blockers "**cannot be closed from the repo** — verifying the
+  endpoint needs a live org." That is the same wall `D-028` sits behind, so it
+  now carries the same gate word, and for the same reason — an unattended
+  session should not select it and should not spend prose re-deriving why.
+
+  The second blocker (the undo cap, redesigned as one run-scoped entry rather
+  than one per user) is **not** live-org work and could be designed from the
+  repo today. It is deliberately left inside this item rather than split out:
+  designing an undo for a write whose merge semantics are unverified is how the
+  undo ends up correct for behaviour Okta does not have.
+
+  If a live-org session happens, run this with `D-028` — both are waiting on the
+  same access, and the sparse-patch-merge check is a natural eleventh entry in
+  that audit's list.
 
 ### I-015 · `ClauseGroupList`'s resolved rows print a raw, uncopyable id
 
@@ -545,7 +572,7 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Category:** ux
 - **Priority:** P2
 - **Size:** M
-- **Files:** `docs/adr/0046-a-keyboard-route-into-the-panel.md` (to be created);
+- **Files:** `docs/adr/0057-a-keyboard-route-into-the-panel.md` (to be created);
   read-only for reference: `src/sidepanel/hooks/useCommandPalette.ts`,
   `src/sidepanel/components/TabJumpPalette.tsx`, `manifest.json`
 - **Verified:** 2026-08-28 — `useCommandPalette` registers a plain `window`
@@ -567,6 +594,11 @@ block says they mean — same vocabulary, one definition, defined there.
   files under `src/`.**
 - **Risk:** n/a — research only.
 - **Status:** research:awaiting-review
+- **ADR written 2026-08-29** (`chore/unstick-backlog`), at Status: Proposed:
+  `docs/adr/0057-a-keyboard-route-into-the-panel.md`. The number this item reserved on 2026-08-28 had been taken by an
+  unrelated ADR before the item was picked up, so the proposal is **ADR-0057** — see
+  `D-072`. Status stays `research:awaiting-review` deliberately: only Sam's
+  acceptance moves it to `open`, never the session that wrote it.
 - **Related:** the Home tab program (which made the jump bar the primary route)
 
 ### I-019 · MFA coverage for a group, from Home

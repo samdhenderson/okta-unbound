@@ -5,8 +5,8 @@
  * Drives `searchApps` through a fully-mocked `CoreApi`, asserting the request
  * shape, the `label || name || id` fallback, the short-query and error
  * short-circuits, and that malformed rows are dropped by boundary validation.
- * Also covers the Applications-tab reads: `getAppById` (lenient validation),
- * `getAppAssignmentCounts`, and the `getAppGroupAssignments` fallback
+ * Also covers the Applications-tab reads: `getAppById` (the four `AppLookup`
+ * outcomes), `getAppAssignmentCounts`, and the `getAppGroupAssignments` fallback
  * (pagination, `[]` vs `null`, lenient rows).
  * Fixtures use fake placeholders (`0oaFAKE…`) per CLAUDE.md.
  */
@@ -14,6 +14,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { createAppOperations } from './appOperations';
 import type { CoreApi } from './core';
 import { makeFakeCore } from '@/test/factories/coreApi';
+import { NO_HTTP_STATUS } from '@/shared/scheduler/requestResult';
 
 /** Build a fake CoreApi whose transport is fully mocked. */
 const makeCore = (overrides: Partial<CoreApi> = {}): CoreApi =>
@@ -96,48 +97,100 @@ describe('searchApps', () => {
 // rows drop rather than fail the walk, and a failed page leaves the collection
 // marked incomplete instead of passing a prefix off as the org.
 
+/**
+ * `getAppById` used to answer `OktaAppListItem | null`, which made "Okta says
+ * there is no such app" and "we never got an answer" the same value — a
+ * throttled or unauthenticated lookup rendered as an authoritative absence.
+ * These cases pin the four outcomes that replaced it (D-007a); the three that
+ * previously asserted `toBeNull()` are the same three scenarios, re-pointed at
+ * the answer each one now gives.
+ */
 describe('getAppById', () => {
-  it('fetches one app and returns the validated entity', async () => {
+  it('returns the validated entity when Okta answers', async () => {
     const core = makeCore({
       makeApiRequest: vi.fn().mockResolvedValue({
         success: true,
+        status: 200,
         data: { id: '0oaFAKE1', label: 'Salesforce', signOnMode: 'SAML_2_0', created: null },
       }),
     });
     const { getAppById } = createAppOperations(core);
 
-    const app = await getAppById('0oaFAKE1');
+    const lookup = await getAppById('0oaFAKE1');
 
     expect(core.makeApiRequest).toHaveBeenCalledWith('/api/v1/apps/0oaFAKE1', {
       reason: 'Load app details',
     });
-    expect(app?.label).toBe('Salesforce');
-    expect(app?.signOnMode).toBe('SAML_2_0');
+    expect(lookup.kind).toBe('found');
+    if (lookup.kind !== 'found') throw new Error('expected a found lookup');
+    expect(lookup.app.label).toBe('Salesforce');
+    expect(lookup.app.signOnMode).toBe('SAML_2_0');
   });
 
-  it('returns null when the request fails', async () => {
+  it('reports 404 — and only 404 — as missing', async () => {
     const core = makeCore({
-      makeApiRequest: vi.fn().mockResolvedValue({ success: false, error: 'not found' }),
+      makeApiRequest: vi
+        .fn()
+        .mockResolvedValue({ success: false, status: 404, error: 'Not found' }),
     });
     const { getAppById } = createAppOperations(core);
 
-    expect(await getAppById('0oaFAKE1')).toBeNull();
+    expect(await getAppById('0oaFAKE1')).toEqual({ kind: 'missing' });
   });
 
-  it('returns null when the response fails validation', async () => {
+  it('reports a rate-limited lookup as failed, not missing', async () => {
     const core = makeCore({
-      makeApiRequest: vi.fn().mockResolvedValue({ success: true, data: { label: 'no id' } }),
+      makeApiRequest: vi
+        .fn()
+        .mockResolvedValue({ success: false, status: 429, error: 'Too many requests' }),
     });
     const { getAppById } = createAppOperations(core);
 
-    expect(await getAppById('0oaFAKE1')).toBeNull();
+    // The defect this item names: 429 used to be indistinguishable from a
+    // deleted app, so a throttled jump reported the app did not exist.
+    expect(await getAppById('0oaFAKE1')).toEqual({ kind: 'failed', status: 429 });
   });
 
-  it('returns null (never throws) when the transport rejects', async () => {
+  it('reports 401 as an expired session', async () => {
+    const core = makeCore({
+      makeApiRequest: vi
+        .fn()
+        .mockResolvedValue({ success: false, status: 401, error: 'Invalid session' }),
+    });
+    const { getAppById } = createAppOperations(core);
+
+    expect(await getAppById('0oaFAKE1')).toEqual({ kind: 'session-expired' });
+  });
+
+  it('does not mistake 403 for an expired session', async () => {
+    const core = makeCore({
+      makeApiRequest: vi
+        .fn()
+        .mockResolvedValue({ success: false, status: 403, error: 'Forbidden' }),
+    });
+    const { getAppById } = createAppOperations(core);
+
+    // Re-authenticating is the wrong remedy for a permission wall.
+    expect(await getAppById('0oaFAKE1')).toEqual({ kind: 'failed', status: 403 });
+  });
+
+  it('reports a response that fails validation as failed, not missing', async () => {
+    const core = makeCore({
+      makeApiRequest: vi
+        .fn()
+        .mockResolvedValue({ success: true, status: 200, data: { label: 'no id' } }),
+    });
+    const { getAppById } = createAppOperations(core);
+
+    expect(await getAppById('0oaFAKE1')).toEqual({ kind: 'failed', status: 200 });
+  });
+
+  it('reports a transport rejection as failed with the no-HTTP-response sentinel', async () => {
     const core = makeCore({ makeApiRequest: vi.fn().mockRejectedValue(new Error('network')) });
     const { getAppById } = createAppOperations(core);
 
-    expect(await getAppById('0oaFAKE1')).toBeNull();
+    // Still never throws — the contract that changed is the return, not that.
+    expect(await getAppById('0oaFAKE1')).toEqual({ kind: 'failed', status: NO_HTTP_STATUS });
   });
 });
 

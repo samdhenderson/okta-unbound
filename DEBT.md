@@ -201,7 +201,7 @@ heuristic and no allow-list of endpoints.
 - **Risk:** Low. Touches the shape every API caller reads, so it is wide, but the
   compiler finds every site. Route through `security-logging-reviewer` anyway:
   it is the request path.
-- **Status:** open
+- **Status:** done:#102
 - **Related:** absorbs what `D-027` wanted before that item was overtaken.
 
 ### D-007b · One expired session, not thirty failed requests
@@ -209,17 +209,25 @@ heuristic and no allow-list of endpoints.
 - **Category:** correctness
 - **Priority:** P2
 - **Size:** M
-- **Files:** `docs/adr/0041-a-401-is-a-session-not-a-request.md` (to be created),
+- **Files:** `docs/adr/0050-a-401-is-a-session-not-a-request.md` (to be created),
   `src/shared/scheduler/apiScheduler.ts`, `src/sidepanel/App.tsx`
-- **Verified:** 2026-08-24 — `CONVENTIONS.md`'s Session-expiry section still
-  describes the live behavior correctly.
+- **Verified:** 2026-08-29 — still holds, but on narrower ground than the
+  original filing: `D-007a` shipped `isSessionExpired` (401 only), so a 401 is
+  now _distinguishable_. Exactly one surface consumes it (`getAppById` →
+  HomeTab's jump bar); the scheduler still drains a queue into the same 401 and
+  no global signal exists, which is the whole of what this item asks for.
+  **Renumbered:** this item reserved `docs/adr/0041-…`, but ADR-0041 has been
+  taken since by the read-only API explorer decision — next free is 0050. The
+  original `Verified` line (2026-08-24) cited `CONVENTIONS.md`'s Session-expiry
+  section as evidence; that section was rewritten tonight, so it no longer
+  supports the claim and the code was re-read instead.
 - **Problem:** When the admin's Okta session ends mid-use — signed out in
   another tab, or simply timed out — the panel does not notice. Every queued
   request fails with an ordinary "request failed" error, so a user sees a dozen
   unrelated surfaces break at once and concludes the extension is broken rather
   than that they need to sign in again. There is also nothing to stop the
   scheduler draining a full queue into the same 401 thirty times over.
-- **Done when:** `docs/adr/0041-a-401-is-a-session-not-a-request.md` exists at
+- **Done when:** `docs/adr/0054-a-401-is-a-session-not-a-request.md` exists at
   Status: Proposed and answers, at minimum: **where** the signal surfaces (the
   scheduler sees every request and is the only layer that can pause the queue —
   that is the argument for it over the content script); **what** the panel
@@ -230,6 +238,11 @@ heuristic and no allow-list of endpoints.
   way — the `D-013` policy and this one meet there.
 - **Risk:** None to write. Medium to implement, which is why the ADR comes first.
 - **Status:** research:awaiting-review
+- **ADR written 2026-08-29** (`chore/unstick-backlog`), at Status: Proposed:
+  `docs/adr/0054-a-401-is-a-session-not-a-request.md`. The number this item reserved on 2026-08-24 had been taken by an
+  unrelated ADR before the item was picked up, so the proposal is **ADR-0054** — see
+  `D-072`. Status stays `research:awaiting-review` deliberately: only Sam's
+  acceptance moves it to `open`, never the session that wrote it.
 
 ### D-007c · A 429 is never retried, because it is not an error
 
@@ -1139,6 +1152,21 @@ more expensive the day an audit viewer ships.
       disagree. Confirm no surface reads one while another reads the other
       within a single view.
 
+  11. **An expired session really returns 401.** ADR-0054 rests entirely on
+      `isSessionExpired()` firing, which requires Okta to answer an expired
+      admin session with HTTP 401 rather than a 302 to a sign-in page. If these
+      endpoints redirect instead, the whole suspension mechanism sits idle and
+      the panel behaves exactly as it does today. Sign out in a second tab and
+      watch what the next queued request actually receives.
+  12. **`String.substring` out-of-range behaviour.** ADR-0055 refuses to
+      implement it because Okta's clamp-versus-throw behaviour at the boundary
+      is undocumented, and the disagreement is silent. Write a rule using it
+      with an out-of-range index and record which it does.
+  13. **Relative time-window boundaries.** Also ADR-0055: whether a "within N
+      days" condition is inclusive or exclusive, and whether it evaluates
+      against org time or UTC. A rule granting access for 30 days that the
+      panel reads as 31 is a security claim the panel got wrong.
+
 - **Done when:** Each numbered item above has a recorded verdict against a
   real org — confirmed, refuted, or not-reachable — with any refuted item
   filed as its own `DEBT.md` entry. Assumptions that turn out to be wrong are
@@ -1147,7 +1175,28 @@ more expensive the day an audit viewer ships.
 - **Risk:** None to ship — this is a read-only audit. The risk is in _not_
   doing it: every item above is currently an argument rather than an
   observation.
-- **Status:** open
+- **Status:** blocked:needs-live-org
+- **Why blocked (2026-08-29):** this was the night's top-priority candidate by
+  sort order — the only open P1 on either ledger — and it was picked up before
+  anything else. Every one of its ten checks is defined as _a verdict against a
+  real org_: a live delta probe, a real `x-total-count` header, an org with >200
+  groups, a known push-enabled app, a suspended MV3 worker, an observed
+  `X-Rate-Limit-Remaining`. An unattended sandbox session has no Okta org and no
+  browser session to one, so it cannot produce a single one of those verdicts.
+  It can only re-read the same code the item was written against, which is not
+  what the item asks for and would produce exactly the false confidence the
+  filing exists to prevent ("no part of it has run against real Okta").
+  Gated rather than left `open` so it stops presenting as the highest-priority
+  available work to every future run that cannot do it either. **This needs
+  Sam, or any session with a real org; it is not a breakdown problem and
+  splitting it further will not help.**
+- **Confirmed 2026-08-29 by Sam**, and two additions. The re-gate above is
+  right and stands. `I-014` is blocked from the other direction on the same
+  missing thing — its sparse-patch-merge blocker also cannot be closed from the
+  repo — so if a live-org session happens, run both in it. And items 11–13 were
+  appended by `chore/unstick-backlog`: each is a question one of ADR-0054 /
+  ADR-0055 rests on and cannot answer from the repo, which is exactly the shape
+  of thing this item collects.
 
 ### D-029 · Retire `shared/rulesCache` — the last hand-rolled cache
 
@@ -1249,10 +1298,37 @@ origin)` imperatively rather than `useOrgSnapshot` —
   refresh semantics, all of which mean "I fetch on demand" and have to be
   re-expressed against a store that syncs in the background. Four test files
   mock `RulesCache` for this path.
-- **Done when:** Not checkable yet — needs Sam on what `force` and the API-cost
-  readout should mean once the panel no longer initiates the walk.
-- **Risk:** Medium. This is the slice that changes what the Rules tab _is_.
-- **Status:** blocked:needs-human
+- **Decided 2026-08-29 by Sam — `force` and the cost readout both go.** The tab
+  becomes a pure reader of the snapshot store. There is no refresh button and no
+  API-cost number; freshness is stated instead, as a "synced N minutes ago" line
+  sourced from `useOrgSnapshot`'s `lastFullWalkAt`.
+
+  The reasoning, recorded so the implementer does not have to re-derive it: once
+  the background owns the walk, **both readouts become lies.** `force` would
+  promise the admin a fetch this tab no longer performs, and an API-cost number
+  scoped to a tab that issues no requests is either zero or someone else's
+  spend — and the version that reports someone else's spend is worse, because it
+  looks like an answer. A timestamp is the honest replacement: it is the thing
+  the admin actually wants to know (is this current?) and it is a fact the tab
+  can state without owning anything.
+
+  This deletes behaviour rather than porting it. That is the point — the item is
+  the slice that changes what the Rules tab _is_, and what it becomes is a view.
+
+- **Done when:** `useRulesData` no longer fetches, no longer reports progress or
+  `apiCost`, and exposes no `force`. `stats` is derived from the snapshot's raw
+  rules (the four-line reduce whose shape already exists at
+  `groupDiscovery.ts:94-99`), `conflicts` from `detectConflicts(rawRules)`, and
+  the tab header's timestamp from `lastFullWalkAt`. The Rules tab renders a
+  freshness line in place of the refresh control and the cost readout. The four
+  test files that mock `RulesCache` for this path are retargeted
+  assertion-by-assertion per ADR-0022, with a PR note saying what stays covered;
+  any assertion pinning the refresh button or the cost number is removed under
+  the "subject was deleted" carve-out, not weakened.
+- **Risk:** Medium. This is the slice that changes what the Rules tab _is_. It
+  removes a control admins can see, so it is user-visible and wants a line in
+  the PR description, not just a commit message.
+- **Status:** open
 
 ### D-029d · Delete the duplicate walk, then the cache
 
@@ -1279,8 +1355,13 @@ origin)` imperatively rather than `useOrgSnapshot` —
   carries an ADR-0022 note. ADR-0040 §6's Status paragraph is updated to say the
   retirement is complete — and not before.
 - **Risk:** Medium. Land last, after `D-029a`–`c`.
-- **Status:** blocked:needs-human
-- **Depends on:** `D-029a`, `D-029b`, `D-029c`
+- **Status:** blocked:D-029c
+- **Re-gated 2026-08-29 by Sam.** This was `blocked:needs-human`, but the human
+  question was never in this item — it was `D-029c`'s, and it is now answered
+  there. What remains is an ordering constraint, not a judgment call, so the
+  gate word now names the real blocker. It becomes `open` the moment `D-029c`
+  lands; no further decision from Sam is needed or should be waited for.
+- **Depends on:** `D-029a` (done:#95), `D-029b` (done:#97), `D-029c` (open)
 
 ### D-030 · `lint:cited-paths` is red on `main` right now
 
@@ -1995,7 +2076,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   every screenshot and every test of the happy path shows `0` either way.
 
   Docs:
-  - https://support.okta.com/help/s/article/Impact-of-Deactivating-and-Deleting-Okta-Group-Rules
+  - https://support.okta.com/help/s/article/what-happens-if-group-rules-are-deactivated-and-deleted?language=en_US
   - https://developer.okta.com/docs/api/openapi/okta-management/management/tag/GroupRule/#tag/GroupRule/operation/deleteGroupRule
 
 - **Done when:** The module names the case it actually computes rather than
@@ -2009,7 +2090,50 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Risk:** Medium. This changes a contract and user-facing claims, so it is
   **architecturally significant** and goes through the plan-and-approval gate as
   its own PR. Do not fold it into unrelated work.
-- **Status:** blocked:needs-human
+- **Status:** open
+- **Approved 2026-08-29 by Sam**, conditional on establishing what Okta actually
+  does on delete. That was done before approving; the verdict is below and the
+  item is now scoped enough to implement without re-researching it.
+
+  **The three cases, verified against Okta's own documentation:**
+
+  | Verb | What happens to existing members | Reversible? |
+  | --- | --- | --- |
+  | **Deactivate** | Nobody moves. "Okta does not remove users that the rule added to a group. The group membership remains, but the rule no longer applies to new users." | Yes — reactivate. |
+  | **Delete, `removeUsers=false`** (or omitted) | "Users remain members of the group, but the rule no longer manages the membership." They become ordinary manual members. | **No.** |
+  | **Delete, `removeUsers=true`** | "Okta removes the users from the group entirely." | **No.** |
+
+  Okta states the delete choice plainly: *"The choice an administrator makes when
+  deleting a group rule is permanent and irreversible."* Recreating the rule
+  afterwards does not undo either branch — it re-evaluates against the directory
+  as it is now, which is a different set.
+
+  `removeUsers` is an **optional Boolean** query parameter on
+  `DELETE /api/v1/groups/rules/{ruleId}`, documented as "Indicates whether to
+  keep or remove users from groups assigned by this rule". **Omitting it keeps
+  the users.** Any UI this item produces must send the parameter explicitly
+  rather than relying on that default, because the safe default and the
+  destructive one differ by a single absent query string.
+
+  **Two corrections to this item's own filing, found while verifying it:**
+
+  1. The support-article URL it cited 404s. The live article is
+     `what-happens-if-group-rules-are-deactivated-and-deleted`, and the citation
+     above has been repointed. The quotes in the original filing are accurate —
+     only the link had rotted.
+  2. `.claude/skills/okta-api/references/groups-and-rules.md` documents the
+     deactivate case correctly at `:154` and `:311` but **says nothing about
+     `removeUsers` at all** — the delete endpoint is listed at `:163` with no
+     mention of the parameter or the choice it encodes. That is the same blind
+     spot the module has, in the reference that is supposed to catch it. Filed
+     as `D-073`.
+
+  **Scope confirmation:** implement as the **Done when** above already states —
+  rename `losing` for the delete-with-removal case, have deactivate report the
+  newly-**unattributed** set, audit all three consumers, fix the `[verified:]`
+  citation. No preliminary ADR: the semantics are now documented facts rather
+  than a design space, and the two-verb model is Okta's, not ours to choose. It
+  remains its own PR and must not be folded into unrelated work.
 - **Related:** ADR-0043 (the demo reel's rule-impact chapter is held out of the
   reel until this lands; when it returns it argues **both verbs side by side** —
   deactivate, where nobody moves but N members become unattributed, and delete,
@@ -2317,7 +2441,7 @@ affects every scroll box in the app, on every platform.
   expression. A test pins whichever guarantee is chosen.
 - **Risk:** Low to investigate. The defect it protects against is a whole-surface
   outage from a single malformed row, which is why this is P2 and not P3.
-- **Status:** open
+- **Status:** done:#102
 - **Related:** `D-050`
 
 ### D-056 · `AlertMessage` hand-rolls two raw buttons inside `components/shared`
@@ -2429,7 +2553,7 @@ affects every scroll box in the app, on every platform.
   whatever is decided about `appLabel` is stated in the handler's doc comment
   rather than left to be rediscovered.
 - **Risk:** Low — one handler, already covered by `content/index.test.ts`.
-- **Status:** open
+- **Status:** done:#102
 - **Related:** the Overview-tab removal (which promoted this from harmless to
   per-page), `D-007a`
 
@@ -2507,7 +2631,7 @@ affects every scroll box in the app, on every platform.
 - **Category:** perf
 - **Priority:** P2
 - **Size:** M
-- **Files:** `docs/adr/0047-one-context-engine.md` (to be created); read-only for
+- **Files:** `docs/adr/0058-one-context-engine.md` (to be created); read-only for
   reference: `src/sidepanel/hooks/useOktaTabContext.ts`,
   `src/sidepanel/hooks/useGroupContext.ts`,
   `src/sidepanel/hooks/useOktaPageContext.ts`, `src/sidepanel/App.tsx`
@@ -2532,10 +2656,354 @@ affects every scroll box in the app, on every platform.
   interacts with a single engine. **Zero files under `src/`.**
 - **Risk:** n/a — research only.
 - **Status:** research:awaiting-review
+- **ADR written 2026-08-29** (`chore/unstick-backlog`), at Status: Proposed:
+  `docs/adr/0058-one-context-engine.md`. The number this item reserved on 2026-08-28 had been taken by an
+  unrelated ADR before the item was picked up, so the proposal is **ADR-0058** — see
+  `D-072`. Status stays `research:awaiting-review` deliberately: only Sam's
+  acceptance moves it to `open`, never the session that wrote it.
 - **Related:** `D-059` (the other traffic cost the re-gate exposed), ADR-0018,
   ADR-0026
 
-### D-063 · A null figure on Home renders an em dash, on camera
+### D-062 · `handleGetAppInfo` reads an Okta response with no zod boundary
+
+- **Category:** security
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/content/index.ts` (`handleGetAppInfo`, the `response.data.name`
+  / `response.data.label` reads), `src/content/index.test.ts` (whose existing
+  case title already admits it: "no zod validation here")
+- **Verified:** 2026-08-29 — raised independently by the `D-059` writer and by
+  `security-logging-reviewer` on the same diff; both read the handler directly.
+- **Problem:** ADR-0006 says every Okta response is validated at the
+  content-script boundary before it is rendered or branched on. `handleGetAppInfo`
+  does not: it reads `.name` and `.label` off `response.data` raw. Its two
+  neighbours in the same file do the opposite — `handleGetGroupInfo` parses with
+  `oktaGroupSchema`, `handleGetPolicyInfo` with `oktaPolicyListItemSchema` — so
+  this is a gap in an otherwise consistent boundary, not an undecided question.
+- **Bounded, and worth stating:** `D-059` made the fetch conditional, so this
+  path now runs strictly less often (only when the page heading is missing).
+  Exposure is reduced, not closed — the reviewer's words.
+- **Done when:** `handleGetAppInfo` parses its response with a lenient schema the
+  same way `handleGetPolicyInfo` does, degrading rather than throwing on a
+  validation miss, and the test whose title concedes the gap is retargeted.
+- **Risk:** Low — one handler, already covered by `content/index.test.ts`.
+- **Status:** open
+- **Related:** `D-059`, ADR-0006
+
+### D-063 · `AppInfo` is declared twice, verbatim, in two files
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/shared/types.ts` (the shared declaration),
+  `src/sidepanel/hooks/useOktaPageContext.ts` (a verbatim local copy it also
+  re-exports)
+- **Verified:** 2026-08-29 — enumerated by the `D-059` writer while tracing every
+  consumer of `AppInfo.appLabel`; both declarations read in full, not grepped.
+- **Problem:** The content script imports the shared `AppInfo`; the hook declares
+  its own identical copy and re-exports that. Nothing links them, so a field
+  added to one is invisible to the other and no type error anywhere says so. The
+  two are in sync today purely by coincidence of having been written together.
+- **Done when:** One declaration survives, in `shared/types.ts`, and the hook
+  imports it. Any re-export it needs is a re-export of that type.
+- **Risk:** Low — mechanical, and the compiler proves the merge.
+- **Status:** open
+- **Related:** `D-059`
+
+### D-064 · A non-ok response drops its headers, so a 429 arrives with no rate-limit headers
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/content/apiRequest.ts` (the `!response.ok` return, which omits
+  `headers` although the function has already built them),
+  `src/shared/scheduler/rateLimitDetector.ts` (the consumer that needs them),
+  `src/content/index.test.ts` (which already pins the drop as a `BUG (pinned)`)
+- **Verified:** 2026-08-29 — surfaced by the `D-007a` writer and confirmed
+  directly against the file: `headers` is populated from `response.headers` and
+  then included on the success return and on the `DELETE` return, but not on the
+  `!response.ok` return.
+- **Problem:** `RateLimitDetector` exists to read `X-Rate-Limit-Remaining` /
+  `-Limit` / `-Reset` off Okta responses, and `CONVENTIONS.md` describes cooldowns
+  driven by them. A 429 is exactly the response whose headers matter most — and
+  it is a `!response.ok` response, so its headers never leave the content script.
+  Rate limiting is therefore steered only by the headers of requests that
+  succeeded, and the one response that says "you are being throttled, here is
+  when to come back" tells the scheduler nothing.
+- **Why it is filed now:** it directly limits `D-007c`. That item routes a
+  retryable resolved failure into `retryRequest` with backoff; honest backoff
+  wants `X-Rate-Limit-Reset`, which under this defect is not there to read.
+  `D-007c` should not be started before this is fixed or consciously accepted.
+- **Done when:** the `!response.ok` return carries `headers` like its siblings,
+  the pinned `BUG (pinned)` case in `content/index.test.ts` is retargeted to
+  assert the headers survive, and `RateLimitDetector` is shown to observe them on
+  a 429.
+- **Risk:** Low to fix. The behavior change is that the scheduler starts seeing
+  headers it currently cannot, which is the point.
+- **Status:** open
+- **Related:** `D-007a`, `D-007c`
+
+### D-065 · `fetchAndCacheAllGroupRules` walks a whole endpoint with no boundary schema
+
+- **Category:** security
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaApi/groupDiscovery.ts`
+  (`fetchAndCacheAllGroupRules`), `src/shared/utils/oktaPagination.ts` (the
+  `schema`-less branch that casts `response.data` straight to `T[]`)
+- **Verified:** 2026-08-29 — found by the `D-055` writer while enumerating that
+  item's callers; the pagination cast was read directly, not inferred.
+- **Problem:** `fetchAllPages<OktaGroupRule>(…)` is called with **no `schema`
+  option**, so `oktaPagination.ts` casts the raw page straight to `OktaGroupRule[]`
+  and unvalidated rows flow into `RulesCache` and on to every consumer. This is
+  the second half of what `D-050` closed on `fetchGroupRulesRequest`'s path.
+  `D-055` stopped the specific outage (a non-string expression no longer throws
+  out of a `.map`), but malformed `groupIds` and other fields still reach
+  consumers unchecked. The path is live: `ensureGroupRulesLoaded` →
+  `useGroupRuleReferences`, and `getGroupRulesForGroup` → `useGroupSource`,
+  `useGroupMerge`.
+- **Done when:** the walk passes `{ schema: oktaGroupRuleSchema, context: 'GET
+/api/v1/groups/rules' }` — `fetchAllPages` already supports it — and what
+  happens to a row that fails validation is a stated decision, since this changes
+  what reaches the cache.
+- **Risk:** Medium — it changes what gets cached, so a row Okta sends that the
+  schema rejects would stop appearing. That is the intended effect but it is a
+  behavior change, not a pure hardening.
+- **Status:** open
+- **Related:** `D-050`, `D-055`, ADR-0006
+
+### D-066 · `groupIdsReferencedBy` carries the identical unguarded expression read `D-055` just fixed
+
+- **Category:** correctness
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/fetchGroupRulesRequest.ts` (`groupIdsReferencedBy`)
+- **Verified:** 2026-08-29 — spotted by the `D-055` writer while fixing the twin
+  in `src/shared/ruleUtils.ts`.
+- **Problem:** It runs the same `expression.match(…)` shape on a condition
+  expression it does not check is a string. It is safe **today** only because its
+  single caller validates upstream at the boundary `D-050` closed — so it is a
+  latent copy of `D-055`'s defect rather than a live one, and it becomes live the
+  moment a second caller arrives that does not validate.
+- **Done when:** it reads its expression through the same string-or-`''` guard
+  `ruleUtils.ts` now uses, or the two share one helper.
+- **Risk:** Low — no behavior change for any well-formed rule.
+- **Status:** open
+- **Related:** `D-055`, `D-050`
+
+### D-067 · No story reaches any arm of HomeTab's jump-bar app lookup
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/HomeTab.stories.tsx` (its `makeOps()`
+  never overrides `getAppById`), `.storybook/mocks/useOktaApi.mock.ts` (whose
+  default answers `{ kind: 'missing' }`)
+- **Verified:** 2026-08-29 — raised by `ui-reviewer` against the `D-007a` diff
+  and left deliberately unfixed there rather than widening a nightly diff.
+- **Problem:** `D-007a` gave the jump bar's app fetcher four outcomes
+  (`found | missing | session-expired | failed`), two of which throw
+  user-facing copy. No story types an app id, and no story overrides
+  `getAppById`, so **none** of the four branches is exercised through `HomeTab` —
+  not even the pre-existing `found`/`missing` pair. The generic machinery is
+  covered elsewhere (`useJumpResolver.test.tsx` pins throw → `mode: 'error'`,
+  `JumpBar.stories.tsx`'s `Failed` story pins the error render), but the specific
+  copy these arms throw is asserted nowhere.
+- **Done when:** stories mirroring `IdResolvesWithoutARequest` /
+  `UserIdCostsOneRequest` override `getAppById` to return `{ kind:
+'session-expired' }` and `{ kind: 'failed', status: 500 }` and assert the exact
+  message each renders; axe-clean per ADR-0014.
+- **Risk:** Low — stories only, no `src/` behavior.
+- **Status:** open
+- **Related:** `D-007a`, ADR-0010, ADR-0014
+
+### D-068 · `createSchedulerPageRequest` drops the status the walk now has
+
+- **Category:** correctness
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/shared/utils/oktaPagination.ts` (`createSchedulerPageRequest`
+  and the `PageRequest` shape it fills),
+  `src/sidepanel/components/home/orgFigures.ts` (whose module header names this
+  as the blocker for its 403-specific copy)
+- **Verified:** 2026-08-29 — raised by the `D-007a` writer; `orgFigures.ts`'s own
+  header documents the dependency.
+- **Problem:** The snapshot walk's `PageRequest` shape discards the failure
+  status. `orgFigures.ts` says in prose that this is what stops it telling an
+  admin "you are not allowed to read this" apart from "this failed". Before
+  `D-007a` there was no guaranteed status to thread; now there is, so the item is
+  actionable where it previously was not.
+- **Done when:** the failure status survives into `PageRequest`, and
+  `orgFigures.ts` either uses it for the 403 case or its header stops citing the
+  gap.
+- **Risk:** Low to thread, medium to present — a permissions claim to an admin is
+  a strong claim and needs the honesty rules re-checked.
+- **Status:** open
+- **Related:** `D-007a`, ADR-0040
+
+### D-069 · Two dead remnants around the app-lookup path
+
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/cache/appAssignmentsSharing.test.tsx` (a
+  `getAppById` mock nothing under test calls), `src/shared/scheduler/types.ts`
+  (`RequestSuccess.fromCache`)
+- **Verified:** 2026-08-29 — both enumerated by the `D-007a` writer while
+  tracing `getAppById`'s callers and rebuilding `RequestResult`.
+- **Problem:** Two small untruths. The test file mocks `getAppById`, but the
+  enumeration showed no subject under test in that file reaches it — so the mock
+  documents a dependency that is not there, and had to be updated by `D-007a` for
+  no behavioral reason. Separately, `RequestSuccess.fromCache` has **zero
+  producers** repo-wide (`grep` returns only the declaration); it was carried
+  through the union rewrite unchanged rather than removed, because removing it is
+  a separate decision.
+- **Done when:** the dead mock is removed and `fromCache` is either removed or
+  given the producer it implies, each verified with the `okta-claim-check` skill
+  rather than a grep for the name.
+- **Risk:** Low. `knip` is advisory here and will not catch either.
+- **Status:** open
+- **Related:** `D-007a`
+
+### D-070 · `handleGetPolicyInfo`'s "mirrors handleGetAppInfo" is no longer true
+
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/content/index.ts` (`handleGetPolicyInfo`'s doc comment, and the
+  unconditional fetch it describes)
+- **Verified:** 2026-08-29 — noticed by the `D-059` writer immediately after
+  making the app handler conditional.
+- **Problem:** The policy handler's doc comment says it mirrors
+  `handleGetAppInfo`. After `D-059` it does not: the app handler fetches only
+  when the DOM comes up empty, the policy handler still fetches every time. The
+  cross-reference now points at a shape that changed out from under it.
+- **Second half, worth deciding rather than assuming:** the policy handler fetches
+  for `policyStatus`, which the DOM genuinely cannot supply — so unlike `D-059`
+  the request may well be earned. But nobody has enumerated `policyStatus`'s
+  consumers, which is exactly the check that turned `D-059` from a guess into a
+  decision.
+- **Done when:** the doc comment describes what the handler actually does, and
+  `policyStatus`'s consumers are enumerated so the unconditional fetch is either
+  justified in the comment or filed as its own perf item.
+- **Risk:** Low — a comment, plus an enumeration that may produce a follow-up.
+- **Status:** open
+- **Related:** `D-059`
+
+### D-071 · Two stale claims in `CONVENTIONS.md`'s messaging sections
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `CONVENTIONS.md` (the "Messaging conventions" bullet on direct
+  `sendMessage` reads, and the "SPA route-change handling" section's file
+  locations), `src/content/groupHandlers.ts`, `src/content/userHandlers.ts`
+- **Verified:** 2026-08-29 — both found by `docs-maintainer` while rewriting the
+  Session-expiry section, and both left alone as outside that task's scope.
+- **Problem:** Two claims a nightly run is told to trust are not accurate.
+  1. "Messaging conventions" says a direct `sendMessage` page-context read
+     "carries no Okta API traffic and doesn't touch the scheduler." The second
+     half is true; the first is not. `handleGetGroupInfo`, `handleGetAppInfo` and
+     `handleGetPolicyInfo` all fall back to `handleMakeApiRequest` when the DOM
+     comes up empty — a real Okta call that bypasses the scheduler. That is a
+     deliberate, documented design, but the sentence as written denies it exists,
+     which matters because the surrounding rule is the one forbidding
+     scheduler-bypassing traffic. `D-059` made this fallback _less_ frequent, not
+     absent.
+  2. "SPA route-change handling" locates `handleGetGroupInfo` /
+     `handleGetUserInfo` in `src/content/index.ts`. They moved to
+     `groupHandlers.ts` / `userHandlers.ts` in PR #45; `index.ts` only routes to
+     them now. The cited path still resolves, so `lint:cited-paths` cannot catch
+     this — it is a prose claim, not a broken link.
+- **Done when:** Both claims describe what the code does. The first should say
+  plainly that these reads may fall back to an unscheduled Okta call and why that
+  is acceptable, rather than implying they never call Okta.
+- **Risk:** None — documentation only. The risk is in leaving it: `CONVENTIONS.md`
+  is what an unattended run is told to match, so a wrong claim there propagates
+  into code.
+- **Status:** open
+- **Related:** `D-059`
+
+### D-072 · A backlog item that reserves an ADR number always loses it
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `DEBT.md`, `IMPROVEMENTS.md`, `docs/adr/README.md` (the "Adding an
+  ADR" section)
+- **Verified:** 2026-08-29 — enumerated, not sampled. **All five**
+  `research:awaiting-review` items named an ADR filename in their **Files**
+  list, and **all five numbers had been taken** by an unrelated ADR before the
+  item was picked up: `D-007b` reserved 0041 (taken by the API explorer),
+  `I-008` reserved 0042 (audit log), `I-012` reserved 0043 (the reel's stage),
+  `I-018` reserved 0046 (the response layer), `D-062` reserved 0047 (elevation).
+  Five for five.
+- **Problem:** The convention is that a research item names the ADR it will
+  produce, filename and all. But an ADR number is claimed by whoever *writes*
+  one, and feature branches write them continuously — `0041`–`0053` all landed
+  in the five days after these items were filed. A backlog item can sit for
+  weeks. So the reservation is a claim on a shared sequence made by the party
+  least able to act on it, and it is not merely unreliable: **it failed every
+  single time it was tried.**
+
+  The failure is quiet in the way that matters. `lint:cited-paths` only checks
+  that cited paths *resolve*, so a reserved-but-not-yet-written filename is
+  invisible to it while the item waits, and once the number is taken the item
+  now points at a real file about a completely different subject. `I-018`'s
+  reserved `0046` resolves today — to the response-layer ADR. A reader
+  following that citation lands somewhere plausible and wrong, which is worse
+  than a broken link.
+- **Done when:** The item template stops reserving numbers. A research item
+  names its ADR by **title only** ("an ADR on how deep the snapshot goes"), and
+  the number is assigned when the file is written. `docs/adr/README.md`'s
+  "Adding an ADR" section says so explicitly, since that is where "number
+  sequentially" is already stated and is where the next person will look. Any
+  remaining reserved filename in either ledger is converted to a title.
+- **Risk:** None — a convention change plus a handful of prose edits. The five
+  affected items were repointed by hand on `chore/unstick-backlog`; this item
+  is about stopping the sixth.
+- **Status:** open
+- **Related:** `D-030` (the other way a citation goes stale without failing a
+  gate)
+
+### D-073 · The `okta-api` skill documents rule deletion without `removeUsers`
+
+- **Category:** standards
+- **Priority:** P2
+- **Size:** S
+- **Files:** `.claude/skills/okta-api/references/groups-and-rules.md:163,297-311`
+- **Verified:** 2026-08-29 — found while verifying `D-052` against Okta's docs.
+- **Problem:** The skill's group-rule section lists
+  `DELETE /api/v1/groups/rules/{ruleId}` at `:163` with no mention of the
+  `removeUsers` query parameter, and its "Rule impact: blast radius before a
+  change" section at `:297-311` explains the **deactivate** case correctly
+  ("Deactivating a rule does not remove existing members") while never stating
+  what **delete** does.
+
+  That is the same blind spot `D-052` records in `shared/membership/ruleImpact`,
+  sitting in the reference that exists to catch exactly this. Worse, `:311`
+  carries a `[verified: shared/membership/ruleImpact]` marker — so the skill
+  vouches for the module using the module, and a reader consulting the skill
+  before touching rule impact is told the half of the story that is already
+  right and nothing about the half that is wrong.
+
+  The missing facts, established under `D-052`: `removeUsers` is an optional
+  Boolean; omitting it **keeps** users as now-unmanaged members; `true` removes
+  them from the group entirely; both delete branches are irreversible, unlike
+  deactivate.
+- **Done when:** `groups-and-rules.md` documents the three-way distinction
+  (deactivate / delete-keep / delete-remove) with its reversibility, names
+  `removeUsers` on the endpoint listing, and carries a `[docs]` marker with the
+  live support-article URL. The `[verified:]` marker at `:311` is only correct
+  once `D-052` has landed, so this item states the API fact independently of the
+  module rather than citing it.
+- **Risk:** None to the app — skill documentation only. The risk in leaving it
+  is that the skill is what a future session reads *before* implementing
+  `D-052`, and it currently omits the parameter that item turns on.
+- **Status:** open
+- **Related:** `D-052` (the module-side defect this reference failed to catch)
+
+### D-074 · A null figure on Home renders an em dash, on camera
 
 - **Category:** ux
 - **Priority:** P3
@@ -2567,8 +3035,13 @@ affects every scroll box in the app, on every platform.
 - **Risk:** Low. One component, one branch, already storied.
 - **Related:** ADR-0043 (no dashes on camera), ADR-0040 §7 (a collection can
   honestly be incomplete)
+- **Renumbered:** filed as `D-063` on `feat/demo-org-writes` while `main` gave that
+  number to a different item. Main's numbering is the published one, so this moved
+  rather than main's. Exactly the failure `D-072` describes for ADR numbers, one
+  ledger over.
 
-### D-064 · A profile write invalidated the memberships and never re-read them
+
+### D-075 · A profile write invalidated the memberships and never re-read them
 
 - **Category:** correctness
 - **Priority:** P2
@@ -2617,3 +3090,8 @@ affects every scroll box in the app, on every platform.
   the ledger because the finding is the useful part: an `invalidate` with no
   reload beside it is invisible on a surface that does not remount, and this
   codebase has three of them.
+- **Renumbered:** filed as `D-064` on `feat/demo-org-writes` while `main` gave that
+  number to a different item. Main's numbering is the published one, so this moved
+  rather than main's. Exactly the failure `D-072` describes for ADR numbers, one
+  ledger over.
+

@@ -17,6 +17,239 @@ Entry format:
 
 ---
 
+## 2026-08-29 (b) — an attended session, clearing the gated shelf
+
+**Not a nightly.** Sam ran this one directly, after merging PR #102. It is logged
+here because it changes the state of nine backlog items and the next unattended
+run needs to know what moved and why.
+
+**Baseline:** not re-run. This session touches `docs/`, `DEBT.md`,
+`IMPROVEMENTS.md` and `NIGHTLY.md` only — **zero files under `src/`** — so the
+code gates are the ones PR #102 already passed on this exact head (`82a5ce4`).
+`lint:cited-paths`, `lint:control-chars` and `format:check` were run, because
+those are the three this diff can actually break.
+
+**Worked in a detached worktree** off `82a5ce4`, on branch
+`chore/unstick-backlog`. Sam had another agent live in the primary checkout with
+uncommitted reel changes on `feat/demo-org-writes`; a worktree was the only way
+to do this without contending for that tree.
+
+**The problem addressed.** Nine items were gated, and the gates had stopped being
+a queue and become a shelf. Five sat at `research:awaiting-review`, each waiting
+on a Proposed ADR that no unattended session had written, some since 2026-08-24.
+Three sat at `blocked:needs-human`. One (`D-028`) had been skipped by six
+consecutive nights. None of it was going to change on its own: every item was
+waiting on either a human decision or a docs-only deliverable that the item's own
+rules permitted but no night had picked up.
+
+**Items moved:** `D-007b`, `I-008`, `I-012`, `I-018`, `D-062` (ADRs written);
+`D-029c`, `D-029d`, `D-052` (decided by Sam); `I-014` (re-gated); `D-028`
+(extended). Two new items filed: `D-072`, `D-073`.
+
+**Five ADRs written, all at Status: Proposed** — 0054 (a 401 is a session, not a
+request), 0055 (what the evaluator refuses to guess), 0056 (how deep the snapshot
+goes), 0057 (a keyboard route into the panel), 0058 (one context engine). **Their
+five items stay at `research:awaiting-review` on purpose**: the status legend says
+Sam moves a research item to `open` by accepting the ADR and the session that
+wrote it never does. Writing the ADR does not exempt this session from that. The
+deliverable moved from "unwritten" to "on Sam's desk"; the gate word is unchanged
+and still accurate.
+
+**Three decisions Sam made, recorded in the items so nobody re-derives them:**
+
+- `D-029c` — the Rules tab's `force` refresh and its API-cost readout both go,
+  replaced by a freshness timestamp. Once the background owns the walk both
+  readouts are lies: `force` promises a fetch the tab no longer performs, and a
+  per-tab cost number is either zero or someone else's spend. Now `open`, with a
+  checkable **Done when** it did not have before.
+- `D-029d` — was `blocked:needs-human`, but **the human question was never in this
+  item**; it was `D-029c`'s. Re-gated to `blocked:D-029c` — an ordering
+  constraint, not a judgment call. It opens when `D-029c` lands, with no further
+  input from Sam.
+- `D-052` — approved, conditional on establishing what Okta actually does. That
+  research was done before approving and is now in the item as a three-row table:
+  deactivate moves nobody and is reversible; delete with `removeUsers=false`
+  leaves users as unmanaged members; `removeUsers=true` removes them; **both
+  delete branches are irreversible**. No preliminary ADR — the two-verb model is
+  Okta's, not ours to choose.
+
+**`D-028` was already re-gated by PR #102's own session** to
+`blocked:needs-live-org`, with a thorough note. That call is right and stands;
+this session only appended **audit items 11–13**, each a question one of the new
+ADRs rests on and cannot answer from the repo: whether an expired session really
+returns 401 (ADR-0054 is inert if Okta redirects instead), `String.substring`
+out-of-range behaviour, and relative time-window boundaries (both ADR-0055
+refusals). `I-014` was re-gated to the same `blocked:needs-live-org`, since its
+own **Risk** paragraph already said its blocker cannot be closed from the repo.
+
+**Notes:**
+
+_The reserved-ADR-number habit failed five times out of five._ Every one of the
+five research items named an ADR **filename** in its **Files** list, and every one
+of those numbers had been taken by an unrelated ADR before the item was picked up
+— 0041, 0042, 0043, 0046 and 0047 all went to feature branches in the five days
+after the items were filed. The proposals landed as 0054–0058 instead. This is not
+bad luck: a number is claimed by whoever writes an ADR, feature branches write them
+continuously, and a backlog item waits weeks. Worse, it fails *quietly* —
+`lint:cited-paths` only checks that a path resolves, so `I-018`'s reserved `0046`
+resolves today, to the response-layer ADR. A reader following that citation lands
+somewhere plausible and wrong. Filed as `D-072`; the fix is to name ADRs by title
+in the ledger and assign the number at write time.
+
+_A dead URL in a filing, found only by following it._ `D-052` cited an Okta support
+article that 404s. The quotes in the filing were accurate — the slug had rotted; it
+was repointed. Nothing in the gate ladder checks external links, and this one was
+load-bearing: it was the evidence for the item's central claim.
+
+_A skill vouching for the module it should have corrected._ Verifying `D-052`
+turned up that `okta-api`'s `groups-and-rules.md` documents the deactivate case
+correctly and says **nothing** about `removeUsers` — the same blind spot as the
+module, in the reference meant to catch it, under a `[verified:]` marker pointing
+back at that module. Filed as `D-073`.
+
+_For the next unattended run._ Do not re-select `D-028` or `I-014`; both are
+`blocked:needs-live-org` and that is now a real gate word. The five ADR items are
+not available either — they need Sam's acceptance, not another session. `D-029c`
+is newly `open` with a real **Done when** and is a good pick, but note it deletes
+a user-visible control and retargets four test files, so it wants the ADR-0022
+note. `D-052` is newly `open`, fully scoped, and must stay its own PR.
+
+---
+
+## 2026-08-29 — three items shipped, one P1 gated as unreachable
+
+**Baseline:** green, all nine gates, against `main` at `f15d109` before any work.
+`type-check`; `lint` 0 errors / 160 warnings; `format:check`; `test:coverage`
+238 files / 3376 tests, 86.16 lines / 76.97 branches / 82.53 functions /
+87.28 statements; `knip:circular` 0 cycles; `lint:control-chars` 996 files;
+`lint:cited-paths` 55 files; `test:storybook` 170 passed / 1 skipped / 1222
+tests (pinned Chromium). `build` green as part of `D-059`'s ladder.
+
+`node_modules` was again absent on a cold container and `npm ci` ran first —
+the trap the 2026-08-28 entry describes is real and worth keeping at the top of
+this file: **a red baseline on a cold container is not a red baseline until
+`node_modules` exists.**
+
+**Open PRs at step 2: zero.** No claimed ids, no contended files, no three-PR
+stop, no branch collision. `gh` remains unavailable; the GitHub MCP tools stood
+in for it, which satisfies step 2's requirement to tell in-flight work from open
+work. With an empty queue the contention filter excluded nothing, so tonight's
+selection was driven purely by the priority sort.
+
+**Branch:** `claude/stoic-gates-cw3s8y`, not `nightly/2026-08-29` — the harness
+assigns this session's branch and forbids pushing to another. `SESSION.md` step 2
+already anticipates this ("and whatever the harness assigns in its place"); items
+are marked `claimed:claude/stoic-gates-cw3s8y` accordingly.
+
+**Items worked:** `D-055`, `D-059`, `D-007a` — three commits, one per item.
+
+- `D-055` — `formatRuleForDisplay` no longer throws on a non-string condition
+  expression. The enumeration found the throw is **not** at the `.replace(…)` the
+  filing cites: `extractUserAttributes` runs first and dies on
+  `expression.match(…)`, because a non-string truthy value survives the `|| ''`.
+  Guarding only the cited line would have left the outage intact. One of four
+  callers (`groupDiscovery`) is genuinely unvalidated, so the function was made to
+  defend itself.
+- `D-059` — the app fetch is conditional now. `AppInfo.appLabel` has **zero
+  readers** repo-wide, which is what made "skip the fetch and drop the label" the
+  right answer rather than a guess.
+- `D-007a` — `RequestResult` is a discriminated union with a non-optional failure
+  `status`, plus `NO_HTTP_STATUS`, `isSessionExpired` (401 only) and
+  `normalizeRequestResult`. **Sized `S` in the ledger; it is not.** The compiler
+  ripple reached 20 files including a UI component, and it produced a
+  user-visible change (HomeTab's jump bar now distinguishes "no such app" from
+  "could not look it up"). Retry behavior was deliberately left alone — that is
+  `D-007c`.
+
+**`D-028` gated `blocked:needs-live-org`.** It was the night's top candidate —
+the only open P1 on either ledger — and it was picked up first. All ten of its
+checks are defined as verdicts against a _real_ org (a live delta probe, a real
+`x-total-count`, an org with >200 groups, a suspended MV3 worker, an observed
+`X-Rate-Limit-Remaining`). An unattended sandbox has no Okta org, so it cannot
+produce any of them; it can only re-read the code the item was written against,
+which is precisely the false confidence the filing exists to prevent. Gated so it
+stops presenting as the highest-priority available work to every future run that
+also cannot do it. It needs Sam or any session with a real org.
+
+**`I-013` skipped deliberately, still `open`.** By the sort it was next after
+`D-028` (P2, and "UX first" prefers an `IMPROVEMENTS` item over a `DEBT` one).
+It was skipped because there is **no rule-authoring UI anywhere in the repo** —
+`createGroupRule` is reached only from rule _consolidation_, which merges rules
+that already exist. So "Create feeding rule" is not a verb wired to an existing
+form; it needs a rule-composition surface (name, expression, target) designed
+from scratch, which the item's **Done when** does not specify at all. That is
+`CLAUDE.md`'s plan-and-approval gate — a reviewer could reasonably disagree with
+the approach after the code exists — and it is the first irreversible group-level
+write on that rung. A nightly should not improvise it. **It wants a plan from Sam,
+or re-filing as `research:awaiting-review`; left `open` rather than re-graded,
+because changing another author's item status on taste is not this session's
+call.**
+
+**Reviews:** `security-logging-reviewer` (request path, content-script boundary,
+messaging) and `ui-reviewer` (`HomeTab.tsx`) both returned **no blocking
+findings**. The security pass separately confirmed the same-origin and
+method-allow-list guards still run first and unweakened, that
+`normalizeRequestResult` cannot fabricate a success from a hostile or dropped
+payload (it requires `success === true` strictly), and that `getAppById` cannot
+present unvalidated data as `found`.
+
+One `ui-reviewer` finding was fixed rather than noted: the `failed` arm's copy
+said "Could not reach Okta", which is **false for 403 and 429** — cases where
+Okta was reached and answered no. Amended into `D-007a`'s own commit to keep
+one-commit-per-item true.
+
+**Nine new items filed** (`D-062`…`D-070`) from what the writers and reviewers
+found in passing, none folded into tonight's diffs. Two deserve attention before
+the next run picks something adjacent:
+
+- **`D-064` blocks `D-007c`.** A `!response.ok` return in `apiRequest.ts` drops
+  `headers`, though the function has already built them. So a 429 — the one
+  response whose `X-Rate-Limit-*` headers matter most — reaches the scheduler with
+  none. `D-007c` is about backoff on a 429; honest backoff wants
+  `X-Rate-Limit-Reset`, which under this defect is not there to read. Fix or
+  consciously accept `D-064` first.
+- **`D-065`** is the other half of `D-050`: `fetchAndCacheAllGroupRules` walks a
+  whole endpoint with no boundary schema, so unvalidated rows still reach
+  `RulesCache`. `D-055` stopped the outage, not the ingestion.
+
+**`CONVENTIONS.md`'s "Session-expiry handling" section was rewritten** by
+`docs-maintainer`, triggered per the roster: it asserted "there is currently no
+code anywhere ... zero hits searching for 401", which `D-007a` falsified. The
+rewrite deliberately does not overclaim — 429 retry is still absent (`D-007c`),
+and exactly one surface consumes `isSessionExpired`.
+
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/102 — three items, not merged.
+
+**Backlog after:** 57 open / 107 status-carrying items (115 headed
+entries, 8 of which are umbrella parents that carry no status of their own:
+`D-007`, `D-013`, `D-029`, `D-053`, and — see below — four that should).
+10 IMPROVEMENTS open, 47 DEBT open, 5 blocked (`D-028` is tonight's addition),
+5 gated `research:awaiting-review`, 2 closed. Tonight filed ten new DEBT items
+(`D-062`…`D-071`) and closed three.
+
+**Notes for the next run:**
+
+- **Do not start `D-007c` before reading `D-064`.** They look adjacent and are;
+  the second is a prerequisite the first's filing does not know about.
+- `D-007a` proves the `Size:` field is a guess, not a measurement. An item whose
+  Files list names three files can still be a 20-file diff once the compiler is
+  involved. Budget by blast radius, not by the letter in the ledger.
+- Files touched tonight, for the next contention check: `src/shared/ruleUtils.*`,
+  `src/content/index.*`, `src/content/apiRequest.*`, `src/shared/scheduler/*`,
+  `src/sidepanel/hooks/useOktaApi/{appOperations,groupMembers,ruleWrites,userOperations}*`,
+  `src/sidepanel/components/HomeTab.tsx`, `src/background/snapshotBridge.ts`,
+  `.storybook/mocks/useOktaApi.mock.ts`, `eslint.config.js`.
+- **Ledger defect worth a look:** `I-021`, `I-022`, `I-023` and `I-024` carry
+  **no `Status:` line at all**. Every selection step in `SESSION.md` filters on
+  that field, so as written those four are invisible to it — they can never be
+  picked and never be excluded, they simply do not exist to a nightly run. They
+  are not tonight's to fix (no item covers them and inventing statuses for
+  someone else's items is a judgment call), but they should get one.
+- `eslint.config.js` gained `Response: 'readonly'`. Warnings dropped 160 → 154,
+  because six pre-existing `no-undef` warnings of the same kind were also
+  suppressed by the missing global. Worth knowing that the warning count is not a
+  stable baseline: it moves when the globals allow-list does.
+
 ## 2026-08-28 — three items shipped
 
 **Baseline:** green, all nine gates, run against `main` at `389f6e5` before any

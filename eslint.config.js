@@ -55,6 +55,7 @@ export default [
         navigator: 'readonly',
         AbortController: 'readonly',
         RequestInit: 'readonly',
+        Response: 'readonly',
         NodeJS: 'readonly',
         alert: 'readonly',
         confirm: 'readonly',

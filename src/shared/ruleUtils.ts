@@ -14,12 +14,37 @@
 import type { OktaGroupRule, RuleConflict, FormattedRule } from '../shared/types';
 
 /**
+ * Read a rule's condition expression as a string, or `''` when it does not have
+ * one this extension can work with.
+ *
+ * `conditions.expression.value` is typed `string` on {@link OktaGroupRule}, but
+ * the type is a *claim about* an Okta response, not a check of one — and the
+ * field is end-user-controllable (`docs/security.md`). Not every caller of the
+ * helpers below validates its rules at a zod boundary: `groupDiscovery`'s
+ * `fetchAndCacheAllGroupRules` walks `/api/v1/groups/rules` with no schema, so a
+ * raw row reaches them exactly as Okta sent it (D-055).
+ *
+ * Every caller formats a whole page inside a `.map`, so an unguarded string
+ * operation on one malformed row throws out of the map and costs the entire
+ * rules surface. A non-string value therefore degrades to the same "no
+ * expression" state a missing one already produces — one field lost, never a
+ * thrown error (`CONVENTIONS.md`, "never throw on a missing selector").
+ *
+ * @param rule - The rule whose condition expression to read.
+ * @returns The expression text, or `''` when it is absent or not a string.
+ */
+function expressionText(rule: OktaGroupRule): string {
+  const value: unknown = rule.conditions?.expression?.value;
+  return typeof value === 'string' ? value : '';
+}
+
+/**
  * Extract user attributes from rule expression
  * e.g., "user.department == 'Engineering'" -> ["department"]
  */
 export function extractUserAttributes(rule: OktaGroupRule): string[] {
   const attributes = new Set<string>();
-  const expression = rule.conditions?.expression?.value || '';
+  const expression = expressionText(rule);
 
   // Parse patterns like user.department, user.title, etc.
   const matches = expression.match(/user\.(\w+)/g) || [];
@@ -103,6 +128,12 @@ export function detectConflicts(rules: OktaGroupRule[]): RuleConflict[] {
  * @param rule - The raw Okta group rule to format.
  * @param currentGroupId - When provided, flags whether the rule targets this group.
  * @param conflicts - Pre-computed conflicts to attribute back to this rule.
+ * @remarks Never throws on a malformed condition expression. A
+ * `conditions.expression.value` that is not a string — which an unvalidated
+ * caller can hand over, since the field is end-user-controllable — degrades to
+ * the same `'No condition specified'` display a missing expression produces,
+ * with no extracted attributes. Callers format whole pages in a `.map`, so a
+ * throw here would cost the entire rules surface for one bad row (D-055).
  */
 export function formatRuleForDisplay(
   rule: OktaGroupRule,
@@ -111,7 +142,7 @@ export function formatRuleForDisplay(
 ): FormattedRule {
   const groupIds = rule.actions?.assignUserToGroups?.groupIds || [];
   const userAttributes = extractUserAttributes(rule);
-  const expression = rule.conditions?.expression?.value || 'No condition specified';
+  const expression = expressionText(rule) || 'No condition specified';
 
   // Simplify expression for display
   let simpleCondition = expression
