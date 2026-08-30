@@ -1,456 +1,314 @@
 /**
  * @module reel/comp/TitleCard
- * @description C1: the pencil title card. The film's geometry drawn as a
- * diagram before it is used as a layout.
+ * @description The title, written by hand onto a frame the overture has
+ * already built. Step 5 of the opening: the console has retracted, the solid
+ * panel is alone at the right, and the film says its name.
  *
- * The film is a panel docked at one edge and an argument beside it. Every
- * chapter assumes that geometry; this is the one place it is *introduced*. So
- * the card draws it: a browser tab you are already inside, sketched in
- * graphite, and a panel docked along its edge. Then the panel - and only the
- * panel - converts out of graphite into the real thing, and the product's own
- * type docks in beside it. The world stays a drawing. The product does not.
+ * ## What this file used to be, and why it is not that any more
  *
- * ## What was cut from the handoff, and why
+ * It used to be the whole of C1: a browser tab sketched in graphite, a panel
+ * docked along its edge, a `pencil/Convert` wipe turning that panel from
+ * drawing into product, and then the type *docking* in over the result. All of
+ * that except the type has moved into the overture - the single continuous
+ * opening that draws the console full-frame, brings the panel in from the
+ * right, climbs it up a fidelity ladder, and retracts the console away. Those
+ * shots own the geometry now (`comp/Overture`, `comp/Console`, and the panel
+ * components beside them), so `TAB`, `PANEL`, `WIPE`, the placeholder rows, the
+ * `SketchBox` fact frames and the `Convert` are all gone from here rather than
+ * left behind disabled.
+ *
+ * What changed about the type is not only where it lives. It used to arrive as
+ * finished type sliding into place - `verbs/Dock`, the grammar's verb for a
+ * populated UI element taking its position. It is now *written*, glyph edge by
+ * glyph edge, through `pencil/Written`. The overture spends four moves
+ * establishing that this world is drawn by a hand; a title that arrived already
+ * set would be the one object in the opening that nobody made.
+ *
+ * ## Knowledge carried over from the card this replaces
  *
  * `DesignDocs/design_handoff_title_animation/` is explicit that it is "a
- * general idea, not a spec". Four of its ideas did not survive contact:
+ * general idea, not a spec". These four rejections were recorded on the old
+ * card and still bind whatever draws the title:
  *
  * - **The pencil tip.** A visible graphite tick travelling along the wordmark's
  *   reveal edge. It is the treatment's highest cheesiness risk - the moment the
  *   metaphor stops being a texture and starts being a cartoon - and cutting it
- *   is also what lands the card at 6.9s instead of the handoff's 8.5s.
- * - **The solidify crossfade.** As authored it runs `inkIn` up while
- *   `pencilOut` runs down for 19 frames, with two renderings of the same object
- *   both visible for most of them. That is a crossfade between synthetic
- *   objects, which this film never does. `pencil/Convert` replaces it: one hard
- *   edge, no frame where a pixel shows both.
+ *   is also what keeps this cue short. `Written`'s clip edge does the same
+ *   narrative work with nothing drawn at the edge itself.
+ * - **The solidify crossfade.** As authored it ran `inkIn` up while `pencilOut`
+ *   ran down for 19 frames, two renderings of the same object both visible for
+ *   most of them. That is a crossfade between synthetic objects, which this
+ *   film never does. It is not needed here at all - by the time this cue starts
+ *   the panel is already solid - but the rule is what stops it coming back.
  * - **Roughly ten raw opacity ramps** (`claimIn`, `factAText`, `factBText`,
- *   `labelIn` and friends). "Nothing fades up" - so every one of those that
- *   carries text is a `dock` instead. The plane's fill is not: a plane arriving
- *   is not an object entering, and the wipe delivers it anyway.
+ *   `labelIn` and friends). Nothing fades up. Every block below is revealed by
+ *   a clip rect whose width grows; no block's opacity is ever animated.
  * - **The camera settle.** A continuous 1.016 to 1.0 zoom held across the whole
  *   piece. On a flat backdrop with 1px hairlines that does not read as a slow
- *   push, it reads as crawl, and nothing in the grammar authorises it.
+ *   push, it reads as crawl, and nothing in the grammar authorises it. There is
+ *   no camera move here and the type does not move once written.
  *
- * The handoff's `feTurbulence`/`feDisplacementMap` wobble is also gone; see
- * `pencil/wobble.ts` for why. `Stroke`'s `amplitude` does the same job in
- * geometry, which is cacheable and does not creep sub-pixel between frames.
+ * The handoff's `feTurbulence`/`feDisplacementMap` wobble is also gone
+ * film-wide; see `pencil/wobble.ts`. Geometry wobble is cacheable and does not
+ * creep sub-pixel between frames.
+ *
+ * One more piece of hard-won geometry knowledge, recorded here because the code
+ * that needed it has moved and the trap has not: **a `Convert` bbox must be
+ * drawn larger than the object it wipes.** A pencil stroke overshoots its
+ * nominal endpoints by `over` px and wobbles off its own line by `amplitude`
+ * px, so a bbox drawn tight to the panel shears those overshoots off the moment
+ * the wipe mounts, which reads as the drawing being trimmed rather than
+ * converted. The old card used panel-30/-30 by panel+30/frame+60. Whoever owns
+ * the fidelity ladder now owns that margin.
  *
  * ## The seam is not drawn here
  *
  * The film carries a 4px accent seam at the frame's right edge, hoisted above
- * every chapter so it outlives them (`comp/Seam`). This card is composed
- * knowing it will be drawn over: nothing load-bearing sits in the rightmost
- * pixels, and the card draws no seam of its own.
+ * every chapter so it outlives them (`comp/Seam`). This cue is composed knowing
+ * it will be drawn over: nothing load-bearing sits in the rightmost pixels.
  *
- * Never wrap any of this in Remotion's `<Sequence>` - every cue below is an
- * absolute composition frame, and `<Sequence>` would silently remap them to
- * zero and freeze the card on its first pose.
+ * ## No `<Sequence>`, ever
+ *
+ * Every cue below is an absolute composition frame offset from the `from` prop.
+ * Remotion's `<Sequence>` remaps `useCurrentFrame()` to zero, which does not
+ * throw - it silently freezes the whole cue on its first pose. `from` is a
+ * number this component adds to, and that is deliberately the only mechanism.
  */
 import React from 'react';
-import { AbsoluteFill, interpolate, useCurrentFrame } from 'remotion';
-import { Backdrop } from './Backdrop';
-import type { Rect } from '../layout';
-import { Convert, GRAPHITE, SketchBox, Stroke, Written, draw } from '../pencil';
-import { Dock, FRAMES, useVerb } from '../verbs';
+import { AbsoluteFill, useCurrentFrame } from 'remotion';
+import { GRAPHITE, Written, draw } from '../pencil';
 import { FRAME, INTER, STAGE, TYPE } from '../theme';
 
 /**
- * This card's length, in frames. 414f = 6.9s at 60fps.
+ * This cue's length, in frames. 216f = 3.6s at 60fps.
  *
- * The brief allots 7.0s. Cutting the handoff's pencil-tip travel is what buys
- * the last tenth back, so the number is 414 rather than a padded 420: the card
- * ends when it has finished, not when a round number says it has.
+ * A literal, not a sum of the cue table below, for the same reason every other
+ * length in this film is: the number is a budget the edit is held to, and a
+ * computed one silently absorbs any cue that overruns instead of failing
+ * loudly against the script.
+ *
+ * About 1.6s of writing and 2.0s of hold. The hold is not padding - it is the
+ * reading time a wordmark, a two-line claim and two privacy facts need when
+ * there is no narration to carry them.
  */
-export const TITLE_CARD_FRAMES = 414;
-
-/** The tab you are already inside: the world, and it stays a drawing. */
-const TAB: Rect = { x: 120, y: 110, width: 1240, height: 860 };
-
-/** The tab's app bar rule. */
-const BAR_Y = 184;
-
-/** The panel, docked along the tab's edge and bleeding off the top and bottom of frame. */
-const PANEL: Rect = {
-  x: TAB.x + TAB.width,
-  y: 0,
-  width: FRAME.width - (TAB.x + TAB.width),
-  height: FRAME.height,
-};
+export const DRAWN_TITLE_FRAMES = 216;
 
 /**
- * The wipe's region, deliberately larger than {@link PANEL}.
+ * Where the solid panel is assumed to stand when this cue runs.
  *
- * `Convert` clips the graphite side to this box too, and a pencil stroke
- * overshoots its nominal endpoints by `over` px and wobbles off its own line by
- * `amplitude` px. A bbox drawn tight to the panel would shear those overshoots
- * off the moment the wipe mounted, which reads as the drawing being trimmed
- * rather than converted.
+ * **FLAGGED ASSUMPTION - another agent owns the real number.** The panel's
+ * rect is set by the overture's fidelity ladder, not here, and nothing in this
+ * file reads it. 1240 is taken from the old card's docked panel (its left edge
+ * sat at 1360) minus room for the wider panel the overture squeezes the console
+ * around. All this file does with it is stay left of it: the type column below
+ * is placed against {@link COLUMN}, and the only thing that breaks if the real
+ * panel edge moves is how much air sits between the claim's longest line and
+ * the panel. If the panel lands left of ~1180, the claim needs re-breaking, not
+ * re-positioning.
  */
-const WIPE: Rect = { x: PANEL.x - 30, y: -30, width: PANEL.width + 30, height: FRAME.height + 60 };
+const ASSUMED_PANEL_LEFT = 1240;
 
 /**
- * The panel's placeholder rows, with a descending emphasis down the column.
+ * The type column: left margin, and the rightmost pixel the type may reach.
  *
- * Abstract on purpose: this is a diagram of a panel, not a screenshot of one,
- * and a card that drew plausible-looking rows of fake data would be claiming
- * evidence three seconds before the film has shown any. The opacity ladder is a
- * static rendering weight, not a ramp - it is the diagram convention for "and
- * the list carries on below the fold", which is the one true thing the shape
- * has to say.
+ * The old card hung its type at x=214 because it was writing *inside* a
+ * sketched browser tab that started at x=120. There is no tab by the time this
+ * cue runs - the console has retracted and gone - so the column is placed
+ * against the frame instead, on the film's own left margin (76, matching
+ * `layout.INDEX.x`) plus a step, and it is given the whole of the empty half of
+ * frame to breathe in.
  */
-const ROWS: readonly (Rect & { weight: number })[] = [
-  { x: 1416, y: 240, width: 448, height: 72, weight: 1 },
-  { x: 1416, y: 340, width: 448, height: 52, weight: 1 },
-  { x: 1416, y: 414, width: 448, height: 52, weight: 0.86 },
-  { x: 1416, y: 488, width: 448, height: 52, weight: 0.72 },
-  { x: 1416, y: 562, width: 448, height: 52, weight: 0.58 },
-  { x: 1416, y: 636, width: 448, height: 52, weight: 0.44 },
-  { x: 1416, y: 710, width: 448, height: 52, weight: 0.32 },
-  { x: 1416, y: 784, width: 448, height: 52, weight: 0.22 },
-] as const;
-
-/** The two privacy facts, each in its own hairline box. */
-const FACTS = [
-  { box: { x: 214, y: 710, width: 306, height: 68 }, text: 'No external servers.' },
-  {
-    box: { x: 544, y: 710, width: 562, height: 68 },
-    text: 'Your data never leaves the browser tab.',
-  },
-] as const;
-
-/**
- * Every cue, in absolute composition frames.
- *
- * Read top to bottom this is the card's whole argument: the world is drawn
- * (0 to ~2.5s), the panel becomes real (~2.5 to 3.0s), the product speaks
- * (~3.0 to 4.6s), and the rest is hold - two seconds of settled frame, which is
- * the reading time three lines of copy need when there is no narration.
- */
-const CUE = {
-  tabTop: 4,
-  tabRight: 16,
-  tabBottom: 28,
-  tabLeft: 40,
-  bar: 52,
-  annotation: 58,
-  seam: 66,
-  rows: 74,
-  rowStagger: 5,
-  panelLabel: 110,
-  convert: 152,
-  mark: 178,
-  claim: 198,
-  factBox: [218, 230],
-  factText: [244, 256],
-  /** The tab recedes at the very end. The panel does not: it becomes chapter one's frame. */
-  exit: TITLE_CARD_FRAMES - FRAMES.recede,
+const COLUMN = {
+  x: 152,
+  /** A hard limit, checked by eye at render: nothing written may cross it. */
+  right: ASSUMED_PANEL_LEFT - 96,
 } as const;
 
-/** How long a box takes to draw all four of its sides. Four sides in sequence need longer than one stroke. */
-const BOX_FRAMES = 30;
-
-/** The wipe's own duration. Longer than `draw`'s 22f because it crosses the full 1080 of frame. */
-const CONVERT_FRAMES = 30;
-
-/** The graphite line's unsteadiness, in px. Enough to read as a hand, not enough to read as a fault. */
-const SHAKE = 5;
-
-/** Absolutely positioned wrapper for a docking block of type. `Dock` itself is `position: relative`. */
-const At: React.FC<{ left: number; top: number; children: React.ReactNode }> = ({
-  left,
-  top,
-  children,
-}) => <div style={{ position: 'absolute', left, top }}>{children}</div>;
+/**
+ * Baselines, top to bottom. `Written` positions on the text baseline, not on a
+ * box's top edge, so these are baselines and not `top`s.
+ *
+ * The block is optically centred against the 1080 frame rather than
+ * mathematically centred: the wordmark's 92px cap height carries far more
+ * visual weight than the two dim facts at the bottom, so a mathematically
+ * centred block sits low. Everything is nudged up accordingly.
+ */
+const BASELINE = {
+  mark: 430,
+  claimA: 546,
+  claimB: 606,
+  factA: 712,
+  factB: 754,
+} as const;
 
 /**
- * The world: a tab rectangle, its app bar, and a written note naming it.
- *
- * Two passes, the way a hand actually draws - the first lays the line down, the
- * second goes back over it lighter and slightly off-register. Both stay
- * graphite for the whole card; nothing here ever converts, because the browser
- * tab is not the thing this film is selling.
+ * The copy, verbatim. Do not rewrite any of this: the wordmark, the claim's two
+ * lines and both privacy facts are the product owner's own wording, and the
+ * facts' terminal full stops are deliberate.
  */
-const TabDrawing: React.FC<{ frame: number }> = ({ frame }) => {
-  const sides = [
-    { x1: TAB.x, y1: TAB.y, x2: TAB.x + TAB.width, y2: TAB.y, at: CUE.tabTop },
-    {
-      x1: TAB.x + TAB.width,
-      y1: TAB.y,
-      x2: TAB.x + TAB.width,
-      y2: TAB.y + TAB.height,
-      at: CUE.tabRight,
-    },
-    {
-      x1: TAB.x + TAB.width,
-      y1: TAB.y + TAB.height,
-      x2: TAB.x,
-      y2: TAB.y + TAB.height,
-      at: CUE.tabBottom,
-    },
-    { x1: TAB.x, y1: TAB.y + TAB.height, x2: TAB.x, y2: TAB.y, at: CUE.tabLeft },
-  ];
-
-  return (
-    <g>
-      <g opacity={0.9}>
-        {sides.map((s, i) => (
-          <Stroke
-            key={i}
-            x1={s.x1}
-            y1={s.y1}
-            x2={s.x2}
-            y2={s.y2}
-            p={draw(frame, s.at)}
-            seed={i + 1}
-            amplitude={SHAKE}
-          />
-        ))}
-        <Stroke
-          x1={TAB.x}
-          y1={BAR_Y}
-          x2={TAB.x + TAB.width}
-          y2={BAR_Y}
-          p={draw(frame, CUE.bar, 16)}
-          seed={5}
-          width={2.2}
-          amplitude={SHAKE - 2}
-        />
-      </g>
-      <g opacity={0.5} transform="translate(3 -2)">
-        {sides.map((s, i) => (
-          <Stroke
-            key={i}
-            x1={s.x1}
-            y1={s.y1}
-            x2={s.x2}
-            y2={s.y2}
-            p={draw(frame, s.at)}
-            seed={31 + i}
-            width={1.4}
-            color={GRAPHITE.second}
-            over={14}
-            amplitude={SHAKE}
-          />
-        ))}
-      </g>
-      <Written
-        x={TAB.x + 40}
-        y={BAR_Y - 22}
-        text="the tab you are already signed in to"
-        p={draw(frame, CUE.annotation, 44)}
-        size={TYPE.label}
-        color={GRAPHITE.second}
-      />
-    </g>
-  );
-};
-
-/** The panel as the hand drew it: a seam, five placeholder rows, a written label. */
-const PanelGraphite: React.FC<{ frame: number }> = ({ frame }) => (
-  <g>
-    <Stroke
-      x1={PANEL.x}
-      y1={PANEL.y}
-      x2={PANEL.x}
-      y2={PANEL.y + PANEL.height}
-      p={draw(frame, CUE.seam, 24)}
-      seed={6}
-      width={4}
-      amplitude={SHAKE}
-    />
-    {ROWS.map((r, i) => (
-      <g key={i} opacity={r.weight}>
-        <SketchBox
-          x={r.x}
-          y={r.y}
-          width={r.width}
-          height={r.height}
-          p={draw(frame, CUE.rows + i * CUE.rowStagger, BOX_FRAMES)}
-          seed={20 + i * 4}
-          weight={2.2}
-          over={3}
-          amplitude={SHAKE - 2.5}
-        />
-      </g>
-    ))}
-    <Written
-      x={1416}
-      y={147}
-      text="SIDE PANEL"
-      p={draw(frame, CUE.panelLabel, BOX_FRAMES)}
-      size={TYPE.label}
-    />
-  </g>
-);
+const COPY = {
+  mark: 'Okta Unbound',
+  claim: ['Group and user administration', 'right inside your active session.'],
+  facts: ['No external servers.', 'Your data never leaves the browser tab.'],
+} as const;
 
 /**
- * The panel once it is real: a plate, hairlines, and the same label set in ink.
+ * Every cue, as an offset from `from` in composition frames, paired with how
+ * long that block takes to write.
  *
- * The label's string, size and weight are identical on both sides of the wipe.
- * They have to be: the wipe is one object changing material, and an edge that
- * crossed from one piece of text to a different one would be a cut disguised
- * as a transition.
+ * Durations scale with how much there is to write rather than being one
+ * constant: `Written` reveals at a uniform rate across its measured width, so a
+ * 12-character wordmark and a 39-character fact given the same budget would be
+ * written by two different hands at two different speeds. `pencil/draw`'s 22f
+ * default is the length of *one stroke*, which is why nothing here uses it
+ * unchanged.
+ *
+ * The claim's second line starts before the first has finished. That is how a
+ * hand writes a sentence that runs over a line break - it does not pause at the
+ * break - and it is what keeps the whole cue under two seconds of writing.
  */
-const PanelInk: React.FC = () => (
-  <g>
-    <rect x={PANEL.x} y={PANEL.y} width={PANEL.width} height={PANEL.height} fill={STAGE.plate} />
-    <line
-      x1={PANEL.x}
-      y1={PANEL.y}
-      x2={PANEL.x}
-      y2={PANEL.y + PANEL.height}
-      stroke={STAGE.rule}
-      strokeWidth={1}
-    />
-    {ROWS.map((r, i) => (
-      <rect
-        key={i}
-        x={r.x}
-        y={r.y}
-        width={r.width}
-        height={r.height}
-        rx={10}
-        fill={STAGE.back}
-        stroke={STAGE.rule}
-        strokeWidth={1}
-        opacity={r.weight}
-      />
-    ))}
-    <text
-      x={1416}
-      y={147}
-      fill={STAGE.inkDim}
-      fontFamily={INTER}
-      fontSize={TYPE.label}
-      fontWeight={400}
-    >
-      SIDE PANEL
-    </text>
-  </g>
-);
+const CUE = {
+  mark: { at: 0, over: 38 },
+  claim: [
+    { at: 34, over: 30 },
+    { at: 52, over: 30 },
+  ],
+  facts: [
+    { at: 74, over: 20 },
+    { at: 84, over: 26 },
+  ],
+} as const;
 
-/** The card. */
-export const TitleCard: React.FC = () => {
+/**
+ * How the title is set.
+ *
+ * ## Why this is graphite and not ink
+ *
+ * The first version set all three blocks in `STAGE.ink`, which rendered a
+ * finished, solid, product-coloured wordmark wiped in from the left. That is
+ * the docked title with a different entrance, and it breaks the rule the whole
+ * overture is built on: `pencil/draw` may only touch something the product has
+ * not made yet. The panel beside this type has just climbed the fidelity ladder
+ * and become real. The title is not part of the product - it is the film's own
+ * voice, naming the thing - so it stays a drawing, and the contrast between a
+ * solid panel and a hand-written name beside it is the film's thesis stated in
+ * one frame rather than argued.
+ *
+ * It also bracket-matches: the console that opened the film was graphite, and
+ * the end card returns the tab outline to graphite. The title belongs to that
+ * layer, not to the panel's.
+ *
+ * The facts drop to `GRAPHITE.second` - the lighter second pass, the hand going
+ * back over its own line - because they are supporting evidence and want to sit
+ * behind the claim without changing material.
+ */
+const SET = {
+  /**
+   * The wordmark is the film's largest type and its only 700, and the only
+   * block big enough to need {@link WrittenProps.perGlyph}: at 92px a single
+   * travelling clip edge spends several frames bisecting one letter, which is
+   * visibly a mask rather than a hand. Measured on `Okta Unbound`, the edge sat
+   * mid-`d` for four frames.
+   */
+  mark: { size: TYPE.chapter, weight: 700, color: GRAPHITE.primary, perGlyph: true },
+  claim: { size: TYPE.claim, weight: 600, color: GRAPHITE.primary, perGlyph: true },
+  /**
+   * The facts keep the single travelling edge. They are set at `TYPE.body`,
+   * inside the range the edge was designed for, and per-glyph on a 39-character
+   * line reads as a teleprinter rather than a hand.
+   */
+  fact: { size: TYPE.body, weight: 400, color: GRAPHITE.second },
+} as const;
+
+/**
+ * The title, written.
+ *
+ * ## Why there is no `letterSpacing` here
+ *
+ * The docked version set the wordmark at `letterSpacing: -3` and the claim at
+ * `-0.9`, which is right for type that arrives finished. It is wrong for type
+ * that is being revealed, and not merely as taste: `pencil/Written` measures
+ * its reveal width with `measureText`, which has no tracking term at all. Under
+ * negative tracking the measurement runs wide of the rendered text by roughly
+ * one tracking step per glyph - about 36px across `Okta Unbound` at -3 - so the
+ * clip finishes its travel with visible dead space after the last letter, and
+ * the wordmark appears to stop being written a beat before the animation ends.
+ * Inter's own metrics at 700 are tight enough at 92px that dropping the
+ * tracking costs very little, and the alternative (teaching `Written` about
+ * tracking) is a change to a shared primitive that several cues depend on.
+ */
+export interface DrawnTitleProps {
+  /**
+   * The absolute composition frame this cue begins on. Never a `<Sequence>`
+   * offset - see the module doc.
+   */
+  from: number;
+}
+
+/** The title, written onto whatever the overture has already put on screen. */
+export const DrawnTitle: React.FC<DrawnTitleProps> = ({ from }) => {
   const frame = useCurrentFrame();
-
-  // The exit is `recede`'s own shape, run on SVG geometry rather than on a
-  // plate: scale settles down, opacity only moves in the closing 6f. The verb
-  // component itself is not usable here because its shadow collapse has no
-  // meaning for a 1px hairline, but its timing and curve do.
-  const leaving = useVerb('recede', CUE.exit);
-  const exitScale = interpolate(leaving, [0, 1], [1, 0.96]);
-  const exitOpacity = interpolate(
-    frame,
-    [TITLE_CARD_FRAMES - FRAMES.recedeOpacityWindow, TITLE_CARD_FRAMES],
-    [1, 0],
-    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
-  );
-  const tabCx = TAB.x + TAB.width / 2;
-  const tabCy = TAB.y + TAB.height / 2;
-  const receding = {
-    transform: `translate(${tabCx} ${tabCy}) scale(${exitScale}) translate(${-tabCx} ${-tabCy})`,
-    opacity: exitOpacity,
-  };
 
   return (
     <AbsoluteFill style={{ fontFamily: INTER }}>
-      <Backdrop focusX={FRAME.width / 2} />
+      <svg width={FRAME.width} height={FRAME.height} viewBox={`0 0 ${FRAME.width} ${FRAME.height}`}>
+        <Written
+          x={COLUMN.x}
+          y={BASELINE.mark}
+          text={COPY.mark}
+          p={draw(frame, from + CUE.mark.at, CUE.mark.over)}
+          {...SET.mark}
+        />
 
-      <AbsoluteFill>
-        <svg
-          width={FRAME.width}
-          height={FRAME.height}
-          viewBox={`0 0 ${FRAME.width} ${FRAME.height}`}
-        >
-          <g {...receding}>
-            <TabDrawing frame={frame} />
-          </g>
-
-          <Convert
-            frame={frame}
-            start={CUE.convert}
-            duration={CONVERT_FRAMES}
-            bbox={WIPE}
-            direction="down"
-            graphite={<PanelGraphite frame={frame} />}
-            ink={<PanelInk />}
+        {COPY.claim.map((line, i) => (
+          <Written
+            key={line}
+            x={COLUMN.x}
+            y={i === 0 ? BASELINE.claimA : BASELINE.claimB}
+            text={line}
+            p={draw(frame, from + CUE.claim[i].at, CUE.claim[i].over)}
+            {...SET.claim}
           />
-
-          {/* The privacy facts' boxes: hairline, crisp, but drawn with a hand's
-              overshot corners. `draw` is legitimate on them under its own rule -
-              a claim awaiting evidence is exactly what a privacy fact is. */}
-          <g {...receding}>
-            {FACTS.map((f, i) => (
-              <SketchBox
-                key={i}
-                x={f.box.x}
-                y={f.box.y}
-                width={f.box.width}
-                height={f.box.height}
-                p={draw(frame, CUE.factBox[i], BOX_FRAMES)}
-                seed={60 + i * 10}
-                color={STAGE.rule}
-                weight={1}
-              />
-            ))}
-          </g>
-        </svg>
-      </AbsoluteFill>
-
-      {/* The type. Every block docks; nothing here fades up. */}
-      <AbsoluteFill
-        style={{
-          transform: `scale(${exitScale})`,
-          transformOrigin: `${tabCx}px ${tabCy}px`,
-          opacity: exitOpacity,
-        }}
-      >
-        <At left={214} top={376}>
-          <Dock from={CUE.mark}>
-            <div
-              style={{
-                fontSize: TYPE.chapter,
-                fontWeight: 700,
-                letterSpacing: -3,
-                lineHeight: 1,
-                color: STAGE.ink,
-              }}
-            >
-              Okta Unbound
-            </div>
-          </Dock>
-        </At>
-
-        <At left={214} top={532}>
-          <Dock from={CUE.claim} rule={false}>
-            <div
-              style={{
-                fontSize: TYPE.claim,
-                fontWeight: 600,
-                letterSpacing: -0.9,
-                lineHeight: 1.28,
-                color: STAGE.ink,
-              }}
-            >
-              <div>Group and user administration</div>
-              <div>right inside your active session.</div>
-            </div>
-          </Dock>
-        </At>
-
-        {FACTS.map((f, i) => (
-          <At key={i} left={f.box.x + 24} top={f.box.y + 20}>
-            <Dock from={CUE.factText[i]} rule={false} distance={90}>
-              <div style={{ fontSize: TYPE.body, lineHeight: 1, color: STAGE.inkDim }}>
-                {f.text}
-              </div>
-            </Dock>
-          </At>
         ))}
-      </AbsoluteFill>
+
+        {COPY.facts.map((fact, i) => (
+          <Written
+            key={fact}
+            x={COLUMN.x}
+            y={i === 0 ? BASELINE.factA : BASELINE.factB}
+            text={fact}
+            p={draw(frame, from + CUE.facts[i].at, CUE.facts[i].over)}
+            {...SET.fact}
+          />
+        ))}
+      </svg>
     </AbsoluteFill>
   );
 };
 
-export const TitleCardPreview: React.FC = () => <TitleCard />;
+/**
+ * The studio's preview of the cue.
+ *
+ * This component draws nothing of the world, by design - in the film it is
+ * written over a frame the overture has already built. So the preview supplies
+ * a stand-in for that frame: the stage's backdrop, and a flat plate at
+ * {@link ASSUMED_PANEL_LEFT} standing where the solid panel will be. Both exist
+ * only so the placement can be judged while scrubbing; neither is imported by
+ * anything, and neither is what ships.
+ */
+export const DrawnTitlePreview: React.FC = () => (
+  <AbsoluteFill style={{ background: STAGE.back }}>
+    <div
+      style={{
+        position: 'absolute',
+        left: ASSUMED_PANEL_LEFT,
+        top: 0,
+        width: FRAME.width - ASSUMED_PANEL_LEFT,
+        height: FRAME.height,
+        background: STAGE.plate,
+        borderLeft: `1px solid ${STAGE.rule}`,
+      }}
+    />
+    <DrawnTitle from={0} />
+  </AbsoluteFill>
+);

@@ -94,7 +94,40 @@ export interface WrittenProps {
   size?: number;
   weight?: number;
   color?: string;
+  /**
+   * Reveal one glyph at a time rather than by a single travelling edge.
+   *
+   * Opt-in, and off by default, because the two are not interchangeable at
+   * every size. The single edge is right for small type: at 16-30px, which is
+   * where the two handoffs use this, a glyph is a few pixels wide and the edge
+   * reads as a nib moving. It stops being right as the type gets large. At the
+   * wordmark's 92px the edge takes several frames to cross a single letter, so
+   * what is on screen is a letter sliced vertically down the middle - visibly a
+   * mask, not a hand, and worst on round glyphs where the cut is longest.
+   *
+   * Per-glyph reveals each letter through its own window, in sequence, with the
+   * windows overlapping so the phrase still flows rather than ticking out like
+   * a teleprinter. Kerning is untouched: this is still one `<text>` element, so
+   * the shaping engine sees the whole string and the clip is applied after. An
+   * earlier attempt at one `<text>` per glyph positioned from cumulative widths
+   * lost every kern pair, which on `Okta Unbound` is visible at the `Un`.
+   */
+  perGlyph?: boolean;
 }
+
+/**
+ * How long one glyph takes to reveal, as a fraction of the whole cue.
+ *
+ * Small on purpose. The count of glyphs in flight at once is roughly
+ * `span / step`, and with `step = (1 - span) / (n - 1)` that is about
+ * `span * (n - 1) / (1 - span)` - so at 12 glyphs, `0.14` puts under two
+ * letters in flight and reads as a hand moving along the line. The first
+ * attempt used `0.6`, which put *ten* in flight: every letter revealing its
+ * own left slice simultaneously, which renders the wordmark as a row of
+ * vertical shards rather than as writing. Raising this does not make the
+ * writing slower, it makes it less sequential.
+ */
+const GLYPH_SPAN = 0.14;
 
 /** A word that writes itself. See the module doc for both fixed defects. */
 export const Written: React.FC<WrittenProps> = ({
@@ -105,6 +138,7 @@ export const Written: React.FC<WrittenProps> = ({
   size = 24,
   weight = 400,
   color = GRAPHITE.primary,
+  perGlyph = false,
 }) => {
   const clipId = useId();
   const textWidth = useMemo(() => measureTextWidth(text, size, weight), [text, size, weight]);
@@ -114,11 +148,50 @@ export const Written: React.FC<WrittenProps> = ({
   const clipWidth = textWidth + 12;
   const clampedP = Math.min(1, Math.max(0, p));
 
+  /**
+   * One rect per glyph, each spanning that glyph's measured slice of the line
+   * and widening across its own window.
+   *
+   * Measured by prefix (`measureText` of the first `i` characters) rather than
+   * per character summed, so kerning and any advance the shaper applies are
+   * included: the slices tile the line exactly with no seam and no drift by the
+   * last letter, which summing isolated character widths does not give.
+   */
+  const glyphRects = useMemo(() => {
+    if (!perGlyph) return null;
+    const edges = [...Array(text.length + 1)].map((_, i) =>
+      measureTextWidth(text.slice(0, i), size, weight),
+    );
+    // Windows are laid out so the LAST one closes exactly at p=1: with n glyphs
+    // each `span` long and each starting `step` after the last, the final start
+    // is `1 - span`, so `step = (1 - span) / (n - 1)`. Getting this wrong by
+    // hand is how a reveal ends up finishing early and holding on a static
+    // frame that the cue table says is still being written.
+    const n = text.length;
+    const span = n > 1 ? Math.min(1, GLYPH_SPAN) : 1;
+    const step = n > 1 ? (1 - span) / (n - 1) : 0;
+    return edges.slice(0, n).map((left, i) => {
+      const start = i * step;
+      const local = span > 0 ? (clampedP - start) / span : 1;
+      const g = Math.min(1, Math.max(0, local));
+      // Each glyph's slice starts a hair left of its own edge for the same
+      // reason the whole-line clip does: an exact edge hairline-clips ink.
+      const slice = edges[i + 1] - left + 2;
+      return { x: x + left - 1, width: slice * g };
+    });
+  }, [perGlyph, text, size, weight, clampedP, x]);
+
   return (
     <g>
       <defs>
         <clipPath id={clipId}>
-          <rect x={x - 6} y={y - size} width={clipWidth * clampedP} height={size * 1.6} />
+          {glyphRects ? (
+            glyphRects.map((r, i) => (
+              <rect key={i} x={r.x} y={y - size} width={r.width} height={size * 1.6} />
+            ))
+          ) : (
+            <rect x={x - 6} y={y - size} width={clipWidth * clampedP} height={size * 1.6} />
+          )}
         </clipPath>
       </defs>
       <text
