@@ -170,56 +170,57 @@ export const SCRIPT: Scene[] = [
         plan: [
           { beat: 'jump', speed: 'half', easeMs: 300, holdMs: 3000, tailMs: 2400 },
           { beat: 'working-set', speed: 'natural', easeMs: 350, holdMs: 3200 },
-          { beat: 'findings', speed: 'half', easeMs: 400, holdMs: 3400 },
-          { beat: 'report', speed: 'half', easeMs: 350, holdMs: 3000, tailMs: 3200 },
+          { beat: 'findings', speed: 'half', easeMs: 400, holdMs: 3400, tailMs: 3200 },
         ],
         marks: [
           {
             beat: 'jump',
             stage: 'home',
-            headline: 'You arrive with an id, not a name.',
-            points: ['Paste it. The row resolves.'],
+            headline: 'Search your directory instantly.',
+            points: ['Type an email, get the person.'],
           },
           {
             beat: 'jump',
             /*
-             * Held until the id has actually resolved.
+             * Held until the search has actually answered.
              *
-             * With no cue this point was on screen while the field still read
-             * `00`, so the film stated what the lookup cost before the lookup
-             * had happened. `figure()` guarantees the number came off the
-             * panel; it cannot guarantee the frame it is printed over shows it.
+             * With no cue this point was on screen while the field was still
+             * empty, so the film stated a result before the lookup had
+             * happened. `figure()` guarantees the number came off the panel; it
+             * cannot guarantee the frame it is printed over shows it.
              */
-            after: 'jumpCost',
-            points: [(m) => figure<string>(m, 'jumpCost')],
+            after: 'results',
+            points: [(m) => `${figure<number>(m, 'results')} result, without leaving the tab.`],
           },
           {
             beat: 'working-set',
-            headline: 'Or pick up where you left off.',
+            headline: 'Resume your workflow without searching.',
             points: [
               (m) =>
                 `${figure<number>(m, 'pinned')} pinned, ${figure<number>(m, 'recent')} recent.`,
-              'Per org. Capped. Expires on its own.',
+              'Stored locally per org. Automatically expires.',
             ],
           },
           {
             beat: 'findings',
-            headline: "What's wrong in this org?",
+            headline: 'Spot actionable items right away.',
             points: [
-              (m) => `${figure<number>(m, 'unruled')} groups no rule fills.`,
-              (m) => `${figure<number>(m, 'emptyGroups')} groups with nobody in them.`,
-              (m) => `${figure<number>(m, 'pausedRules')} rule switched off and left there.`,
+              (m) => `${figure<number>(m, 'unruled')} groups with no rule filling them.`,
+              (m) => `${figure<number>(m, 'emptyGroups')} empty groups with nobody in them.`,
+              (m) => `${figure<number>(m, 'pausedRules')} inactive rule left behind.`,
             ],
           },
-          {
-            beat: 'report',
-            headline: 'Press a finding, get the names.',
-            points: [
-              (m) =>
-                `${figure<number>(m, 'reportCount')} groups hold app access no rule maintains.`,
-              (m) => `All ${figure<number>(m, 'reportNamed')} named here. No tab switch.`,
-            ],
-          },
+          /*
+           * The `report` beat is filmed and not played.
+           *
+           * Pressing a finding and getting the group names back is a good
+           * moment, and Home is not where it earns its runtime: Reporting ends
+           * on the same move against a scan nobody could run by hand, which is
+           * the version worth the seconds. The walk still shoots it, and still
+           * refuses a capture where the count and the rows behind it disagree,
+           * so the fixture assertion survives the cut. Name the beat in the
+           * plan and the words come back with it.
+           */
         ],
       },
     ],
@@ -240,14 +241,15 @@ export const SCRIPT: Scene[] = [
           {
             beat: 'arrive',
             stage: 'home',
-            headline: 'A new hire cannot get in.',
-            points: ['Set up Monday. Still locked out Wednesday.'],
+            headline: 'A new hire files an access ticket.',
+            points: ['Onboarding finished, but her core access never arrived.'],
           },
           {
             beat: 'gap',
             points: [
-              (m) => `${figure<number>(m, 'groups')} groups, and not her team's.`,
-              'The whole list fits on one screen.',
+              (m) =>
+                `${figure<number>(m, 'groups')} assigned groups, missing her core team access.`,
+              'View the complete assignment list on one screen.',
             ],
           },
         ],
@@ -265,8 +267,8 @@ export const SCRIPT: Scene[] = [
           {
             beat: 'subject',
             stage: 'home',
-            headline: 'Compare her with a teammate.',
-            points: ['Same job. Same team. Different access.'],
+            headline: 'Benchmark against a working coworker.',
+            points: ['Same title and team. Different application access.'],
           },
           {
             beat: 'difference',
@@ -291,11 +293,11 @@ export const SCRIPT: Scene[] = [
              */
             beat: 'cause',
             after: 'cause',
-            headline: 'This one says why.',
+            headline: 'Unbound reveals the root cause.',
             points: [
-              (m) => `The rule wants ${figure<{ clause: string }>(m, 'cause').clause}`,
-              (m) => `Her profile says ${figure<{ resolved: string }>(m, 'cause').resolved}`,
-              'Mistyped the day the account was made.',
+              (m) => `The mapping rule requires ${figure<{ clause: string }>(m, 'cause').clause}`,
+              (m) => `The user profile says ${figure<{ resolved: string }>(m, 'cause').resolved}`,
+              'An attribute typo broke the automated provisioning.',
             ],
           },
         ],
@@ -313,13 +315,13 @@ export const SCRIPT: Scene[] = [
           {
             beat: 'open',
             stage: 'home',
-            headline: 'Fix it here.',
-            points: ['One attribute, in the panel.'],
+            headline: 'Remediate directly from the investigation screen.',
+            points: ['Edit the attribute right inside the panel.'],
           },
           {
             beat: 'predict',
-            headline: 'It says what will change first.',
-            points: ['Every rule that reads the attribute, re-checked against the draft.'],
+            headline: 'Preview the blast radius before saving.',
+            points: ['Test the draft against all dependent rules.'],
           },
           {
             beat: 'predict',
@@ -329,13 +331,13 @@ export const SCRIPT: Scene[] = [
           {
             beat: 'land',
             after: 'groupsAfter',
-            headline: 'The rule applied.',
+            headline: 'The automation triggers immediately.',
             points: [
               (m) => figure<string>(m, 'saved'),
               (m) =>
                 `${figure<number>(m, 'groupsBefore')} groups before, ` +
                 `${figure<number>(m, 'groupsAfter')} after.`,
-              'No reload. No leaving the tab.',
+              'Resolved without a single page reload.',
             ],
           },
         ],
@@ -361,8 +363,8 @@ export const SCRIPT: Scene[] = [
           { beat: 'cascade', stage: 'home' },
           {
             beat: 'members',
-            headline: 'Who is in here, and why?',
-            points: ['Grouped by where each membership came from, not by name.'],
+            headline: 'Audit membership provenance instantly.',
+            points: ['Grouped by assignment source instead of alphabetical order.'],
             diagram: (m, plot, from) =>
               React.createElement(Tally, {
                 plot,
@@ -390,7 +392,7 @@ export const SCRIPT: Scene[] = [
           { beat: 'open', stage: 'home' },
           {
             beat: 'filter',
-            headline: 'The apps nobody switched back on.',
+            headline: 'Identify the applications nobody switched back on.',
             diagram: (m, plot, from) =>
               React.createElement(Ratio, {
                 plot,
@@ -419,13 +421,13 @@ export const SCRIPT: Scene[] = [
           {
             beat: 'load',
             stage: 'home',
-            headline: 'Nothing loads itself.',
+            headline: 'Audit your automation logic directly.',
             points: ['Rules are fetched when you ask, and not before.'],
           },
           {
             beat: 'dormant',
             stage: 'focus',
-            headline: 'The rule nobody deleted.',
+            headline: 'Locate inactive logic cluttering the environment.',
             points: [
               (m) => {
                 const stats = figure<Record<string, number>>(m, 'stats');
@@ -476,13 +478,13 @@ export const SCRIPT: Scene[] = [
           {
             beat: 'open',
             stage: 'home',
-            headline: 'A group is a population, not a list of names.',
+            headline: 'Before you write a rule, see what you are matching on.',
           },
           {
             beat: 'facets',
             stage: 'focus',
-            headline: 'It finds its own dimensions.',
-            points: ['The attributes this group actually varies along, not a fixed column set.'],
+            headline: 'Every attribute this group actually varies along.',
+            points: ['Values, counts, and which ones a rule can filter on.'],
             // The whole board, not one attribute. The claim is about a *set* of
             // dimensions being discovered, so an enlargement of a single spread
             // would be arguing something narrower than the slide beside it.
@@ -494,8 +496,8 @@ export const SCRIPT: Scene[] = [
           { beat: 'filter', stage: 'home' },
           {
             beat: 'compose',
-            headline: 'Two filters, one roster.',
-            points: ['Nothing is fetched again.'],
+            headline: 'Stack two filters and you have the population a rule would match.',
+            points: ['Counted locally, without reloading the page.'],
             diagram: (m, plot, from) =>
               React.createElement(Funnel, {
                 plot,
@@ -542,19 +544,19 @@ export const SCRIPT: Scene[] = [
           {
             beat: 'open',
             stage: 'home',
-            headline: 'SMS stops qualifying. Who is exposed?',
+            headline: 'Deprecating SMS authentication. Who is exposed?',
           },
           {
             beat: 'arm',
             points: [
-              'One factors call per member.',
-              'It never runs this on its own, and says so first.',
+              'Calculates the exact cost before running the scan.',
+              'One API call per member. It never runs on its own.',
             ],
           },
           {
             beat: 'breakdown',
             stage: 'focus',
-            headline: 'What everyone actually has.',
+            headline: 'Map the exact authentication posture.',
             diagram: (m, plot, from) =>
               React.createElement(FactorLadder, {
                 plot,
@@ -566,7 +568,7 @@ export const SCRIPT: Scene[] = [
           {
             beat: 'unenrolled',
             stage: 'home',
-            headline: 'The people it means.',
+            headline: 'Turn reports into actionable target lists.',
             points: [
               (m) => {
                 const gap = figure<CoverageRow[]>(m, 'coverage').find(
@@ -574,9 +576,9 @@ export const SCRIPT: Scene[] = [
                 );
                 if (!gap) throw new Error('reporting: the coverage scan found no unenrolled row');
                 const roster = figure<Counts>(m, 'rosterUnenrolled');
-                return `${gap.count} of ${roster.total} have no second factor.`;
+                return `${gap.count} of ${roster.total} have no secure second factor.`;
               },
-              'Click the finding and the list is right there.',
+              'Click the finding to reveal the vulnerable accounts.',
             ],
           },
         ],
