@@ -12,6 +12,7 @@ import { Composition } from 'remotion';
 import { SCRIPT } from './script';
 import { Chapter, chapterLength } from './comp/Chapter';
 import { REEL_FRAMES, Reel } from './comp/Reel';
+import { Verbs, VERBS_FRAMES } from './comp/Verbs';
 import { FRAME } from './theme';
 
 export const Root: React.FC = () => (
@@ -20,6 +21,14 @@ export const Root: React.FC = () => (
       id="reel"
       component={Reel}
       durationInFrames={REEL_FRAMES}
+      fps={FRAME.fps}
+      width={FRAME.width}
+      height={FRAME.height}
+    />
+    <Composition
+      id="verbs"
+      component={Verbs}
+      durationInFrames={VERBS_FRAMES}
       fps={FRAME.fps}
       width={FRAME.width}
       height={FRAME.height}
