@@ -69,14 +69,66 @@ const files = walk(SRC);
  * (`useStagger`). Lower this number in the same commit that converts one of
  * them.
  */
-const SPRING_RATCHET_BASELINE = 5;
+const SPRING_RATCHET_BASELINE = 3;
+
+/**
+ * Blank out comments and string bodies, preserving offsets and newlines.
+ *
+ * The ratchet greps for `spring(` in *source text*, which counts a doc comment
+ * that writes `spring({ ... })` as a call site. That is not hypothetical: the
+ * first draft of the Margin migration replaced every real call, wrote a comment
+ * explaining what it had replaced them with, and the ratchet went on reporting
+ * 5/5 holding. A gate that a comment can satisfy is not measuring the thing it
+ * claims to measure.
+ *
+ * This is deliberately cruder than the dash scanner below, which has to know
+ * about JSX because a dash is legal in JSX text. Here the only question is
+ * whether an identifier is executable, so blanking comments and string bodies
+ * is enough. Offsets are preserved so any future line reporting stays honest.
+ */
+function codeOnly(text) {
+  let out = '';
+  let i = 0;
+  while (i < text.length) {
+    const two = text.slice(i, i + 2);
+    if (two === '//') {
+      while (i < text.length && text[i] !== '\n') { out += ' '; i += 1; }
+      continue;
+    }
+    if (two === '/*') {
+      while (i < text.length && text.slice(i, i + 2) !== '*/') {
+        out += text[i] === '\n' ? '\n' : ' ';
+        i += 1;
+      }
+      out += '  ';
+      i += 2;
+      continue;
+    }
+    const q = text[i];
+    if (q === "'" || q === '"' || q === '`') {
+      out += q;
+      i += 1;
+      while (i < text.length && text[i] !== q) {
+        if (text[i] === '\\') { out += '  '; i += 2; continue; }
+        out += text[i] === '\n' ? '\n' : ' ';
+        i += 1;
+      }
+      out += q;
+      i += 1;
+      continue;
+    }
+    out += text[i];
+    i += 1;
+  }
+  return out;
+}
 
 function checkSpringRatchet() {
   const offenders = files.filter((file) => {
     const rel = path.relative(SRC, file);
     const top = rel.split(path.sep)[0];
     if (top === 'verbs' || top === 'pencil') return false;
-    return /\bspring\(/.test(fs.readFileSync(file, 'utf8'));
+    return /\bspring\(/.test(codeOnly(fs.readFileSync(file, 'utf8')));
   });
 
   if (offenders.length > SPRING_RATCHET_BASELINE) {

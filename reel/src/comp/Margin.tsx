@@ -33,8 +33,8 @@
  * whole difference between a point landing and a point being missed.
  */
 import React from 'react';
-import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { STAGE, TYPE } from '../theme';
+import { Dock } from '../verbs';
 
 /** One line of a slide. */
 export interface Line {
@@ -63,20 +63,44 @@ const splitFigure = (text: string): [string, string] => {
   return match ? [match[1]!, match[2]!] : ['', text];
 };
 
-/** Arrival: the same spring everywhere, so nothing has its own idea of timing. */
-const useArrival = (from: number) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  return spring({ frame: frame - from, fps, config: { damping: 200, mass: 0.6 } });
-};
+/**
+ * How long a slide's line takes to arrive: 35 frames, not the verb table's 22.
+ *
+ * This margin used to animate on a hand-rolled Remotion spring - `damping:
+ * 200`, `mass: 0.6` - and every `holdMs`/`tailMs` in `script.ts` was tuned by
+ * eye against it, against copy that had visibly stopped moving somewhere around
+ * half a second in. Remotion's own `measureSpring` puts that spring's settle at
+ * **35 frames** at 60fps (it crosses 90% at f=18, 95% at f=22, 99% at f=31).
+ * Docking in the verb's default 22f would land every line 10 to 15 frames
+ * early in all nine chapters at once, which would not read as a bug - it would
+ * read as a film that is slightly rushed everywhere, with nothing to point at.
+ *
+ * So the curve is the grammar's and the duration is the one the script was
+ * written against. `dock` takes a `frames` override precisely so a caller can
+ * say this out loud; a verb with an explicit frame count is still the verb, and
+ * the point of the migration is one shared curve and one shared vocabulary
+ * rather than one shared duration. Retiming the slides is a `script.ts` change,
+ * and a deliberate one, not a side effect of swapping a curve.
+ *
+ * `entrance` at 35f tracks that spring's whole tail to within about a frame at
+ * every threshold that matters (90% at f=18, 95% at f=23, 99% at f=29). The
+ * head differs and is meant to: `dock` is front-loaded and reaches full opacity
+ * inside its first 8f, so a line is legible sooner than it used to be while
+ * still travelling the same distance over the same window.
+ */
+const ARRIVAL_FRAMES = 35;
 
-const Headline: React.FC<{ line: Line }> = ({ line }) => {
-  const enter = useArrival(line.from);
-  return (
+const Headline: React.FC<{ line: Line }> = ({ line }) => (
+  // `edge="down"` and `rule={false}` are both deliberate. The slide's lines
+  // rise into place rather than arriving from the left, because the left edge
+  // here is already occupied by the margin's own 2px rule - the thing the whole
+  // slide hangs from - and docking copy through it would read as the copy
+  // crossing the rule rather than settling against it. For the same reason
+  // there is no accent hairline under each line: the rule beside them is the
+  // margin's only rule, and a second one per line would be seven of them.
+  <Dock from={line.from} edge="down" distance={20} frames={ARRIVAL_FRAMES} rule={false}>
     <div
       style={{
-        opacity: interpolate(enter, [0, 1], [0, 1]),
-        transform: `translateY(${(1 - enter) * 20}px)`,
         fontSize: TYPE.claim,
         fontWeight: 600,
         color: STAGE.ink,
@@ -86,37 +110,41 @@ const Headline: React.FC<{ line: Line }> = ({ line }) => {
     >
       {line.text}
     </div>
-  );
-};
+  </Dock>
+);
 
 const Point: React.FC<{ line: Line }> = ({ line }) => {
-  const enter = useArrival(line.from);
   const [figure, rest] = splitFigure(line.text);
   return (
-    <div
-      style={{
-        display: 'flex',
-        gap: 18,
-        marginTop: 26,
-        opacity: interpolate(enter, [0, 1], [0, 1]),
-        transform: `translateY(${(1 - enter) * 14}px)`,
-      }}
+    // A point travels 14px where a headline travels 20 - the same relationship
+    // the hand-rolled version had, kept because it is the slide's hierarchy
+    // rather than an accident: the thing that starts the slide moves further
+    // than the things that join it.
+    <Dock
+      from={line.from}
+      edge="down"
+      distance={14}
+      frames={ARRIVAL_FRAMES}
+      rule={false}
+      style={{ marginTop: 26 }}
     >
-      <span
-        style={{
-          flex: 'none',
-          width: 9,
-          height: 9,
-          marginTop: 14,
-          borderRadius: 2,
-          background: STAGE.accent,
-        }}
-      />
-      <span style={{ fontSize: TYPE.body, color: STAGE.inkDim, lineHeight: 1.45 }}>
-        {figure && <span style={{ color: STAGE.ink, fontWeight: 700 }}>{figure}</span>}
-        {rest}
-      </span>
-    </div>
+      <div style={{ display: 'flex', gap: 18 }}>
+        <span
+          style={{
+            flex: 'none',
+            width: 9,
+            height: 9,
+            marginTop: 14,
+            borderRadius: 2,
+            background: STAGE.accent,
+          }}
+        />
+        <span style={{ fontSize: TYPE.body, color: STAGE.inkDim, lineHeight: 1.45 }}>
+          {figure && <span style={{ color: STAGE.ink, fontWeight: 700 }}>{figure}</span>}
+          {rest}
+        </span>
+      </div>
+    </Dock>
   );
 };
 
