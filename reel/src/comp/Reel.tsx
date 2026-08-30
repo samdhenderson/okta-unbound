@@ -14,11 +14,13 @@
  */
 import React from 'react';
 import { AbsoluteFill, Series, interpolate, useCurrentFrame } from 'remotion';
-import { capture } from '../captures';
 import { SCRIPT } from '../script';
-import { Chapter, chapterLength, chapterTab } from './Chapter';
+import { Chapter, actLabelAt, chapterLength, chapterTab } from './Chapter';
 import { FilmIndex } from './FilmIndex';
 import { END_CARD_FRAMES, EndCard } from './EndCard';
+import { OPENING_FRAMES, Opening } from './Opening';
+import { SEAM_LANDED } from './Overture';
+import { Seam } from './Seam';
 
 /** Frames the index band takes to hand over from one chapter to the next. */
 const SLIDE_FRAMES = 30;
@@ -28,16 +30,25 @@ const CHAPTERS = SCRIPT.map((scene, i) => ({
   scene,
   at: i,
   tab: chapterTab(scene),
-  kind: capture(scene.id).kind,
   from: SCRIPT.slice(0, i).reduce((total, earlier) => total + chapterLength(earlier), 0),
   length: chapterLength(scene),
 }));
 
-export const REEL_FRAMES = CHAPTERS.reduce((total, c) => total + c.length, 0) + END_CARD_FRAMES;
+export const REEL_FRAMES =
+  OPENING_FRAMES + CHAPTERS.reduce((total, c) => total + c.length, 0) + END_CARD_FRAMES;
 
-/** The band, driven by the film's own clock rather than any chapter's. */
+/**
+ * The band, driven by the film's own clock rather than any chapter's.
+ *
+ * Its clock starts at the first chapter, not at the first frame. `CHAPTERS`
+ * offsets are relative to the start of the series of chapters, and the opening
+ * sits in front of them — so the opening's frames are subtracted here rather
+ * than added to every offset above. The band is also hidden across the opening
+ * outright: it counts chapters, and the opening is not one.
+ */
 const Band: React.FC = () => {
-  const frame = useCurrentFrame();
+  const frame = useCurrentFrame() - OPENING_FRAMES;
+  if (frame < 0) return null;
   const index = Math.max(
     0,
     CHAPTERS.reduce((found, c, i) => (frame >= c.from ? i : found), 0),
@@ -71,15 +82,42 @@ const Band: React.FC = () => {
         tab={before.tab + (current.tab - before.tab) * slide}
         count={CHAPTERS.length}
         title={shown.scene.title}
-        kind={shown.kind}
+        label={actLabelAt(shown.scene, frame - shown.from)}
       />
     </div>
   );
 };
 
+/**
+ * The last chapter's final frame, in the film's own absolute frames.
+ *
+ * The seam needs this and `Band` already computes the same number for its own
+ * fade, but chapter-relative. Hoisting it here rather than passing `Band`'s
+ * copy keeps the two from drifting when a chapter is retimed.
+ */
+const CHAPTERS_CLOSE = OPENING_FRAMES + CHAPTERS.reduce((total, c) => total + c.length, 0);
+
+/**
+ * The film, with its two pieces of furniture drawn over the top of it.
+ *
+ * `Band` and `Seam` are both outside the `<Series>` for the same reason: they
+ * belong to the film rather than to a chapter, and a component rendered inside
+ * a chapter cannot slide from one into the next. The seam additionally cannot
+ * be drawn by both sides of a cut, because the cut into chapter one comes from
+ * the premise card, whose exit fades its whole fill to zero, while a chapter's
+ * own panel opacity is already 1 at its frame 0. A seam driven by either would
+ * jump on the cut. Hoisted, it has one clock and no boundary to match.
+ */
+const SeamOverFilm: React.FC = () => (
+  <Seam frame={useCurrentFrame()} arriveAt={SEAM_LANDED} recedeAt={CHAPTERS_CLOSE} />
+);
+
 export const Reel: React.FC = () => (
   <AbsoluteFill>
     <Series>
+      <Series.Sequence durationInFrames={OPENING_FRAMES}>
+        <Opening />
+      </Series.Sequence>
       {CHAPTERS.map(({ scene, length }) => (
         <Series.Sequence key={scene.id} durationInFrames={length}>
           <Chapter id={scene.id} rail={false} />
@@ -90,5 +128,6 @@ export const Reel: React.FC = () => (
       </Series.Sequence>
     </Series>
     <Band />
+    <SeamOverFilm />
   </AbsoluteFill>
 );

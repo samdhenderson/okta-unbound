@@ -100,6 +100,19 @@ export const Searching: Story = {
 };
 
 /**
+ * A *refining* search: the reader has typed further and a newer search is in
+ * flight, but the rows from the previous one are still on screen. Unmounting
+ * them here is what made the bar flash on every settle — the answers vanished
+ * and the stagger replayed for a query still being typed. The spinner carries
+ * the "newer answer coming" signal instead.
+ */
+export const SearchingOverResults: Story = {
+  args: {
+    jump: jumpState({ query: 'engineering', mode: 'searching', results: [GROUP, USER] }),
+  },
+};
+
+/**
  * The design's "Resolving" state: an id returned the entity and the rules
  * touching it, each row labelled with the tab it opens. Resolved from the local
  * snapshot, so the footnote says **no request**.

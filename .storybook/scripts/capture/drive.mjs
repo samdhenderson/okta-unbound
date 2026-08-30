@@ -493,7 +493,7 @@ export function createDriver(page, { scale, panel, now, trace }) {
       const found = await find(locator);
       if (!found) throw new Error(`scrollTo: no element for ${locator}`);
       await found.evaluate(
-        (el, [selector, duration]) =>
+        (el, [selector, duration, tail]) =>
           new Promise((resolve) => {
             // The nearest scrollable ancestor, never anything above the panel.
             // Hardcoding the app's scroller is wrong on the comparison surface,
@@ -523,7 +523,16 @@ export function createDriver(page, { scale, panel, now, trace }) {
             // Declared here rather than at the top: a call that resolves without
             // moving anything must not open a window, or "declare everything"
             // stops meaning anything.
-            window.__CAP__?.declare('scroll', duration);
+            //
+            // The window covers the scroll **and the hold after it**, because a
+            // scroll's consequences land after the scroll has stopped: sticky
+            // bands re-pin, `useStaggerReveal` releases the rows that just
+            // crossed the fold, and a header collapses. A ledger that closed at
+            // the last scroll frame was measuring the cause and calling the
+            // effect an undeclared jump - which is what it did to the Users
+            // chapter's scroll back up to the pane header, 200ms of settling
+            // reported as four violations.
+            window.__CAP__?.declare('scroll', duration + tail);
             const started = performance.now();
             const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
             const step = (nowMs) => {
@@ -534,7 +543,7 @@ export function createDriver(page, { scale, panel, now, trace }) {
             };
             requestAnimationFrame(step);
           }),
-        [SCROLL_ROOT, ms],
+        [SCROLL_ROOT, ms, settleMs],
       );
       await hold(settleMs);
       return true;

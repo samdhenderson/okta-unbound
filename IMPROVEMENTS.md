@@ -761,7 +761,69 @@ block says they mean — same vocabulary, one definition, defined there.
   `useOrgFigures.test.tsx:130-131` asserts the current plural nouns and will
   need retargeting to the new contract.
 
-### I-025 · A snapshot cannot ask for a field it did not used to store
+### I-025 · The capture fingerprint does not cover the app it films
+
+- **Category:** tooling
+- **Priority:** P2
+- **Size:** M
+- **Verified:** 2026-08-28
+- **Files:** `.storybook/scripts/capture/capture.mjs:92-98` (`SHARED_INPUTS`)
+- **Problem:** A clip's fingerprint hashes `src/sidepanel/demo`, four rig
+  modules and the chapter's own walk. It does not hash the panel. So a change to
+  the product a chapter is _about_ leaves every clip reading as current, and the
+  reel goes on showing behaviour the extension no longer has - silently, since
+  "unchanged" is exactly what a correct cache reports.
+
+  Not hypothetical. `D-064` changed how the Groups pane behaves after a profile
+  write; `npm run capture -- users-fix` answered "unchanged" over footage of the
+  old behaviour, and the only reason the reel is right is that the manifest was
+  deleted by hand to force a re-shoot.
+
+  The obvious fix - add `src/sidepanel` - is not obviously correct: every
+  product commit would then re-film every chapter, about 4 minutes, which is a
+  real tax on unrelated work. Worth considering instead: hash only what a
+  chapter's own story mounts, or accept the cost and make the shoot incremental
+  in CI rather than local.
+
+- **Done when:** a change to the code a chapter films invalidates that chapter,
+  by some rule that does not re-film all nine for an unrelated commit. Whatever
+  is chosen is recorded next to `SHARED_INPUTS`, since the current list reads as
+  complete and is not.
+- **Related:** ADR-0045 (capture thin, compose in React), D-064
+
+### I-026 · The demo org derives memberships from rules it does not declare
+
+- **Category:** fixtures
+- **Priority:** P3
+- **Size:** M
+- **Verified:** 2026-08-28
+- **Files:** `src/sidepanel/demo/memberships.ts` (`RULE_FED`),
+  `src/sidepanel/demo/snapshot.ts` (`demoRules`)
+- **Problem:** `RULE_FED` fills roughly twenty groups from predicates - ten
+  departments, the office groups, `Datadog - Engineering`, `everyone`,
+  `workdayAllWorkers`. `demoRules` declares nine rules. The two lists are not
+  the same list, and nothing checks that they are.
+
+  It shows on camera. The Users chapter corrects a `department` and the blast
+  radius predicts two groups will move, by name, and three do: the third is
+  `Datadog - Engineering`, whose membership derives from a `department`
+  predicate that no rule in the org expresses, so the panel had nothing to
+  predict from and was right not to guess. The reel narrates the two it named
+  and stays quiet about the third, which is accurate but is working around a
+  fixture that says two different things about the same group.
+
+  It also makes Home's strongest finding harder to trust than it should be:
+  "Groups no rule fills" counts groups with no rule, and some of those groups
+  are visibly filled by a predicate.
+
+- **Done when:** every group in `RULE_FED` has a rule in `demoRules` whose
+  expression is the predicate, or is moved out of `RULE_FED`. A test asserts the
+  two agree, because the drift is invisible until something evaluates the rules
+  rather than the predicates. Note this re-films every chapter and moves Home's
+  `unruled` figure.
+- **Related:** ADR-0043 (memberships are derived, not asserted), ADR-0052
+
+### I-027 · A snapshot cannot ask for a field it did not used to store
 
 - **Category:** architecture
 - **Priority:** P3
@@ -796,7 +858,7 @@ block says they mean — same vocabulary, one definition, defined there.
   collection on every release, which is exactly the cost ADR-0040 exists to
   avoid. Wants an ADR before code.
 
-### I-026 · Dormant access: the report `lastMembershipUpdated` actually unlocks
+### I-028 · Dormant access: the report `lastMembershipUpdated` actually unlocks
 
 - **Category:** feature
 - **Priority:** P2
@@ -828,5 +890,5 @@ block says they mean — same vocabulary, one definition, defined there.
   the upstream directory is quiet.
 - **Risk:** Low to build, but it is a new security-relevant report and the
   claims it makes are stronger than the existing ones, so it wants an ADR
-  fixing the wording before the code. Depends on `D-074` for the numbers to be
+  fixing the wording before the code. Depends on `D-076` for the numbers to be
   trustworthy on a long-lived snapshot.

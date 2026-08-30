@@ -61,11 +61,17 @@ export const JUMP_SEARCH_MIN_CHARS = 3;
 /**
  * How long typing must pause before a search is issued.
  *
- * 300ms, matching the live group search rather than the Users tab's 600ms: this
- * is the panel's primary entry point, and 600 reads as lag on a surface whose
- * whole job is to get out of the way.
+ * 600ms, the same window the Users tab's search uses. It was 300ms — chosen on
+ * the theory that the panel's front door should feel quicker than a list tab —
+ * and that reasoning had the sign backwards. Home fans out over several
+ * endpoints per settle and replaces the whole result list with what comes back,
+ * so a window short enough to fit *between* two keystrokes turns ordinary typing
+ * into a search per character: the list re-resolves under the reader mid-word,
+ * over and over. A shorter debounce did not make the surface feel faster, it
+ * made it feel unstable. 600 is long enough that a word is typed before anything
+ * is spent, and Enter still bypasses it for a reader who is already done.
  */
-export const JUMP_SEARCH_DEBOUNCE_MS = 300;
+export const JUMP_SEARCH_DEBOUNCE_MS = 600;
 
 /** What the jump bar is currently doing. */
 export type JumpMode = 'idle' | 'searching' | 'resolving' | 'results' | 'error';

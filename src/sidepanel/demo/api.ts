@@ -20,18 +20,25 @@
  *   memberships instead of asserting counts.
  */
 import type { MemberMfaResult, OktaGroup, OktaUser } from '../../shared/types';
+import type { OktaUserProfileSchema } from '../../shared/schemas/okta';
+import type { RawOktaGroup } from '../components/groups/groupSummary';
 import { summarizeFactors } from '../../shared/utils/mfaUtils';
+import {
+  assertNoExcludedKeys,
+  type UpdateProfileResult,
+} from '../hooks/useOktaApi/profileOperations';
 import {
   summarizeRuleImpact,
   toImpactRule,
   type RuleImpactSummary,
   type TargetGroupMembers,
 } from '../../shared/membership/ruleImpact';
-import type { DemoControls } from './control';
+import { republishDemoGroups, type DemoControls } from './control';
 import { demoFactorsFor } from './factors';
+import { DEMO_USER_PROFILE_SCHEMA } from './profileSchema';
 import { demoGroupMembers, demoUserGroups } from './memberships';
-import { demoApps, demoGroups, demoGroupsById, demoRules } from './snapshot';
-import { demoUsers, demoUsersById } from './users';
+import { applyProfilePatch, currentUserById, currentUsers, type DemoProfilePatch } from './state';
+import { currentGroups, currentGroupsById, demoApps, demoRules } from './snapshot';
 
 /** A `{ success, data }` envelope, matching what the real core transport returns. */
 interface DemoResult {
@@ -44,7 +51,7 @@ const ok = (data: unknown): DemoResult => ({ success: true, data });
 
 /** Narrow a raw demo group to the `OktaGroup` shape the panel's types use. */
 function asOktaGroup(id: string): OktaGroup | null {
-  const raw = demoGroupsById.get(id);
+  const raw = currentGroupsById().get(id);
   if (!raw) return null;
   return {
     id: raw.id,
@@ -89,8 +96,8 @@ function matchesQuery(user: OktaUser, query: string): boolean {
 
 /** Everyone in a group, resolved from the derived memberships. */
 export function demoMembersOf(groupId: string): OktaUser[] {
-  const ids = demoGroupMembers.get(groupId) ?? [];
-  return ids.map((id) => demoUsersById.get(id)).filter((u): u is OktaUser => Boolean(u));
+  const ids = demoGroupMembers().get(groupId) ?? [];
+  return ids.map((id) => currentUserById(id)).filter((u): u is OktaUser => Boolean(u));
 }
 
 /**
@@ -126,8 +133,8 @@ export async function demoMakeApiRequest(endpoint?: string): Promise<DemoResult>
 
   const userId = captured(/^\/api\/v1\/users\/([^/]+)\/groups$/);
   if (userId !== undefined) {
-    const ids = demoUserGroups.get(userId) ?? [];
-    return ok(ids.map((id) => demoGroupsById.get(id)).filter(Boolean));
+    const ids = demoUserGroups().get(userId) ?? [];
+    return ok(ids.map((id) => currentGroupsById().get(id)).filter(Boolean));
   }
 
   const memberGroupId = captured(/^\/api\/v1\/groups\/([^/]+)\/users$/);
@@ -136,11 +143,11 @@ export async function demoMakeApiRequest(endpoint?: string): Promise<DemoResult>
   if (path === '/api/v1/groups/rules') return ok(demoRules);
 
   const groupId = captured(/^\/api\/v1\/groups\/([^/]+)$/);
-  if (groupId !== undefined) return ok(demoGroupsById.get(groupId) ?? null);
+  if (groupId !== undefined) return ok(currentGroupsById().get(groupId) ?? null);
 
   if (path === '/api/v1/groups') {
     const q = queryParam(queryString, 'q');
-    const hits = demoGroups.filter((g) =>
+    const hits = currentGroups().filter((g) =>
       (g.profile?.name ?? '').toLowerCase().includes(q.toLowerCase()),
     );
     return ok(hits.slice(0, 20));
@@ -148,7 +155,11 @@ export async function demoMakeApiRequest(endpoint?: string): Promise<DemoResult>
 
   if (path === '/api/v1/users') {
     const q = queryParam(queryString, 'q') || queryParam(queryString, 'search');
-    return ok(demoUsers.filter((u) => matchesQuery(u, q)).slice(0, 20));
+    return ok(
+      currentUsers()
+        .filter((u) => matchesQuery(u, q))
+        .slice(0, 20),
+    );
   }
 
   // The factors route exists so a direct-transport caller and the named
@@ -157,7 +168,7 @@ export async function demoMakeApiRequest(endpoint?: string): Promise<DemoResult>
   if (factorsUserId !== undefined) return ok(demoFactorsFor(factorsUserId));
 
   const singleUserId = captured(/^\/api\/v1\/users\/([^/]+)$/);
-  if (singleUserId !== undefined) return ok(demoUsersById.get(singleUserId) ?? null);
+  if (singleUserId !== undefined) return ok(currentUserById(singleUserId) ?? null);
 
   if (path.startsWith('/api/v1/apps')) return ok(demoApps);
 
@@ -178,7 +189,7 @@ export async function demoCaptureRuleImpact(rule: {
   const targetIds = subject?.actions?.assignUserToGroups?.groupIds ?? [];
 
   const targets: TargetGroupMembers[] = targetIds.map((groupId) => {
-    const raw = demoGroupsById.get(groupId);
+    const raw = currentGroupsById().get(groupId);
     return {
       groupId,
       groupName: raw?.profile?.name ?? groupId,
@@ -195,6 +206,63 @@ export async function demoCaptureRuleImpact(rule: {
   );
 }
 
+/**
+ * The org's one write: a sparse profile patch, applied for real.
+ *
+ * Mirrors `useOktaApi`'s `updateUserProfile` (`profileOperations.ts`) rather than
+ * approximating it, because the reel's payoff turns on the whole chain behaving:
+ * the patch applies, every rule-fed membership re-derives from the rules' own
+ * predicates, the group rows are re-published, and the panel repaints off its
+ * real `snapshotUpdated` listener. A stub that returned `saved` and changed
+ * nothing would film an admin correcting an attribute and a group appearing for
+ * no reason.
+ *
+ * Two things it deliberately keeps from the real operation:
+ *
+ * - **The three-state result.** `saved` / `failed` / `unknown` are not
+ *   interchangeable, and the panel branches on `kind`. Note that the Storybook
+ *   facade mock's canned `{ outcome: 'saved' }` does not match that shape at all
+ *   and never satisfied the `kind === 'saved'` branch; this replaces it.
+ * - **`assertNoExcludedKeys`, imported rather than reimplemented.** The real
+ *   write refuses credential fields at the request boundary precisely so that no
+ *   future caller can reach the endpoint with one in hand. A demo that skipped
+ *   the check would be the one caller that can, which is the wrong thing for a
+ *   fixture to teach.
+ *
+ * @param userId - Okta id of the user being written.
+ * @param patch - Sparse profile patch; keys absent from it are untouched.
+ */
+export async function demoUpdateUserProfile(
+  userId: string,
+  patch: Record<string, unknown>,
+): Promise<UpdateProfileResult> {
+  const attributeCount = Object.keys(patch).length;
+  if (attributeCount === 0) throw new Error('Refusing to write an empty profile patch');
+  assertNoExcludedKeys(patch);
+
+  const before = currentUserById(userId);
+  if (!before) {
+    // Okta answered and said no such user. `failed`, not `unknown`: nothing was
+    // written and we know it.
+    return { kind: 'failed', error: 'No user in this org has that id' };
+  }
+
+  applyProfilePatch(userId, patch as DemoProfilePatch);
+  // Headcounts have moved. Publish them before returning, so the caller's own
+  // re-read cannot land between the patch and the rows that reflect it.
+  await republishDemoGroups();
+
+  const after = currentUserById(userId);
+  if (!after) {
+    // Unreachable while `applyProfilePatch` only ever merges, but the real
+    // operation's `unknown` exists for exactly this shape of doubt and
+    // collapsing it to `failed` would tell an admin their edit did not happen
+    // when it did.
+    return { kind: 'unknown', error: 'The update could not be confirmed' };
+  }
+  return { kind: 'saved', user: after };
+}
+
 /** Everyone in a group. */
 export async function demoGetAllGroupMembers(groupId: string): Promise<OktaUser[]> {
   return demoMembersOf(groupId);
@@ -207,13 +275,13 @@ export async function demoGetGroupById(groupId: string): Promise<OktaGroup | nul
 
 /** How many members a group has. */
 export async function demoGetGroupMemberCount(groupId: string): Promise<number> {
-  return demoGroupMembers.get(groupId)?.length ?? 0;
+  return demoGroupMembers().get(groupId)?.length ?? 0;
 }
 
 /** Search users by name/email/login. */
 export async function demoSearchUsers(query: string): Promise<FlatUser[]> {
   if (query.trim().length < 2) return [];
-  return demoUsers
+  return currentUsers()
     .filter((u) => matchesQuery(u, query))
     .slice(0, 20)
     .map(flatten);
@@ -221,23 +289,34 @@ export async function demoSearchUsers(query: string): Promise<FlatUser[]> {
 
 /** One user, flattened. */
 export async function demoGetUserById(userId: string): Promise<FlatUser | null> {
-  const user = demoUsersById.get(userId);
+  const user = currentUserById(userId);
   return user ? flatten(user) : null;
+}
+
+/**
+ * The org's user profile schema.
+ *
+ * Fixture rather than absence: the edit gate is deny-by-default, so an org that
+ * answers `null` here has no editable attribute anywhere. See
+ * {@link module:sidepanel/demo/profileSchema}.
+ */
+export async function demoGetUserProfileSchema(): Promise<OktaUserProfileSchema> {
+  return DEMO_USER_PROFILE_SCHEMA;
 }
 
 /** The whole validated user, profile included — what a profile editor needs. */
 export async function demoGetUserRaw(userId: string): Promise<OktaUser | null> {
-  return demoUsersById.get(userId) ?? null;
+  return currentUserById(userId) ?? null;
 }
 
 /** How many groups a user belongs to. */
 export async function demoGetUserGroupMemberships(userId: string): Promise<number> {
-  return demoUserGroups.get(userId)?.length ?? 0;
+  return demoUserGroups().get(userId)?.length ?? 0;
 }
 
 /** A user's last sign-in, or `null` when they have never signed in. */
 export async function demoGetUserLastLogin(userId: string): Promise<Date | null> {
-  const last = demoUsersById.get(userId)?.lastLogin;
+  const last = currentUserById(userId)?.lastLogin;
   return last ? new Date(last) : null;
 }
 
@@ -245,7 +324,7 @@ export async function demoGetUserLastLogin(userId: string): Promise<Date | null>
 export async function demoBatchGetUserDetails(userIds: string[]): Promise<Map<string, OktaUser>> {
   const out = new Map<string, OktaUser>();
   for (const id of userIds) {
-    const user = demoUsersById.get(id);
+    const user = currentUserById(id);
     if (user) out.set(id, user);
   }
   return out;
@@ -260,11 +339,11 @@ export async function demoBatchGetUserDetails(userIds: string[]): Promise<Map<st
 export async function demoGetUserApps(
   userId: string,
 ): Promise<{ apps: { id: string; label: string; groupId?: string }[]; complete: boolean }> {
-  const groupIds = demoUserGroups.get(userId) ?? [];
+  const groupIds = demoUserGroups().get(userId) ?? [];
   const apps = new Map<string, { id: string; label: string; groupId?: string }>();
 
   for (const groupId of groupIds) {
-    const source = demoGroupsById.get(groupId)?.source;
+    const source = currentGroupsById().get(groupId)?.source;
     if (!source) continue;
     if (!apps.has(source.id)) {
       apps.set(source.id, { id: source.id, label: source.name ?? source.id, groupId });
@@ -275,14 +354,16 @@ export async function demoGetUserApps(
 }
 
 /** The org's groups, raw. */
-export async function demoGetAllGroups(): Promise<typeof demoGroups> {
-  return demoGroups;
+export async function demoGetAllGroups(): Promise<RawOktaGroup[]> {
+  return [...currentGroups()];
 }
 
 /** Groups matching a search string. */
-export async function demoSearchGroups(query: string): Promise<typeof demoGroups> {
+export async function demoSearchGroups(query: string): Promise<RawOktaGroup[]> {
   const q = query.toLowerCase();
-  return demoGroups.filter((g) => (g.profile?.name ?? '').toLowerCase().includes(q)).slice(0, 20);
+  return currentGroups()
+    .filter((g) => (g.profile?.name ?? '').toLowerCase().includes(q))
+    .slice(0, 20);
 }
 
 /** Every rule that assigns into a group. */

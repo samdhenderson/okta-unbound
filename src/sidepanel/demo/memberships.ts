@@ -12,11 +12,42 @@
  * *why* someone is a member; if memberships were hand-listed and counts were
  * hand-typed, the scene would be filming a lie that happens to look right.
  *
- * Import order is `org → users → memberships → snapshot`. This module must not
- * import from `./snapshot`, or the graph gains a cycle (`npm run knip:circular`).
+ * ## Derivation is now continuous, not once at module load
+ *
+ * The reel's Users chapter ends on an admin correcting a mis-typed `department`
+ * and the rule that reads it then applying, so the org has to be able to change
+ * (ADR-0052). Rule-fed membership is therefore re-derived whenever
+ * {@link module:sidepanel/demo/state} reports a write, over
+ * {@link currentUsers} rather than over the frozen seed.
+ *
+ * That strengthens the property this module was built around rather than
+ * weakening it. "Membership is computed from the rule's own predicate" used to
+ * be true of one snapshot taken at import; it is now true continuously, which is
+ * exactly what makes the payoff honest: nobody adds Priya to `Engineering - All`
+ * when her department is fixed, the predicate simply starts matching her.
+ *
+ * ## The hand-managed carve-out, and the line it must not be read across
+ *
+ * {@link HAND_MANAGED} groups are sampled once and then hold their id list for
+ * the life of the page. They have **no predicate** — that is what makes them
+ * hand-managed, and it is the contrast the drilldown scene needs against the
+ * rule-fed rows. Re-sampling them on every write would reshuffle six unrelated
+ * groups on camera because a seeded draw over a changed eligible pool lands
+ * somewhere else, which is motion nobody asked for and cannot explain.
+ *
+ * Freezing the sample of a group that has no predicate is **not** the same thing
+ * as hand-listing a membership to make a shot work, and the distinction is
+ * load-bearing: the first is the only way to model a group a human curates, the
+ * second is banned. If a scene needs a rule-fed outcome, change the predicate or
+ * change the user - never write an id into a list.
+ *
+ * Import order is `org → users → state → memberships → snapshot`. This module
+ * must not import from `./snapshot`, or the graph gains a cycle
+ * (`npm run knip:circular`).
  */
 import type { OktaUser } from '../../shared/types';
 import { EMEA_COUNTRIES, SeededRandom, fakeId } from './org';
+import { currentUsers, demoRevision } from './state';
 import { demoUsers } from './users';
 
 /**
@@ -60,6 +91,9 @@ export const GROUP = {
   githubEngineering: 32,
   zoomLicensed: 33,
   datadogEngineering: 34,
+  migrationAccess: 35,
+  salesEmeaLegacy: 36,
+  verifyRollout: 37,
 } as const;
 
 /** The departments that get a rule-fed `<Department> - All` group. */
@@ -208,16 +242,24 @@ const HAND_MANAGED: readonly {
   },
 ];
 
-function buildMemberships(): Map<string, string[]> {
-  const byGroup = new Map<string, string[]>();
+/**
+ * The hand-managed draw, taken once and kept.
+ *
+ * Sampled from the **seed** rather than from the current users, and never
+ * re-sampled. See the module header for why that is not the same act as
+ * hand-listing a membership: these groups have no predicate to re-apply, so
+ * there is nothing to re-derive, and a seeded draw over a changed eligible pool
+ * would simply land somewhere else.
+ *
+ * It also happens to model the real thing correctly. Correcting somebody's
+ * department must not silently put them on the incident-response rota, because
+ * in a real org a human decides that.
+ */
+let handManaged: ReadonlyMap<string, readonly string[]> | null = null;
 
-  for (const { ordinal, predicate } of RULE_FED) {
-    byGroup.set(
-      fakeId('00g', ordinal),
-      demoUsers.filter(predicate).map((u) => u.id),
-    );
-  }
-
+function sampleHandManaged(): ReadonlyMap<string, readonly string[]> {
+  if (handManaged) return handManaged;
+  const byGroup = new Map<string, readonly string[]>();
   const rng = new SeededRandom(778899);
   for (const { ordinal, size, eligible } of HAND_MANAGED) {
     const pool = demoUsers.filter(eligible);
@@ -238,29 +280,61 @@ function buildMemberships(): Map<string, string[]> {
     }
     byGroup.set(fakeId('00g', ordinal), chosen);
   }
-
-  return byGroup;
+  handManaged = byGroup;
+  return handManaged;
 }
 
-/** Group id → the ids of everyone in it. */
-export const demoGroupMembers: ReadonlyMap<string, readonly string[]> = buildMemberships();
+/** Memoised derivation, rebuilt only when {@link demoRevision} moves. */
+let memoRevision = -1;
+let memoByGroup: ReadonlyMap<string, readonly string[]> = new Map();
+let memoByUser: ReadonlyMap<string, readonly string[]> = new Map();
 
-/** How many members group `ordinal` has. Feeds the raw `_embedded.stats.usersCount`. */
-export function demoMemberCount(ordinal: number): number {
-  return demoGroupMembers.get(fakeId('00g', ordinal))?.length ?? 0;
-}
+function derive(): void {
+  const revision = demoRevision();
+  if (memoRevision === revision) return;
 
-function buildUserGroups(): Map<string, string[]> {
+  const users = currentUsers();
+  const byGroup = new Map<string, readonly string[]>(sampleHandManaged());
+
+  // The only half that re-derives. Every one of these predicates mirrors the
+  // expression of the rule that feeds the group, so a profile edit changes
+  // membership by the same route Okta would: the predicate starts, or stops,
+  // matching.
+  for (const { ordinal, predicate } of RULE_FED) {
+    byGroup.set(
+      fakeId('00g', ordinal),
+      users.filter(predicate).map((u) => u.id),
+    );
+  }
+
   const byUser = new Map<string, string[]>();
-  for (const [groupId, memberIds] of demoGroupMembers) {
+  for (const [groupId, memberIds] of byGroup) {
     for (const userId of memberIds) {
       const existing = byUser.get(userId);
       if (existing) existing.push(groupId);
       else byUser.set(userId, [groupId]);
     }
   }
-  return byUser;
+
+  memoByGroup = byGroup;
+  memoByUser = byUser;
+  memoRevision = revision;
 }
 
-/** User id → the ids of every group they belong to. */
-export const demoUserGroups: ReadonlyMap<string, readonly string[]> = buildUserGroups();
+/**
+ * Group id → the ids of everyone in it, as the org stands now.
+ *
+ * A function rather than the constant it used to be, because the org can be
+ * written to (ADR-0052). Callers must not hold the returned map across a write:
+ * read it again instead, which costs a revision comparison when nothing changed.
+ */
+export function demoGroupMembers(): ReadonlyMap<string, readonly string[]> {
+  derive();
+  return memoByGroup;
+}
+
+/** User id → the ids of every group they belong to, as the org stands now. */
+export function demoUserGroups(): ReadonlyMap<string, readonly string[]> {
+  derive();
+  return memoByUser;
+}

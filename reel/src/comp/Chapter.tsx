@@ -1,6 +1,12 @@
 /**
  * @module reel/comp/Chapter
- * @description One chapter: a retimed walk, and the argument beside it.
+ * @description One chapter: one tab, one or more acts, and the argument beside them.
+ *
+ * A chapter is a `<Series>` of acts and an act is one capture (ADR-0053). A
+ * chapter that carries three scenarios is three clips, so a walk change
+ * re-films the twenty seconds it touched rather than the whole chapter, and a
+ * beat that misses ends its act rather than the argument either side of it. A
+ * one-act chapter is the degenerate case and needs no special handling.
  *
  * The whole assembly is derived from two inputs — the capture's manifest and
  * the chapter's entry in `script.ts` — and nothing here holds state. Change the
@@ -13,8 +19,8 @@
  * the beat means the caption follows.
  */
 import React, { useMemo } from 'react';
-import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
-import { capture, clip, type Manifest } from '../captures';
+import { AbsoluteFill, Series, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
+import { capture, clip, type CaptureId, type Manifest } from '../captures';
 import { buildRamp } from '../ramp';
 import {
   STAGES,
@@ -26,7 +32,8 @@ import {
   type Rect,
   type StageName,
 } from '../layout';
-import { SCRIPT, type Scene } from '../script';
+import { SCRIPT, type Act, type FilmAct, type PieceAct, type Scene } from '../script';
+import { PIECES, piece } from '../pieces';
 import { Backdrop } from './Backdrop';
 import { TAB_DEFS } from '../../../src/sidepanel/tabs';
 import { FilmIndex } from './FilmIndex';
@@ -60,13 +67,43 @@ interface Cue {
   crop: Crop;
   /** Did this mark move the camera? A diagram's lifetime ends at the next one that did. */
   movesCamera: boolean;
-  lines: { register: Line['register']; text: string }[];
+  lines: { kind: Line['kind']; text: string }[];
   diagram?: (manifest: Manifest, plot: Rect, from: number) => React.ReactNode;
+}
+
+/**
+ * The footage an act is about: what it plays, or what a set piece dramatises.
+ *
+ * A piece plays no frames, and it is still tied to a capture - its figures came
+ * off that panel, and it films the same tab, so everything that reasons about a
+ * chapter's footage reasons about a piece's `from` too. One accessor rather
+ * than a `kind` check at each of those call sites.
+ */
+export function actCapture(act: Act): CaptureId {
+  return act.kind === 'piece' ? act.from : act.capture;
+}
+
+/** A stable key for an act within its chapter. Pieces have no capture to name. */
+function actKey(act: Act, index: number): string {
+  return `${act.kind === 'piece' ? `piece-${act.piece}` : act.capture}-${index}`;
+}
+
+/** How long each act runs, in order. The chapter's own layout, and the band's. */
+export function actLengths(scene: Scene): number[] {
+  return scene.acts.map((act) =>
+    act.kind === 'piece'
+      ? // A literal from the piece's own module, never a computation. `Reel`
+        // builds `CHAPTERS` at module scope, so anything that can throw on this
+        // path takes the whole bundle down instead of one composition. See
+        // `pieces/index.ts`.
+        PIECES[act.piece].frames
+      : buildRamp(capture(act.capture), act.plan, FRAME.fps).durationInFrames,
+  );
 }
 
 /** How long a whole chapter runs. Needed before rendering to lay out the series. */
 export function chapterLength(scene: Scene): number {
-  return buildRamp(capture(scene.id), scene.plan, FRAME.fps).durationInFrames;
+  return actLengths(scene).reduce((total, length) => total + length, 0);
 }
 
 /**
@@ -74,9 +111,24 @@ export function chapterLength(scene: Scene): number {
  *
  * The registry is the source, not a transcription, so a renamed or reordered
  * tab cannot silently desync the film's index from the product's navigation.
+ *
+ * **And every act in a chapter has to film the same tab.** That is the one
+ * invariant acts exist to hold: a chapter is a tab, visited once, and a second
+ * act shot somewhere else would put the film's rail back where the restructure
+ * took it from - moving backwards inside a chapter, with the band still naming
+ * the tab it left. Checked here rather than trusted, because the tab is a
+ * property of the footage and nothing in the script states it.
  */
 export function chapterTab(scene: Scene): number {
-  const { tab } = capture(scene.id);
+  const tabs = scene.acts.map((act) => capture(actCapture(act)).tab);
+  const [tab] = tabs;
+  const stray = scene.acts.find((act, i) => tabs[i] !== tab);
+  if (stray) {
+    throw new Error(
+      `Chapter "${scene.id}" films tab "${tab}" but its act "${actCapture(stray)}" films ` +
+        `"${capture(actCapture(stray)).tab}". A chapter is one tab (ADR-0053).`,
+    );
+  }
   const index = TAB_DEFS.findIndex((t) => t.id === tab);
   if (index < 0) {
     throw new Error(`Chapter "${scene.id}" films tab "${tab}", which is not in TAB_DEFS.`);
@@ -84,46 +136,90 @@ export function chapterTab(scene: Scene): number {
   return index;
 }
 
-type ChapterProps = {
-  id: string;
-  /**
-   * Draw the rail.
-   *
-   * `Reel` sets this false and draws one continuous rail of its own across
-   * every chapter, which is the only way the highlight can slide *between*
-   * them. A chapter rendered on its own draws a static one, so the per-chapter
-   * compositions still look like the film.
-   */
-  rail?: boolean;
-};
+/** The act running at a frame within a chapter, and where it started. */
+export function actAt(scene: Scene, frame: number): { act: Act; index: number; from: number } {
+  const lengths = actLengths(scene);
+  let from = 0;
+  for (const [index, length] of lengths.entries()) {
+    if (frame < from + length || index === lengths.length - 1) {
+      return { act: scene.acts[index]!, index, from };
+    }
+    from += length;
+  }
+  /* istanbul ignore next - unreachable: acts is non-empty and the loop returns on the last. */
+  throw new Error(`Chapter "${scene.id}" has no acts.`);
+}
 
 /**
- * A chapter is addressed by id, never handed its own `Scene`.
+ * What the band should say beside the chapter counter at a frame.
  *
- * That is a Remotion constraint with teeth: `defaultProps` on a `<Composition>`
- * are serialized to JSON so the studio can edit them, and **every function in
- * them is silently dropped**. Passing the scene object through props therefore
- * delivered a chapter with its captions intact and every `diagram` and every
- * computed proof line quietly missing — a render that succeeded and showed less
- * than it was asked to. Resolving from `SCRIPT` here keeps the functions.
+ * A set piece has no label of its own and inherits the one belonging to the act
+ * it interrupts. Reading `actAt(...).act.label` directly was fine while every
+ * act was footage; with a piece between two acts of one movement it blinks the
+ * label off for the piece's whole slot and back on afterwards, which reads as a
+ * fault rather than as a movement ending. So the search walks backwards to the
+ * nearest film act, which is the act the piece is part of.
  */
-export const Chapter: React.FC<ChapterProps> = ({ id, rail = true }) => {
+export function actLabelAt(scene: Scene, frame: number): string | undefined {
+  const { index } = actAt(scene, frame);
+  for (let i = index; i >= 0; i -= 1) {
+    const act = scene.acts[i]!;
+    if (act.kind !== 'piece') return act.label;
+  }
+  // A chapter opening on a piece has nothing to inherit. Legal, and unlabelled.
+  return undefined;
+}
+
+/** Look a chapter up, or fail naming what the film does have. */
+function sceneById(id: string): Scene {
   const scene = SCRIPT.find((s) => s.id === id);
   if (!scene) {
     throw new Error(`No chapter "${id}" in SCRIPT. Known: ${SCRIPT.map((s) => s.id).join(', ')}`);
   }
+  return scene;
+}
+
+type ActProps = {
+  /** The chapter this act belongs to. Resolved from `SCRIPT`, never passed. */
+  chapter: string;
+  /** Which act, by position. */
+  index: number;
+};
+
+/**
+ * One act: one clip, retimed, with its own margin and its own camera.
+ *
+ * The margin accumulates *within* an act and starts clean at the next one.
+ * That is deliberate rather than a limit of the sequencing: bands stack, and a
+ * three-act chapter that never cleared would be arguing its third scenario
+ * underneath six lines about the first two. An act is a scenario, and a
+ * scenario's evidence belongs to it.
+ */
+const ActFilm: React.FC<ActProps> = ({ chapter, index }) => {
+  const scene = sceneById(chapter);
+  const act = scene.acts[index];
+  if (!act) {
+    throw new Error(`Chapter "${chapter}" has no act ${index}; it has ${scene.acts.length}.`);
+  }
+  // Narrowed rather than assumed: `Chapter` picks the renderer off `kind`, so
+  // arriving here with a piece means the two disagree, and a wrong renderer on
+  // the right slot would otherwise fail somewhere deep in a manifest read.
+  if (act.kind === 'piece') {
+    throw new Error(`Chapter "${chapter}" act ${index} is the set piece "${act.piece}", not film.`);
+  }
+  const film: FilmAct = act;
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const manifest = capture(scene.id);
+  const manifest = capture(film.capture);
 
   if (manifest.panel.width !== 840 || manifest.panel.height !== 980) {
     throw new Error(
-      `${scene.id}: captured at ${manifest.panel.width}x${manifest.panel.height}, ` +
+      `${film.capture}: captured at ${manifest.panel.width}x${manifest.panel.height}, ` +
         'but the composition lays out for 840x980.',
     );
   }
 
-  const ramp = useMemo(() => buildRamp(manifest, scene.plan, fps), [manifest, scene.plan, fps]);
+  const ramp = useMemo(() => buildRamp(manifest, film.plan, fps), [manifest, film.plan, fps]);
 
   /**
    * Marks resolved to frames, with the stage and crop carried forward.
@@ -136,23 +232,66 @@ export const Chapter: React.FC<ChapterProps> = ({ id, rail = true }) => {
   // part of the product and stay on camera. See `PANEL_RECT` in the layout.
   const bare = FULL_CROP;
 
+  /**
+   * The stretch of clip this act plays, in clip ms.
+   *
+   * The plan is in reel order, so the window is the first planned beat's start
+   * to the last planned beat's end. It exists to make {@link Ramp.frameAtClipMs}
+   * fail loudly, because outside this window it does not fail at all: it clamps
+   * to frame 0 for a moment before the act and returns the act's last frame for
+   * a moment after it, both of which render a perfectly good chapter with a
+   * caption in the wrong place. That became reachable the moment one capture
+   * could be cut into two acts - a mark left behind in act A cued to a figure
+   * the panel showed during act B is exactly the mistake a split invites, and
+   * the guard below is what makes splitting an act safe to do again.
+   */
+  const played = useMemo(() => {
+    const byName = new Map(manifest.beats.map((beat) => [beat.name, beat]));
+    // `buildRamp` has already refused a plan naming a beat that was never
+    // filmed, so every lookup here resolves.
+    const planned = film.plan.map((entry) => byName.get(entry.beat)!);
+    return { at: planned[0]!.at, endAt: planned[planned.length - 1]!.endAt };
+  }, [film.plan, manifest]);
+
   const cues = useMemo<Cue[]>(() => {
     let stage: StageName = WORKING_STAGE;
     let crop = bare;
-    return scene.marks.map((mark) => {
+    return film.marks.map((mark) => {
       const cue = ramp.cues[mark.beat];
       if (!cue) {
         throw new Error(
-          `${scene.id}: mark on beat "${mark.beat}", which the plan does not include. ` +
-            `Planned: ${scene.plan.map((p) => p.beat).join(', ')}`,
+          `${film.capture}: mark on beat "${mark.beat}", which the plan does not include. ` +
+            `Planned: ${film.plan.map((p) => p.beat).join(', ')}`,
         );
       }
       const wasStage = stage;
       const wasCrop = crop;
       if (mark.stage) stage = mark.stage;
       crop = mark.crop ? fitCrop(mark.crop, PANEL_RECT) : bare;
+      // A mark cued to a figure lands where the panel was showing it. Resolved
+      // here so an unknown key fails the render rather than silently cueing at
+      // the beat's own start, which is the drift this exists to stop.
+      let base = cue.from;
+      if (mark.after !== undefined) {
+        const read = manifest.figures[mark.after];
+        if (!read) {
+          throw new Error(
+            `${film.capture}: mark cued after figure "${mark.after}", which was never read. ` +
+              `Read: ${Object.keys(manifest.figures).join(', ') || '(none)'}`,
+          );
+        }
+        if (read.at < played.at || read.at > played.endAt) {
+          throw new Error(
+            `${film.capture}: mark cued after figure "${mark.after}", read at ${read.at}ms, ` +
+              `which is outside act ${index}'s window of ${played.at}-${played.endAt}ms. ` +
+              'The act does not play that moment, so the cue would land silently at one ' +
+              'end of it. Move the mark to the act that plays the figure.',
+          );
+        }
+        base = ramp.frameAtClipMs(read.at);
+      }
       return {
-        from: cue.from + (mark.offset ?? 0),
+        from: base + (mark.offset ?? 0),
         stage,
         crop,
         // Whether the camera *moved*, not whether the mark mentioned it. A mark
@@ -160,14 +299,19 @@ export const Chapter: React.FC<ChapterProps> = ({ id, rail = true }) => {
         // a move would end the diagram beside it for nothing — which is what
         // happened the moment every chapter started by naming its home stage.
         movesCamera: stage !== wasStage || crop !== wasCrop,
-        lines: (mark.lines ?? []).map((line) => ({
-          register: line.register,
-          text: typeof line.text === 'function' ? line.text(manifest) : line.text,
-        })),
+        lines: [
+          ...(mark.headline === undefined
+            ? []
+            : [{ kind: 'headline' as const, text: mark.headline }]),
+          ...(mark.points ?? []).map((point) => ({
+            kind: 'point' as const,
+            text: typeof point === 'function' ? point(manifest) : point,
+          })),
+        ],
         diagram: mark.diagram,
       };
     });
-  }, [bare, manifest, ramp, scene]);
+  }, [film, bare, index, manifest, ramp, played]);
 
   // The active cue is the last one that has arrived, and the camera eases from
   // the one before it. Two cues, one interpolation: no state, no accumulation.
@@ -246,9 +390,26 @@ export const Chapter: React.FC<ChapterProps> = ({ id, rail = true }) => {
   const marginBox =
     STAGES[!moving || age >= MARGIN_CLEAR_FRAMES ? active.stage : previous.stage].margin;
 
-  /** Every line that has arrived, in order. Bands accumulate; they never replace. */
-  const lines: Line[] = cues
-    .filter((cue) => frame >= cue.from)
+  /**
+   * The slide on screen: the most recent headline, plus the points cued since.
+   *
+   * Slides replace rather than accumulate. The old margin let every band stay
+   * for the rest of the chapter, on the reasoning that a claim which scrolls
+   * away takes its evidence's subject with it - true of a band, false of a
+   * slide, because a slide carries its own subject in its headline. What
+   * accumulation actually produced was six lines by the end of a chapter with
+   * the newest at the bottom, which is the opposite of where the eye goes.
+   *
+   * Points cued before the first headline still show. A chapter is allowed to
+   * open on a point; it just has nothing to clear.
+   */
+  const arrived = cues.filter((cue) => frame >= cue.from);
+  const lastHeadline = arrived.reduce(
+    (found, cue, i) => (cue.lines.some((line) => line.kind === 'headline') ? i : found),
+    -1,
+  );
+  const lines: Line[] = arrived
+    .slice(Math.max(0, lastHeadline))
     .flatMap((cue) => cue.lines.map((line) => ({ ...line, from: cue.from })));
 
   /**
@@ -322,7 +483,13 @@ export const Chapter: React.FC<ChapterProps> = ({ id, rail = true }) => {
     <AbsoluteFill style={{ fontFamily: INTER, color: STAGE.ink }}>
       <Backdrop focusX={focusX} />
 
-      <Panel src={clip(scene.id)} ramp={ramp} pose={panel} crop={crop} reveal={reveal * panelOn} />
+      <Panel
+        src={clip(film.capture)}
+        ramp={ramp}
+        pose={panel}
+        crop={crop}
+        reveal={reveal * panelOn}
+      />
       {panelOn > 0.02 && (
         <div style={{ opacity: panelOn }}>
           <Cursor
@@ -345,14 +512,107 @@ export const Chapter: React.FC<ChapterProps> = ({ id, rail = true }) => {
           {entry.cue.diagram?.(manifest, STAGES[entry.cue.stage].plot, entry.cue.from)}
         </div>
       ))}
+    </AbsoluteFill>
+  );
+};
 
+/**
+ * One act with no footage: a set piece on the dark stage.
+ *
+ * The sibling of {@link ActFilm} and deliberately much thinner. There is no
+ * ramp, no clip, no cursor and no margin - a piece carries its own copy,
+ * because the whole reason it exists is that it can say a thing the margin
+ * beside a video cannot. What it shares with an act of film is the backdrop and
+ * the frame's own clock.
+ *
+ * **The piece is not wrapped in a `<Sequence>` of its own.** `Chapter`'s
+ * `<Series>` already places this act, so `useCurrentFrame()` here starts at 0
+ * on the piece's first frame - which is the clock every verb in `reel/verbs` is
+ * authored against. A further `<Sequence>` inside a piece would remap that to 0
+ * again and silently freeze every verb at its first pose. See
+ * `verbs/useVerb.ts`.
+ */
+const ActPiece: React.FC<ActProps> = ({ chapter, index }) => {
+  const scene = sceneById(chapter);
+  const act = scene.acts[index];
+  if (!act) {
+    throw new Error(`Chapter "${chapter}" has no act ${index}; it has ${scene.acts.length}.`);
+  }
+  if (act.kind !== 'piece') {
+    throw new Error(
+      `Chapter "${chapter}" act ${index} is footage ("${act.capture}"), not a piece.`,
+    );
+  }
+  const set: PieceAct = act;
+  const { component: Piece, frames } = piece(set.piece);
+
+  // The `focus` stage's plot: the rectangle a showcase gets when the panel has
+  // left. A piece is the same situation with no footage underneath, so it draws
+  // into the same place rather than inventing a second geometry for it.
+  const { plot } = STAGES.focus;
+
+  return (
+    <AbsoluteFill style={{ fontFamily: INTER, color: STAGE.ink }}>
+      <Backdrop focusX={plot.x + plot.width / 2} />
+      <Piece id={set.piece} frames={frames} plot={plot} manifest={capture(set.from)} />
+    </AbsoluteFill>
+  );
+};
+
+type ChapterProps = {
+  id: string;
+  /**
+   * Draw the rail.
+   *
+   * `Reel` sets this false and draws one continuous rail of its own across
+   * every chapter, which is the only way the highlight can slide *between*
+   * them. A chapter rendered on its own draws a static one, so the per-chapter
+   * compositions still look like the film.
+   */
+  rail?: boolean;
+};
+
+/**
+ * A chapter is addressed by id, never handed its own `Scene`.
+ *
+ * That is a Remotion constraint with teeth: `defaultProps` on a `<Composition>`
+ * are serialized to JSON so the studio can edit them, and **every function in
+ * them is silently dropped**. Passing the scene object through props therefore
+ * delivered a chapter with its captions intact and every `diagram` and every
+ * computed proof line quietly missing — a render that succeeded and showed less
+ * than it was asked to. Resolving from `SCRIPT` here keeps the functions.
+ *
+ * The band is drawn here rather than inside each act, and reads the running
+ * act's label off the chapter's own clock. Inside an act it would remount at
+ * every act boundary, and the counter is a property of the film.
+ */
+export const Chapter: React.FC<ChapterProps> = ({ id, rail = true }) => {
+  const scene = sceneById(id);
+  const frame = useCurrentFrame();
+  const lengths = actLengths(scene);
+
+  return (
+    <AbsoluteFill style={{ fontFamily: INTER, color: STAGE.ink }}>
+      <Series>
+        {scene.acts.map((act, index) => (
+          // Keyed off the piece id or the capture, never `act.capture` alone -
+          // a piece has none, so every piece act keyed as `undefined-N`.
+          <Series.Sequence key={actKey(act, index)} durationInFrames={lengths[index]!}>
+            {act.kind === 'piece' ? (
+              <ActPiece chapter={scene.id} index={index} />
+            ) : (
+              <ActFilm chapter={scene.id} index={index} />
+            )}
+          </Series.Sequence>
+        ))}
+      </Series>
       {rail && (
         <FilmIndex
           at={SCRIPT.findIndex((s) => s.id === scene.id)}
           tab={chapterTab(scene)}
           count={SCRIPT.length}
           title={scene.title}
-          kind={manifest.kind}
+          label={actLabelAt(scene, frame)}
         />
       )}
     </AbsoluteFill>

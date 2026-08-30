@@ -196,3 +196,39 @@ if (heroRight) {
   heroRight.profile.employeeType = 'CONTRACTOR';
   heroRight.profile.userType = 'Contractor';
 }
+
+/**
+ * The new hire whose department is mis-typed.
+ *
+ * Created this week for onboarding. Whoever set up the account fat-fingered
+ * `department` as `Enginering`, and it was never caught. Because group
+ * membership here is derived from the same predicate each rule expresses
+ * (`memberships.ts`), that typo is not decorative: she genuinely falls out of
+ * `Engineering - All` (rule 2), `GitHub - Engineering` (rule 3) and
+ * `Datadog - Engineering`, the same way a real mistyped attribute would strand
+ * a real new hire out of the groups their rules were supposed to catch them
+ * in. Nothing about her group membership is hand-listed to make that happen —
+ * it falls out of the typo on its own. Do not "fix" the spelling; the typo is
+ * the point of the fixture.
+ */
+export const DEMO_ONBOARDING_USER = fakeId('00u', 31);
+
+const heroOnboarding = demoUsersById.get(DEMO_ONBOARDING_USER);
+if (heroOnboarding) {
+  heroOnboarding.status = 'ACTIVE';
+  heroOnboarding.profile.firstName = 'Priya';
+  heroOnboarding.profile.lastName = 'Achterberg';
+  heroOnboarding.profile.login = 'priya.achterberg@example.com';
+  heroOnboarding.profile.email = 'priya.achterberg@example.com';
+  // Deliberately mis-typed; this is the point. See the doc comment above.
+  heroOnboarding.profile.department = 'Enginering';
+  heroOnboarding.profile.title = 'Software Engineer';
+  heroOnboarding.profile.city = 'Seattle';
+  heroOnboarding.profile.state = 'WA';
+  heroOnboarding.profile.countryCode = 'US';
+  heroOnboarding.profile.employeeType = 'FULL_TIME';
+  heroOnboarding.profile.userType = 'Employee';
+  heroOnboarding.created = isoDaysAgo(3);
+  heroOnboarding.activated = isoDaysAgo(2);
+  heroOnboarding.lastLogin = isoDaysAgo(1);
+}

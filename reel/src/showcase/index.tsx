@@ -31,9 +31,10 @@
  * advance. Everything here is driven by `useCurrentFrame`.
  */
 import React from 'react';
-import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
+import { interpolate, useCurrentFrame } from 'remotion';
 import type { Rect } from '../layout';
 import { COLOR, STAGE, TYPE } from '../theme';
+import { EASING, FRAMES, release } from '../verbs';
 
 /** Where a showcase may draw, in frame pixels. */
 export type Plot = Rect;
@@ -50,20 +51,42 @@ const at = (plot: Plot): React.CSSProperties => ({
 /**
  * The stagger every showcase is built on.
  *
- * One spring per item, offset by its index. Returned rather than applied, so a
- * component can spend the same value on opacity, on a rise, and on the width of
- * a bar, and have all three arrive as one gesture instead of three that overlap.
+ * One entrance per item, offset by its index via `release()` — the same
+ * offset `Fan`'s render prop hands its children (`reel/verbs/Fan.tsx`). Each
+ * item gets back two numbers rather than one: `t`, an `entrance`-eased `[0,1]`
+ * a component can spend on a rise, on the width of a bar, or on a legend
+ * cascading in, so all three still read as one gesture; and `opacity`, a fast
+ * ramp over dock's own `dockOpacity` window. They are split because a card
+ * fading up over the whole arrival is exactly the violation this migration
+ * exists to fix — "nothing in this film fades up" — so the *object* now snaps
+ * to visible the way `Dock`'s children do, while `t` keeps driving whatever
+ * inside it still wants a slow reveal.
+ *
+ * `STAGGER_SETTLE` replaces the overdamped Remotion spring (`damping: 200,
+ * mass: 0.7`) this hook used to drive: measured with Remotion's own
+ * `measureSpring` at this film's 60fps, that config settles to within 0.5% of
+ * rest at frame 38. That is longer than `dock`'s own 22f or `fan`'s 26f, so it
+ * is kept explicit here rather than borrowed from either verb's default — one
+ * shared curve, not one shared timing.
  */
+const STAGGER_SETTLE = 38;
+
 function useStagger(from: number, count: number, step = 5) {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  return Array.from({ length: count }, (_, i) =>
-    spring({
-      frame: frame - from - i * step,
-      fps,
-      config: { damping: 200, mass: 0.7 },
-    }),
-  );
+  return Array.from({ length: count }, (_, i) => {
+    const start = from + release(i, step);
+    const t = EASING.entrance(
+      interpolate(frame, [start, start + STAGGER_SETTLE], [0, 1], {
+        extrapolateLeft: 'clamp',
+        extrapolateRight: 'clamp',
+      }),
+    );
+    const opacity = interpolate(frame, [start, start + FRAMES.dockOpacity], [0, 1], {
+      extrapolateLeft: 'clamp',
+      extrapolateRight: 'clamp',
+    });
+    return { t, opacity };
+  });
 }
 
 /**
@@ -164,13 +187,13 @@ export const FacetBoard: React.FC<{
       }}
     >
       {shown.map((facet, i) => {
-        const t = cards[i] ?? 0;
+        const { t, opacity } = cards[i] ?? { t: 0, opacity: 0 };
         const total = facet.values.reduce((sum, v) => sum + v.members, 0);
         return (
           <Card
             key={facet.attribute}
             style={{
-              opacity: t,
+              opacity,
               transform: `translateY(${(1 - t) * 26}px)`,
               alignSelf: 'start',
             }}
@@ -270,13 +293,13 @@ export const FactorLadder: React.FC<{
   return (
     <div style={{ ...at(plot), display: 'flex', flexDirection: 'column', gap: 14 }}>
       {ordered.map((row, i) => {
-        const t = steps[i] ?? 0;
+        const { t, opacity } = steps[i] ?? { t: 0, opacity: 0 };
         const lit = row.label === highlight;
         return (
           <Card
             key={row.label}
             style={{
-              opacity: t,
+              opacity,
               transform: `translateX(${(1 - t) * -34}px)`,
               padding: '18px 24px',
               borderColor: lit ? STAGE.alert : STAGE.rule,
@@ -383,8 +406,10 @@ export const RuleBoard: React.FC<{
   const cards = useStagger(from, stats.length, 8);
   const frame = useCurrentFrame();
   // The dormant tiles do not fade with the others; they arrive lit and then go
-  // out, a beat later, which is the whole argument in one gesture.
-  const dim = interpolate(frame - from - total * 4 - 26, [0, 22], [1, 0.18], {
+  // out, a beat later, which is the whole argument in one gesture. The buffer
+  // is `STAGGER_SETTLE` itself (not a re-eyeballed number) so dimming always
+  // starts once the last tile's own entrance has actually finished.
+  const dim = interpolate(frame - from - total * 4 - STAGGER_SETTLE, [0, 22], [1, 0.18], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
@@ -405,13 +430,13 @@ export const RuleBoard: React.FC<{
     >
       <div style={{ display: 'flex', gap: 16 }}>
         {stats.map((stat, i) => {
-          const t = cards[i] ?? 0;
+          const { t, opacity } = cards[i] ?? { t: 0, opacity: 0 };
           return (
             <Card
               key={stat.label}
               style={{
                 flex: 1,
-                opacity: t,
+                opacity,
                 transform: `translateY(${(1 - t) * 22}px)`,
                 padding: '18px 20px',
               }}
@@ -438,7 +463,7 @@ export const RuleBoard: React.FC<{
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }}>
         {Array.from({ length: total }, (_, i) => {
-          const t = tiles[i] ?? 0;
+          const { t, opacity } = tiles[i] ?? { t: 0, opacity: 0 };
           const dormant = i >= active;
           return (
             <div
@@ -449,7 +474,7 @@ export const RuleBoard: React.FC<{
                 borderRadius: 12,
                 border: `1px solid ${STAGE.rule}`,
                 background: dormant ? `rgba(143,159,242,${0.1 * dim})` : 'rgba(143,159,242,0.26)',
-                opacity: t * (dormant ? Math.max(dim, 0.3) : 1),
+                opacity: opacity * (dormant ? Math.max(dim, 0.3) : 1),
                 transform: `scale(${0.86 + t * 0.14})`,
                 display: 'flex',
                 alignItems: 'center',

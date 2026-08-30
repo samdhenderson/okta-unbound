@@ -15,6 +15,17 @@
  * specified a fixed "1 request"; the snapshot makes that untrue about half the
  * time, and a cost line that is sometimes wrong is worse than none.
  *
+ * ## Results are held across a refining search
+ *
+ * The list is rendered whenever the resolver is holding rows — not only in
+ * `results` mode. A committed search leaves that mode while it runs, and
+ * unmounting the list on that transition is what made refining a query flash:
+ * the rows vanished, `.rise-in-stagger` replayed, and the panel visibly rebuilt
+ * itself for a query still being typed. The spinner in the field's trailing slot
+ * already says a newer answer is on the way; the older answer stays until it is
+ * replaced. The id-cost footnote is not held — it is a claim about a finished
+ * resolution, so it hides the moment one is superseded.
+ *
  * ## No `PageHeader`, and no helper line
  *
  * Home deliberately has no page header — one could only say "Home" — so this bar
@@ -64,6 +75,14 @@ const JumpBar: React.FC<JumpBarProps> = ({
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const isBusy = jump.mode === 'searching' || jump.mode === 'resolving';
+
+  // Rows survive a refining search. `mode` leaves `results` the moment a new
+  // query is committed, and unmounting the list on that transition is what makes
+  // a refined search flash: the answers vanish, the stagger replays, and the
+  // reader watches the panel rebuild itself for a query they are still typing.
+  // The spinner in the trailing slot already says a newer answer is coming, so
+  // the older one stays put until it is replaced.
+  const showResults = jump.results.length > 0 && (jump.mode === 'results' || isBusy);
 
   const handleClear = () => {
     jump.clear();
@@ -119,7 +138,7 @@ const JumpBar: React.FC<JumpBarProps> = ({
         <AlertMessage message={{ text: jump.error, type: 'danger' }} onDismiss={jump.clear} />
       )}
 
-      {jump.mode === 'results' && jump.results.length > 0 && (
+      {showResults && (
         <>
           {/* `.rise-in-stagger` steps its direct children 24ms apart in pure CSS,
               honouring the motion tokens. No raw ms or cubic-bezier reaches this
@@ -138,7 +157,7 @@ const JumpBar: React.FC<JumpBarProps> = ({
               );
             })}
           </ul>
-          {jump.resolution && (
+          {jump.mode === 'results' && jump.resolution && (
             <p className="text-xs text-neutral-600">
               Exact id match · {jump.resolution.cost === 0 ? 'no request' : '1 request'}
             </p>

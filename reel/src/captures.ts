@@ -11,11 +11,13 @@
 import { staticFile } from 'remotion';
 import apps from '../../captures/apps.json';
 import attributes from '../../captures/attributes.json';
-import compare from '../../captures/compare.json';
 import groups from '../../captures/groups.json';
+import home from '../../captures/home.json';
 import reporting from '../../captures/reporting.json';
 import rules from '../../captures/rules.json';
-import users from '../../captures/users.json';
+import usersCause from '../../captures/users-cause.json';
+import usersFix from '../../captures/users-fix.json';
+import usersGap from '../../captures/users-gap.json';
 
 /** The manifest schema this composition understands. Asserted, never branched on. */
 export const SCHEMA = 4;
@@ -50,6 +52,15 @@ export interface Manifest {
   id: string;
   title: string;
   tab: string;
+  /**
+   * Capture-time hint only.
+   *
+   * The composition stopped reading this when a chapter became several acts
+   * (ADR-0053): `tour` / `deep` named nothing once every chapter was an
+   * argument about a job. `capture.mjs` still writes it, because it is what
+   * decides how long a walk runs and how much it reads off the panel, and
+   * dropping it from the type would make this interface a lie about the file.
+   */
   kind: 'tour' | 'deep';
   file: string;
   ok: boolean;
@@ -65,7 +76,17 @@ export interface Manifest {
   figures: Record<string, Figure>;
 }
 
-const MANIFESTS = { users, groups, apps, rules, compare, attributes, reporting } as const;
+const MANIFESTS = {
+  home,
+  'users-gap': usersGap,
+  'users-cause': usersCause,
+  'users-fix': usersFix,
+  groups,
+  apps,
+  rules,
+  attributes,
+  reporting,
+} as const;
 
 /** A chapter id with footage behind it. */
 export type CaptureId = keyof typeof MANIFESTS;
@@ -114,4 +135,28 @@ export function figure<T>(manifest: Manifest, key: string): T {
     );
   }
   return found.value as T;
+}
+
+/**
+ * A numeric figure read off the panel, or a thrown error naming what is missing
+ * or what came back instead of a number.
+ *
+ * `figure<T>` proves a key was read during capture; it does not prove the value
+ * is a number, because `T` is an unchecked cast supplied by the caller. A
+ * caption that does `` `${figure<number>(m, 'foo')} groups` `` on a key whose
+ * capture actually recorded a string, or `null` because the read-back failed
+ * silently, gets `NaN groups` on screen - a rendered claim nobody measured,
+ * which is the exact failure the manifest schema and `figure()`'s own refusal
+ * exist to catch. This closes that gap for arithmetic call sites: delegate to
+ * `figure()` for the existence check, then refuse anything that is not a finite
+ * number before it reaches a caption.
+ */
+export function figureNumber(manifest: Manifest, key: string): number {
+  const value = figure<unknown>(manifest, key);
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(
+      `${manifest.id}: figure "${key}" is not a finite number - got ${JSON.stringify(value)}.`,
+    );
+  }
+  return value;
 }

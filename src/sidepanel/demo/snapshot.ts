@@ -9,22 +9,30 @@
  * Authoring raw means the demo exercises the real mappers, so what gets filmed
  * is the actual render path rather than a hand-faked approximation of it.
  *
- * Member counts are **computed from {@link module:sidepanel/demo/users}** rather
- * than invented, so a group that says 84 members and the rule that feeds it
- * agree with each other on camera.
+ * Member counts are **computed from {@link module:sidepanel/demo/memberships}**
+ * rather than invented, so a group that says 84 members and the rule that feeds
+ * it agree with each other on camera. Since ADR-0052 they are also computed at
+ * *read* time rather than at module load, because a profile write re-derives
+ * every rule-fed membership and a headcount frozen at import would go quietly
+ * wrong the moment one lands. Read groups through {@link currentGroups}.
  */
 import type { OktaGroupRule } from '../../shared/types';
 import type { OktaAppGroupAssignment, OktaAppListItem } from '../../shared/schemas/okta';
 import type { RawOktaGroup } from '../components/groups/groupSummary';
 import { fakeId, isoDaysAgo } from './org';
-import { GROUP, demoMemberCount } from './memberships';
+import { GROUP, demoGroupMembers } from './memberships';
+import { demoRevision } from './state';
 
 /**
- * Build one raw group.
+ * Build one raw group, minus its headcount.
  *
- * The member count is **not** a parameter: it is read from the computed
- * memberships in {@link module:sidepanel/demo/memberships}, so a group can never
- * advertise a headcount it does not actually hold.
+ * The member count is **not** a parameter and is deliberately **not stamped
+ * here** either. It is derived from {@link module:sidepanel/demo/memberships},
+ * which re-derives whenever the org is written to (ADR-0052), so a count baked
+ * in at module load would be right exactly until the first profile edit and
+ * silently wrong afterwards. {@link currentGroups} stamps it at read time
+ * instead, which is why these templates carry no `_embedded` at all: a stale
+ * count is invisible, an absent one is not.
  *
  * @param n - Ordinal, which becomes the `00gFAKE…` id.
  * @param name - Display name.
@@ -57,7 +65,6 @@ function group(
     id: fakeId('00g', n),
     type: options.type ?? 'OKTA_GROUP',
     profile: { name, description },
-    _embedded: { stats: { usersCount: demoMemberCount(n) } },
     ...(options.source
       ? { source: options.source, _links: { apps: { href: `/api/v1/apps/${options.source.id}` } } }
       : {}),
@@ -75,7 +82,7 @@ function group(
  * app-sourced group with a `source` (which renders a provenance badge), and a
  * built-in.
  */
-export const demoGroups: RawOktaGroup[] = [
+const groupTemplates: readonly RawOktaGroup[] = [
   group(GROUP.everyone, 'Everyone', 'All users in your organization', { type: 'BUILT_IN' }),
   group(GROUP.engineering, 'Engineering - All', 'Every engineer, rule-assigned by department'),
   group(GROUP.sales, 'Sales - All', 'Rule-assigned by department'),
@@ -143,6 +150,13 @@ export const demoGroups: RawOktaGroup[] = [
     type: 'APP_GROUP',
     source: { id: fakeId('0oa', 7), name: 'Datadog' },
   }),
+  group(
+    GROUP.migrationAccess,
+    'Temp - Migration Access',
+    'Cutover access for the IdP migration. Nobody closed it.',
+  ),
+  group(GROUP.salesEmeaLegacy, 'Sales - EMEA legacy', 'Superseded by Sales - All'),
+  group(GROUP.verifyRollout, 'Okta Verify Rollout', 'Pilot cohort for the Okta Verify rollout'),
 ];
 
 /**
@@ -225,6 +239,10 @@ export const demoRules: OktaGroupRule[] = [
  * @param label - What an admin sees.
  * @param signOnMode - e.g. `SAML_2_0`.
  * @param status - `ACTIVE` unless the scene wants a deactivated row.
+ * @param features - The provisioning features Okta reports for this app
+ * instance, e.g. `['GROUP_PUSH', 'IMPORT_NEW_USERS']`. Omitted by default, the
+ * way most demo apps carry no `features` field at all; pass it only for the
+ * apps the scene needs {@link isGroupPushApp} to recognize.
  */
 function app(
   n: number,
@@ -232,6 +250,7 @@ function app(
   label: string,
   signOnMode: string,
   status: 'ACTIVE' | 'INACTIVE' = 'ACTIVE',
+  features?: readonly string[],
 ): OktaAppListItem {
   return {
     id: fakeId('0oa', n),
@@ -241,18 +260,21 @@ function app(
     signOnMode,
     created: isoDaysAgo(700 + n * 11),
     lastUpdated: isoDaysAgo(n * 4 + 3),
+    ...(features ? { features: [...features] } : {}),
   };
 }
 
 /** The org's app inventory. */
+const GROUP_PUSH_FEATURES = ['GROUP_PUSH', 'IMPORT_NEW_USERS'] as const;
+
 export const demoApps: OktaAppListItem[] = [
-  app(1, 'salesforce', 'Salesforce', 'SAML_2_0'),
+  app(1, 'salesforce', 'Salesforce', 'SAML_2_0', 'ACTIVE', GROUP_PUSH_FEATURES),
   app(2, 'workday', 'Workday HR', 'SAML_2_0'),
-  app(3, 'github', 'GitHub Enterprise', 'SAML_2_0'),
-  app(4, 'slack', 'Slack', 'SAML_2_0'),
-  app(5, 'zoom', 'Zoom', 'SAML_2_0'),
-  app(6, 'atlassian', 'Atlassian Cloud', 'SAML_2_0'),
-  app(7, 'datadog', 'Datadog', 'SAML_2_0'),
+  app(3, 'github', 'GitHub Enterprise', 'SAML_2_0', 'ACTIVE', GROUP_PUSH_FEATURES),
+  app(4, 'slack', 'Slack', 'SAML_2_0', 'ACTIVE', GROUP_PUSH_FEATURES),
+  app(5, 'zoom', 'Zoom', 'SAML_2_0', 'ACTIVE', GROUP_PUSH_FEATURES),
+  app(6, 'atlassian', 'Atlassian Cloud', 'SAML_2_0', 'ACTIVE', GROUP_PUSH_FEATURES),
+  app(7, 'datadog', 'Datadog', 'SAML_2_0', 'ACTIVE', GROUP_PUSH_FEATURES),
   app(8, 'aws_account_federation', 'AWS Account Federation', 'SAML_2_0'),
   app(9, 'boxnet', 'Box', 'SAML_2_0'),
   app(10, 'docusign', 'DocuSign', 'SAML_2_0'),
@@ -298,10 +320,48 @@ export const demoAppGroups: readonly { appId: string; assignment: OktaAppGroupAs
   },
 ];
 
-/** Index for the scene helpers that resolve a group by id. */
-export const demoGroupsById: ReadonlyMap<string, RawOktaGroup> = new Map(
-  demoGroups.map((g) => [g.id, g]),
-);
+/**
+ * How many groups the org has. Constant, and safe to read without deriving.
+ *
+ * Separate from {@link currentGroups} so `seedDemoSnapshot` can state an
+ * `itemCount` without forcing a membership derivation it does not need.
+ */
+export const DEMO_GROUP_COUNT = groupTemplates.length;
+
+/** Memoised live view, rebuilt only when a write moves the revision. */
+let stampedRevision = -1;
+let stampedGroups: readonly RawOktaGroup[] = [];
+let stampedById: ReadonlyMap<string, RawOktaGroup> = new Map();
+
+function stamp(): void {
+  const revision = demoRevision();
+  if (stampedRevision === revision && stampedGroups.length > 0) return;
+  stampedGroups = groupTemplates.map((template) => ({
+    ...template,
+    _embedded: { stats: { usersCount: demoGroupMembers().get(template.id)?.length ?? 0 } },
+  }));
+  stampedById = new Map(stampedGroups.map((g) => [g.id, g]));
+  stampedRevision = revision;
+}
+
+/**
+ * The org's groups as they stand now, each carrying its real current headcount.
+ *
+ * A function rather than the constant it used to be. The org can be written to
+ * (ADR-0052), a write re-derives every rule-fed membership, and a group row is
+ * where that change becomes visible to the panel. Callers must not hold the
+ * returned array across a write.
+ */
+export function currentGroups(): readonly RawOktaGroup[] {
+  stamp();
+  return stampedGroups;
+}
+
+/** The same rows, indexed by id. */
+export function currentGroupsById(): ReadonlyMap<string, RawOktaGroup> {
+  stamp();
+  return stampedById;
+}
 
 /**
  * The group the drilldown scene opens.
