@@ -210,10 +210,12 @@ export const GroupDrilldown: Story = {
 };
 
 /**
- * Scene 2 — preview what turning a rule off would cost.
+ * Scene 2 — preview what a rule is currently holding up.
  *
- * The affected-user count is computed by the app's real `summarizeRuleImpact`
- * over the demo memberships, so the number on screen is derived, not written.
+ * The count of members held by the rule alone is computed by the app's real
+ * `summarizeRuleImpact` over the demo memberships, so the number on screen is
+ * derived, not written. Deactivating removes none of them (D-052); the panel's
+ * copy says so.
  */
 export const RuleImpact: Story = {
   beforeEach: async () => {

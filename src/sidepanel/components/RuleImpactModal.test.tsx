@@ -17,16 +17,22 @@ const summary: RuleImpactSummary = {
   ruleId: 'r1',
   ruleName: 'Engineering',
   distinctMemberCount: 3,
-  totalLosing: 2,
+  totalHeldSolely: 2,
   targetGroups: [
     {
       groupId: 'g1',
       groupName: 'Eng All',
       memberCount: 3,
-      losingCount: 2,
-      losing: [member('u1', 'Ada'), member('u2', 'Bea')],
+      heldSolelyCount: 2,
+      heldSolelyByRule: [member('u1', 'Ada'), member('u2', 'Bea')],
     },
-    { groupId: 'g2', groupName: 'Eng Leads', memberCount: 1, losingCount: 0, losing: [] },
+    {
+      groupId: 'g2',
+      groupName: 'Eng Leads',
+      memberCount: 1,
+      heldSolelyCount: 0,
+      heldSolelyByRule: [],
+    },
   ],
 };
 
@@ -44,16 +50,16 @@ describe('RuleImpactModal', () => {
   it('shows the summary tiles and per-group breakdown when done', () => {
     render(<RuleImpactModal {...baseProps} mode="preview" />);
     // Summary metric tiles.
-    expect(screen.getByText('Lose access')).toBeInTheDocument();
+    expect(screen.getByText('Held by this rule alone')).toBeInTheDocument();
     expect(screen.getByText('Current members')).toBeInTheDocument();
     // Per-group breakdown.
     expect(screen.getByText('Eng All')).toBeInTheDocument();
-    expect(screen.getByText('−2 lose access')).toBeInTheDocument();
-    // The group with no loss is labeled "No change".
+    expect(screen.getByText('2 held by this rule alone')).toBeInTheDocument();
+    // The group nothing is solely held in is labeled "No change".
     expect(screen.getByText('No change')).toBeInTheDocument();
   });
 
-  it('expands a group to list the members who would lose access', async () => {
+  it('expands a group to list the members it holds up alone', async () => {
     render(<RuleImpactModal {...baseProps} mode="preview" />);
     // Members are hidden until the group row is expanded.
     expect(screen.queryByText('Ada U')).not.toBeInTheDocument();
@@ -118,22 +124,46 @@ describe('RuleImpactModal', () => {
     expect(onNavigateToGroup).toHaveBeenCalledWith('g1');
   });
 
-  it('reports zero loss cleanly', () => {
+  /**
+   * D-052: Okta does not retract membership on deactivate. The modal must say so
+   * rather than reporting the solely-held population as an access loss.
+   */
+  it('deactivate mode says nobody is removed, never that members lose access', () => {
+    render(<RuleImpactModal {...baseProps} mode="deactivate" onConfirmDeactivate={() => {}} />);
+    expect(screen.getByText(/Nobody is removed from a group/)).toBeInTheDocument();
+    expect(screen.queryByText(/lose access/)).not.toBeInTheDocument();
+  });
+
+  /** Preview mode is equally forbidden from pinning removal on deactivation. */
+  it('preview mode attributes removal to delete, not to deactivation', () => {
+    render(<RuleImpactModal {...baseProps} mode="preview" />);
+    expect(screen.getByText(/Deactivating it removes nobody/)).toBeInTheDocument();
+    expect(screen.getByText(/Only deleting the rule can remove them/)).toBeInTheDocument();
+    expect(screen.queryByText(/lose access/)).not.toBeInTheDocument();
+  });
+
+  it('reports nobody solely held cleanly', () => {
     render(
       <RuleImpactModal
         {...baseProps}
         mode="preview"
         summary={{
           ...summary,
-          totalLosing: 0,
+          totalHeldSolely: 0,
           targetGroups: [
-            { groupId: 'g2', groupName: 'Eng Leads', memberCount: 1, losingCount: 0, losing: [] },
+            {
+              groupId: 'g2',
+              groupName: 'Eng Leads',
+              memberCount: 1,
+              heldSolelyCount: 0,
+              heldSolelyByRule: [],
+            },
           ],
         }}
       />,
     );
-    // No danger loss badge, and every group reads "No change".
-    expect(screen.queryByText(/lose access$/)).not.toBeInTheDocument();
+    // No solely-held badge, and every group reads "No change".
+    expect(screen.queryByText(/^\d+ held by this rule alone$/)).not.toBeInTheDocument();
     expect(screen.getByText('No change')).toBeInTheDocument();
   });
 });
