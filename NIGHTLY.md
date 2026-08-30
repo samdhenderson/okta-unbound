@@ -17,6 +17,87 @@ Entry format:
 
 ---
 
+## 2026-08-30
+
+**Baseline:** green — full ladder run against `main` @ `5609987` before any work:
+type-check, lint (0 errors / 164 pre-existing warnings), `format:check`,
+`test:coverage` (240 files), `knip:circular`, `lint:control-chars`,
+`lint:cited-paths`, and `test:storybook` (170 files, 1223 tests, 1 skipped).
+**Items worked:** `D-052`
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/106
+**Backlog after:** see below — 3 new items filed (`D-080`, `D-081`, `D-082`),
+1 new improvement (`I-029`), 1 existing item widened (`D-058`)
+**Notes:**
+
+**Open PRs at step 2: zero.** Nothing was claimed, nothing contended, and no
+stop condition applied. `gh` is unavailable in this environment, but the GitHub
+MCP tools are, and `list_pull_requests --state open` returned an empty set —
+that satisfies step 2's requirement to distinguish in-flight work from open
+work, which is what the `gh`-unavailable stop exists to protect.
+
+**Why one item and not the usual 2–3.** `D-052` was the only `P1` open item and
+its ledger entry carries Sam's approval with an explicit, twice-stated
+condition: _"it goes through the plan-and-approval gate as its own PR. Do not
+fold it into unrelated work"_, and again under **Scope confirmation**, _"It
+remains its own PR and must not be folded into unrelated work."_ The previous
+session's handoff repeats it verbatim. That item-specific instruction is more
+specific than `SESSION.md`'s 2–3 range, so the range yielded to it. The
+runner-up under the sort (`D-073`, the only other `P2` naming the same subject)
+was independently disqualified anyway: it edits
+`.claude/skills/okta-api/references/groups-and-rules.md`, which `D-052` also
+touches, so it fails step 3's disjointness test. **`D-073` is still open and is
+a good pick for the next run** — `D-052` deliberately left
+`groups-and-rules.md:163` untouched, so the `removeUsers` documentation gap
+`D-073` exists to close is exactly as it was.
+
+**A ledger defect that breaks step 2's own mechanism — `D-080`.** Every
+`### [ID]-NNN` header in both ledgers was extracted and passed through
+`uniq -d`. `D-062` is the only duplicate in 100+ items, and it is a real
+collision of two unrelated items: a `perf` `research:awaiting-review` item at
+`DEBT.md:2630` (the one ADR-0058 and `docs/adr/README.md` cite) and an **open
+P2 security** item at `:2668` (`handleGetAppInfo` reading an Okta response with
+no zod boundary). This is not cosmetic. Step 2 greps open PRs for bare
+`I-NNN`/`D-NNN` tokens and treats every match as claimed — so a PR closing
+either one marks the other claimed too, and a PR closing the research item
+would hide an open P2 security gap from every subsequent session. It fails
+silently, in the safe-looking direction: nothing errors, an item just stops
+being offered. Same class as `D-072`, one level up — there a citation resolved
+to the wrong document, here it resolves to either of two. `lint:cited-paths`
+cannot see it, because it checks that cited _paths_ resolve, not that a cited
+_item id_ is unique; `D-080` proposes putting that check in the same script.
+
+**Reviewers.** Both ran read-only against the branch diff.
+`security-logging-reviewer`: clean — no zod-boundary weakening, no token or
+payload leakage, no new `console.*`, no new `any`, no XSS-unsafe rendering.
+`ui-reviewer`: no hard-rule or ADR violation in the changed content; the
+`danger` → `warning` token move was confirmed complete and correct, and the
+`Deactivate rule` confirm button was confirmed to correctly _stay_ `danger`
+(the codebase styles state-changing confirm CTAs `danger` regardless of
+reversibility, and `Button`'s variant union has no `warning` member). It raised
+nine advisories; `git show` established that eight are pre-existing lines this
+diff never touched. Three were worth recording rather than dropping: the
+hand-rolled eyebrow went into `D-058` (which had _asked_ for exactly this
+enumeration, and has now grown on both runs of it), the unannounced error state
+became `D-081`, and the `@x.io` fixture domain — `security-logging-reviewer`'s
+find, five files, enumerated not sampled — became `D-082`.
+
+**One advisory that is this commit's and was left unfixed:**
+`RuleImpactModal.tsx` went from exactly 300 lines to 314, crossing the ~300
+guideline. Every added line is JSDoc or user-facing copy — the three-verb table
+in the module header and the corrected per-verb sentences — and no logic was
+added. Splitting a component to shed documentation would trade a real
+explanation for a line count, so it was left, and is noted here and in the PR
+rather than dropped.
+
+**For the next run.** `D-073` is unblocked and disjoint now. `D-080` should be
+taken early — every night it survives is a night the duplicate id can swallow
+another item. `I-029` is newly filed and newly _unblocked_ by tonight: the
+reel's rule-impact chapter was held out of the reel by ADR-0043 precisely
+because the product made the claim `D-052` just fixed, and that dependency was
+recorded only inside `D-052`, which is now closed.
+
+---
+
 ## 2026-08-29 (b) — an attended session, clearing the gated shelf
 
 **Not a nightly.** Sam ran this one directly, after merging PR #102. It is logged
@@ -90,7 +171,7 @@ of those numbers had been taken by an unrelated ADR before the item was picked u
 — 0041, 0042, 0043, 0046 and 0047 all went to feature branches in the five days
 after the items were filed. The proposals landed as 0054–0058 instead. This is not
 bad luck: a number is claimed by whoever writes an ADR, feature branches write them
-continuously, and a backlog item waits weeks. Worse, it fails *quietly* —
+continuously, and a backlog item waits weeks. Worse, it fails _quietly_ —
 `lint:cited-paths` only checks that a path resolves, so `I-018`'s reserved `0046`
 resolves today, to the response-layer ADR. A reader following that citation lands
 somewhere plausible and wrong. Filed as `D-072`; the fix is to name ADRs by title

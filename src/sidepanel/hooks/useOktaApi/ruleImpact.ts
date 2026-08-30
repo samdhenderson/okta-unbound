@@ -1,13 +1,14 @@
 /**
  * @module hooks/useOktaApi/ruleImpact
- * @description Read-only capture of a group rule's access impact.
+ * @description Read-only capture of what a group rule currently holds up.
  *
  * Gathers the raw inputs the pure {@link summarizeRuleImpact} engine needs — the
  * org's rules (with their exclusion lists) and each target group's current
  * members — from the org snapshot plus the rate-limited scheduler path, then
  * hands off to the engine for the set math. No mutation, and no per-member API
- * calls: the "who loses access" answer comes from rules metadata + the members
- * already fetched.
+ * calls: the "held by this rule alone" answer comes from rules metadata + the
+ * members already fetched. What that population means depends on the verb the
+ * caller is about to perform — see `shared/membership/ruleImpact`'s header.
  */
 
 import type { CoreApi } from './core';
@@ -85,8 +86,9 @@ export function createRuleImpactOperations(
    * returned rows" (D-038). A partial walk is a prefix of the org, not the org
    * (ADR-0040 §7): a rule already deleted in Okta can survive in it un-swept,
    * and a surviving stale rule reads as "another active rule still covers this
-   * member", which **understates** who loses access — a confident wrong answer
-   * to an access question. The row-count heuristic also failed the opposite way,
+   * member", which **understates** who is held by this rule alone — a confident
+   * wrong answer to an access question. The row-count heuristic also failed the
+   * opposite way,
    * since an org with genuinely zero rules could never satisfy it and so
    * re-listed the endpoint on every preview even when fully synced.
    *
@@ -158,7 +160,7 @@ export function createRuleImpactOperations(
   };
 
   /**
-   * Capture the access impact of deactivating `rule`.
+   * Capture which members of `rule`'s target groups it holds up on its own.
    *
    * @param rule - The rule to analyze (id, name, target group ids/names).
    * @param opts - Optional progress callback.

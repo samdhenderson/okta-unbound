@@ -1,7 +1,7 @@
 /**
  * Tests for the rule-impact capture: zod validation at the response boundary
  * (ADR-0006) — malformed rule rows are dropped leniently by `parseOktaList`, so
- * they cannot skew the "who loses access" set math — and the snapshot-first
+ * they cannot skew the "held by this rule alone" set math — and the snapshot-first
  * raw-rules read (rows stored for the connected org mean no re-pagination of
  * `/api/v1/groups/rules`).
  *
@@ -100,7 +100,7 @@ describe('captureRuleImpact boundary validation', () => {
     };
     // Numeric `id` fails the schema — the lenient list parser drops the row. If
     // it were NOT dropped, it would read as a second active rule targeting the
-    // group and wrongly flip the member from "losing" to "retaining".
+    // group and wrongly flip the member from "heldSolelyByRule" to "unaffected".
     const malformedRule = {
       id: 999,
       name: 'Broken Rule',
@@ -131,10 +131,10 @@ describe('captureRuleImpact boundary validation', () => {
     });
 
     // The malformed rule was dropped, so the analyzed rule is the sole managing
-    // rule and the member loses access on deactivation.
+    // rule and the member is held by it alone.
     expect(summary.targetGroups).toHaveLength(1);
-    expect(summary.targetGroups[0].losingCount).toBe(1);
-    expect(summary.totalLosing).toBe(1);
+    expect(summary.targetGroups[0].heldSolelyCount).toBe(1);
+    expect(summary.totalHeldSolely).toBe(1);
   });
 });
 
@@ -230,8 +230,8 @@ describe('fetchRawRules snapshot consultation', () => {
       String(c[0]).startsWith('/api/v1/groups/rules'),
     );
     expect(rulesListings).toHaveLength(0);
-    // The snapshot's rule drove the set math: sole managing rule → member loses.
-    expect(summary.totalLosing).toBe(1);
+    // The snapshot's rule drove the set math: sole managing rule → held alone.
+    expect(summary.totalHeldSolely).toBe(1);
   });
 
   it('ignores a RulesCache entry now that the snapshot is the source of rules', async () => {
@@ -283,7 +283,7 @@ describe('fetchRawRules snapshot consultation', () => {
       String(c[0]).startsWith('/api/v1/groups/rules'),
     );
     expect(rulesListings).toHaveLength(1);
-    expect(summary.totalLosing).toBe(1);
+    expect(summary.totalHeldSolely).toBe(1);
   });
 
   it('reads only the connected org, paginating when the snapshot holds another org', async () => {
@@ -397,8 +397,8 @@ describe('fetchRawRules snapshot consultation', () => {
     );
     expect(rulesListings).toHaveLength(1);
     // Served from the authoritative listing: the analyzed rule is the only one
-    // covering the member, so deactivating it costs them access.
-    expect(summary.totalLosing).toBe(1);
+    // covering the member, so it holds them there alone.
+    expect(summary.totalHeldSolely).toBe(1);
   });
 
   it('serves a complete-but-empty snapshot without re-paginating', async () => {
@@ -417,8 +417,8 @@ describe('fetchRawRules snapshot consultation', () => {
       String(c[0]).startsWith('/api/v1/groups/rules'),
     );
     expect(rulesListings).toHaveLength(0);
-    // No rule manages the member, so the analyzed rule's deactivation costs
-    // nobody access — the empty snapshot really was the answer used.
-    expect(summary.totalLosing).toBe(0);
+    // No rule manages the member, so the analyzed rule holds nobody up — the
+    // empty snapshot really was the answer used.
+    expect(summary.totalHeldSolely).toBe(0);
   });
 });

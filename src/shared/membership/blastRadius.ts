@@ -315,8 +315,8 @@ function additionEffect(
 
 /**
  * What a set of `stops-matching` rules does to one group the user holds — the
- * user-centric mirror of `ruleImpact.classifyGroupImpact`'s `losing`/`retaining`
- * split, asked one member at a time.
+ * user-centric mirror of `ruleImpact.classifyGroupImpact`'s
+ * `heldSolelyByRule`/`unaffected` split, asked one member at a time.
  *
  * **`likely-removed` requires all six gates to clear.** Each failure names its
  * own reason rather than falling through to a quiet "no change":

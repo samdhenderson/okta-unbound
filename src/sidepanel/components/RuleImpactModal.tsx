@@ -1,14 +1,24 @@
 /**
  * @module sidepanel/components/RuleImpactModal
- * @description Read-only "who loses access?" preview for a group rule.
+ * @description Read-only "what does this rule hold up?" preview for a group rule.
  *
  * Shows a rule's target groups with live member counts and, crucially, how many
- * members would lose access if the rule were deactivated (the members held by
- * this rule alone). Doubles as the confirmation gate for a deactivation: in
- * `deactivate` mode it leads with the loss headline and its footer commits the
- * change. Computation is read-only — see `shared/membership/ruleImpact`.
+ * members are held by this rule **alone** — nobody else's rule explains their
+ * membership. Doubles as the confirmation gate for a deactivation: in
+ * `deactivate` mode its footer commits the change. Computation is read-only —
+ * see `shared/membership/ruleImpact`.
  *
- * `TargetGroupRow`'s member-loss disclosure is the shared `IconButton` (with a
+ * **It used to call that population "lose access" in both modes, which was wrong
+ * for the only verb it can perform (D-052).** Deactivating a rule removes
+ * nobody: Okta keeps every existing membership and merely stops applying the
+ * rule to new users, so the honest deactivate headline is that these members
+ * stay put and become *unattributed*. Removal exists only on **delete**, where
+ * `removeUsers` decides it and both branches are irreversible — stated here as
+ * context because the panel does not offer delete. Per ADR-0036 the population
+ * itself is still hedged: a manual add cannot always be told from a rule-placed
+ * membership, which is what the closing footnote says.
+ *
+ * `TargetGroupRow`'s member-list disclosure is the shared `IconButton` (with a
  * real `aria-controls`), not a hand-rolled `<button>` — it used to be one, with
  * no `aria-controls` at all. Modal-body spacing consumes the `--sp-card`/
  * `--sp-rung` roles (ADR-0048) so the stack breathes with the panel's measured
@@ -26,7 +36,7 @@ import type { RuleImpactSummary, TargetGroupImpact } from '../../shared/membersh
 import type { RuleImpactMode, RuleImpactStatus, RuleImpactProgress } from '../hooks/useRuleImpact';
 import { userDisplayName } from '../../shared/utils/userDisplay';
 
-/** How many losing members to list per group before collapsing to a count. */
+/** How many solely-held members to list per group before collapsing to a count. */
 const MAX_LISTED = 50;
 
 interface RuleImpactModalProps {
@@ -52,18 +62,18 @@ interface RuleImpactModalProps {
   onNavigateToGroup?: (groupId: string) => void;
 }
 
-/** One target-group row with an expandable list of members who would lose access. */
+/** One target-group row with an expandable list of members held by this rule alone. */
 const TargetGroupRow: React.FC<{
   group: TargetGroupImpact;
   onNavigateToGroup?: (groupId: string) => void;
 }> = ({ group, onNavigateToGroup }) => {
   const [expanded, setExpanded] = useState(false);
   const disclosureId = useId();
-  const hasLoss = group.losingCount > 0;
-  const listed = group.losing.slice(0, MAX_LISTED);
-  const overflow = group.losingCount - listed.length;
-  const lossPct =
-    group.memberCount > 0 ? Math.round((group.losingCount / group.memberCount) * 100) : 0;
+  const hasSoleHolds = group.heldSolelyCount > 0;
+  const listed = group.heldSolelyByRule.slice(0, MAX_LISTED);
+  const overflow = group.heldSolelyCount - listed.length;
+  const sharePct =
+    group.memberCount > 0 ? Math.round((group.heldSolelyCount / group.memberCount) * 100) : 0;
 
   const memberLine = (
     <>
@@ -77,7 +87,7 @@ const TargetGroupRow: React.FC<{
   return (
     <div
       className={`rounded-md border bg-white overflow-hidden ${
-        hasLoss ? 'border-danger-light' : 'border-neutral-200'
+        hasSoleHolds ? 'border-warning-light' : 'border-neutral-200'
       }`}
     >
       <div className="flex items-center justify-between gap-3 px-(--sp-row-x) py-(--sp-row-y)">
@@ -107,18 +117,18 @@ const TargetGroupRow: React.FC<{
         )}
 
         <div className="flex items-center gap-(--sp-inline) shrink-0">
-          {hasLoss ? (
-            <span className="px-2 py-0.5 rounded-md bg-danger-light text-danger-text text-xs font-bold border border-danger-light">
-              −{group.losingCount.toLocaleString()} lose access
+          {hasSoleHolds ? (
+            <span className="px-2 py-0.5 rounded-md bg-warning-light text-warning-text text-xs font-bold border border-warning-light">
+              {group.heldSolelyCount.toLocaleString()} held by this rule alone
             </span>
           ) : (
             <span className="px-2 py-0.5 rounded-md bg-success-light text-success-text text-xs font-medium border border-success-light">
               No change
             </span>
           )}
-          {hasLoss && (
+          {hasSoleHolds && (
             <IconButton
-              label={`${expanded ? 'Hide' : 'Show'} members losing access in ${group.groupName}`}
+              label={`${expanded ? 'Hide' : 'Show'} members held by this rule alone in ${group.groupName}`}
               variant="ghost"
               size="sm"
 
@@ -136,14 +146,14 @@ const TargetGroupRow: React.FC<{
         </div>
       </div>
 
-      {/* Loss-proportion bar: at-a-glance share of the group that would be removed. */}
-      {hasLoss && (
-        <div className="h-1 bg-neutral-100" title={`${lossPct}% of members`}>
-          <div className="h-full bg-danger" style={{ width: `${lossPct}%` }} />
+      {/* Share bar: at-a-glance proportion of the roster this rule alone accounts for. */}
+      {hasSoleHolds && (
+        <div className="h-1 bg-neutral-100" title={`${sharePct}% of members`}>
+          <div className="h-full bg-warning" style={{ width: `${sharePct}%` }} />
         </div>
       )}
 
-      {hasLoss && expanded && (
+      {hasSoleHolds && expanded && (
         <ul
           id={disclosureId}
           className="border-t border-neutral-100 divide-y divide-neutral-100 max-h-56 overflow-y-auto scrollable-list"
@@ -174,7 +184,9 @@ const TargetGroupRow: React.FC<{
  * Renders the rule-impact preview / deactivation-confirmation modal.
  *
  * Shows a loading state while target-group members load, an error state on
- * failure, and — on success — a loss headline plus a per-target-group breakdown.
+ * failure, and — on success — the count of members held by this rule alone plus
+ * a per-target-group breakdown. The lead paragraph names the consequence of the
+ * verb in play: on `deactivate`, that nobody is removed.
  */
 const RuleImpactModal: React.FC<RuleImpactModalProps> = ({
   isOpen,
@@ -189,7 +201,7 @@ const RuleImpactModal: React.FC<RuleImpactModalProps> = ({
   onNavigateToGroup,
 }) => {
   const isDeactivate = mode === 'deactivate';
-  const totalLosing = summary?.totalLosing ?? 0;
+  const totalHeldSolely = summary?.totalHeldSolely ?? 0;
 
   const footer = (
     <>
@@ -223,8 +235,8 @@ const RuleImpactModal: React.FC<RuleImpactModalProps> = ({
           {isDeactivate ? 'Deactivating ' : 'Previewing '}
           <span className="font-semibold text-neutral-900">{ruleName}</span>
           {isDeactivate
-            ? ' removes its assignments. Members below are held by this rule alone and would lose access.'
-            : ' — members held by this rule alone would lose access if it were deactivated.'}
+            ? ' stops it placing new members. Nobody is removed from a group — Okta keeps existing memberships. The members below are held by this rule alone, so they would stay put with no rule left to explain their membership. Reactivating the rule restores it.'
+            : ' — the members below appear to be held by this rule alone. Deactivating it removes nobody; they stay in the group, no longer explained by any rule. Only deleting the rule can remove them, and that choice is irreversible.'}
         </p>
 
         {status === 'loading' && (
@@ -253,10 +265,10 @@ const RuleImpactModal: React.FC<RuleImpactModalProps> = ({
             {/* Summary metrics — mirrors the Overview stat tiles for cohesion. */}
             <div className="grid grid-cols-2 gap-(--sp-rung)">
               <StatCard
-                title="Lose access"
-                value={totalLosing}
-                color={totalLosing > 0 ? 'danger' : 'success'}
-                icon={totalLosing > 0 ? 'alert' : 'check'}
+                title="Held by this rule alone"
+                value={totalHeldSolely}
+                color={totalHeldSolely > 0 ? 'warning' : 'success'}
+                icon={totalHeldSolely > 0 ? 'alert' : 'check'}
                 subtitle={`across ${summary.targetGroups.length} target group${
                   summary.targetGroups.length === 1 ? '' : 's'
                 }`}
@@ -289,8 +301,8 @@ const RuleImpactModal: React.FC<RuleImpactModalProps> = ({
             )}
 
             <p className="text-xs text-neutral-400">
-              Loss is inferred from rule targets and exclusions (the same attribution used across
-              the app); members added manually cannot always be distinguished.
+              Attribution is inferred from rule targets and exclusions (the same attribution used
+              across the app); members added manually cannot always be distinguished.
             </p>
           </>
         )}

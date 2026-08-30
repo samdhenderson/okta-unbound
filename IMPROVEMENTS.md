@@ -892,3 +892,39 @@ block says they mean — same vocabulary, one definition, defined there.
   claims it makes are stronger than the existing ones, so it wants an ADR
   fixing the wording before the code. Depends on `D-076` for the numbers to be
   trustworthy on a long-lived snapshot.
+
+### I-029 · The reel's rule-impact chapter can come back, arguing both verbs
+
+- **Category:** feature-completeness
+- **Priority:** P3
+- **Size:** M
+- **Files:** `docs/adr/0043-the-demo-is-a-stage-the-script-is-the-director.md`
+  (the held-out chapter), the reel's chapter sources under `src/sidepanel/demo/`,
+  and whatever `npm run capture` re-shoots
+- **Verified:** 2026-08-30 — `D-052`'s **Related** note is the source: the
+  chapter was deliberately held out of the reel "until this lands". It has now
+  landed, so the block is gone and the item is actionable.
+- **Problem:** ADR-0043 pulled the rule-impact chapter from the demo reel
+  because the product was making a claim that was not true — that deactivating
+  a rule retracts membership. `D-052` fixed the claim, and nothing now records
+  that the chapter is free to return; the knowledge lived only in `D-052`'s
+  **Related** paragraph, and `D-052` is closed.
+
+  The chapter should not simply be re-shot as it was. `D-052`'s own note says
+  what it should now argue: **both verbs side by side** — deactivate, where
+  nobody moves but N members become unattributed, and delete, where
+  `removeUsers` is the irreversible choice between removing N and keeping them
+  as now-manual members. That contrast is a better demo than the original scene
+  was, because it shows the product knowing something an admin usually gets
+  wrong.
+
+- **Done when:** the chapter is back in the reel, it shows both verbs and names
+  `removeUsers` as the irreversible choice, ADR-0043's held-out note is updated
+  to say it returned and why, and `npm run capture:check` passes on the new
+  footage.
+- **Risk:** Low to the app — this is demo footage, not product code. Note that
+  the hero rule's solely-held set is **empty**, which is exactly why the
+  original defect went unnoticed for so long; the scene needs a fixture where
+  the count is non-zero or it will demonstrate nothing.
+- **Status:** open
+- **Related:** `D-052` (the defect that held it out), ADR-0043, ADR-0045

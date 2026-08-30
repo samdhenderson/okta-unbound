@@ -302,9 +302,15 @@ Before deactivating, deleting, or editing a rule, establish who it currently fee
 3. For each target, walk members with `expand=group-rules` and keep those whose
    embed names this rule.
 
-Members attributed to **this rule only** lose access when it goes. Members also
-attributed to another rule, or added manually, do not.
-`[verified: shared/membership/ruleImpact]`
+Members attributed to **this rule only** are the ones the rule holds up on its own.
+Members also attributed to another rule, or added manually, are unaffected by
+anything done to it.
+
+That population is **not** "who loses access" — the verb decides what happens to
+them, and only deleting the rule can take anybody out of a group. Deactivating
+leaves every one of them a member, merely no longer explained by any rule.
+`[verified: shared/membership/ruleImpact → classifyGroupImpact returns
+heldSolelyByRule / unaffected, and never a set named for access loss]`
 
 Two facts that change the answer, and are easy to get backwards:
 

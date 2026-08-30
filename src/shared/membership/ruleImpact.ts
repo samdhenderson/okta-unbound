@@ -1,20 +1,37 @@
 /**
  * @module shared/membership/ruleImpact
- * @description Pure engine for previewing the access impact of a group rule.
+ * @description Pure engine for previewing what a group rule currently holds up.
  *
- * Answers the question an admin most needs before touching a rule: **who loses
- * access if this rule is deactivated?** It is deliberately I/O-free — callers
- * supply the rule set and each target group's current members, and these
- * functions do the set math. The classification is consistent with the app's
- * single source of truth for membership attribution
+ * Answers one question an admin needs before touching a rule: **which current
+ * members of each target group are held by this rule alone?** — that is, whose
+ * membership no *other* active, non-excluding rule also explains. It is
+ * deliberately I/O-free — callers supply the rule set and each target group's
+ * current members, and these functions do the set math. The classification is
+ * consistent with the app's single source of truth for membership attribution
  * (`shared/utils/membershipAnalysis`): a member is attributed to a rule for a
  * group when an ACTIVE rule that targets the group and does not exclude them is
  * that rule, and `APP_GROUP` membership is application-managed and never
  * attributed to a group rule.
  *
- * The reusable population-diff shape here (`losing`/`retaining`) is exactly what
- * a future rule-consolidation / merge preview would consume, so it lives in
- * `shared/` rather than beside the UI.
+ * **This set is not "who loses access", and the distinction is the module's whole
+ * point (D-052).** The same population means something different per verb, and
+ * only one of the three takes anybody out of a group:
+ *
+ * | Verb | What happens to the members held by this rule alone | Reversible? |
+ * | --- | --- | --- |
+ * | Deactivate | Nobody moves. Membership remains; the rule no longer applies to new users. They are simply no longer explained by any rule — **unattributed**. | Yes — reactivate. |
+ * | Delete, `removeUsers=false` (or omitted) | They stay in the group as ordinary manual members; the rule no longer manages the membership. | No. |
+ * | Delete, `removeUsers=true` | Okta removes them from the group entirely. | No. |
+ *
+ * So callers must name the consequence themselves from the verb they are about
+ * to perform; the engine reports the population and nothing more. Rendering this
+ * count as an access loss under a deactivate is the defect D-052 fixed, and the
+ * hedge ADR-0036 requires still applies to the population itself: a manual add
+ * cannot always be told apart from a rule-placed membership.
+ *
+ * The reusable population-diff shape here (`heldSolelyByRule`/`unaffected`) is
+ * exactly what a future rule-consolidation / merge preview would consume, so it
+ * lives in `shared/` rather than beside the UI.
  *
  * @see {@link classifyGroupImpact}
  * @see {@link summarizeRuleImpact}
@@ -66,39 +83,45 @@ export interface TargetGroupMembers {
 }
 
 /**
- * Partition one target group's current members into those who would lose access
- * if `ruleId` were deactivated and those who would retain it.
+ * Partition one target group's current members into those held by `ruleId`
+ * **alone** and those whose membership nothing about this rule touches.
  *
  * A member is considered **managed by this rule** for the group when this rule
  * is among the ACTIVE rules that target the group and do not exclude the member.
- * Such a member **loses** access only when no *other* active, non-excluding rule
- * also targets the group; otherwise the other rule keeps them and they
- * **retain** access. Members this rule does not manage (manual adds, or members
- * placed solely by other rules) always retain. `APP_GROUP` membership is
- * application-managed, so no member is attributed to the group rule.
+ * Such a member is **held solely by this rule** only when no *other* active,
+ * non-excluding rule also targets the group; otherwise the other rule still
+ * explains the membership and they are **unaffected**. Members this rule does
+ * not manage (manual adds, or members placed solely by other rules) are always
+ * unaffected. `APP_GROUP` membership is application-managed, so no member is
+ * attributed to the group rule.
  *
- * @param ruleId - The rule whose deactivation is being previewed.
+ * `heldSolelyByRule` is the population whose *meaning* changes when the rule is
+ * touched — it is **not** a set of people who lose access. See the module header
+ * for what each verb does to it; deactivating leaves every one of them in the
+ * group, merely unattributed.
+ *
+ * @param ruleId - The rule being analyzed.
  * @param target - The target group and its current members.
  * @param rules - All candidate rules (normalized via {@link toImpactRule}).
- * @returns The `losing` and `retaining` member partitions (input order preserved).
+ * @returns The `heldSolelyByRule` and `unaffected` partitions (input order preserved).
  */
 export function classifyGroupImpact(
   ruleId: string,
   target: TargetGroupMembers,
   rules: ImpactRule[],
-): { losing: OktaUser[]; retaining: OktaUser[] } {
-  // APP_GROUP membership is granted by the application, not a group rule, so
-  // deactivating a group rule cannot remove it.
+): { heldSolelyByRule: OktaUser[]; unaffected: OktaUser[] } {
+  // APP_GROUP membership is granted by the application, not a group rule, so no
+  // group rule holds it up and no verb against one can change it.
   if (target.groupType === 'APP_GROUP') {
-    return { losing: [], retaining: [...target.members] };
+    return { heldSolelyByRule: [], unaffected: [...target.members] };
   }
 
   const activeRulesForGroup = rules.filter(
     (r) => r.status === 'ACTIVE' && r.targetGroupIds.includes(target.groupId),
   );
 
-  const losing: OktaUser[] = [];
-  const retaining: OktaUser[] = [];
+  const heldSolelyByRule: OktaUser[] = [];
+  const unaffected: OktaUser[] = [];
 
   for (const member of target.members) {
     const nonExcluding = activeRulesForGroup.filter((r) => !r.excludedUserIds.includes(member.id));
@@ -106,22 +129,22 @@ export function classifyGroupImpact(
 
     if (!managedByThisRule) {
       // Manual member, or placed only by other rules — unaffected by this rule.
-      retaining.push(member);
+      unaffected.push(member);
       continue;
     }
 
     const otherActiveRules = nonExcluding.filter((r) => r.id !== ruleId);
     if (otherActiveRules.length === 0) {
-      losing.push(member);
+      heldSolelyByRule.push(member);
     } else {
-      retaining.push(member);
+      unaffected.push(member);
     }
   }
 
-  return { losing, retaining };
+  return { heldSolelyByRule, unaffected };
 }
 
-/** The access impact against a single target group. */
+/** What a single target group's roster owes to the analyzed rule. */
 export interface TargetGroupImpact {
   /** Group id. */
   groupId: string;
@@ -129,13 +152,16 @@ export interface TargetGroupImpact {
   groupName: string;
   /** Total current members of the group. */
   memberCount: number;
-  /** Number of members who would lose access on deactivation. */
-  losingCount: number;
-  /** Members who would lose access (full list; the UI decides how many to show). */
-  losing: OktaUser[];
+  /** Number of members held by the analyzed rule alone. */
+  heldSolelyCount: number;
+  /**
+   * Members held by the analyzed rule alone (full list; the UI decides how many
+   * to show). Not a set of people who lose access — see the module header.
+   */
+  heldSolelyByRule: OktaUser[];
 }
 
-/** The aggregate access impact of deactivating a rule across its target groups. */
+/** What a rule currently holds up, aggregated across its target groups. */
 export interface RuleImpactSummary {
   /** The analyzed rule's id. */
   ruleId: string;
@@ -145,15 +171,19 @@ export interface RuleImpactSummary {
   targetGroups: TargetGroupImpact[];
   /** Distinct users across all target groups (a user in two targets counts once). */
   distinctMemberCount: number;
-  /** Distinct users who would lose access to at least one target group. */
-  totalLosing: number;
+  /**
+   * Distinct users held by the analyzed rule alone in at least one target group.
+   * On deactivate this is who becomes **unattributed**; on delete with
+   * `removeUsers=true` it is who is removed. It is never, on its own, a loss.
+   */
+  totalHeldSolely: number;
 }
 
 /**
- * Summarize the access impact of deactivating a rule across all its target
- * groups, de-duplicating users who appear in more than one target group.
+ * Summarize which members a rule holds up across all its target groups,
+ * de-duplicating users who appear in more than one target group.
  *
- * @param ruleId - The rule whose deactivation is being previewed.
+ * @param ruleId - The rule being analyzed.
  * @param ruleName - The rule's display name (echoed into the summary).
  * @param targets - Each target group with its current members.
  * @param rules - All candidate rules (normalized via {@link toImpactRule}).
@@ -167,19 +197,19 @@ export function summarizeRuleImpact(
 ): RuleImpactSummary {
   const targetGroups: TargetGroupImpact[] = [];
   const distinctMembers = new Set<string>();
-  const distinctLosers = new Set<string>();
+  const distinctHeldSolely = new Set<string>();
 
   for (const target of targets) {
-    const { losing } = classifyGroupImpact(ruleId, target, rules);
+    const { heldSolelyByRule } = classifyGroupImpact(ruleId, target, rules);
     for (const m of target.members) distinctMembers.add(m.id);
-    for (const u of losing) distinctLosers.add(u.id);
+    for (const u of heldSolelyByRule) distinctHeldSolely.add(u.id);
 
     targetGroups.push({
       groupId: target.groupId,
       groupName: target.groupName,
       memberCount: target.members.length,
-      losingCount: losing.length,
-      losing,
+      heldSolelyCount: heldSolelyByRule.length,
+      heldSolelyByRule,
     });
   }
 
@@ -188,6 +218,6 @@ export function summarizeRuleImpact(
     ruleName,
     targetGroups,
     distinctMemberCount: distinctMembers.size,
-    totalLosing: distinctLosers.size,
+    totalHeldSolely: distinctHeldSolely.size,
   };
 }
