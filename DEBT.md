@@ -2090,7 +2090,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Risk:** Medium. This changes a contract and user-facing claims, so it is
   **architecturally significant** and goes through the plan-and-approval gate as
   its own PR. Do not fold it into unrelated work.
-- **Status:** open
+- **Status:** claimed:claude/stoic-gates-pvs6hq
 - **Approved 2026-08-29 by Sam**, conditional on establishing what Okta actually
   does on delete. That was done before approving; the verdict is below and the
   item is now scoped enough to implement without re-researching it.
@@ -2492,7 +2492,7 @@ affects every scroll box in the app, on every platform.
 - **Status:** open
 - **Related:** `D-013c`
 
-### D-058 · Two modals hand-roll the eyebrow recipe `Eyebrow` exists to own
+### D-058 · Three modals hand-roll the eyebrow recipe `Eyebrow` exists to own
 
 - **Category:** standards
 - **Priority:** P3
@@ -2500,22 +2500,27 @@ affects every scroll box in the app, on every platform.
 - **Files:** `src/sidepanel/components/RuleConsolidationModal.tsx:151,162,186`,
   `src/sidepanel/components/groups/GroupMergeModal.tsx:116` (the hand-rolled
   eyebrow labels), `:127` (an off-scale `py-2.5`),
+  `src/sidepanel/components/RuleImpactModal.tsx:288` (the "Target groups"
+  label — the third instance, found 2026-08-30),
   `src/sidepanel/components/shared/Eyebrow.tsx` (the primitive they should use)
 - **Verified:** 2026-08-28 — spotted by `ui-reviewer` while reviewing the
   `D-013c` diff; both files confirmed **pre-existing** and untouched by that
-  change.
-- **Problem:** Four call sites across the two wizard modals build a section
-  eyebrow out of the `tracking-wider` recipe that `docs/design-system.md` bans in
-  favour of the shared `Eyebrow` component, which exists precisely so the
-  typography contract lives in one place. `GroupMergeModal.tsx:127` additionally
-  uses an off-scale `py-2.5`. Reported as advisory, not blocking, and
-  deliberately not folded into `D-013c`'s diff — that item added notice props to
-  these files and nothing else, and widening it would have broken the
-  one-concern-per-PR rule.
-- **Done when:** All four eyebrow labels render through `Eyebrow`, the `py-2.5`
-  moves onto the spacing scale, and both modals' existing stories stay green
-  without retargeting. Check whether the same recipe appears in other modals
-  before fixing only these two — enumerate, do not sample.
+  change. **Re-confirmed and widened 2026-08-30** — `ui-reviewer` found the same
+  recipe in `RuleImpactModal` while reviewing `D-052`, and `git show` confirmed
+  that line is pre-existing and untouched by that diff too.
+- **Problem:** Five call sites across three modals build a section eyebrow out of
+  the `tracking-wider` recipe that `docs/design-system.md` bans in favour of the
+  shared `Eyebrow` component, which exists precisely so the typography contract
+  lives in one place. `GroupMergeModal.tsx:127` additionally uses an off-scale
+  `py-2.5`. Reported as advisory, not blocking, and deliberately not folded into
+  `D-013c`'s diff — that item added notice props to these files and nothing
+  else, and widening it would have broken the one-concern-per-PR rule. The same
+  reasoning kept it out of `D-052`'s diff on 2026-08-30.
+- **Done when:** All five eyebrow labels render through `Eyebrow`, the `py-2.5`
+  moves onto the spacing scale, and all three modals' existing stories stay green
+  without retargeting. **The enumeration this item asked for has now been run
+  twice and grown the list both times** — run `grep -rn "tracking-wider" src/`
+  and fix every hit, rather than the three modals named here.
 - **Risk:** Low — presentational, behind two components that already have story
   coverage.
 - **Status:** open
@@ -3043,7 +3048,6 @@ affects every scroll box in the app, on every platform.
   rather than main's. Exactly the failure `D-072` describes for ADR numbers, one
   ledger over.
 
-
 ### D-075 · A profile write invalidated the memberships and never re-read them
 
 - **Category:** correctness
@@ -3097,7 +3101,6 @@ affects every scroll box in the app, on every platform.
   number to a different item. Main's numbering is the published one, so this moved
   rather than main's. Exactly the failure `D-072` describes for ADR numbers, one
   ledger over.
-
 
 ### D-076 · The org snapshot's delta cannot see a membership change
 
@@ -3221,3 +3224,112 @@ affects every scroll box in the app, on every platform.
   reporting.
 - **Status:** open
 - **Related:** `D-078`
+
+### D-080 · `D-062` names two different items, and the ledger cannot tell them apart
+
+- **Category:** standards
+- **Priority:** P2
+- **Size:** S
+- **Files:** `DEBT.md` (`:2630` and `:2668`, the two `### D-062` headers),
+  `docs/adr/0058-one-context-engine.md:5,13`, `docs/adr/README.md:69`,
+  `NIGHTLY.md:45,201,228`
+- **Verified:** 2026-08-30 — enumerated, not sampled. Every `### [ID]-NNN`
+  header in both ledgers was extracted and passed through `uniq -d`: `D-062` is
+  the **only** duplicate across all 100+ items, and it is a genuine collision of
+  two unrelated items, not one item written twice.
+- **Problem:** `DEBT.md:2630` is `D-062 · Two context engines probe the same
+page twice on every navigation` — category `perf`, status
+  `research:awaiting-review`, scoped by ADR-0058. `DEBT.md:2668` is `D-062 ·
+handleGetAppInfo reads an Okta response with no zod boundary` — category
+  `security`, status `open`. They share an id and nothing else. The second was
+  filed on 2026-08-29 in the `D-062`…`D-070` batch (`NIGHTLY.md:201`) against an
+  id already taken on 2026-08-28.
+
+  This breaks the one mechanism `SESSION.md` step 2 depends on. That step greps
+  open PRs for bare `I-NNN`/`D-NNN` tokens and treats every match as claimed —
+  so a PR closing the security item marks the research item claimed too, and a
+  PR closing the research item hides an **open P2 security gap** from every
+  subsequent session. It fails in the safe-looking direction: nothing errors,
+  an item simply stops being offered.
+
+  It also corrupts citations already in `docs/`. `ADR-0058:5` says "Scoped by:
+  `D-062`" and `docs/adr/README.md:69` says "Scopes `D-062`" — both meaning the
+  context-engine item, both now ambiguous. `lint:cited-paths` cannot see this:
+  it checks that cited **paths** resolve, not that a cited **item id** is
+  unique. This is the same class of quiet failure as `D-072` (a reserved ADR
+  number that silently retargets), one level up: there the citation resolved to
+  the wrong document, here it resolves to either of two.
+
+- **Done when:** one of the two items is renumbered to a free id (the security
+  one is the later filing and has no `docs/` citations pointing at it, so it is
+  the cheaper move), every reference to the renumbered item is updated across
+  `DEBT.md`, `IMPROVEMENTS.md`, `NIGHTLY.md` and `docs/`, and a check makes the
+  collision impossible to reintroduce — extending `scripts/check-cited-paths.mjs`
+  (or a sibling script wired into the same npm task) to fail on a duplicate
+  `### [ID]-NNN` header is the cheapest place to put it, since that script
+  already walks the ledgers.
+- **Risk:** Low to fix — a renumber plus a mechanical citation sweep. The risk
+  in leaving it is that the security item stays invisible to step 2 the next
+  time either id appears in a PR.
+- **Status:** open
+- **Related:** `D-072` (the reserved-ADR-number failure — same quiet-citation
+  class), `D-031`, `D-024`
+
+### D-081 · `RuleImpactModal`'s error state is not announced to a screen reader
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/RuleImpactModal.tsx:257-261` (the
+  hand-rolled error `<div>`), `src/sidepanel/components/shared/AlertMessage.tsx`
+  (the primitive it should use)
+- **Verified:** 2026-08-30 — found by `ui-reviewer` on the `D-052` diff, then
+  confirmed **pre-existing** with `git show`: the flagged lines appear nowhere in
+  that commit's diff.
+- **Problem:** `docs/ux-guidelines.md` requires error states to render through
+  the shared `AlertMessage` (`type="danger"`), which carries `role="alert"`.
+  `RuleImpactModal` hand-rolls a plain `<div>` instead, so when the impact walk
+  fails the modal changes silently for anyone not watching the pixels — the
+  failure of a preview whose entire purpose is to inform a destructive decision.
+  It is the load-failure arm of a modal that is otherwise well covered.
+- **Done when:** the error arm renders through `AlertMessage` with
+  `type="danger"`, the announcement is asserted by a story or test that reaches
+  the error state (`RuleImpactModal.stories.tsx` already has the other arms), and
+  `status` vocabulary stays `danger`, not `error`, per ADR-0002 — note the
+  component's internal `status === 'error'` union member is a different thing
+  from the visual token and does not need renaming here.
+- **Risk:** Low — one arm of one modal, already story-covered.
+- **Status:** open
+- **Related:** `D-056` (the same primitive hand-rolling its own buttons),
+  `D-057` (alert states no story can reach)
+
+### D-082 · Five test fixtures build addresses on a real domain, not `example.com`
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/shared/membership/ruleImpact.test.ts:21`,
+  `src/shared/membership/groupSource.test.ts`,
+  `src/shared/membership/memberSourceIndex.test.ts`,
+  `src/shared/membership/mergePlan.test.ts`,
+  `src/sidepanel/components/RuleImpactModal.test.tsx`
+- **Verified:** 2026-08-30 — found by `security-logging-reviewer` on the `D-052`
+  diff and enumerated, not sampled: `grep -rn "@x\.io" src/` returns exactly
+  five files. Confirmed pre-existing — `git show main:…ruleImpact.test.ts` has
+  the identical line 21.
+- **Problem:** `CLAUDE.md` says fixtures use fake placeholders (`00gFAKE…`,
+  `user@example.com`). These five build logins and emails as `` `${id}@x.io` ``.
+  `x.io` is a live, registered second-level domain, not one of the RFC 2606
+  reserved names. No real person's data is exposed — the local parts are
+  synthetic (`u1`, `u2`) — so this is a convention breach rather than a leak, and
+  it is filed at P3 for that reason. It still matters: the repo's rule is
+  absolute precisely so that nobody has to make this judgement call per fixture,
+  and a sibling suite in the same directory (`useOktaApi/ruleImpact.test.ts:78`)
+  already does it correctly with `ada@example.com`.
+- **Done when:** all five use `example.com` (or a documented `.test`/`.invalid`
+  placeholder), the suites stay green without retargeting any assertion — these
+  are fixture inputs, not expectations — and a grep for a non-reserved domain
+  across `src/` comes back empty.
+- **Risk:** Low — fixture inputs only. Check each suite for an assertion that
+  happens to hard-code the old string before swapping.
+- **Status:** open
