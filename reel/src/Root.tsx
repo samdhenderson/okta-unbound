@@ -13,10 +13,11 @@ import { SCRIPT } from './script';
 import { Chapter, chapterLength } from './comp/Chapter';
 import { LedgerPreview, LEDGER_FRAMES } from './pieces/Ledger';
 import { UnpackingPreview, UNPACKING_FRAMES } from './pieces/Unpacking';
-import { TitleCardPreview, TITLE_CARD_FRAMES } from './comp/TitleCard';
-import { ColdOpenPreview, COLD_OPEN_FRAMES } from './comp/ColdOpen';
+import { DrawnTitlePreview, DRAWN_TITLE_FRAMES } from './comp/TitleCard';
 import { PremiseCardPreview, PREMISE_CARD_FRAMES } from './comp/PremiseCard';
 import { SeamPreview } from './comp/Seam';
+import { OverturePreview, OVERTURE_FRAMES } from './comp/Overture';
+import { PanelInkPreview, PANEL_INK_FRAMES } from './comp/PanelInk';
 import { REEL_FRAMES, Reel } from './comp/Reel';
 import { Verbs, VERBS_FRAMES } from './comp/Verbs';
 import { FRAME } from './theme';
@@ -89,10 +90,11 @@ export const Root: React.FC = () => (
       [
         ['piece-ledger', LedgerPreview, LEDGER_FRAMES],
         ['piece-unpacking', UnpackingPreview, UNPACKING_FRAMES],
-        ['card-title', TitleCardPreview, TITLE_CARD_FRAMES],
-        ['cold-open', ColdOpenPreview, COLD_OPEN_FRAMES],
+        ['card-title', DrawnTitlePreview, DRAWN_TITLE_FRAMES],
         ['card-premise', PremiseCardPreview, PREMISE_CARD_FRAMES],
         ['seam', SeamPreview, 60],
+        ['overture', OverturePreview, OVERTURE_FRAMES],
+        ['panel-ink', PanelInkPreview, PANEL_INK_FRAMES],
       ] as const
     ).map(([id, component, durationInFrames]) => (
       <Composition

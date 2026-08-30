@@ -19,6 +19,7 @@ import { Chapter, actLabelAt, chapterLength, chapterTab } from './Chapter';
 import { FilmIndex } from './FilmIndex';
 import { END_CARD_FRAMES, EndCard } from './EndCard';
 import { OPENING_FRAMES, Opening } from './Opening';
+import { SEAM_LANDED } from './Overture';
 import { Seam } from './Seam';
 
 /** Frames the index band takes to hand over from one chapter to the next. */
@@ -108,7 +109,7 @@ const CHAPTERS_CLOSE = OPENING_FRAMES + CHAPTERS.reduce((total, c) => total + c.
  * jump on the cut. Hoisted, it has one clock and no boundary to match.
  */
 const SeamOverFilm: React.FC = () => (
-  <Seam frame={useCurrentFrame()} arriveAt={0} recedeAt={CHAPTERS_CLOSE} />
+  <Seam frame={useCurrentFrame()} arriveAt={SEAM_LANDED} recedeAt={CHAPTERS_CLOSE} />
 );
 
 export const Reel: React.FC = () => (

@@ -68,8 +68,15 @@ const files = walk(SRC);
  * `src/diagrams/index.tsx` (`useArrival`), `src/showcase/index.tsx`
  * (`useStagger`). Lower this number in the same commit that converts one of
  * them.
+ *
+ * 3 to 2: `src/comp/Opening.tsx`'s two springs went with the file's two type
+ * cards when the overture replaced them. Not a conversion - a deletion - but
+ * the ratchet does not care which, and this is the gate working as designed:
+ * the count dropped, the run went red, and the constant had to come down in
+ * the same commit rather than leaving 3 as headroom a future spring could
+ * quietly occupy.
  */
-const SPRING_RATCHET_BASELINE = 3;
+const SPRING_RATCHET_BASELINE = 2;
 
 /**
  * Blank out comments and string bodies, preserving offsets and newlines.
@@ -92,7 +99,10 @@ function codeOnly(text) {
   while (i < text.length) {
     const two = text.slice(i, i + 2);
     if (two === '//') {
-      while (i < text.length && text[i] !== '\n') { out += ' '; i += 1; }
+      while (i < text.length && text[i] !== '\n') {
+        out += ' ';
+        i += 1;
+      }
       continue;
     }
     if (two === '/*') {
@@ -109,7 +119,11 @@ function codeOnly(text) {
       out += q;
       i += 1;
       while (i < text.length && text[i] !== q) {
-        if (text[i] === '\\') { out += '  '; i += 2; continue; }
+        if (text[i] === '\\') {
+          out += '  ';
+          i += 2;
+          continue;
+        }
         out += text[i] === '\n' ? '\n' : ' ';
         i += 1;
       }
@@ -176,7 +190,9 @@ function checkEaseTokens() {
 
   const entries = [...block[1].matchAll(/(['"]?)([\w-]+)\1:\s*(['"])((?:[^\\]|\\.)*?)\3,/g)];
   if (entries.length === 0) {
-    fail('check-verbs: EASE block parsed but yielded no entries — did the generator format change?');
+    fail(
+      'check-verbs: EASE block parsed but yielded no entries — did the generator format change?',
+    );
     return;
   }
 
@@ -413,9 +429,7 @@ function checkNoDashesInStrings() {
   if (violations.length > 0) {
     fail(
       `check-verbs: em/en dash found in a string literal (ADR-0043 bans them on screen):\n` +
-        violations
-          .map((v) => `  ${path.relative(SRC, v.file)}:${v.line}`)
-          .join('\n'),
+        violations.map((v) => `  ${path.relative(SRC, v.file)}:${v.line}`).join('\n'),
     );
   } else {
     console.log(`dash scan: 0 violations across ${files.length} files.`);
