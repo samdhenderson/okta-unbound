@@ -32,10 +32,11 @@
  */
 import {
   jumpBarInput,
-  jumpResolutionFootnote,
   jumpResultRow,
+  jumpResultRows,
   orgFinding,
   readOrgFinding,
+  readOrgFindingTotal,
   readReportCount,
   readWorkingSetCount,
   reportDisclosure,
@@ -43,33 +44,37 @@ import {
   workingSetSection,
 } from '../selectors.mjs';
 
-/** The group the jump bar resolves. `Engineering - All`, the demo org's hero group. */
-const JUMP_ID = '00gFAKE0000000000002';
-const JUMP_NAME = 'Engineering - All';
+/** The person the jump bar resolves by email — the film's hero, so Home hands off straight into the Users chapter. */
+const JUMP_EMAIL = 'priya.achterberg@example.com';
+const JUMP_NAME = 'Priya Achterberg';
+
+/** The finding whose "of N groups" note the unpacking set piece draws its denominator from. */
+const GROUPS_FINDING = 'Groups no rule fills';
 
 /** The finding the reports card opens. */
 const REPORT = 'App access no rule maintains';
 
 export async function walk({ page, drive, beat }) {
   await beat('jump', async () => {
-    // Typed rather than filled: the no-request-until-Enter rule is the claim,
-    // and it is only legible if the viewer sees the id land without the panel
-    // reacting to it.
-    await drive.type(jumpBarInput(page), JUMP_ID);
+    // Typed rather than filled: the beat is showing a search landing, and that
+    // is only legible if the viewer sees the email arrive keystroke by
+    // keystroke before the panel answers.
+    await drive.type(jumpBarInput(page), JUMP_EMAIL);
     await drive.settle(900);
     await page.keyboard.press('Enter');
     await drive.waitFor(jumpResultRow(page, JUMP_NAME), {
-      why: 'the jump bar never resolved the pasted id',
+      why: 'the jump bar never resolved the email search',
     });
 
-    // The footnote is the whole beat. A row appearing proves a lookup happened;
-    // only this says what it cost.
-    const footnote = await jumpResolutionFootnote(page).innerText();
-    await drive.read('jumpCost', () => footnote);
-    if (!footnote.includes('no request')) {
+    // An email search never carries the id-resolution footnote — JumpBar only
+    // renders it for `jump.resolution`, which an email/name search never sets
+    // (see selectors.mjs). So the number this beat has to answer for is not
+    // what the lookup cost, it's how many rows it found.
+    const results = await drive.read('results', () => jumpResultRows(page).count());
+    if (results === 0) {
       throw new Error(
-        `the jump footnote reads "${footnote}" — the snapshot did not answer, so the ` +
-          'beat would claim a local resolution the panel did not make',
+        `the jump bar returned 0 results for "${JUMP_EMAIL}" — the beat claims a search ` +
+          'that found the person and would be showing nobody',
       );
     }
     await drive.settle(800);
@@ -91,9 +96,9 @@ export async function walk({ page, drive, beat }) {
   });
 
   await beat('findings', async () => {
-    await drive.scrollTo(orgFinding(page, 'Groups no rule fills'));
+    await drive.scrollTo(orgFinding(page, GROUPS_FINDING));
     await drive.settle(900);
-    const unruled = await drive.read('unruled', () => readOrgFinding(page, 'Groups no rule fills'));
+    const unruled = await drive.read('unruled', () => readOrgFinding(page, GROUPS_FINDING));
     const empty = await drive.read('emptyGroups', () =>
       readOrgFinding(page, 'Groups with no members'),
     );
@@ -105,7 +110,7 @@ export async function walk({ page, drive, beat }) {
     // read zero argues the opposite of what it is for, and three of these read
     // zero before the fixtures were changed for exactly this reason.
     for (const [label, value] of [
-      ['Groups no rule fills', unruled],
+      [GROUPS_FINDING, unruled],
       ['Groups with no members', empty],
       ['Paused group rules', paused],
     ]) {
@@ -116,6 +121,12 @@ export async function walk({ page, drive, beat }) {
         throw new Error(`"${label}" reads 0 — the chapter would narrate a finding that is not one`);
       }
     }
+
+    // The set piece B3 grid draws `unruled` out of `groupsTotal` cells, so the
+    // denominator has to come off the same row while the camera is already
+    // parked on it — see readOrgFindingTotal for why it is read from the
+    // finding's own note rather than the card's totals paragraph.
+    await drive.read('groupsTotal', () => readOrgFindingTotal(page, GROUPS_FINDING));
     await drive.settle(1000);
   });
 

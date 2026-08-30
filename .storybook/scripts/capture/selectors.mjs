@@ -133,6 +133,22 @@ export const jumpResultRow = (page, name) =>
   jumpBarSection(page).getByRole('button', { name: startsWith(name) });
 
 /**
+ * Every jump-bar result row on screen, reachable in this build.
+ *
+ * A count of {@link jumpResultRow}, not a count of `role=button` inside the
+ * section: that section also holds {@link jumpBarClear}, whose name is the
+ * plain string `Clear` and would inflate the tally by one the instant it
+ * renders. Every result row's name carries the em dash `JumpResultRow` builds
+ * it with (`${name} — open in ${destinationLabel(kind)}`), so requiring one is
+ * enough to exclude `Clear` without naming it.
+ *
+ * Same ceiling as {@link jumpResultRow}: an unreachable kind swaps its row for
+ * an `OpenInOktaLink` anchor instead of a button, so this counts *reachable*
+ * results, not every row the search matched.
+ */
+export const jumpResultRows = (page) => jumpBarSection(page).getByRole('button', { name: /—/ });
+
+/**
  * The working set's own scope: `Pinned` or `Recent`.
  *
  * `WorkingSet.tsx` renders each as its own `<section aria-label="…">` — two
@@ -252,6 +268,50 @@ export async function readOrgFinding(page, label) {
   const text = await orgSnapshotCard(page).locator('li').filter({ hasText: label }).innerText();
   const match = text.replace(/,/g, '').match(/\d+/);
   return match ? Number(match[0]) : null;
+}
+
+/**
+ * Read the denominator behind one org-card finding — the collection total its
+ * note states, not the value the finding itself counts.
+ *
+ * `countNote()` (`orgFigures.ts`) writes `of {total} {noun}` under a finding
+ * whose status is `ok`, so the number sits in the finding's own row rather
+ * than in the card's totals paragraph, and reading it there ties it to the
+ * same status computation that produced the finding's numerator. That note is
+ * the *only* correct source: `countNote` also returns `At least — the last
+ * read of {noun} did not finish.` when the collection's walk is only
+ * `partial`, which makes the number a floor, and a floor used as a
+ * denominator overstates whatever proportion is drawn against it. So this
+ * throws rather than parsing a number out of that sentence, and throws again
+ * if there is no note at all (status `reading`, no walk finished yet) or if
+ * the note does not parse — quoting the raw text in both cases, the way every
+ * other reader in this file reports what it actually saw.
+ *
+ * Reached through the finding's own label span (`id="org-finding-<key>"`,
+ * set by `Finding` in `OrgSnapshotCard.tsx`) rather than the row's whole text,
+ * because the row also carries the `FigureNumber` digits and the label prose,
+ * and a regex over all three risks matching the wrong number.
+ */
+export async function readOrgFindingTotal(page, label) {
+  const li = orgSnapshotCard(page).locator('li').filter({ hasText: label });
+  const note = await li.evaluate((el) => {
+    const labelSpan = el.querySelector('span[id^="org-finding-"]');
+    return labelSpan?.nextElementSibling?.textContent ?? null;
+  });
+  if (note === null) {
+    throw new Error(
+      `readOrgFindingTotal: "${label}" has no note yet — the card is still reading`,
+    );
+  }
+  const ok = /^of ([\d,]+) /.exec(note);
+  if (!ok) {
+    throw new Error(
+      `readOrgFindingTotal: "${label}"'s note reads "${note}" — that is not a finished ` +
+        'total, and a floor or a missing denominator would make the proportion drawn ' +
+        'against it a lie',
+    );
+  }
+  return Number(ok[1].replace(/,/g, ''));
 }
 
 /**
