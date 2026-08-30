@@ -70,7 +70,10 @@ const Field: React.FC<{ label: string; value: string }> = ({ label, value }) => 
 export const Placeholder: React.FC<PieceProps> = ({ id, frames, plot, manifest }) => (
   <AbsoluteFill>
     <Recede
-      from={frames - FRAMES.recede}
+      // Minus one: a piece of N frames renders 0 through N-1, so a recede
+      // ending on frame N leaves the object still visible on the last frame
+      // that is actually shown. See ExplodedPlates for the full note.
+      from={frames - FRAMES.recede - 1}
       style={{ position: 'absolute', left: plot.x, top: plot.y, width: plot.width }}
     >
       <Dock from={0}>

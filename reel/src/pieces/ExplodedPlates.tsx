@@ -112,7 +112,13 @@ const BAND_OUT = 164;
 const CLOSE_AT = 186;
 const CLOSE_OVER = 12;
 /** The whole card recedes, landing its last frame on the piece's last frame. */
-const RECEDE_AT = EXPLODED_PLATES_FRAMES - FRAMES.recede;
+// Minus one, and the one matters. A piece of N frames renders 0 through N-1,
+// so a recede starting at `N - recede` completes on frame N, which is never
+// rendered: the last frame the film actually shows still has the object on it
+// at about 17 percent, and that ghost is composited over the first frame of
+// the footage the piece cuts back to. Found by rendering the last frame rather
+// than by reading the arithmetic.
+const RECEDE_AT = EXPLODED_PLATES_FRAMES - FRAMES.recede - 1;
 
 /* --- Geometry ------------------------------------------------------------- */
 
