@@ -28,8 +28,11 @@ const mixedGroups: GroupSummary[] = [
     id: 'g4',
     name: 'Contractors 2019',
     memberCount: 8,
-    // Old enough to trip the cleanup panel's age-based Stale bucket.
-    lastUpdated: new Date('2019-06-01'),
+    // Old enough to trip the panel's Dormant bucket: nobody has joined or left
+    // in years. The profile clock is deliberately recent, so this row only
+    // appears if the signal is reading the membership clock.
+    lastUpdated: new Date('2026-06-01'),
+    lastMembershipUpdated: new Date('2019-06-01'),
   }),
   makeGroup({ id: 'g5', name: 'Sales Team', memberCount: 40 }),
   makeGroup({ id: 'g6', name: 'Sales Team', memberCount: 15 }),
@@ -58,7 +61,7 @@ const meta = {
       description: {
         component:
           'Read-only clutter-triage panel over the loaded groups.\n\n' +
-          'Buckets groups into cleanup categories (empty, duplicate-named, stale, …), ' +
+          'Buckets groups into cleanup categories (empty, duplicate-named, dormant, …), ' +
           'offers category selectors, and previews a ranked review list that can be ' +
           'pushed back as the current selection. When nothing is flagged it renders an ' +
           'empty state; a long flagged list is capped with an "N more" overflow line. ' +
@@ -87,7 +90,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Default: a mix of empty, duplicate-named, and stale groups. */
+/** Default: a mix of empty, duplicate-named, and dormant groups. */
 export const Default: Story = {};
 
 /** No clutter detected — renders the empty state. */

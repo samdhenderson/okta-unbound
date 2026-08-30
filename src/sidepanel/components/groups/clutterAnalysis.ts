@@ -3,8 +3,8 @@
  * @description Local, read-only "directory clutter" triage over loaded groups.
  *
  * Fuses the signals already present on a {@link GroupSummary} — emptiness,
- * duplicate names, age since last update, missing metadata — into a single
- * per-group `reviewScore` plus human-readable reasons, and buckets groups into
+ * duplicate names, time since the membership last changed, missing metadata —
+ * into a single per-group `reviewScore` plus human-readable reasons, and buckets groups into
  * the categories an admin triages on. Pure and I/O-free: it runs over the group
  * list the Groups tab has already loaded, so it costs no extra API calls. It
  * deliberately only claims what is reliably knowable locally (it does not infer
@@ -16,13 +16,17 @@
 import type { GroupSummary } from '../../../shared/types';
 
 /**
- * Days since a group's real `lastUpdated` date at or beyond which it is treated
+ * Days since a group's membership last changed at or beyond which it is treated
  * as stale for triage.
  *
- * One full year: `lastUpdated` is the only age signal Okta actually returns on a
- * group, so the threshold is deliberately conservative — a year of no change to
- * a group's profile or membership is unambiguous enough to put it in front of an
- * admin, where a 3- or 6-month cutoff would flag ordinary, healthy groups.
+ * One full year. The threshold is unchanged from when this measured the profile
+ * clock, deliberately: the signal beneath it just changed, and moving both at
+ * once would make it impossible to tell which one moved the numbers. A shorter
+ * cutoff is probably right for membership — the old rationale for 365 was that a
+ * 3- or 6-month cutoff "would flag ordinary, healthy groups", which is true of
+ * profile edits (nobody renames a healthy group) and much weaker of membership
+ * (a year without a joiner or a leaver is genuinely unusual for a live team).
+ * Retuning it is filed separately.
  */
 export const STALE_AGE_DAYS = 365;
 
@@ -30,21 +34,62 @@ export const STALE_AGE_DAYS = 365;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
- * Whether a group has gone at least {@link STALE_AGE_DAYS} without an update.
+ * Whether a group's **membership** has gone at least {@link STALE_AGE_DAYS}
+ * without changing.
  *
- * A group with no `lastUpdated` date is NOT stale: absence of a date is missing
- * data, not evidence of age, and claiming otherwise would flag groups on
- * something the API never told us.
+ * Reads `lastMembershipUpdated`, falling back to `lastUpdated` only when Okta (or
+ * a snapshot synced before that field was parsed) did not report it.
+ *
+ * The fallback is second, not first, because the two clocks answer different
+ * questions and only one of them is the question triage asks. `lastUpdated` moves
+ * when a group is renamed or its description edited; `lastMembershipUpdated` moves
+ * when somebody joins or leaves. Scoring staleness off the profile clock produced
+ * errors in both directions: a group with weekly membership churn whose
+ * description nobody had touched in a year was flagged, and — the dangerous one —
+ * a group whose roster had been frozen for three years but whose profile was
+ * tidied last month was not. The org's most privileged groups are exactly the ones
+ * under periodic review, so exactly the ones whose profile clock stays fresh while
+ * the roster ossifies.
+ *
+ * It is also the only signal here that sees the maintainers nothing else does:
+ * Workflows, SCIM, HR provisioning, direct API writes and IdP sync all bump it and
+ * none of them leave a group rule behind (see `ruleOrphans`'
+ * `INVISIBLE_MAINTAINERS`). A quiet membership clock is therefore evidence about
+ * every write path, not just the visible ones.
+ *
+ * A group with neither date is NOT stale: absence of a date is missing data, not
+ * evidence of age, and claiming otherwise would flag groups on something the API
+ * never told us.
  *
  * @param group - The group to test.
  * @param now - Current epoch ms; injected so the predicate stays deterministic.
- * @returns `true` when the group's last update is at least a year old.
+ * @returns `true` when the membership has been unchanged for at least a year.
  */
 export function isStaleByAge(group: GroupSummary, now: number = Date.now()): boolean {
-  if (!group.lastUpdated) return false;
-  const time = group.lastUpdated.getTime();
+  const clock = group.lastMembershipUpdated ?? group.lastUpdated;
+  if (!clock) return false;
+  const time = clock.getTime();
   if (Number.isNaN(time)) return false;
   return now - time >= STALE_AGE_DAYS * MS_PER_DAY;
+}
+
+/**
+ * The reason line for a stale group, naming the clock it was actually read from.
+ *
+ * Two strings rather than one because {@link isStaleByAge} has a fallback, and a
+ * fallback verdict does not support the stronger claim. When
+ * `lastMembershipUpdated` is missing all we know is that the *profile* has not
+ * moved; saying "no membership change in over a year" there would assert
+ * something Okta never told us — precisely the mistake that put the wrong clock
+ * behind this signal in the first place.
+ *
+ * @param group - The group the reason describes.
+ * @returns A reason line true of whichever date was available.
+ */
+function staleReason(group: GroupSummary): string {
+  return group.lastMembershipUpdated
+    ? 'No membership change in over a year'
+    : 'Not updated in over a year';
 }
 
 /**
@@ -64,7 +109,10 @@ export interface GroupClutterSignals {
   empty: boolean;
   /** Group's normalized name is shared with at least one other group. */
   duplicateName: boolean;
-  /** Group has not been updated in at least {@link STALE_AGE_DAYS} days. */
+  /**
+   * Group's membership has not changed in at least {@link STALE_AGE_DAYS} days —
+   * or, when Okta reported no membership date, its profile has not.
+   */
   stale: boolean;
   /** Group has no description (metadata hygiene). */
   noDescription: boolean;
@@ -151,7 +199,19 @@ export function analyzeClutter(groups: GroupSummary[], now: number = Date.now())
   for (const group of groups) {
     const empty = group.memberCount === 0;
     const duplicateName = duplicateIds.has(group.id);
-    const stale = isStaleByAge(group, now);
+    // Staleness is asked only of groups Okta admins actually maintain.
+    //
+    // `BUILT_IN` (Everyone) gains a member every time anyone joins the org, so
+    // its membership clock is always fresh and the predicate would never fire —
+    // excluding it costs nothing and states the intent. `APP_GROUP` is the one
+    // that matters: it is mastered by the app that sources it, so a quiet roster
+    // means the upstream directory is quiet, not that anybody here neglected it.
+    // Listing a synced-but-idle AD group beside genuinely abandoned Okta groups
+    // would put a finding with no available action at the top of a list sorted by
+    // consequence. `findCleanupCandidates` already draws this line; this draws the
+    // same one.
+    const maintainedHere = group.type !== 'BUILT_IN' && group.type !== 'APP_GROUP';
+    const stale = maintainedHere && isStaleByAge(group, now);
     const noDescription = !group.description || group.description.trim() === '';
 
     if (empty) categories.empty.push(group.id);
@@ -165,7 +225,7 @@ export function analyzeClutter(groups: GroupSummary[], now: number = Date.now())
     const reasons: string[] = [];
     if (empty) reasons.push('No members');
     if (duplicateName) reasons.push('Duplicate name');
-    if (stale) reasons.push('Not updated in over a year');
+    if (stale) reasons.push(staleReason(group));
     if (noDescription) reasons.push('No description');
 
     const reviewScore = Math.min(
