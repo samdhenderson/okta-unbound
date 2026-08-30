@@ -15,7 +15,7 @@
 import React from 'react';
 import { AbsoluteFill, Series, interpolate, useCurrentFrame } from 'remotion';
 import { SCRIPT } from '../script';
-import { Chapter, actAt, chapterLength, chapterTab } from './Chapter';
+import { Chapter, actLabelAt, chapterLength, chapterTab } from './Chapter';
 import { FilmIndex } from './FilmIndex';
 import { END_CARD_FRAMES, EndCard } from './EndCard';
 import { OPENING_FRAMES, Opening } from './Opening';
@@ -80,7 +80,7 @@ const Band: React.FC = () => {
         tab={before.tab + (current.tab - before.tab) * slide}
         count={CHAPTERS.length}
         title={shown.scene.title}
-        label={actAt(shown.scene, frame - shown.from).act.label}
+        label={actLabelAt(shown.scene, frame - shown.from)}
       />
     </div>
   );

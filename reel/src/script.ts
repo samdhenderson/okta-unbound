@@ -21,6 +21,7 @@ import type { CaptureId, Manifest } from './captures';
 import { figure } from './captures';
 import type { BeatPlan } from './ramp';
 import type { Crop, StageName } from './layout';
+import type { PieceId } from './pieces';
 import type { Plot } from './diagrams';
 import { Funnel, Ratio, Tally } from './diagrams';
 import { FacetBoard, FactorLadder, RuleBoard } from './showcase';
@@ -80,7 +81,16 @@ export interface Mark {
  * chapter. It is also the unit of failure: a beat that misses ends its act, not
  * the argument either side of it. (ADR-0053)
  */
-export interface Act {
+export interface FilmAct {
+  /**
+   * Which kind of act this is. Optional, and only on this variant.
+   *
+   * An act was footage and nothing else until set pieces arrived, so making the
+   * discriminant required would have meant touching every act in this file to
+   * say the thing it already was. Omitted means film, which is what an act
+   * written before there was anything else to be already meant.
+   */
+  kind?: 'film';
   /** The footage this act plays. Several acts in a chapter, several clips. */
   capture: CaptureId;
   /**
@@ -95,6 +105,37 @@ export interface Act {
   plan: BeatPlan[];
   marks: Mark[];
 }
+
+/**
+ * One act with no footage under it: a set piece takes the frame.
+ *
+ * The panel is gone and a recreation of one of its own components is on the
+ * dark stage, enlarged, exploded, counted. `SCRIPT.md`'s "synthetic layer"
+ * carries the rules; the one that shapes this type is that **every figure a
+ * piece prints has to be a figure the rig read**. So a piece act names the
+ * capture it dramatises even though it plays none of its frames: `from` is
+ * where its numbers come from, not what is on screen.
+ *
+ * A piece act carries no `label`. The band names the act a piece interrupts,
+ * not the piece - see `actLabelAt` in `comp/Chapter.tsx`. A piece that named
+ * itself would blink the label off mid-chapter and back on again, which reads
+ * as a fault rather than as a movement ending.
+ */
+export interface PieceAct {
+  kind: 'piece';
+  /** Which piece, by id. Resolved through the registry, never passed as a component. */
+  piece: PieceId;
+  /** The footage whose figures this piece dramatises. None of its frames are played. */
+  from: CaptureId;
+}
+
+/**
+ * One act of a chapter: footage, or a set piece standing in place of it.
+ *
+ * Narrow on `kind` before reading anything else. A piece has no `capture`, no
+ * `plan` and no `marks`, and the two are sequenced by the same `<Series>`.
+ */
+export type Act = FilmAct | PieceAct;
 
 /**
  * One chapter of the reel: one tab, one or more acts.
@@ -302,6 +343,20 @@ export const SCRIPT: Scene[] = [
           },
         ],
       },
+      /*
+       * The fix, in two acts around a set piece.
+       *
+       * One capture, cut in two: the ledger belongs between the prediction and
+       * what the prediction turned out to be worth, and an act is the only
+       * thing a piece can sit between. **This cost no re-shoot.** `buildRamp`
+       * takes any subset of a capture's beats in reel order and a segment's
+       * `trimBefore` derives from the beat's own absolute `at`, so the second
+       * act seeks into the same clip rather than needing one of its own.
+       *
+       * It did cost one editorial change, and it is not obvious: see `land`'s
+       * missing `easeMs` below. Re-shooting nothing is true of the footage and
+       * false of the cut.
+       */
       {
         capture: 'users-fix',
         label: 'The fix',
@@ -309,7 +364,6 @@ export const SCRIPT: Scene[] = [
           { beat: 'open', speed: 'sprint', easeMs: 300, holdMs: 2600 },
           { beat: 'edit', speed: 'brisk', easeMs: 400, holdMs: 1600 },
           { beat: 'predict', speed: 'half', easeMs: 400, holdMs: 3400 },
-          { beat: 'land', speed: 'half', easeMs: 400, holdMs: 2600, tailMs: 4000 },
         ],
         marks: [
           {
@@ -328,6 +382,30 @@ export const SCRIPT: Scene[] = [
             after: 'added',
             points: [(m) => `Predicted: ${figure<string[]>(m, 'added').join(', ')}`],
           },
+        ],
+      },
+      // The ledger's slot. A placeholder until the piece itself is built, and
+      // visibly one on camera, so an empty slot cannot be mistaken for a piece
+      // that rendered nothing.
+      { kind: 'piece', piece: 'placeholder', from: 'users-fix' },
+      {
+        capture: 'users-fix',
+        label: 'The fix',
+        plan: [
+          /*
+           * No `easeMs`, where the single act had 400.
+           *
+           * `buildRamp` resets `previousRate` to natural at the start of every
+           * ramp, so an ease is only ever applied against the rate the previous
+           * beat *in this act* ended on. While `predict` and `land` were one
+           * act they were both `half`, the rates matched, and the ease was
+           * never run. Split, `land` starts from natural and would ramp down
+           * across its first 400ms of clip - a speed change the cut never had
+           * and nobody asked for, on the beat the whole chapter resolves on.
+           */
+          { beat: 'land', speed: 'half', holdMs: 2600, tailMs: 4000 },
+        ],
+        marks: [
           {
             beat: 'land',
             after: 'groupsAfter',
