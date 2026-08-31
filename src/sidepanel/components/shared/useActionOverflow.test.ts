@@ -172,6 +172,11 @@ function makeFixture(options: { width?: number; withProbe?: boolean } = {}): Fix
 
   setRect(sentinel, { left: 24, top: 76, height: 0 });
   setRect(band, { left: 24, top: 100, width, height: 48 });
+  // The rung step the sentinel floats above, as a *layout* fact. The hook reads
+  // the gap from here rather than from the pair of rects above, because those
+  // two stop being 24px apart the moment the band sticks — see the stuck-band
+  // case below. The rects still say 76/100 so the fixture describes one page.
+  band.style.marginTop = '24px';
 
   const fixture: Fixture = {
     parent,
@@ -394,9 +399,31 @@ describe('useActionOverflow', () => {
       expect(band.getPropertyValue('--bar-bleed')).toBe('24px');
       expect(band.getPropertyValue('--dock-offset')).toBe('');
 
-      // band.top 100 − sentinel.top 76.
+      // The band's own leading margin — the rung step the sentinel floats above.
       expect(parent.getPropertyValue('--dock-offset')).toBe('24px');
       expect(parent.getPropertyValue('--bar-bleed')).toBe('');
+    });
+
+    it('keeps --dock-offset a layout gap once the band has stuck', () => {
+      // The regression. `bandRect.top - sentinelRect.top` is the rung step while
+      // the strip is in flow and is *how far you have scrolled* once it sticks:
+      // the sentinel keeps travelling and the band does not. Any re-publish
+      // while docked — ticking a row, opening the tier, dragging the panel,
+      // returning to a scrolled rung — used to write that scroll offset into the
+      // sentinel's `view-timeline-inset`, which puts the merge's finish line
+      // that far below the parking line. The strip then pins as an unmerged
+      // floating card, and stays that way: nothing re-publishes at the top.
+      const fixture = makeFixture({ width: 500 });
+      mount(fixture);
+      expect(fixture.parent.style.getPropertyValue('--dock-offset')).toBe('24px');
+
+      // Scrolled 380px with the band parked: the sentinel has left the viewport,
+      // the band has not moved, and the layout gap between them is unchanged.
+      setRect(fixture.sentinel, { left: 24, top: -304, height: 0 });
+      fixture.setWidth(480);
+      resize();
+
+      expect(fixture.parent.style.getPropertyValue('--dock-offset')).toBe('24px');
     });
 
     it('publishes nothing while the band is hidden', () => {
