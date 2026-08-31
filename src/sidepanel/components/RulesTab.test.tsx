@@ -9,6 +9,10 @@
  * gated behind the impact modal, the preview flow, and the search/filter/empty
  * states — rather than child internals.
  *
+ * The rule **detail rung** is deliberately not stubbed. Its strip is where the lifecycle
+ * verbs live now, and which tier a verb sits in — and what it takes to fire it — is
+ * exactly the orchestration these tests exist to pin.
+ *
  * Message passing is chrome-based (not fetch), so MSW does not apply; we mock the
  * chrome messaging surface plus the storage-backed cache/tab-state/audit modules.
  */
@@ -25,12 +29,16 @@ import type { FormattedRule } from '../../shared/types';
 // ---------------------------------------------------------------------------
 const captured = vi.hoisted(() => ({ impact: {} as Record<string, unknown> }));
 
+/*
+  The card stub brokers one callback where it brokered four. The write verbs are not
+  RuleCard's to offer any more — they are the rule rung's `ActionBar`, which this suite
+  drives for real, because "which verb is where, and what gates it" is now part of the
+  orchestration under test rather than a child's internals.
+*/
 vi.mock('./RuleCard', () => ({
   default: (props: {
     rule: FormattedRule;
-    onActivate?: (id: string) => void;
-    onDeactivate?: (id: string) => void;
-    onPreviewImpact?: (rule: FormattedRule) => void;
+    onOpenRule?: (rule: FormattedRule) => void;
     isHighlighted?: boolean;
   }) => (
     <div
@@ -38,11 +46,7 @@ vi.mock('./RuleCard', () => ({
       data-highlighted={String(Boolean(props.isHighlighted))}
     >
       <span>{props.rule.name}</span>
-      <button onClick={() => props.onActivate?.(props.rule.id)}>activate {props.rule.id}</button>
-      <button onClick={() => props.onDeactivate?.(props.rule.id)}>
-        deactivate {props.rule.id}
-      </button>
-      <button onClick={() => props.onPreviewImpact?.(props.rule)}>preview {props.rule.id}</button>
+      <button onClick={() => props.onOpenRule?.(props.rule)}>open {props.rule.id}</button>
     </div>
   ),
 }));
@@ -173,6 +177,47 @@ function renderTab(props: Partial<React.ComponentProps<typeof RulesTab>> = {}) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Reaching the controls the ADR-0051 strip put behind a disclosure.
+//
+// The filter chips and the three analysis panels used to be always-on cards and
+// an always-on toolbar; they are now behind the rules strip's **More** tier and
+// its `Filters` toggle. These helpers are the extra press each assertion needs —
+// no assertion below was relaxed to accommodate the move, only preceded.
+// ---------------------------------------------------------------------------
+
+/** Open the strip's **More** tier, if it is not already open. */
+async function openMoreTier(): Promise<void> {
+  const more = screen.queryByRole('button', { name: 'More' });
+  if (more && more.getAttribute('aria-expanded') !== 'true') await userEvent.click(more);
+}
+
+/** Open one of the strip's analysis panels (Stats / Duplicates / This group). */
+async function openPanel(label: RegExp): Promise<void> {
+  await openMoreTier();
+  await userEvent.click(screen.getByRole('button', { name: label }));
+}
+
+/** Disclose the filter panel that holds the chips and the sort selector. */
+async function openFilters(): Promise<void> {
+  await userEvent.click(screen.getByRole('button', { name: /^Filters/ }));
+}
+
+/**
+ * Load the rules and push one rule's detail rung — where every write verb now lives.
+ *
+ * While the rung is up the list rung carries `hidden`, so its own strip leaves the
+ * accessible tree and a role query for **More** resolves to the rung's strip
+ * unambiguously. `getByTestId` still reaches the hidden cards, which is what the
+ * search/filter assertions rely on.
+ */
+async function openRuleRung(ruleId: string): Promise<void> {
+  await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
+  await waitFor(() => expect(screen.getByTestId(`rule-${ruleId}`)).toBeInTheDocument());
+  await userEvent.click(screen.getByRole('button', { name: `open ${ruleId}` }));
+  await screen.findByTestId('rule-action-bar');
+}
+
 /**
  * Raw `/api/v1/groups/rules` response, reassignable per test (e.g. a failure).
  * Reset in `beforeEach` to the two default fixtures.
@@ -222,7 +267,9 @@ describe('RulesTab characterization', () => {
     expect(screen.getByText('Engineering Rule')).toBeInTheDocument();
     expect(screen.getByText('Sales Rule')).toBeInTheDocument();
 
-    // Stat tiles render their values.
+    // Stat tiles render their values — one press further in than they used to be,
+    // now that the grid is an analysis panel rather than a permanent card.
+    await openPanel(/^Stats/);
     expect(
       within(screen.getByText('Total Rules').closest('div')!).getByText('2'),
     ).toBeInTheDocument();
@@ -244,32 +291,80 @@ describe('RulesTab characterization', () => {
     expect(rulesFetchCalls()).toHaveLength(0);
   });
 
-  it('activates a rule immediately (no confirmation gate)', async () => {
-    renderTab();
-    await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
-    await waitFor(() => expect(screen.getByTestId('rule-r2')).toBeInTheDocument());
+  /*
+    RETARGETED, and it pins a deliberate **behaviour change**. This test was called
+    `activates a rule immediately (no confirmation gate)` and it characterized exactly
+    that: a click on the card fired `activateRule` with nothing in between.
 
-    await userEvent.click(screen.getByRole('button', { name: 'activate r2' }));
-    // §8: the mutation now routes through the scheduler (POST to the lifecycle
-    // endpoint) rather than a direct `activateRule` content-script message.
+    That was wrong, and D-052 is why. Okta's rule engine only ever adds, so activating a
+    rule writes memberships into every target group and pausing it again removes none of
+    them. There is no second press that undoes the first, which is ADR-0039's definition
+    of a verb that needs a confirm. So the verb moved behind **More**, gained a `Modal`
+    that states the consequence in plain language, and the endpoint fires only on confirm.
+
+    The old assertion survives whole — same endpoint, same method, same scheduler path.
+    What is new is everything asserted *before* it: that the press alone writes nothing.
+  */
+  it('gates activation behind a confirm that states what cannot be undone', async () => {
+    renderTab();
+    await openRuleRung('r2');
+
+    const activateEndpoint = '/api/v1/groups/rules/r2/lifecycle/activate';
+    await openMoreTier();
+    await userEvent.click(screen.getByRole('button', { name: 'Activate rule' }));
+
+    // The dialog is up and nothing has been written yet.
+    expect(await screen.findByRole('dialog')).toHaveTextContent(/only ever adds members/);
+    expect(runtimeSendMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: activateEndpoint }),
+    );
+
+    // §8: the mutation routes through the scheduler (POST to the lifecycle endpoint)
+    // rather than a direct `activateRule` content-script message.
+    await userEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Activate' }),
+    );
     await waitFor(() =>
       expect(runtimeSendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           action: 'scheduleApiRequest',
-          endpoint: '/api/v1/groups/rules/r2/lifecycle/activate',
+          endpoint: activateEndpoint,
           method: 'POST',
         }),
       ),
     );
   });
 
+  /* The other half of the gate: dismissing it writes nothing. */
+  it('writes nothing when the activation confirm is cancelled', async () => {
+    renderTab();
+    await openRuleRung('r2');
+
+    await openMoreTier();
+    await userEvent.click(screen.getByRole('button', { name: 'Activate rule' }));
+    await userEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' }),
+    );
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(runtimeSendMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: '/api/v1/groups/rules/r2/lifecycle/activate' }),
+    );
+  });
+
+  /*
+    RETARGETED only in where the verb is pressed: it left the card's action row for the
+    rung's **More** tier, for the same D-052 reason as activation. Its gate is unchanged
+    — `RuleImpactModal`, which names who is affected rather than describing it, which is
+    why this verb gained no second dialog of its own.
+  */
   it('gates deactivation behind the impact modal, committing only on confirm', async () => {
     renderTab();
-    await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
-    await waitFor(() => expect(screen.getByTestId('rule-r1')).toBeInTheDocument());
+    await openRuleRung('r1');
 
     // Clicking Deactivate opens the modal in 'deactivate' mode — no API call yet.
-    await userEvent.click(screen.getByRole('button', { name: 'deactivate r1' }));
+    await openMoreTier();
+    await userEvent.click(screen.getByRole('button', { name: 'Deactivate rule' }));
     const modal = await screen.findByTestId('impact-modal');
     expect(modal).toHaveAttribute('data-mode', 'deactivate');
     const deactivateEndpoint = '/api/v1/groups/rules/r1/lifecycle/deactivate';
@@ -290,12 +385,16 @@ describe('RulesTab characterization', () => {
     );
   });
 
+  /*
+    RETARGETED to the rung's strip. *Preview impact* stays in the **row** — it computes
+    who would stop being attributed and writes nothing — and it is the rung's `primary`,
+    the thing an admin opens a rule's page to do.
+  */
   it('opens the impact modal in preview mode (read-only)', async () => {
     renderTab();
-    await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
-    await waitFor(() => expect(screen.getByTestId('rule-r1')).toBeInTheDocument());
+    await openRuleRung('r1');
 
-    await userEvent.click(screen.getByRole('button', { name: 'preview r1' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Preview impact' }));
     const modal = await screen.findByTestId('impact-modal');
     expect(modal).toHaveAttribute('data-mode', 'preview');
     expect(runtimeSendMessage).not.toHaveBeenCalledWith(
@@ -318,6 +417,7 @@ describe('RulesTab characterization', () => {
     await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
     await waitFor(() => expect(screen.getByTestId('rule-r2')).toBeInTheDocument());
 
+    await openFilters();
     await userEvent.click(screen.getByRole('button', { name: 'Active Only' }));
     expect(screen.getByTestId('rule-r1')).toBeInTheDocument();
     expect(screen.queryByTestId('rule-r2')).not.toBeInTheDocument();
@@ -331,20 +431,37 @@ describe('RulesTab characterization', () => {
     await waitFor(() => expect(screen.getByText('Okta said no')).toBeInTheDocument());
   });
 
+  /*
+    RETARGETED — a deep link **opens the rule's rung** now instead of scrolling the list
+    to its card and flashing it for two seconds.
+
+    Scroll-and-flash was the best a list could do: it put you next to a collapsed row and
+    left you to expand it. The assertion that the tab fetches on its own is unchanged;
+    what it fetches *for* has moved from "highlight the target" to "have the target to
+    push". The rung's presence is asserted through its strip, whose `aria-label` names the
+    rule — a stronger claim than the old `data-highlighted` flag, which only said the
+    card had been told it was the target.
+  */
   it('auto-loads rules when deep-linked to a rule with nothing loaded yet', async () => {
     // Arrive with a cross-tab deep-link (selectedRuleId) but no rules loaded and
-    // no persisted state — the tab must fetch on its own, then highlight the target.
+    // no persisted state — the tab must fetch on its own, then open the target.
     renderTab({ selectedRuleId: 'r2' });
 
-    await waitFor(() => expect(screen.getByTestId('rule-r2')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('rule-action-bar')).toBeInTheDocument());
     // The deep-link triggered exactly one cache-first rules read (no manual click).
     expect(rulesFetchCalls()).toHaveLength(1);
-    expect(screen.getByTestId('rule-r2')).toHaveAttribute('data-highlighted', 'true');
+    expect(screen.getByLabelText('Actions for Sales Rule')).toBeInTheDocument();
   });
 
-  it('clears a persisted filter that would hide the deep-linked rule', async () => {
-    // Persisted state restores an "active only" filter; the deep-link targets the
-    // INACTIVE rule, which that filter would hide. The tab must relax the filter.
+  /*
+    RETARGETED, and the behaviour it guarded is now structural. The old test pinned that
+    a restored "active only" filter — which would hide the INACTIVE deep-link target —
+    gets cleared, because a filtered-out card cannot be scrolled to. The rung does not
+    care what the list is filtered to, so the tab no longer clears anything; the
+    *property* the test protects, "a persisted filter cannot swallow a deep link", is
+    asserted the same way and now holds without the workaround.
+  */
+  it('opens a deep-linked rule that the persisted filter would have hidden', async () => {
     loadTabState.mockResolvedValue({
       cachedRules: [rule(), rule({ id: 'r2', name: 'Sales Rule', status: 'INACTIVE' })],
       cachedStats: stats,
@@ -354,22 +471,32 @@ describe('RulesTab characterization', () => {
 
     renderTab({ selectedRuleId: 'r2' });
 
-    // r2 becomes visible and highlighted despite the restored "active" filter...
-    await waitFor(() => expect(screen.getByTestId('rule-r2')).toBeInTheDocument());
-    expect(screen.getByTestId('rule-r2')).toHaveAttribute('data-highlighted', 'true');
+    // r2's rung opens despite the restored "active" filter...
+    await waitFor(() =>
+      expect(screen.getByLabelText('Actions for Sales Rule')).toBeInTheDocument(),
+    );
     // ...and no network fetch was needed — the rules came from persisted state.
     expect(rulesFetchCalls()).toHaveLength(0);
   });
 
-  it('the merge banner "View" link highlights the rule card in the list', async () => {
+  /*
+    RETARGETED with the deep-link path it shares: *View* asked the list to highlight a
+    card, and now asks the tab to open that rule's rung. The route into it is unchanged —
+    the panel sets the same focused-rule id the cross-tab link does — so this keeps
+    covering the wire between the panel and the tab, and now proves it lands somewhere
+    that answers the question the panel raised.
+  */
+  it('the duplicates panel "View" link opens the rule\'s rung', async () => {
     // The two default fixtures share a condition, so they cluster in the banner.
     renderTab();
     await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
     await waitFor(() => expect(screen.getByTestId('rule-r1')).toBeInTheDocument());
-    expect(screen.getByTestId('rule-r1')).toHaveAttribute('data-highlighted', 'false');
+    expect(screen.queryByTestId('rule-action-bar')).not.toBeInTheDocument();
 
-    // Open the collapsed banner, then the cluster, then click View on the first rule.
-    await userEvent.click(screen.getByRole('button', { name: /duplicate-condition rules/ }));
+    // Open the panel from the strip, then the cluster, then click View on the first
+    // rule. The panel's own outer collapsible is gone — the strip's `Duplicates (N)`
+    // verb is what holds it closed now (ADR-0061).
+    await openPanel(/^Duplicates/);
     await userEvent.click(screen.getByRole('button', { name: /rules → .* target group/ }));
     // The rule name appears in both the stubbed card and the banner row; pick the
     // banner row (inside an <li>) and click its View link.
@@ -382,7 +509,7 @@ describe('RulesTab characterization', () => {
       await userEvent.click(within(bannerRow).getByRole('button', { name: 'View' }));
     }
 
-    expect(screen.getByTestId('rule-r1')).toHaveAttribute('data-highlighted', 'true');
+    expect(await screen.findByLabelText('Actions for Engineering Rule')).toBeInTheDocument();
   });
 });
 
@@ -425,6 +552,7 @@ describe('RulesTab current-group filter', () => {
     await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
     await waitFor(() => expect(screen.getByTestId('rule-r1')).toBeInTheDocument());
 
+    await openFilters();
     await userEvent.click(screen.getByRole('button', { name: 'Current Group' }));
 
     expect(screen.getByTestId('rule-r1')).toBeInTheDocument();
@@ -453,6 +581,7 @@ describe('RulesTab current-group filter', () => {
     await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
     await waitFor(() => expect(screen.getByTestId('rule-r2')).toBeInTheDocument());
 
+    await openFilters();
     await userEvent.click(screen.getByRole('button', { name: 'Current Group' }));
 
     expect(screen.getByTestId('rule-r1')).toBeInTheDocument();
@@ -478,7 +607,11 @@ describe('RulesTab current-group filter', () => {
     await waitFor(() => expect(screen.getByText('No Matching Rules')).toBeInTheDocument());
     expect(screen.queryByTestId('rule-r1')).not.toBeInTheDocument();
     expect(screen.queryByTestId('rule-r2')).not.toBeInTheDocument();
-    // No group detected → no chip to toggle it back off.
+    // No group detected → no chip to toggle it back off. Asserted with the filter panel
+    // **open**: closed, it is not rendered at all, so the absence would hold whether or
+    // not the chip is conditional and would prove nothing.
+    await openFilters();
+    expect(screen.getByRole('button', { name: 'All Rules' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Current Group' })).not.toBeInTheDocument();
   });
 });

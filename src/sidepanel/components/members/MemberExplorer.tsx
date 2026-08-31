@@ -28,9 +28,9 @@ import type { OktaUser, MemberMfaResult, MfaScanStatus } from '../../../shared/t
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { mfaScanNeedsConfirm } from '../../hooks/useMemberMfaScan';
 import Button from '../shared/Button';
+import FilterToggle from '../shared/FilterToggle';
 import Modal from '../shared/Modal';
 import MemberSearchBar from './MemberSearchBar';
-import MemberFilterToggle from './MemberFilterToggle';
 import MemberFilterPanel from './MemberFilterPanel';
 import CopyMembersModal from './CopyMembersModal';
 import CompositionReports from './CompositionReports';
@@ -348,9 +348,9 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
         <div className="flex-1">
           <MemberSearchBar value={query} onChange={setQuery} />
         </div>
-        <MemberFilterToggle
-          showFilters={showFilters}
-          activeFilterCount={activeFilterCount}
+        <FilterToggle
+          open={showFilters}
+          activeCount={activeFilterCount}
           onToggle={() => setShowFilters((prev) => !prev)}
         />
       </div>

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
-import RulesMergeBanner from './RulesMergeBanner';
+import RulesDuplicatesPanel from './RulesDuplicatesPanel';
 import type { MergeableRuleGroup } from '../../../shared/rules/consolidation';
 
 /** Two clusters of duplicate-condition rules, ready to review and merge. */
@@ -55,18 +55,19 @@ const clusters: MergeableRuleGroup[] = [
   },
 ];
 
-/** Collapsible banner surfacing rule sets that can be safely merged (Feature A4). */
+/** The Rules rung's duplicate-condition panel: rule sets that can be safely merged (Feature A4). */
 const meta = {
-  title: 'Rules/RulesMergeBanner',
-  component: RulesMergeBanner,
+  title: 'Rules/RulesDuplicatesPanel',
+  component: RulesDuplicatesPanel,
   tags: ['autodocs'],
   parameters: {
     layout: 'fullscreen',
     docs: {
       description: {
         component:
-          'Collapsible banner surfacing rule sets that can be safely merged (Feature A4).\n\n' +
-          'Rules that share a match expression but target different groups are redundant and can be folded into one rule carrying the union of their target groups, with no change to who is matched. The banner starts collapsed so it stays out of the way; each cluster expands to reveal its shared condition and member rules, each with a "View" link that scrolls to the rule\'s card. Merging opens a non-destructive preview wizard — nothing is written until the admin confirms. Renders nothing when there are no mergeable clusters.',
+          "The duplicate-condition panel, opened from the rules strip's **Duplicates (N)** verb (Feature A4).\n\n" +
+          'Rules that share a match expression but target different groups are redundant and can be folded into one rule carrying the union of their target groups, with no change to who is matched. Each cluster expands to reveal its shared condition and member rules, each with a "View" link that scrolls to the rule\'s card. Merging opens a non-destructive preview wizard — nothing is written until the admin confirms.\n\n' +
+          'It was `RulesMergeBanner`, a band that sat permanently above the list and started **collapsed**, putting the sets behind a *Review* pill and each set behind a second chevron — two presses to see one duplicate, on the most valuable read-only analysis the tab performs. The outer disclosure now belongs to the strip. Renders nothing when there are no mergeable clusters.',
       },
     },
   },
@@ -82,12 +83,12 @@ const meta = {
     onMerge: fn(),
     onFocusRule: fn(),
   },
-} satisfies Meta<typeof RulesMergeBanner>;
+} satisfies Meta<typeof RulesDuplicatesPanel>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Default: two mergeable clusters, collapsed until the header is clicked. */
+/** Default: two mergeable clusters, each behind its own set-level chevron. */
 export const Default: Story = {};
 
 /** A single mergeable cluster. */

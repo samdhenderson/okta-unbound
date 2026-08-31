@@ -325,6 +325,15 @@ const App: React.FC = () => {
     });
 
   /**
+   * The Rules rung's *Export rules* verb.
+   *
+   * No context id: the Group Rules descriptor is whole-org and carries
+   * `filter: { kind: 'none' }`, so it fetches its own rows rather than exporting whatever
+   * the Rules tab happens to have loaded. That is why the strip never disables the verb.
+   */
+  const handleExportRules = () => handleNavigateToExport({ descriptorId: 'group-rules' });
+
+  /**
    * Open a list tab with one filter already applied — how the Home card's
    * sub-counts ("31 empty", "4 paused") turn into the list they describe.
    *
@@ -439,6 +448,8 @@ const App: React.FC = () => {
                 selectedRuleId={selectedRuleId}
                 onRuleSelected={() => setSelectedRuleId(null)}
                 onNavigateToGroup={handleNavigateToGroup}
+                onExportRules={handleExportRules}
+                scrollRootRef={scrollRootRef}
                 listView={viewFor(listViewRequest, 'rules')}
                 onListViewConsumed={clearListViewRequest}
               />

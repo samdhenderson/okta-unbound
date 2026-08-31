@@ -15,19 +15,30 @@
  * ## A rule you can read, not a link to one
  *
  * Both lists were `RuleLinkRow`s: a name, a status pill, and a click that
- * navigated *away* to the Rules tab. So the one question this tab exists to
- * answer — "what does that rule actually say?" — could only be answered by
- * leaving it. They are {@link RuleCard} now, the same expandable card the Rules
- * tab itself renders, which discharges one of ADR-0030's outstanding migrations.
+ * navigated *away* to the Rules tab. They are {@link RuleCard} now, the same row the
+ * Rules tab itself renders, which discharged one of ADR-0030's outstanding migrations.
  *
  * It costs no request. `getGroupRulesForGroup` and `ensureGroupRulesLoaded`
  * already return `FormattedRule[]` — the exact shape the card takes — and both
  * hooks were copying four fields off each one and dropping the rest.
  *
- * `onNavigateToRule` survives as a **secondary** affordance inside the expanded
- * card rather than as the only way to see the rule. None of the card's write
- * verbs are wired here: this section cannot activate or deactivate a rule, so it
- * renders no control that would (ADR-0039).
+ * ## Where the rule's body went
+ *
+ * The card used to carry a disclosure holding the condition expression, the attributes
+ * and the target groups, so "what does that rule actually say?" could be answered without
+ * leaving this tab. That body is a **rule detail rung** on the Rules tab now, with its own
+ * `ActionBar` — more than the disclosure ever held, and it exists because a disclosure was
+ * the wrong home for four write verbs (ADR-0030 §2, ADR-0039).
+ *
+ * So this section is back to being a set of links out — but the link lands differently.
+ * `onNavigateToRule` used to deposit you on a rules *list* scrolled to a collapsed card;
+ * it opens the rule's rung directly now. The row still carries the facts you scan for —
+ * name, status, and the condition in its human-readable form — and the row itself is the
+ * jump, rather than a secondary control buried inside a disclosure.
+ *
+ * None of the card's write verbs are wired here — this section cannot activate or
+ * deactivate a rule, and since the verbs moved to the rung there is no control here that
+ * could (ADR-0039).
  */
 import React from 'react';
 import { AlertMessage, DetailSection, LoadingSpinner } from '../../shared';
@@ -44,9 +55,8 @@ const RuleRelationList: React.FC<{
   error: string | null;
   emptyMessage: string;
   rules: FormattedRule[];
-  oktaOrigin?: string | null;
   onNavigateToRule?: (ruleId: string) => void;
-}> = ({ heading, hint, status, error, emptyMessage, rules, oktaOrigin, onNavigateToRule }) => (
+}> = ({ heading, hint, status, error, emptyMessage, rules, onNavigateToRule }) => (
   <div>
     <h3 className="text-xs font-medium text-neutral-600">
       {heading}
@@ -63,14 +73,11 @@ const RuleRelationList: React.FC<{
       ) : (
         <div className="space-y-2">
           {rules.map((rule) => (
-            /* No `onActivate`/`onDeactivate`/`onPreviewImpact`: this section
-               wires none of them, so the card renders no control for them. */
-            <RuleCard
-              key={rule.id}
-              rule={rule}
-              oktaOrigin={oktaOrigin}
-              onOpenInRulesTab={onNavigateToRule}
-            />
+            /* `onOpenInRulesTab`, never `onOpenRule`: this tab's view stack is showing
+               a *group*, so it has no rule rung of its own to push. With neither handler
+               the row is inert by design — the same "no control without a handler"
+               discipline the card applied to its writes (ADR-0039). */
+            <RuleCard key={rule.id} rule={rule} onOpenInRulesTab={onNavigateToRule} />
           ))}
         </div>
       )}
@@ -92,10 +99,8 @@ interface GroupRulesSectionProps {
   referencingStatus: SourceStatus;
   /** Error message when the referencing-rules load failed. */
   referencingError: string | null;
-  /** Deep-links a rule in the Rules tab, from inside its expanded card. */
+  /** Opens a rule's detail rung on the Rules tab. Pressing a row is the jump. */
   onNavigateToRule?: (ruleId: string) => void;
-  /** Okta org origin for each card's "View in Okta" link. */
-  oktaOrigin?: string | null;
 }
 
 /**
@@ -110,7 +115,6 @@ const GroupRulesSection: React.FC<GroupRulesSectionProps> = ({
   referencingStatus,
   referencingError,
   onNavigateToRule,
-  oktaOrigin,
 }) => (
   <DetailSection title="Rules">
     <div className="space-y-4">
@@ -121,7 +125,6 @@ const GroupRulesSection: React.FC<GroupRulesSectionProps> = ({
         error={assigningError}
         emptyMessage="No rule assigns users to this group. Members are added manually or by app push."
         rules={assigningRules}
-        oktaOrigin={oktaOrigin}
         onNavigateToRule={onNavigateToRule}
       />
 
@@ -132,7 +135,6 @@ const GroupRulesSection: React.FC<GroupRulesSectionProps> = ({
         error={referencingError}
         emptyMessage="No rule condition references this group by id."
         rules={referencingRules}
-        oktaOrigin={oktaOrigin}
         onNavigateToRule={onNavigateToRule}
       />
     </div>
