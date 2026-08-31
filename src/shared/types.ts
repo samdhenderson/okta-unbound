@@ -14,6 +14,7 @@
  */
 
 import type { SchedulerState, SchedulerMetrics } from './scheduler/types';
+import type { PlanEstimate, PlanLegInput } from './scheduler/plan';
 
 /** An Okta user as returned by the Users API, with a partly-typed profile. */
 export interface OktaUser {
@@ -421,6 +422,31 @@ export interface SchedulerStateChangedMessage {
   /** Throughput/rate-limit metrics snapshot taken at broadcast time. */
   metrics: SchedulerMetrics;
 }
+
+/**
+ * Side-panel → background message that opens, refines, or closes an
+ * {@link OperationPlan} (`shared/scheduler/plan`).
+ *
+ * One action with a discriminated `op` rather than four separate actions: they
+ * share a validator, a sender check, and a plan id, and splitting them would
+ * have meant repeating all three.
+ */
+export type UpdateOperationPlanMessage = {
+  action: 'updateOperationPlan';
+  /** Opaque id minted by the caller and echoed on every request the plan covers. */
+  planId: string;
+} & (
+  | {
+      op: 'declare';
+      /** Human-readable operation name, e.g. `'Export all users'`. */
+      name: string;
+      tabId: number;
+      legs: PlanLegInput[];
+    }
+  | { op: 'refine'; endpoint: string; estimate: PlanEstimate }
+  | { op: 'complete' }
+  | { op: 'cancel' }
+);
 
 /** Aggregate counts across a set of rules. */
 export interface RuleStats {

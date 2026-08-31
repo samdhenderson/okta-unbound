@@ -19,6 +19,7 @@ import { createLogger } from '../utils/logger';
 import { flushAllPending, recordRequest } from '../requestLog';
 import { OperationCancelledError } from './cancellation';
 import { RateLimitDetector, bucketOf } from './rateLimitDetector';
+import { PlanRegistry, type PlanDeclaration, type PlanEstimate } from './plan';
 import { normalizeRequestResult } from './requestResult';
 import type {
   QueuedRequest,
@@ -29,6 +30,7 @@ import type {
   SchedulerMetrics,
   RequestResult,
   RateLimitInfo,
+  BucketState,
 } from './types';
 
 const log = createLogger('ApiScheduler');
@@ -67,6 +69,15 @@ export class ApiScheduler {
     }
   > = new Map();
   private rateLimitDetector: RateLimitDetector;
+  /**
+   * Declared-but-unspent work (`shared/scheduler/plan`).
+   *
+   * Advisory by construction: nothing here gates a dispatch. It exists so the
+   * Activity Bar can show the requests an operation *intends* to make alongside
+   * the headroom they will consume, instead of discovering a fifty-page walk
+   * one page at a time.
+   */
+  private plans: PlanRegistry;
   private config: SchedulerConfig;
   private status: SchedulerStatus = 'idle';
   /**
@@ -117,6 +128,7 @@ export class ApiScheduler {
   constructor(config: Partial<SchedulerConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.rateLimitDetector = new RateLimitDetector();
+    this.plans = new PlanRegistry(bucketOf);
 
     log.debug('Initialized with config:', this.config);
 
@@ -145,6 +157,7 @@ export class ApiScheduler {
     tabId: number,
     priority: RequestPriority = 'normal',
     reason?: string,
+    planId?: string,
   ): Promise<RequestResult> {
     const dedupKey = this.getGetDedupKey(method, endpoint, tabId);
 
@@ -171,6 +184,7 @@ export class ApiScheduler {
         tabId,
         timestamp: Date.now(),
         reason,
+        planId,
         resolve: (result: RequestResult) => resolve(result),
         reject,
         retryCount: 0,
@@ -545,6 +559,14 @@ export class ApiScheduler {
    * called for a mid-flight retry — only the terminal outcome.
    */
   private recordSettledRequest(request: QueuedRequest, success: boolean): void {
+    // Charge the plan here, in the one place a request is known to be finally
+    // settled. A coalesced GET's joined waiters never reach this method, so a
+    // plan's `spent` counts requests Okta actually saw rather than callers that
+    // asked — the only reading that can honestly be compared against headroom.
+    if (request.planId) {
+      this.plans.attribute(request.planId, request.endpoint);
+    }
+
     recordRequest({
       reason: request.reason,
       method: request.method,
@@ -776,7 +798,128 @@ export class ApiScheduler {
       cooldownEndsAt: this.latestCooldownEnd(),
       errorCount: this.metrics.failedRequests,
       lastError: this.lastError,
+      buckets: this.buildBucketStates(),
+      plans: this.plans.summarize(),
+      minRemainingThresholdPercent: this.config.minRemainingThreshold,
     };
+  }
+
+  /**
+   * Every bucket currently worth showing, most-pressured first.
+   *
+   * The union of four sources, because each one can know about a bucket the
+   * others do not: Okta's own observations, requests waiting in the queue,
+   * requests in flight, and the legs active plans have declared. That last one
+   * is why a bucket can appear here with real `planned` work and no traffic yet.
+   *
+   * Sorted by pressure — least headroom first, unobserved buckets last — so the
+   * bar can render the top few rows and collapse the rest without having to
+   * decide which ones matter.
+   */
+  private buildBucketStates(): BucketState[] {
+    const buckets = new Set<string>();
+    for (const { bucket } of this.rateLimitDetector.getState().bucketLimits) buckets.add(bucket);
+    for (const request of this.queue) buckets.add(bucketOf(request.endpoint));
+    for (const request of this.activeRequests.values()) buckets.add(bucketOf(request.endpoint));
+    for (const bucket of this.plans.plannedBuckets()) buckets.add(bucket);
+
+    const globalGateEndsAt = this.isGated(GLOBAL_GATE)
+      ? (this.cooldowns.get(GLOBAL_GATE) as number)
+      : null;
+
+    const states: BucketState[] = [...buckets].map((bucket) => {
+      const info = this.rateLimitDetector.getForBucket(bucket);
+
+      // Which gate governs this bucket is the same question `gateKeyFor` asks
+      // when deciding whether to dispatch: an observed bucket answers for
+      // itself, an unobserved one falls back to the global backstop. Reporting
+      // anything else would show a bucket as free while the scheduler was in
+      // fact refusing to dispatch it.
+      const gatedUntil = info
+        ? this.isGated(bucket)
+          ? (this.cooldowns.get(bucket) as number)
+          : null
+        : globalGateEndsAt;
+
+      return {
+        bucket,
+        limit: info?.limit ?? null,
+        remaining: info?.remaining ?? null,
+        // Okta reports the reset as Unix *seconds*; everything crossing to the
+        // UI is milliseconds, so convert once here rather than at each reader.
+        resetAt: info ? info.reset * 1000 : null,
+        queued: this.queue.filter((request) => bucketOf(request.endpoint) === bucket).length,
+        active: [...this.activeRequests.values()].filter(
+          (request) => bucketOf(request.endpoint) === bucket,
+        ).length,
+        planned: this.plans.plannedForBucket(bucket),
+        gatedUntil,
+      };
+    });
+
+    return states.sort(byPressure);
+  }
+
+  /**
+   * Declare an operation's request budget. Advisory: nothing is reserved and no
+   * request is gated on it.
+   *
+   * @param declaration - The plan and its legs.
+   * @returns Whether the plan is now tracked.
+   */
+  declarePlan(declaration: PlanDeclaration): boolean {
+    const declared = this.plans.declare(declaration) !== null;
+    if (declared) this.notifyStateChange();
+    return declared;
+  }
+
+  /**
+   * Update one leg's estimate mid-flight — how a paginating walk raises its
+   * floor as `Link` headers promise more pages, and settles to an exact count
+   * when the walk ends.
+   */
+  refinePlan(planId: string, endpoint: string, estimate: PlanEstimate): void {
+    if (!this.plans.has(planId)) return;
+    this.plans.refine(planId, endpoint, estimate);
+    this.notifyStateChange();
+  }
+
+  /** Close a plan normally. */
+  completePlan(planId: string): void {
+    if (!this.plans.has(planId)) return;
+    this.plans.complete(planId);
+    this.notifyStateChange();
+  }
+
+  /**
+   * Cancel one operation: close its plan and drop **only** the queued requests
+   * that declared themselves part of it.
+   *
+   * Deliberately narrower than {@link clearQueue}, which drains everything. A
+   * background export and a foreground search share one queue, and stopping the
+   * first should never take out the second. In-flight requests are left to
+   * settle — they have already spent their budget, so killing them would cost
+   * the quota without saving anything.
+   *
+   * @returns How many queued requests were dropped.
+   */
+  cancelPlan(planId: string): number {
+    const dropped = this.queue.filter((request) => request.planId === planId);
+    if (dropped.length > 0) {
+      this.queue = this.queue.filter((request) => request.planId !== planId);
+    }
+
+    this.plans.cancel(planId);
+
+    for (const request of dropped) {
+      // `request.reject` is the coalescing-aware wrapper for GETs, so this also
+      // rejects any waiters and clears the coalescing entry.
+      request.reject(new OperationCancelledError());
+    }
+
+    log.debug('Cancelled plan', { dropped: dropped.length });
+    this.notifyStateChange();
+    return dropped.length;
   }
 
   /**
@@ -860,6 +1003,11 @@ export class ApiScheduler {
       request.reject(new OperationCancelledError());
     }
 
+    // A whole-queue drain is a user Cancel of everything, so no declared plan
+    // survives it — leaving them would strand rows in the bar promising work
+    // that was just thrown away.
+    this.plans.reset();
+
     log.debug(`Cleared ${dropped.length} requests from queue`);
     this.notifyStateChange();
     return dropped.length;
@@ -883,4 +1031,29 @@ export class ApiScheduler {
     };
     log.debug('Metrics reset');
   }
+}
+
+/**
+ * Sort comparator: least headroom first, unobserved buckets last.
+ *
+ * Ranking by *fraction* rather than absolute remaining is what makes buckets
+ * with different quota sizes comparable — 50 left of 100 is under more pressure
+ * than 200 left of 1000, even though the second number is larger. A bucket Okta
+ * has not reported on has no fraction to rank, so it sorts to the bottom (by
+ * name, for a stable order) rather than being guessed at.
+ */
+function byPressure(a: BucketState, b: BucketState): number {
+  const fractionOf = (state: BucketState): number | null =>
+    state.limit && state.limit > 0 && state.remaining !== null
+      ? state.remaining / state.limit
+      : null;
+
+  const left = fractionOf(a);
+  const right = fractionOf(b);
+
+  if (left === null && right === null) return a.bucket.localeCompare(b.bucket);
+  if (left === null) return 1;
+  if (right === null) return -1;
+  if (left !== right) return left - right;
+  return a.bucket.localeCompare(b.bucket);
 }

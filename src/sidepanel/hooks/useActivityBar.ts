@@ -72,6 +72,13 @@ export interface UseActivityBar {
   cancel: () => void;
 }
 
+/**
+ * Fallback for the "low headroom" line, used only before the first scheduler
+ * state arrives. Matches `DEFAULT_CONFIG.minRemainingThreshold` so the bar and
+ * the scheduler never disagree even during that first render.
+ */
+const DEFAULT_LOW_THRESHOLD_PERCENT = 10;
+
 const STATUS_COLOR: Record<SchedulerStatus, string> = {
   idle: 'var(--color-success)',
   processing: 'var(--color-info)',
@@ -155,10 +162,20 @@ export function useActivityBar(): UseActivityBar {
   const etaLabel =
     operationActive && remaining > 0 && done > 2 ? `~${clock(remaining)} left` : undefined;
 
+  // "Low" is the line the *scheduler* backs off at, not a number of the bar's
+  // own. The org's warning threshold is learned in the background and published
+  // on the state; reading it here is what stops the bar showing comfortable
+  // headroom while the scheduler is already cooling down.
+  const lowThreshold = state?.minRemainingThresholdPercent ?? DEFAULT_LOW_THRESHOLD_PERCENT;
   const rl = state?.rateLimitInfo ?? null;
-  const rateLimit = rl
-    ? { remaining: rl.remaining, limit: rl.limit, low: (rl.remaining / rl.limit) * 100 <= 20 }
-    : null;
+  const rateLimit =
+    rl && rl.limit > 0
+      ? {
+          remaining: rl.remaining,
+          limit: rl.limit,
+          low: (rl.remaining / rl.limit) * 100 <= lowThreshold,
+        }
+      : null;
 
   const queueLength = state?.queueLength ?? 0;
 
