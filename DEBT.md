@@ -3333,3 +3333,46 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
 - **Risk:** Low — fixture inputs only. Check each suite for an assertion that
   happens to hard-code the old string before swapping.
 - **Status:** open
+
+### D-083 · The docked strip and the header merge into one surface with two content margins
+
+- **Verified:** 2026-08-30 — measured in the capture rig (Chrome, real
+  scroll-driven timeline) on the Groups list rung at 400px and 840px, and
+  visible in the same shot at both widths.
+- **Problem:** At full merge the header and the action strip are one continuous
+  pinned surface with a single bottom edge — that is the whole point of the
+  merge — but their contents do not line up. `PageHeader`'s row is padded
+  `px-(--sp-gutter)`, so the title sits at the column gutter; `ActionBar`'s row
+  is padded `p-2` **inside** a band that is itself inset by that same gutter, so
+  the verbs and the search field sit at gutter + 8px. Measured docked at 400px:
+  title `x=16`, first verb `x=24`, search field `x=24`; at 840px, `x=20` against
+  `x=28`. The 8px is constant at every density, because the row's padding is a
+  raw `p-2` rather than one of ADR-0048's spacing roles.
+
+  It is filed as debt rather than cosmetics because `ActionBar`'s own module
+  header states the opposite as a design guarantee — "the row keeps the column's
+  padding whether the band is inside its margins or past them, which is also
+  what keeps the verbs aligned with the header's own content once the two have
+  become one surface." The code has never done that. So either the doc or the
+  padding is wrong, and a reader trusting the doc will not go and measure.
+
+  Affects every docked strip, not just Groups: `UserActionBar` merges through
+  the same band.
+
+- **Done when:** docked, the strip's first verb and its `subRow` share a left
+  edge with the header's title at every density, and `ActionBar`'s module note
+  either describes what the code does or is deleted. The fix has to hold in both
+  states — the strip is a card inset in the gutter at rest and full-bleed when
+  docked, and the row must not shift horizontally between them, since holding
+  the buttons still through the merge is the reason the animated chrome lives on
+  a `::before` in the first place. Check against
+  `ActionBar.stories.tsx`'s docking stories and `useActionOverflow.test.ts` —
+  the fit arithmetic reads the row's padding at runtime (`readPx` on
+  `padding-inline-start`/`-end`), so changing it changes the overflow budget and
+  must not be hard-coded anywhere.
+- **Risk:** Low. Chrome-only change to one row's padding, but it moves the
+  overflow budget, so the split can change at narrow widths and wants a look at
+  360px before and after.
+- **Status:** open
+- **Related:** ADR-0032 (the sticky stack and the merge), ADR-0048 (the spacing
+  roles the raw `p-2` predates), `useActionOverflow` (reads the row's padding)
