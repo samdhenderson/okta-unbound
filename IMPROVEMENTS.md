@@ -671,29 +671,32 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Status:** open
 - **Related:** `I-019`, ADR-0030, ADR-0040
 
-### I-021 · Icon registry entries for the four glyphs `groups/` still hand-rolls
+### I-021 · Icon registry entries for the three glyphs `GroupCollections` still hand-rolls
 
 - **Category:** ux
 - **Priority:** P3
 - **Size:** S
 - **Verified:** 2026-08-28
 - **Files:** `src/sidepanel/components/shared/Icon.tsx`,
-  `src/sidepanel/components/groups/GroupFilterToggle.tsx`,
   `src/sidepanel/components/groups/GroupCollections.tsx`
-- **Problem:** `GroupFilterToggle` hand-rolls a funnel glyph and
-  `GroupCollections` hand-rolls upload, refresh and pencil-rename glyphs, as
-  inline `<svg>`. None has a matching entry in the `Icon` registry, so the
-  polish pass could not convert them the way it converted
+- **Narrowed 2026-08-31:** the funnel is done. Promoting the two hand-copied
+  filter toggles to `shared/FilterToggle` added it to the registry as
+  `Icon type="filter"` and deleted the call site that hand-rolled it. What is
+  left is `GroupCollections`' three.
+- **Problem:** `GroupCollections` hand-rolls upload, refresh and pencil-rename
+  glyphs as inline `<svg>`. None has a matching entry in the `Icon` registry, so
+  the polish pass could not convert them the way it converted
   `GroupExportModal`'s warning triangle (`Icon type="alert"`) and
   `BulkOperationsPanel`'s chevron. `GroupCollections`' four icon-buttons were
   deliberately left as a matched set rather than swapping only the one with
   an exact registry match (`trash`), because mixing one `Icon`-sized glyph
   into a row of custom-sized SVGs is visibly inconsistent.
-- **Done when:** `funnel`, `upload`, `refresh-cw` (or an agreed name) and
-  `pencil` exist in the `Icon` registry with stories; both files render them
-  through `Icon` at a registry size; no inline `<svg>` remains in either.
+- **Done when:** `upload`, `refresh-cw` (or an agreed name) and `pencil` exist
+  in the `Icon` registry with stories; `GroupCollections` renders them through
+  `Icon` at a registry size; no inline `<svg>` remains in it.
 - **Risk:** Low — the glyphs are decorative, both call sites already carry
   their own `aria-label`.
+- **Status:** open
 
 ### I-022 · A spacing role for the toolbar cluster, or a documented refusal
 

@@ -284,7 +284,7 @@ comment at the call site:
 - **Composites** where a shared primitive is not pixel-neutral: the Add-to-Group
   type-ahead (`AddToGroupModal`) and `UserComparisonModal`'s search field in
   `ComparisonSearchPhase` — leading-glyph search inputs with an absolutely
-  positioned spinner/dropdown — plus `GroupFilterToggle`.
+  positioned spinner/dropdown — plus `shared/FilterToggle`.
 
   `SearchDropdown`, `UserSearchBar` and `GroupSearchBar` **left this list**: they
   now compose `Input` + `Icon` + `LoadingSpinner` like `MemberSearchBar`. The
