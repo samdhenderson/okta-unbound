@@ -27,7 +27,7 @@ const COMPACT_BELOW_PX = 640;
  * Renders the fixed bottom activity bar and gates cancellation behind a confirm.
  */
 const ActivityBar: React.FC = () => {
-  const { view, cancel } = useActivityBar();
+  const { view, cancel, cancelOperation } = useActivityBar();
   const [confirming, setConfirming] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const isNarrow = useIsNarrow(COMPACT_BELOW_PX);
@@ -53,6 +53,9 @@ const ActivityBar: React.FC = () => {
     <ActivityBarView
       view={view}
       onCancel={handleCancel}
+      // No confirm: unlike "Cancel all", this stops exactly the operation its
+      // label names, costs nothing but a re-run, and takes nothing else with it.
+      onCancelOperation={cancelOperation}
       collapsible={collapsible}
       collapsed={collapsed}
       onToggleCollapse={() => setExpanded((prev) => !prev)}

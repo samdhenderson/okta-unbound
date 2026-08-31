@@ -13,6 +13,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useScheduler } from '../contexts/SchedulerContext';
 import { useProgress } from '../contexts/ProgressContext';
 import type { SchedulerStatus, BucketState } from '../../shared/scheduler/types';
+import type { PlanSummary } from '../../shared/scheduler/plan';
 
 /** Display-ready, already-merged activity state consumed by `ActivityBarView`. */
 export interface ActivityView {
@@ -70,6 +71,13 @@ export interface ActivityView {
   /** The org-learned percentage at which the scheduler starts backing off. */
   lowThresholdPercent: number;
   /**
+   * Every operation that has declared a request budget and not yet finished,
+   * oldest first (ADR-0060). This is the scheduler's own ledger rather than the
+   * panel's progress state, which is why several concurrent operations show as
+   * several rows where the progress bar can only ever describe one.
+   */
+  operations: PlanSummary[];
+  /**
    * Shared clock tick in epoch milliseconds, so every countdown in the bar moves
    * together instead of each row owning a timer.
    */
@@ -82,6 +90,12 @@ export interface UseActivityBar {
   view: ActivityView;
   /** Stop the current operation and drain the scheduler queue. */
   cancel: () => void;
+  /**
+   * Stop one declared operation, leaving the rest of the queue alone. The
+   * requests it has already dispatched are left to settle: they have spent
+   * their budget, so killing them would cost the quota and save nothing.
+   */
+  cancelOperation: (planId: string) => void;
 }
 
 /**
@@ -96,6 +110,9 @@ const DEFAULT_LOW_THRESHOLD_PERCENT = 10;
  * every consumer a new identity on every clock tick.
  */
 const EMPTY_BUCKETS: BucketState[] = [];
+
+/** Stable empty array for the no-state case, for the same reason. */
+const EMPTY_PLANS: PlanSummary[] = [];
 
 const STATUS_COLOR: Record<SchedulerStatus, string> = {
   idle: 'var(--color-success)',
@@ -137,7 +154,7 @@ function cooldownClock(ms: number): string {
  * operation cancellation token and clears the background queue.
  */
 export function useActivityBar(): UseActivityBar {
-  const { state, metrics, clearQueue } = useScheduler();
+  const { state, metrics, clearQueue, cancelPlan } = useScheduler();
   const { progress, cancel: cancelOperation } = useProgress();
 
   // A single ticking clock. Elapsed and cooldown are derived purely from `now`
@@ -172,6 +189,17 @@ export function useActivityBar(): UseActivityBar {
     cancelOperation();
     void clearQueue();
   }, [cancelOperation, clearQueue]);
+
+  // Deliberately does not touch the shared progress token: that token is global,
+  // so tripping it here would stop every other operation too — the exact thing
+  // this control exists to avoid. The scheduler rejecting that plan's requests
+  // is what unwinds its loop.
+  const cancelSingleOperation = useCallback(
+    (planId: string) => {
+      void cancelPlan(planId);
+    },
+    [cancelPlan],
+  );
 
   // Computed plainly rather than via useMemo: this bar re-renders on every clock
   // tick anyway, and `progress.current` trips the React Compiler's ref-access
@@ -231,8 +259,9 @@ export function useActivityBar(): UseActivityBar {
     canCancel: (operationActive || queueLength > 0) && !progress.isCancelling,
     buckets,
     lowThresholdPercent: lowThreshold,
+    operations: state?.plans ?? EMPTY_PLANS,
     now,
   };
 
-  return { view, cancel };
+  return { view, cancel, cancelOperation: cancelSingleOperation };
 }

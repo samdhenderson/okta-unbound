@@ -157,6 +157,21 @@ their budget, so killing them would cost the quota without saving anything.
 unchanged, and additionally resets the ledger, because no declared plan should
 survive a cancel that threw its work away.
 
+Dropping the queue is only half a cancel, though. The loop that filled it is
+still running in the side panel and will enqueue its next page a moment later,
+so a cancel that only drained would stop one batch and then watch the operation
+carry on. The scheduler therefore keeps a bounded FIFO of **cancelled plan ids**
+and rejects any later request carrying one with `OperationCancelledError`, which
+is also what unwinds the loop. This is the single place the ledger is
+authoritative rather than advisory (§2), and the distinction is deliberate: it
+governs whether an operation is still running, never how much one may spend. The
+same tombstone is written for every plan `clearQueue()` forgets, for the same
+reason.
+
+Per-operation cancel deliberately does **not** trip the shared progress
+cancellation token. That token is global — tripping it would stop every other
+operation, which is the exact thing this control exists to avoid.
+
 ### 7. Two integration points, both explicit
 
 There is no `AsyncLocalStorage` in the browser, so a plan id cannot be ambient.
@@ -188,6 +203,25 @@ control-plane chatter reads as API traffic.
 `useActivityBar` reads `minRemainingThresholdPercent` off the state instead of
 hardcoding 20. The bar and the scheduler now draw the same line by construction.
 
+### 9. The operation ledger is read from the scheduler, not from `ProgressContext`
+
+The bar's operation rows come from `SchedulerState.plans`. `ProgressContext` is
+left exactly as it is: one operation, one message, one item count.
+
+The original sketch turned `ProgressContext` into a map keyed by plan id with
+the single-operation API kept as a facade over the primary operation. That work
+turned out to be unnecessary. The scheduler already tracks every declared
+operation by id, with its name, its buckets and its spent/estimated counts — a
+strictly better source for a ledger than a context whose job is a single
+foreground loop's _item_ progress, and one that is already pushed to the panel
+on every state change. Restructuring the context would have added a second,
+weaker copy of the same list and touched every call site to do it.
+
+The two therefore describe different things on purpose: the progress bar is
+about items in the operation the user started, the ledger is about requests each
+operation will spend. That also keeps concurrent background work visible without
+it having to claim the foreground progress bar.
+
 ## Consequences
 
 **The bar can finally answer "what is coming".** A declared operation shows
@@ -206,6 +240,12 @@ in-flight requests against the governing budget rather than per-bucket
 only, and making the gate use it is a behaviour change that wants its own
 change. And `unknown` legs mean a plan total can be a floor rather than a
 number — the bar must render that as a floor, not round it away.
+
+**A cancelled operation's id outlives its plan.** The tombstone list is bounded
+at 64 ids and never persisted; ids are random per operation, so a recycled slot
+cannot refuse someone else's work. It does mean an operation cannot be cancelled
+and then re-run under the _same_ plan id — every entry point mints a fresh one,
+and any future caller that reuses an id would find its requests refused.
 
 **`RateLimitDetector.getState()` has a production caller for the first time.**
 It was written for ADR-0059 and used only by tests; the bucket view is what it

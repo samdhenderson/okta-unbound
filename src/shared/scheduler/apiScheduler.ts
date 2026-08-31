@@ -53,6 +53,12 @@ const DEFAULT_CONFIG: SchedulerConfig = {
 const GLOBAL_GATE = '*';
 
 /**
+ * How many cancelled plan ids to remember. Only has to outlast the unwinding of
+ * the operations that were cancelled, which is a matter of seconds.
+ */
+const MAX_CANCELLED_PLANS = 64;
+
+/**
  * Priority queue and executor for Okta API requests. One instance is created in
  * the background worker; the processing loop starts in the constructor.
  */
@@ -104,6 +110,13 @@ export class ApiScheduler {
   // captures this before it waits and, on waking, rejects instead of reviving if
   // the value moved — so Cancel also stops mid-backoff requests, not just queued ones.
   private cancelGeneration: number = 0;
+
+  // Plans the user has cancelled, kept as a tombstone after the plan itself is
+  // gone. Cancelling drops what is queued, but the loop that was feeding the
+  // queue is still running and would enqueue its next request a moment later;
+  // without this, "cancel this operation" would drop one batch and then watch
+  // the operation carry on regardless.
+  private cancelledPlans: string[] = [];
 
   // Metrics
   private metrics: SchedulerMetrics = {
@@ -159,6 +172,13 @@ export class ApiScheduler {
     reason?: string,
     planId?: string,
   ): Promise<RequestResult> {
+    // A request belonging to a cancelled operation never enters the queue. This
+    // is the one place the ledger is authoritative rather than advisory: it
+    // decides whether an operation is still running, not how much it may spend.
+    if (planId && this.cancelledPlans.includes(planId)) {
+      throw new OperationCancelledError();
+    }
+
     const dedupKey = this.getGetDedupKey(method, endpoint, tabId);
 
     // Coalesce an identical in-flight/queued GET: attach to the leader's result
@@ -910,6 +930,7 @@ export class ApiScheduler {
     }
 
     this.plans.cancel(planId);
+    this.tombstone(planId);
 
     for (const request of dropped) {
       // `request.reject` is the coalescing-aware wrapper for GETs, so this also
@@ -920,6 +941,20 @@ export class ApiScheduler {
     log.debug('Cancelled plan', { dropped: dropped.length });
     this.notifyStateChange();
     return dropped.length;
+  }
+
+  /**
+   * Remember a cancelled plan id so requests still coming down its loop are
+   * refused rather than queued. Bounded FIFO: an id ages out long after the
+   * operation that owned it has unwound, and ids are random per operation, so
+   * a recycled slot cannot refuse someone else's work.
+   */
+  private tombstone(planId: string): void {
+    if (this.cancelledPlans.includes(planId)) return;
+    this.cancelledPlans.push(planId);
+    if (this.cancelledPlans.length > MAX_CANCELLED_PLANS) {
+      this.cancelledPlans.shift();
+    }
   }
 
   /**
@@ -1005,7 +1040,9 @@ export class ApiScheduler {
 
     // A whole-queue drain is a user Cancel of everything, so no declared plan
     // survives it — leaving them would strand rows in the bar promising work
-    // that was just thrown away.
+    // that was just thrown away. Each is tombstoned for the same reason a
+    // single cancel is: the loops behind them are still running.
+    for (const plan of this.plans.summarize()) this.tombstone(plan.id);
     this.plans.reset();
 
     log.debug(`Cleared ${dropped.length} requests from queue`);

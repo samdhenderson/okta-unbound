@@ -356,6 +356,50 @@ describe('ApiScheduler plan ledger', () => {
       expect(state.buckets.find((b) => b.bucket === '/api/v1/users')?.planned ?? 0).toBe(0);
     });
 
+    it('refuses the next request the cancelled operation-s loop sends', async () => {
+      // Dropping the queue is only half a cancel. The loop that filled it is
+      // still running and will enqueue its next page a moment later; without a
+      // tombstone the operation carries on after the user stopped it.
+      sendMessage.mockImplementation(respondHealthy());
+      scheduler = new ApiScheduler({ maxRetries: 0 });
+
+      scheduler.declarePlan({
+        id: 'export',
+        name: 'Export all users',
+        tabId: 1,
+        legs: [{ endpoint: '/api/v1/users', estimate: { kind: 'exact', requests: 9 } }],
+      });
+      scheduler.cancelPlan('export');
+
+      await expect(
+        scheduler.scheduleRequest(
+          '/api/v1/users?after=p2',
+          'GET',
+          undefined,
+          1,
+          'normal',
+          'w',
+          'export',
+        ),
+      ).rejects.toBeInstanceOf(OperationCancelledError);
+      expect(sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('refuses only that plan-s requests, not undeclared ones', async () => {
+      sendMessage.mockImplementation(respondHealthy());
+      scheduler = new ApiScheduler({ maxRetries: 0 });
+
+      scheduler.cancelPlan('export');
+
+      // A request with no plan, and one belonging to a different plan, both run.
+      await expect(
+        scheduler.scheduleRequest('/api/v1/groups', 'GET', undefined, 1),
+      ).resolves.toMatchObject({ success: true });
+      await expect(
+        scheduler.scheduleRequest('/api/v1/apps', 'GET', undefined, 1, 'normal', 'w', 'search'),
+      ).resolves.toMatchObject({ success: true });
+    });
+
     it('is a no-op for a plan that was never declared', () => {
       sendMessage.mockImplementation(respondHealthy());
       scheduler = new ApiScheduler({ maxRetries: 0 });
@@ -431,6 +475,32 @@ describe('ApiScheduler plan ledger', () => {
       scheduler.clearQueue();
 
       expect(scheduler.getState().plans).toEqual([]);
+    });
+
+    it('refuses the requests those forgotten plans were still about to send', async () => {
+      sendMessage.mockImplementation(respondHealthy());
+      scheduler = new ApiScheduler({ maxRetries: 0 });
+
+      scheduler.declarePlan({
+        id: 'export',
+        name: 'Export all users',
+        tabId: 1,
+        legs: [{ endpoint: '/api/v1/users', estimate: { kind: 'exact', requests: 9 } }],
+      });
+
+      scheduler.clearQueue();
+
+      await expect(
+        scheduler.scheduleRequest(
+          '/api/v1/users?after=p2',
+          'GET',
+          undefined,
+          1,
+          'normal',
+          'w',
+          'export',
+        ),
+      ).rejects.toBeInstanceOf(OperationCancelledError);
     });
   });
 });

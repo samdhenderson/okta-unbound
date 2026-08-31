@@ -13,6 +13,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import ActivityBarView from './ActivityBarView';
 import type { ActivityView } from '../hooks/useActivityBar';
+import type { PlanSummary } from '@/shared/scheduler/plan';
 
 /** A frozen clock, so countdown assertions are not a race against wall time. */
 const FIXED_NOW = 1_760_000_000_000;
@@ -45,6 +46,7 @@ function idleView(overrides: Partial<ActivityView> = {}): ActivityView {
     canCancel: false,
     buckets: [],
     lowThresholdPercent: 10,
+    operations: [],
     now: FIXED_NOW,
     ...overrides,
   };
@@ -389,5 +391,143 @@ describe('per-bucket headroom', () => {
     );
 
     expect(screen.queryByTestId('activity-buckets')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The ledger and the timeline. Both are conditional sections, and both are
+ * conditional for the same reason: an idle bar must render at exactly the height
+ * it renders today (ADR-0008).
+ */
+describe('ActivityBarView operation ledger', () => {
+  function bucket(overrides: { bucket: string } & Partial<ActivityView['buckets'][number]>) {
+    return {
+      limit: 600,
+      remaining: 600,
+      resetAt: FIXED_NOW + 60_000,
+      queued: 0,
+      active: 0,
+      planned: 0,
+      gatedUntil: null,
+      ...overrides,
+    };
+  }
+
+  function plan(overrides: { id: string; name: string } & Partial<PlanSummary>): PlanSummary {
+    return {
+      startedAt: FIXED_NOW,
+      legs: [
+        {
+          id: 'leg',
+          bucket: '/api/v1/users',
+          method: 'GET',
+          estimated: 50,
+          spent: 0,
+          remaining: 50,
+          approximate: false,
+        },
+      ],
+      spent: 0,
+      estimated: 50,
+      remaining: 50,
+      approximate: false,
+      ...overrides,
+    };
+  }
+
+  it('adds no ledger section when nothing has declared work', () => {
+    render(<ActivityBarView view={idleView()} onCancel={vi.fn()} />);
+
+    expect(screen.queryByTestId('activity-operations')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('activity-reset-timeline')).not.toBeInTheDocument();
+  });
+
+  it('lists each declared operation with its own stop control', () => {
+    const onCancelOperation = vi.fn();
+    render(
+      <ActivityBarView
+        view={idleView({
+          operations: [
+            plan({ id: 'export', name: 'Export all users', spent: 12 }),
+            plan({ id: 'search', name: 'Search groups' }),
+          ],
+        })}
+        onCancel={vi.fn()}
+        onCancelOperation={onCancelOperation}
+      />,
+    );
+
+    expect(screen.getByTestId('activity-operation-export')).toHaveTextContent('12 / 50');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stop Export all users' }));
+    expect(onCancelOperation).toHaveBeenCalledExactlyOnceWith('export');
+  });
+
+  it('renames the queue-wide Cancel once it would stop more than one thing', () => {
+    const onCancel = vi.fn();
+    const { unmount } = render(
+      <ActivityBarView
+        view={idleView({ operations: [plan({ id: 'export', name: 'Export all users' })] })}
+        onCancel={onCancel}
+      />,
+    );
+    // One operation: the button still means what it has always meant.
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    unmount();
+
+    render(
+      <ActivityBarView
+        view={idleView({
+          queueLength: 3,
+          canCancel: true,
+          operations: [
+            plan({ id: 'export', name: 'Export all users' }),
+            plan({ id: 'search', name: 'Search groups' }),
+          ],
+        })}
+        onCancel={onCancel}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel all' }));
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it('shows the reset timeline only while a bucket is actually gated', () => {
+    const { unmount } = render(
+      <ActivityBarView
+        view={idleView({ buckets: [bucket({ bucket: '/api/v1/users', queued: 4 })] })}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId('activity-reset-timeline')).not.toBeInTheDocument();
+    unmount();
+
+    render(
+      <ActivityBarView
+        view={idleView({
+          buckets: [bucket({ bucket: '/api/v1/users', gatedUntil: FIXED_NOW + 24_000 })],
+        })}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('activity-reset-timeline')).toHaveTextContent('users in 24s');
+  });
+
+  it('keeps both sections out of the condensed layout', () => {
+    render(
+      <ActivityBarView
+        view={idleView({
+          operations: [plan({ id: 'export', name: 'Export all users' })],
+          buckets: [bucket({ bucket: '/api/v1/users', gatedUntil: FIXED_NOW + 24_000 })],
+        })}
+        onCancel={vi.fn()}
+        collapsible
+        collapsed
+      />,
+    );
+
+    expect(screen.queryByTestId('activity-operations')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('activity-reset-timeline')).not.toBeInTheDocument();
   });
 });

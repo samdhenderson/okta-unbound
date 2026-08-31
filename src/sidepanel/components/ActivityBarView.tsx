@@ -42,6 +42,8 @@
 import React from 'react';
 import { Button, IconButton } from './shared';
 import BucketList from './activity/BucketList';
+import OperationList from './activity/OperationList';
+import ResetTimeline from './activity/ResetTimeline';
 import type { ActivityView } from '../hooks/useActivityBar';
 
 /** Props for {@link ActivityBarView}. */
@@ -50,6 +52,11 @@ export interface ActivityBarViewProps {
   view: ActivityView;
   /** Invoked when the user confirms cancellation of the current work. */
   onCancel: () => void;
+  /**
+   * Stops one declared operation, leaving every other one running. Omit to
+   * render the operation ledger read-only.
+   */
+  onCancelOperation?: (planId: string) => void;
   /**
    * Whether the panel is narrow enough to offer collapsing. When `true` the
    * chevron toggle is shown; when `false` the bar always renders its full row.
@@ -118,6 +125,7 @@ const CollapseChevron: React.FC<{ collapsed: boolean }> = ({ collapsed }) => (
 const ActivityBarView: React.FC<ActivityBarViewProps> = ({
   view,
   onCancel,
+  onCancelOperation,
   collapsible = false,
   collapsed = false,
   onToggleCollapse,
@@ -135,6 +143,11 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({
     />
   );
 
+  // Once the ledger shows more than one operation, each with its own ✕, a bare
+  // "Cancel" no longer says which. It becomes "Cancel all" — the button's
+  // behaviour has always been to drain the whole queue.
+  const cancelsEverything = view.operations.length > 1;
+
   const cancelButton = (
     <Button
       variant="danger"
@@ -142,9 +155,13 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({
 
       disabled={!view.canCancel || view.isCancelling}
       onClick={onCancel}
-      title="Cancel the current operation and clear the queue"
+      title={
+        cancelsEverything
+          ? 'Cancel every running operation and clear the queue'
+          : 'Cancel the current operation and clear the queue'
+      }
     >
-      {view.isCancelling ? 'Cancelling…' : 'Cancel'}
+      {view.isCancelling ? 'Cancelling…' : cancelsEverything ? 'Cancel all' : 'Cancel'}
     </Button>
   );
 
@@ -345,6 +362,13 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({
           {cancelButton}
         </div>
       </div>
+
+      {/* The ledger: every operation that declared a budget, with its own stop
+          control. Absent entirely when nothing has been declared. */}
+      <OperationList operations={view.operations} onCancelOperation={onCancelOperation} />
+
+      {/* Only while a gate is armed: when each bucket comes back, on one axis. */}
+      <ResetTimeline buckets={view.buckets} now={view.now} />
 
       {/* Per-bucket headroom. Only strained buckets get a row; the rest collapse
           to one line, so an idle bar is exactly as slim as it was (ADR-0060 §4). */}
