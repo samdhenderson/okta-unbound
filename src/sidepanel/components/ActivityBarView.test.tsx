@@ -14,6 +14,9 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import ActivityBarView from './ActivityBarView';
 import type { ActivityView } from '../hooks/useActivityBar';
 
+/** A frozen clock, so countdown assertions are not a race against wall time. */
+const FIXED_NOW = 1_760_000_000_000;
+
 /** A fully idle, empty view — the slim persistent baseline. */
 function idleView(overrides: Partial<ActivityView> = {}): ActivityView {
   return {
@@ -40,6 +43,9 @@ function idleView(overrides: Partial<ActivityView> = {}): ActivityView {
     opFailed: 0,
     isCancelling: false,
     canCancel: false,
+    buckets: [],
+    lowThresholdPercent: 10,
+    now: FIXED_NOW,
     ...overrides,
   };
 }
@@ -276,5 +282,112 @@ describe('ActivityBarView', () => {
         screen.getByRole('button', { name: /hide extra activity stats/i }),
       ).toBeInTheDocument();
     });
+  });
+});
+
+/**
+ * The bucket section is the one thing in the bar whose height depends on org
+ * state, so it is the one place the ADR-0008 no-reflow contract could newly be
+ * broken. These pin the collapse rule at the bar level: idle costs nothing,
+ * strain costs exactly the rows it needs.
+ */
+describe('per-bucket headroom', () => {
+  const NOW = FIXED_NOW;
+
+  function bucket(overrides: { bucket: string } & Partial<ActivityView['buckets'][number]>) {
+    return {
+      limit: 600,
+      remaining: 600,
+      resetAt: NOW + 60_000,
+      queued: 0,
+      active: 0,
+      planned: 0,
+      gatedUntil: null,
+      ...overrides,
+    };
+  }
+
+  it('adds no bucket section at all when the scheduler has seen nothing', () => {
+    // An idle bar is exactly as slim as it was before ADR-0060.
+    render(<ActivityBarView view={idleView()} onCancel={vi.fn()} />);
+
+    expect(screen.queryByTestId('activity-buckets')).not.toBeInTheDocument();
+  });
+
+  it('collapses quiet buckets to a single line rather than a row each', () => {
+    render(
+      <ActivityBarView
+        view={idleView({
+          buckets: [
+            bucket({ bucket: '/api/v1/groups' }),
+            bucket({ bucket: '/api/v1/policies' }),
+            bucket({ bucket: '/api/v1/meta', limit: null, remaining: null }),
+          ],
+        })}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryAllByTestId(/^activity-bucket-/)).toHaveLength(0);
+    expect(screen.getByTestId('activity-buckets-quiet')).toHaveTextContent('3 buckets idle');
+  });
+
+  it('shows the planned work against a bucket before any of it is sent', () => {
+    render(
+      <ActivityBarView
+        view={idleView({
+          buckets: [bucket({ bucket: '/api/v1/users', planned: 812 })],
+        })}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('activity-bucket-/api/v1/users')).toHaveTextContent('812 planned');
+  });
+
+  it('surfaces the gated bucket-s own countdown, not just the global one', () => {
+    render(
+      <ActivityBarView
+        view={idleView({
+          buckets: [
+            bucket({ bucket: '/api/v1/users', remaining: 18, gatedUntil: NOW + 24_000 }),
+            bucket({ bucket: '/api/v1/groups' }),
+          ],
+        })}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('activity-bucket-cooldown-/api/v1/users')).toHaveTextContent('24s');
+    // The healthy family stays collapsed — the whole point of per-bucket gating.
+    expect(screen.getByTestId('activity-buckets-quiet')).toHaveTextContent('groups');
+  });
+
+  it('colours low headroom at the org threshold the view carries', () => {
+    const buckets = [bucket({ bucket: '/api/v1/users', limit: 100, remaining: 30, queued: 1 })];
+
+    const { unmount } = render(
+      <ActivityBarView view={idleView({ buckets, lowThresholdPercent: 10 })} onCancel={vi.fn()} />,
+    );
+    expect(screen.getByTestId('activity-bucket-/api/v1/users')).not.toHaveAttribute('data-low');
+    unmount();
+
+    render(
+      <ActivityBarView view={idleView({ buckets, lowThresholdPercent: 35 })} onCancel={vi.fn()} />,
+    );
+    expect(screen.getByTestId('activity-bucket-/api/v1/users')).toHaveAttribute('data-low', 'true');
+  });
+
+  it('is absent from the condensed layout, which stays a single line', () => {
+    render(
+      <ActivityBarView
+        view={idleView({ buckets: [bucket({ bucket: '/api/v1/users', planned: 40 })] })}
+        onCancel={vi.fn()}
+        collapsible
+        collapsed
+      />,
+    );
+
+    expect(screen.queryByTestId('activity-buckets')).not.toBeInTheDocument();
   });
 });

@@ -12,7 +12,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useScheduler } from '../contexts/SchedulerContext';
 import { useProgress } from '../contexts/ProgressContext';
-import type { SchedulerStatus } from '../../shared/scheduler/types';
+import type { SchedulerStatus, BucketState } from '../../shared/scheduler/types';
 
 /** Display-ready, already-merged activity state consumed by `ActivityBarView`. */
 export interface ActivityView {
@@ -62,6 +62,18 @@ export interface ActivityView {
   isCancelling: boolean;
   /** Whether there is anything to cancel (active operation or non-empty queue). */
   canCancel: boolean;
+  /**
+   * Every rate-limit bucket the scheduler is tracking, most-pressured first
+   * (ADR-0060). Empty until Okta has answered at least once.
+   */
+  buckets: BucketState[];
+  /** The org-learned percentage at which the scheduler starts backing off. */
+  lowThresholdPercent: number;
+  /**
+   * Shared clock tick in epoch milliseconds, so every countdown in the bar moves
+   * together instead of each row owning a timer.
+   */
+  now: number;
 }
 
 /** Value returned by {@link useActivityBar}. */
@@ -78,6 +90,12 @@ export interface UseActivityBar {
  * the scheduler never disagree even during that first render.
  */
 const DEFAULT_LOW_THRESHOLD_PERCENT = 10;
+
+/**
+ * Stable empty array for the no-state case. A fresh `[]` each render would give
+ * every consumer a new identity on every clock tick.
+ */
+const EMPTY_BUCKETS: BucketState[] = [];
 
 const STATUS_COLOR: Record<SchedulerStatus, string> = {
   idle: 'var(--color-success)',
@@ -127,7 +145,14 @@ export function useActivityBar(): UseActivityBar {
   // React Compiler would otherwise refuse to memoize around).
   const [now, setNow] = useState(() => Date.now());
   const cooldownEndsAt = state?.cooldownEndsAt ?? null;
-  const ticking = (progress.isLoading && Boolean(progress.startTime)) || cooldownEndsAt !== null;
+  const buckets = state?.buckets ?? EMPTY_BUCKETS;
+  // Anything with live counts wants the clock: a running operation, the global
+  // cooldown, or any single gated bucket — the last of which can be armed while
+  // `cooldownEndsAt` reports a different, later gate.
+  const ticking =
+    (progress.isLoading && Boolean(progress.startTime)) ||
+    cooldownEndsAt !== null ||
+    buckets.some((bucket) => bucket.gatedUntil !== null);
 
   useEffect(() => {
     if (!ticking) return;
@@ -204,6 +229,9 @@ export function useActivityBar(): UseActivityBar {
     failed: metrics?.failedRequests ?? 0,
     isCancelling: Boolean(progress.isCancelling),
     canCancel: (operationActive || queueLength > 0) && !progress.isCancelling,
+    buckets,
+    lowThresholdPercent: lowThreshold,
+    now,
   };
 
   return { view, cancel };

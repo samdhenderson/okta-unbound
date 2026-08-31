@@ -51,6 +51,12 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/**
+ * A frozen clock. Countdowns are derived from `now`, so a real one would make
+ * every story a moving target for the visual-diff run.
+ */
+const FIXED_NOW = 1_760_000_000_000;
+
 const idleView: ActivityView = {
   statusLabel: 'Ready',
   statusColorVar: 'var(--color-success)',
@@ -69,6 +75,9 @@ const idleView: ActivityView = {
   failed: 0,
   isCancelling: false,
   canCancel: false,
+  buckets: [],
+  lowThresholdPercent: 10,
+  now: FIXED_NOW,
 };
 
 /** Fully idle — nothing queued, nothing processed, cancel disabled. */
@@ -258,6 +267,108 @@ export const Cancelling: Story = {
       queueLength: 3,
       isCancelling: true,
       canCancel: false,
+    },
+  },
+};
+
+/**
+ * Helper for bucket fixtures below. `resetAt` is fixed so nothing drifts between
+ * story runs.
+ */
+function bucket(
+  overrides: { bucket: string } & Partial<ActivityView['buckets'][number]>,
+): ActivityView['buckets'][number] {
+  return {
+    limit: 600,
+    remaining: 600,
+    resetAt: FIXED_NOW + 60_000,
+    queued: 0,
+    active: 0,
+    planned: 0,
+    gatedUntil: null,
+    ...overrides,
+  };
+}
+
+/**
+ * Idle, but the scheduler has seen five families. Every one is at full headroom,
+ * so all five collapse to a single grey line and the bar stays as slim as it is
+ * with no buckets at all.
+ */
+export const BucketsAllQuiet: Story = {
+  args: {
+    view: {
+      ...idleView,
+      processed: 128,
+      buckets: [
+        bucket({ bucket: '/api/v1/users' }),
+        bucket({ bucket: '/api/v1/groups' }),
+        bucket({ bucket: '/api/v1/apps' }),
+        bucket({ bucket: '/api/v1/policies' }),
+        bucket({ bucket: '/api/v1/meta', limit: null, remaining: null, resetAt: null }),
+      ],
+    },
+  },
+};
+
+/**
+ * An export under way: `/api/v1/users` has 812 requests declared against it
+ * before most of them exist, while the untouched families stay collapsed.
+ */
+export const BucketsWithPlannedWork: Story = {
+  args: {
+    view: {
+      ...idleView,
+      statusLabel: 'Processing',
+      statusColorVar: 'var(--color-info)',
+      busy: true,
+      operationActive: true,
+      operationName: 'Export all users',
+      current: 312,
+      total: 812,
+      percentage: 38,
+      opCompleted: 312,
+      opActive: 4,
+      queueLength: 26,
+      activeRequests: 4,
+      rateLimit: { remaining: 288, limit: 600, low: false },
+      canCancel: true,
+      buckets: [
+        bucket({ bucket: '/api/v1/users', remaining: 288, active: 4, queued: 26, planned: 470 }),
+        bucket({ bucket: '/api/v1/groups' }),
+        bucket({ bucket: '/api/v1/policies' }),
+      ],
+    },
+  },
+};
+
+/**
+ * One family exhausted and cooling, the rest untouched — the case per-bucket
+ * gating exists for (ADR-0059). The countdown is that bucket's own gate.
+ */
+export const BucketCoolingDown: Story = {
+  args: {
+    view: {
+      ...idleView,
+      statusLabel: 'Cooldown',
+      statusColorVar: 'var(--color-danger)',
+      busy: true,
+      queueLength: 40,
+      rateLimit: { remaining: 18, limit: 600, low: true },
+      cooldownLabel: '24s',
+      canCancel: true,
+      buckets: [
+        bucket({
+          bucket: '/api/v1/users',
+          remaining: 18,
+          queued: 40,
+          planned: 500,
+          gatedUntil: FIXED_NOW + 24_000,
+        }),
+        bucket({ bucket: '/api/v1/apps', limit: 300, remaining: 81, queued: 3, planned: 402 }),
+        bucket({ bucket: '/api/v1/groups' }),
+        bucket({ bucket: '/api/v1/policies' }),
+      ],
     },
   },
 };

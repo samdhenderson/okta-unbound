@@ -41,6 +41,7 @@
  */
 import React from 'react';
 import { Button, IconButton } from './shared';
+import BucketList from './activity/BucketList';
 import type { ActivityView } from '../hooks/useActivityBar';
 
 /** Props for {@link ActivityBarView}. */
@@ -344,6 +345,14 @@ const ActivityBarView: React.FC<ActivityBarViewProps> = ({
           {cancelButton}
         </div>
       </div>
+
+      {/* Per-bucket headroom. Only strained buckets get a row; the rest collapse
+          to one line, so an idle bar is exactly as slim as it was (ADR-0060 §4). */}
+      <BucketList
+        buckets={view.buckets}
+        lowThresholdPercent={view.lowThresholdPercent}
+        now={view.now}
+      />
 
       {/* Progress track — stays mounted at 0% when idle */}
       {progressTrack}
