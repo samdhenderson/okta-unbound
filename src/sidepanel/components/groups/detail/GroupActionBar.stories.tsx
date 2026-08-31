@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import GroupActionBar from './GroupActionBar';
 import type { GroupSummary } from '../../../../shared/types';
 
@@ -35,9 +35,15 @@ const meta = {
           "the row at `priority: 'flex'`, mirroring `UserActionBar`'s treatment of *Add group*. " +
           '**Compare** sits beside it for the same reason that strip puts its own *Compare* in the ' +
           'row: it reads two rosters and writes nothing.\n\n' +
-          'Unlike `UserActionBar`, this strip ships with **no disclosure tier** — there is no ' +
-          "group-level verb today that changes the group's state with no symmetric undo, so there is " +
-          'nothing to put behind **More**.',
+          'The strip *does* have a disclosure tier, and one verb in it: **Remove deprovisioned**, ' +
+          'the bulk cleanup that empties a group of every member Okta has already deprovisioned. ' +
+          'It changes group state with no symmetric undo press, so per ADR-0039 it is ' +
+          "`priority: 'tier'` (behind **More** from the start) behind a confirm `Modal` that names " +
+          'the count and the group.\n\n' +
+          'It is **absent, not disabled**, whenever it cannot honestly run: no `onRemoveDeprovisioned` ' +
+          'wire, an `APP_GROUP` (the operation refuses those), or a `deprovisionedCount` of `0` or ' +
+          '`undefined` — `undefined` being the pre-analysis state, which is deliberately not shown ' +
+          'as zero (ADR-0032 §2a, absent is not zero).',
       },
     },
   },
@@ -47,6 +53,8 @@ const meta = {
     onExportGroup: fn(),
     onAddMember: fn(),
     onCompare: fn(),
+    onRemoveDeprovisioned: fn(),
+    deprovisionedCount: 3,
     // Nothing scrolls in a story, so the strip renders at its resting geometry.
     sticky: false,
   },
@@ -64,6 +72,21 @@ const meta = {
     },
     onAddMember: { description: 'Opens the Add-member modal.' },
     onCompare: { description: 'Opens the picker for the second group in a comparison.' },
+    deprovisionedCount: {
+      description:
+        'How many loaded members are `DEPROVISIONED`. `undefined` (not yet analyzed) and `0` both ' +
+        'omit the action rather than rendering a count the page cannot vouch for.',
+    },
+    onRemoveDeprovisioned: {
+      description:
+        'Runs the bulk removal once the confirm modal is accepted. Omitted \u2192 no action.',
+    },
+    isRemoving: {
+      description: 'Holds the confirm button in its loading state while the run is in flight.',
+    },
+    removeError: {
+      description: 'The last error the run reported, shown inside the confirm modal.',
+    },
     sticky: {
       description: 'Pin the strip below the header. `false` in stories — nothing scrolls.',
     },
@@ -73,7 +96,10 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Every action wired: Export members (pinned, primary), Add and Compare (flex). */
+/**
+ * Every action wired: Export members (pinned, primary), Add and Compare (flex) in
+ * the row, and Remove deprovisioned behind **More**.
+ */
 export const Default: Story = {};
 
 /** No `onExportGroup` — the strip renders only `Add`, never a disabled ghost button. */
@@ -94,5 +120,88 @@ export const NoConnectedTab: Story = {
     await expect(canvas.getByRole('button', { name: 'Add' })).toBeDisabled();
     await expect(canvas.getByRole('button', { name: 'Compare' })).toBeDisabled();
     await expect(canvas.getByRole('button', { name: /Export members/ })).toBeEnabled();
+  },
+};
+
+/**
+ * The tier's one verb, confirmed. **Remove deprovisioned** is `priority: 'tier'`,
+ * so it is behind **More** from the start rather than ever sitting in the row,
+ * and it is *accepting the confirm* that calls the handler — never the verb
+ * itself. (The row/tier split is `actionBarFit`'s, and has its own table-driven
+ * tests; what this story pins is that pressing through both steps reaches the
+ * handler exactly once.)
+ */
+export const RemoveDeprovisioned: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    const more = canvas.getByRole('button', { name: 'More' });
+    await expect(more).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(more);
+    await expect(more).toHaveAttribute('aria-expanded', 'true');
+
+    await userEvent.click(canvas.getByRole('button', { name: /Remove 3 deprovisioned/ }));
+
+    const dialog = body.getByRole('dialog', { name: 'Remove deprovisioned members' });
+    await expect(dialog).toHaveTextContent(/3 deprovisioned members from Engineering/);
+    await expect(args.onRemoveDeprovisioned).not.toHaveBeenCalled();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Remove 3' }));
+    await expect(args.onRemoveDeprovisioned).toHaveBeenCalledTimes(1);
+  },
+};
+
+/** The confirm, mid-run and then failed — the error lands in the dialog, not a toast. */
+export const RemoveFailed: Story = {
+  args: { removeError: '403 Forbidden: you lack permission to modify this group' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    await userEvent.click(canvas.getByRole('button', { name: 'More' }));
+    await userEvent.click(canvas.getByRole('button', { name: /Remove 3 deprovisioned/ }));
+
+    await expect(body.getByRole('dialog')).toHaveTextContent(/403 Forbidden/);
+  },
+};
+
+/**
+ * Nobody in the group is deprovisioned. The verb is **gone**, not a disabled
+ * "Remove 0 deprovisioned" sitting behind **More** forever.
+ */
+export const NoDeprovisionedMembers: Story = {
+  args: { deprovisionedCount: 0 },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole('button', { name: /deprovisioned/i })).not.toBeInTheDocument();
+  },
+};
+
+/**
+ * The roster has not been analyzed yet (`deprovisionedCount` is `undefined`).
+ * Absent is not zero: the page does not know the count, so it does not offer a
+ * verb whose label would have to state one.
+ */
+export const RosterNotLoaded: Story = {
+  args: { deprovisionedCount: undefined },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole('button', { name: /deprovisioned/i })).not.toBeInTheDocument();
+  },
+};
+
+/**
+ * An APP_GROUP: membership is mastered by the application, and the operation
+ * refuses these outright — so the strip does not offer the verb at all.
+ */
+export const AppGroupHasNoRemove: Story = {
+  args: {
+    group: { ...group, type: 'APP_GROUP', name: 'Salesforce Users' },
+    deprovisionedCount: 12,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole('button', { name: /deprovisioned/i })).not.toBeInTheDocument();
   },
 };
