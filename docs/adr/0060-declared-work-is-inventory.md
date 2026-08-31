@@ -157,7 +157,33 @@ their budget, so killing them would cost the quota without saving anything.
 unchanged, and additionally resets the ledger, because no declared plan should
 survive a cancel that threw its work away.
 
-### 7. The bar reads the scheduler's threshold
+### 7. Two integration points, both explicit
+
+There is no `AsyncLocalStorage` in the browser, so a plan id cannot be ambient.
+It is threaded the same way `reason` already is:
+
+- **`CoreApi.runOperation({ plan })`** for a per-item fan-out. Its cost is exact
+  by construction — the item list is in hand — so the estimate is
+  `items × requestsPerItem`, or a floor via `approximate` when the per-item
+  worker itself paginates. The worker receives the `planId` as a third argument.
+- **`CoreApi.withPlan(name, legs, run)`** for walk-shaped work. The callback gets
+  a handle carrying `planId` and a `refine` to raise the estimate as pages land.
+  The plan is closed in a `finally`, on success, failure, or cancellation.
+
+`shared/scheduler/planEstimate` holds the estimators, and every one of them
+converts a number the extension **already paid for**: an `expand=stats` member
+count, an `x-total-count` header, a persisted `SyncMeta.itemCount`, an item list
+length, a `Link` header. **No estimator issues a request to learn what it will
+declare** — a cost display that spends budget to report on budget would be
+self-defeating.
+
+Plan control messages ride the same `chrome.runtime` channel as
+`scheduleApiRequest` but are not requests. Test harnesses that script per-call
+responses on that channel must route them past the queue, and helpers that count
+"scheduler calls" must filter on `action === 'scheduleApiRequest'` — otherwise
+control-plane chatter reads as API traffic.
+
+### 8. The bar reads the scheduler's threshold
 
 `useActivityBar` reads `minRemainingThresholdPercent` off the state instead of
 hardcoding 20. The bar and the scheduler now draw the same line by construction.

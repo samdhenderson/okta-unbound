@@ -431,8 +431,7 @@ export interface SchedulerStateChangedMessage {
  * share a validator, a sender check, and a plan id, and splitting them would
  * have meant repeating all three.
  */
-export type UpdateOperationPlanMessage = {
-  action: 'updateOperationPlan';
+export type OperationPlanUpdate = {
   /** Opaque id minted by the caller and echoed on every request the plan covers. */
   planId: string;
 } & (
@@ -447,6 +446,9 @@ export type UpdateOperationPlanMessage = {
   | { op: 'complete' }
   | { op: 'cancel' }
 );
+
+/** The {@link OperationPlanUpdate} payload as it travels over `chrome.runtime`. */
+export type UpdateOperationPlanMessage = { action: 'updateOperationPlan' } & OperationPlanUpdate;
 
 /** Aggregate counts across a set of rules. */
 export interface RuleStats {
