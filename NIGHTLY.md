@@ -24,7 +24,7 @@ work: type-check, lint (0 errors / 164 pre-existing warnings), `format:check`,
 `test:coverage`, `knip:circular`, `lint:control-chars`, `lint:cited-paths`, and
 `test:storybook` (170 files, 1223 tests, 1 skipped).
 **Items worked:** `I-013`, `D-065`, `D-064`
-**PR:** _filled in below_
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/107
 **Backlog after:** 70 open of 139 total — 10 IMPROVEMENTS, 60 DEBT, 1 blocked,
 6 `research:awaiting-review`. Seven new items filed tonight (`D-083`–`D-089`,
 `I-030`), none folded into an existing diff.
