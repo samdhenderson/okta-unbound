@@ -31,6 +31,10 @@ const schedulerMethods = {
   getMetrics: vi.fn(() => ({})),
   onStateChange: vi.fn(),
   scheduleRequest: vi.fn(async () => ({ success: true, data: {} })),
+  declarePlan: vi.fn(() => true),
+  refinePlan: vi.fn(),
+  completePlan: vi.fn(),
+  cancelPlan: vi.fn(() => 0),
 };
 
 vi.mock('../shared/scheduler/apiScheduler', () => ({
@@ -256,6 +260,7 @@ describe('scheduleApiRequest reason validation', () => {
       1,
       'normal',
       'Load groups',
+      undefined,
     );
   });
 
@@ -271,6 +276,7 @@ describe('scheduleApiRequest reason validation', () => {
       undefined,
       1,
       'normal',
+      undefined,
       undefined,
     );
     expect(sendResponse).not.toHaveBeenCalledWith(
@@ -307,5 +313,216 @@ describe('scheduleApiRequest reason validation', () => {
       error: 'Invalid scheduleApiRequest message',
     });
     expect(schedulerMethods.scheduleRequest).not.toHaveBeenCalled();
+  });
+});
+
+// ============================================================================
+// updateOperationPlan (the declared-request ledger)
+// ============================================================================
+
+describe('updateOperationPlan', () => {
+  const declare = (overrides: Record<string, unknown> = {}) => ({
+    action: 'updateOperationPlan',
+    op: 'declare',
+    planId: 'plan-1',
+    name: 'Export all users',
+    tabId: 1,
+    legs: [{ endpoint: '/api/v1/users', estimate: { kind: 'exact', requests: 8 } }],
+    ...overrides,
+  });
+
+  it('forwards a valid declaration to the scheduler', () => {
+    const { sendResponse } = send(declare(), SIDE_PANEL);
+
+    expect(schedulerMethods.declarePlan).toHaveBeenCalledWith({
+      id: 'plan-1',
+      name: 'Export all users',
+      tabId: 1,
+      legs: [{ endpoint: '/api/v1/users', estimate: { kind: 'exact', requests: 8 } }],
+    });
+    expect(sendResponse).toHaveBeenCalledWith({ success: true });
+  });
+
+  it('rejects a tab-originated plan update and never touches the scheduler', () => {
+    // Same posture as scheduleApiRequest: a content script must never be able to
+    // author what the side panel's own activity bar reports.
+    const { sendResponse } = send(declare(), CONTENT_SCRIPT);
+
+    expect(sendResponse).toHaveBeenCalledWith({
+      success: false,
+      error: 'updateOperationPlan not allowed from tabs',
+    });
+    expect(schedulerMethods.declarePlan).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['an unknown op', { op: 'obliterate' }],
+    ['a missing planId', { planId: undefined }],
+    ['an over-long planId', { planId: 'x'.repeat(65) }],
+    ['an over-long name', { name: 'x'.repeat(81) }],
+    ['an empty name', { name: '' }],
+    ['a non-integer tabId', { tabId: 1.5 }],
+    ['no legs at all', { legs: [] }],
+    [
+      'more legs than the cap',
+      {
+        legs: Array.from({ length: 17 }, () => ({
+          endpoint: '/api/v1/users',
+          estimate: { kind: 'exact', requests: 1 },
+        })),
+      },
+    ],
+    [
+      'an absolute leg endpoint',
+      {
+        legs: [{ endpoint: 'https://evil.example/api', estimate: { kind: 'unknown' } }],
+      },
+    ],
+    [
+      'a protocol-relative leg endpoint',
+      {
+        legs: [{ endpoint: '//evil.example/api', estimate: { kind: 'unknown' } }],
+      },
+    ],
+    [
+      'a disallowed leg method',
+      {
+        legs: [{ endpoint: '/api/v1/users', method: 'TRACE', estimate: { kind: 'unknown' } }],
+      },
+    ],
+    [
+      'an unknown estimate kind',
+      {
+        legs: [{ endpoint: '/api/v1/users', estimate: { kind: 'roughly', requests: 3 } }],
+      },
+    ],
+    [
+      'a negative request count',
+      {
+        legs: [{ endpoint: '/api/v1/users', estimate: { kind: 'exact', requests: -1 } }],
+      },
+    ],
+    [
+      'a non-numeric request count',
+      {
+        legs: [{ endpoint: '/api/v1/users', estimate: { kind: 'exact', requests: 'lots' } }],
+      },
+    ],
+  ])('rejects %s and never declares', (_label, overrides) => {
+    const { sendResponse } = send(declare(overrides), SIDE_PANEL);
+
+    expect(sendResponse).toHaveBeenCalledWith({
+      success: false,
+      error: 'Invalid updateOperationPlan message',
+    });
+    expect(schedulerMethods.declarePlan).not.toHaveBeenCalled();
+  });
+
+  it('forwards a refinement', () => {
+    send(
+      {
+        action: 'updateOperationPlan',
+        op: 'refine',
+        planId: 'plan-1',
+        endpoint: '/api/v1/users?after=cursor',
+        estimate: { kind: 'atLeast', requests: 12 },
+      },
+      SIDE_PANEL,
+    );
+
+    expect(schedulerMethods.refinePlan).toHaveBeenCalledWith(
+      'plan-1',
+      '/api/v1/users?after=cursor',
+      { kind: 'atLeast', requests: 12 },
+    );
+  });
+
+  it('rejects a refinement with an absolute endpoint', () => {
+    const { sendResponse } = send(
+      {
+        action: 'updateOperationPlan',
+        op: 'refine',
+        planId: 'plan-1',
+        endpoint: 'https://evil.example/api',
+        estimate: { kind: 'atLeast', requests: 12 },
+      },
+      SIDE_PANEL,
+    );
+
+    expect(sendResponse).toHaveBeenCalledWith({
+      success: false,
+      error: 'Invalid updateOperationPlan message',
+    });
+    expect(schedulerMethods.refinePlan).not.toHaveBeenCalled();
+  });
+
+  it('forwards a completion, which needs nothing but a plan id', () => {
+    const { sendResponse } = send(
+      { action: 'updateOperationPlan', op: 'complete', planId: 'plan-1' },
+      SIDE_PANEL,
+    );
+
+    expect(schedulerMethods.completePlan).toHaveBeenCalledWith('plan-1');
+    expect(sendResponse).toHaveBeenCalledWith({ success: true });
+  });
+
+  it('reports how many queued requests a cancel dropped', () => {
+    schedulerMethods.cancelPlan.mockReturnValueOnce(4);
+
+    const { sendResponse } = send(
+      { action: 'updateOperationPlan', op: 'cancel', planId: 'plan-1' },
+      SIDE_PANEL,
+    );
+
+    expect(schedulerMethods.cancelPlan).toHaveBeenCalledWith('plan-1');
+    expect(sendResponse).toHaveBeenCalledWith({ success: true, dropped: 4 });
+  });
+});
+
+// ============================================================================
+// scheduleApiRequest's optional planId
+// ============================================================================
+
+describe('scheduleApiRequest planId', () => {
+  it('forwards a planId through to the scheduler', () => {
+    send(
+      {
+        action: 'scheduleApiRequest',
+        endpoint: '/api/v1/users',
+        tabId: 1,
+        reason: 'Export all users',
+        planId: 'plan-1',
+      },
+      SIDE_PANEL,
+    );
+
+    expect(schedulerMethods.scheduleRequest).toHaveBeenCalledWith(
+      '/api/v1/users',
+      'GET',
+      undefined,
+      1,
+      'normal',
+      'Export all users',
+      'plan-1',
+    );
+  });
+
+  it('drops a non-string planId rather than failing the request', () => {
+    // The ledger is advisory: a malformed planId must degrade to an unattributed
+    // request, never to a request that does not happen.
+    send(
+      { action: 'scheduleApiRequest', endpoint: '/api/v1/users', tabId: 1, planId: 42 },
+      SIDE_PANEL,
+    );
+
+    expect(schedulerMethods.scheduleRequest).toHaveBeenCalledWith(
+      '/api/v1/users',
+      'GET',
+      undefined,
+      1,
+      'normal',
+      undefined,
+      undefined,
+    );
   });
 });

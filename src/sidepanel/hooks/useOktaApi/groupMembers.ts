@@ -4,6 +4,7 @@
  */
 
 import type { CoreApi } from './core';
+import { openingWalkEstimate, walkEstimate } from '@/shared/scheduler/planEstimate';
 import type { OktaUser } from './types';
 import type { BatchOutcome } from '@/shared/scheduler/runBatch';
 import { logAction } from '../../../shared/undoManager';
@@ -76,10 +77,12 @@ export function createGroupMemberOperations(
     groupName: string,
     user: OktaUser,
     skipUndoLog = false,
+    planId?: string,
   ) => {
     const result = await coreApi.makeApiRequest(`/api/v1/groups/${groupId}/users/${user.id}`, {
       method: 'DELETE',
       reason: 'Remove user from group',
+      planId,
     });
 
     // Fires regardless of `skipUndoLog`: that flag controls the *audit* entry a
@@ -133,10 +136,11 @@ export function createGroupMemberOperations(
     return coreApi.runOperation(
       'Remove user from groups',
       groupIds,
-      async (groupId) => {
+      async (groupId, _index, planId) => {
         await coreApi.makeApiRequest(`/api/v1/groups/${groupId}/users/${userId}`, {
           method: 'DELETE',
           reason: 'Remove user from groups',
+          planId,
         });
         onMembershipChanged?.(groupId);
         completedCount += 1;
@@ -146,6 +150,9 @@ export function createGroupMemberOperations(
         concurrency: 1,
         stopOnError: () => true,
         message: (p) => `Removing user from groups (${p.completed}/${p.total})`,
+        // One DELETE per group. `stopOnError` may end the run early, so the
+        // estimate is a ceiling the plan spends down rather than reaching.
+        plan: { endpoint: '/api/v1/groups', method: 'DELETE' },
       },
     );
   };
@@ -165,34 +172,64 @@ export function createGroupMemberOperations(
    * requests** — the no-fan-out guarantee in
    * `useGroupSource.requestCount.test.ts` is unchanged.
    */
-  const getAllGroupMembers = async (groupId: string): Promise<OktaUser[]> => {
+  const getAllGroupMembers = async (
+    groupId: string,
+    options: { memberCount?: number; planId?: string } = {},
+  ): Promise<OktaUser[]> => {
     let pageCount = 0;
+    const firstPage = `/api/v1/groups/${groupId}/users?limit=${OKTA_PAGE_SIZE}&expand=${GROUP_RULES_EXPAND}`;
 
-    const allMembers: OktaUser[] = await fetchAllPages<MemberWithGroupRules>(
-      (url) => coreApi.makeApiRequest(url, { reason: 'Load all group members' }),
-      `/api/v1/groups/${groupId}/users?limit=${OKTA_PAGE_SIZE}&expand=${GROUP_RULES_EXPAND}`,
+    // A caller that already holds the group's member count — it arrives free
+    // with `expand=stats` on the groups listing — can price the whole walk
+    // before it starts. One that does not declares a floor and raises it per
+    // page. Neither spends a request to find out (ADR-0060 §1).
+    const declaredLegs = [
       {
-        // Validated at the response boundary (ADR-0006): malformed rows are
-        // dropped leniently by parseOktaList, never thrown on.
-        schema: memberWithGroupRulesSchema,
-        // Okta does NOT echo the private `expand` into its rel="next" link, so
-        // without this page 2+ would arrive with no embed at all — attribution
-        // exact for the first 200 members and inferred for the rest. The only
-        // caller of fetchAllPages that opts in.
-        preserveParams: ['expand'],
-        errorMessage: 'Failed to fetch group members',
-        onBeforePage: (pageNumber) => {
-          pageCount = pageNumber;
-          coreApi.callbacks.onResult?.({ message: `Fetching page ${pageNumber}...`, type: 'info' });
-        },
-        onPage: (pageMembers, totalSoFar) => {
-          coreApi.callbacks.onResult?.({
-            message: `Page ${pageCount}: Loaded ${pageMembers.length} members (Total: ${totalSoFar})`,
-            type: 'info',
-          });
-        },
+        endpoint: firstPage,
+        method: 'GET',
+        estimate:
+          options.memberCount === undefined
+            ? openingWalkEstimate()
+            : walkEstimate(options.memberCount),
       },
-    );
+    ];
+
+    const walk = async (planId: string | undefined): Promise<OktaUser[]> =>
+      fetchAllPages<MemberWithGroupRules>(
+        (url) => coreApi.makeApiRequest(url, { reason: 'Load all group members', planId }),
+        firstPage,
+        {
+          // Validated at the response boundary (ADR-0006): malformed rows are
+          // dropped leniently by parseOktaList, never thrown on.
+          schema: memberWithGroupRulesSchema,
+          // Okta does NOT echo the private `expand` into its rel="next" link, so
+          // without this page 2+ would arrive with no embed at all — attribution
+          // exact for the first 200 members and inferred for the rest. The only
+          // caller of fetchAllPages that opts in.
+          preserveParams: ['expand'],
+          errorMessage: 'Failed to fetch group members',
+          onBeforePage: (pageNumber) => {
+            pageCount = pageNumber;
+            coreApi.callbacks.onResult?.({
+              message: `Fetching page ${pageNumber}...`,
+              type: 'info',
+            });
+          },
+          onPage: (pageMembers, totalSoFar) => {
+            coreApi.callbacks.onResult?.({
+              message: `Page ${pageCount}: Loaded ${pageMembers.length} members (Total: ${totalSoFar})`,
+              type: 'info',
+            });
+          },
+        },
+      );
+
+    // A caller inside its own operation passes the planId down rather than
+    // opening a second plan, so a rule-impact preview reads as one row in the
+    // bar instead of one per target group.
+    const allMembers = options.planId
+      ? await walk(options.planId)
+      : await coreApi.withPlan('Load all group members', declaredLegs, (plan) => walk(plan.planId));
 
     coreApi.callbacks.onResult?.({
       message: `Loaded ${allMembers.length} total members`,

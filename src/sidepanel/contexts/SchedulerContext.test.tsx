@@ -23,6 +23,9 @@ const baseState: SchedulerState = {
   cooldownEndsAt: null,
   errorCount: 0,
   lastError: null,
+  buckets: [],
+  plans: [],
+  minRemainingThresholdPercent: 10,
 };
 
 /** Reads the live state out of the context into the DOM for assertions. */

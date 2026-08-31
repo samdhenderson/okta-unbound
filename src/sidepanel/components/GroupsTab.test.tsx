@@ -201,7 +201,14 @@ function route(pattern: RegExp, respond: (msg: any) => any) {
 }
 
 function schedulerCalls() {
-  return runtimeSendMessage.mock.calls.map((c) => c[0]);
+  return (
+    runtimeSendMessage.mock.calls
+      .map((c) => c[0])
+      // Scheduled API requests only. The same channel also carries plan-ledger
+      // control messages (ADR-0060), which have no endpoint or method and would
+      // otherwise show up as untyped entries in every assertion built on this.
+      .filter((m: any) => m?.action === 'scheduleApiRequest')
+  );
 }
 
 // §8: live search now routes through the scheduler as a single

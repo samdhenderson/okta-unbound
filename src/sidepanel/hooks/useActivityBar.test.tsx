@@ -46,6 +46,17 @@ beforeEach(() => {
   });
 });
 
+/** Re-point the mocked `getSchedulerState` at a different state for one test. */
+function schedulerStateIs(state: Record<string, unknown>): void {
+  sendMessage.mockImplementation((msg: { action: string }) => {
+    if (msg.action === 'getSchedulerState') return Promise.resolve({ success: true, state });
+    if (msg.action === 'getSchedulerMetrics') {
+      return Promise.resolve({ success: true, metrics: { failedRequests: 0 } });
+    }
+    return Promise.resolve({ success: true });
+  });
+}
+
 describe('useActivityBar', () => {
   it('merges scheduler state into the view', async () => {
     const { result } = renderHook(() => useActivityBar(), { wrapper });
@@ -98,5 +109,62 @@ describe('useActivityBar', () => {
     // Operation half: cancellation tripped, reflected as isCancelling.
     expect(result.current.progress.progress.isCancelling).toBe(true);
     expect(result.current.progress.isCancelled).toBe(true);
+  });
+});
+
+describe('useActivityBar low-headroom threshold', () => {
+  const stateWith = (remaining: number, threshold: number) => ({
+    status: 'processing',
+    queueLength: 0,
+    activeRequests: 0,
+    totalProcessed: 0,
+    rateLimitInfo: {
+      limit: 100,
+      remaining,
+      reset: 0,
+      endpoint: '/api/v1/users',
+      bucket: '/api/v1/users',
+      timestamp: 0,
+    },
+    cooldownEndsAt: null,
+    errorCount: 0,
+    lastError: null,
+    buckets: [],
+    plans: [],
+    minRemainingThresholdPercent: threshold,
+  });
+
+  it('marks headroom low at the threshold the scheduler actually backs off at', async () => {
+    // 30% left. Against the old hardcoded 20% line this reads as comfortable,
+    // while the scheduler — told by the org that its warning threshold is 35% —
+    // is already gating. The bar must agree with the scheduler, not with a
+    // number of its own.
+    schedulerStateIs(stateWith(30, 35));
+
+    const { result } = renderHook(() => useActivityBar(), { wrapper });
+
+    await waitFor(() => expect(result.current.view.rateLimit).not.toBeNull());
+    expect(result.current.view.rateLimit).toEqual({ remaining: 30, limit: 100, low: true });
+  });
+
+  it('leaves headroom unflagged above the org threshold', async () => {
+    schedulerStateIs(stateWith(30, 10));
+
+    const { result } = renderHook(() => useActivityBar(), { wrapper });
+
+    await waitFor(() => expect(result.current.view.rateLimit).not.toBeNull());
+    expect(result.current.view.rateLimit?.low).toBe(false);
+  });
+
+  it('reports no headroom rather than dividing by a zero limit', async () => {
+    schedulerStateIs({
+      ...stateWith(0, 10),
+      rateLimitInfo: { ...stateWith(0, 10).rateLimitInfo, limit: 0 },
+    });
+
+    const { result } = renderHook(() => useActivityBar(), { wrapper });
+
+    await waitFor(() => expect(result.current.view.statusLabel).toBe('Processing'));
+    expect(result.current.view.rateLimit).toBeNull();
   });
 });

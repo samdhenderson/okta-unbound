@@ -194,7 +194,7 @@ interface ResolveGrantingGroupsOptions {
   oktaOrigin?: string | null;
   /** The two api surfaces this needs, read off the hook's stable ref. */
   api: {
-    getAppGroupAssignments: (appId: string) => Promise<string[] | null>;
+    getAppGroupAssignments: (appId: string, planId?: string) => Promise<string[] | null>;
     runOperation: ReturnType<typeof useOktaApi>['runOperation'];
   };
   /** Called with each batch of `appId → groupId` attributions as it lands. */
@@ -268,17 +268,23 @@ async function resolveGrantingGroups({
   const outcome = await api.runOperation<string, [string, string] | null>(
     'Name the groups granting these apps',
     toWalk,
-    async (appId) =>
+    async (appId, _index, planId) =>
       nameGrantor(
         appId,
         await getOrFetch<string[] | null>(
           cacheKeys.appGroups(appId),
-          () => api.getAppGroupAssignments(appId),
+          () => api.getAppGroupAssignments(appId, planId),
           { ttl: TTL_LONG },
         ),
         memberGroupIds,
       ),
-    { message: ({ completed, total }) => `Naming granting groups (${completed}/${total})` },
+    {
+      message: ({ completed, total }) => `Naming granting groups (${completed}/${total})`,
+      // A floor, not a total: each app costs at least one request, and an app
+      // with more than 200 assigned groups costs more. `toWalk` has already
+      // excluded the apps a cache hit will serve for free.
+      plan: { endpoint: '/api/v1/apps', method: 'GET', approximate: true },
+    },
   );
 
   const named: Record<string, string> = {};

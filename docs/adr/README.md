@@ -68,6 +68,7 @@ convention; the specs in [`../`](../README.md) describe the _what_.
 | [0057](./0057-a-keyboard-route-into-the-panel.md) | A keyboard route into the panel | Proposed | Scopes `I-018`. One `_execute_action` command, `⌘⇧K` — no listener, no message, no permission. The chord is suggested not assumed; UI reads it back from `chrome.commands.getAll()`. In-panel ⌘K unchanged. |
 | [0058](./0058-one-context-engine.md) | One context engine | Proposed | Scopes `D-062`. `useGroupContext` becomes a selector over a single `useOktaPageContext`. The two failure semantics stay distinct — a failed probe reports `unknown`, not `admin`, which is the behaviour change to test. |
 | [0059](./0059-one-bucket-is-not-the-org.md) | One bucket is not the org, and the org sets its own line | Proposed | Rate-limit observations key by Okta endpoint bucket and gate per bucket, with the global minimum as the backstop for an unobserved family. The cooldown trigger comes from the org's own `warning-threshold` less 5 points, falling back to the configured default on any unusable answer. |
+| [0060](./0060-declared-work-is-inventory.md) | Declared work is inventory, not a promise | Proposed | An operation may declare a per-bucket request budget before spending it; the scheduler attributes settled requests back to it from its single settle path and publishes every bucket's headroom, queued/active/planned counts, and gate. The ledger is advisory — nothing gates on an estimate — and cancelling one plan drops only that plan's queued requests. |
 
 ## Adding an ADR
 

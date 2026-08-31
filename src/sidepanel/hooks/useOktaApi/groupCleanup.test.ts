@@ -30,13 +30,21 @@ vi.mock('../../../shared/storage/auditStore', () => ({
 const makeCore = (overrides: Partial<CoreApi> = {}): CoreApi =>
   makeFakeCore({
     runOperation: vi.fn(
-      async (_name, items: unknown[], task: (item: unknown, index: number) => unknown) => {
+      async (
+        _name,
+        items: unknown[],
+        task: (item: unknown, index: number, planId?: string) => unknown,
+        options?: { plan?: unknown },
+      ) => {
+        // Mirrors the real runOperation: a planId reaches the task only when the
+        // caller declared a plan, so a task that threads it through is testable.
+        const planId = options?.plan ? 'fake-plan' : undefined;
         const results: Array<{ status: string; item: unknown; error?: unknown }> = [];
         let completed = 0;
         let failed = 0;
         for (let i = 0; i < items.length; i++) {
           try {
-            await task(items[i], i);
+            await task(items[i], i, planId);
             results.push({ status: 'fulfilled', item: items[i] });
             completed++;
           } catch (error) {
@@ -93,6 +101,9 @@ describe('removeDeprovisioned boundary validation', () => {
       'Fake Group',
       expect.objectContaining({ id: '00uFAKE1' }),
       true,
+      // The plan declared by `runOperation`, threaded down so the DELETEs are
+      // attributed to the operation rather than running unaccounted for.
+      'fake-plan',
     );
   });
 });

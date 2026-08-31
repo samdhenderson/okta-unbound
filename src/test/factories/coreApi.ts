@@ -26,16 +26,32 @@ export const FAKE_ADMIN = { kind: 'resolved', email: 'admin@example.com', id: 'a
 /**
  * Overrides accepted by {@link makeFakeCore}.
  *
- * Every field is checked against the real `CoreApi` **except** `runOperation`.
- * That one is generic (`<T, R>(name, items: T[], task: (item: T, …) => Promise<R>)`),
- * and a `vi.fn()` executor written against `unknown` cannot satisfy it without
- * ceasing to be a usable fake. The suites this replaced dodged the problem with a
- * blanket `as unknown as CoreApi` on the whole literal; loosening the single field
- * that needs it keeps the other eight type-checked.
+ * Every field is checked against the real `CoreApi` **except** the two generic
+ * ones: `runOperation` (`<T, R>(name, items: T[], task: (item: T, …) => Promise<R>)`)
+ * and `withPlan` (`<R>(name, legs, run: (handle) => Promise<R>)`). A `vi.fn()`
+ * executor written against `unknown` cannot satisfy either without ceasing to be
+ * a usable fake. The suites this replaced dodged the problem with a blanket
+ * `as unknown as CoreApi` on the whole literal; loosening only the fields that
+ * need it keeps the rest type-checked.
  */
-export type FakeCoreOverrides = Partial<Omit<CoreApi, 'runOperation'>> & {
+export type FakeCoreOverrides = Partial<Omit<CoreApi, 'runOperation' | 'withPlan'>> & {
   runOperation?: unknown;
+  withPlan?: unknown;
 };
+
+/**
+ * A `withPlan` that runs its callback and does nothing else.
+ *
+ * The default, because the plan ledger is advisory (ADR-0060 §2): an operation's
+ * observable behaviour must be identical whether or not a plan was declared, so
+ * the fake that exercises that behaviour should add nothing. A suite asserting on
+ * the *declaration* overrides this with its own spy.
+ */
+export function passThroughWithPlan() {
+  return vi.fn(async (_name: string, _legs: unknown, run: (handle: unknown) => Promise<unknown>) =>
+    run({ planId: 'fake-plan', refine: vi.fn() }),
+  );
+}
 
 /**
  * Build a fake {@link CoreApi}.
@@ -56,6 +72,7 @@ export function makeFakeCore(overrides: FakeCoreOverrides = {}): CoreApi {
     checkCancelled: vi.fn(),
     resetCancellation: vi.fn(),
     runOperation: vi.fn(),
+    withPlan: passThroughWithPlan(),
     callbacks: {},
     ...overrides,
   } as unknown as CoreApi;
@@ -77,8 +94,13 @@ export function sequentialRunOperation() {
     async (
       _name: string,
       items: unknown[],
-      task: (item: unknown, index: number) => Promise<unknown>,
+      task: (item: unknown, index: number, planId?: string) => Promise<unknown>,
+      options?: { plan?: unknown },
     ) => {
+      // The real runOperation only supplies a planId when a plan was declared,
+      // so the fake mirrors that: a task asserting on `planId` sees `undefined`
+      // exactly where production would.
+      const planId = options?.plan ? 'fake-plan' : undefined;
       const results: Array<{
         item: unknown;
         index: number;
@@ -90,7 +112,7 @@ export function sequentialRunOperation() {
       let failed = 0;
       for (let i = 0; i < items.length; i++) {
         try {
-          const value = await task(items[i], i);
+          const value = await task(items[i], i, planId);
           results.push({ item: items[i], index: i, status: 'fulfilled', value });
           completed++;
         } catch (error) {
