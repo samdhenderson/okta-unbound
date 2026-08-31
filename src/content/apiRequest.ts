@@ -182,6 +182,13 @@ export async function handleMakeApiRequest(
           `Request failed with status ${response.status}`,
         status: response.status,
         data,
+        // Carried on the failure arm for the same reason as on the success arm,
+        // and more urgently: a 429 is a non-ok response, and its
+        // `X-Rate-Limit-Reset` / `-Remaining` are the only authoritative
+        // statement of when the scheduler may come back. Dropping them here
+        // left `RateLimitDetector` steering on the headers of requests that
+        // succeeded and learning nothing from the one that said "stop" (D-064).
+        headers,
       };
     }
 
