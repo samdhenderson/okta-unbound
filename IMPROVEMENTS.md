@@ -928,3 +928,29 @@ block says they mean — same vocabulary, one definition, defined there.
   the count is non-zero or it will demonstrate nothing.
 - **Status:** open
 - **Related:** `D-052` (the defect that held it out), ADR-0043, ADR-0045
+
+### I-030 · A created feeding rule does not appear until the group is reopened
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useGroupSource.ts` (which exposes only
+  `open()`), `src/sidepanel/components/groups/detail/GroupRulesSection.tsx`,
+  `src/sidepanel/hooks/useCreateFeedingRule.ts`
+- **Verified:** 2026-08-31 — found by the `I-013` writer, which shipped around
+  it deliberately rather than reaching outside its scope.
+- **Problem:** `I-013` lets an admin create a feeding rule from Group Detail,
+  and the write succeeds — but the open Rules pane still shows the empty state
+  that prompted the verb, because `useGroupSource` has no rules-only refresh.
+  Its only reload is `open()`, which also resets the member-source analysis and
+  would discard a walk the admin already paid for, so the hook deliberately does
+  not call it. The success step names the created rule and offers a jump, which
+  covers the gap but does not close it: the pane the admin is looking at
+  contradicts the action they just took.
+- **Done when:** `useGroupSource` exposes a rules-only reload that leaves the
+  member-source analysis intact, and a successful create calls it; the Rules
+  pane shows the new rule without a reopen. A test pins that the member-source
+  analysis survives the refresh.
+- **Risk:** Low-medium — touches the hook every Group Detail pane reads.
+- **Status:** open
+- **Related:** `I-013`
