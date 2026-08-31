@@ -88,6 +88,23 @@ describe('GroupRulesSection', () => {
     expect(screen.getByText(/No rule condition references this group by id/)).toBeInTheDocument();
   });
 
+  /*
+    Companion to the assertion above, added with the strip's *Create feeding
+    rule* verb (I-013). The empty state is the most natural place to grow a
+    second copy of that verb, and it must not: creating a rule has no symmetric
+    undo, so ADR-0039 §2 puts it in the action strip's disclosure tier behind a
+    confirm `Modal`, not inline in a section that wires no write at all. This
+    section still states the fact and offers no control for it — the same rule
+    "renders no write verb it cannot perform" pins for Activate/Deactivate.
+  */
+  it('states the empty fact without growing a create control of its own', () => {
+    render(<GroupRulesSection {...base} assigningRules={[]} referencingRules={[]} />);
+
+    expect(screen.getByText(/Members are added manually or by app push/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Create/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /rule/i })).not.toBeInTheDocument();
+  });
+
   it('does not overclaim: says name-based references are not detected', () => {
     render(<GroupRulesSection {...base} />);
     expect(screen.getByText(/matching on group name is not listed/)).toBeInTheDocument();

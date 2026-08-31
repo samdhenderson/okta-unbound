@@ -428,7 +428,7 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Medium. It is the first group-level _write_ on this rung that is
   not a membership change, and the first thing on the page that cannot be
   undone by pressing the opposite button.
-- **Status:** open
+- **Status:** claimed:claude/stoic-gates-6o17id
 
 ### I-014 · Normalize an attribute across the filtered members
 
