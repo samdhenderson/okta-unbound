@@ -174,6 +174,50 @@ describe('ApiScheduler per-bucket gating', () => {
     expect(cooldownEndsAt! - Date.now()).toBeGreaterThan(0);
   });
 
+  it('cools down at the threshold the org set, not the configured default', async () => {
+    // 12% remaining: comfortably clear of the hardcoded 10% default, and below
+    // the 15% a Workforce org's own `warningThreshold: 90` implies. So the
+    // threshold the org publishes is the only thing that decides this case.
+    sendMessage.mockImplementation(respondPerBucket({ '/api/v1/apps': 12 }));
+    scheduler = new ApiScheduler({ maxRetries: 0 });
+
+    await scheduler.scheduleRequest('/api/v1/apps?limit=200', 'GET', undefined, 1, 'high');
+    expect(scheduler.getState().cooldownEndsAt).toBeNull();
+
+    scheduler.setMinRemainingThreshold(15);
+
+    let appsResolved = false;
+    void scheduler
+      .scheduleRequest('/api/v1/apps/0oaFAKE1/users?limit=200', 'GET', undefined, 1, 'normal')
+      .then(() => {
+        appsResolved = true;
+      })
+      .catch(() => {});
+
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(appsResolved).toBe(false);
+    expect(scheduler.getState().cooldownEndsAt).toBeTruthy();
+  });
+
+  it('ignores a threshold outside 0-100 rather than stalling forever', async () => {
+    sendMessage.mockImplementation(respondPerBucket({ '/api/v1/apps': 12 }));
+    scheduler = new ApiScheduler({ maxRetries: 0 });
+
+    await scheduler.scheduleRequest('/api/v1/apps?limit=200', 'GET', undefined, 1, 'high');
+    scheduler.setMinRemainingThreshold(140);
+
+    // The default (10%) still governs, so 12% remaining still dispatches.
+    const result = await scheduler.scheduleRequest(
+      '/api/v1/apps/0oaFAKE1/users?limit=200',
+      'GET',
+      undefined,
+      1,
+      'normal',
+    );
+    expect(result.success).toBe(true);
+  });
+
   it('reports no cooldown once every gate has expired', async () => {
     // A 60ms cooldown so the expiry is observable without faking timers, which
     // the 50ms dispatch loop does not survive.

@@ -675,6 +675,37 @@ export class ApiScheduler {
   }
 
   /**
+   * Set the percentage-remaining at or below which a bucket cools down.
+   *
+   * Exists so the background can hand the scheduler the org's **own** answer —
+   * `GET /api/v1/rate-limit-settings/warning-threshold` less a margin, see
+   * `shared/scheduler/rateLimitSettings` — instead of leaving it on the
+   * configured guess. Called at most once per org per browser session, and never
+   * called at all when the org does not answer, in which case
+   * `DEFAULT_CONFIG.minRemainingThreshold` stands.
+   *
+   * Takes effect on the next gate evaluation; already-armed gates are left
+   * alone, since they were armed on evidence that has not changed.
+   *
+   * @param percent - Percentage remaining, `0`–`100`. Values outside that range
+   * are ignored: a threshold above 100 would hold every request forever and a
+   * negative one would disable the gate, and neither is a state a caller can
+   * have meant.
+   */
+  setMinRemainingThreshold(percent: number): void {
+    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+      log.warn('Ignoring out-of-range cooldown threshold', { percent });
+      return;
+    }
+    if (this.config.minRemainingThreshold === percent) return;
+    log.info('Cooldown threshold updated', {
+      from: this.config.minRemainingThreshold,
+      to: percent,
+    });
+    this.config.minRemainingThreshold = percent;
+  }
+
+  /**
    * Pause the scheduler
    */
   pause(): void {

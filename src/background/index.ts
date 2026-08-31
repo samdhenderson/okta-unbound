@@ -45,6 +45,7 @@ import { isOktaUrl } from '../shared/utils/oktaUrl';
 import { createThrottledRelay } from './throttledRelay';
 import { reinjectContentScripts } from './reinjectContentScripts';
 import { syncSnapshot } from './snapshotBridge';
+import { ensureRateLimitThreshold } from './rateLimitThreshold';
 import { startSnapshotScheduler } from './snapshotScheduler';
 
 const log = createLogger('Background');
@@ -215,6 +216,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
       }
 
+      // Learn this org's own cooldown threshold, once per org per browser
+      // session. Deliberately not awaited: this request must not wait on — or
+      // be failed by — an optional refinement of the backoff policy.
+      ensureRateLimitThreshold(globalScheduler, request.tabId);
+
       globalScheduler
         .scheduleRequest(
           request.endpoint,
@@ -248,6 +254,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: false, error: 'Invalid syncSnapshot message' });
         return true;
       }
+
+      // A snapshot sync is the largest fan-out the extension issues, so it is
+      // the traffic that most wants the org's own threshold rather than the
+      // configured default. Same fire-and-forget posture as above.
+      ensureRateLimitThreshold(globalScheduler, request.tabId);
 
       syncSnapshot(
         globalScheduler,
