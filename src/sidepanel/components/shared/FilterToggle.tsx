@@ -22,6 +22,13 @@
  * **The count is a fact, not decoration.** It renders only above zero, because a
  * `0` badge and an absent badge say the same thing and only one of them is quiet
  * (ADR-0032 §2a's rule of thumb, applied to a control).
+ *
+ * **And it is a fact in words, not just a digit.** Both copies appended a bare `2` to
+ * the button's content, so the accessible name computed as `Filters2` — a screen reader
+ * was read a number with nothing saying what it counted. The badge is now `aria-hidden`
+ * and the count is stated in an `aria-label` (`Filters, 2 applied`), which is the same
+ * correction ADR-0059 makes to the strip's open-panel marker one level up: state it,
+ * do not decorate it.
  */
 import React from 'react';
 import Icon from './Icon';
@@ -43,7 +50,10 @@ export interface FilterToggleProps {
   size?: 'md' | 'lg';
   /** Visible label. Defaults to `Filters`. */
   label?: string;
-  /** Native tooltip. Defaults to `Toggle filters`. */
+  /**
+   * Native tooltip. Defaults to `Toggle filters`. Use it for the *why*; the accessible
+   * name is built from {@link FilterToggleProps.label} and the count.
+   */
   title?: string;
 }
 
@@ -80,6 +90,7 @@ const FilterToggle: React.FC<FilterToggleProps> = ({
     type="button"
     onClick={onToggle}
     aria-pressed={open}
+    aria-label={activeCount > 0 ? `${label}, ${activeCount} applied` : label}
     className={`press flex items-center gap-(--sp-inline) rounded-md border text-sm font-medium ${
       PADDING[size]
     } ${
@@ -92,7 +103,10 @@ const FilterToggle: React.FC<FilterToggleProps> = ({
     <Icon type="filter" size="sm" />
     {label}
     {activeCount > 0 && (
-      <span className="min-w-[20px] rounded-full bg-primary px-1.5 py-0.5 text-center text-xs font-bold text-white">
+      <span
+        aria-hidden="true"
+        className="min-w-[20px] rounded-full bg-primary px-1.5 py-0.5 text-center text-xs font-bold text-white"
+      >
         {activeCount}
       </span>
     )}

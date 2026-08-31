@@ -1,6 +1,6 @@
 # ADR-0051: A verb strip for a list rung
 
-- Status: Accepted
+- Status: Accepted (§1 amended by [ADR-0059](./0059-a-list-rungs-primary-is-its-page-verb.md))
 - Date: 2026-08-28
 - Discharges: ADR-0039's deferral ("that refinement is for whichever ADR ships
   `GroupSelectionBar`, not this one") and ADR-0038's named extension point
@@ -33,6 +33,17 @@ The strip becomes `GroupsListActionBar`, an ADR-0039 wrapper around the shared
 `ActionBar`. The two open questions are answered as follows.
 
 ### 1. On a list rung, `primary` marks the open panel, not the important verb
+
+> **Amended by [ADR-0059](./0059-a-list-rungs-primary-is-its-page-verb.md).** This section
+> generalised from one rung. Some list rungs _do_ have a page-level verb — the Rules rung's
+> **Load rules** / **Refresh**, without which the rung means nothing — and on those,
+> `primary` names that verb. The open panel states itself in its **label** instead
+> (`Duplicates (3)` → `Hide duplicates`), which is strictly more information than the wash:
+> an `ActionDescriptor` carries no `aria-pressed`, so `variant: 'primary'` was colour-only
+> state that no screen reader could read. The `pinned`-while-open half below is kept, set
+> explicitly rather than as a side effect of `variant` — that was always the real safety
+> property. `GroupsListActionBar` is unchanged: it has no page-level verb, so this section
+> still describes it exactly.
 
 A detail rung has one page-level verb, and `variant: 'primary'` names it. A list rung does
 not: _Compare_, _Merge_, _Bulk actions_ and _Export_ are peers whose availability is gated

@@ -1,22 +1,35 @@
 /**
- * @module sidepanel/components/rules/RulesMergeBanner
- * @description Collapsible banner surfacing rule sets that can be safely merged.
+ * @module sidepanel/components/rules/RulesDuplicatesPanel
+ * @description The Rules rung's duplicate-condition panel: rule sets that can be safely
+ * merged, opened from the strip's *Duplicates (N)* verb.
  *
  * Rules that share a match expression but target different groups are redundant —
  * they can be consolidated into one rule carrying the union of their target
- * groups with no change to who is matched. This banner offers that merge (A4).
+ * groups with no change to who is matched. This panel offers that merge (A4).
  *
- * It collapses to a single header line so it never dominates the tab, and each
- * set expands to reveal the shared condition and its member rules — each with a
+ * Each set expands to reveal the shared condition and its member rules — each with a
  * "View" link that scrolls to the rule's card so the expression can be reviewed
  * before merging. Merging opens a preview wizard; nothing is written until the
  * admin confirms there.
+ *
+ * ## It used to hide behind two disclosures, and that was one too many
+ *
+ * This was `RulesMergeBanner`: a `bg-primary-light` band that sat permanently above the
+ * rules list, **started collapsed**, and put its sets behind a *Review* pill — which then
+ * put each set's contents behind a second chevron. Two presses before the reader saw a
+ * single duplicate, on a card most of them scrolled straight past. It is the most
+ * valuable read-only analysis the tab performs and it was the least reachable thing on it.
+ *
+ * The outer disclosure is gone. The strip's `Duplicates (N)` verb is now the one that
+ * holds this closed, which also means the count is stated where the reader decides
+ * whether to open it rather than inside the thing they have to open first. The per-set
+ * chevrons stay: with several sets, expanding all of them at once is a wall.
  */
 import React, { useState } from 'react';
 import Button from '../shared/Button';
 import type { MergeableRuleGroup } from '../../../shared/rules/consolidation';
 
-interface RulesMergeBannerProps {
+interface RulesDuplicatesPanelProps {
   /** Clusters of identical-expression rules (2+ each). */
   clusters: MergeableRuleGroup[];
   /** Start merging a cluster (opens the non-destructive preview wizard). */
@@ -128,66 +141,44 @@ const MergeClusterRow: React.FC<{
 };
 
 /**
- * Renders the collapsible mergeable-rules banner, or nothing when there are none.
- * The banner starts collapsed so it stays out of the way until the admin opens it.
+ * Renders the duplicate-condition sets, or nothing when there are none.
+ *
+ * The `clusters.length === 0` guard is kept even though the strip omits the verb that
+ * opens this panel in that case: the component is also rendered directly by its stories
+ * and by the Storybook docs, and a panel that decides for itself what to do with an empty
+ * list cannot be opened onto a blank card by a caller that forgets the check.
  */
-const RulesMergeBanner: React.FC<RulesMergeBannerProps> = ({ clusters, onMerge, onFocusRule }) => {
-  const [open, setOpen] = useState(false);
+const RulesDuplicatesPanel: React.FC<RulesDuplicatesPanelProps> = ({
+  clusters,
+  onMerge,
+  onFocusRule,
+}) => {
   if (clusters.length === 0) return null;
 
   return (
-    <div className="rounded-md border border-primary-highlight bg-primary-light">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="press-subtle flex w-full items-center gap-2 px-4 py-3 text-left"
-      >
-        <svg
-          className={`h-4 w-4 shrink-0 text-primary-text transition-transform duration-(--dur-instant) ${
-            open ? 'rotate-90' : ''
-          }`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-        </svg>
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-primary-text">
-            {clusters.length} set{clusters.length === 1 ? '' : 's'} of duplicate-condition rules
-          </h3>
-          {!open && (
-            <p className="truncate text-xs text-neutral-600">
-              Rules sharing an identical condition — expand to review and merge.
-            </p>
-          )}
-        </div>
-        <span className="shrink-0 rounded-md border border-primary-highlight bg-white px-2 py-0.5 text-xs font-medium text-primary-text">
-          {open ? 'Hide' : 'Review'}
-        </span>
-      </button>
-
-      {open && (
-        <div className="space-y-(--sp-rung) px-(--sp-card) pb-(--sp-card)">
-          <p className="text-xs text-neutral-600">
-            Each set below shares an identical condition. Merging one folds its rules into a single
-            rule carrying the union of their target groups — no change to who is matched.
-          </p>
-          <ul className="space-y-(--sp-rung)">
-            {clusters.map((cluster) => (
-              <MergeClusterRow
-                key={cluster.expression}
-                cluster={cluster}
-                onMerge={onMerge}
-                onFocusRule={onFocusRule}
-              />
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
+    <section
+      aria-labelledby="rules-duplicates-heading"
+      className="animate-rise-in rounded-md border border-primary-highlight bg-primary-light p-(--sp-card)"
+    >
+      <h3 id="rules-duplicates-heading" className="text-sm font-semibold text-primary-text">
+        {clusters.length} set{clusters.length === 1 ? '' : 's'} of duplicate-condition rules
+      </h3>
+      <p className="mt-0.5 text-xs text-neutral-600">
+        Each set below shares an identical condition. Merging one folds its rules into a single rule
+        carrying the union of their target groups — no change to who is matched.
+      </p>
+      <ul className="mt-(--sp-card) space-y-(--sp-rung)">
+        {clusters.map((cluster) => (
+          <MergeClusterRow
+            key={cluster.expression}
+            cluster={cluster}
+            onMerge={onMerge}
+            onFocusRule={onFocusRule}
+          />
+        ))}
+      </ul>
+    </section>
   );
 };
 
-export default RulesMergeBanner;
+export default RulesDuplicatesPanel;

@@ -173,6 +173,32 @@ function renderTab(props: Partial<React.ComponentProps<typeof RulesTab>> = {}) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Reaching the controls the ADR-0051 strip put behind a disclosure.
+//
+// The filter chips and the three analysis panels used to be always-on cards and
+// an always-on toolbar; they are now behind the rules strip's **More** tier and
+// its `Filters` toggle. These helpers are the extra press each assertion needs —
+// no assertion below was relaxed to accommodate the move, only preceded.
+// ---------------------------------------------------------------------------
+
+/** Open the strip's **More** tier, if it is not already open. */
+async function openMoreTier(): Promise<void> {
+  const more = screen.queryByRole('button', { name: 'More' });
+  if (more && more.getAttribute('aria-expanded') !== 'true') await userEvent.click(more);
+}
+
+/** Open one of the strip's analysis panels (Stats / Duplicates / This group). */
+async function openPanel(label: RegExp): Promise<void> {
+  await openMoreTier();
+  await userEvent.click(screen.getByRole('button', { name: label }));
+}
+
+/** Disclose the filter panel that holds the chips and the sort selector. */
+async function openFilters(): Promise<void> {
+  await userEvent.click(screen.getByRole('button', { name: /^Filters/ }));
+}
+
 /**
  * Raw `/api/v1/groups/rules` response, reassignable per test (e.g. a failure).
  * Reset in `beforeEach` to the two default fixtures.
@@ -222,7 +248,9 @@ describe('RulesTab characterization', () => {
     expect(screen.getByText('Engineering Rule')).toBeInTheDocument();
     expect(screen.getByText('Sales Rule')).toBeInTheDocument();
 
-    // Stat tiles render their values.
+    // Stat tiles render their values — one press further in than they used to be,
+    // now that the grid is an analysis panel rather than a permanent card.
+    await openPanel(/^Stats/);
     expect(
       within(screen.getByText('Total Rules').closest('div')!).getByText('2'),
     ).toBeInTheDocument();
@@ -318,6 +346,7 @@ describe('RulesTab characterization', () => {
     await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
     await waitFor(() => expect(screen.getByTestId('rule-r2')).toBeInTheDocument());
 
+    await openFilters();
     await userEvent.click(screen.getByRole('button', { name: 'Active Only' }));
     expect(screen.getByTestId('rule-r1')).toBeInTheDocument();
     expect(screen.queryByTestId('rule-r2')).not.toBeInTheDocument();
@@ -361,15 +390,17 @@ describe('RulesTab characterization', () => {
     expect(rulesFetchCalls()).toHaveLength(0);
   });
 
-  it('the merge banner "View" link highlights the rule card in the list', async () => {
+  it('the duplicates panel "View" link highlights the rule card in the list', async () => {
     // The two default fixtures share a condition, so they cluster in the banner.
     renderTab();
     await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
     await waitFor(() => expect(screen.getByTestId('rule-r1')).toBeInTheDocument());
     expect(screen.getByTestId('rule-r1')).toHaveAttribute('data-highlighted', 'false');
 
-    // Open the collapsed banner, then the cluster, then click View on the first rule.
-    await userEvent.click(screen.getByRole('button', { name: /duplicate-condition rules/ }));
+    // Open the panel from the strip, then the cluster, then click View on the first
+    // rule. The panel's own outer collapsible is gone — the strip's `Duplicates (N)`
+    // verb is what holds it closed now (ADR-0059).
+    await openPanel(/^Duplicates/);
     await userEvent.click(screen.getByRole('button', { name: /rules → .* target group/ }));
     // The rule name appears in both the stubbed card and the banner row; pick the
     // banner row (inside an <li>) and click its View link.
@@ -425,6 +456,7 @@ describe('RulesTab current-group filter', () => {
     await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
     await waitFor(() => expect(screen.getByTestId('rule-r1')).toBeInTheDocument());
 
+    await openFilters();
     await userEvent.click(screen.getByRole('button', { name: 'Current Group' }));
 
     expect(screen.getByTestId('rule-r1')).toBeInTheDocument();
@@ -453,6 +485,7 @@ describe('RulesTab current-group filter', () => {
     await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
     await waitFor(() => expect(screen.getByTestId('rule-r2')).toBeInTheDocument());
 
+    await openFilters();
     await userEvent.click(screen.getByRole('button', { name: 'Current Group' }));
 
     expect(screen.getByTestId('rule-r1')).toBeInTheDocument();
@@ -478,7 +511,11 @@ describe('RulesTab current-group filter', () => {
     await waitFor(() => expect(screen.getByText('No Matching Rules')).toBeInTheDocument());
     expect(screen.queryByTestId('rule-r1')).not.toBeInTheDocument();
     expect(screen.queryByTestId('rule-r2')).not.toBeInTheDocument();
-    // No group detected → no chip to toggle it back off.
+    // No group detected → no chip to toggle it back off. Asserted with the filter panel
+    // **open**: closed, it is not rendered at all, so the absence would hold whether or
+    // not the chip is conditional and would prove nothing.
+    await openFilters();
+    expect(screen.getByRole('button', { name: 'All Rules' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Current Group' })).not.toBeInTheDocument();
   });
 });

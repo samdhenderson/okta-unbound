@@ -2,30 +2,50 @@
  * @module sidepanel/components/RulesTab
  * @description Rules tab shell: browse, search, filter, and manage group rules.
  *
- * A thin coordinator that owns cross-cutting shell state (search/filter, error,
- * TabState persistence, deep-link navigation) and composes the rule hooks
- * (`useRulesData` for load/cache, `useRuleLifecycle` for activate/deactivate,
+ * A thin coordinator that owns cross-cutting shell state (search/filter, panel
+ * disclosure, error, TabState persistence, deep-link navigation) and composes the rule
+ * hooks (`useRulesData` for load/cache, `useRuleLifecycle` for activate/deactivate,
  * `useRuleImpact` for the impact preview) with presentational subcomponents
- * (`RulesMetaRow`, `RulesStatsGrid`, `RulesToolbar`, `RulesListPanel`) plus the
- * `RuleImpactModal`. Deactivation is gated behind that modal (Feature B).
+ * (`RulesListActionBar`, `RulesSearchRow`, `RulesFilterPanel`, `RulesMetaRow`,
+ * `RulesStatsGrid`, `RulesListPanel`) plus the `RuleImpactModal`. Deactivation is gated
+ * behind that modal (Feature B).
+ *
+ * ## The rung's shape (ADR-0051, ADR-0059)
+ *
+ * The strip is **first, and a direct child of the scrolling rung box**. That is
+ * load-bearing rather than tidy: a `sticky` element only travels within its own parent's
+ * box, and ADR-0051 §5 records the Groups strip measuring un-stuck at `y = -183` when it
+ * was nested one wrapper deeper. Everything the strip discloses renders after it.
+ *
+ * Three cards that used to sit permanently between the header and the first rule — the
+ * stats grid, the duplicate-condition banner and the current-group relations section —
+ * are now panels behind the strip's **More**, at most one open at a time. Each panel is
+ * rendered only while its own verb still has an object, so a panel cannot be left open
+ * over a subject that has gone (a refresh that resolves the last duplicate cluster closes
+ * the duplicates panel rather than leaving an empty card with no way back to it).
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import RuleImpactModal from './RuleImpactModal';
 import PageHeader from './shared/PageHeader';
-import Button from './shared/Button';
 import AlertMessage from './shared/AlertMessage';
 import RulesMetaRow from './rules/RulesMetaRow';
 import RulesStatsGrid from './rules/RulesStatsGrid';
-import RulesToolbar, { type RulesFilterType } from './rules/RulesToolbar';
+import RulesFilterPanel, {
+  countActiveRuleFilters,
+  type RulesFilterType,
+} from './rules/RulesFilterPanel';
+import RulesSearchRow from './rules/RulesSearchRow';
+import RulesListActionBar, { type RulesPanel } from './rules/RulesListActionBar';
 import type { RulesListView } from '../listViewRequest';
 import RulesListPanel from './rules/RulesListPanel';
-import RulesMergeBanner from './rules/RulesMergeBanner';
+import RulesDuplicatesPanel from './rules/RulesDuplicatesPanel';
 import CurrentGroupRuleRelations from './rules/CurrentGroupRuleRelations';
 import RuleConsolidationModal from './RuleConsolidationModal';
 import type { FormattedRule, OktaGroupRule } from '../../shared/types';
 import { filterRules } from '../../shared/ruleUtils';
 import { findMergeableRuleGroups, type MergeableRuleGroup } from '../../shared/rules/consolidation';
 import { sortRules, type RuleSortMode } from '../../shared/rules/similarity';
+import { countCurrentGroupRuleRelations } from '../../shared/rules/currentGroupRelations';
 import { useOktaApi } from '../hooks/useOktaApi';
 import type { OperationResult } from '../hooks/useOktaApi/types';
 import { useRuleImpact } from '../hooks/useRuleImpact';
@@ -72,6 +92,11 @@ interface RulesTabProps {
   /** Deep-link to a group in the Groups tab (from a rule's target groups, B → A2). */
   onNavigateToGroup?: (groupId: string) => void;
   /**
+   * Open the Export tab on the whole-org Group Rules descriptor. Absent → the strip omits
+   * the verb entirely rather than shipping it disabled (ADR-0039 §3).
+   */
+  onExportRules?: () => void;
+  /**
    * A pre-filtered view requested from another tab (the Home card's "N paused").
    * Applied once on arrival, then cleared via
    * {@link RulesTabProps.onListViewConsumed}.
@@ -100,6 +125,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
   selectedRuleId,
   onRuleSelected,
   onNavigateToGroup,
+  onExportRules,
   listView,
   onListViewConsumed,
   isActive = true,
@@ -107,6 +133,11 @@ const RulesTab: React.FC<RulesTabProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<RulesFilterType>('all');
   const [sortMode, setSortMode] = useState<RuleSortMode>('default');
+  // Which analysis panel the strip has open, and whether the filter panel under the
+  // search field is disclosed. Both are properties of the strip you are looking at
+  // rather than of the rules, so neither is persisted into TabState.
+  const [activePanel, setActivePanel] = useState<RulesPanel>('none');
+  const [showFilters, setShowFilters] = useState(false);
   // Set once the mount-time persisted-state restore has run, so the deep-link
   // auto-load doesn't race a fetch ahead of the hydrate, and a scope request
   // applies *after* (and thus wins over) any restored filter.
@@ -359,6 +390,19 @@ const RulesTab: React.FC<RulesTabProps> = ({
     return sortRules(result, sortMode);
   }, [scopedRules, searchQuery, activeFilter, sortMode, currentGroupId]);
 
+  // The count on the strip's *This group* verb, computed by the same helper the panel
+  // itself lists with, so the label can never promise more rows than the panel shows.
+  const currentGroupRelationCount = React.useMemo(
+    () => countCurrentGroupRuleRelations(rules, currentGroupId),
+    [rules, currentGroupId],
+  );
+
+  /** Open a panel, or close it if it is already the open one. At most one at a time. */
+  const togglePanel = useCallback(
+    (panel: RulesPanel) => setActivePanel((prev) => (prev === panel ? 'none' : panel)),
+    [],
+  );
+
   // Scroll to and highlight the active rule (cross-tab deep-link or a local focus)
   // once it is in the DOM. If it is loaded but hidden by the current search/filter,
   // relax them first so a persisted filter can't swallow the deep-link.
@@ -391,6 +435,12 @@ const RulesTab: React.FC<RulesTabProps> = ({
 
   return (
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
+      {/*
+        No `actions`. Load/Refresh is the rung's page-level verb and it now lives in the
+        strip, where ADR-0030 §2 says a page-level verb belongs and where it can be the
+        `primary` this rung was missing (ADR-0059). The conflict badge stays: it is what
+        carries that count at a glance now that the stats grid is behind a disclosure.
+      */}
       <PageHeader
         title="Group Rules"
         subtitle="Analyze group rules and detect potential conflicts"
@@ -399,20 +449,72 @@ const RulesTab: React.FC<RulesTabProps> = ({
             ? { text: `${stats.conflicts} Conflicts`, variant: 'warning' }
             : undefined
         }
-        actions={
-          <Button
-            variant={rules.length > 0 ? 'secondary' : 'primary'}
-            icon="refresh"
-            onClick={() => loadRules(rules.length > 0)}
-            disabled={data.isLoading}
-            loading={data.isLoading}
-          >
-            {rules.length > 0 ? 'Refresh' : 'Load Rules'}
-          </Button>
-        }
       />
 
       <div className="max-w-7xl mx-auto px-(--sp-gutter) py-(--sp-gutter) space-y-(--sp-rung)">
+        {/*
+          First in the rung, and a direct child of it. `sticky` only travels inside its
+          own parent's box, and the `.dock-sentinel` timeline hoists onto that same
+          parent — nest this in a wrapper and the strip scrolls away instead of docking
+          (ADR-0051 §5).
+        */}
+        <RulesListActionBar
+          search={
+            rules.length > 0 ? (
+              <RulesSearchRow
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                filtersOpen={showFilters}
+                onToggleFilters={() => setShowFilters((prev) => !prev)}
+                activeFilterCount={countActiveRuleFilters(activeFilter, sortMode)}
+              />
+            ) : undefined
+          }
+          hasRules={rules.length > 0}
+          isLoading={data.isLoading}
+          onLoad={() => loadRules(rules.length > 0)}
+          duplicateClusterCount={mergeableClusters.length}
+          hasCurrentGroup={Boolean(currentGroupId)}
+          currentGroupRelationCount={currentGroupRelationCount}
+          activePanel={activePanel}
+          onTogglePanel={togglePanel}
+          onExportRules={onExportRules}
+        />
+
+        {/*
+          The toolbar zone: the disclosed filter panel and whichever analysis panel the
+          strip has open. Each is gated on the same condition that puts its verb on the
+          strip, so a panel can never outlive the control that closes it.
+        */}
+        {rules.length > 0 && showFilters && (
+          <RulesFilterPanel
+            activeFilter={activeFilter}
+            onFilterChange={setActiveFilter}
+            conflictsCount={stats.conflicts}
+            showCurrentGroup={Boolean(currentGroupId)}
+            sortMode={sortMode}
+            onSortChange={setSortMode}
+          />
+        )}
+
+        {activePanel === 'stats' && rules.length > 0 && <RulesStatsGrid stats={stats} />}
+
+        {activePanel === 'duplicates' && mergeableClusters.length > 0 && (
+          <RulesDuplicatesPanel
+            clusters={mergeableClusters}
+            onMerge={handleMergeCluster}
+            onFocusRule={setFocusRuleId}
+          />
+        )}
+
+        {activePanel === 'currentGroup' && (
+          <CurrentGroupRuleRelations
+            rules={rules}
+            currentGroupId={currentGroupId}
+            onFocusRule={setFocusRuleId}
+          />
+        )}
+
         <RulesMetaRow
           apiCost={data.apiCost}
           lastFetchTime={data.lastFetchTime}
@@ -430,37 +532,6 @@ const RulesTab: React.FC<RulesTabProps> = ({
             (D-013c). Informational only — the rule change already happened. */}
         {lifecycle.actorNotice && (
           <AlertMessage message={lifecycle.actorNotice} onDismiss={lifecycle.dismissActorNotice} />
-        )}
-
-        {rules.length > 0 && <RulesStatsGrid stats={stats} />}
-
-        {rules.length > 0 && (
-          <RulesMergeBanner
-            clusters={mergeableClusters}
-            onMerge={handleMergeCluster}
-            onFocusRule={setFocusRuleId}
-          />
-        )}
-
-        {rules.length > 0 && (
-          <CurrentGroupRuleRelations
-            rules={rules}
-            currentGroupId={currentGroupId}
-            onFocusRule={setFocusRuleId}
-          />
-        )}
-
-        {rules.length > 0 && (
-          <RulesToolbar
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            activeFilter={activeFilter}
-            onFilterChange={setActiveFilter}
-            conflictsCount={stats.conflicts}
-            showCurrentGroup={Boolean(currentGroupId)}
-            sortMode={sortMode}
-            onSortChange={setSortMode}
-          />
         )}
 
         <RulesListPanel

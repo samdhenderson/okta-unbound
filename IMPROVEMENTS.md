@@ -931,3 +931,47 @@ block says they mean — same vocabulary, one definition, defined there.
   the count is non-zero or it will demonstrate nothing.
 - **Status:** open
 - **Related:** `D-052` (the defect that held it out), ADR-0043, ADR-0045
+
+### I-030 · The Groups list strip has no `primary`, and reads as six equal buttons
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Verified:** 2026-08-31
+- **Files:** `src/sidepanel/components/groups/GroupsListActionBar.tsx`,
+  `src/sidepanel/components/groups/GroupsListActionBar.stories.tsx`,
+  `docs/adr/0059-a-list-rungs-primary-is-its-page-verb.md`
+- **Problem:** Sam, on the strip that ADR-0051 shipped: _"groups tab has no blue
+  buttons and it should."_ With no inline panel open — the state the rung rests
+  in — every control on it is `secondary`, so six identically-weighted buttons
+  sit above the list with nothing saying where to start.
+
+  `ADR-0059` fixed the _mechanism_ while building the Rules strip: `primary` now
+  names a rung's page-level verb, and an open panel states itself in its label
+  (`Cross-search (5)` → `Hide cross-search`) rather than in a colour a screen
+  reader cannot read. It deliberately did **not** convert this strip, because
+  applying the new rule mechanically would just delete its `primary` and leave it
+  with none: the Groups rung has no page-level verb to promote. _Compare (3)_,
+  _Merge (3)_, _Export (3)_ are all selection-scoped, and _Export list_ acts on
+  the filter.
+
+  So this is a design question, not a mechanical port, and it is the reason it is
+  filed rather than folded into the Rules commit: **does the Groups rung have a
+  page-level verb it is not currently offering?** The candidates worth weighing
+  are a _Load_/_Refresh_ equivalent (the Groups list does load on arrival, unlike
+  Rules, so this may be a genuine "no") and _Export list_, which acts on the whole
+  filtered rung and is the closest thing to a page-level verb the strip has today.
+
+- **Done when:** either `GroupsListActionBar` carries a `primary` under ADR-0059's
+  rule with the choice justified in its docblock, **or** an explicit note in that
+  docblock records that this rung has no page-level verb and therefore ships with
+  no `primary` on purpose — so the next reader does not re-open the question. In
+  both cases the open-panel marker moves from `variant` to the label + explicit
+  `priority: 'pinned'`, and the stories assert the label swap the way
+  `RulesListActionBar.stories.tsx`'s `TheOpenPanelSaysSo` does.
+- **Risk:** Low — one component, its stories, and seventeen `GroupsTab` tests that
+  query these labels. Note that changing a panel trigger's label changes its
+  accessible name, so `GroupsTab.test.tsx` queries for `Cross-search` and
+  `Bulk actions` need checking against the open state, not only the closed one.
+- **Status:** open
+- **Related:** ADR-0059, ADR-0051 §1, ADR-0038
