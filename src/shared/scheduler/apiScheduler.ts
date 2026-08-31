@@ -6,7 +6,9 @@
  * extension to prevent rate limiting. It:
  * - Queues requests by priority (high &gt; normal &gt; low)
  * - Bounds concurrency and dispatches each request to the content script
- * - Parses rate-limit headers and enters cooldown near the limit
+ * - Parses rate-limit headers and enters cooldown near the limit, **per Okta
+ *   rate-limit bucket** — an exhausted `/api/v1/apps` bucket stops app traffic
+ *   without stopping a group lookup that has its own budget
  * - Auto-retries failures with exponential backoff
  * - Tracks metrics and broadcasts state to subscribers
  *
@@ -16,7 +18,7 @@
 import { createLogger } from '../utils/logger';
 import { flushAllPending, recordRequest } from '../requestLog';
 import { OperationCancelledError } from './cancellation';
-import { RateLimitDetector } from './rateLimitDetector';
+import { RateLimitDetector, bucketOf } from './rateLimitDetector';
 import { normalizeRequestResult } from './requestResult';
 import type {
   QueuedRequest,
@@ -41,6 +43,14 @@ const DEFAULT_CONFIG: SchedulerConfig = {
 };
 
 /**
+ * Key for the gate that is not any one bucket's: the most-restrictive
+ * observation seen anywhere, which governs a request whose own bucket Okta has
+ * not reported on yet. Not a valid Okta path, so it can never collide with a
+ * real bucket key from `bucketOf`.
+ */
+const GLOBAL_GATE = '*';
+
+/**
  * Priority queue and executor for Okta API requests. One instance is created in
  * the background worker; the processing loop starts in the constructor.
  */
@@ -59,7 +69,18 @@ export class ApiScheduler {
   private rateLimitDetector: RateLimitDetector;
   private config: SchedulerConfig;
   private status: SchedulerStatus = 'idle';
-  private cooldownEndsAt: number | null = null;
+  /**
+   * When each armed gate lifts, keyed by rate-limit bucket, plus
+   * {@link GLOBAL_GATE} for the most-restrictive-anywhere backstop.
+   *
+   * A gate is per-bucket because Okta's quotas are: exhausting `/api/v1/apps`
+   * says nothing about `/api/v1/groups`, and stalling the whole queue on it
+   * spent wall-clock the org was never asking for. The global entry survives
+   * alongside them for requests whose own bucket Okta has not reported on yet —
+   * see {@link gateKeyFor} — which is what keeps this from ever being *less*
+   * protective than the single cooldown it replaced.
+   */
+  private cooldowns: Map<string, number> = new Map();
   private isPaused: boolean = false;
   private processingInterval: ReturnType<typeof setInterval> | null = null;
   // Re-entrancy guard for processQueue: notifyStateChange runs listeners
@@ -287,10 +308,109 @@ export class ApiScheduler {
   }
 
   /**
+   * Is a gate armed right now? Expired entries are dropped as they are found,
+   * so this doubles as the cooldown reaper.
+   *
+   * @param key - A bucket key, or {@link GLOBAL_GATE}.
+   */
+  private isGated(key: string): boolean {
+    const endsAt = this.cooldowns.get(key);
+    if (endsAt === undefined) return false;
+    if (Date.now() >= endsAt) {
+      this.cooldowns.delete(key);
+      log.debug('Cooldown ended, resuming processing', { gate: key });
+      return false;
+    }
+    return true;
+  }
+
+  /** Whether any gate at all is armed (drops expired entries on the way). */
+  private anyGateArmed(): boolean {
+    let armed = false;
+    for (const key of [...this.cooldowns.keys()]) {
+      if (this.isGated(key)) armed = true;
+    }
+    return armed;
+  }
+
+  /**
+   * Which gate governs this request, and whether Okta has actually reported on
+   * the bucket it belongs to.
+   *
+   * **A bucket Okta has spoken about answers for itself.** That is the whole
+   * point: `/api/v1/apps` running out says nothing about `/api/v1/groups`, and
+   * gating groups on it spent wall-clock the org was never asking for.
+   *
+   * **A bucket Okta has said nothing about falls back to the most-restrictive
+   * observation anywhere.** Not because that is the real constraint — it isn't —
+   * but because an unobserved family has no budget of its own to plead, and the
+   * conservative reading is the only honest one available. This is also what
+   * keeps the change from ever being weaker than the single cooldown it
+   * replaced: before the first response from a family, it behaves exactly as
+   * before.
+   *
+   * @param request - The candidate request.
+   */
+  private gateKeyFor(request: QueuedRequest): { key: string; observed: boolean } {
+    const bucket = bucketOf(request.endpoint);
+    const observed = this.rateLimitDetector.getForBucket(bucket) !== null;
+    return { key: observed ? bucket : GLOBAL_GATE, observed };
+  }
+
+  /**
+   * May this request dispatch right now?
+   *
+   * An `interactive` request may jump the soft gate — but only while the budget
+   * governing it has genuine hard headroom left, so it can never force a 429
+   * (see {@link RequestPriority}).
+   *
+   * @param request - A queued candidate.
+   * @returns `'go'` to dispatch, `'gated'` to skip it and try the next queued
+   * request, or `'cooldown'` when the soft threshold has just been crossed and
+   * the caller must arm this request's gate.
+   */
+  private gateFor(request: QueuedRequest): 'go' | 'gated' | 'cooldown' {
+    const { key, observed } = this.gateKeyFor(request);
+    const bucket = observed ? key : undefined;
+
+    if (request.priority === 'interactive' && !this.rateLimitDetector.isLimitExceeded(bucket)) {
+      return 'go';
+    }
+
+    // An armed gate stays armed — a request that finds one simply waits, and a
+    // request governed by a different gate gets its turn instead.
+    if (this.isGated(key)) return 'gated';
+
+    // In-flight requests have spent budget no header has counted yet, so they
+    // are subtracted from `remaining` before the comparison. They are charged
+    // in full to whichever budget governs this request: we do not track which
+    // bucket each in-flight request belongs to, and over-charging errs toward
+    // backing off early, which is the safe direction.
+    if (
+      this.rateLimitDetector.isApproachingLimit(
+        this.config.minRemainingThreshold,
+        this.activeRequests.size,
+        bucket,
+      )
+    ) {
+      return 'cooldown';
+    }
+
+    return 'go';
+  }
+
+  /**
    * One drain pass: dispatch queued requests until the concurrency cap, an
-   * armed rate-limit gate, or an empty queue stops it. Every gate is
+   * empty queue, or every remaining request being gated stops it. Every gate is
    * re-evaluated per dispatch so a multi-dispatch drain can never overshoot
    * what the single-dispatch tick would have allowed.
+   *
+   * Unlike the single-gate version this replaces, a gated request at the head
+   * does **not** end the pass. The queue is scanned in its existing priority
+   * order and the first dispatchable request wins, so a cooling-down
+   * `/api/v1/apps` fan-out no longer holds up a `/api/v1/groups` lookup that has
+   * its own untouched budget. Priority order is otherwise unchanged: a request
+   * is only skipped when its own bucket says no.
    */
   private drainQueue(): void {
     // Skip if paused
@@ -299,44 +419,26 @@ export class ApiScheduler {
       return;
     }
 
-    // Clear an expired cooldown before draining
-    if (this.cooldownEndsAt && Date.now() >= this.cooldownEndsAt) {
-      log.debug('Cooldown ended, resuming processing');
-      this.cooldownEndsAt = null;
-    }
-
     while (this.activeRequests.size < this.config.maxConcurrent && this.queue.length > 0) {
-      // An `interactive` request at the head of the (priority-ordered) queue may
-      // jump the soft rate-limit gates — but only while there is genuine hard
-      // headroom left, so it can never force a 429. See {@link RequestPriority}.
-      // Re-evaluated every iteration: the head changes as requests dispatch.
-      const interactiveBypass =
-        this.queue[0]?.priority === 'interactive' && !this.rateLimitDetector.isLimitExceeded();
+      let index = -1;
+      for (let i = 0; i < this.queue.length; i++) {
+        const verdict = this.gateFor(this.queue[i]);
+        if (verdict === 'go') {
+          index = i;
+          break;
+        }
+        // Crossing the soft threshold arms this request's gate; the request is
+        // then left queued and the scan continues into other buckets.
+        if (verdict === 'cooldown') this.enterCooldown(this.gateKeyFor(this.queue[i]).key);
+      }
 
-      // Check cooldown (may have been armed mid-drain by a settling request).
-      // An interactive head falls through to dispatch; the cooldown stays armed
-      // for every other tier (we do not clear `cooldownEndsAt`).
-      if (this.cooldownEndsAt && Date.now() < this.cooldownEndsAt && !interactiveBypass) {
+      // Nothing in the queue may run yet. Everything left is waiting on a gate.
+      if (index === -1) {
         this.updateStatus('cooldown');
         return;
       }
 
-      // Check rate limits (account for in-flight requests). An interactive
-      // request with hard headroom dispatches without arming a cooldown; any
-      // other tier trips the soft threshold and cools down.
-      if (
-        this.rateLimitDetector.isApproachingLimit(
-          this.config.minRemainingThreshold,
-          this.activeRequests.size,
-        ) &&
-        !interactiveBypass
-      ) {
-        this.enterCooldown();
-        return;
-      }
-
-      const request = this.queue.shift();
-      if (!request) return;
+      const [request] = this.queue.splice(index, 1);
 
       // Execute request (synchronously registers itself in activeRequests, so
       // the loop condition above stays accurate for the next iteration).
@@ -345,10 +447,10 @@ export class ApiScheduler {
     }
 
     // Post-drain status: busy while anything is queued or in flight, cooldown
-    // while the gate is armed with an empty queue, idle otherwise.
+    // while a gate is armed with an empty queue, idle otherwise.
     if (this.queue.length > 0 || this.activeRequests.size > 0) {
       this.updateStatus('processing');
-    } else if (this.cooldownEndsAt && Date.now() < this.cooldownEndsAt) {
+    } else if (this.anyGateArmed()) {
       // Keep the interval ticking through an armed cooldown so its expiry (a
       // time-based wake-up with nothing to settle) is still noticed and pushed.
       this.updateStatus('cooldown');
@@ -386,9 +488,12 @@ export class ApiScheduler {
       if (result.headers) {
         const rateLimitInfo = this.rateLimitDetector.parseHeaders(result.headers, request.endpoint);
 
-        // Check if we should enter cooldown after this request
+        // Check if we should enter cooldown after this request. The gate is the
+        // bucket this response actually reported on — cooling down every other
+        // family because one of them ran low is what made an apps fan-out stall
+        // an unrelated interactive lookup.
         if (rateLimitInfo && this.shouldEnterCooldown(rateLimitInfo)) {
-          this.enterCooldown();
+          this.enterCooldown(rateLimitInfo.bucket);
         }
       }
 
@@ -527,31 +632,77 @@ export class ApiScheduler {
   }
 
   /**
-   * Enter cooldown mode
+   * Arm one gate.
+   *
+   * @param gate - The rate-limit bucket to hold back, or {@link GLOBAL_GATE} to
+   * hold everything back. A bucket with a live observation is timed by **its**
+   * reset; anything else falls back to the most restrictive observation
+   * anywhere, and to the configured duration when there is none.
+   * @remarks The wait is `min(configured, msUntilReset)` — capped so a bad clock
+   * or a far-future reset cannot stall the queue indefinitely, and never longer
+   * than Okta says is necessary. Re-arming a gate that is already armed extends
+   * it only if the new end is later, so a burst of settling requests cannot
+   * ratchet the wait down below what the first one established.
    */
-  private enterCooldown(): void {
-    const info = this.rateLimitDetector.getMostRestrictive();
-    if (!info) return;
+  private enterCooldown(gate: string = GLOBAL_GATE): void {
+    const info =
+      (gate === GLOBAL_GATE ? null : this.rateLimitDetector.getForBucket(gate)) ??
+      this.rateLimitDetector.getMostRestrictive();
 
     // Use reset time if available and shorter, otherwise fall back to configured cooldown
-    const resetWaitTime = this.rateLimitDetector.getMillisecondsUntilReset(info);
+    const resetWaitTime = info ? this.rateLimitDetector.getMillisecondsUntilReset(info) : 0;
     const cooldownDuration =
       resetWaitTime > 0
         ? Math.min(this.config.cooldownDuration, resetWaitTime)
         : this.config.cooldownDuration;
 
-    this.cooldownEndsAt = Date.now() + cooldownDuration;
+    const endsAt = Date.now() + cooldownDuration;
+    const existing = this.cooldowns.get(gate);
+    if (existing !== undefined && existing >= endsAt) return;
+    this.cooldowns.set(gate, endsAt);
     this.metrics.cooldownEvents++;
 
     log.warn('Entering cooldown mode:', {
-      remaining: info.remaining,
-      limit: info.limit,
+      gate,
+      remaining: info?.remaining,
+      limit: info?.limit,
       cooldownDuration: `${Math.ceil(cooldownDuration / 1000)}s`,
-      endsAt: new Date(this.cooldownEndsAt).toISOString(),
+      endsAt: new Date(endsAt).toISOString(),
     });
 
     this.updateStatus('cooldown');
     this.notifyStateChange();
+  }
+
+  /**
+   * Set the percentage-remaining at or below which a bucket cools down.
+   *
+   * Exists so the background can hand the scheduler the org's **own** answer —
+   * `GET /api/v1/rate-limit-settings/warning-threshold` less a margin, see
+   * `shared/scheduler/rateLimitSettings` — instead of leaving it on the
+   * configured guess. Called at most once per org per browser session, and never
+   * called at all when the org does not answer, in which case
+   * `DEFAULT_CONFIG.minRemainingThreshold` stands.
+   *
+   * Takes effect on the next gate evaluation; already-armed gates are left
+   * alone, since they were armed on evidence that has not changed.
+   *
+   * @param percent - Percentage remaining, `0`–`100`. Values outside that range
+   * are ignored: a threshold above 100 would hold every request forever and a
+   * negative one would disable the gate, and neither is a state a caller can
+   * have meant.
+   */
+  setMinRemainingThreshold(percent: number): void {
+    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+      log.warn('Ignoring out-of-range cooldown threshold', { percent });
+      return;
+    }
+    if (this.config.minRemainingThreshold === percent) return;
+    log.info('Cooldown threshold updated', {
+      from: this.config.minRemainingThreshold,
+      to: percent,
+    });
+    this.config.minRemainingThreshold = percent;
   }
 
   /**
@@ -593,6 +744,26 @@ export class ApiScheduler {
   }
 
   /**
+   * When the last armed gate lifts, or `null` when none is.
+   *
+   * The **latest** end across every gate, not the earliest: `SchedulerState`'s
+   * `cooldownEndsAt` drives the activity bar's countdown, and a reader watching
+   * it is being told when the scheduler is unencumbered. Quoting the earliest
+   * would promise a clear queue while another bucket was still held back.
+   * Unchanged for the common case — one bucket cooling down reports its own end,
+   * exactly as the single cooldown did.
+   */
+  private latestCooldownEnd(): number | null {
+    let latest: number | null = null;
+    for (const key of [...this.cooldowns.keys()]) {
+      if (!this.isGated(key)) continue;
+      const endsAt = this.cooldowns.get(key) as number;
+      if (latest === null || endsAt > latest) latest = endsAt;
+    }
+    return latest;
+  }
+
+  /**
    * Get current scheduler state
    */
   getState(): SchedulerState {
@@ -602,7 +773,7 @@ export class ApiScheduler {
       activeRequests: this.activeRequests.size,
       totalProcessed: this.metrics.successfulRequests + this.metrics.failedRequests,
       rateLimitInfo: this.rateLimitDetector.getMostRestrictive(),
-      cooldownEndsAt: this.cooldownEndsAt,
+      cooldownEndsAt: this.latestCooldownEnd(),
       errorCount: this.metrics.failedRequests,
       lastError: this.lastError,
     };

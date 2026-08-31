@@ -395,6 +395,7 @@ describe('makeApiRequest response shapes', () => {
       error: 'Nope',
       status: 404,
       data: { errorSummary: 'Nope' },
+      headers: expect.any(Object),
     });
   });
 
@@ -408,6 +409,7 @@ describe('makeApiRequest response shapes', () => {
       error: 'Not found',
       status: 404,
       data: { errorSummary: 'Not found', message: 'ignored' },
+      headers: expect.any(Object),
     });
   });
 
@@ -429,19 +431,26 @@ describe('makeApiRequest response shapes', () => {
       error: 'Request failed with status 429',
       status: 429,
       data: {},
+      headers: expect.any(Object),
     });
   });
 
-  it('non-ok response omits headers entirely — the scheduler cannot read rate-limit headers on 429', async () => {
+  // UPDATED (D-064): this previously pinned the header drop as a known bug —
+  // `headers` was collected and then omitted from the `!response.ok` return, so
+  // a 429's `X-Rate-Limit-Reset` never reached `RateLimitDetector` and the
+  // scheduler backed off on a configured guess instead of Okta's own answer.
+  // Retargeted assertion-by-assertion: the status assertion is unchanged, and
+  // the `not.toHaveProperty('headers')` assertion is replaced by its inverse
+  // (ADR-0022 — the unit's behavior legitimately changed).
+  it('non-ok response carries its headers, so the scheduler can read rate-limit headers on 429', async () => {
     fetchMock.mockResolvedValue(
       res({}, { status: 429, headers: { 'x-rate-limit-reset': '1700000000' } }),
     );
 
     const result = await call();
 
-    // BUG (pinned): headers ARE collected but not returned on the error path.
-    expect(result).not.toHaveProperty('headers');
     expect(result.status).toBe(429);
+    expect(result.headers).toMatchObject({ 'x-rate-limit-reset': '1700000000' });
   });
 
   // UPDATED (D-007a): these two pinned the absent `status` that made a transport

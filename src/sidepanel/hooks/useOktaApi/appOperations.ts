@@ -10,6 +10,7 @@
  * boundary. There are no write operations in this module.
  */
 
+import { z } from 'zod';
 import type { CoreApi } from './core';
 import type { RequestResult } from '@/shared/scheduler/types';
 import { oktaAppListItemSchema, type OktaAppListItem } from '@/shared/schemas/okta';
@@ -20,6 +21,7 @@ import {
 } from '@/shared/schemas/okta';
 import { parseOkta, parseOktaList } from '@/shared/schemas/okta';
 import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
+import { readTotalCount } from '@/shared/snapshot/syncMeta';
 import { isSessionExpired, NO_HTTP_STATUS } from '@/shared/scheduler/requestResult';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -161,43 +163,94 @@ export function createAppOperations(coreApi: CoreApi) {
   };
 
   /**
+   * Count one collection under an app by asking Okta for the total instead of
+   * walking to it.
+   *
+   * A `limit=1` request returns one row of payload and, where Okta supplies it,
+   * an exact `x-total-count` header — so a 10,000-user app costs **one** request
+   * rather than the fifty its full walk costs. That is the whole point of this
+   * helper: the numbers it feeds are two integers in a disclosure panel, and
+   * paginating an entire assignment list to render them was the single largest
+   * avoidable consumer of the `/api/v1/apps` rate-limit bucket.
+   *
+   * **The header is probed, never assumed.** Its availability is not universal
+   * across Okta endpoints, and this repo has only ever verified it on
+   * `/api/v1/users/{id}/groups`. So an absent or unusable header is treated as
+   * *count unknown* — not as zero, and not as a failure — and this falls back to
+   * the full validated walk it replaced. An org that does not send the header
+   * therefore behaves exactly as it did before this change.
+   *
+   * @param probeUrl - The `limit=1` probe URL.
+   * @param walkUrl - The paginated URL to fall back to.
+   * @param schema - Boundary schema for the fallback walk's rows (ADR-0006).
+   * @param context - Validation context for the fallback walk.
+   * @returns The count. Throws only if the fallback walk throws, which is what
+   * the caller's `catch` turns into `null`.
+   */
+  const countAssignments = async <T>(
+    probeUrl: string,
+    walkUrl: string,
+    schema: z.ZodType<T, z.ZodTypeDef, unknown>,
+    context: string,
+  ): Promise<number> => {
+    const request = (url: string) =>
+      coreApi.makeApiRequest(url, {
+        method: 'GET',
+        priority: 'low',
+        reason: 'Count app assignments',
+      });
+
+    const probe = await request(probeUrl);
+    if (probe.success) {
+      // `readTotalCount` is the shared reader: case-insensitive keys (header
+      // casing is not guaranteed across the messaging hops) and, crucially,
+      // `null` rather than `0` for an empty header — "Okta said nothing" and
+      // "Okta said none" are different answers.
+      const total = readTotalCount(probe.headers);
+      if (total !== null) return total;
+    }
+
+    const rows = await fetchAllPages(request, walkUrl, { schema, context });
+    return rows.length;
+  };
+
+  /**
    * Count the users and groups assigned to an app.
    *
    * @param appId - App to size.
-   * @returns `{ users, groups }` across all pages, or `null` if either walk fails.
-   * Never throws.
-   * @remarks Both collections are walked in full at `low` priority so this bulk
-   * read yields to interactive work (the `getAppPushGroupMappings` precedent).
-   * Counts reflect *validated* rows: malformed rows are dropped at the boundary
-   * (ADR-0006), so a corrupt row is excluded rather than counted blindly. A large
-   * app costs one request per 200 assignments, so call it lazily.
+   * @returns `{ users, groups }`, or `null` if either count could not be
+   * obtained. Never throws.
+   * @remarks Each collection is counted independently by {@link countAssignments}
+   * — a `limit=1` probe first, the full walk only where Okta withholds
+   * `x-total-count` — so one may probe while the other falls back. Everything is
+   * issued at `low` priority so this bulk read yields to interactive work (the
+   * `getAppPushGroupMappings` precedent).
+   *
+   * A walked count reflects *validated* rows: malformed rows are dropped at the
+   * boundary (ADR-0006). A probed count is Okta's own total and is not filtered
+   * that way, so the two paths can disagree by however many rows an org sends
+   * that fail validation. That is the right trade for a headline number — the
+   * probe is what Okta itself would report — but it is a real difference, not an
+   * equivalence, and it is stated here rather than glossed.
    */
   const getAppAssignmentCounts = async (appId: string): Promise<AppAssignmentCounts | null> => {
     const encodedId = encodeURIComponent(appId);
     try {
       const [users, groups] = await Promise.all([
-        fetchAllPages(
-          (url) =>
-            coreApi.makeApiRequest(url, {
-              method: 'GET',
-              priority: 'low',
-              reason: 'Count app assignments',
-            }),
+        countAssignments(
+          `/api/v1/apps/${encodedId}/users?limit=1`,
           `/api/v1/apps/${encodedId}/users?limit=${OKTA_PAGE_SIZE}`,
-          { schema: oktaAppUserSchema, context: 'GET /api/v1/apps/{id}/users' },
+          oktaAppUserSchema,
+          'GET /api/v1/apps/{id}/users',
         ),
-        fetchAllPages(
-          (url) =>
-            coreApi.makeApiRequest(url, {
-              method: 'GET',
-              priority: 'low',
-              reason: 'Count app assignments',
-            }),
+        countAssignments(
+          `/api/v1/apps/${encodedId}/groups?limit=1`,
           `/api/v1/apps/${encodedId}/groups?limit=${OKTA_PAGE_SIZE}`,
-          { schema: oktaAppGroupSchema, context: 'GET /api/v1/apps/{id}/groups' },
+          oktaAppGroupSchema,
+          'GET /api/v1/apps/{id}/groups',
         ),
       ]);
-      return { users: users.length, groups: groups.length };
+      return { users, groups };
     } catch {
       // Identifier + outcome only.
       log.error('getAppAssignmentCounts failed', { code: 'app_assignment_counts_failed', appId });

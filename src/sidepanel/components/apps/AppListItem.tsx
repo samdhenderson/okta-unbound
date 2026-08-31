@@ -35,9 +35,11 @@ export interface AppListItemProps {
   /** Okta org origin, enabling the "Open in Okta" deep link when present. */
   oktaOrigin?: string;
   /**
-   * Loads this app's assignment counts. Called only once the row is expanded (the
-   * walk costs one request per 200 assignments), and cached by app id. Must be
-   * stable — it is a memo dependency of the row's query.
+   * Loads this app's assignment counts. Called only once the row is expanded,
+   * and cached by app id. Must be stable — it is a memo dependency of the row's
+   * query. Two requests where the org sends `x-total-count`, one per 200
+   * assignments where it does not; either way it is not free, which is why it
+   * waits for the disclosure.
    */
   fetchAssignmentCounts?: (appId: string) => Promise<AppAssignmentCounts | null>;
 }
