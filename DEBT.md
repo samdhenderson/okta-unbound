@@ -2746,7 +2746,7 @@ affects every scroll box in the app, on every platform.
   a 429.
 - **Risk:** Low to fix. The behavior change is that the scheduler starts seeing
   headers it currently cannot, which is the point.
-- **Status:** open
+- **Status:** claimed:claude/stoic-gates-6o17id
 - **Related:** `D-007a`, `D-007c`
 
 ### D-065 · `fetchAndCacheAllGroupRules` walks a whole endpoint with no boundary schema
