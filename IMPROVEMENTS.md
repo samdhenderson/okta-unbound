@@ -975,3 +975,52 @@ block says they mean — same vocabulary, one definition, defined there.
   `Bulk actions` need checking against the open state, not only the closed one.
 - **Status:** open
 - **Related:** ADR-0059, ADR-0051 §1, ADR-0038
+
+---
+
+### I-031 · Group Detail's rules section answers "what does it say?" by leaving the tab
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** M
+- **Verified:** 2026-08-31
+- **Files:** `src/sidepanel/components/groups/detail/GroupRulesSection.tsx`,
+  `src/sidepanel/components/groups/detail/GroupDetailView.tsx`,
+  `src/sidepanel/components/rules/RuleDetailView.tsx`
+- **Problem:** `GroupRulesSection` lists the two rule relationships a group has —
+  rules that assign into it, and rules that name it in a condition. Its rows used
+  to be `RuleCard`s with a disclosure, and the section's whole justification was
+  that the disclosure held the condition expression, the referenced attributes and
+  the target groups: _"the one question this tab exists to answer — what does that
+  rule actually say? — could only be answered by leaving it."_
+
+  Building the rule detail rung took that disclosure away, on purpose: four write
+  verbs flex-wrapped inside a list row's body is the ADR-0030 §2 failure the rung
+  exists to fix, and the rung holds strictly more than the disclosure ever did. But
+  the trade is real and worth naming rather than quietly banking. The row still
+  carries the condition in human-readable form and the press now lands on a rung
+  that fully answers the question — it just answers it **on the Rules tab**, and
+  the reader loses their place in the group they were studying.
+
+  Three options, in rough order of cost:
+
+  1. **Accept it and say so** — the deep link is one press, lands somewhere better
+     than it used to, and a group's rules are a secondary concern on that tab.
+  2. **Push the rule's rung onto the _group_ stack.** `useViewStack` is per tab and
+     the trail is already generic; the blocker is that the rung's write verbs act on
+     a rule and this section deliberately wires none of them, so it would need a
+     read-only mode for `RuleDetailView` rather than the full strip.
+  3. **Inline the one section that matters** — a read-only "When" block under the
+     row, reusing `RuleDetailView`'s condition renderer directly. Cheapest, and it
+     is also where Feature H's clause explainer wants to live on this surface.
+
+- **Done when:** one of the three is chosen and recorded in `GroupRulesSection`'s
+  docblock, with the two rejected options named so the question does not re-open.
+  If (2) or (3), the section's tests regain a case asserting the condition
+  expression is reachable without a tab change — the assertion
+  `GroupRulesSection.test.tsx` gave up when the disclosure went.
+- **Risk:** Low for (1) and (3). (2) touches `useViewStack` wiring on the Groups
+  tab and would need `RuleDetailView` to render without an `ActionBar`, which no
+  caller needs today.
+- **Status:** open
+- **Related:** ADR-0030 §2, ADR-0039, ADR-0016, `docs/features-plan.md` §H

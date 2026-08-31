@@ -199,7 +199,7 @@ never asked. `memberCount` is the exception, because zero and unknown are
 distinguishable at its source.
 
 Adding an entity kind is one new builder beside that entity (`groupIdentity.ts`,
-`userIdentity.ts`) plus a unit test, with no edit to anything shared. `PageHeader`
+`userIdentity.ts`, `ruleIdentity.ts`) plus a unit test, with no edit to anything shared. `PageHeader`
 still describes the _browsed_ entity and `ContextBar` still describes the _live Okta
 tab_ — the two must not converge, and on a drilled-in view their ids routinely differ.
 
@@ -274,6 +274,13 @@ applies to identity facts, not rendered `disabled` forever with a tooltip standi
 in for an explanation. A permission-gated verb may still render `disabled` with a
 `title` naming the real reason. See ADR-0039 for the incident this closes.
 
+A detail rung may also end up with **no `primary` at all**, and that is a result rather
+than an omission: `RuleActionBar`'s one row verb is _Preview impact_, which is dropped
+entirely for a rule that targets no groups — no population to compute a change for, so
+no verb (ADR-0051 §3). Nothing is promoted to fill the empty slot. Say the missing fact
+in prose where the reader is looking instead; `RuleDetailView` states "assigns to no
+groups, so it adds nobody anywhere" in the section the verb would have acted on.
+
 **A detail rung that answers several questions about one entity uses tabbed panes of
 one card**, not a stack of sections — `UserDetailPanel` is the pattern (Groups / Apps /
 Profile, through shared `Tabs`). Stacking made the page a scroll where the reader
@@ -286,6 +293,15 @@ because the loads are gated on it (see
 [state-management.md](./state-management.md)) — and a pane's tab shows **no count**
 until a walk has returned, tested by a `hasLoaded` flag rather than `items.length`
 ("Unknown is not zero", below). The panel composes and does not fetch.
+
+**One question, one load, three short sections: use the stack.** The threshold is real in
+both directions — `RuleDetailView` is a `DetailSection` stack because a rule has one
+condition and three facts about it, all already on the `FormattedRule` the list was
+rendering. Splitting four short sections across tabs would hide three of them to save a
+scroll that does not exist, and the rung fetches nothing, so there is no per-pane load to
+gate. It is also the rung that closes ADR-0030's last unconverted layout dialect: `RuleCard`'s
+expandable body, whose four write verbs flex-wrapped at the bottom of a card were the exact
+"page-level verb read as a section's property" failure ADR-0030 §2 exists to stop.
 
 ## Documented raw-control exceptions
 

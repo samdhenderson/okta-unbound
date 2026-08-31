@@ -1,15 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import type { FormattedRule } from '../../shared/types';
 import RuleCard from './RuleCard';
-import { NavigationProvider } from '../contexts/NavigationContext';
-
-/**
- * Target groups render as `EntityLink` chips, which need a navigation host to be
- * openable — without one every chip degrades to plain text, which would hide the
- * very affordance these stories exist to show.
- */
-const navigationHandlers = { rule: fn(), group: fn(), user: fn(), app: fn(), policy: fn() };
 
 const baseRule: FormattedRule = {
   id: '00rABCDEF1234567890',
@@ -29,10 +21,7 @@ const baseRule: FormattedRule = {
   affectsCurrentGroup: false,
 };
 
-/**
- * Expandable card summarising a single Okta group rule, with activate/deactivate
- * and "View in Okta" actions in its expanded detail view.
- */
+/** One group rule as a list row, with a way into its detail rung. */
 const meta = {
   title: 'Rules/RuleCard',
   component: RuleCard,
@@ -42,48 +31,30 @@ const meta = {
     docs: {
       description: {
         component:
-          'Expandable card summarising a single Okta group rule.\n\n' +
-          'The collapsed view shows the rule name, an ACTIVE/INACTIVE status badge, current-group/conflict badges, and the condition. Expanding reveals the condition expression (with inline group-name badges), referenced user attributes, target groups, conflict details, metadata, and the activate/deactivate plus "View in Okta" actions. A deep-linked rule auto-expands and flashes on arrival. Memoised for list rendering.\n\n' +
-          '**A target group is named, or it is stated as un-named.** Every group — in the condition expression and under THEN ADD TO GROUPS — is a shared `EntityLink` chip that opens the group and copies its raw id. When no name was resolved, the card says "Group name not loaded" beside the copyable id instead of printing the id where a name belongs: an unresolved group used to be indistinguishable from a group actually called `00g1a2b3…`.\n\n' +
-          '**Related internals:** [EntityLink](?path=/docs/shared-entitylink--docs)',
+          'A single Okta group rule as a list row: name, status, the badges that say how it relates to the group you arrived from, and its condition in human-readable form.\n\n' +
+          '**It used to be the detail view.** The card carried an expandable body holding the condition expression, the referenced attributes, the target groups, the conflicts and the metadata — and, flex-wrapped at the bottom, four write verbs. That body is [RuleDetailView](?path=/docs/rules-ruledetailview--docs) now, under a real `ActionBar`: ADR-0030 §2 is explicit that verbs whose object is the whole entity do not belong inside a section of a card.\n\n' +
+          "**Pressing the row opens it, through a `StretchedButton`.** An invisible full-bleed `<button>` rather than a click handler on a `<div>`, so Enter/Space, focus and disabled semantics come for free and the row's heading stays a heading. Its accessible name is the same on every row, so it points at *this* row's name via `aria-describedby`.\n\n" +
+          '**The status is stated in text, not hue.** It was a coloured dot with no label — the one fact the row most needed to carry, available only to a reader who could see the colour and knew the convention.\n\n' +
+          '**Related internals:** [ListRow](?path=/docs/shared-listrow--docs), [StretchedButton](?path=/docs/shared-stretchedbutton--docs)',
       },
     },
   },
-  decorators: [
-    (Story) => (
-      <NavigationProvider handlers={navigationHandlers}>
-        <Story />
-      </NavigationProvider>
-    ),
-  ],
   argTypes: {
     rule: { description: 'The formatted rule to display.' },
-    onActivate: {
-      description: 'Called with the rule id when the user activates an inactive rule.',
+    onOpenRule: {
+      description: "Open this rule's detail rung. Wired by the Rules tab, which has one to push.",
     },
-    onDeactivate: {
-      description: 'Called with the rule id when the user deactivates an active rule.',
-    },
-    onPreviewImpact: {
-      description: 'Called with the rule when the user opens its read-only impact preview.',
-    },
-    onAddTargetGroup: {
-      description: 'Called with the rule to start the "add target group" consolidation (A4).',
-    },
-    oktaOrigin: {
-      description: 'Okta org origin used to build the "View in Okta" rules-page link.',
+    onOpenInRulesTab: {
+      description:
+        'Jump to this rule on the Rules tab. Wired by surfaces showing a rule somewhere else, whose own view stack has no rule rung to push.',
     },
     isHighlighted: {
-      description: 'When true, the card auto-expands and flashes on arrival (deep-link target).',
+      description: 'When true, the row flashes once on arrival (deep-link target).',
     },
   },
   args: {
     rule: baseRule,
-    onActivate: fn(),
-    onDeactivate: fn(),
-    onPreviewImpact: fn(),
-    onAddTargetGroup: fn(),
-    oktaOrigin: 'https://dev-12345.okta.com',
+    onOpenRule: fn(),
     isHighlighted: false,
   },
 } satisfies Meta<typeof RuleCard>;
@@ -91,94 +62,46 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Collapsed, active rule with no conflicts. */
-export const Default: Story = {};
+/** An active rule with no conflicts. Pressing anywhere on the row opens its rung. */
+export const Default: Story = {
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Open rule' }));
+    await expect(args.onOpenRule).toHaveBeenCalledWith(baseRule);
+  },
+};
 
 /**
- * Highlighted deep-link target — auto-expands, flashes on arrival, and shows all
- * detail sections, including the metadata row's copyable rule id. That copy control
- * is named after the rule, since a list can have several cards expanded at once.
+ * The row names the rule it opens. `label` is identical on every row in a list, so the
+ * overlay is described by this row's own heading — a reader hears "Open rule, Engineering
+ * – Auto-assign by department" rather than fifty controls called the same thing.
  */
-export const Expanded: Story = {
-  args: { isHighlighted: true },
+export const NamesTheRuleItOpens: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(
-      canvas.getByRole('button', {
-        name: `Copy rule id for ${baseRule.name}`,
-      }),
-    ).toBeInTheDocument();
+    const open = canvas.getByRole('button', { name: 'Open rule' });
+    const describedBy = open.getAttribute('aria-describedby');
+    await expect(describedBy).toBeTruthy();
+    await expect(canvas.getByText(baseRule.name)).toHaveAttribute('id', describedBy);
   },
 };
 
-/**
- * Every target group resolved to a name: each is an openable chip, with a copy
- * control named after the *id* rather than the group, since two groups on one card
- * can share a display name.
- */
-export const NamedTargetGroups: Story = {
-  args: { isHighlighted: true },
+/** Inactive rule — the status is a neutral badge that says so, not a grey dot. */
+export const Inactive: Story = {
+  args: { rule: { ...baseRule, status: 'INACTIVE' } },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await expect(
-      canvas.getByRole('button', { name: 'Open group Engineering – All' }),
-    ).toBeInTheDocument();
-    await expect(
-      canvas.getByRole('button', { name: `Copy group id ${baseRule.groupIds[0]}` }),
-    ).toBeInTheDocument();
+    await expect(within(canvasElement).getByText('INACTIVE')).toBeInTheDocument();
   },
 };
 
-/**
- * The same rule with **no names resolved** for its target groups. The card states
- * the gap — "Group name not loaded" — and puts the raw id in the identifier
- * register beside its copy control, rather than printing the id where a name
- * belongs. Nothing here fetches, so the name cannot be filled in at render time.
- */
-export const UnresolvedTargetGroups: Story = {
-  args: {
-    isHighlighted: true,
-    rule: { ...baseRule, groupNames: undefined, allGroupNamesMap: {} },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await expect(canvas.getAllByText('Group name not loaded')).toHaveLength(2);
-    await expect(
-      canvas.getByRole('button', { name: `Copy group id ${baseRule.groupIds[1]}` }),
-    ).toBeInTheDocument();
-    // No name, so nothing claims to open the group.
-    await expect(canvas.queryByRole('button', { name: /^Open group/ })).not.toBeInTheDocument();
-  },
-};
-
-/**
- * A condition expression that names a group by id. The literal is replaced by the
- * chip it resolves to — the same trade `RuleExpressionText` makes for the Group
- * Detail clause view, so the app's two renderers of rule conditions read alike.
- */
-export const ConditionNamesAGroup: Story = {
-  args: {
-    isHighlighted: true,
-    rule: {
-      ...baseRule,
-      condition: 'isMemberOfAnyGroup("00g1a2b3c4d5e6f7g8h9")',
-      conditionExpression: 'isMemberOfAnyGroup("00g1a2b3c4d5e6f7g8h9")',
-    },
-  },
-};
-
-/** Rule that assigns to the group currently being viewed — shows the "Current Group" badge. */
+/** Assigns into the group you arrived from — takes `ListRow`'s shared `selected` state. */
 export const AffectsCurrentGroup: Story = {
-  args: {
-    isHighlighted: true,
-    rule: { ...baseRule, affectsCurrentGroup: true },
-  },
+  args: { rule: { ...baseRule, affectsCurrentGroup: true } },
 };
 
-/** Expanded view with a detected conflict against another rule. */
+/** A detected conflict is counted on the row; the detail is on the rule's rung. */
 export const WithConflicts: Story = {
   args: {
-    isHighlighted: true,
     rule: {
       ...baseRule,
       conflicts: [
@@ -192,21 +115,36 @@ export const WithConflicts: Story = {
       ],
     },
   },
-};
-
-/** Inactive rule — collapsed dot is neutral grey and the primary action becomes "Activate Rule". */
-export const Inactive: Story = {
-  args: {
-    rule: { ...baseRule, status: 'INACTIVE' },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText('1 Conflict')).toBeInTheDocument();
   },
 };
 
-/** No `oktaOrigin`, `onPreviewImpact`, or `onAddTargetGroup` — the optional action buttons are hidden. */
-export const MinimalActions: Story = {
-  args: {
-    isHighlighted: true,
-    oktaOrigin: null,
-    onPreviewImpact: undefined,
-    onAddTargetGroup: undefined,
+/**
+ * The Group Detail rules section's wiring: the press leaves this tab, so the control says
+ * where it lands rather than promising a detail view that opens in place.
+ */
+export const OpensInTheRulesTab: Story = {
+  args: { onOpenRule: undefined, onOpenInRulesTab: fn() },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Open rule in the Rules tab' }));
+    await expect(args.onOpenInRulesTab).toHaveBeenCalledWith(baseRule.id);
   },
+};
+
+/**
+ * Neither handler wired: the row is inert *by design*, and renders no affordance — no
+ * chevron, no overlay, nothing that looks pressable and is not (ADR-0039).
+ */
+export const NotOpenable: Story = {
+  args: { onOpenRule: undefined },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).queryByRole('button')).not.toBeInTheDocument();
+  },
+};
+
+/** A deep-link target, flashing once on arrival. */
+export const Highlighted: Story = {
+  args: { isHighlighted: true },
 };

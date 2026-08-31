@@ -54,7 +54,7 @@ const meta = {
       description: {
         component:
           "The Rules tab's list region, switching between four states.\n\n" +
-          'Shows a spinner while loading; a "Load Rules" call-to-action empty state when nothing is loaded yet; a "no match" empty state when a search/filter excludes every rule; otherwise the filtered `RuleCard` list. Each card is wrapped in a `data-rule-id` anchor so a deep-linked rule can be scrolled to and highlighted.',
+          'Shows a spinner while loading; a "Load Rules" call-to-action empty state when nothing is loaded yet; a "no match" empty state when a search/filter excludes every rule; otherwise the filtered `RuleCard` list. Each card is a row that opens the rule\'s own detail rung — the write verbs it used to carry inline are that rung\'s `ActionBar` now.',
       },
     },
   },
@@ -66,27 +66,17 @@ const meta = {
     },
     filteredRules: { description: 'Rules after search + filter.' },
     onLoad: { description: 'Load rules (used by the empty-state action).' },
-    onActivate: { description: 'Activate an inactive rule.' },
-    onDeactivate: {
-      description: 'Request deactivation (gated behind the impact confirm upstream).',
+    onOpenRule: { description: "Open a rule's detail rung." },
+    selectedRuleId: {
+      description: 'Rule id being opened (deep-link target), for the arrival flash.',
     },
-    onPreviewImpact: { description: 'Open the read-only impact preview for a rule.' },
-    onAddTargetGroup: {
-      description: 'Start the "add target group" consolidation for a rule (A4).',
-    },
-    oktaOrigin: { description: 'Okta origin for each card\'s "View in Okta" link.' },
-    selectedRuleId: { description: 'Rule id to highlight/scroll to (deep-link target).' },
   },
   args: {
     isLoading: false,
     hasRules: true,
     filteredRules: sampleRules,
     onLoad: fn(),
-    onActivate: fn(),
-    onDeactivate: fn(),
-    onPreviewImpact: fn(),
-    onAddTargetGroup: fn(),
-    oktaOrigin: 'https://example.okta.com',
+    onOpenRule: fn(),
     selectedRuleId: null,
   },
 } satisfies Meta<typeof RulesListPanel>;
@@ -112,12 +102,7 @@ export const NoMatchingRules: Story = {
   args: { filteredRules: [] },
 };
 
-/** A deep-link target rule is highlighted and auto-expanded. */
+/** A deep-link target rule, flashing on arrival. */
 export const WithSelectedRule: Story = {
   args: { selectedRuleId: sampleRules[0].id },
-};
-
-/** No `oktaOrigin` — cards hide the "View in Okta" action. */
-export const WithoutOktaOrigin: Story = {
-  args: { oktaOrigin: null },
 };

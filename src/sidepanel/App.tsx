@@ -449,6 +449,7 @@ const App: React.FC = () => {
                 onRuleSelected={() => setSelectedRuleId(null)}
                 onNavigateToGroup={handleNavigateToGroup}
                 onExportRules={handleExportRules}
+                scrollRootRef={scrollRootRef}
                 listView={viewFor(listViewRequest, 'rules')}
                 onListViewConsumed={clearListViewRequest}
               />

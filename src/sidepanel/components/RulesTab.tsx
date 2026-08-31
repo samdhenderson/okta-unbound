@@ -27,6 +27,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import RuleImpactModal from './RuleImpactModal';
 import PageHeader from './shared/PageHeader';
+import Breadcrumbs from './shared/Breadcrumbs';
+import EntityIdentity from './shared/EntityIdentity';
 import AlertMessage from './shared/AlertMessage';
 import RulesMetaRow from './rules/RulesMetaRow';
 import RulesStatsGrid from './rules/RulesStatsGrid';
@@ -36,6 +38,8 @@ import RulesFilterPanel, {
 } from './rules/RulesFilterPanel';
 import RulesSearchRow from './rules/RulesSearchRow';
 import RulesListActionBar, { type RulesPanel } from './rules/RulesListActionBar';
+import RuleDetailView from './rules/RuleDetailView';
+import { ruleIdentity } from './rules/ruleIdentity';
 import type { RulesListView } from '../listViewRequest';
 import RulesListPanel from './rules/RulesListPanel';
 import RulesDuplicatesPanel from './rules/RulesDuplicatesPanel';
@@ -52,7 +56,8 @@ import { useRuleImpact } from '../hooks/useRuleImpact';
 import { useRulesData } from '../hooks/useRulesData';
 import { useRuleLifecycle } from '../hooks/useRuleLifecycle';
 import { useRuleConsolidation } from '../hooks/useRuleConsolidation';
-import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useViewStack } from '../hooks/useViewStack';
+import { useScrollPreservation } from '../hooks/useScrollPreservation';
 import type { RuleImpactInput } from '../hooks/useOktaApi/ruleImpact';
 import { TabStateManager, saveRulesTabState } from '../../shared/tabState/tabStateManager';
 import type { RulesTabState } from '../../shared/tabState/types';
@@ -85,9 +90,9 @@ interface RulesTabProps {
   currentGroupId?: string;
   /** Okta org origin passed to each {@link RuleCard} for its "View in Okta" link. */
   oktaOrigin?: string | null;
-  /** Rule id to scroll to and highlight when navigated here from another tab. */
+  /** Rule id to open the detail rung for when navigated here from another tab. */
   selectedRuleId?: string | null;
-  /** Called once the highlighted rule has been shown, so the parent can clear it. */
+  /** Called once the requested rule has been shown, so the parent can clear it. */
   onRuleSelected?: () => void;
   /** Deep-link to a group in the Groups tab (from a rule's target groups, B → A2). */
   onNavigateToGroup?: (groupId: string) => void;
@@ -112,6 +117,12 @@ interface RulesTabProps {
    * preserved per tab by {@link sidepanel/components/TabPanel}. Defaults to `true`.
    */
   isActive?: boolean;
+  /**
+   * The app's one scroller. Handed down so the list rung's offset can be captured before
+   * a push and restored on pop — the detail rung is shorter than the list, so the shared
+   * scroller clamps rather than remembering (ADR-0051's consequence note on `GroupsTab`).
+   */
+  scrollRootRef?: React.RefObject<HTMLElement | null>;
 }
 
 /**
@@ -129,6 +140,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
   listView,
   onListViewConsumed,
   isActive = true,
+  scrollRootRef,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<RulesFilterType>('all');
@@ -138,6 +150,11 @@ const RulesTab: React.FC<RulesTabProps> = ({
   // rather than of the rules, so neither is persisted into TabState.
   const [activePanel, setActivePanel] = useState<RulesPanel>('none');
   const [showFilters, setShowFilters] = useState(false);
+  // The rule strip's disclosure tier, and its one armed confirm. Both are properties of
+  // the strip you are looking at rather than of the rule, so they reset on a rung change
+  // (see the adjust-during-render block below) and neither is persisted.
+  const [tierOpen, setTierOpen] = useState(false);
+  const [isConfirmingActivate, setIsConfirmingActivate] = useState(false);
   // Set once the mount-time persisted-state restore has run, so the deep-link
   // auto-load doesn't race a fetch ahead of the hydrate, and a scope request
   // applies *after* (and thus wins over) any restored filter.
@@ -151,8 +168,6 @@ const RulesTab: React.FC<RulesTabProps> = ({
   // Single error channel; '' clears it. Stable so the hooks below keep their
   // memoized identities (useOktaApi in particular memoizes on this callback).
   const handleError = useCallback((message: string) => setError(message || null), []);
-
-  const reducedMotion = useReducedMotion();
 
   // `onResult` takes one `OperationResult` object, not `(message, type)`. It used to
   // be positional, and TypeScript accepts a function that ignores trailing
@@ -352,6 +367,23 @@ const RulesTab: React.FC<RulesTabProps> = ({
     if (ruleId) void lifecycle.deactivateRule(ruleId);
   };
 
+  /*
+    Activation is gated now, and it was not before — the rule card fired
+    `lifecycle.activateRule` straight from a click. The gate is not symmetry with
+    deactivate; it is the *asymmetry*. Okta's rule engine only ever adds, so activating
+    writes memberships into every target group and pausing the rule again removes none of
+    them (D-052). That is a change with no second press to take it back, which is exactly
+    what ADR-0039 puts behind a confirm.
+
+    Deactivation keeps `RuleImpactModal` as its confirm rather than gaining one of these:
+    a dialog that names who is affected beats a sentence describing it.
+  */
+  const handleConfirmActivate = () => {
+    const ruleId = openRule?.id;
+    setIsConfirmingActivate(false);
+    if (ruleId) void lifecycle.activateRule(ruleId);
+  };
+
   // Re-derive each rule's current-group relation before anything reads it. This
   // tab is the only place that knows the detected group, so it stamps the truth
   // onto the rules it hands down (RuleCard's "Current Group" badge and border
@@ -397,61 +429,132 @@ const RulesTab: React.FC<RulesTabProps> = ({
     [rules, currentGroupId],
   );
 
+  /*
+    The rung stack. The list stays mounted and hidden behind a pushed rule (ADR-0016):
+    unmounting it would throw away the progressive-reveal window, the filter state and
+    the focus-restore target, and "back" would return to a reset list.
+  */
+  const ruleViewRef = useRef<HTMLDivElement>(null);
+  const nav = useViewStack<FormattedRule>({
+    rootLabel: 'Group Rules',
+    getLabel: (entry) => entry.name,
+    getKey: (entry) => entry.id,
+    viewRef: ruleViewRef,
+  });
+  const { push: pushRule, pop: popRule, currentEntry } = nav;
+
+  const captureListScroll = useScrollPreservation(scrollRootRef ?? ruleViewRef, nav.isRoot);
+
+  /*
+    Re-resolve the pushed rule against the live list rather than rendering the snapshot
+    taken at push time — the `UserRungHeader` pattern. A refresh, an activate or a
+    consolidation replaces the objects in `rules`, and a rung showing the pre-write copy
+    would state the old status under a header that had just been told the write succeeded.
+    Falls back to the pushed entry so the rung survives a rule vanishing mid-read.
+  */
+  const openRule = currentEntry
+    ? (rules.find((r) => r.id === currentEntry.id) ?? currentEntry)
+    : null;
+
+  /*
+    The header's identity, built by a pure per-entity function beside its entity
+    (ADR-0032 §2). Its presence is also what every branch in the header below switches
+    on — one test for "am I on the detail rung", rather than four.
+  */
+  const identity = openRule ? ruleIdentity(openRule) : null;
+
+  /*
+    Collapse the strip's tier and disarm any confirm whenever the rung changes. Adjusted
+    during render rather than in an effect — the pattern `UsersTab` and `PageHeader` use —
+    so React re-renders immediately instead of committing a frame with the previous rule's
+    tier open over the new one's verbs.
+  */
+  const [tierRung, setTierRung] = useState<string | null>(null);
+  const openRuleKey = openRule?.id ?? null;
+  if (tierRung !== openRuleKey) {
+    setTierRung(openRuleKey);
+    setTierOpen(false);
+    setIsConfirmingActivate(false);
+  }
+
+  /** Push a rule's detail rung, remembering where the list was. */
+  const handleOpenRule = useCallback(
+    (ruleToOpen: FormattedRule) => {
+      captureListScroll();
+      pushRule(ruleToOpen);
+    },
+    [captureListScroll, pushRule],
+  );
+
   /** Open a panel, or close it if it is already the open one. At most one at a time. */
   const togglePanel = useCallback(
     (panel: RulesPanel) => setActivePanel((prev) => (prev === panel ? 'none' : panel)),
     [],
   );
 
-  // Scroll to and highlight the active rule (cross-tab deep-link or a local focus)
-  // once it is in the DOM. If it is loaded but hidden by the current search/filter,
-  // relax them first so a persisted filter can't swallow the deep-link.
+  /*
+    A requested rule — a cross-tab deep-link, or a "View" press inside one of the analysis
+    panels — now **opens its rung** rather than scrolling the list to it and flashing the
+    card for two seconds.
+
+    That is a behaviour change and it is the point of this rung existing. Scroll-and-flash
+    was the best a list could do: it put the reader next to a collapsed row and left them
+    to expand it. It also had to fight the filters — a persisted "Active only" would hide
+    an inactive target, so the effect cleared the search and the filter to make the row
+    renderable. The rung does not care what the list is filtered to, so that whole dance
+    goes with it, along with the 2s highlight window and the `reducedMotion` branch that
+    chose its scroll behaviour.
+  */
   useEffect(() => {
-    if (!activeRuleId || rules.length === 0) return;
-    if (!rules.some((r) => r.id === activeRuleId)) return; // not loaded yet; loader effect handles it
-    if (!filteredRules.some((r) => r.id === activeRuleId)) {
-      // Target exists but is filtered out — clear the view so it renders, then
-      // this effect re-runs and scrolls to it.
-      setSearchQuery('');
-      setActiveFilter('all');
-      return;
-    }
-    log.debug('Navigating to rule:', activeRuleId);
-    const ruleElement = document.querySelector(`[data-rule-id="${activeRuleId}"]`);
-    if (ruleElement) {
-      ruleElement.scrollIntoView?.({
-        behavior: reducedMotion ? 'auto' : 'smooth',
-        block: 'center',
-      });
-      const t = setTimeout(() => {
-        onRuleSelected?.();
-        setFocusRuleId(null);
-      }, 2000);
-      return () => clearTimeout(t);
-    } else {
-      log.warn('Rule not found in DOM:', activeRuleId);
-    }
-  }, [activeRuleId, rules, filteredRules, onRuleSelected, reducedMotion]);
+    if (!activeRuleId) return;
+    const target = rules.find((r) => r.id === activeRuleId);
+    if (!target) return; // not loaded yet; the loader effect above handles it
+    if (currentEntry?.id === activeRuleId) return; // already showing it
+    log.debug('Opening rule rung:', activeRuleId);
+    captureListScroll();
+    pushRule(target);
+    onRuleSelected?.();
+    setFocusRuleId(null);
+  }, [activeRuleId, rules, currentEntry, captureListScroll, pushRule, onRuleSelected]);
 
   return (
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
       {/*
-        No `actions`. Load/Refresh is the rung's page-level verb and it now lives in the
-        strip, where ADR-0030 §2 says a page-level verb belongs and where it can be the
-        `primary` this rung was missing (ADR-0059). The conflict badge stays: it is what
-        carries that count at a glance now that the stats grid is behind a disclosure.
+        One `PageHeader` for both rungs, swapping its contents as a rule is pushed and
+        popped (ADR-0016) — never a second header inside the detail view, and never a
+        second identity card inside its body (ADR-0032).
+
+        No `actions` on either rung. On the list, Load/Refresh is the page-level verb and
+        it lives in the strip now, where ADR-0030 §2 says it belongs and where it is the
+        `primary` this rung was missing (ADR-0059). On the detail rung there is no
+        `actions` node either: `ruleIdentity` emits no `link`, because Okta has no
+        per-rule route, and the honest rules-list link is stated as what it is inside the
+        view rather than dressed as a deep link here.
       */}
       <PageHeader
-        title="Group Rules"
-        subtitle="Analyze group rules and detect potential conflicts"
+        title={identity ? identity.name : 'Group Rules'}
+        subtitle={identity ? undefined : 'Analyze group rules and detect potential conflicts'}
+        onBack={identity ? popRule : undefined}
+        backLabel="Back to rules"
+        breadcrumbs={identity ? <Breadcrumbs items={nav.trail} /> : undefined}
+        sticky={isActive}
+        identityKey={identity?.key}
+        identity={identity ? <EntityIdentity rows={identity.rows} /> : undefined}
         badge={
-          stats.conflicts > 0
-            ? { text: `${stats.conflicts} Conflicts`, variant: 'warning' }
-            : undefined
+          identity
+            ? identity.badge
+            : stats.conflicts > 0
+              ? { text: `${stats.conflicts} Conflicts`, variant: 'warning' }
+              : undefined
         }
       />
 
-      <div className="max-w-7xl mx-auto px-(--sp-gutter) py-(--sp-gutter) space-y-(--sp-rung)">
+      <div
+        hidden={!nav.isRoot}
+        className={`max-w-7xl mx-auto px-(--sp-gutter) py-(--sp-gutter) space-y-(--sp-rung) ${
+          nav.transition === 'pop' ? 'animate-pop-in' : ''
+        }`}
+      >
         {/*
           First in the rung, and a direct child of it. `sticky` only travels inside its
           own parent's box, and the `.dock-sentinel` timeline hoists onto that same
@@ -539,14 +642,41 @@ const RulesTab: React.FC<RulesTabProps> = ({
           hasRules={rules.length > 0}
           filteredRules={filteredRules}
           onLoad={() => loadRules(false)}
-          onActivate={lifecycle.activateRule}
-          onDeactivate={handleRequestDeactivate}
-          onPreviewImpact={handlePreviewImpact}
-          onAddTargetGroup={consolidation.openAddTarget}
-          oktaOrigin={oktaOrigin}
+          onOpenRule={handleOpenRule}
           selectedRuleId={activeRuleId}
         />
       </div>
+
+      {/*
+        The pushed rung, a **sibling** of the list rather than its replacement — that is
+        what lets the list above keep its scroll offset, its filter and its reveal window
+        while this is on screen. `tabIndex={-1}` is the focus target `useViewStack` moves
+        to when nothing inside is focusable.
+      */}
+      {openRule && (
+        <div
+          ref={ruleViewRef}
+          tabIndex={-1}
+          className="max-w-7xl mx-auto px-(--sp-gutter) py-(--sp-gutter) animate-push-in"
+        >
+          <RuleDetailView
+            rule={openRule}
+            oktaOrigin={oktaOrigin}
+            onPreviewImpact={
+              openRule.groupIds.length > 0 ? () => handlePreviewImpact(openRule) : undefined
+            }
+            tierOpen={tierOpen}
+            onTierOpenChange={setTierOpen}
+            isConfirmingActivate={isConfirmingActivate}
+            onRequestActivate={() => setIsConfirmingActivate(true)}
+            onCancelActivate={() => setIsConfirmingActivate(false)}
+            onConfirmActivate={handleConfirmActivate}
+            onRequestDeactivate={() => handleRequestDeactivate(openRule.id)}
+            onAddTargetGroup={() => consolidation.openAddTarget(openRule)}
+            sticky={isActive}
+          />
+        </div>
+      )}
 
       <RuleImpactModal
         isOpen={impact.rule !== null}
