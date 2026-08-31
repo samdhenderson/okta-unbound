@@ -32,6 +32,9 @@ const meta = {
         'Merged, display-ready activity state (status, metric slots, progress, cancel flags).',
     },
     onCancel: { description: 'Invoked when the user confirms cancellation of the current work.' },
+    onCancelOperation: {
+      description: 'Stops one declared operation, leaving every other one running.',
+    },
     collapsible: {
       description:
         'Whether the panel is narrow enough to offer collapsing; when `true` the chevron toggle is shown.',
@@ -44,12 +47,19 @@ const meta = {
   },
   args: {
     onCancel: fn(),
+    onCancelOperation: fn(),
     onToggleCollapse: fn(),
   },
 } satisfies Meta<typeof ActivityBarView>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+/**
+ * A frozen clock. Countdowns are derived from `now`, so a real one would make
+ * every story a moving target for the visual-diff run.
+ */
+const FIXED_NOW = 1_760_000_000_000;
 
 const idleView: ActivityView = {
   statusLabel: 'Ready',
@@ -69,6 +79,10 @@ const idleView: ActivityView = {
   failed: 0,
   isCancelling: false,
   canCancel: false,
+  buckets: [],
+  lowThresholdPercent: 10,
+  operations: [],
+  now: FIXED_NOW,
 };
 
 /** Fully idle — nothing queued, nothing processed, cancel disabled. */
@@ -258,6 +272,233 @@ export const Cancelling: Story = {
       queueLength: 3,
       isCancelling: true,
       canCancel: false,
+    },
+  },
+};
+
+/**
+ * Helper for bucket fixtures below. `resetAt` is fixed so nothing drifts between
+ * story runs.
+ */
+function bucket(
+  overrides: { bucket: string } & Partial<ActivityView['buckets'][number]>,
+): ActivityView['buckets'][number] {
+  return {
+    limit: 600,
+    remaining: 600,
+    resetAt: FIXED_NOW + 60_000,
+    queued: 0,
+    active: 0,
+    planned: 0,
+    gatedUntil: null,
+    ...overrides,
+  };
+}
+
+/**
+ * Idle, but the scheduler has seen five families. Every one is at full headroom,
+ * so all five collapse to a single grey line and the bar stays as slim as it is
+ * with no buckets at all.
+ */
+export const BucketsAllQuiet: Story = {
+  args: {
+    view: {
+      ...idleView,
+      processed: 128,
+      buckets: [
+        bucket({ bucket: '/api/v1/users' }),
+        bucket({ bucket: '/api/v1/groups' }),
+        bucket({ bucket: '/api/v1/apps' }),
+        bucket({ bucket: '/api/v1/policies' }),
+        bucket({ bucket: '/api/v1/meta', limit: null, remaining: null, resetAt: null }),
+      ],
+    },
+  },
+};
+
+/**
+ * An export under way: `/api/v1/users` has 812 requests declared against it
+ * before most of them exist, while the untouched families stay collapsed.
+ */
+export const BucketsWithPlannedWork: Story = {
+  args: {
+    view: {
+      ...idleView,
+      statusLabel: 'Processing',
+      statusColorVar: 'var(--color-info)',
+      busy: true,
+      operationActive: true,
+      operationName: 'Export all users',
+      current: 312,
+      total: 812,
+      percentage: 38,
+      opCompleted: 312,
+      opActive: 4,
+      queueLength: 26,
+      activeRequests: 4,
+      rateLimit: { remaining: 288, limit: 600, low: false },
+      canCancel: true,
+      buckets: [
+        bucket({ bucket: '/api/v1/users', remaining: 288, active: 4, queued: 26, planned: 470 }),
+        bucket({ bucket: '/api/v1/groups' }),
+        bucket({ bucket: '/api/v1/policies' }),
+      ],
+    },
+  },
+};
+
+/**
+ * One family exhausted and cooling, the rest untouched — the case per-bucket
+ * gating exists for (ADR-0059). The countdown is that bucket's own gate.
+ */
+export const BucketCoolingDown: Story = {
+  args: {
+    view: {
+      ...idleView,
+      statusLabel: 'Cooldown',
+      statusColorVar: 'var(--color-danger)',
+      busy: true,
+      queueLength: 40,
+      rateLimit: { remaining: 18, limit: 600, low: true },
+      cooldownLabel: '24s',
+      canCancel: true,
+      buckets: [
+        bucket({
+          bucket: '/api/v1/users',
+          remaining: 18,
+          queued: 40,
+          planned: 500,
+          gatedUntil: FIXED_NOW + 24_000,
+        }),
+        bucket({ bucket: '/api/v1/apps', limit: 300, remaining: 81, queued: 3, planned: 402 }),
+        bucket({ bucket: '/api/v1/groups' }),
+        bucket({ bucket: '/api/v1/policies' }),
+      ],
+    },
+  },
+};
+
+function leg(bucket: string, estimated: number | null, spent = 0) {
+  return {
+    id: `${bucket}-leg`,
+    bucket,
+    method: 'GET',
+    estimated,
+    spent,
+    remaining: estimated === null ? null : Math.max(0, estimated - spent),
+    approximate: false,
+  };
+}
+
+/**
+ * Two operations at once — the case the single progress bar above cannot
+ * express. Each row carries its own stop control; the queue-wide button becomes
+ * "Cancel all", because with two ✕s already on screen a bare "Cancel" no longer
+ * says which.
+ */
+export const ConcurrentOperations: Story = {
+  args: {
+    view: {
+      ...idleView,
+      statusLabel: 'Processing',
+      statusColorVar: 'var(--color-info)',
+      busy: true,
+      operationActive: true,
+      operationName: 'Export all users',
+      current: 312,
+      total: 812,
+      percentage: 38,
+      opCompleted: 312,
+      opActive: 4,
+      queueLength: 26,
+      activeRequests: 4,
+      rateLimit: { remaining: 288, limit: 600, low: false },
+      canCancel: true,
+      buckets: [
+        bucket({ bucket: '/api/v1/users', remaining: 288, active: 4, queued: 26, planned: 470 }),
+        bucket({ bucket: '/api/v1/groups', active: 1, planned: 2 }),
+      ],
+      operations: [
+        {
+          id: 'export',
+          name: 'Export all users',
+          startedAt: FIXED_NOW - 90_000,
+          legs: [leg('/api/v1/users', 812, 342)],
+          spent: 342,
+          estimated: 812,
+          remaining: 470,
+          approximate: false,
+        },
+        {
+          id: 'search',
+          name: 'Search groups',
+          startedAt: FIXED_NOW - 2_000,
+          legs: [leg('/api/v1/groups', 3, 1)],
+          spent: 1,
+          estimated: 3,
+          remaining: 2,
+          approximate: true,
+        },
+      ],
+    },
+  },
+};
+
+/**
+ * Gated, with the ledger above and the reset timeline between: what is still
+ * owed, and when each family comes back to pay it.
+ */
+export const GatedWithLedger: Story = {
+  args: {
+    view: {
+      ...idleView,
+      statusLabel: 'Cooldown',
+      statusColorVar: 'var(--color-danger)',
+      busy: true,
+      queueLength: 40,
+      rateLimit: { remaining: 18, limit: 600, low: true },
+      cooldownLabel: '24s',
+      canCancel: true,
+      buckets: [
+        bucket({
+          bucket: '/api/v1/users',
+          remaining: 18,
+          queued: 40,
+          planned: 470,
+          gatedUntil: FIXED_NOW + 24_000,
+        }),
+        bucket({
+          bucket: '/api/v1/apps',
+          limit: 300,
+          remaining: 4,
+          queued: 3,
+          planned: 402,
+          gatedUntil: FIXED_NOW + 95_000,
+        }),
+        bucket({ bucket: '/api/v1/groups' }),
+      ],
+      operations: [
+        {
+          id: 'export',
+          name: 'Export all users',
+          startedAt: FIXED_NOW - 90_000,
+          legs: [leg('/api/v1/users', 812, 342)],
+          spent: 342,
+          estimated: 812,
+          remaining: 470,
+          approximate: false,
+        },
+        {
+          id: 'assignments',
+          name: 'Count app assignments',
+          startedAt: FIXED_NOW - 30_000,
+          legs: [leg('/api/v1/apps', 402, 0)],
+          spent: 0,
+          estimated: 402,
+          remaining: 402,
+          approximate: true,
+        },
+      ],
     },
   },
 };

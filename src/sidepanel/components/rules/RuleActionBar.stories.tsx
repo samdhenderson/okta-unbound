@@ -44,7 +44,7 @@ const meta = {
           'and retiring this one.\n\n' +
           'What is left for the row is genuinely read-only: *Preview impact*, which works out who ' +
           'would stop being attributed and writes nothing. It is also the `primary` — this is a ' +
-          '**detail** rung, so ADR-0059’s list-rung rule does not apply, and `primary` means what ' +
+          '**detail** rung, so ADR-0061’s list-rung rule does not apply, and `primary` means what ' +
           'ADR-0030 always said it meant: the page’s one main verb.\n\n' +
           '**There is no Delete and no Edit condition, deliberately.** Rule deletion exists only as ' +
           'the retire half of the consolidation sequence, which owns its own preview and undo ' +

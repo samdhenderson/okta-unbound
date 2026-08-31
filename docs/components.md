@@ -244,7 +244,7 @@ the row (`flex`, or `pinned` for the page's one primary verb); a change to the
 entity's state with **no symmetric undo** — suspend, delete, deactivate — defaults
 to `tier`, behind a confirm `Modal` that states the consequence in plain language
 next to the control ("Blocks sign-in until reversed," not just "Suspend").
-A **list** rung reads the same rules with two additions (ADR-0051, ADR-0059). The tier
+A **list** rung reads the same rules with two additions (ADR-0051, ADR-0061). The tier
 may sort by **frequency** as well as consequence, though frequency may move a verb down,
 never up, and never brings a confirm `Modal` with it. And `primary` is spent on whichever
 of these the rung has:

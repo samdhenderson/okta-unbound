@@ -1,4 +1,4 @@
-# ADR-0059: A list rung's `primary` is its page verb, and the open panel says so in words
+# ADR-0061: A list rung's `primary` is its page verb, and the open panel says so in words
 
 - Status: Accepted
 - Date: 2026-08-31

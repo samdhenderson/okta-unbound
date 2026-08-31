@@ -495,7 +495,7 @@ describe('RulesTab characterization', () => {
 
     // Open the panel from the strip, then the cluster, then click View on the first
     // rule. The panel's own outer collapsible is gone — the strip's `Duplicates (N)`
-    // verb is what holds it closed now (ADR-0059).
+    // verb is what holds it closed now (ADR-0061).
     await openPanel(/^Duplicates/);
     await userEvent.click(screen.getByRole('button', { name: /rules → .* target group/ }));
     // The rule name appears in both the stubbed card and the banner row; pick the

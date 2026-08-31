@@ -7,6 +7,8 @@
  * requests, rate-limit info, scheduler config/state/metrics, and results.
  */
 
+import type { PlanSummary } from './plan';
+
 /**
  * Queue priority for a scheduled request. Ordered
  * `interactive` &gt; `high` &gt; `normal` &gt; `low`.
@@ -39,6 +41,15 @@ export interface QueuedRequest {
    * so a caller that forgets one still gets logged instead of silently dropped.
    */
   reason?: string;
+  /**
+   * The {@link PlanSummary}-bearing operation plan (`shared/scheduler/plan`)
+   * this request was declared part of, when its caller declared one.
+   *
+   * Absent is ordinary and fully supported: the plan ledger is advisory, so an
+   * undeclared request still runs and still shows up in its bucket's counts —
+   * it just has no operation row of its own.
+   */
+  planId?: string;
   resolve: (response: RequestResult) => void;
   reject: (error: Error) => void;
   retryCount: number;
@@ -52,7 +63,14 @@ export interface RateLimitInfo {
   limit: number; // X-Rate-Limit-Limit
   remaining: number; // X-Rate-Limit-Remaining
   reset: number; // X-Rate-Limit-Reset (Unix timestamp in seconds)
+  /** The exact endpoint whose response carried these headers. Reporting only. */
   endpoint: string;
+  /**
+   * The Okta rate-limit bucket {@link endpoint} belongs to, as computed by
+   * `bucketOf` — this is what the observation is *keyed* by, because Okta
+   * enforces its quotas per endpoint family rather than per URL.
+   */
+  bucket: string;
   timestamp: number;
 }
 
@@ -69,6 +87,51 @@ export interface SchedulerConfig {
 }
 
 /**
+ * One Okta rate-limit bucket, as the Activity Bar sees it: how much budget is
+ * left, and how much of what remains is already spoken for.
+ *
+ * A bucket appears here once anything has touched it — an observation parsed
+ * from Okta's headers, a queued or in-flight request, or an active plan's
+ * declared leg. That last source is the point: a bucket can be listed with real
+ * {@link BucketState.planned} work against it before a single request has been
+ * sent, which is exactly what the scheduler could never say before.
+ */
+export interface BucketState {
+  /** Bucket key from `bucketOf`, e.g. `/api/v1/users`. */
+  bucket: string;
+  /**
+   * Quota size from `X-Rate-Limit-Limit`, or `null` when Okta has not reported
+   * on this bucket yet.
+   *
+   * `null` is not zero. An unobserved bucket has an unknown budget, and the bar
+   * says so rather than drawing an empty gauge that reads as exhaustion.
+   */
+  limit: number | null;
+  /** Remaining budget, or `null` when unobserved. */
+  remaining: number | null;
+  /**
+   * When this bucket's window resets, in **milliseconds** since the epoch, or
+   * `null` when unobserved. Converted here from Okta's seconds-based header so
+   * every timestamp crossing to the UI is in the same unit.
+   */
+  resetAt: number | null;
+  /** Queued requests whose endpoint buckets here. */
+  queued: number;
+  /** In-flight requests whose endpoint buckets here. */
+  active: number;
+  /** Requests active plans still expect to spend here (`shared/scheduler/plan`). */
+  planned: number;
+  /**
+   * When this bucket's gate lifts, or `null` when it is not gated.
+   *
+   * Reflects the gate that actually governs the bucket, which for a bucket Okta
+   * has said nothing about is the global backstop rather than an entry of its
+   * own — the same rule `gateKeyFor` applies when deciding whether to dispatch.
+   */
+  gatedUntil: number | null;
+}
+
+/**
  * Scheduler state for UI display
  */
 export interface SchedulerState {
@@ -76,10 +139,35 @@ export interface SchedulerState {
   queueLength: number;
   activeRequests: number;
   totalProcessed: number;
+  /**
+   * The most-restrictive observation seen anywhere. Kept as the one-number
+   * summary the collapsed bar shows; {@link SchedulerState.buckets} is the
+   * per-bucket truth behind it.
+   */
   rateLimitInfo: RateLimitInfo | null;
   cooldownEndsAt: number | null; // Timestamp when cooldown ends
   errorCount: number;
   lastError: string | null;
+  /**
+   * Every bucket currently worth showing, most-pressured first.
+   *
+   * Okta enforces quotas per endpoint family, so one number was never the whole
+   * story: `/api/v1/apps` can be exhausted while `/api/v1/groups` sits
+   * untouched. The scheduler has gated per bucket since ADR-0059; this is that
+   * same view finally reaching the UI.
+   */
+  buckets: BucketState[];
+  /** Active operation plans (`shared/scheduler/plan`), oldest first. */
+  plans: PlanSummary[];
+  /**
+   * The remaining-percentage at or below which the scheduler starts backing
+   * off — learned from the org's own warning-threshold setting.
+   *
+   * Published so the bar can colour "low" at the line the scheduler actually
+   * acts on. It previously hardcoded its own number, which meant the bar could
+   * read "fine" while the scheduler was already cooling down.
+   */
+  minRemainingThresholdPercent: number;
 }
 
 /**

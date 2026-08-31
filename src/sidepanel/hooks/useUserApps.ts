@@ -26,6 +26,21 @@
  * Each walk is cached under `cacheKeys.appGroups(appId)` at {@link TTL_LONG}, so
  * a second visit to the pane costs nothing at all.
  *
+ * ## The snapshot answers first, where it can
+ *
+ * Before walking anything, the fallback reads the org snapshot's `appGroups`
+ * collection (`readAppGroupsFromSnapshot`) and drops every app it already has
+ * rows for. Those apps cost **zero** requests, and unlike the `entityCache`
+ * above the snapshot is on disk — so it survives the panel being closed, which
+ * is when this fan-out used to be re-spent in full.
+ *
+ * The scope of that win is bounded, and stated rather than implied: the
+ * snapshot walks `/api/v1/apps/{id}/groups` for `GROUP_PUSH` apps only, so an
+ * app with no rows means **nobody asked**, not "no groups". Every such app still
+ * walks, exactly as before. Only the apps the snapshot positively has are served
+ * from it, and only those are left out of the ActivityBar's count — reporting
+ * work that costs no request would put a number on screen nothing corresponds to.
+ *
  * ## What it refuses to conclude
  *
  * - An intersection with **more than one** member group narrows the candidates
@@ -44,6 +59,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useOktaApi } from './useOktaApi';
 import { useEntityQuery } from '../cache/useEntityQuery';
 import { getOrFetch } from '../cache/entityCache';
+import { readAppGroupsFromSnapshot } from '../cache/appGroupSnapshot';
 import { cacheKeys, TTL_LONG } from '../cache/keys';
 import { createLogger } from '../../shared/utils/logger';
 import { summarizeAppSources, indexAppsByGroup } from '../components/users/appSourceSummary';
@@ -68,6 +84,14 @@ export interface UseUserAppsOptions {
    * never to infer a source Okta did not report.
    */
   memberships: GroupMembership[];
+  /**
+   * Connected org origin, which scopes the snapshot the fallback consults first.
+   *
+   * Optional, and omitting it costs correctness nothing — the fallback simply
+   * walks every unresolved app as it always did. It is the difference between
+   * spending a request on an answer already on disk and not.
+   */
+  oktaOrigin?: string | null;
   /**
    * Whether the Apps pane is the visible one. Defaults to `true` so a story or a
    * standalone render is unaffected.
@@ -136,6 +160,153 @@ function unresolvedGroupApps(apps: UserAppAssignment[]): UserAppAssignment[] {
 }
 
 /**
+ * Name the grantor from an app's assigned groups, wherever those groups came
+ * from — the snapshot or a walk.
+ *
+ * `null` groups is "the walk failed", `[]` is "Okta says no groups". Neither is
+ * an answer about this user, and neither becomes one here. Exactly one shared
+ * group names the grantor; two or more narrows the candidates without resolving
+ * them, and choosing between them would be an attribution invented in the client
+ * (ADR-0020).
+ *
+ * @param appId - The app being attributed.
+ * @param groupIds - Groups assigned to the app, or `null` when unknown.
+ * @param memberGroupIds - The user's own group memberships.
+ * @returns `[appId, groupId]` when exactly one group is shared, else `null`.
+ */
+function nameGrantor(
+  appId: string,
+  groupIds: string[] | null,
+  memberGroupIds: Set<string>,
+): [string, string] | null {
+  if (!groupIds) return null;
+  const candidates = groupIds.filter((id) => memberGroupIds.has(id));
+  return candidates.length === 1 ? [appId, candidates[0]] : null;
+}
+
+/** What {@link resolveGrantingGroups} needs to do its work. */
+interface ResolveGrantingGroupsOptions {
+  /** Apps whose granting group the embed did not name. */
+  appIds: string[];
+  /** The user's group memberships, as ids. */
+  memberGroupIds: Set<string>;
+  /** Org origin scoping the snapshot read; `null` skips it. */
+  oktaOrigin?: string | null;
+  /** The two api surfaces this needs, read off the hook's stable ref. */
+  api: {
+    getAppGroupAssignments: (appId: string, planId?: string) => Promise<string[] | null>;
+    runOperation: ReturnType<typeof useOktaApi>['runOperation'];
+  };
+  /** Called with each batch of `appId → groupId` attributions as it lands. */
+  onResolved: (named: Record<string, string>) => void;
+}
+
+/**
+ * Resolve the granting group for each unresolved app — from the snapshot where
+ * it already knows, and from a walk only where it does not.
+ *
+ * Lives at module scope rather than inside the effect on purpose: an inline
+ * `async` closure in a `useEffect` makes the React Compiler bail on the whole
+ * hook, which silently turns off the `react-hooks/refs` analysis that guards the
+ * two deliberate render-time ref assignments above. A function here keeps the
+ * hook analysable.
+ *
+ * @param options - See {@link ResolveGrantingGroupsOptions}.
+ * @returns Resolves when every app has been attributed or given up on. Never
+ * rejects — a failure is an unnamed row, not a broken pane.
+ */
+async function resolveGrantingGroups({
+  appIds,
+  memberGroupIds,
+  oktaOrigin,
+  api,
+  onResolved,
+}: ResolveGrantingGroupsOptions): Promise<void> {
+  // Apps the org snapshot has already walked cost nothing to resolve: the rows
+  // are on disk, origin-scoped, and were validated when they were written. Only
+  // apps the snapshot has NO rows for go to the network — absence there means
+  // the fan-out never asked about that app (it covers `GROUP_PUSH` apps only),
+  // never that the app has no groups.
+  let fromSnapshot = new Map<string, string[]>();
+  try {
+    fromSnapshot = await readAppGroupsFromSnapshot(oktaOrigin);
+  } catch {
+    // A snapshot read that failed just means everything walks, as before.
+    log.warn('Snapshot app-group read failed; walking every app instead', {
+      code: 'user_apps_snapshot_read_failed',
+    });
+  }
+
+  const servedLocally: Record<string, string> = {};
+  const toWalk: string[] = [];
+  for (const appId of appIds) {
+    const groupIds = fromSnapshot.get(appId);
+    if (groupIds === undefined) {
+      toWalk.push(appId);
+      continue;
+    }
+    const named = nameGrantor(appId, groupIds, memberGroupIds);
+    if (named) servedLocally[named[0]] = named[1];
+  }
+  onResolved(servedLocally);
+
+  if (toWalk.length === 0) {
+    log.info('granting-group fallback served entirely from the snapshot', {
+      code: 'user_apps_grant_group_fallback',
+      attempted: appIds.length,
+      fromSnapshot: appIds.length,
+      resolved: Object.keys(servedLocally).length,
+    });
+    return;
+  }
+
+  // ADR-0009: one tracked, cancellable operation rather than N loose promises,
+  // so the cost of a walk that is linear in app count is on screen while it is
+  // being spent. Only the apps that actually cost a request are counted into it
+  // — reporting the snapshot-served ones as work would put a number on screen
+  // that no request corresponds to.
+  const outcome = await api.runOperation<string, [string, string] | null>(
+    'Name the groups granting these apps',
+    toWalk,
+    async (appId, _index, planId) =>
+      nameGrantor(
+        appId,
+        await getOrFetch<string[] | null>(
+          cacheKeys.appGroups(appId),
+          () => api.getAppGroupAssignments(appId, planId),
+          { ttl: TTL_LONG },
+        ),
+        memberGroupIds,
+      ),
+    {
+      message: ({ completed, total }) => `Naming granting groups (${completed}/${total})`,
+      // A floor, not a total: each app costs at least one request, and an app
+      // with more than 200 assigned groups costs more. `toWalk` has already
+      // excluded the apps a cache hit will serve for free.
+      plan: { endpoint: '/api/v1/apps', method: 'GET', approximate: true },
+    },
+  );
+
+  const named: Record<string, string> = {};
+  for (const result of outcome.results) {
+    if (result.status === 'fulfilled' && result.value) {
+      named[result.value[0]] = result.value[1];
+    }
+  }
+  onResolved(named);
+
+  // Counts and outcomes only — never an app label, a group name or an href.
+  log.info('granting-group fallback finished', {
+    code: 'user_apps_grant_group_fallback',
+    attempted: appIds.length,
+    fromSnapshot: appIds.length - toWalk.length,
+    resolved: Object.keys(named).length + Object.keys(servedLocally).length,
+    failed: outcome.failed,
+    cancelled: outcome.cancelled,
+  });
+}
+
+/**
  * Load a user's apps and name the group behind each assignment.
  *
  * @param userId - The user whose apps to list, or `null` when no user is open.
@@ -144,7 +315,7 @@ function unresolvedGroupApps(apps: UserAppAssignment[]): UserAppAssignment[] {
  */
 export function useUserApps(
   userId: string | null,
-  { targetTabId, memberships, enabled = true }: UseUserAppsOptions,
+  { targetTabId, memberships, oktaOrigin, enabled = true }: UseUserAppsOptions,
 ): UseUserAppsResult {
   const { getUserApps, getAppGroupAssignments, runOperation } = useOktaApi({ targetTabId });
 
@@ -200,67 +371,34 @@ export function useUserApps(
     // Entering the pane later runs this; it is not dropped, and it is not redone.
     if (!enabled || !userId || pendingKey === '') return;
 
-    const latch = `${userId}:${pendingKey}`;
+    // The origin is in the latch because it now selects a data source: the same
+    // user and the same app set, read against a different org's snapshot, is a
+    // different question and must not be answered from the previous org's latch.
+    const latch = `${userId}:${oktaOrigin ?? ''}:${pendingKey}`;
     if (attemptedRef.current === latch) return;
     attemptedRef.current = latch;
 
-    const appIds = pendingKey.split(',');
-    const memberGroupIds = new Set(membershipIdsRef.current);
     let cancelled = false;
-
     setIsResolvingSources(true);
 
-    // ADR-0009: one tracked, cancellable operation rather than N loose promises,
-    // so the cost of a walk that is linear in app count is on screen while it is
-    // being spent.
-    apiRef.current
-      .runOperation<string, [string, string] | null>(
-        'Name the groups granting these apps',
-        appIds,
-        async (appId) => {
-          const groupIds = await getOrFetch<string[] | null>(
-            cacheKeys.appGroups(appId),
-            () => apiRef.current.getAppGroupAssignments(appId),
-            { ttl: TTL_LONG },
-          );
-          // `null` is "the walk failed", `[]` is "Okta says no groups". Neither
-          // is an answer about this user, and neither becomes one here.
-          if (!groupIds) return null;
-
-          const candidates = groupIds.filter((id) => memberGroupIds.has(id));
-          // Exactly one shared group names the grantor. Two or more narrows the
-          // candidates without resolving them, and choosing between them would be
-          // an attribution invented in the client (ADR-0020).
-          return candidates.length === 1 ? [appId, candidates[0]] : null;
-        },
-        { message: ({ completed, total }) => `Naming granting groups (${completed}/${total})` },
-      )
-      .then((outcome) => {
-        if (cancelled) return;
-        const named: Record<string, string> = {};
-        for (const result of outcome.results) {
-          if (result.status === 'fulfilled' && result.value) {
-            named[result.value[0]] = result.value[1];
-          }
+    resolveGrantingGroups({
+      appIds: pendingKey.split(','),
+      memberGroupIds: new Set(membershipIdsRef.current),
+      oktaOrigin,
+      api: apiRef.current,
+      onResolved: (named) => {
+        if (!cancelled && Object.keys(named).length > 0) {
+          setResolved((prev) => ({ ...prev, ...named }));
         }
-        setResolved((prev) => ({ ...prev, ...named }));
-        // Counts and outcomes only — never an app label, a group name or an href.
-        log.info('granting-group fallback finished', {
-          code: 'user_apps_grant_group_fallback',
-          attempted: outcome.total,
-          resolved: Object.keys(named).length,
-          failed: outcome.failed,
-          cancelled: outcome.cancelled,
-        });
-      })
-      .finally(() => {
-        if (!cancelled) setIsResolvingSources(false);
-      });
+      },
+    }).finally(() => {
+      if (!cancelled) setIsResolvingSources(false);
+    });
 
     return () => {
       cancelled = true;
     };
-  }, [enabled, userId, pendingKey]);
+  }, [enabled, userId, oktaOrigin, pendingKey]);
 
   const apps = useMemo(() => {
     if (!data) return [];

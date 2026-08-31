@@ -1,6 +1,6 @@
 # ADR-0051: A verb strip for a list rung
 
-- Status: Accepted (§1 amended by [ADR-0059](./0059-a-list-rungs-primary-is-its-page-verb.md))
+- Status: Accepted (§1 amended by [ADR-0061](./0061-a-list-rungs-primary-is-its-page-verb.md))
 - Date: 2026-08-28
 - Discharges: ADR-0039's deferral ("that refinement is for whichever ADR ships
   `GroupSelectionBar`, not this one") and ADR-0038's named extension point
@@ -34,7 +34,7 @@ The strip becomes `GroupsListActionBar`, an ADR-0039 wrapper around the shared
 
 ### 1. On a list rung, `primary` marks the open panel, not the important verb
 
-> **Amended by [ADR-0059](./0059-a-list-rungs-primary-is-its-page-verb.md).** This section
+> **Amended by [ADR-0061](./0061-a-list-rungs-primary-is-its-page-verb.md).** This section
 > generalised from one rung. Some list rungs _do_ have a page-level verb — the Rules rung's
 > **Load rules** / **Refresh**, without which the rung means nothing — and on those,
 > `primary` names that verb. The open panel states itself in its **label** instead

@@ -10,7 +10,7 @@
  * `RulesStatsGrid`, `RulesListPanel`) plus the `RuleImpactModal`. Deactivation is gated
  * behind that modal (Feature B).
  *
- * ## The rung's shape (ADR-0051, ADR-0059)
+ * ## The rung's shape (ADR-0051, ADR-0061)
  *
  * The strip is **first, and a direct child of the scrolling rung box**. That is
  * load-bearing rather than tidy: a `sticky` element only travels within its own parent's
@@ -526,7 +526,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
 
         No `actions` on either rung. On the list, Load/Refresh is the page-level verb and
         it lives in the strip now, where ADR-0030 §2 says it belongs and where it is the
-        `primary` this rung was missing (ADR-0059). On the detail rung there is no
+        `primary` this rung was missing (ADR-0061). On the detail rung there is no
         `actions` node either: `ruleIdentity` emits no `link`, because Okta has no
         per-rule route, and the honest rules-list link is stated as what it is inside the
         view rather than dressed as a deep link here.

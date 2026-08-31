@@ -15,6 +15,7 @@ import type { CoreApi } from './core';
 import type { AuditLogEntry } from './types';
 import type { EntityExport, CellValue } from '@/sidepanel/export/types';
 import { parseNextLink, nextPageUrl } from '@/shared/utils/oktaPagination';
+import { openingWalkEstimate, refinedWalkEstimate } from '@/shared/scheduler/planEstimate';
 import { parseOktaList } from '@/shared/schemas/okta';
 import {
   generateCSV,
@@ -85,44 +86,64 @@ export function createExportEngineOperations(coreApi: CoreApi) {
     resolvedEndpoint: string,
     onPage?: (rowsSoFar: number) => void,
   ): Promise<FetchAllResult<Row>> => {
-    const rows: Row[] = [];
     const cap = descriptor.maxRows ?? DEFAULT_MAX_ROWS;
     const context = `EXPORT ${descriptor.id}`;
-    let fetched = 0;
-    let dropped = 0;
-    let capped = false;
-    let nextUrl: string | null = resolvedEndpoint;
 
-    while (nextUrl) {
-      coreApi.checkCancelled();
-      const response = await coreApi.makeApiRequest(nextUrl, {
-        method: 'GET',
-        priority: 'low',
-        reason: `Export: ${descriptor.displayName}`,
-      });
-      if (!response.success) {
-        throw new Error(response.error || `Export fetch failed (${descriptor.id})`);
-      }
+    // An export is the extension's longest walk and the one whose length is
+    // least knowable in advance: the filter decides how many rows match. So it
+    // declares a floor of one page and raises it as each page's `Link` header
+    // promises another, settling to an exact count when the walk ends
+    // (ADR-0060 §1). No probe request is spent to learn the total.
+    return coreApi.withPlan(
+      `Export: ${descriptor.displayName}`,
+      [{ endpoint: resolvedEndpoint, method: 'GET', estimate: openingWalkEstimate() }],
+      async (plan) => {
+        const rows: Row[] = [];
+        let fetched = 0;
+        let dropped = 0;
+        let capped = false;
+        let pages = 0;
+        let nextUrl: string | null = resolvedEndpoint;
 
-      const rawLength = Array.isArray(response.data) ? response.data.length : 0;
-      fetched += rawLength;
-      const page = parseOktaList(descriptor.schema, response.data, context) as Row[];
-      dropped += rawLength - page.length;
-      rows.push(...page);
-      onPage?.(rows.length);
-      coreApi.callbacks.onResult?.({ message: `Loaded ${rows.length} rows…`, type: 'info' });
+        while (nextUrl) {
+          coreApi.checkCancelled();
+          const response = await coreApi.makeApiRequest(nextUrl, {
+            method: 'GET',
+            priority: 'low',
+            reason: `Export: ${descriptor.displayName}`,
+            planId: plan.planId,
+          });
+          if (!response.success) {
+            throw new Error(response.error || `Export fetch failed (${descriptor.id})`);
+          }
+          pages++;
 
-      if (rows.length >= cap) {
-        capped = true;
-        rows.length = cap;
-        break;
-      }
-      // Guarded: stops on an empty page or a non-advancing rel="next" cursor,
-      // keyed off the RAW page length so an all-malformed page still advances.
-      nextUrl = nextPageUrl(nextUrl, response.headers?.link, rawLength);
-    }
+          const rawLength = Array.isArray(response.data) ? response.data.length : 0;
+          fetched += rawLength;
+          const page = parseOktaList(descriptor.schema, response.data, context) as Row[];
+          dropped += rawLength - page.length;
+          rows.push(...page);
+          onPage?.(rows.length);
+          coreApi.callbacks.onResult?.({ message: `Loaded ${rows.length} rows…`, type: 'info' });
 
-    return { rows, fetched, dropped, capped };
+          if (rows.length >= cap) {
+            capped = true;
+            rows.length = cap;
+            break;
+          }
+          // Guarded: stops on an empty page or a non-advancing rel="next" cursor,
+          // keyed off the RAW page length so an all-malformed page still advances.
+          nextUrl = nextPageUrl(nextUrl, response.headers?.link, rawLength);
+          plan.refine(resolvedEndpoint, refinedWalkEstimate(pages, nextUrl !== null));
+        }
+
+        // Hitting the row cap ends the walk too, and the estimate has to agree
+        // — otherwise the bar would keep promising pages the cap just cancelled.
+        if (capped) plan.refine(resolvedEndpoint, refinedWalkEstimate(pages, false));
+
+        return { rows, fetched, dropped, capped };
+      },
+    );
   };
 
   /**

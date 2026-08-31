@@ -12,7 +12,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useScheduler } from '../contexts/SchedulerContext';
 import { useProgress } from '../contexts/ProgressContext';
-import type { SchedulerStatus } from '../../shared/scheduler/types';
+import type { SchedulerStatus, BucketState } from '../../shared/scheduler/types';
+import type { PlanSummary } from '../../shared/scheduler/plan';
 
 /** Display-ready, already-merged activity state consumed by `ActivityBarView`. */
 export interface ActivityView {
@@ -62,6 +63,25 @@ export interface ActivityView {
   isCancelling: boolean;
   /** Whether there is anything to cancel (active operation or non-empty queue). */
   canCancel: boolean;
+  /**
+   * Every rate-limit bucket the scheduler is tracking, most-pressured first
+   * (ADR-0060). Empty until Okta has answered at least once.
+   */
+  buckets: BucketState[];
+  /** The org-learned percentage at which the scheduler starts backing off. */
+  lowThresholdPercent: number;
+  /**
+   * Every operation that has declared a request budget and not yet finished,
+   * oldest first (ADR-0060). This is the scheduler's own ledger rather than the
+   * panel's progress state, which is why several concurrent operations show as
+   * several rows where the progress bar can only ever describe one.
+   */
+  operations: PlanSummary[];
+  /**
+   * Shared clock tick in epoch milliseconds, so every countdown in the bar moves
+   * together instead of each row owning a timer.
+   */
+  now: number;
 }
 
 /** Value returned by {@link useActivityBar}. */
@@ -70,7 +90,29 @@ export interface UseActivityBar {
   view: ActivityView;
   /** Stop the current operation and drain the scheduler queue. */
   cancel: () => void;
+  /**
+   * Stop one declared operation, leaving the rest of the queue alone. The
+   * requests it has already dispatched are left to settle: they have spent
+   * their budget, so killing them would cost the quota and save nothing.
+   */
+  cancelOperation: (planId: string) => void;
 }
+
+/**
+ * Fallback for the "low headroom" line, used only before the first scheduler
+ * state arrives. Matches `DEFAULT_CONFIG.minRemainingThreshold` so the bar and
+ * the scheduler never disagree even during that first render.
+ */
+const DEFAULT_LOW_THRESHOLD_PERCENT = 10;
+
+/**
+ * Stable empty array for the no-state case. A fresh `[]` each render would give
+ * every consumer a new identity on every clock tick.
+ */
+const EMPTY_BUCKETS: BucketState[] = [];
+
+/** Stable empty array for the no-state case, for the same reason. */
+const EMPTY_PLANS: PlanSummary[] = [];
 
 const STATUS_COLOR: Record<SchedulerStatus, string> = {
   idle: 'var(--color-success)',
@@ -112,7 +154,7 @@ function cooldownClock(ms: number): string {
  * operation cancellation token and clears the background queue.
  */
 export function useActivityBar(): UseActivityBar {
-  const { state, metrics, clearQueue } = useScheduler();
+  const { state, metrics, clearQueue, cancelPlan } = useScheduler();
   const { progress, cancel: cancelOperation } = useProgress();
 
   // A single ticking clock. Elapsed and cooldown are derived purely from `now`
@@ -120,7 +162,14 @@ export function useActivityBar(): UseActivityBar {
   // React Compiler would otherwise refuse to memoize around).
   const [now, setNow] = useState(() => Date.now());
   const cooldownEndsAt = state?.cooldownEndsAt ?? null;
-  const ticking = (progress.isLoading && Boolean(progress.startTime)) || cooldownEndsAt !== null;
+  const buckets = state?.buckets ?? EMPTY_BUCKETS;
+  // Anything with live counts wants the clock: a running operation, the global
+  // cooldown, or any single gated bucket — the last of which can be armed while
+  // `cooldownEndsAt` reports a different, later gate.
+  const ticking =
+    (progress.isLoading && Boolean(progress.startTime)) ||
+    cooldownEndsAt !== null ||
+    buckets.some((bucket) => bucket.gatedUntil !== null);
 
   useEffect(() => {
     if (!ticking) return;
@@ -141,6 +190,17 @@ export function useActivityBar(): UseActivityBar {
     void clearQueue();
   }, [cancelOperation, clearQueue]);
 
+  // Deliberately does not touch the shared progress token: that token is global,
+  // so tripping it here would stop every other operation too — the exact thing
+  // this control exists to avoid. The scheduler rejecting that plan's requests
+  // is what unwinds its loop.
+  const cancelSingleOperation = useCallback(
+    (planId: string) => {
+      void cancelPlan(planId);
+    },
+    [cancelPlan],
+  );
+
   // Computed plainly rather than via useMemo: this bar re-renders on every clock
   // tick anyway, and `progress.current` trips the React Compiler's ref-access
   // heuristic when placed in a manual dependency array.
@@ -155,10 +215,20 @@ export function useActivityBar(): UseActivityBar {
   const etaLabel =
     operationActive && remaining > 0 && done > 2 ? `~${clock(remaining)} left` : undefined;
 
+  // "Low" is the line the *scheduler* backs off at, not a number of the bar's
+  // own. The org's warning threshold is learned in the background and published
+  // on the state; reading it here is what stops the bar showing comfortable
+  // headroom while the scheduler is already cooling down.
+  const lowThreshold = state?.minRemainingThresholdPercent ?? DEFAULT_LOW_THRESHOLD_PERCENT;
   const rl = state?.rateLimitInfo ?? null;
-  const rateLimit = rl
-    ? { remaining: rl.remaining, limit: rl.limit, low: (rl.remaining / rl.limit) * 100 <= 20 }
-    : null;
+  const rateLimit =
+    rl && rl.limit > 0
+      ? {
+          remaining: rl.remaining,
+          limit: rl.limit,
+          low: (rl.remaining / rl.limit) * 100 <= lowThreshold,
+        }
+      : null;
 
   const queueLength = state?.queueLength ?? 0;
 
@@ -187,7 +257,11 @@ export function useActivityBar(): UseActivityBar {
     failed: metrics?.failedRequests ?? 0,
     isCancelling: Boolean(progress.isCancelling),
     canCancel: (operationActive || queueLength > 0) && !progress.isCancelling,
+    buckets,
+    lowThresholdPercent: lowThreshold,
+    operations: state?.plans ?? EMPTY_PLANS,
+    now,
   };
 
-  return { view, cancel };
+  return { view, cancel, cancelOperation: cancelSingleOperation };
 }

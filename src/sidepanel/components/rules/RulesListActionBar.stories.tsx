@@ -18,7 +18,7 @@ const meta = {
           'list — and nothing docked, so all of it scrolled away together. The three analysis ' +
           'cards are now panels this strip toggles, the search field is its `subRow`, and the ' +
           'filter chips live behind that field.\n\n' +
-          '**Where `primary` goes (ADR-0059).** ADR-0051 spends `primary` on which inline panel ' +
+          '**Where `primary` goes (ADR-0061).** ADR-0051 spends `primary` on which inline panel ' +
           'is open, reasoning that a list rung has no page-level verb. This rung is the ' +
           'counter-example: rules do not load on mount, so **Load rules** / **Refresh** is the ' +
           'one thing that has to happen before the rung means anything. It takes `primary` here, ' +
@@ -124,7 +124,7 @@ export const Loading: Story = {
 };
 
 /**
- * The ADR-0059 assertion. Opening a panel changes what the control **says**, not just
+ * The ADR-0061 assertion. Opening a panel changes what the control **says**, not just
  * how it is painted — so the state survives a screen reader, and the closer is pulled
  * into the row where it cannot hide behind **More**.
  */

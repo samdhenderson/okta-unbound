@@ -940,13 +940,13 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Verified:** 2026-08-31
 - **Files:** `src/sidepanel/components/groups/GroupsListActionBar.tsx`,
   `src/sidepanel/components/groups/GroupsListActionBar.stories.tsx`,
-  `docs/adr/0059-a-list-rungs-primary-is-its-page-verb.md`
+  `docs/adr/0061-a-list-rungs-primary-is-its-page-verb.md`
 - **Problem:** Sam, on the strip that ADR-0051 shipped: _"groups tab has no blue
   buttons and it should."_ With no inline panel open — the state the rung rests
   in — every control on it is `secondary`, so six identically-weighted buttons
   sit above the list with nothing saying where to start.
 
-  `ADR-0059` fixed the _mechanism_ while building the Rules strip: `primary` now
+  `ADR-0061` fixed the _mechanism_ while building the Rules strip: `primary` now
   names a rung's page-level verb, and an open panel states itself in its label
   (`Cross-search (5)` → `Hide cross-search`) rather than in a colour a screen
   reader cannot read. It deliberately did **not** convert this strip, because
@@ -962,7 +962,7 @@ block says they mean — same vocabulary, one definition, defined there.
   Rules, so this may be a genuine "no") and _Export list_, which acts on the whole
   filtered rung and is the closest thing to a page-level verb the strip has today.
 
-- **Done when:** either `GroupsListActionBar` carries a `primary` under ADR-0059's
+- **Done when:** either `GroupsListActionBar` carries a `primary` under ADR-0061's
   rule with the choice justified in its docblock, **or** an explicit note in that
   docblock records that this rung has no page-level verb and therefore ships with
   no `primary` on purpose — so the next reader does not re-open the question. In
@@ -974,7 +974,7 @@ block says they mean — same vocabulary, one definition, defined there.
   accessible name, so `GroupsTab.test.tsx` queries for `Cross-search` and
   `Bulk actions` need checking against the open state, not only the closed one.
 - **Status:** open
-- **Related:** ADR-0059, ADR-0051 §1, ADR-0038
+- **Related:** ADR-0061, ADR-0051 §1, ADR-0038
 
 ---
 

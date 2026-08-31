@@ -221,6 +221,9 @@ export function useUserDetailPanes({
   const appsResult = useUserApps(userId, {
     targetTabId: targetTabId ?? null,
     memberships,
+    // Scopes the org snapshot the granting-group fallback consults before it
+    // walks anything — see `useUserApps`' "The snapshot answers first".
+    oktaOrigin,
     enabled: enabled && pane === 'apps',
   });
 

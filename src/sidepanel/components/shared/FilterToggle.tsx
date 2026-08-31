@@ -27,7 +27,7 @@
  * the button's content, so the accessible name computed as `Filters2` — a screen reader
  * was read a number with nothing saying what it counted. The badge is now `aria-hidden`
  * and the count is stated in an `aria-label` (`Filters, 2 applied`), which is the same
- * correction ADR-0059 makes to the strip's open-panel marker one level up: state it,
+ * correction ADR-0061 makes to the strip's open-panel marker one level up: state it,
  * do not decorate it.
  */
 import React from 'react';

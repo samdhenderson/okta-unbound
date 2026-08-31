@@ -14,7 +14,7 @@
  * its `subRow`, and the filter chips live behind that field's `FilterToggle`. What is
  * left above the list is the strip and the list.
  *
- * ## The blue button, and where `primary` goes (ADR-0059)
+ * ## The blue button, and where `primary` goes (ADR-0061)
  *
  * ADR-0051 spends `primary` on *which inline panel is open*, on the reasoning that a list
  * rung has no page-level verb — its verbs are gated by a selection, and which one matters
@@ -161,7 +161,7 @@ const RulesListActionBar: React.FC<RulesListActionBarProps> = ({
   const actions: ActionDescriptor[] = [
     {
       // The rung's page-level verb, and the reason this strip has a `primary` at all
-      // (ADR-0059). `primary` implies `pinned`, so it never leaves the row.
+      // (ADR-0061). `primary` implies `pinned`, so it never leaves the row.
       id: 'load',
       label: hasRules ? 'Refresh' : 'Load rules',
       icon: 'refresh',

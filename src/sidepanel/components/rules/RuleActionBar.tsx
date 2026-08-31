@@ -27,7 +27,7 @@
  *
  * ## `primary`
  *
- * This is a **detail** rung, so ADR-0059's list-rung rule does not apply and ADR-0051's
+ * This is a **detail** rung, so ADR-0061's list-rung rule does not apply and ADR-0051's
  * does not either — `primary` names the page's one main verb, as ADR-0030 always said.
  * Here that is *Preview impact*: the thing an admin opens a rule's page to do. A rule that
  * targets no groups has no population to compute a change for, so the verb is omitted and
