@@ -166,14 +166,18 @@ describe('ensureRateLimitThreshold', () => {
 
   it('never rejects, so an inbound request is never failed by it', async () => {
     scheduleRequest.mockRejectedValue(new Error('boom'));
-    const rejections: unknown[] = [];
-    const capture = (event: PromiseRejectionEvent) => rejections.push(event.reason);
-    globalThis.addEventListener?.('unhandledrejection', capture as EventListener);
 
-    expect(() => ensureRateLimitThreshold(scheduler(), TAB_ID)).not.toThrow();
+    // Returns void synchronously — the message handler cannot await it and so
+    // cannot be failed by it. The rejected probe inside is swallowed rather than
+    // orphaned, which vitest enforces for us: an unhandled rejection surfacing
+    // from this file after `settle()` fails the run.
+    expect(ensureRateLimitThreshold(scheduler(), TAB_ID)).toBeUndefined();
     await settle();
 
-    globalThis.removeEventListener?.('unhandledrejection', capture as EventListener);
-    expect(rejections).toEqual([]);
+    // It still recorded the failure, so it will not re-probe this session.
+    expect(setMinRemainingThreshold).not.toHaveBeenCalled();
+    ensureRateLimitThreshold(scheduler(), TAB_ID);
+    await settle();
+    expect(scheduleRequest).toHaveBeenCalledTimes(1);
   });
 });
