@@ -2746,7 +2746,7 @@ affects every scroll box in the app, on every platform.
   a 429.
 - **Risk:** Low to fix. The behavior change is that the scheduler starts seeing
   headers it currently cannot, which is the point.
-- **Status:** done:#107
+- **Status:** done:#108
 - **Related:** `D-007a`, `D-007c`
 
 ### D-065 · `fetchAndCacheAllGroupRules` walks a whole endpoint with no boundary schema
@@ -3334,7 +3334,91 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
   happens to hard-code the old string before swapping.
 - **Status:** open
 
-### D-083 · `oktaGroupRuleSchema` rejects the `INVALID` status Okta reports
+### D-083 · The docked strip and the header merge into one surface with two content margins
+
+- **Verified:** 2026-08-30 — measured in the capture rig (Chrome, real
+  scroll-driven timeline) on the Groups list rung at 400px and 840px, and
+  visible in the same shot at both widths.
+- **Problem:** At full merge the header and the action strip are one continuous
+  pinned surface with a single bottom edge — that is the whole point of the
+  merge — but their contents do not line up. `PageHeader`'s row is padded
+  `px-(--sp-gutter)`, so the title sits at the column gutter; `ActionBar`'s row
+  is padded `p-2` **inside** a band that is itself inset by that same gutter, so
+  the verbs and the search field sit at gutter + 8px. Measured docked at 400px:
+  title `x=16`, first verb `x=24`, search field `x=24`; at 840px, `x=20` against
+  `x=28`. The 8px is constant at every density, because the row's padding is a
+  raw `p-2` rather than one of ADR-0048's spacing roles.
+
+  It is filed as debt rather than cosmetics because `ActionBar`'s own module
+  header states the opposite as a design guarantee — "the row keeps the column's
+  padding whether the band is inside its margins or past them, which is also
+  what keeps the verbs aligned with the header's own content once the two have
+  become one surface." The code has never done that. So either the doc or the
+  padding is wrong, and a reader trusting the doc will not go and measure.
+
+  Affects every docked strip, not just Groups: `UserActionBar` merges through
+  the same band.
+
+- **Done when:** docked, the strip's first verb and its `subRow` share a left
+  edge with the header's title at every density, and `ActionBar`'s module note
+  either describes what the code does or is deleted. The fix has to hold in both
+  states — the strip is a card inset in the gutter at rest and full-bleed when
+  docked, and the row must not shift horizontally between them, since holding
+  the buttons still through the merge is the reason the animated chrome lives on
+  a `::before` in the first place. Check against
+  `ActionBar.stories.tsx`'s docking stories and `useActionOverflow.test.ts` —
+  the fit arithmetic reads the row's padding at runtime (`readPx` on
+  `padding-inline-start`/`-end`), so changing it changes the overflow budget and
+  must not be hard-coded anywhere.
+- **Risk:** Low. Chrome-only change to one row's padding, but it moves the
+  overflow budget, so the split can change at narrow widths and wants a look at
+  360px before and after.
+- **Status:** open
+- **Related:** ADR-0032 (the sticky stack and the merge), ADR-0048 (the spacing
+  roles the raw `p-2` predates), `useActionOverflow` (reads the row's padding)
+
+### D-084 · The granting-group fallback's walked app-group rows still die with the panel
+
+- **Category:** perf
+- **Priority:** P2
+- **Size:** M
+- **Files:** `src/sidepanel/hooks/useUserApps.ts` (`resolveGrantingGroups`),
+  `src/sidepanel/cache/appGroupSnapshot.ts` (the read half, which exists),
+  `src/shared/snapshot/snapshotSync.ts` (`APP_GROUPS_SPEC`, `runShardedWalk`'s
+  sweep), `src/shared/snapshot/orgSnapshotStore.ts` (`upsertMany`, `sweepStale`)
+- **Verified:** 2026-08-31 — filed by the ADR-0059 work while wiring the read
+  half; the sweep interaction was read directly in `runShardedWalk`, not assumed.
+- **Problem:** ADR-0059 made the fallback read app→group assignments out of the
+  org snapshot before walking anything, which covers `GROUP_PUSH` apps. Every
+  **other** app still walks `/api/v1/apps/{id}/groups`, and that result lands
+  only in the panel-owned in-memory `entityCache` at `TTL_LONG`. Close the side
+  panel and it is gone; the next visit to the same user's Apps pane re-spends one
+  request per unresolved app against the `/api/v1/apps` bucket — the same bucket
+  the report that prompted ADR-0059 was exhausting.
+- **Why it is not just "write them to the snapshot":** `runShardedWalk` stamps
+  every row it writes with the walk's mark and then **sweeps** anything not
+  re-marked. A row written opportunistically by the panel, for an app the
+  fan-out's shard list does not contain, is by construction never re-marked — so
+  the next `appGroups` walk would delete it. Widening the shard list to every app
+  instead is the opposite trade: it turns a fan-out over push-enabled apps into
+  one over the whole inventory, which is a much larger bill than the one being
+  saved.
+- **Done when:** a walked app-group result survives the panel closing, and a
+  subsequent sharded walk provably does not delete it. Whatever the mechanism —
+  a separate collection with its own retention, an exemption in the sweep keyed
+  on how a row was written, or a TTL'd side store — the sweep interaction is the
+  thing that has to be shown, not argued. A test that writes a row by the panel
+  path, runs a full `runShardedWalk` that does not include that app, and asserts
+  the row is still there.
+- **Risk:** Medium. It touches the sweep, which is the mechanism that keeps the
+  snapshot from accumulating rows for deleted entities — an exemption written
+  loosely would make deletions invisible in a collection whose whole job is to
+  reflect the org.
+- **Status:** open
+- **Related:** ADR-0040 (the snapshot and its sweep), ADR-0059 (the read half
+  that exists), ADR-0020 (why absence is not an empty answer)
+
+### D-085 · `oktaGroupRuleSchema` rejects the `INVALID` status Okta reports
 
 - **Category:** correctness
 - **Priority:** P1
@@ -3381,7 +3465,7 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
 - **Status:** open
 - **Related:** `D-065` (introduced the drop), `D-061`, `D-050`, `D-078`
 
-### D-084 · `RateLimitDetector.parseHeaders` has no `NaN` guard, so it fails open
+### D-086 · `RateLimitDetector.parseHeaders` has no `NaN` guard, so it fails open
 
 - **Category:** correctness
 - **Priority:** P2
@@ -3407,7 +3491,7 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
 - **Status:** open
 - **Related:** `D-064`, `D-007c`
 
-### D-085 · The content script forwards the whole response header bag
+### D-087 · The content script forwards the whole response header bag
 
 - **Category:** security
 - **Priority:** P3
@@ -3433,7 +3517,7 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
 - **Status:** open
 - **Related:** `D-064`
 
-### D-086 · Two stale comments name `groupDiscovery` as the schema-less rules walk
+### D-088 · Two stale comments name `groupDiscovery` as the schema-less rules walk
 
 - **Category:** standards
 - **Priority:** P3
@@ -3454,7 +3538,7 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
 - **Status:** open
 - **Related:** `D-065`, `D-055`
 
-### D-087 · `useRuleConsolidation` never clears `RulesCache` after writing rules
+### D-089 · `useRuleConsolidation` never clears `RulesCache` after writing rules
 
 - **Category:** correctness
 - **Priority:** P2
@@ -3477,7 +3561,7 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
 - **Status:** open
 - **Related:** `I-013`
 
-### D-088 · `MAX_RULE_NAME` is declared twice
+### D-090 · `MAX_RULE_NAME` is declared twice
 
 - **Category:** cleanup
 - **Priority:** P3
@@ -3494,7 +3578,7 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
 - **Status:** open
 - **Related:** `I-013`
 
-### D-089 · `GroupDetailView.tsx` is 514 lines, well over the ~300-line bar
+### D-091 · `GroupDetailView.tsx` is 514 lines, well over the ~300-line bar
 
 - **Category:** cleanup
 - **Priority:** P3

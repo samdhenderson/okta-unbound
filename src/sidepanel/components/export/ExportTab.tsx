@@ -24,16 +24,22 @@ import PresetControls from './PresetControls';
 import ExportPreviewTable from './ExportPreviewTable';
 
 /**
- * A one-shot request to open the Export tab pre-scoped to a specific descriptor
- * and context entity (e.g. from the group Overview's "Export Members").
+ * A one-shot request to open the Export tab pre-scoped to a specific descriptor, and
+ * optionally to a context entity (e.g. from the group Overview's "Export Members").
+ *
+ * The context is optional because not every descriptor has one. A whole-org export —
+ * `group-rules`, reached from the Rules rung's *Export rules* verb — is scoped by nothing
+ * but itself, and seeding it with a context entity would be inventing a scope the
+ * descriptor does not have. Absent context selects the descriptor and clears the context,
+ * which is the state the tab opens in when a reader picks that entity by hand.
  */
 export interface ExportRequest {
   /** Descriptor id to select (e.g. `'group-memberships'`). */
   descriptorId: string;
-  /** The context entity's Okta id (e.g. the group id). */
-  contextId: string;
+  /** The context entity's Okta id (e.g. the group id). Omitted for whole-org descriptors. */
+  contextId?: string;
   /** The context entity's display label (folded into the export filename). */
-  contextLabel: string;
+  contextLabel?: string;
 }
 
 /** Props for {@link ExportTab}. */
@@ -117,11 +123,18 @@ const ExportTab: React.FC<ExportTabProps> = ({
       handledExportRef.current = null;
       return;
     }
-    const key = `${exportRequest.descriptorId}:${exportRequest.contextId}`;
+    const key = `${exportRequest.descriptorId}:${exportRequest.contextId ?? ''}`;
     if (handledExportRef.current === key) return;
     handledExportRef.current = key;
     selectEntity(exportRequest.descriptorId);
-    setContext({ id: exportRequest.contextId, label: exportRequest.contextLabel });
+    setContext(
+      exportRequest.contextId
+        ? {
+            id: exportRequest.contextId,
+            label: exportRequest.contextLabel ?? exportRequest.contextId,
+          }
+        : null,
+    );
     onExportRequestConsumed?.();
   }, [exportRequest, selectEntity, setContext, onExportRequestConsumed]);
 

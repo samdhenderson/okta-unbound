@@ -23,12 +23,39 @@ Entry format:
 work: type-check, lint (0 errors / 164 pre-existing warnings), `format:check`,
 `test:coverage`, `knip:circular`, `lint:control-chars`, `lint:cited-paths`, and
 `test:storybook` (170 files, 1223 tests, 1 skipped).
-**Items worked:** `I-013`, `D-065`, `D-064`
+**Items worked:** `I-013`, `D-065`, `D-064` — but see the collision note below:
+`D-064` was fixed independently in #108 while this branch was open, and this
+PR no longer carries that fix.
 **PR:** https://github.com/samdhenderson/okta-unbound/pull/107
 **Backlog after:** 70 open of 139 total — 10 IMPROVEMENTS, 60 DEBT, 1 blocked,
-6 `research:awaiting-review`. Seven new items filed tonight (`D-083`–`D-089`,
-`I-030`), none folded into an existing diff.
+6 `research:awaiting-review`. Seven new items filed tonight (`D-085`–`D-091`,
+`I-032`), none folded into an existing diff.
 **Notes:**
+
+**`D-064` collided with #108, and the step-2 check is why it wasn't caught.**
+This branch fixed `D-064` — the `!response.ok` return in `apiRequest.ts` dropping
+its rate-limit headers — and #108 fixed the same defect, the same way, in the same
+line, from `worktree-app-api-efficiency-and-ratelimit`. #108 landed first, so on
+resolving this branch against `main` the `apiRequest.ts` and `index.test.ts`
+conflicts were settled by taking `main`'s side wholesale: the fix is already
+there, and `main` had already retargeted the `BUG (pinned)` case in
+`index.test.ts` to assert the headers survive. `D-064`'s ledger status is now
+`done:#108`, not `done:#107`.
+
+One thing this branch had that `main` did not was kept: the `apiRequest.test.ts`
+case that drives a real 429 through a real `RateLimitDetector` and asserts
+`isLimitExceeded()` and `getSecondsUntilReset() === 60`. `main` proves the headers
+survive the return; this proves the consumer acts on them. It is the whole of
+`D-064`'s remaining contribution to this PR.
+
+**The step-2 open-PR check reported zero, and that was wrong.** The entry above
+records `list_pull_requests --state open` coming back empty via the GitHub MCP
+tools, with `gh` unavailable. #108's branch already existed and `D-064` was
+already marked `claimed:worktree-app-api-efficiency-and-ratelimit` in `main`'s
+own `DEBT.md` — which this session read, and which alone should have held the
+item back. The MCP substitution for `gh` is not equivalent to it here, and the
+`claimed:` mark in the ledger was the cheaper signal that got past us. Filed as
+its own concern rather than fixed in this diff.
 
 **Open PRs at step 2: zero.** Nothing claimed, nothing contended, no stop
 condition. `gh` is unavailable in this environment but the GitHub MCP tools
@@ -50,7 +77,7 @@ condition "if Sam starts v2, the rule goes back". Sam's v2 landed and merged
 does not apply.
 
 **`D-065` introduced a silent drop, and it is filed rather than patched —
-`D-083`. Read this before merging.** Validating the org-wide rules walk means a
+`D-085`. Read this before merging.** Validating the org-wide rules walk means a
 row failing `oktaGroupRuleSchema` is now discarded. That schema admits only
 `ACTIVE | INACTIVE`, but Okta's `GroupRuleStatus` has a third value, `INVALID`
 — the status a rule takes when it stops being evaluable, e.g. its expression
@@ -65,13 +92,13 @@ schema alone would let it flow as a lie in the type system; the honest fix
 makes the compiler demand a decision at every status branch, which is
 architecturally significant enough that a reviewer could reasonably disagree
 with it after the code exists (`CLAUDE.md`'s plan-and-approval gate). It is
-`D-083` at P1, and it is the one thing in this PR that wants Sam's eye before
+`D-085` at P1, and it is the one thing in this PR that wants Sam's eye before
 the merge rather than after.
 
 **Reviews.** `ui-reviewer` and `security-logging-reviewer` both ran read-only
 against the combined diff and both returned **no must-fix**. Four advisory
-notes were filed rather than folded in (`D-085` header allow-list, `D-089`
-`GroupDetailView` line count, plus `D-084`/`D-087` from the writers). One
+notes were filed rather than folded in (`D-087` header allow-list, `D-091`
+`GroupDetailView` line count, plus `D-086`/`D-089` from the writers). One
 advisory is recorded and **not** filed: `ui-reviewer` flagged
 `CreateFeedingRuleModal`'s use of `text-danger-text` for a stated consequence
 rather than an error as a judgment call worth a second look — it violates no

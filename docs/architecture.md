@@ -34,6 +34,17 @@ Side panel (useOktaApi)  →  Background (ApiScheduler: rate limit, retry, backo
   group/user/app or the Okta origin); it carries no raw Okta API traffic.
 - `ApiScheduler` (`shared/scheduler/apiScheduler.ts`): priority queue, concurrency
   cap (5), cooldowns, exponential backoff, rate-limit detection.
+- **Rate limiting is per Okta bucket** (ADR-0059). Okta quotas are bucketed by
+  endpoint family, so `RateLimitDetector` keys observations by
+  `bucketOf(endpoint)` (`/api/v1/{resource}`) and the scheduler holds one gate
+  per bucket rather than one cooldown for everything — an exhausted
+  `/api/v1/apps` does not stall a `/api/v1/groups` lookup with its own budget.
+  A request whose bucket Okta has not reported on yet falls back to the
+  most-restrictive observation anywhere. The cooldown _threshold_ is the org's
+  own `warning-threshold` less 5 points (`shared/scheduler/rateLimitSettings.ts`,
+  probed once per org per browser session by `background/rateLimitThreshold.ts`),
+  falling back to the configured 10% whenever the org does not give a usable
+  answer.
 - **Cancellation** is one signal end to end (ADR-0008):
   `OperationCancelledError` + `createCancellation()` (`shared/scheduler/cancellation.ts`).
   `ProgressContext` owns the current operation's token; `useOktaApi.checkCancelled`

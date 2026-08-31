@@ -216,12 +216,13 @@ export function createUserOperations(coreApi: CoreApi) {
     await coreApi.runOperation(
       'Load user details',
       userIds,
-      async (userId) => {
+      async (userId, _index, planId) => {
         try {
           const response = await coreApi.makeApiRequest(`/api/v1/users/${userId}`, {
             method: 'GET',
             priority: 'low',
             reason: 'Load user details',
+            planId,
           });
           if (response.success && response.data) {
             userDetailsMap.set(userId, response.data);
@@ -235,7 +236,11 @@ export function createUserOperations(coreApi: CoreApi) {
           }
         }
       },
-      { message: (p) => `Loading user details (${p.completed}/${p.total})` },
+      {
+        message: (p) => `Loading user details (${p.completed}/${p.total})`,
+        // One request per user, exactly — the cost is the list length.
+        plan: { endpoint: '/api/v1/users', method: 'GET' },
+      },
     );
 
     return userDetailsMap;
@@ -267,12 +272,13 @@ export function createUserOperations(coreApi: CoreApi) {
     await coreApi.runOperation(
       'MFA scan',
       userIds,
-      async (userId) => {
+      async (userId, _index, planId) => {
         try {
           const response = await coreApi.makeApiRequest(`/api/v1/users/${userId}/factors`, {
             method: 'GET',
             priority: 'low',
             reason: 'MFA scan',
+            planId,
           });
           const rawFactors = response.success ? response.data : [];
           const validated = parseOktaList(
@@ -297,7 +303,12 @@ export function createUserOperations(coreApi: CoreApi) {
           resultMap.set(userId, summarizeFactors(userId, []));
         }
       },
-      { message: (p) => `Scanned ${p.completed}/${p.total} members` },
+      {
+        message: (p) => `Scanned ${p.completed}/${p.total} members`,
+        // One /factors call per member — the linear cost ADR-0031 insists is
+        // deliberate, now priced on screen while it is being spent.
+        plan: { endpoint: '/api/v1/users', method: 'GET' },
+      },
     );
 
     return resultMap;

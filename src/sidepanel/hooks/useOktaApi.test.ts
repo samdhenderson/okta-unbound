@@ -8,7 +8,16 @@ const mockRuntimeSendMessage = vi.fn();
 const mockTabsSendMessage = vi.fn();
 globalThis.chrome = {
   runtime: {
-    sendMessage: mockRuntimeSendMessage,
+    // Plan-ledger control messages (ADR-0060) are answered inline rather than
+    // from the scripted queue below. They ride the same channel as API requests
+    // but are not requests, and letting them consume a `mockResolvedValueOnce`
+    // would desynchronise every scripted sequence in this file. Keeping them off
+    // it also preserves what `mockRuntimeSendMessage`'s call counts have always
+    // meant: Okta API requests, not runtime chatter.
+    sendMessage: (message: { action?: string }) =>
+      message?.action === 'updateOperationPlan'
+        ? Promise.resolve({ success: true })
+        : mockRuntimeSendMessage(message),
   },
   tabs: {
     sendMessage: mockTabsSendMessage,
@@ -315,6 +324,9 @@ describe('useOktaApi', () => {
         tabId: targetTabId,
         priority: 'normal',
         reason: 'Load all group members',
+        // The walk declares a plan, so every page carries its id. Matched by
+        // shape, not value — the id is a fresh UUID per operation.
+        planId: expect.any(String),
       });
     });
 
@@ -394,6 +406,9 @@ describe('useOktaApi', () => {
         tabId: targetTabId,
         priority: 'low',
         reason: 'MFA scan',
+        // The scan declares a plan (one /factors call per member), so every
+        // request carries its id. Matched by shape — the id is a fresh UUID.
+        planId: expect.any(String),
       });
       expect(map.get('alice')).toMatchObject({
         enrolled: true,

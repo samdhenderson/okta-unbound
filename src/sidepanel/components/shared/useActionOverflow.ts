@@ -75,6 +75,22 @@
  * Publishing it on the band instead does not error, it just silently mistimes
  * the merge, which is why this is written down rather than left to be inferred.
  *
+ * It is also read from **style**, not from the two elements' rects, and that is
+ * the difference between a merge that works and one that works until you touch
+ * it. `bandRect.top - sentinelRect.top` is the gap while the strip is in flow
+ * and is *how far you have scrolled* the moment the strip sticks — the sentinel
+ * keeps travelling, the band does not. Every re-publish while docked (tick a
+ * row, open the tier, drag the panel, come back to a scrolled rung) therefore
+ * wrote a scroll offset into a layout variable: measured at 380px on the groups
+ * rung, which pushes the timeline's finish line 380px below the parking line, so
+ * the strip pins as a floating card and only merges hundreds of pixels later.
+ * It survives scrolling back to the top, because nothing re-publishes there.
+ *
+ * The gap is a CSS fact — a rung step — so it is read as one: the band's own
+ * `margin-block-start`, plus the parent's `row-gap` if the rung is flex or grid
+ * rather than block flow. Scroll-invariant by construction, which is the only
+ * property that actually matters here.
+ *
  * There were two more. `--bar-content-measured` and `--dock-more-travel` drove a
  * resting strip that hugged its buttons and a More control that slid out to the
  * docked edge; both were measured working and both went when the strip became a
@@ -170,6 +186,36 @@ function readPx(style: CSSStyleDeclaration, property: string, fallback: string):
   const raw = style.getPropertyValue(property) || style.getPropertyValue(fallback);
   const value = Number.parseFloat(raw);
   return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+/**
+ * The rung step between the dock sentinel and the band it marks.
+ *
+ * Read from computed style rather than by subtracting the two elements' rects,
+ * for the reason in the module header: that subtraction stops being a layout
+ * gap the instant the band sticks, and the sentinel's `view-timeline-inset` is
+ * not a place a scroll offset can be parked harmlessly.
+ *
+ * The sentinel is out of flow (`float`, zero-size), so it contributes nothing to
+ * the gap — whatever separates the pair is the band's own leading margin, plus
+ * the parent's `row-gap` on the rungs that space themselves with flex or grid
+ * instead of `space-y-*`.
+ *
+ * @param band - The `.dock-band` element.
+ * @param host - The band's parent; the rung box both siblings sit in.
+ * @returns The gap in whole pixels, never negative.
+ */
+function gapAboveBand(band: HTMLElement, host: HTMLElement): number {
+  const margin = readPx(getComputedStyle(band), 'margin-block-start', 'margin-top');
+  const hostStyle = getComputedStyle(host);
+  const display = hostStyle.display;
+  // `row-gap` computes to `normal` on a block container, which `readPx` reads as
+  // zero — but asking only where it can be a length keeps the intent legible.
+  const rowGap =
+    display.includes('flex') || display.includes('grid')
+      ? readPx(hostStyle, 'row-gap', 'row-gap')
+      : 0;
+  return Math.max(0, Math.round(margin + rowGap));
 }
 
 /**
@@ -352,8 +398,7 @@ export function useActionOverflow(
     const sentinel = refs.sentinel.current;
     const host = band.parentElement;
     if (sentinel && host) {
-      const offset = Math.max(0, Math.round(bandRect.top - sentinel.getBoundingClientRect().top));
-      host.style.setProperty('--dock-offset', `${offset}px`);
+      host.style.setProperty('--dock-offset', `${gapAboveBand(band, host)}px`);
     }
   };
 

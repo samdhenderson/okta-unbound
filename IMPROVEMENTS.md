@@ -671,29 +671,32 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Status:** open
 - **Related:** `I-019`, ADR-0030, ADR-0040
 
-### I-021 · Icon registry entries for the four glyphs `groups/` still hand-rolls
+### I-021 · Icon registry entries for the three glyphs `GroupCollections` still hand-rolls
 
 - **Category:** ux
 - **Priority:** P3
 - **Size:** S
 - **Verified:** 2026-08-28
 - **Files:** `src/sidepanel/components/shared/Icon.tsx`,
-  `src/sidepanel/components/groups/GroupFilterToggle.tsx`,
   `src/sidepanel/components/groups/GroupCollections.tsx`
-- **Problem:** `GroupFilterToggle` hand-rolls a funnel glyph and
-  `GroupCollections` hand-rolls upload, refresh and pencil-rename glyphs, as
-  inline `<svg>`. None has a matching entry in the `Icon` registry, so the
-  polish pass could not convert them the way it converted
+- **Narrowed 2026-08-31:** the funnel is done. Promoting the two hand-copied
+  filter toggles to `shared/FilterToggle` added it to the registry as
+  `Icon type="filter"` and deleted the call site that hand-rolled it. What is
+  left is `GroupCollections`' three.
+- **Problem:** `GroupCollections` hand-rolls upload, refresh and pencil-rename
+  glyphs as inline `<svg>`. None has a matching entry in the `Icon` registry, so
+  the polish pass could not convert them the way it converted
   `GroupExportModal`'s warning triangle (`Icon type="alert"`) and
   `BulkOperationsPanel`'s chevron. `GroupCollections`' four icon-buttons were
   deliberately left as a matched set rather than swapping only the one with
   an exact registry match (`trash`), because mixing one `Icon`-sized glyph
   into a row of custom-sized SVGs is visibly inconsistent.
-- **Done when:** `funnel`, `upload`, `refresh-cw` (or an agreed name) and
-  `pencil` exist in the `Icon` registry with stories; both files render them
-  through `Icon` at a registry size; no inline `<svg>` remains in either.
+- **Done when:** `upload`, `refresh-cw` (or an agreed name) and `pencil` exist
+  in the `Icon` registry with stories; `GroupCollections` renders them through
+  `Icon` at a registry size; no inline `<svg>` remains in it.
 - **Risk:** Low — the glyphs are decorative, both call sites already carry
   their own `aria-label`.
+- **Status:** open
 
 ### I-022 · A spacing role for the toolbar cluster, or a documented refusal
 
@@ -929,7 +932,100 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Status:** open
 - **Related:** `D-052` (the defect that held it out), ADR-0043, ADR-0045
 
-### I-030 · A created feeding rule does not appear until the group is reopened
+### I-030 · The Groups list strip has no `primary`, and reads as six equal buttons
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Verified:** 2026-08-31
+- **Files:** `src/sidepanel/components/groups/GroupsListActionBar.tsx`,
+  `src/sidepanel/components/groups/GroupsListActionBar.stories.tsx`,
+  `docs/adr/0061-a-list-rungs-primary-is-its-page-verb.md`
+- **Problem:** Sam, on the strip that ADR-0051 shipped: _"groups tab has no blue
+  buttons and it should."_ With no inline panel open — the state the rung rests
+  in — every control on it is `secondary`, so six identically-weighted buttons
+  sit above the list with nothing saying where to start.
+
+  `ADR-0061` fixed the _mechanism_ while building the Rules strip: `primary` now
+  names a rung's page-level verb, and an open panel states itself in its label
+  (`Cross-search (5)` → `Hide cross-search`) rather than in a colour a screen
+  reader cannot read. It deliberately did **not** convert this strip, because
+  applying the new rule mechanically would just delete its `primary` and leave it
+  with none: the Groups rung has no page-level verb to promote. _Compare (3)_,
+  _Merge (3)_, _Export (3)_ are all selection-scoped, and _Export list_ acts on
+  the filter.
+
+  So this is a design question, not a mechanical port, and it is the reason it is
+  filed rather than folded into the Rules commit: **does the Groups rung have a
+  page-level verb it is not currently offering?** The candidates worth weighing
+  are a _Load_/_Refresh_ equivalent (the Groups list does load on arrival, unlike
+  Rules, so this may be a genuine "no") and _Export list_, which acts on the whole
+  filtered rung and is the closest thing to a page-level verb the strip has today.
+
+- **Done when:** either `GroupsListActionBar` carries a `primary` under ADR-0061's
+  rule with the choice justified in its docblock, **or** an explicit note in that
+  docblock records that this rung has no page-level verb and therefore ships with
+  no `primary` on purpose — so the next reader does not re-open the question. In
+  both cases the open-panel marker moves from `variant` to the label + explicit
+  `priority: 'pinned'`, and the stories assert the label swap the way
+  `RulesListActionBar.stories.tsx`'s `TheOpenPanelSaysSo` does.
+- **Risk:** Low — one component, its stories, and seventeen `GroupsTab` tests that
+  query these labels. Note that changing a panel trigger's label changes its
+  accessible name, so `GroupsTab.test.tsx` queries for `Cross-search` and
+  `Bulk actions` need checking against the open state, not only the closed one.
+- **Status:** open
+- **Related:** ADR-0061, ADR-0051 §1, ADR-0038
+
+---
+
+### I-031 · Group Detail's rules section answers "what does it say?" by leaving the tab
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** M
+- **Verified:** 2026-08-31
+- **Files:** `src/sidepanel/components/groups/detail/GroupRulesSection.tsx`,
+  `src/sidepanel/components/groups/detail/GroupDetailView.tsx`,
+  `src/sidepanel/components/rules/RuleDetailView.tsx`
+- **Problem:** `GroupRulesSection` lists the two rule relationships a group has —
+  rules that assign into it, and rules that name it in a condition. Its rows used
+  to be `RuleCard`s with a disclosure, and the section's whole justification was
+  that the disclosure held the condition expression, the referenced attributes and
+  the target groups: _"the one question this tab exists to answer — what does that
+  rule actually say? — could only be answered by leaving it."_
+
+  Building the rule detail rung took that disclosure away, on purpose: four write
+  verbs flex-wrapped inside a list row's body is the ADR-0030 §2 failure the rung
+  exists to fix, and the rung holds strictly more than the disclosure ever did. But
+  the trade is real and worth naming rather than quietly banking. The row still
+  carries the condition in human-readable form and the press now lands on a rung
+  that fully answers the question — it just answers it **on the Rules tab**, and
+  the reader loses their place in the group they were studying.
+
+  Three options, in rough order of cost:
+
+  1. **Accept it and say so** — the deep link is one press, lands somewhere better
+     than it used to, and a group's rules are a secondary concern on that tab.
+  2. **Push the rule's rung onto the _group_ stack.** `useViewStack` is per tab and
+     the trail is already generic; the blocker is that the rung's write verbs act on
+     a rule and this section deliberately wires none of them, so it would need a
+     read-only mode for `RuleDetailView` rather than the full strip.
+  3. **Inline the one section that matters** — a read-only "When" block under the
+     row, reusing `RuleDetailView`'s condition renderer directly. Cheapest, and it
+     is also where Feature H's clause explainer wants to live on this surface.
+
+- **Done when:** one of the three is chosen and recorded in `GroupRulesSection`'s
+  docblock, with the two rejected options named so the question does not re-open.
+  If (2) or (3), the section's tests regain a case asserting the condition
+  expression is reachable without a tab change — the assertion
+  `GroupRulesSection.test.tsx` gave up when the disclosure went.
+- **Risk:** Low for (1) and (3). (2) touches `useViewStack` wiring on the Groups
+  tab and would need `RuleDetailView` to render without an `ActionBar`, which no
+  caller needs today.
+- **Status:** open
+- **Related:** ADR-0030 §2, ADR-0039, ADR-0016, `docs/features-plan.md` §H
+
+### I-032 · A created feeding rule does not appear until the group is reopened
 
 - **Category:** ux
 - **Priority:** P3

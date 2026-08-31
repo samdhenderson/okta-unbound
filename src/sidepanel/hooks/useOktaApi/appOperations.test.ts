@@ -264,6 +264,98 @@ describe('getAppAssignmentCounts', () => {
 
     expect(await getAppAssignmentCounts('0oaFAKE1')).toBeNull();
   });
+
+  /**
+   * The `x-total-count` probe. The cases above all answer with `headers: {}`,
+   * so they already pin the fallback half — an org that withholds the header
+   * behaves exactly as it did before the probe existed. These pin the half that
+   * saves the requests, and the boundary between them.
+   */
+  describe('x-total-count probe', () => {
+    /** A transport that answers the two `limit=1` probes with the given headers. */
+    const probing = (users: Record<string, string>, groups: Record<string, string>) =>
+      vi.fn().mockImplementation((url: string) => {
+        if (url === '/api/v1/apps/0oaFAKE1/users?limit=1') {
+          return Promise.resolve({ success: true, data: [{ id: '00uFAKE1' }], headers: users });
+        }
+        if (url === '/api/v1/apps/0oaFAKE1/groups?limit=1') {
+          return Promise.resolve({ success: true, data: [{ id: '00gFAKE1' }], headers: groups });
+        }
+        // Any full walk reaching here is the fallback, and returns a length that
+        // could never be mistaken for a probed total.
+        return Promise.resolve({ success: true, data: [{ id: '00uWALKED' }], headers: {} });
+      });
+
+    it('reads both totals from the header and issues exactly one request each', async () => {
+      const makeApiRequest = probing({ 'x-total-count': '9814' }, { 'x-total-count': '12' });
+      const { getAppAssignmentCounts } = createAppOperations(makeCore({ makeApiRequest }));
+
+      expect(await getAppAssignmentCounts('0oaFAKE1')).toEqual({ users: 9814, groups: 12 });
+      // Two requests total: the walk this replaced would have been 50 for the
+      // users collection alone.
+      expect(makeApiRequest).toHaveBeenCalledTimes(2);
+      expect(makeApiRequest.mock.calls.map((call) => call[0])).toEqual([
+        '/api/v1/apps/0oaFAKE1/users?limit=1',
+        '/api/v1/apps/0oaFAKE1/groups?limit=1',
+      ]);
+      for (const call of makeApiRequest.mock.calls) {
+        expect(call[1]).toMatchObject({ priority: 'low', reason: 'Count app assignments' });
+      }
+    });
+
+    it('reads a header casing Okta did not promise', async () => {
+      const makeApiRequest = probing({ 'X-Total-Count': '7' }, { 'x-total-count': '0' });
+      const { getAppAssignmentCounts } = createAppOperations(makeCore({ makeApiRequest }));
+
+      // 0 is a real total, not a missing one — it must not trigger the fallback.
+      expect(await getAppAssignmentCounts('0oaFAKE1')).toEqual({ users: 7, groups: 0 });
+      expect(makeApiRequest).toHaveBeenCalledTimes(2);
+    });
+
+    it('falls back per collection, so one may probe while the other walks', async () => {
+      const makeApiRequest = probing({ 'x-total-count': '9814' }, {});
+      const { getAppAssignmentCounts } = createAppOperations(makeCore({ makeApiRequest }));
+
+      // Users probed; groups fell back to the single-page walk (one row).
+      expect(await getAppAssignmentCounts('0oaFAKE1')).toEqual({ users: 9814, groups: 1 });
+      expect(makeApiRequest.mock.calls.map((call) => call[0])).toContain(
+        '/api/v1/apps/0oaFAKE1/groups?limit=200',
+      );
+      expect(makeApiRequest.mock.calls.map((call) => call[0])).not.toContain(
+        '/api/v1/apps/0oaFAKE1/users?limit=200',
+      );
+    });
+
+    // An unusable header is "count unknown", never a number. Each of these
+    // would produce a confidently wrong figure if it were parsed leniently:
+    // `''` and `'   '` both `Number()` to 0, `'12.5'` is not a row count, and a
+    // negative total is not a count at all.
+    it.each([[''], ['   '], ['12.5'], ['-1'], ['many']])(
+      'treats %j as unknown and walks instead',
+      async (header) => {
+        const makeApiRequest = probing({ 'x-total-count': header }, { 'x-total-count': '12' });
+        const { getAppAssignmentCounts } = createAppOperations(makeCore({ makeApiRequest }));
+
+        expect(await getAppAssignmentCounts('0oaFAKE1')).toEqual({ users: 1, groups: 12 });
+        expect(makeApiRequest.mock.calls.map((call) => call[0])).toContain(
+          '/api/v1/apps/0oaFAKE1/users?limit=200',
+        );
+      },
+    );
+
+    it('falls back when the probe itself fails, so a blip is not a count', async () => {
+      const makeApiRequest = vi
+        .fn()
+        .mockImplementation((url: string) =>
+          url.endsWith('limit=1')
+            ? Promise.resolve({ success: false, error: 'blip', status: 500 })
+            : Promise.resolve({ success: true, data: [{ id: '00uFAKE1' }], headers: {} }),
+        );
+      const { getAppAssignmentCounts } = createAppOperations(makeCore({ makeApiRequest }));
+
+      expect(await getAppAssignmentCounts('0oaFAKE1')).toEqual({ users: 1, groups: 1 });
+    });
+  });
 });
 
 /**

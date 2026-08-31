@@ -137,10 +137,30 @@ and retries with backoff"_ and to _"avoid aggressive, unnecessary polling"_. `[d
 
 A working strategy, proven on large scans: `[verified: shared/scheduler/apiScheduler]`
 
-- Track `remaining / limit` per endpoint family from every response.
+- Track `remaining / limit` per endpoint family from every response, and **gate per
+  family**. One global cooldown makes an exhausted `/api/v1/apps` stall a
+  `/api/v1/groups` call that has its own untouched budget. Bucket by
+  `/api/v1/{first resource segment}` — coarser than Okta's real buckets, which is the
+  safe direction: merging two observations that share a bucket costs precision,
+  splitting two that do not lets a budget be spent twice.
+  `[verified: shared/scheduler/rateLimitDetector → bucketOf, ADR-0059]`
+- A family you have **not** observed has no budget of its own to plead. Fall back to
+  the most restrictive observation anywhere rather than letting it run unthrottled.
 - Enter a cooldown when the projected remainder after in-flight requests falls below
-  ~10%, waiting until `X-Rate-Limit-Reset` (capped, so a bad clock cannot stall the
-  job indefinitely).
+  the threshold, waiting until `X-Rate-Limit-Reset` (capped, so a bad clock cannot
+  stall the job indefinitely).
+- **Take the threshold from the org, not from a constant.**
+  `GET /api/v1/rate-limit-settings/warning-threshold` returns
+  `{"warningThreshold": <int>}` — the consumed percentage at which the org has asked
+  to be warned, defaulting to 90 for Workforce and 60 for CIAM. Back off a few points
+  below it so your traffic is not what trips the org's own alarm. It is a Super Admin
+  surface, so **403 is an ordinary answer**: fall back to your default rather than
+  treating it as an error. `[docs]`
+  `[verified: shared/scheduler/rateLimitSettings, ADR-0059]`
+- **A 429 is a non-ok response, and its headers are the ones that matter most.** If
+  your transport drops headers on the error path, your throttling is steered only by
+  the requests that succeeded — the one response telling you when to come back
+  teaches you nothing. `[verified: content/apiRequest, D-064]`
 - Cap concurrency — around 5 in-flight requests is a reasonable default. Concurrency
   is the variable that turns a safe job into a 429 storm.
 - Retry with exponential backoff, bounded (2s, 4s, give up).
@@ -195,6 +215,10 @@ rather than only those queued. `[verified: shared/scheduler/apiScheduler]`
   https://developer.okta.com/docs/reference/rl-best-practices/
 - Rate limit bucket model and quota variability —
   https://developer.okta.com/docs/reference/rate-limits/
+- Rate Limit Settings API (`warning-threshold`, `per-client`, `admin-notifications`) —
+  https://developer.okta.com/docs/api/openapi/okta-management/management/tag/RateLimitSettings/
+- Configuring the warning threshold in the Admin Console —
+  https://help.okta.com/oie/en-us/content/topics/settings/set-up-rate-limit-notifs.htm
 
 See `request-optimization.md` for removing calls before budgeting them, and
 `system-log.md` for the log's distinct pagination contract.

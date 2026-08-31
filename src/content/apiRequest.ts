@@ -10,9 +10,8 @@
  * {@link ApiResponse}.
  *
  * NOTE: This is the content-script transport, not the background `ApiScheduler`.
- * It does no rate limiting itself; it only reports what Okta said — status,
- * headers, and a normalized error — so the scheduler's `RateLimitDetector` has
- * something to steer by.
+ * The scheduler/rate-limit route is unchanged — this module only relocates the
+ * existing fetch verbatim.
  *
  * @see `content/index` for the message routing that consumes this primitive.
  */
@@ -85,10 +84,7 @@ export function isSameOriginPath(endpoint: string): boolean {
  * @returns A normalized success/error response with headers and status. Every
  * failure carries a `status` — the real one when Okta answered, else
  * {@link NO_HTTP_STATUS} — so the scheduler's `RequestFailure` arm can promise
- * one is always there. `headers` is present whenever Okta answered at all,
- * success or not, so the scheduler's `RateLimitDetector` can read
- * `X-Rate-Limit-*` off a 429; it is absent only when there was no response
- * (a rejected boundary guard or a `fetch` that threw).
+ * one is always there.
  */
 export async function handleMakeApiRequest(
   endpoint: string,
@@ -186,10 +182,12 @@ export async function handleMakeApiRequest(
           `Request failed with status ${response.status}`,
         status: response.status,
         data,
-        // Headers travel with a failure too (D-064). A 429 is exactly the
-        // response whose `X-Rate-Limit-*` headers the scheduler's
-        // `RateLimitDetector` needs; dropping them here left rate limiting
-        // steered only by requests that succeeded.
+        // Carried on the failure arm for the same reason as on the success arm,
+        // and more urgently: a 429 is a non-ok response, and its
+        // `X-Rate-Limit-Reset` / `-Remaining` are the only authoritative
+        // statement of when the scheduler may come back. Dropping them here
+        // left `RateLimitDetector` steering on the headers of requests that
+        // succeeded and learning nothing from the one that said "stop" (D-064).
         headers,
       };
     }

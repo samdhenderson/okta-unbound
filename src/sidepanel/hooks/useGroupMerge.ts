@@ -108,7 +108,7 @@ export function useGroupMerge(targetTabId?: number): UseGroupMergeReturn {
 
         // One paginated member read per group; feeding rules only for the sources.
         for (const g of groups) {
-          membersByGroup.set(g.id, await getAllGroupMembers(g.id));
+          membersByGroup.set(g.id, await getAllGroupMembers(g.id, { memberCount: g.memberCount }));
         }
         for (const s of sources) {
           const rules = await getGroupRulesForGroup(s.id);

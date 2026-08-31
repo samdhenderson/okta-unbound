@@ -199,7 +199,7 @@ never asked. `memberCount` is the exception, because zero and unknown are
 distinguishable at its source.
 
 Adding an entity kind is one new builder beside that entity (`groupIdentity.ts`,
-`userIdentity.ts`) plus a unit test, with no edit to anything shared. `PageHeader`
+`userIdentity.ts`, `ruleIdentity.ts`) plus a unit test, with no edit to anything shared. `PageHeader`
 still describes the _browsed_ entity and `ContextBar` still describes the _live Okta
 tab_ — the two must not converge, and on a drilled-in view their ids routinely differ.
 
@@ -244,11 +244,23 @@ the row (`flex`, or `pinned` for the page's one primary verb); a change to the
 entity's state with **no symmetric undo** — suspend, delete, deactivate — defaults
 to `tier`, behind a confirm `Modal` that states the consequence in plain language
 next to the control ("Blocks sign-in until reversed," not just "Suspend").
-A **list** rung reads the same rules with two additions (ADR-0051). With no single
-page-level verb, `variant: 'primary'` marks the one open inline panel — which also pins
-it, so the control that closes that panel can never overflow. And the tier may sort by
-**frequency** as well as consequence, though frequency may move a verb down, never up,
-and never brings a confirm `Modal` with it.
+A **list** rung reads the same rules with two additions (ADR-0051, ADR-0061). The tier
+may sort by **frequency** as well as consequence, though frequency may move a verb down,
+never up, and never brings a confirm `Modal` with it. And `primary` is spent on whichever
+of these the rung has:
+
+- **A page-level verb, if there is one** — one whose object is the whole page rather
+  than a selection. `RulesListActionBar`'s _Load rules_ / _Refresh_ is the reference:
+  rules do not load on mount, so nothing on that rung means anything until it is pressed.
+- **Nothing, if there isn't** — `GroupsListActionBar` has only selection-scoped peers, so
+  it has no `primary`.
+
+**The open inline panel is named in its label, not in a colour**: `Duplicates (3)` →
+`Hide duplicates`, plus an explicit `priority: 'pinned'` so the control that closes an
+open panel can never overflow behind **More**. An `ActionDescriptor` carries no
+`aria-pressed`, so a `primary` wash was state only a sighted reader could perceive — the
+same correction `RuleCard` already made to its status dot. Pinning and emphasis are
+requested separately now rather than both arriving with `variant`.
 
 Two traps that rung found the hard way. **A wizard in front of a verb does not move that
 verb into the row** — the test asks what the verb does, not what stands between the press
@@ -261,6 +273,13 @@ unimplemented verb is omitted, the same "absent is not zero" discipline ADR-0032
 applies to identity facts, not rendered `disabled` forever with a tooltip standing
 in for an explanation. A permission-gated verb may still render `disabled` with a
 `title` naming the real reason. See ADR-0039 for the incident this closes.
+
+A detail rung may also end up with **no `primary` at all**, and that is a result rather
+than an omission: `RuleActionBar`'s one row verb is _Preview impact_, which is dropped
+entirely for a rule that targets no groups — no population to compute a change for, so
+no verb (ADR-0051 §3). Nothing is promoted to fill the empty slot. Say the missing fact
+in prose where the reader is looking instead; `RuleDetailView` states "assigns to no
+groups, so it adds nobody anywhere" in the section the verb would have acted on.
 
 **A detail rung that answers several questions about one entity uses tabbed panes of
 one card**, not a stack of sections — `UserDetailPanel` is the pattern (Groups / Apps /
@@ -275,6 +294,15 @@ because the loads are gated on it (see
 until a walk has returned, tested by a `hasLoaded` flag rather than `items.length`
 ("Unknown is not zero", below). The panel composes and does not fetch.
 
+**One question, one load, three short sections: use the stack.** The threshold is real in
+both directions — `RuleDetailView` is a `DetailSection` stack because a rule has one
+condition and three facts about it, all already on the `FormattedRule` the list was
+rendering. Splitting four short sections across tabs would hide three of them to save a
+scroll that does not exist, and the rung fetches nothing, so there is no per-pane load to
+gate. It is also the rung that closes ADR-0030's last unconverted layout dialect: `RuleCard`'s
+expandable body, whose four write verbs flex-wrapped at the bottom of a card were the exact
+"page-level verb read as a section's property" failure ADR-0030 §2 exists to stop.
+
 ## Documented raw-control exceptions
 
 The button/input migration is complete; these are the raw controls that stay raw
@@ -284,7 +312,7 @@ comment at the call site:
 - **Composites** where a shared primitive is not pixel-neutral: the Add-to-Group
   type-ahead (`AddToGroupModal`) and `UserComparisonModal`'s search field in
   `ComparisonSearchPhase` — leading-glyph search inputs with an absolutely
-  positioned spinner/dropdown — plus `GroupFilterToggle`.
+  positioned spinner/dropdown — plus `shared/FilterToggle`.
 
   `SearchDropdown`, `UserSearchBar` and `GroupSearchBar` **left this list**: they
   now compose `Input` + `Icon` + `LoadingSpinner` like `MemberSearchBar`. The

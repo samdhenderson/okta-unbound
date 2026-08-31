@@ -43,6 +43,12 @@ interface SchedulerContextType {
   resume: () => Promise<void>;
   /** Drop all queued requests in the background scheduler, then re-read state. */
   clearQueue: () => Promise<void>;
+  /**
+   * Cancel a single declared operation: drop only the queued requests carrying
+   * that `planId` and refuse any more of them, leaving every other operation
+   * running. The narrow counterpart to {@link SchedulerContextType.clearQueue}.
+   */
+  cancelPlan: (planId: string) => Promise<void>;
   /** Force an immediate re-fetch of {@link SchedulerContextType.state}. */
   refreshState: () => Promise<void>;
   /** Force an immediate re-fetch of {@link SchedulerContextType.metrics}. */
@@ -148,6 +154,22 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, [refreshState]);
 
+  const cancelPlan = useCallback(
+    async (planId: string) => {
+      try {
+        await chrome.runtime.sendMessage({
+          action: 'updateOperationPlan',
+          op: 'cancel',
+          planId,
+        });
+        await refreshState();
+      } catch (error) {
+        log.error('Failed to cancel operation:', error);
+      }
+    },
+    [refreshState],
+  );
+
   // Memoize the provider value so consumers only re-render when the scheduler
   // snapshot actually changes — every callback above is useCallback-stable, so
   // a parent re-render no longer mints a fresh context object.
@@ -158,10 +180,11 @@ export const SchedulerProvider: React.FC<{ children: ReactNode }> = ({ children 
       pause,
       resume,
       clearQueue,
+      cancelPlan,
       refreshState,
       refreshMetrics,
     }),
-    [state, metrics, pause, resume, clearQueue, refreshState, refreshMetrics],
+    [state, metrics, pause, resume, clearQueue, cancelPlan, refreshState, refreshMetrics],
   );
 
   return <SchedulerContext.Provider value={contextValue}>{children}</SchedulerContext.Provider>;

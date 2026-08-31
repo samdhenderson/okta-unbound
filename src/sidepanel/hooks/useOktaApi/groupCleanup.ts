@@ -72,6 +72,7 @@ export function createGroupCleanupOperations(
     groupName: string,
     user: OktaUser,
     skipUndoLog?: boolean,
+    planId?: string,
   ) => Promise<RequestResult>,
 ) {
   /**
@@ -153,8 +154,8 @@ export function createGroupCleanupOperations(
       const outcome = await coreApi.runOperation(
         'Remove deprovisioned users',
         deprovisionedUsers,
-        async (user) => {
-          const result = await removeUserFromGroup(groupId, groupName, user, true);
+        async (user, _index, planId) => {
+          const result = await removeUserFromGroup(groupId, groupName, user, true, planId);
           if (!result.success) {
             const err = new Error(result.error || 'Failed to remove user') as Error & {
               status?: number;
@@ -167,6 +168,9 @@ export function createGroupCleanupOperations(
         {
           stopOnError: (error) => (error as { status?: number }).status === 403,
           message: (p) => `Removing deprovisioned users (${p.completed}/${p.total})`,
+          // One DELETE per deprovisioned member. A 403 wall can end the run
+          // early, so this is the ceiling rather than a prediction of the total.
+          plan: { endpoint: '/api/v1/groups', method: 'DELETE' },
         },
       );
 

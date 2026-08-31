@@ -142,11 +142,13 @@ describe('fetchAllRows pagination', () => {
       method: 'GET',
       priority: 'low',
       reason: 'Export: My Users',
+      planId: 'fake-plan',
     });
     expect(makeApiRequest).toHaveBeenNthCalledWith(2, '/api/v1/users?after=cursor2', {
       method: 'GET',
       priority: 'low',
       reason: 'Export: My Users',
+      planId: 'fake-plan',
     });
   });
 

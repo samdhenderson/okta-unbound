@@ -39,12 +39,13 @@ import { auditStore } from '../shared/storage/auditStore';
 import { ApiScheduler } from '../shared/scheduler/apiScheduler';
 import { TabStateManager } from '../shared/tabState/tabStateManager';
 import type { SchedulerState } from '../shared/scheduler/types';
-import type { SchedulerStateChangedMessage } from '../shared/types';
+import type { SchedulerStateChangedMessage, UpdateOperationPlanMessage } from '../shared/types';
 import { createLogger } from '../shared/utils/logger';
 import { isOktaUrl } from '../shared/utils/oktaUrl';
 import { createThrottledRelay } from './throttledRelay';
 import { reinjectContentScripts } from './reinjectContentScripts';
 import { syncSnapshot } from './snapshotBridge';
+import { ensureRateLimitThreshold } from './rateLimitThreshold';
 import { startSnapshotScheduler } from './snapshotScheduler';
 
 const log = createLogger('Background');
@@ -146,6 +147,89 @@ function isValidScheduleRequest(request: {
   return true;
 }
 
+/** Bounds a plan `name` the same way `reason` is bounded, and for the same reason. */
+const MAX_PLAN_NAME_LENGTH = 80;
+/** Bounds an opaque plan id, which is only ever compared, never parsed. */
+const MAX_PLAN_ID_LENGTH = 64;
+/** Mirrors `MAX_LEGS_PER_PLAN`; rejected here so an oversized message is never even unpacked. */
+const MAX_PLAN_LEGS = 16;
+const PLAN_OPS = new Set(['declare', 'refine', 'complete', 'cancel']);
+const ESTIMATE_KINDS = new Set(['exact', 'atLeast', 'unknown']);
+
+/** Structural check for one declared or refined estimate. */
+function isValidPlanEstimate(estimate: unknown): boolean {
+  if (typeof estimate !== 'object' || estimate === null) return false;
+  const { kind, requests } = estimate as { kind?: unknown; requests?: unknown };
+  if (typeof kind !== 'string' || !ESTIMATE_KINDS.has(kind)) return false;
+  if (kind === 'unknown') return true;
+  return typeof requests === 'number' && Number.isFinite(requests) && requests >= 0;
+}
+
+/**
+ * Validate an `updateOperationPlan` message.
+ *
+ * The plan ledger is advisory — nothing here can gate, reserve, or redirect a
+ * request — so the risk this guards is not privilege but volume and noise: an
+ * unbounded `name` reaching the state broadcast, or an unbounded leg array
+ * reaching the registry. Every string is therefore length-capped and every
+ * endpoint is held to the same same-origin single-`/` shape
+ * `isValidScheduleRequest` enforces, since a leg endpoint is bucketed by the
+ * same rule a real request is.
+ */
+function isValidPlanUpdate(request: {
+  op?: unknown;
+  planId?: unknown;
+  name?: unknown;
+  tabId?: unknown;
+  legs?: unknown;
+  endpoint?: unknown;
+  estimate?: unknown;
+}): request is UpdateOperationPlanMessage {
+  if (typeof request.op !== 'string' || !PLAN_OPS.has(request.op)) return false;
+  if (
+    typeof request.planId !== 'string' ||
+    request.planId.length === 0 ||
+    request.planId.length > MAX_PLAN_ID_LENGTH
+  ) {
+    return false;
+  }
+
+  const isPlainPath = (value: unknown): boolean =>
+    typeof value === 'string' && value.startsWith('/') && !value.startsWith('//');
+
+  if (request.op === 'declare') {
+    if (
+      typeof request.name !== 'string' ||
+      request.name.length === 0 ||
+      request.name.length > MAX_PLAN_NAME_LENGTH
+    ) {
+      return false;
+    }
+    if (typeof request.tabId !== 'number' || !Number.isInteger(request.tabId)) return false;
+    if (!Array.isArray(request.legs) || request.legs.length === 0) return false;
+    if (request.legs.length > MAX_PLAN_LEGS) return false;
+
+    return request.legs.every((leg: unknown) => {
+      if (typeof leg !== 'object' || leg === null) return false;
+      const { endpoint, method, estimate } = leg as {
+        endpoint?: unknown;
+        method?: unknown;
+        estimate?: unknown;
+      };
+      if (!isPlainPath(endpoint)) return false;
+      if (method !== undefined && !ALLOWED_METHODS.has(String(method).toUpperCase())) return false;
+      return isValidPlanEstimate(estimate);
+    });
+  }
+
+  if (request.op === 'refine') {
+    return isPlainPath(request.endpoint) && isValidPlanEstimate(request.estimate);
+  }
+
+  // 'complete' and 'cancel' need nothing beyond a plan id.
+  return true;
+}
+
 /**
  * Validate a `syncSnapshot` message before it can drive a walk of the org.
  *
@@ -215,6 +299,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
       }
 
+      // Learn this org's own cooldown threshold, once per org per browser
+      // session. Deliberately not awaited: this request must not wait on — or
+      // be failed by — an optional refinement of the backoff policy.
+      ensureRateLimitThreshold(globalScheduler, request.tabId);
+
       globalScheduler
         .scheduleRequest(
           request.endpoint,
@@ -223,6 +312,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           request.tabId,
           request.priority || 'normal',
           request.reason,
+          typeof request.planId === 'string' ? request.planId : undefined,
         )
         .then((result) => {
           sendResponse(result);
@@ -236,6 +326,46 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
       return true; // Keep message channel open for async response
 
+    case 'updateOperationPlan': {
+      // Same sender posture as `scheduleApiRequest`: a plan names and sizes
+      // authenticated Okta traffic, and a content script must never be able to
+      // author what the side panel's own bar reports.
+      if (rejectIfFromTab(sender, 'updateOperationPlan', sendResponse)) {
+        return true;
+      }
+
+      if (!isValidPlanUpdate(request)) {
+        sendResponse({ success: false, error: 'Invalid updateOperationPlan message' });
+        return true;
+      }
+
+      switch (request.op) {
+        case 'declare':
+          sendResponse({
+            success: globalScheduler.declarePlan({
+              id: request.planId,
+              name: request.name,
+              tabId: request.tabId,
+              legs: request.legs,
+            }),
+          });
+          break;
+        case 'refine':
+          globalScheduler.refinePlan(request.planId, request.endpoint, request.estimate);
+          sendResponse({ success: true });
+          break;
+        case 'complete':
+          globalScheduler.completePlan(request.planId);
+          sendResponse({ success: true });
+          break;
+        default:
+          sendResponse({ success: true, dropped: globalScheduler.cancelPlan(request.planId) });
+          break;
+      }
+
+      return true;
+    }
+
     case 'syncSnapshot':
       // Same sender posture as `scheduleApiRequest`, and for the same reason:
       // this drives authenticated Okta traffic, so a content script running
@@ -248,6 +378,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: false, error: 'Invalid syncSnapshot message' });
         return true;
       }
+
+      // A snapshot sync is the largest fan-out the extension issues, so it is
+      // the traffic that most wants the org's own threshold rather than the
+      // configured default. Same fire-and-forget posture as above.
+      ensureRateLimitThreshold(globalScheduler, request.tabId);
 
       syncSnapshot(
         globalScheduler,

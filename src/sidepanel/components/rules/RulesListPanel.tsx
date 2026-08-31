@@ -2,10 +2,13 @@
  * @module sidepanel/components/rules/RulesListPanel
  * @description The Rules tab's list region: loading, empty, and populated states.
  *
- * Wraps a {@link ScrollableList} of {@link RuleCard}s (each wrapped in a
- * `data-rule-id` anchor for deep-link scrolling) and picks the right empty state:
+ * Wraps a {@link ScrollableList} of {@link RuleCard}s and picks the right empty state:
  * "no rules loaded" vs. "nothing matches the search/filter". The populated list is
  * staggered in via `.rise-in-stagger`, the same reveal `AppsListPanel` uses.
+ *
+ * Each card opens the rule's own rung. It used to carry four write verbs inside a
+ * disclosure instead; those are the rung's `ActionBar` now (ADR-0030 §2, ADR-0039), so
+ * this panel brokers one callback where it brokered four.
  *
  * Loading draws a row `Skeleton`, not a spinner. This reverses an earlier call
  * here that a rule card is "variable-height, so there is no honest placeholder to
@@ -36,17 +39,9 @@ interface RulesListPanelProps {
   filteredRules: FormattedRule[];
   /** Load rules (used by the empty-state action). */
   onLoad: () => void;
-  /** Activate an inactive rule. */
-  onActivate: (ruleId: string) => void;
-  /** Request deactivation (gated behind the impact confirm upstream). */
-  onDeactivate: (ruleId: string) => void;
-  /** Open the read-only impact preview for a rule. */
-  onPreviewImpact: (rule: FormattedRule) => void;
-  /** Start the "add target group" consolidation for a rule (A4). */
-  onAddTargetGroup: (rule: FormattedRule) => void;
-  /** Okta origin for each card's "View in Okta" link. */
-  oktaOrigin?: string | null;
-  /** Rule id to highlight/scroll to (deep-link target). */
+  /** Open a rule's detail rung. */
+  onOpenRule: (rule: FormattedRule) => void;
+  /** Rule id currently being opened (deep-link target), for the arrival flash. */
   selectedRuleId?: string | null;
 }
 
@@ -56,11 +51,7 @@ const RulesListPanel: React.FC<RulesListPanelProps> = ({
   hasRules,
   filteredRules,
   onLoad,
-  onActivate,
-  onDeactivate,
-  onPreviewImpact,
-  onAddTargetGroup,
-  oktaOrigin,
+  onOpenRule,
   selectedRuleId,
 }) => {
   const setStaggerRef = useStaggerReveal();
@@ -98,11 +89,7 @@ const RulesListPanel: React.FC<RulesListPanelProps> = ({
               <div key={rule.id} data-rule-id={rule.id}>
                 <RuleCard
                   rule={rule}
-                  onActivate={onActivate}
-                  onDeactivate={onDeactivate}
-                  onPreviewImpact={onPreviewImpact}
-                  onAddTargetGroup={onAddTargetGroup}
-                  oktaOrigin={oktaOrigin}
+                  onOpenRule={onOpenRule}
                   isHighlighted={selectedRuleId === rule.id}
                 />
               </div>

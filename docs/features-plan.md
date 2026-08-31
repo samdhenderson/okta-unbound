@@ -229,8 +229,11 @@ effectively impossible without an AST and nearly free with one — which is why 
   `isMemberOf*` seam (documented on `GROUP_MEMBERSHIP_FUNCTIONS`). The app already fetches user
   groups elsewhere, and it would widen this feature — and every other consumer of the evaluator —
   at once.
-- Surfaces: a rule's card in the Rules tab (explain against a picked user), and the group detail
-  view's membership-source section (explain why a listed member is attributed to a rule).
+- Surfaces: the **rule detail rung** in the Rules tab (explain against a picked user), and the
+  group detail view's membership-source section (explain why a listed member is attributed to a
+  rule). This said "a rule's card" while the rule's detail _was_ a card's disclosure; that body is
+  `rules/RuleDetailView.tsx` now, and the clause tree is a new `DetailSection` in its stack —
+  which is the room a per-clause breakdown never had inside a list row.
 - _Rendering note:_ rule expressions and profile values are end-user-controllable. Rely on React
   escaping; never build HTML strings from them.
 - Done when: an admin picks a user and a rule and sees a per-clause pass/fail breakdown with the

@@ -181,7 +181,12 @@ export function useGroupSource(targetTabId?: number): UseGroupSourceReturn {
     // cascades. The meter above a mutation therefore reflects it immediately
     // rather than holding a pre-mutation count until the TTL lapses.
     Promise.all([
-      getOrFetch(cacheKeys.groupMembers(group.id), () => getAllGroupMembers(group.id)),
+      getOrFetch(cacheKeys.groupMembers(group.id), () =>
+        // `memberCount` rode in free on the groups listing's `expand=stats`, so
+        // the walk's exact page count is already known — no probe request is
+        // spent to learn what the bar is about to show (ADR-0060 §1).
+        getAllGroupMembers(group.id, { memberCount: group.memberCount }),
+      ),
       getGroupRulesForGroup(group.id),
     ])
       .then(([members, rules]) => {

@@ -34,24 +34,6 @@ const base = {
   referencingError: null,
 };
 
-/**
- * Expand one rule's card. The name is anchored to the disclosure's own label
- * rather than matched loosely on the rule name — the collapsed body also holds a
- * "Copy rule id for …" control, and jsdom does not honour `inert`, so a loose
- * match finds both.
- */
-function expandRule(scope: ReturnType<typeof within>, name: string) {
-  return userEvent.click(scope.getByRole('button', { name: `Expand ${name}` }));
-}
-
-/** The panel a disclosure toggle names, resolved through `aria-controls`. */
-function disclosureFor(toggle: HTMLElement): HTMLElement {
-  const id = toggle.getAttribute('aria-controls');
-  const panel = id ? document.getElementById(id) : null;
-  if (!panel) throw new Error('the disclosure toggle names no panel');
-  return panel;
-}
-
 /** The list under a given sub-heading, so the two axes can be asserted apart. */
 function listUnder(heading: string) {
   const block = screen.getByText(new RegExp(`^${heading}`)).parentElement as HTMLElement;
@@ -131,78 +113,65 @@ describe('GroupRulesSection', () => {
   });
 
   /*
-    RETARGETED. The deep link used to be the whole row: clicking a rule's name
-    navigated away to the Rules tab, which is why the one question this tab exists
-    to answer — what the rule says — could only be answered by leaving it. The
-    rows are `RuleCard`s now and the jump is a secondary control *inside* the
-    expanded card. Same handler, same argument, same "absent handler ⇒ absent
-    control" rule; only where the control lives has moved.
+    RETARGETED, twice over. The deep link was once the whole row; then it became a
+    secondary control inside the card's disclosure; now the row is the jump again —
+    but it lands on the rule's own **detail rung** rather than on a list scrolled to
+    a collapsed card. Same handler, same argument, and the same title string, which
+    is why this assertion survives the move unchanged: the row states where the
+    press goes, because it leaves this tab to get there.
   */
-  it('deep-links a rule from inside its expanded card', async () => {
+  it('deep-links a rule by pressing its row', async () => {
     const onNavigateToRule = vi.fn();
     render(<GroupRulesSection {...base} onNavigateToRule={onNavigateToRule} />);
 
-    await expandRule(listUnder(REFERENCES), 'Contractors gate');
-    const jump = await screen.findByTitle('Open rule Contractors gate in the Rules tab');
-    await userEvent.click(jump);
+    await userEvent.click(await screen.findByTitle('Open rule Contractors gate in the Rules tab'));
+
     expect(onNavigateToRule).toHaveBeenCalledWith('r2');
   });
 
   it('offers no jump control when no navigation handler is supplied', () => {
     render(<GroupRulesSection {...base} />);
-    expect(screen.queryByText('Open in Rules tab')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Open rule/ })).not.toBeInTheDocument();
     expect(screen.getByText('All Engineers')).toBeInTheDocument();
   });
 
   /*
-    New, and the point of the change: the rule's own condition is on the page
-    rather than one navigation away.
+    RETARGETED, and narrowed on purpose. This used to open the card's disclosure and
+    assert the raw condition *expression* was on the page — the point being that
+    "what does the rule say?" did not need a navigation to answer.
 
-    Asserted through the disclosure this rule's own toggle controls, not by text
-    search. `RuleCard` keeps its body mounted while closed (`.disclose` + `inert`,
-    so it collapses without unmounting), and jsdom honours neither `inert` nor
-    CSS — a bare `getByText` would pass against a card nobody opened, and would
-    match the *other* rule's card besides.
+    The disclosure is gone: the rule's full body is the Rules tab's detail rung now,
+    because four write verbs flex-wrapped inside a list row's disclosure is the exact
+    ADR-0030 §2 failure that rung exists to fix. What survives here is the row's own
+    summary — the condition in human-readable form, with no interaction needed. The
+    expression itself is covered where it now lives, in `rules/RuleDetailView.test.tsx`.
   */
-  it('shows the rule itself, not just a link to it', async () => {
+  it("shows each rule's condition on the row, with nothing to open first", () => {
     render(<GroupRulesSection {...base} />);
 
-    const toggle = listUnder(ASSIGNS).getByRole('button', { name: 'Expand All Engineers' });
-    const disclosure = disclosureFor(toggle);
-    expect(disclosure).toHaveAttribute('data-open', 'false');
-
-    await userEvent.click(toggle);
-
-    expect(disclosure).toHaveAttribute('data-open', 'true');
-    expect(within(disclosure).getByText('user.department == "Engineering"')).toBeInTheDocument();
+    expect(listUnder(ASSIGNS).getByText('department == "Engineering"')).toBeInTheDocument();
   });
 
   /*
-    ADR-0039: this section wires none of the card's write verbs, so it must render
-    no control for them — not a disabled one, and not one that swallows the click.
-    `RuleCard` rendered Activate/Deactivate unconditionally until this commit,
-    which was invisible while `RulesTab` was its only consumer.
+    ADR-0039: this section cannot activate or deactivate a rule, so it must render no
+    control that would — not a disabled one, and not one that swallows the click. The
+    verbs live on the rule's rung now, which makes this structurally true rather than
+    conditionally true; it is asserted anyway, because "the row renders no verbs" is
+    the property, not "the verbs happen to be elsewhere today".
+
+    REMOVED alongside it: `offers the Okta deep link only when an org origin is known`.
+    Its subject is deleted — the card has no "View in Okta" control, and this section no
+    longer takes an `oktaOrigin` to feed one. Okta has no per-rule route at all, so that
+    link was always the org's rules list; it is stated as such on the detail rung, and
+    covered by `rules/RuleDetailView.test.tsx`'s
+    `does not claim the Okta link opens this rule`.
   */
-  it('renders no write verb it cannot perform', async () => {
-    render(<GroupRulesSection {...base} />);
+  it('renders no write verb it cannot perform', () => {
+    render(<GroupRulesSection {...base} onNavigateToRule={vi.fn()} />);
 
-    await expandRule(listUnder(ASSIGNS), 'All Engineers');
-    expect(screen.queryByRole('button', { name: /Deactivate Rule/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Activate Rule/ })).not.toBeInTheDocument();
-  });
-
-  /*
-    The org origin reaches the card or the link is absent — never a dead "View in
-    Okta" pointing at nothing. `GroupDetailView` did not pass one at all until this
-    was wired, so every deep link on the page was silently unrendered.
-  */
-  it('offers the Okta deep link only when an org origin is known', async () => {
-    const { rerender } = render(<GroupRulesSection {...base} />);
-    await expandRule(listUnder(ASSIGNS), 'All Engineers');
-    expect(screen.queryByRole('link', { name: /View in Okta/ })).not.toBeInTheDocument();
-
-    rerender(<GroupRulesSection {...base} oktaOrigin="https://example.okta.com" />);
-    expect(screen.getAllByRole('link', { name: /View in Okta/ }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /Deactivate/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Activate/ })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Open rule/ }).length).toBe(2);
   });
 
   it("shows each rule's Okta status verbatim", () => {

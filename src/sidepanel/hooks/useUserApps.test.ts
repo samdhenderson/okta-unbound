@@ -18,7 +18,15 @@ const api = vi.hoisted(() => ({
   // A faithful stand-in for coreApi.runOperation: same signature, same
   // per-item outcome shape, so the hook's result handling is genuinely exercised.
   runOperation: vi.fn(
-    async <T, R>(_name: string, items: T[], task: (item: T, index: number) => Promise<R>) => {
+    async <T, R>(
+      _name: string,
+      items: T[],
+      task: (item: T, index: number, planId?: string) => Promise<R>,
+      options?: { plan?: unknown },
+    ) => {
+      // Faithful to the real runOperation: a planId reaches the task only when
+      // the caller declared a plan (ADR-0060).
+      const planId = options?.plan ? 'fake-plan' : undefined;
       const results = [];
       let failed = 0;
       for (const [index, item] of items.entries()) {
@@ -27,7 +35,7 @@ const api = vi.hoisted(() => ({
             item,
             index,
             status: 'fulfilled' as const,
-            value: await task(item, index),
+            value: await task(item, index, planId),
           });
         } catch (error) {
           failed += 1;
@@ -170,7 +178,9 @@ describe('useUserApps — the granting-group fallback', () => {
     await load([app({ scope: 'GROUP' })]);
 
     await waitFor(() => expect(api.runOperation).toHaveBeenCalledTimes(1));
-    expect(api.getAppGroupAssignments).toHaveBeenCalledWith(APP_ID);
+    // …and each walk is attributed to that operation's plan rather than running
+    // unaccounted for against the /api/v1/apps bucket.
+    expect(api.getAppGroupAssignments).toHaveBeenCalledWith(APP_ID, 'fake-plan');
   });
 
   it('names the group when exactly one member group is assigned the app', async () => {

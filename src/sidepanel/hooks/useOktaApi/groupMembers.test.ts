@@ -54,7 +54,7 @@ describe('getAllGroupMembers boundary validation', () => {
 
     expect(makeApiRequest).toHaveBeenCalledWith(
       '/api/v1/groups/00gFAKE1/users?limit=200&expand=group-rules',
-      { reason: 'Load all group members' },
+      { reason: 'Load all group members', planId: 'fake-plan' },
     );
     expect(members.map((m) => m.id)).toEqual(['00uFAKE1']);
   });
@@ -87,7 +87,7 @@ describe('getAllGroupMembers rule attribution', () => {
 
     expect(makeApiRequest).toHaveBeenCalledWith(
       '/api/v1/groups/00gFAKE1/users?limit=200&expand=group-rules',
-      { reason: 'Load all group members' },
+      { reason: 'Load all group members', planId: 'fake-plan' },
     );
     expect(members[0]).toMatchObject({ _embedded: embedded });
   });
@@ -107,6 +107,7 @@ describe('getAllGroupMembers rule attribution', () => {
 
     expect(makeApiRequest).toHaveBeenNthCalledWith(2, `${droppedNext}&expand=group-rules`, {
       reason: 'Load all group members',
+      planId: 'fake-plan',
     });
     expect(members.map((m) => m.id)).toEqual(['00uFAKE1', '00uFAKE2']);
   });

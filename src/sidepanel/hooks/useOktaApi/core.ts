@@ -15,6 +15,9 @@
 import type { MessageRequest, MessageResponse, OperationCallbacks } from './types';
 import type { RequestResult, RequestPriority } from '@/shared/scheduler/types';
 import { runBatch, type BatchProgress, type BatchOutcome } from '@/shared/scheduler/runBatch';
+import type { PlanEstimate, PlanLegInput } from '@/shared/scheduler/plan';
+import { fanOutEstimate, atLeastFanOutEstimate } from '@/shared/scheduler/planEstimate';
+import type { OperationPlanUpdate } from '@/shared/types';
 import { createLogger } from '@/shared/utils/logger';
 import { z } from 'zod';
 import {
@@ -102,6 +105,13 @@ export interface MakeApiRequestOptions {
   priority?: RequestPriority;
   /** Human-readable "why", e.g. `'Load group members'`. Shown in the History tab's verbose mode. */
   reason: string;
+  /**
+   * The {@link PlanHandle} this request belongs to, when it was issued inside a
+   * {@link CoreApi.withPlan} block. Threaded explicitly rather than ambiently —
+   * the browser has no `AsyncLocalStorage`, and `reason` is already threaded the
+   * same way.
+   */
+  planId?: string;
 }
 
 /** Options for {@link CoreApi.runOperation}. */
@@ -112,6 +122,27 @@ export interface RunOperationOptions<T> {
   stopOnError?: (error: unknown, item: T, index: number) => boolean;
   /** Derive the status message shown in the activity bar from the live counts. */
   message?: (progress: BatchProgress) => string;
+  /**
+   * Declare this operation's request budget so the activity bar can show what
+   * the fan-out will cost before it is spent (ADR-0060).
+   *
+   * Supply the endpoint each item will hit — its bucket is what the plan is
+   * keyed by — and, when an item costs more than one request, how many. The
+   * per-item worker receives the resulting `planId` and must pass it in its
+   * {@link MakeApiRequestOptions}, or the requests will run unattributed.
+   */
+  plan?: {
+    endpoint: string;
+    method?: string;
+    requestsPerItem?: number;
+    /**
+     * Set when an item costs *at least* `requestsPerItem` rather than exactly
+     * that — an item whose worker paginates, for instance. The declared total
+     * becomes a floor the bar renders as approximate instead of a number it
+     * presents as fact.
+     */
+    approximate?: boolean;
+  };
 }
 
 /**
@@ -154,18 +185,60 @@ export interface CoreApi {
    *
    * @param name - Operation label shown in the activity bar.
    * @param items - Work items.
-   * @param task - Per-item worker; issues its own scheduler request(s).
+   * @param task - Per-item worker; issues its own scheduler request(s). Receives
+   * the declared `planId` as a third argument when `options.plan` is set, and
+   * must pass it through in its {@link MakeApiRequestOptions}.
    * @param options - See {@link RunOperationOptions}.
    * @returns The {@link BatchOutcome}; never throws for cancellation (inspect `cancelled`).
    */
   runOperation: <T, R>(
     name: string,
     items: T[],
-    task: (item: T, index: number) => Promise<R>,
+    task: (item: T, index: number, planId?: string) => Promise<R>,
     options?: RunOperationOptions<T>,
   ) => Promise<BatchOutcome<T, R>>;
+  /**
+   * Run a walk-shaped operation that declares its request budget up front.
+   *
+   * The counterpart to {@link CoreApi.runOperation} for work that is not a
+   * per-item fan-out — a pagination walk, an export. The callback receives a
+   * {@link PlanHandle}: pass `handle.planId` in every request's
+   * {@link MakeApiRequestOptions} so the requests are attributed, and call
+   * `handle.refine` as pages land so the estimate rises with what is known.
+   *
+   * The plan is always closed, on success, failure, or cancellation. A plan that
+   * outlived its operation would hold a row in the bar promising work nobody is
+   * doing.
+   *
+   * @param name - Operation label shown in the activity bar.
+   * @param legs - One entry per bucket this operation will spend against.
+   * @param run - The operation itself.
+   */
+  withPlan: <R>(
+    name: string,
+    legs: PlanLegInput[],
+    run: (handle: PlanHandle) => Promise<R>,
+  ) => Promise<R>;
   /** Progress/result callbacks used to surface operation feedback to the UI. */
   callbacks: OperationCallbacks;
+}
+
+/** What a {@link CoreApi.withPlan} block hands to the work it wraps. */
+export interface PlanHandle {
+  /**
+   * Pass this in every {@link MakeApiRequestOptions} inside the block. A request
+   * that omits it still runs — the ledger is advisory — but is not counted
+   * against the operation.
+   */
+  planId: string;
+  /**
+   * Update one leg's estimate as the operation learns more, e.g. from
+   * `refinedWalkEstimate` (`shared/scheduler/planEstimate`) after each page.
+   *
+   * Fire-and-forget: a refinement that fails to reach the background must never
+   * fail the walk it is describing.
+   */
+  refine: (endpoint: string, estimate: PlanEstimate) => void;
 }
 
 /**
@@ -179,6 +252,17 @@ export interface CoreApi {
  * @returns The {@link CoreApi} consumed by every `create*Operations` factory.
  * @remarks `sendMessage` and `makeApiRequest` both throw if `targetTabId` is `null`.
  */
+/**
+ * Mint an opaque plan id.
+ *
+ * Only ever compared, never parsed — `crypto.randomUUID` is available in every
+ * MV3 context this runs in, and uniqueness across concurrently open panels is
+ * the only property required.
+ */
+function newPlanId(): string {
+  return `plan-${crypto.randomUUID()}`;
+}
+
 export function createCoreApi(
   targetTabId: number | null,
   checkCancelled: () => void,
@@ -222,7 +306,7 @@ export function createCoreApi(
     endpoint: string,
     options: MakeApiRequestOptions,
   ): Promise<RequestResult> => {
-    const { method = 'GET', body, priority = 'normal', reason } = options;
+    const { method = 'GET', body, priority = 'normal', reason, planId } = options;
 
     if (!targetTabId) {
       throw new Error('No target tab ID - not connected to Okta page');
@@ -250,6 +334,7 @@ export function createCoreApi(
           tabId: targetTabId,
           priority,
           reason,
+          planId,
         });
         break;
       } catch (error) {
@@ -327,27 +412,87 @@ export function createCoreApi(
    * Run `items` through `task` as one tracked, cancellable operation. See
    * {@link CoreApi.runOperation}.
    */
+  /**
+   * Post an `updateOperationPlan` message, swallowing any failure.
+   *
+   * The ledger is advisory (ADR-0060 §2), so a message that cannot be delivered
+   * — an MV3 worker mid-suspension, most often — must degrade the display and
+   * never the operation. Nothing here is awaited by a caller for that reason.
+   */
+  const postPlanUpdate = (message: OperationPlanUpdate): void => {
+    void chrome.runtime.sendMessage({ action: 'updateOperationPlan', ...message }).catch(() => {
+      log.debug('Plan update dropped', { op: message.op });
+    });
+  };
+
+  const withPlan = async <R>(
+    name: string,
+    legs: PlanLegInput[],
+    run: (handle: PlanHandle) => Promise<R>,
+  ): Promise<R> => {
+    const planId = newPlanId();
+
+    if (targetTabId !== null) {
+      postPlanUpdate({ op: 'declare', planId, name, tabId: targetTabId, legs });
+    }
+
+    const handle: PlanHandle = {
+      planId,
+      refine: (endpoint, estimate) => postPlanUpdate({ op: 'refine', planId, endpoint, estimate }),
+    };
+
+    try {
+      return await run(handle);
+    } finally {
+      // Closed on every path. A plan that outlived its operation would hold a
+      // row in the bar promising work nobody is doing.
+      postPlanUpdate({ op: 'complete', planId });
+    }
+  };
+
   const runOperation = async <T, R>(
     name: string,
     items: T[],
-    task: (item: T, index: number) => Promise<R>,
+    task: (item: T, index: number, planId?: string) => Promise<R>,
     options: RunOperationOptions<T> = {},
   ): Promise<BatchOutcome<T, R>> => {
     resetCancellation();
     progress.start(name, items.length);
-    try {
-      return await runBatch(items, task, {
+
+    const drive = (planId?: string) =>
+      runBatch(items, (item, index) => task(item, index, planId), {
         concurrency: options.concurrency,
         stopOnError: options.stopOnError,
         throwIfCancelled: checkCancelled,
         onProgress: (p) => progress.reportBatch(p, options.message?.(p)),
       });
+
+    try {
+      const plan = options.plan;
+      if (!plan) return await drive();
+
+      // A fan-out's cost is exact by construction: the item list is in hand, so
+      // the request count is items × requests-per-item with nothing estimated.
+      return await withPlan(
+        name,
+        [
+          {
+            endpoint: plan.endpoint,
+            method: plan.method,
+            estimate: plan.approximate
+              ? atLeastFanOutEstimate(items.length, plan.requestsPerItem)
+              : fanOutEstimate(items.length, plan.requestsPerItem),
+          },
+        ],
+        (handle) => drive(handle.planId),
+      );
     } finally {
       progress.complete();
     }
   };
 
   return {
+    withPlan,
     targetTabId,
     sendMessage,
     makeApiRequest,

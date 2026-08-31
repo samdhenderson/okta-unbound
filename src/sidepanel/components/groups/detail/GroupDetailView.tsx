@@ -407,7 +407,6 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
             {activeTab === 'rules' && (
               <div role="tabpanel" aria-label="Rules">
                 <GroupRulesSection
-                  oktaOrigin={oktaOrigin}
                   assigningRules={source.feedingRules}
                   assigningStatus={source.rulesStatus}
                   assigningError={source.error}
