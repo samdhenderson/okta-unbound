@@ -2775,7 +2775,7 @@ affects every scroll box in the app, on every platform.
 - **Risk:** Medium — it changes what gets cached, so a row Okta sends that the
   schema rejects would stop appearing. That is the intended effect but it is a
   behavior change, not a pure hardening.
-- **Status:** open
+- **Status:** claimed:claude/stoic-gates-6o17id
 - **Related:** `D-050`, `D-055`, ADR-0006
 
 ### D-066 · `groupIdsReferencedBy` carries the identical unguarded expression read `D-055` just fixed

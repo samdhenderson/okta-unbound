@@ -8,6 +8,7 @@ import type { OktaGroup, OktaGroupRule, FormattedRule } from '../../../shared/ty
 import { RulesCache } from '../../../shared/rulesCache';
 import { detectConflicts, formatRuleForDisplay } from '../../../shared/ruleUtils';
 import { fetchAllPages, OKTA_PAGE_SIZE } from '@/shared/utils/oktaPagination';
+import { oktaGroupRuleSchema } from '../../../shared/schemas/okta';
 import { createLogger } from '../../../shared/utils/logger';
 
 const log = createLogger('useOktaApi');
@@ -77,15 +78,60 @@ export function createGroupDiscoveryOperations(coreApi: CoreApi) {
    * cache is org-wide, so baking one group's `affectsCurrentGroup` flag into it
    * would be wrong. Throws if a page fails — callers decide whether that is
    * fatal.
+   *
+   * **Every page is validated at the Okta boundary, and an invalid row is
+   * dropped (D-065).** The walk passes `oktaGroupRuleSchema` to
+   * {@link fetchAllPages}, which validates each page through `parseOktaList`.
+   * That is deliberately *lenient* (ADR-0006, "degrade, never crash"): a row
+   * that fails the schema is discarded and the rest of the page survives, so
+   * `rules`, `rawRules` and the cached `stats` describe only the rows Okta
+   * returned in a shape this extension understands. This is the same decision
+   * `D-050` recorded for `fetchGroupRulesRequest`, which walks the same
+   * endpoint — the two paths now agree on what a malformed rule costs.
+   *
+   * Failing the whole walk on one bad row was rejected: this listing is the
+   * *only* rules source for {@link ensureGroupRulesLoaded} (Groups-tab cold
+   * start) and {@link getGroupRulesForGroup}, both of which degrade to "no rule
+   * attribution at all" when it throws. One malformed row would then cost every
+   * group its rules rather than costing one rule its row.
+   *
+   * The drop is never silent: `parseOktaList` warns once per page, and this
+   * function warns once per walk with the walk-level totals — so a cache holding
+   * fewer rules than Okta returned is visible. Both carry **counts only**, never
+   * a row, an expression or a group id (`docs/security.md`).
    */
   const fetchAndCacheAllGroupRules = async (): Promise<{
     rules: FormattedRule[];
     rawRules: OktaGroupRule[];
   }> => {
-    const rawRules = await fetchAllPages<OktaGroupRule>(
-      (url) => coreApi.makeApiRequest(url, { reason: 'Load org-wide group rules' }),
+    // Counted around the transport rather than from `onPage`, which only ever
+    // sees rows that already survived validation.
+    let rowsReturned = 0;
+    const validated = await fetchAllPages(
+      async (url) => {
+        const response = await coreApi.makeApiRequest(url, {
+          reason: 'Load org-wide group rules',
+        });
+        if (Array.isArray(response.data)) rowsReturned += response.data.length;
+        return response;
+      },
       `/api/v1/groups/rules?limit=${OKTA_PAGE_SIZE}`,
+      { schema: oktaGroupRuleSchema, context: 'GET /api/v1/groups/rules' },
     );
+    // `oktaGroupRuleSchema` is `.passthrough()`, so a validated row still carries
+    // the domain type's required audit fields (`type`, `created`, `lastUpdated`)
+    // at runtime even though the schema does not require them — hence the widen
+    // through `unknown`, the same one `fetchGroupRulesRequest` documents.
+    const rawRules = validated as unknown as OktaGroupRule[];
+
+    if (rawRules.length < rowsReturned) {
+      // Counts only — never the row, its expression, or its target group ids.
+      log.warn('Dropped malformed group rules before caching', {
+        context: 'GET /api/v1/groups/rules',
+        dropped: rowsReturned - rawRules.length,
+        returned: rowsReturned,
+      });
+    }
 
     const conflicts = detectConflicts(rawRules);
     const rules = rawRules.map((rule) => formatRuleForDisplay(rule, undefined, conflicts));
