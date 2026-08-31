@@ -185,7 +185,17 @@ entity rather than a listing.
 `[verified: useOktaApi/userOperations]`
 
 Header availability is not universal across endpoints. Treat a missing
-`x-total-count` as "count unknown", never as zero.
+`x-total-count` as "count unknown", never as zero — and **probe rather than
+assume**, per collection, with the full walk as the fallback. This repo does that
+for `/api/v1/apps/{id}/users` and `/api/v1/apps/{id}/groups`, whose header
+availability is not independently confirmed: the probe path saves ~50 requests on
+a 10,000-user app where the header is sent, and costs nothing where it is not.
+`[verified: useOktaApi/appOperations → getAppAssignmentCounts, ADR-0059]`
+
+One asymmetry worth stating when you report a probed count: a walked count can be
+filtered (dropping rows that fail boundary validation), a probed count is Okta's
+own total and cannot. The two can disagree by exactly the rows an org sends that
+do not validate.
 
 ## Anti-patterns
 

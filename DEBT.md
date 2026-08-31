@@ -3376,3 +3376,44 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
 - **Status:** open
 - **Related:** ADR-0032 (the sticky stack and the merge), ADR-0048 (the spacing
   roles the raw `p-2` predates), `useActionOverflow` (reads the row's padding)
+
+### D-084 · The granting-group fallback's walked app-group rows still die with the panel
+
+- **Category:** perf
+- **Priority:** P2
+- **Size:** M
+- **Files:** `src/sidepanel/hooks/useUserApps.ts` (`resolveGrantingGroups`),
+  `src/sidepanel/cache/appGroupSnapshot.ts` (the read half, which exists),
+  `src/shared/snapshot/snapshotSync.ts` (`APP_GROUPS_SPEC`, `runShardedWalk`'s
+  sweep), `src/shared/snapshot/orgSnapshotStore.ts` (`upsertMany`, `sweepStale`)
+- **Verified:** 2026-08-31 — filed by the ADR-0059 work while wiring the read
+  half; the sweep interaction was read directly in `runShardedWalk`, not assumed.
+- **Problem:** ADR-0059 made the fallback read app→group assignments out of the
+  org snapshot before walking anything, which covers `GROUP_PUSH` apps. Every
+  **other** app still walks `/api/v1/apps/{id}/groups`, and that result lands
+  only in the panel-owned in-memory `entityCache` at `TTL_LONG`. Close the side
+  panel and it is gone; the next visit to the same user's Apps pane re-spends one
+  request per unresolved app against the `/api/v1/apps` bucket — the same bucket
+  the report that prompted ADR-0059 was exhausting.
+- **Why it is not just "write them to the snapshot":** `runShardedWalk` stamps
+  every row it writes with the walk's mark and then **sweeps** anything not
+  re-marked. A row written opportunistically by the panel, for an app the
+  fan-out's shard list does not contain, is by construction never re-marked — so
+  the next `appGroups` walk would delete it. Widening the shard list to every app
+  instead is the opposite trade: it turns a fan-out over push-enabled apps into
+  one over the whole inventory, which is a much larger bill than the one being
+  saved.
+- **Done when:** a walked app-group result survives the panel closing, and a
+  subsequent sharded walk provably does not delete it. Whatever the mechanism —
+  a separate collection with its own retention, an exemption in the sweep keyed
+  on how a row was written, or a TTL'd side store — the sweep interaction is the
+  thing that has to be shown, not argued. A test that writes a row by the panel
+  path, runs a full `runShardedWalk` that does not include that app, and asserts
+  the row is still there.
+- **Risk:** Medium. It touches the sweep, which is the mechanism that keeps the
+  snapshot from accumulating rows for deleted entities — an exemption written
+  loosely would make deletions invisible in a collection whose whole job is to
+  reflect the org.
+- **Status:** open
+- **Related:** ADR-0040 (the snapshot and its sweep), ADR-0059 (the read half
+  that exists), ADR-0020 (why absence is not an empty answer)

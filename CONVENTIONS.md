@@ -68,8 +68,18 @@ functions need staleness protection they don't already have.
 `ApiScheduler` (`shared/scheduler/apiScheduler.ts`) owns throttling:
 concurrency cap of 5, a priority queue (`interactive > high > normal > low`),
 `RateLimitDetector` parsing `X-Rate-Limit-*` response headers, cooldowns
-when remaining capacity drops below 10%, and exponential backoff with up to
-3 retries. Any new bulk/multi-call operation goes through
+when remaining capacity drops below a threshold, and exponential backoff with
+up to 3 retries.
+
+Two things about that threshold and that cooldown (ADR-0059). The threshold is
+the **org's own** — `GET /api/v1/rate-limit-settings/warning-threshold` less 5
+percentage points, read once per org per browser session — falling back to the
+configured 10% on any unusable answer, including the 403 a non-super-admin
+gets. And a cooldown is **per Okta rate-limit bucket** (`bucketOf(endpoint)` →
+`/api/v1/{resource}`), not global: an exhausted `/api/v1/apps` must not stall a
+`/api/v1/groups` lookup that has its own budget. A request whose own bucket
+Okta has not reported on yet falls back to the most-restrictive observation
+anywhere, which is what keeps an unobserved family from running unthrottled. Any new bulk/multi-call operation goes through
 `coreApi.runOperation` (`shared/scheduler/runBatch.ts`), never a hand-rolled
 `for await` / `Promise.all` loop — that's the existing, already-consistent
 pattern.
