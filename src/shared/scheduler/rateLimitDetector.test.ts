@@ -1,12 +1,17 @@
 /**
  * Tests for RateLimitDetector — the scheduler's parser/tracker of Okta
- * `X-Rate-Limit-*` headers. These pin the pure header-math contract: per-endpoint
+ * `X-Rate-Limit-*` headers. These pin the pure header-math contract: per-bucket
  * + most-restrictive global tracking, in-flight-aware threshold checks, and
  * reset/cooldown computation. Time is frozen with fake timers so `Date.now()`
  * reads are deterministic — no real clocks that could make branches flaky.
+ *
+ * Most cases below key on paths like `/a` and `/b`, which are not
+ * `/api/v1/{resource}` paths and therefore bucket to themselves — so the
+ * pre-bucketing expectations they encode still hold exactly. The bucketing
+ * behaviour proper is pinned in its own describe block.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { RateLimitDetector } from './rateLimitDetector';
+import { RateLimitDetector, bucketOf } from './rateLimitDetector';
 
 /** A fixed wall-clock instant used as "now" for every test. */
 const NOW_MS = 1_700_000_000_000;
@@ -20,6 +25,26 @@ function headers(limit?: string, remaining?: string, reset?: string): Record<str
   if (reset !== undefined) h['x-rate-limit-reset'] = reset;
   return h;
 }
+
+describe('bucketOf', () => {
+  it.each([
+    ['/api/v1/apps', '/api/v1/apps'],
+    ['/api/v1/apps?limit=200', '/api/v1/apps'],
+    ['/api/v1/apps/0oaFAKE1/groups?limit=200', '/api/v1/apps'],
+    ['/api/v1/apps/0oaFAKE1/users?after=abc%2Bdef', '/api/v1/apps'],
+    ['/api/v1/groups/00gFAKE1/users?expand=group-rules', '/api/v1/groups'],
+    ['/api/v1/rate-limit-settings/warning-threshold', '/api/v1/rate-limit-settings'],
+  ])('buckets %s to %s', (endpoint, bucket) => {
+    expect(bucketOf(endpoint)).toBe(bucket);
+  });
+
+  it('leaves a non-/api/v1 path in a bucket of its own', () => {
+    // Isolating an unrecognised surface is the safe direction: pooling it with
+    // a real family would let that family's budget be spent twice over.
+    expect(bucketOf('/oauth2/v1/token')).toBe('/oauth2/v1/token');
+    expect(bucketOf('/api/v2/apps')).toBe('/api/v2/apps');
+  });
+});
 
 describe('RateLimitDetector', () => {
   beforeEach(() => {
@@ -212,6 +237,7 @@ describe('RateLimitDetector', () => {
         remaining: 90,
         reset: NOW_SECONDS - 30,
         endpoint: '/a',
+        bucket: '/a',
         timestamp: NOW_MS,
       };
       expect(d.getSecondsUntilReset(info)).toBe(0);
@@ -225,6 +251,7 @@ describe('RateLimitDetector', () => {
         remaining: 90,
         reset: NOW_SECONDS,
         endpoint: '/a',
+        bucket: '/a',
         timestamp: NOW_MS,
       };
       expect(d.getSecondsUntilReset(info)).toBe(0);
@@ -276,7 +303,7 @@ describe('RateLimitDetector', () => {
 
       vi.setSystemTime((NOW_SECONDS + 6) * 1000);
       expect(d.getMostRestrictive()).toBeNull();
-      expect(d.getState().endpointLimits).toHaveLength(0);
+      expect(d.getState().bucketLimits).toHaveLength(0);
     });
 
     it('recomputes the global from survivors when one endpoint expires', () => {
@@ -299,7 +326,68 @@ describe('RateLimitDetector', () => {
       d.reset();
       expect(d.getMostRestrictive()).toBeNull();
       expect(d.getForEndpoint('/a')).toBeNull();
-      expect(d.getState().endpointLimits).toHaveLength(0);
+      expect(d.getState().bucketLimits).toHaveLength(0);
+    });
+  });
+
+  describe('bucketed tracking', () => {
+    it('merges every /api/v1/apps* observation onto one bucket', () => {
+      const d = new RateLimitDetector();
+      d.parseHeaders(headers('600', '500', String(NOW_SECONDS + 60)), '/api/v1/apps?limit=200');
+      d.parseHeaders(
+        headers('600', '120', String(NOW_SECONDS + 60)),
+        '/api/v1/apps/0oaFAKE1/groups?limit=200',
+      );
+
+      // One entry, not two — and it carries the latest answer, because Okta's
+      // headers describe the budget as of that response.
+      expect(d.getState().bucketLimits).toHaveLength(1);
+      expect(d.getForBucket('/api/v1/apps')?.remaining).toBe(120);
+      // Any endpoint in the family resolves to it.
+      expect(d.getForEndpoint('/api/v1/apps/0oaFAKE9/users?limit=1')?.remaining).toBe(120);
+    });
+
+    it('does not let one family answer for another', () => {
+      const d = new RateLimitDetector();
+      d.parseHeaders(headers('100', '2', String(NOW_SECONDS + 60)), '/api/v1/apps?limit=200');
+      d.parseHeaders(headers('100', '95', String(NOW_SECONDS + 60)), '/api/v1/groups?limit=200');
+
+      expect(d.isApproachingLimit(10, 0, '/api/v1/apps')).toBe(true);
+      expect(d.isApproachingLimit(10, 0, '/api/v1/groups')).toBe(false);
+      // Omitting the bucket still asks the most-restrictive-anywhere question,
+      // which is what keeps the global backstop honest.
+      expect(d.isApproachingLimit(10, 0)).toBe(true);
+    });
+
+    it('answers isLimitExceeded per bucket as well as globally', () => {
+      const d = new RateLimitDetector();
+      d.parseHeaders(headers('100', '0', String(NOW_SECONDS + 60)), '/api/v1/apps?limit=200');
+      d.parseHeaders(headers('100', '95', String(NOW_SECONDS + 60)), '/api/v1/groups?limit=200');
+
+      expect(d.isLimitExceeded('/api/v1/apps')).toBe(true);
+      expect(d.isLimitExceeded('/api/v1/groups')).toBe(false);
+      expect(d.isLimitExceeded()).toBe(true);
+    });
+
+    it('does not grow an entry per pagination cursor', () => {
+      const d = new RateLimitDetector();
+      for (let page = 0; page < 25; page++) {
+        d.parseHeaders(
+          headers('600', String(600 - page), String(NOW_SECONDS + 60)),
+          `/api/v1/apps?limit=200&after=cursor${page}`,
+        );
+      }
+      expect(d.getState().bucketLimits).toHaveLength(1);
+    });
+
+    it('reports an unseen bucket as unknown, never as exhausted', () => {
+      const d = new RateLimitDetector();
+      d.parseHeaders(headers('100', '0', String(NOW_SECONDS + 60)), '/api/v1/apps?limit=200');
+
+      // No observation for users at all. Absence is not evidence of exhaustion.
+      expect(d.getForBucket('/api/v1/users')).toBeNull();
+      expect(d.isApproachingLimit(10, 0, '/api/v1/users')).toBe(false);
+      expect(d.isLimitExceeded('/api/v1/users')).toBe(false);
     });
   });
 
@@ -311,7 +399,7 @@ describe('RateLimitDetector', () => {
 
       const state = d.getState();
       expect(state.globalLimit?.endpoint).toBe('/a');
-      expect(state.endpointLimits.map((e) => e.endpoint).sort()).toEqual(['/a', '/b']);
+      expect(state.bucketLimits.map((entry) => entry.bucket).sort()).toEqual(['/a', '/b']);
     });
   });
 });

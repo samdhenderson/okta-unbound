@@ -52,7 +52,14 @@ export interface RateLimitInfo {
   limit: number; // X-Rate-Limit-Limit
   remaining: number; // X-Rate-Limit-Remaining
   reset: number; // X-Rate-Limit-Reset (Unix timestamp in seconds)
+  /** The exact endpoint whose response carried these headers. Reporting only. */
   endpoint: string;
+  /**
+   * The Okta rate-limit bucket {@link endpoint} belongs to, as computed by
+   * `bucketOf` — this is what the observation is *keyed* by, because Okta
+   * enforces its quotas per endpoint family rather than per URL.
+   */
+  bucket: string;
   timestamp: number;
 }
 

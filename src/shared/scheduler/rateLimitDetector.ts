@@ -8,8 +8,8 @@
  * - `X-Rate-Limit-Remaining` — requests remaining in the current window
  * - `X-Rate-Limit-Reset` — Unix timestamp (seconds) when the window resets
  *
- * Tracks limits per-endpoint and a most-restrictive global view, expiring entries
- * once their reset time passes.
+ * Tracks limits **per Okta rate-limit bucket** plus a most-restrictive global
+ * view, expiring entries once their reset time passes.
  *
  * @see {@link https://developer.okta.com/docs/reference/rate-limits/ | Okta rate limits}
  * @see `ApiScheduler`
@@ -20,11 +20,42 @@ import type { RateLimitInfo } from './types';
 
 const log = createLogger('RateLimitDetector');
 
+/** Matches the first resource segment of an `/api/v1/{resource}` path. */
+const API_V1_RESOURCE = /^\/api\/v1\/([^/]+)/;
+
+/**
+ * The Okta rate-limit bucket an endpoint's quota belongs to.
+ *
+ * Okta does not enforce one org-wide number: quotas are bucketed by endpoint
+ * family, so `/api/v1/apps` can be exhausted while `/api/v1/groups` still has
+ * its full budget. Tracking observations per *URL* — which is what this module
+ * used to do, query string and all — cannot see that, and it also grew the map
+ * without bound as every distinct pagination cursor became its own key.
+ *
+ * The rule is the first resource segment: `/api/v1/apps/{id}/groups?limit=200`
+ * and `/api/v1/apps?limit=200` both bucket to `/api/v1/apps`. That is
+ * deliberately **at least as coarse as Okta's real buckets**, and the asymmetry
+ * is the whole argument — merging two observations that share a bucket costs a
+ * little precision, while splitting two that do not would let one family's
+ * budget be spent twice over. Anything that is not an `/api/v1/{resource}` path
+ * keys under its own path, so an unrecognised surface is isolated rather than
+ * pooled with something it has nothing to do with.
+ *
+ * @param endpoint - Okta path, with or without a query string.
+ * @returns The bucket key.
+ */
+export function bucketOf(endpoint: string): string {
+  const path = endpoint.split('?')[0];
+  const match = API_V1_RESOURCE.exec(path);
+  return match ? `/api/v1/${match[1]}` : path;
+}
+
 /**
  * Stateful tracker of Okta rate-limit headers. Owned by an `ApiScheduler`;
  * not safe for concurrent mutation across instances.
  */
 export class RateLimitDetector {
+  /** Latest observation per bucket (see {@link bucketOf}), not per URL. */
   private limits: Map<string, RateLimitInfo> = new Map();
   private globalLimit: RateLimitInfo | null = null;
 
@@ -41,16 +72,20 @@ export class RateLimitDetector {
       return null;
     }
 
+    const bucket = bucketOf(endpoint);
     const info: RateLimitInfo = {
       limit: parseInt(limit, 10),
       remaining: parseInt(remaining, 10),
       reset: parseInt(reset, 10),
       endpoint,
+      bucket,
       timestamp: Date.now(),
     };
 
-    // Store per-endpoint and global
-    this.limits.set(endpoint, info);
+    // Store per-bucket and global. The newest observation for a bucket replaces
+    // the previous one outright: Okta's headers describe that bucket's budget as
+    // of that response, so the most recent answer is the only current one.
+    this.limits.set(bucket, info);
 
     // Update global if this is more restrictive
     if (!this.globalLimit || info.remaining < this.globalLimit.remaining) {
@@ -58,7 +93,7 @@ export class RateLimitDetector {
     }
 
     log.debug('Rate limit updated:', {
-      endpoint: endpoint.split('?')[0],
+      bucket,
       remaining: info.remaining,
       limit: info.limit,
       resetIn: this.getSecondsUntilReset(info),
@@ -77,15 +112,18 @@ export class RateLimitDetector {
   }
 
   /**
-   * Get rate limit info for a specific endpoint
+   * Get the live observation for one bucket, or `null` when there is none — or
+   * when the one there has expired.
+   *
+   * @param bucket - A key from {@link bucketOf}, not a raw endpoint.
    */
-  getForEndpoint(endpoint: string): RateLimitInfo | null {
-    const info = this.limits.get(endpoint);
+  getForBucket(bucket: string): RateLimitInfo | null {
+    const info = this.limits.get(bucket);
     if (!info) return null;
 
     // Check if expired
     if (this.isExpired(info)) {
-      this.limits.delete(endpoint);
+      this.limits.delete(bucket);
       return null;
     }
 
@@ -93,12 +131,33 @@ export class RateLimitDetector {
   }
 
   /**
+   * Get rate limit info covering a specific endpoint — that is, its bucket's.
+   *
+   * @param endpoint - An Okta path; bucketed with {@link bucketOf} before lookup.
+   */
+  getForEndpoint(endpoint: string): RateLimitInfo | null {
+    return this.getForBucket(bucketOf(endpoint));
+  }
+
+  /**
    * Check if we're approaching the rate limit.
    * Accounts for in-flight requests that have been dispatched but whose
    * response headers haven't been processed yet.
+   *
+   * @param thresholdPercent - Approaching means at or below this percentage
+   * remaining.
+   * @param inFlightCount - Requests already dispatched whose headers have not
+   * come back. Subtracted from `remaining`, because they have spent budget the
+   * header has not counted yet.
+   * @param bucket - Ask about one bucket's budget. Omit to ask about the
+   * most-restrictive bucket seen anywhere, which is the global backstop.
    */
-  isApproachingLimit(thresholdPercent: number = 10, inFlightCount: number = 0): boolean {
-    const info = this.getMostRestrictive();
+  isApproachingLimit(
+    thresholdPercent: number = 10,
+    inFlightCount: number = 0,
+    bucket?: string,
+  ): boolean {
+    const info = bucket === undefined ? this.getMostRestrictive() : this.getForBucket(bucket);
     if (!info) return false;
 
     const effectiveRemaining = Math.max(0, info.remaining - inFlightCount);
@@ -107,6 +166,7 @@ export class RateLimitDetector {
 
     if (approaching) {
       log.warn('Approaching rate limit:', {
+        bucket: info.bucket,
         remaining: info.remaining,
         limit: info.limit,
         percentRemaining: percentRemaining.toFixed(1) + '%',
@@ -118,10 +178,13 @@ export class RateLimitDetector {
   }
 
   /**
-   * Check if rate limit has been exceeded
+   * Check if rate limit has been exceeded.
+   *
+   * @param bucket - Ask about one bucket. Omit for the most-restrictive bucket
+   * seen anywhere.
    */
-  isLimitExceeded(): boolean {
-    const info = this.getMostRestrictive();
+  isLimitExceeded(bucket?: string): boolean {
+    const info = bucket === undefined ? this.getMostRestrictive() : this.getForBucket(bucket);
     if (!info) return false;
     return info.remaining <= 0;
   }
@@ -185,10 +248,10 @@ export class RateLimitDetector {
    * Clean up expired rate limit entries
    */
   private cleanExpiredLimits(): void {
-    // Clean per-endpoint limits
-    for (const [endpoint, info] of this.limits.entries()) {
+    // Clean per-bucket limits
+    for (const [bucket, info] of this.limits.entries()) {
       if (this.isExpired(info)) {
-        this.limits.delete(endpoint);
+        this.limits.delete(bucket);
       }
     }
 
@@ -223,14 +286,14 @@ export class RateLimitDetector {
    */
   getState(): {
     globalLimit: RateLimitInfo | null;
-    endpointLimits: Array<{ endpoint: string; info: RateLimitInfo }>;
+    bucketLimits: Array<{ bucket: string; info: RateLimitInfo }>;
   } {
     this.cleanExpiredLimits();
 
     return {
       globalLimit: this.globalLimit,
-      endpointLimits: Array.from(this.limits.entries()).map(([endpoint, info]) => ({
-        endpoint,
+      bucketLimits: Array.from(this.limits.entries()).map(([bucket, info]) => ({
+        bucket,
         info,
       })),
     };
