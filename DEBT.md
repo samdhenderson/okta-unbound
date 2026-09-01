@@ -1931,7 +1931,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   block comes out with it.
 - **Risk:** Medium. It changes an attribution verdict an admin acts on, and the
   producer feeds every formatted-rule consumer, not just this one.
-- **Status:** open
+- **Status:** claimed:beta/trust-and-polish
 - **Related:** `D-029b`
 
 ### D-049 · `RULE_INVENTORY_KEY` is a cache-key literal outside `keys.ts`

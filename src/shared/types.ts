@@ -186,6 +186,15 @@ export interface FormattedRule {
   groupNames?: string[];
   allGroupNamesMap?: Record<string, string>;
   userAttributes: string[];
+  /**
+   * User ids the rule explicitly excludes (`conditions.people.users.exclude` on
+   * the raw rule). Carried through the formatter because the user-path
+   * membership classifier only ever sees this shape: without it,
+   * `membershipAnalysis.isUserExcludedFromRule` cannot tell that a rule excludes
+   * the very user it is being credited for, and the row hedges `Rule?` where the
+   * truth is `Direct` (D-048).
+   */
+  excludedUserIds?: string[];
   created: string;
   lastUpdated: string;
   affectsCurrentGroup?: boolean;
@@ -264,6 +273,12 @@ export interface MembershipRule {
   groupIds?: string[];
   conditionExpression?: string;
   userAttributes?: string[];
+  /**
+   * The formatted shape's carrier for `conditions.people.users.exclude` — see
+   * {@link FormattedRule.excludedUserIds}. A rule that arrived raw carries its
+   * exclusions under `conditions` instead; consumers read whichever is present.
+   */
+  excludedUserIds?: string[];
 }
 
 /**
