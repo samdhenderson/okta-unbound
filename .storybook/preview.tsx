@@ -6,6 +6,7 @@ import type { Preview, Decorator } from '@storybook/react-vite';
 // font-heading) resolve in stories.
 import '../src/sidepanel/tailwind.css';
 
+import { configure } from 'storybook/test';
 import { installChromeFake } from './mocks/chrome';
 import ErrorBoundary from '../src/sidepanel/components/ErrorBoundary';
 import { ProgressProvider } from '../src/sidepanel/contexts/ProgressContext';
@@ -14,6 +15,13 @@ import { SchedulerProvider } from '../src/sidepanel/contexts/SchedulerContext';
 // Install the benign chrome fake before any story (and thus any provider that
 // polls chrome on mount) renders.
 installChromeFake();
+
+// `StableWidth` reserves a slot by rendering its widest state invisibly beside
+// the live one (ADR-0044). The twin is `aria-hidden` and `invisible`, so a play
+// function's text query must skip it the same way it already skips `<script>`
+// and `<style>` — otherwise a reserved label matches twice. Mirrors
+// `src/test/setup.ts`, which does the same for the jsdom suite.
+configure({ defaultIgnore: 'script, style, [data-reserve-width], [data-reserve-width] *' });
 
 /**
  * Global decorator mounting the app's provider stack

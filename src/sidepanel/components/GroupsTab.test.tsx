@@ -1211,21 +1211,25 @@ describe('filter pipeline (cached mode)', () => {
         ],
       }),
     ]);
-    const badge = () => screen.getByRole('button', { name: /^Filters/ }).textContent;
+    // The accessible name, not `textContent`: the control reserves its badge's
+    // slot with an invisible twin (D-053f), so the button's text now carries a
+    // digit no reader ever sees. The name is the announced fact and the one that
+    // was worth pinning all along — `Filters, 2 applied` rather than `Filters2`.
+    const badge = () => screen.getByRole('button', { name: /^Filters/ }).getAttribute('aria-label');
     await openFilters(uev);
 
     expect(badge()).toBe('Filters');
 
     await uev.click(section('Group Type').getByRole('button', { name: 'App' }));
-    expect(badge()).toBe('Filters1');
+    expect(badge()).toBe('Filters, 1 applied');
 
     await uev.click(section('Push Status').getByRole('button', { name: 'Pushed' }));
-    expect(badge()).toBe('Filters2');
+    expect(badge()).toBe('Filters, 2 applied');
 
     // Two apps selected still only add 1 to the count.
     await uev.click(section('Push Target App').getByRole('button', { name: 'Slack' }));
     await uev.click(section('Push Target App').getByRole('button', { name: 'Zoom' }));
-    expect(badge()).toBe('Filters3');
+    expect(badge()).toBe('Filters, 3 applied');
   });
 
   // SURPRISE (pinned as-is): activeFilterCount ignores searchQuery, yet
@@ -1236,14 +1240,14 @@ describe('filter pipeline (cached mode)', () => {
     const input = screen.getByPlaceholderText('Search by name, description, ID — or /regex/');
 
     await uev.type(input, 'alph');
-    expect(screen.getByRole('button', { name: /^Filters/ }).textContent).toBe('Filters');
+    expect(screen.getByRole('button', { name: /^Filters/ })).toHaveAccessibleName('Filters');
 
     await openFilters(uev);
     await uev.click(section('Group Type').getByRole('button', { name: 'App' }));
     await uev.click(screen.getByRole('button', { name: 'Clear all' }));
 
     expect(input).toHaveValue('');
-    expect(screen.getByRole('button', { name: /^Filters/ }).textContent).toBe('Filters');
+    expect(screen.getByRole('button', { name: /^Filters/ })).toHaveAccessibleName('Filters');
   });
 
   it('an individual filter chip removes only its own axis', async () => {
@@ -2084,7 +2088,9 @@ describe('a filtered view requested from Home', () => {
     // The badge on the collapsed toggle is what explains the short list. The
     // panel itself stays shut: a reader who pressed a finding on Home asked for
     // the list, not for the controls that produced it.
-    expect(screen.getByRole('button', { name: /^Filters/ }).textContent).toBe('Filters1');
+    expect(screen.getByRole('button', { name: /^Filters/ })).toHaveAccessibleName(
+      'Filters, 1 applied',
+    );
     expect(screen.queryByText('Sort by')).not.toBeInTheDocument();
     expect(onListViewConsumed).toHaveBeenCalledTimes(1);
   });

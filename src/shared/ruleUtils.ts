@@ -39,6 +39,25 @@ function expressionText(rule: OktaGroupRule): string {
 }
 
 /**
+ * The user ids a rule explicitly excludes, read defensively for the same reason
+ * {@link expressionText} is: `conditions.people.users.exclude` is typed
+ * `string[]` on {@link OktaGroupRule}, but the type is a claim about an Okta
+ * response rather than a check of one, and not every caller formats rules that
+ * came through a zod boundary.
+ *
+ * A non-array, or an array holding anything other than strings, degrades to the
+ * rows that *are* strings — never a throw out of the caller's `.map`, which
+ * would cost the whole rules surface for one bad row.
+ *
+ * @param rule - The rule whose exclusion list to read.
+ * @returns The excluded user ids, possibly empty.
+ */
+function excludedUserIdsOf(rule: OktaGroupRule): string[] {
+  const value: unknown = rule.conditions?.people?.users?.exclude;
+  return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+}
+
+/**
  * Extract user attributes from rule expression
  * e.g., "user.department == 'Engineering'" -> ["department"]
  */
@@ -128,6 +147,10 @@ export function detectConflicts(rules: OktaGroupRule[]): RuleConflict[] {
  * @param rule - The raw Okta group rule to format.
  * @param currentGroupId - When provided, flags whether the rule targets this group.
  * @param conflicts - Pre-computed conflicts to attribute back to this rule.
+ * @remarks Carries the rule's exclusion list forward as
+ * {@link FormattedRule.excludedUserIds}: this shape is the only one the
+ * user-path membership classifier ever sees, so an exclusion dropped here is an
+ * excluded user attributed to the rule that excludes them (D-048).
  * @remarks Never throws on a malformed condition expression. A
  * `conditions.expression.value` that is not a string — which an unvalidated
  * caller can hand over, since the field is end-user-controllable — degrades to
@@ -165,6 +188,7 @@ export function formatRuleForDisplay(
     conditionExpression: expression,
     groupIds,
     userAttributes,
+    excludedUserIds: excludedUserIdsOf(rule),
     created: rule.created,
     lastUpdated: rule.lastUpdated,
     affectsCurrentGroup,

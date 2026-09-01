@@ -139,37 +139,27 @@ export function attributionNamesRules(attribution: MembershipAttribution): boole
  * Whether `userId` is explicitly excluded from a rule. Excluded users are not
  * affected by the rule even if they otherwise match its conditions.
  *
- * ## Known hole: exclusion lists are invisible on the cache-served path
+ * Reads **both** shapes a rule can arrive in, because the two attribution paths
+ * do not agree on one. A raw Okta rule carries its exclusions under
+ * `conditions.people.users.exclude`; a formatted rule
+ * (`shared/ruleUtils.formatRuleForDisplay`, the only shape the user path ever
+ * sees) carries them as {@link MembershipRule.excludedUserIds}. Reading only the
+ * raw field is what let this function answer `false` for every cache-served
+ * rule, so an explicitly-excluded user was still attributed to the rule that
+ * excludes them (D-048).
  *
- * This reads `conditions.people.users.exclude`, which only a **raw** Okta rule
- * carries. Every rule that reaches this module through `RulesCache` is a
- * `FormattedRule` (`shared/types`), and that shape has no `conditions` at all —
- * it keeps `groupIds`, `conditionExpression` and `userAttributes` and drops the
- * rest. So for a cache-served rule this function always returns `false` and an
- * explicitly-excluded user can still be attributed to the rule that excludes
- * them.
- *
- * This is **pre-existing and deliberately left in place here**, not fixed by
- * widening the type:
- * - Widening `FormattedRule` alone would change nothing — the field would just
- *   be `undefined` forever. The real fix is in the *producer*
- *   (`shared/ruleUtils.formatRuleForDisplay`, which builds the formatted shape)
- *   plus the cache's stored schema, neither of which belongs to this change.
- * - The blast radius is bounded. Okta applies exclusions *before* it reports
- *   membership, so the primary attribution source —
- *   `_embedded['group-rules']`, read by
- *   `shared/membership/memberRuleAttribution` — is unaffected: an excluded user
- *   simply is not credited to that rule. Only this fallback can over-attribute,
- *   and only on the user path.
- * - It cannot invent a membership, only mis-name its source: exclusion is
- *   consulted to *downgrade* an attribution, never to create one.
- *
- * When the formatter starts carrying exclusions, this function needs no change —
- * only the type it reads through.
+ * @param rule - The rule, raw or formatted.
+ * @param userId - The user being attributed.
+ * @returns `true` when the rule names this user in its exclusion list.
  */
 function isUserExcludedFromRule(rule: MembershipRule, userId: string): boolean {
-  const excludedUsers = rule.conditions?.people?.users?.exclude || [];
-  return excludedUsers.includes(userId);
+  // The union, not the first shape that answers: the formatter always sets
+  // `excludedUserIds` (empty when there are none), so preferring it would make an
+  // empty formatted list hide a raw `conditions` block on any rule carrying both.
+  return (
+    (rule.excludedUserIds?.includes(userId) ?? false) ||
+    (rule.conditions?.people?.users?.exclude?.includes(userId) ?? false)
+  );
 }
 
 /**

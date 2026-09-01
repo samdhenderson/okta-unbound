@@ -546,31 +546,18 @@ describe('membership classification (in-file heuristic)', () => {
     expect(screen.getByText('Added directly')).toBeInTheDocument();
   });
 
-  // CHARACTERIZED (a real defect, flagged here and filed, not fixed): this case
-  // was titled "classifies an excluded user as DIRECT even when an active rule
-  // targets the group" and asserted the `Direct` badge with the rule unnamed.
-  // It was green only because its fixture reached the classifier as a rule
-  // object carrying `conditions.people.users.exclude` — a shape **no producer
-  // on this surface emits**. Both of the tab's rule sources hand the classifier
-  // `FormattedRule`s, and `formatRuleForDisplay` keeps `groupIds`,
-  // `conditionExpression` and `userAttributes` and drops `conditions` outright.
-  // `membershipAnalysis.isUserExcludedFromRule` documents that hole in so many
-  // words and deliberately leaves it to the *producer* to close.
-  //
-  // D-029b did not cause it and does not fix it: before the migration the
-  // inventory came from `RulesCache`, whose stored rules are the same formatted
-  // shape, so production has always answered this way. It only became visible
-  // when the seeding moved onto a path that formats what it is given, instead of
-  // injecting a hand-built object past the formatter.
-  //
-  // What stays covered (ADR-0022): the classifier's exclusion branch is pinned
-  // on the raw shape it actually reads by
-  // `shared/utils/membershipAnalysis.test.ts` ("classifies as DIRECT when the
-  // user is excluded from every matching rule", plus the partial-exclusion and
-  // candidate-set cases), and end-to-end against Okta's own attribution by
-  // `shared/membership/attributionParity.test.ts`. What is pinned here is what
-  // *this surface* really tells an admin today.
-  it('CHARACTERIZED (defect): over-attributes an excluded user to the rule that excludes them', async () => {
+  // FLIPPED (ADR-0012, D-048): this case spent one release as
+  // "CHARACTERIZED (defect): over-attributes an excluded user to the rule that
+  // excludes them", asserting the hedged `Rule?` badge. It pinned a real defect.
+  // Both of this tab's rule sources hand the classifier `FormattedRule`s, and
+  // `formatRuleForDisplay` used to drop `conditions` outright — so the exclusion
+  // list never reached `membershipAnalysis.isUserExcludedFromRule`, which
+  // therefore answered `false` for every rule on this surface and credited the
+  // rule that excludes the user. The formatter now carries the exclusions as
+  // `excludedUserIds` and the classifier reads either shape, so the assertion
+  // returns to what it made before `D-029b` made the hole visible: `Direct`,
+  // with the rule unnamed.
+  it('classifies an excluded user as Direct even when an active rule targets the group', async () => {
     route(USER_GROUPS, () => ({ success: true, data: [rawGroup()] }));
     route(GROUP_RULES, () => ({
       success: true,
@@ -581,11 +568,11 @@ describe('membership classification (in-file heuristic)', () => {
     fireEvent.change(userSearchInput(), { target: { value: 'ada' } });
     fireEvent.click(await screen.findByText('Ada Lovelace', {}, { timeout: 2000 }));
 
-    // The honest answer is `Direct`. The row says `Rule?` — hedged, because the
-    // exclusion the rule carries never reached the classifier.
+    // Excluded from the only rule that targets the group, so the membership is a
+    // manual add — proven, not hedged, and the rule is not named as its source.
     const engineering = await membershipRow('Engineering');
-    expect(within(engineering).getByText('Rule?')).toBeInTheDocument();
-    expect(within(engineering).queryByText('Direct')).not.toBeInTheDocument();
+    expect(within(engineering).getByText('Direct')).toBeInTheDocument();
+    expect(within(engineering).queryByText('Rule?')).not.toBeInTheDocument();
   });
 
   // FLIPPED (ADR-0012): this case used to assert `expect(screen.getByText('DIRECT'))`

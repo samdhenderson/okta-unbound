@@ -86,6 +86,24 @@ export interface RuleAssignment {
   groupIds: readonly string[];
 }
 
+/** A rule row for the missing-target join: its assignments, plus who to blame. */
+export interface RuleTargets extends RuleAssignment {
+  /** Okta rule id. */
+  id: string;
+  /** Rule name, for display. */
+  name: string;
+}
+
+/** One rule whose assignment list names a group the org no longer has. */
+export interface MissingTargetFinding {
+  /** Okta rule id. */
+  id: string;
+  /** Rule name. */
+  name: string;
+  /** The target ids with no group behind them, in the rule's own order. */
+  missingGroupIds: string[];
+}
+
 /** One group a report lists, with the line shown under its name. */
 export interface GroupFinding {
   /** Okta group id — the navigation target. */
@@ -139,6 +157,48 @@ export function appNamesByGroup(
     else byGroup.set(split.entityId, [name]);
   }
   return byGroup;
+}
+
+/**
+ * Rules that assign users into a group the org no longer has.
+ *
+ * `actions.assignUserToGroups.groupIds` is a list of ids Okta does not validate
+ * against the group inventory on read, so a rule whose target was deleted still
+ * lists it, still reports `ACTIVE`, and does nothing. Every input is a row the
+ * snapshot already holds, so this costs **zero requests** — it is a set
+ * difference.
+ *
+ * ## The completeness gate is the whole reason this is not a one-liner
+ *
+ * The group collection is read **negatively** here: the finding is an id that is
+ * *absent*. An absence only means anything if the walk that would have supplied
+ * it finished. Against a half-read inventory every rule in the org looks broken,
+ * and "this rule is broken" is a strong enough claim that it must not be made
+ * off a partial read (ADR-0040 §7). So an incomplete walk suppresses the join
+ * entirely rather than softening its wording — the same shape
+ * `resolveCount`'s `gates` give the Home reports.
+ *
+ * @param rules - Rule rows, each carrying its identity and its assignments.
+ * @param knownGroupIds - Every group id the snapshot holds.
+ * @param groupWalkComplete - Whether the group walk finished. When `false`, the
+ * result is empty.
+ * @returns One finding per rule with at least one missing target, in input
+ * order.
+ */
+export function findRulesWithMissingTargets(
+  rules: readonly RuleTargets[],
+  knownGroupIds: ReadonlySet<string>,
+  groupWalkComplete: boolean,
+): MissingTargetFinding[] {
+  if (!groupWalkComplete) return [];
+  const findings: MissingTargetFinding[] = [];
+  for (const rule of rules) {
+    const missingGroupIds = rule.groupIds.filter((id) => !knownGroupIds.has(id));
+    if (missingGroupIds.length > 0) {
+      findings.push({ id: rule.id, name: rule.name, missingGroupIds });
+    }
+  }
+  return findings;
 }
 
 /** Sort findings by name, so the same org produces the same list twice running. */

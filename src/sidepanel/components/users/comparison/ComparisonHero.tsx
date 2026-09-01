@@ -26,6 +26,7 @@
 import React from 'react';
 import { initialsOf, hueFromId } from '../../../../shared/utils/userDisplay';
 import { similarityColor } from './comparisonAnalytics';
+import { StableWidth } from '../../shared';
 import type { OktaUser } from '../../../../shared/types';
 
 /** Props for {@link ComparisonHero}. */
@@ -79,12 +80,21 @@ const ComparisonHero: React.FC<ComparisonHeroProps> = ({
       <span className="min-w-0 truncate text-xs font-semibold text-neutral-500 uppercase tracking-wide">
         {isLoading ? '· ·' : scopeNote ? `Match · ${scopeNote}` : 'Match'}
       </span>
-      <span
-        className="font-mono text-sm leading-none font-bold"
-        style={{ color: similarityColor(similarity) }}
-      >
-        {isLoading ? '··' : `${similarity}%`}
-      </span>
+      {/*
+        The percentage cannot be allowed to decide how much width the label beside
+        it gets (D-053a). It reserves its widest state (`100%`) so the loading
+        placeholder occupies the same box as the value, it is `shrink-0` so it is
+        never the side that gives, and it is `tabular-nums` so `11%` and `88%` are
+        the same width as each other.
+      */}
+      <StableWidth reserve="100%" align="end" className="shrink-0">
+        <span
+          className="font-mono text-sm leading-none font-bold tabular-nums"
+          style={{ color: similarityColor(similarity) }}
+        >
+          {isLoading ? '··' : `${similarity}%`}
+        </span>
+      </StableWidth>
     </div>
 
     {/* Same track recipe as the Overview tab's proportion bars. Hidden from the

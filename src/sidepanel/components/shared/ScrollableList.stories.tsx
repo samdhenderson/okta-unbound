@@ -130,6 +130,43 @@ export const BoxParityLoading: Story = {
   },
 };
 
+/**
+ * The same pair with a scrollbar in play — the half `D-053g` left behind.
+ *
+ * The reserved channel (`scrollbar-gutter: stable`) lived only on the scrolling
+ * branch, so the loaded box gave up 6px of content width that the loading box did
+ * not, and the rows shifted sideways the moment the spinner was replaced. Flip
+ * between this story and the one below: the left edge of the content must not
+ * move (`D-054`). Per ADR-0023 the pair *is* the coverage — the class string
+ * itself is not asserted.
+ */
+export const GutterParityLoading: Story = {
+  args: {
+    loading: true,
+    maxHeight: '160px',
+    fillAvailable: false,
+    skeleton: <Skeleton variant="row" count={3} label="Loading groups" />,
+    children: null,
+  },
+};
+
+/** The loaded counterpart of {@link GutterParityLoading} — enough rows to scroll. */
+export const GutterParityLoaded: Story = {
+  args: {
+    maxHeight: '160px',
+    fillAvailable: false,
+    children: (
+      <>
+        {Array.from({ length: 12 }, (_, i) => (
+          <div key={i} className="p-3 bg-white border border-neutral-200 rounded-md">
+            Item {i + 1}
+          </div>
+        ))}
+      </>
+    ),
+  },
+};
+
 /** The loaded counterpart of {@link BoxParityLoading} — same box, real rows. */
 export const BoxParityLoaded: Story = {
   args: {

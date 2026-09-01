@@ -274,7 +274,12 @@ describe('GroupMembersSection', () => {
     render(<GroupMembersSection {...base} status="done" members={many} memberCount={205} />);
 
     expect(screen.queryByText(/Showing the first 200/)).not.toBeInTheDocument();
-    expect(screen.getByText(/of 205$/)).toBeInTheDocument();
+    // Two places now say it, and both are the point: the heading's count renders
+    // `205 of 205` from first paint rather than growing into that form when a
+    // filter applies (D-053f), and the list footer still reports how far the
+    // roster has been mounted.
+    expect(screen.getAllByText(/of 205$/)).not.toHaveLength(0);
+    expect(screen.getByText(/Showing \d+ of 205$/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Load more/ })).toBeInTheDocument();
   });
 });

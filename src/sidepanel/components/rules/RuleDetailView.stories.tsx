@@ -143,6 +143,41 @@ export const UnresolvedTargetGroups: Story = {
 };
 
 /**
+ * A target group that **no longer exists**, against a completed group walk (D-061).
+ *
+ * The distinction this story exists to hold is against
+ * [UnresolvedTargetGroups](?path=/story/rules-ruledetailview--unresolved-target-groups),
+ * which looks superficially similar and means something entirely different: that one says
+ * *this view has not learned the name*, this one says *there is nothing left to name*. A
+ * rule assigning into a deleted group is `ACTIVE`, adds nobody, and used to render exactly
+ * like a working rule.
+ *
+ * It takes a warning's weight because it is a proven answer — the producer only sets
+ * `missingGroupIds` when the group inventory is complete, so the claim is never made off a
+ * half-read walk.
+ */
+export const MissingTargetGroup: Story = {
+  args: {
+    rule: rule({
+      groupNames: ['Engineering – All', GROUP_B],
+      allGroupNamesMap: { [GROUP_A]: 'Engineering – All' },
+      missingGroupIds: [GROUP_B],
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Group no longer exists')).toBeInTheDocument();
+    // Said once in the chip and once in the section's description, so the fact is
+    // legible whether the reader is scanning the list or reading the sentence.
+    await expect(canvas.getByText(/One target no longer exists/)).toBeInTheDocument();
+    // The surviving target is unaffected and still openable.
+    await expect(
+      canvas.getByRole('button', { name: 'Open group Engineering – All' }),
+    ).toBeInTheDocument();
+  },
+};
+
+/**
  * A condition expression that names a group by id. The literal is replaced by the chip it
  * resolves to — the same trade `RuleExpressionText` makes for the Group Detail clause
  * view, so the app's two renderers of rule conditions read alike.

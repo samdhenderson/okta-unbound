@@ -1718,7 +1718,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   where the glyph _is_ the accessible name is the cheapest route, but check for
   that case first rather than assuming it does not exist. Stories stay axe-clean.
 - **Risk:** Low, but it touches every icon in the app, so land it on its own.
-- **Status:** open
+- **Status:** claimed:beta/trust-and-polish
 
 ### D-042 · The `idb` fake is copy-pasted across four test files
 
@@ -1931,7 +1931,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   block comes out with it.
 - **Risk:** Medium. It changes an attribution verdict an admin acts on, and the
   producer feeds every formatted-rule consumer, not just this one.
-- **Status:** open
+- **Status:** claimed:beta/trust-and-polish
 - **Related:** `D-029b`
 
 ### D-049 · `RULE_INVENTORY_KEY` is a cache-key literal outside `keys.ts`
@@ -2205,7 +2205,7 @@ affects every scroll box in the app, on every platform.
   truncation point stay put. Per ADR-0023 that stays a visual check rather than a
   class assertion.
 - **Risk:** Low. One row, no behaviour.
-- **Status:** open
+- **Status:** claimed:beta/trust-and-polish
 - **Related:** `D-053`, ADR-0044. The reel masks this with a settle gate; the
   defect is unchanged for real users.
 
@@ -2233,7 +2233,7 @@ affects every scroll box in the app, on every platform.
   with a fixed chip track rather than `justify-between`. Note `D-036` already has
   this file over the 300-line bar; do not land the two together.
 - **Risk:** Low. Presentation only.
-- **Status:** open
+- **Status:** claimed:beta/trust-and-polish
 - **Related:** `D-053`, `D-036` (same file, over the line bar), ADR-0044. The reel
   masks this with a settle gate.
 
@@ -2254,7 +2254,7 @@ affects every scroll box in the app, on every platform.
   is laid out so the badge cannot change the description's width (its own track,
   or the badge dropped below the heading). The count carries `tabular-nums`.
 - **Risk:** Low. Presentation only.
-- **Status:** open
+- **Status:** claimed:beta/trust-and-polish
 - **Related:** `D-053`, ADR-0044. The reel masks this with a settle gate.
 
 ### D-053d · The MFA scan paragraph re-wraps three times as the button label changes
@@ -2283,7 +2283,7 @@ affects every scroll box in the app, on every platform.
   width of its widest label, so a scan changes what the row says and not how it is
   laid out.
 - **Risk:** Low. Presentation only.
-- **Status:** open
+- **Status:** claimed:beta/trust-and-polish
 - **Related:** `D-053`, ADR-0044. The reel masks this with a settle gate.
 
 ### D-053e · Three tab labels slide sideways when their count badges materialise
@@ -2306,7 +2306,7 @@ affects every scroll box in the app, on every platform.
   space. The badge carries `tabular-nums`.
 - **Risk:** Low. Presentation only, though it touches the tab rail's alignment, so
   check the four-tab and two-column (`sm:grid-cols-4`) breakpoints both.
-- **Status:** open
+- **Status:** claimed:beta/trust-and-polish
 - **Related:** `D-053`, ADR-0044. The reel masks this with a settle gate.
 
 ### D-053f · The Filters button shrinks the search field, and the member count grows in place
@@ -2330,7 +2330,7 @@ affects every scroll box in the app, on every platform.
   reserves its widest form or renders both parts from first paint (`250 of 250`),
   with `tabular-nums` either way.
 - **Risk:** Low. Presentation only.
-- **Status:** open
+- **Status:** claimed:beta/trust-and-polish
 - **Related:** `D-053`, ADR-0044. The reel masks this with a settle gate.
 
 ### D-053g · Classic scrollbars take 6px out of content width the instant a list overflows
@@ -2415,7 +2415,7 @@ affects every scroll box in the app, on every platform.
   be inert) before assuming the one-word change is enough.
 - **Risk:** Low — but it is the remaining tail of `D-053g`, so verify against the
   same story set that item used.
-- **Status:** open
+- **Status:** claimed:beta/trust-and-polish
 - **Related:** `D-053g`
 
 ### D-055 · `formatRuleForDisplay` does unguarded string work on a field it does not validate
@@ -2629,7 +2629,7 @@ affects every scroll box in the app, on every platform.
   says which target is missing rather than rendering a dead rule as a live one.
 - **Risk:** Low to compute, medium to present — claiming a rule is broken is a
   strong claim, and it must not be made off a half-read group list.
-- **Status:** open
+- **Status:** claimed:beta/trust-and-polish
 - **Related:** `D-060`, ADR-0040 §7
 
 ### D-062 · Two context engines probe the same page twice on every navigation

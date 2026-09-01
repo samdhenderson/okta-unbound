@@ -1,8 +1,18 @@
 import '@testing-library/jest-dom';
 import { afterEach, vi } from 'vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { resetEntityCache } from '../sidepanel/cache/entityCache';
 import { resetCurrentUserCache } from '../sidepanel/hooks/useOktaApi/currentUserCache';
+
+// `StableWidth` (ADR-0044's layout-stability convention) reserves a slot by
+// rendering its widest state invisibly in the same grid cell. That twin is
+// `aria-hidden` and `invisible`, so no reader ever meets it — but a text query
+// walks the DOM and would match it, making every reserved label ambiguous.
+// Ignoring it here is the same mechanism Testing Library already uses to skip
+// `<script>` and `<style>`: the query sees what the user sees. The subtree is
+// named explicitly — `ignore` filters nodes that *match* the selector, so a
+// reserved chip's inner spans would otherwise still be found.
+configure({ defaultIgnore: 'script, style, [data-reserve-width], [data-reserve-width] *' });
 
 // Cleanup after each test
 afterEach(() => {

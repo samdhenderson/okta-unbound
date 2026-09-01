@@ -396,9 +396,15 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-semibold text-neutral-900">
             Members
-            <span className="ml-2 text-xs font-normal text-neutral-500">
-              {sorted.length.toLocaleString()}
-              {sorted.length !== members.length && ` of ${members.length.toLocaleString()}`}
+            {/*
+              Both parts from first paint — `250 of 250` rather than `250` that
+              becomes `47 of 250` the moment a filter applies. The heading sits in a
+              `justify-between` row, so the old form grew in place and pushed the
+              Copy button beside it (D-053f). `tabular-nums` keeps it still as the
+              digits themselves change.
+            */}
+            <span className="ml-2 text-xs font-normal tabular-nums text-neutral-500">
+              {sorted.length.toLocaleString()} of {members.length.toLocaleString()}
             </span>
           </h3>
           <Button

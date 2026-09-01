@@ -32,6 +32,7 @@
  */
 import React from 'react';
 import Icon from './Icon';
+import StableWidth from './StableWidth';
 
 /** Props for {@link FilterToggle}. */
 export interface FilterToggleProps {
@@ -91,7 +92,7 @@ const FilterToggle: React.FC<FilterToggleProps> = ({
     onClick={onToggle}
     aria-pressed={open}
     aria-label={activeCount > 0 ? `${label}, ${activeCount} applied` : label}
-    className={`press flex items-center gap-(--sp-inline) rounded-md border text-sm font-medium ${
+    className={`press flex shrink-0 items-center gap-(--sp-inline) rounded-md border text-sm font-medium ${
       PADDING[size]
     } ${
       open || activeCount > 0
@@ -102,14 +103,30 @@ const FilterToggle: React.FC<FilterToggleProps> = ({
   >
     <Icon type="filter" size="sm" />
     {label}
-    {activeCount > 0 && (
-      <span
-        aria-hidden="true"
-        className="min-w-[20px] rounded-full bg-primary px-1.5 py-0.5 text-center text-xs font-bold text-white"
-      >
-        {activeCount}
-      </span>
-    )}
+    {/*
+      The badge's slot is held open from first render, and the button is
+      `shrink-0`. Both halves matter: applying a filter used to widen this button,
+      and because the search field beside it is the `flex-1` in the row, the field
+      shrank under a typing user (D-053f). Reserving here rather than at the call
+      site fixes every rung that hosts the control.
+    */}
+    <StableWidth
+      reserve={
+        <span className="min-w-[20px] px-1.5 py-0.5 text-xs font-bold">
+          {Math.max(activeCount, 1)}
+        </span>
+      }
+      align="center"
+    >
+      {activeCount > 0 && (
+        <span
+          aria-hidden="true"
+          className="min-w-[20px] rounded-full bg-primary px-1.5 py-0.5 text-center text-xs font-bold tabular-nums text-white"
+        >
+          {activeCount}
+        </span>
+      )}
+    </StableWidth>
   </button>
 );
 

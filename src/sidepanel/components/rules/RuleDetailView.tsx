@@ -76,6 +76,27 @@ export interface RuleDetailViewProps {
  * pasted into a search. Nothing here fetches, so nothing can turn the id into a name at
  * render time.
  */
+/**
+ * A target id the org has no group for — a rule assigning users into a group
+ * that was deleted (D-061).
+ *
+ * Distinct from {@link UnnamedGroupChip}, and the distinction is the point: one
+ * says *this view has not learned the name*, the other says *there is nothing
+ * left to name*. The second is only ever rendered when the group walk finished,
+ * so it is a proven answer and takes a warning's weight; the first is a
+ * non-answer and keeps its dashed, un-chipped register.
+ */
+const MissingGroupChip: React.FC<{ groupId: string }> = ({ groupId }) => (
+  <span
+    className="inline-flex max-w-full items-center gap-1 rounded-md border border-warning bg-warning-light px-2 py-0.5 text-xs"
+    title="No group in this org has this id. The rule still lists it, and adds nobody to it."
+  >
+    <Icon type="alert" size="xs" className="shrink-0 text-warning-text" />
+    <span className="shrink-0 text-warning-text">Group no longer exists</span>
+    <CopyableId value={groupId} label={`Copy group id ${groupId}`} />
+  </span>
+);
+
 const UnnamedGroupChip: React.FC<{ groupId: string }> = ({ groupId }) => (
   <span
     className="inline-flex max-w-full items-center gap-1 rounded-md border border-dashed border-neutral-300 px-2 py-0.5 text-xs"
@@ -168,6 +189,7 @@ const RuleDetailView: React.FC<RuleDetailViewProps> = ({
   sticky = true,
 }) => {
   const hasConflicts = Boolean(rule.conflicts && rule.conflicts.length > 0);
+  const missingTargetCount = rule.missingGroupIds?.length ?? 0;
 
   return (
     <div className="space-y-(--sp-rung)">
@@ -220,7 +242,9 @@ const RuleDetailView: React.FC<RuleDetailViewProps> = ({
         title="Then add to groups"
         description={
           rule.groupIds.length > 0
-            ? 'Everyone the condition matches is added to each of these.'
+            ? missingTargetCount > 0
+              ? `Everyone the condition matches is added to each of these. ${missingTargetCount === 1 ? 'One target no longer exists' : `${missingTargetCount} targets no longer exist`}, so that part of the rule does nothing.`
+              : 'Everyone the condition matches is added to each of these.'
             : undefined
         }
       >
@@ -231,6 +255,12 @@ const RuleDetailView: React.FC<RuleDetailViewProps> = ({
               // A `groupNames` entry equal to the id is the upstream formatter's own
               // "unresolved" marker, not a name.
               const resolvedName = groupName !== groupId ? groupName : undefined;
+              // Only the producer knows whether the group inventory was complete
+              // enough to read an absence as a deletion, so this reads its verdict
+              // rather than re-deriving one from a missing name (D-061).
+              const isMissing = rule.missingGroupIds?.includes(groupId) ?? false;
+
+              if (isMissing) return <MissingGroupChip key={groupId} groupId={groupId} />;
 
               return resolvedName ? (
                 <EntityLink
@@ -269,14 +299,14 @@ const RuleDetailView: React.FC<RuleDetailViewProps> = ({
             {rule.conflicts!.map((conflict, idx) => (
               <div
                 key={idx}
-                className="rounded-md border border-warning-light bg-warning-light p-(--sp-card)"
+                className="rounded-md border border-warning bg-warning-light p-(--sp-card)"
               >
                 <div className="flex items-start gap-3">
                   <span
                     className={`rounded-md px-2 py-0.5 text-xs font-bold uppercase ${
                       conflict.severity === 'high'
                         ? 'border border-danger-light bg-danger-light text-danger-text'
-                        : 'border border-warning-light bg-warning-light text-warning-text'
+                        : 'border border-warning bg-warning-light text-warning-text'
                     }`}
                   >
                     {conflict.severity}
