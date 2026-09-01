@@ -76,7 +76,7 @@ interface GroupsListActionBarProps {
   selectedCount: number;
   /** Number of groups after filtering — the *Select all* count and the export denominator. */
   filteredCount: number;
-  /** Which inline panel is open; its trigger renders primary and pinned. */
+  /** Which inline panel is open; its trigger names the way back and is pinned. */
   activePanel: ActivePanel;
   /** `groupMembersCache.size` — appended to the Cross-search label when above zero. */
   crossSearchBadge: number;
@@ -98,6 +98,36 @@ interface GroupsListActionBarProps {
 
 /**
  * The groups-list action strip.
+ *
+ * ## The blue button, and why it is *Export list* (ADR-0061, I-030)
+ *
+ * With no panel open — the state this rung rests in — every control here was
+ * `secondary`, so six identically-weighted buttons sat above the list with nothing
+ * saying where to start. Sam, on that strip: *"groups tab has no blue buttons and
+ * it should."*
+ *
+ * ADR-0061 fixed the mechanism while the Rules strip was being built — `primary`
+ * names a rung's **page-level verb**, and an open panel states itself in its label
+ * rather than in a colour a screen reader cannot read — but deliberately did not
+ * convert this strip, because applying the rule mechanically would have deleted
+ * its `primary` and left it with none.
+ *
+ * *Export list* is the answer, and it is the only candidate that survives the
+ * ADR's own test. *Compare (N)*, *Merge (N)*, *Export (N)* and *Bulk actions* are
+ * all **selection-scoped** — they act on rows you ticked, so they are properties
+ * of a selection rather than of the page, and they are absent entirely until one
+ * exists. *Export list* acts on the whole filtered rung, is present in every state,
+ * and is the one verb whose object is the thing the reader is looking at.
+ *
+ * The Rules strip's answer — a *Load* / *Refresh* verb — is **not** available here,
+ * and that is a real difference rather than an oversight: the Groups list loads on
+ * arrival, so there is no "fetch this rung" verb for a reader to press. That
+ * asymmetry is the ADR's point: two strips now differ in which verb is blue because
+ * the two rungs differ in what their page-level verb is.
+ *
+ * It passes the consequence test that decides whether a page verb may sit in the
+ * row at all (ADR-0039): an export reads and writes a file, and pressing it twice
+ * costs a second download.
  *
  * Selection-scoped verbs (*Compare*, *Merge*, *Bulk actions*, *Export (N)*,
  * *Deselect*) are **omitted** below their selection threshold rather than
@@ -141,21 +171,31 @@ const GroupsListActionBar: React.FC<GroupsListActionBarProps> = ({
   onExportSelection,
   onExportGroupsList,
 }) => {
-  /** An inline-panel trigger: primary + pinned while its panel is the open one. */
+  /**
+   * An inline-panel trigger. It states its own state in **words** — closed it names
+   * what it will show, open it names the way back — and is `pinned` while open so
+   * the control that closes a panel can never be the thing hiding behind **More**
+   * (ADR-0061).
+   *
+   * It used to say so in colour instead: the open trigger took `variant: 'primary'`,
+   * which `ActionBar` also reads as `pinned`. That carried the pinning for free but
+   * made the open state colour-only — a screen reader was told nothing, and the
+   * strip's one blue button meant "a panel is open" rather than "start here".
+   */
   const panelAction = (
     panel: Exclude<ActivePanel, 'none'>,
-    label: string,
+    closedLabel: string,
+    openLabel: string,
     icon: ActionDescriptor['icon'],
     restingPriority: ActionDescriptor['priority'] = 'flex',
   ): ActionDescriptor => {
     const open = activePanel === panel;
     return {
       id: panel,
-      label,
+      label: open ? openLabel : closedLabel,
       icon,
       onClick: () => onTogglePanel(panel),
       priority: open ? 'pinned' : restingPriority,
-      ...(open ? { variant: 'primary' as const } : {}),
     };
   };
 
@@ -215,13 +255,18 @@ const GroupsListActionBar: React.FC<GroupsListActionBarProps> = ({
     panelAction(
       'crossSearch',
       crossSearchBadge > 0 ? `Cross-search (${crossSearchBadge})` : 'Cross-search',
+      'Hide cross-search',
       'search',
     ),
-    panelAction('collections', 'Collections', 'clipboard'),
+    panelAction('collections', 'Collections', 'Hide collections', 'clipboard'),
     {
+      // The rung's page-level verb, and the reason this strip has a `primary` at
+      // all — see the docblock. `primary` implies `pinned`, so it never leaves the
+      // row.
       id: 'export-list',
       label: 'Export list',
       icon: 'download',
+      variant: 'primary',
       onClick: onExportGroupsList,
       disabled: filteredCount === 0,
       title: 'Export the current groups list as CSV',
@@ -256,8 +301,10 @@ const GroupsListActionBar: React.FC<GroupsListActionBarProps> = ({
           },
         ]
       : []),
-    ...(selectedCount > 0 ? [panelAction('bulk', 'Bulk actions', 'list', 'tier')] : []),
-    panelAction('cleanup', 'Cleanup', 'sparkles', 'tier'),
+    ...(selectedCount > 0
+      ? [panelAction('bulk', 'Bulk actions', 'Hide bulk actions', 'list', 'tier')]
+      : []),
+    panelAction('cleanup', 'Cleanup', 'Hide cleanup', 'sparkles', 'tier'),
   ];
 
   return (

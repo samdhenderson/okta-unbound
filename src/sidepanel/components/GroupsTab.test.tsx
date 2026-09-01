@@ -1868,12 +1868,16 @@ describe('inline panels', () => {
     await uev.click(screen.getByRole('button', { name: /^Cross-search/ }));
     expect(screen.getByTestId('cross-group-search')).toBeInTheDocument();
 
-    await uev.click(screen.getByRole('button', { name: /Collections/ }));
+    await uev.click(screen.getByRole('button', { name: 'Collections' }));
     expect(screen.queryByTestId('cross-group-search')).not.toBeInTheDocument();
     expect(screen.getByTestId('collections-panel')).toBeInTheDocument();
 
-    await uev.click(screen.getByRole('button', { name: /Collections/ }));
+    // The open panel says so in its label, not in a colour (ADR-0061), so the way
+    // back is a control that names itself — which is also how a screen reader
+    // learns the panel is open at all.
+    await uev.click(screen.getByRole('button', { name: 'Hide collections' }));
     expect(screen.queryByTestId('collections-panel')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Collections' })).toBeInTheDocument();
   });
 
   it('closes via the child onClose callback', async () => {

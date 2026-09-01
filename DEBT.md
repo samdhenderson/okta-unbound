@@ -3594,3 +3594,49 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
   panes rather than split arbitrarily by line count.
 - **Risk:** Low-medium — it is the detail rung's container; land it tests-first.
 - **Status:** open
+
+### D-092 · Nine backlog items carry no `Status:` line, so no session can select them
+
+- **Category:** standards
+- **Priority:** P2
+- **Size:** S
+- **Files:** `IMPROVEMENTS.md` (`I-022`–`I-028`), `DEBT.md` (`D-074`, `D-075`),
+  `scripts/check-cited-paths.mjs` (or a sibling wired into the same npm task —
+  the cheapest place to put the guard, same argument `D-080` makes)
+- **Verified:** 2026-09-01 — enumerated, not sampled. Every `### [ID]-NNN`
+  section in both ledgers was extracted and tested for a `**Status:**` line.
+  Thirteen sections lack one. Four are deliberate umbrellas whose sub-items
+  carry the status instead (`D-007`, `D-013`, `D-029`, `D-053` — each has
+  `a`/`b`/`c`… children). The remaining **nine have no sub-items and no
+  status**: `I-022`, `I-023`, `I-024`, `I-025`, `I-026`, `I-027`, `I-028`,
+  `D-074`, `D-075`.
+- **Problem:** `SESSION.md` step 3 selects by filtering to `Status: open`. An
+  item with no `Status:` line at all does not match that filter, and does not
+  match `blocked:`/`research:`/`claimed:`/`closed:`/`done:` either — so it is
+  never offered to a session and never appears in a backlog count as anything.
+  It is not deferred, it is invisible.
+
+  These nine are otherwise complete, well-formed items with **Category**,
+  **Priority**, **Size**, **Files**, **Verified** and **Problem** — they read
+  as ready to pick up. Three are P2: `I-025` (the capture fingerprint does not
+  cover the app it films), `I-028` (dormant access via
+  `lastMembershipUpdated`), and `D-075` (a profile write invalidated the
+  memberships and never re-read them, found by filming it). `D-075` is a P2
+  **correctness** bug with a reproduction.
+
+  This is `D-080`'s failure mode one step earlier. There the ledger said
+  something ambiguous; here it says nothing, and the omission is silent in the
+  same safe-looking direction — nothing errors, an item simply stops being
+  offered. `lint:cited-paths` cannot see it: it checks that cited **paths**
+  resolve, not that an item is well-formed.
+
+- **Done when:** each of the nine carries an explicit `Status:` line reflecting
+  its real state (Sam decides `open` vs `blocked:`/`research:` per item — a
+  session must not invent one, and must not silently mark them `open` and then
+  claim them in the same night), and a check fails on any `### [ID]-NNN`
+  section that has neither a `**Status:**` line nor at least one sub-item.
+  Fold that check in with `D-080`'s duplicate-header guard if `D-080` lands
+  first — same script, same npm task, one pass over the ledgers.
+- **Risk:** Low. Ledger and script only; no `src/` change.
+- **Status:** open
+- **Related:** `D-080` (the duplicate-id sibling), `D-072`

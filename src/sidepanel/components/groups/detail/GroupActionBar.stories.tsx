@@ -35,8 +35,19 @@ const meta = {
           "the row at `priority: 'flex'`, mirroring `UserActionBar`'s treatment of *Add group*. " +
           '**Compare** sits beside it for the same reason that strip puts its own *Compare* in the ' +
           'row: it reads two rosters and writes nothing.\n\n' +
-          '**Create feeding rule** is the strip’s first — and so far only — tier action, and the ' +
-          'first group-side consumer of `ActionBar`’s `expansion` slot. It is behind **More** for ' +
+          'The strip has a disclosure tier holding two verbs, one of each shape `ActionBar` ' +
+          'offers. First, as a descriptor: **Remove deprovisioned**, ' +
+          'the bulk cleanup that empties a group of every member Okta has already deprovisioned. ' +
+          'It changes group state with no symmetric undo press, so per ADR-0039 it is ' +
+          "`priority: 'tier'` (behind **More** from the start) behind a confirm `Modal` that names " +
+          'the count and the group.\n\n' +
+          'It is **absent, not disabled**, whenever it cannot honestly run: no `onRemoveDeprovisioned` ' +
+          'wire, an `APP_GROUP` (the operation refuses those), or a `deprovisionedCount` of `0` or ' +
+          '`undefined` — `undefined` being the pre-analysis state, which is deliberately not shown ' +
+          'as zero (ADR-0032 §2a, absent is not zero).\n\n' +
+          'Second, in `ActionBar`’s `expansion` slot — where it goes because it ships a line of ' +
+          'prose beside it and a descriptor can carry no JSX: **Create feeding rule**. It is ' +
+          'behind **More** for ' +
           'its consequence, not its importance (ADR-0039 §2): a rule *grants* memberships as it ' +
           'matches, and deleting it afterwards leaves every one of them in place. The consequence ' +
           'is written beside the control, the way `UserLifecycleActions` writes “Blocks sign-in ' +
@@ -50,6 +61,8 @@ const meta = {
     onExportGroup: fn(),
     onAddMember: fn(),
     onCompare: fn(),
+    onRemoveDeprovisioned: fn(),
+    deprovisionedCount: 3,
     onCreateFeedingRule: fn(),
     // Nothing scrolls in a story, so the strip renders at its resting geometry.
     sticky: false,
@@ -68,6 +81,21 @@ const meta = {
     },
     onAddMember: { description: 'Opens the Add-member modal.' },
     onCompare: { description: 'Opens the picker for the second group in a comparison.' },
+    deprovisionedCount: {
+      description:
+        'How many loaded members are `DEPROVISIONED`. `undefined` (not yet analyzed) and `0` both ' +
+        'omit the action rather than rendering a count the page cannot vouch for.',
+    },
+    onRemoveDeprovisioned: {
+      description:
+        'Runs the bulk removal once the confirm modal is accepted. Omitted \u2192 no action.',
+    },
+    isRemoving: {
+      description: 'Holds the confirm button in its loading state while the run is in flight.',
+    },
+    removeError: {
+      description: 'The last error the run reported, shown inside the confirm modal.',
+    },
     onCreateFeedingRule: {
       description:
         'Opens the create-feeding-rule confirm dialog. Lives in the disclosure tier because a ' +
@@ -82,7 +110,10 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Every action wired: Export members (pinned, primary), Add and Compare (flex). */
+/**
+ * Every action wired: Export members (pinned, primary), Add and Compare (flex) in
+ * the row, and Remove deprovisioned plus Create feeding rule behind **More**.
+ */
 export const Default: Story = {};
 
 /** No `onExportGroup` — the strip renders only `Add`, never a disabled ghost button. */
@@ -107,8 +138,91 @@ export const NoConnectedTab: Story = {
 };
 
 /**
- * The strip's first disclosure tier, opened: *Create feeding rule*, with what it
- * leaves behind stated beside it rather than only inside the dialog it opens.
+ * The tier's descriptor half, confirmed. **Remove deprovisioned** is `priority: 'tier'`,
+ * so it is behind **More** from the start rather than ever sitting in the row,
+ * and it is *accepting the confirm* that calls the handler — never the verb
+ * itself. (The row/tier split is `actionBarFit`'s, and has its own table-driven
+ * tests; what this story pins is that pressing through both steps reaches the
+ * handler exactly once.)
+ */
+export const RemoveDeprovisioned: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    const more = canvas.getByRole('button', { name: 'More' });
+    await expect(more).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(more);
+    await expect(more).toHaveAttribute('aria-expanded', 'true');
+
+    await userEvent.click(canvas.getByRole('button', { name: /Remove 3 deprovisioned/ }));
+
+    const dialog = body.getByRole('dialog', { name: 'Remove deprovisioned members' });
+    await expect(dialog).toHaveTextContent(/3 deprovisioned members from Engineering/);
+    await expect(args.onRemoveDeprovisioned).not.toHaveBeenCalled();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Remove 3' }));
+    await expect(args.onRemoveDeprovisioned).toHaveBeenCalledTimes(1);
+  },
+};
+
+/** The confirm, mid-run and then failed — the error lands in the dialog, not a toast. */
+export const RemoveFailed: Story = {
+  args: { removeError: '403 Forbidden: you lack permission to modify this group' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    await userEvent.click(canvas.getByRole('button', { name: 'More' }));
+    await userEvent.click(canvas.getByRole('button', { name: /Remove 3 deprovisioned/ }));
+
+    await expect(body.getByRole('dialog')).toHaveTextContent(/403 Forbidden/);
+  },
+};
+
+/**
+ * Nobody in the group is deprovisioned. The verb is **gone**, not a disabled
+ * "Remove 0 deprovisioned" sitting behind **More** forever.
+ */
+export const NoDeprovisionedMembers: Story = {
+  args: { deprovisionedCount: 0 },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole('button', { name: /deprovisioned/i })).not.toBeInTheDocument();
+  },
+};
+
+/**
+ * The roster has not been analyzed yet (`deprovisionedCount` is `undefined`).
+ * Absent is not zero: the page does not know the count, so it does not offer a
+ * verb whose label would have to state one.
+ */
+export const RosterNotLoaded: Story = {
+  args: { deprovisionedCount: undefined },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole('button', { name: /deprovisioned/i })).not.toBeInTheDocument();
+  },
+};
+
+/**
+ * An APP_GROUP: membership is mastered by the application, and the operation
+ * refuses these outright — so the strip does not offer the verb at all.
+ */
+export const AppGroupHasNoRemove: Story = {
+  args: {
+    group: { ...group, type: 'APP_GROUP', name: 'Salesforce Users' },
+    deprovisionedCount: 12,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole('button', { name: /deprovisioned/i })).not.toBeInTheDocument();
+  },
+};
+
+/**
+ * The tier's `expansion` half, opened: *Create feeding rule*, with what it leaves
+ * behind stated beside it rather than only inside the dialog it opens.
  *
  * **More** belongs to the shared `ActionBar`, not to this component — this story
  * is what proves `GroupActionBar` wires a working one through it, and that the
