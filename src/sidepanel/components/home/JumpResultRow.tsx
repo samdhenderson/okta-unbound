@@ -48,7 +48,9 @@ export interface JumpResultRowProps {
  *
  * `rule` is absent because the admin console has no single-rule route — a rule
  * is only viewable inside its group — so an unreachable rule row shows no link
- * rather than a fabricated one.
+ * rather than a fabricated one. `policy` is absent for the same reason and one
+ * more: `oktaUrl` has no `OktaAdminEntityType` for a policy, which is the same
+ * refusal `oktaId` makes about policy id prefixes.
  */
 const OKTA_LINK_TYPE: Partial<Record<JumpResult['kind'], OktaAdminEntityType>> = {
   group: 'group',

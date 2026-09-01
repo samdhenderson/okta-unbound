@@ -4,10 +4,12 @@
  */
 import { describe, it, expect } from 'vitest';
 import { DESTINATION_TAB, KIND_ICON, destinationLabel, navigationTarget } from './jumpDestinations';
-import type { OktaIdKind } from '../../../shared/utils/oktaId';
+import type { JumpKind } from '../../hooks/useJumpResolver';
 import { TAB_DEFS } from '../../tabs';
 
-const ALL_KINDS: OktaIdKind[] = ['group', 'user', 'app', 'rule'];
+// Every searchable kind, not every identifiable one: `policy` is searchable by
+// name but deliberately unclassifiable from an id prefix (see `oktaId.ts`).
+const ALL_KINDS: JumpKind[] = ['group', 'user', 'app', 'rule', 'policy'];
 
 describe('DESTINATION_TAB', () => {
   it('sends each kind to the tab that owns it', () => {
@@ -16,6 +18,7 @@ describe('DESTINATION_TAB', () => {
       user: 'users',
       app: 'apps',
       rule: 'rules',
+      policy: 'policies',
     });
   });
 
@@ -45,6 +48,7 @@ describe('destinationLabel', () => {
     expect(destinationLabel('rule')).toBe('Rules');
     expect(destinationLabel('user')).toBe('Users');
     expect(destinationLabel('app')).toBe('Apps');
+    expect(destinationLabel('policy')).toBe('Policies');
   });
 });
 
