@@ -10,6 +10,10 @@
  * method, and a `fetch` that threw — and all three must say so with
  * {@link NO_HTTP_STATUS} rather than omitting the field.
  *
+ * Also covers the headers a failure carries (D-064): a 429's `X-Rate-Limit-*`
+ * headers must survive the `!response.ok` return, since the background
+ * `RateLimitDetector` is the only consumer that can act on them.
+ *
  * Network is stubbed at `globalThis.fetch` rather than via MSW, matching
  * `content/index.test.ts` (MSW is not used in this repo, and a rejecting fetch
  * is not observable through a handler).
@@ -17,14 +21,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { handleMakeApiRequest, isSameOriginPath } from './apiRequest';
 import { NO_HTTP_STATUS } from '../shared/scheduler/requestResult';
+import { RateLimitDetector } from '../shared/scheduler/rateLimitDetector';
 
 const fetchMock = vi.fn();
 
-/** A JSON `Response` with the given status. */
-const res = (body: unknown, status = 200): Response =>
+/** A JSON `Response` with the given status and any extra response headers. */
+const res = (body: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...extraHeaders },
   });
 
 beforeEach(() => {
@@ -109,5 +114,47 @@ describe('handleMakeApiRequest failure statuses', () => {
     const result = await handleMakeApiRequest('/api/v1/apps/0oaFAKE1');
 
     expect(result).toMatchObject({ success: true, status: 200, data: { id: '0oaFAKE1' } });
+  });
+});
+
+describe('handleMakeApiRequest rate-limit headers on a failure (D-064)', () => {
+  /** A fixed wall-clock instant so the detector's reset math is deterministic. */
+  const NOW_MS = 1_700_000_000_000;
+  const NOW_SECONDS = Math.floor(NOW_MS / 1000);
+  const RESET_SECONDS = NOW_SECONDS + 60;
+  const ENDPOINT = '/api/v1/groups/00gFAKE1/users';
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW_MS);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a 429 reaches RateLimitDetector with its X-Rate-Limit-* headers intact', async () => {
+    fetchMock.mockResolvedValue(
+      res({ errorSummary: 'Too many requests' }, 429, {
+        'X-Rate-Limit-Limit': '600',
+        'X-Rate-Limit-Remaining': '0',
+        'X-Rate-Limit-Reset': String(RESET_SECONDS),
+      }),
+    );
+
+    const result = await handleMakeApiRequest(ENDPOINT);
+
+    expect(result).toMatchObject({ success: false, status: 429 });
+    expect(result.headers).toBeDefined();
+
+    // Exactly what `ApiScheduler.executeRequest` does with a settled request:
+    // feed its headers to the detector when they are there.
+    const detector = new RateLimitDetector();
+    const info = result.headers ? detector.parseHeaders(result.headers, ENDPOINT) : null;
+
+    expect(info).toMatchObject({ limit: 600, remaining: 0, reset: RESET_SECONDS });
+    expect(detector.isLimitExceeded()).toBe(true);
+    expect(detector.getSecondsUntilReset()).toBe(60);
+    expect(detector.getForEndpoint(ENDPOINT)).toMatchObject({ remaining: 0 });
   });
 });

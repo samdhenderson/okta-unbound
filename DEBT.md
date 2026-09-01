@@ -2746,7 +2746,7 @@ affects every scroll box in the app, on every platform.
   a 429.
 - **Risk:** Low to fix. The behavior change is that the scheduler starts seeing
   headers it currently cannot, which is the point.
-- **Status:** claimed:worktree-app-api-efficiency-and-ratelimit
+- **Status:** done:#108
 - **Related:** `D-007a`, `D-007c`
 
 ### D-065 · `fetchAndCacheAllGroupRules` walks a whole endpoint with no boundary schema
@@ -2775,7 +2775,7 @@ affects every scroll box in the app, on every platform.
 - **Risk:** Medium — it changes what gets cached, so a row Okta sends that the
   schema rejects would stop appearing. That is the intended effect but it is a
   behavior change, not a pure hardening.
-- **Status:** open
+- **Status:** done:#107
 - **Related:** `D-050`, `D-055`, ADR-0006
 
 ### D-066 · `groupIdsReferencedBy` carries the identical unguarded expression read `D-055` just fixed
@@ -3417,3 +3417,226 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
 - **Status:** open
 - **Related:** ADR-0040 (the snapshot and its sweep), ADR-0059 (the read half
   that exists), ADR-0020 (why absence is not an empty answer)
+
+### D-085 · `oktaGroupRuleSchema` rejects the `INVALID` status Okta reports
+
+- **Category:** correctness
+- **Priority:** P1
+- **Size:** M
+- **Files:** `src/shared/schemas/okta.ts:136` (`status: z.enum(['ACTIVE', 'INACTIVE'])`),
+  `src/shared/types.ts:132` (`OktaGroupRule.status`), `:181`
+  (`FormattedRule.status`), `src/sidepanel/hooks/useOktaApi/groupDiscovery.ts`,
+  `src/sidepanel/hooks/fetchGroupRulesRequest.ts`,
+  `src/shared/snapshot/snapshotSync.ts` (`RULES_SPEC`),
+  `.claude/skills/okta-api/references/groups-and-rules.md:153`
+- **Verified:** 2026-08-31 — raised by the `D-065` writer and confirmed against
+  the schema and both type declarations. Every one of them enumerates exactly
+  two states.
+- **Problem:** Okta's `GroupRuleStatus` has a third value, `INVALID` — the
+  status a rule takes when it stops being evaluable, e.g. its expression
+  references a group that has been deleted. The schema admits only
+  `ACTIVE | INACTIVE`, and `OktaGroupRule`/`FormattedRule` type it the same way.
+  Before `D-065` this cost nothing on the org-wide walk, because that walk had
+  no schema and an `INVALID` row flowed through mistyped-but-present. **`D-065`
+  turned that into a silent drop**: the row now fails validation and is
+  discarded with only a count in a debug warning, so a broken rule disappears
+  from the cache entirely on all three schema-bearing paths.
+  This directly undercuts `D-061`, which exists to surface rules pointing at
+  groups that no longer exist — `INVALID` is Okta's own signal for exactly that
+  condition, and we now throw it away. The repo's own skill reference
+  (`groups-and-rules.md:153`, "status is `ACTIVE` or `INACTIVE`") states the
+  same wrong thing and should be corrected with it; compare `D-078`, an already
+  open item of the same shape against the same skill.
+- **Done when:** `INVALID` is a first-class status end to end — accepted by
+  `oktaGroupRuleSchema`, present in `OktaGroupRule.status` and
+  `FormattedRule.status`, and handled (not defaulted) at every branch on those
+  unions, so an `INVALID` rule reaches the cache and is visibly distinguishable
+  from an `INACTIVE` one rather than silently vanishing. The skill reference is
+  corrected in the same change. Verify against Okta's published
+  `GroupRuleStatus` enum before implementing — the widening is only safe if the
+  set really is `ACTIVE | INACTIVE | INVALID`.
+- **Risk:** Medium. Widening the schema alone is one line and strictly
+  additive, but widening the two shipped unions makes the compiler demand a
+  decision at every status branch, which is the actual work — and the point.
+  **Not folded into `D-065`** deliberately: a one-line schema widen would have
+  left `INVALID` flowing as a lie in the type system, and the honest fix is
+  architecturally significant enough that a reviewer could reasonably disagree
+  with it after the code exists (`CLAUDE.md`'s plan-and-approval gate).
+- **Status:** open
+- **Related:** `D-065` (introduced the drop), `D-061`, `D-050`, `D-078`
+
+### D-086 · `RateLimitDetector.parseHeaders` has no `NaN` guard, so it fails open
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/shared/scheduler/rateLimitDetector.ts` (`parseHeaders`),
+  `src/shared/scheduler/rateLimitDetector.test.ts:76` (the case that already
+  pins the `NaN` outcome)
+- **Verified:** 2026-08-31 — raised by the `D-064` writer while proving the
+  detector observes headers on a 429; read directly.
+- **Problem:** `parseHeaders` uses bare `parseInt` on the `X-Rate-Limit-*`
+  values with no `Number.isNaN` check. A malformed or absent-but-present header
+  yields `NaN`, and every downstream comparison then fails **open**:
+  `NaN <= threshold` is `false`, so `isApproachingLimit` reports calm and no
+  cooldown is taken. There is already a test pinning the `NaN` outcome, so this
+  is a known shape rather than a surprise — but it is pinned, not fixed.
+  `D-064` makes it newly reachable: rate-limit headers now arrive on failure
+  responses too, so `parseHeaders` sees strictly more input than before.
+- **Done when:** a value that does not parse to a finite number is treated as
+  "unknown", not as zero-or-calm; the pinning test is retargeted to assert the
+  safe outcome with an ADR-0022 note.
+- **Risk:** Low. Behavior change is in the safe direction (unknown capacity
+  stops reading as spare capacity).
+- **Status:** open
+- **Related:** `D-064`, `D-007c`
+
+### D-087 · The content script forwards the whole response header bag
+
+- **Category:** security
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/content/apiRequest.ts:152-156` (the `headers` collection),
+  `src/background/snapshotBridge.ts:114-115` (a consumer that re-forwards it)
+- **Verified:** 2026-08-31 — raised by `security-logging-reviewer` on tonight's
+  diff; pre-existing on the success path, not introduced by `D-064`.
+- **Problem:** `handleMakeApiRequest` collects **every** response header and
+  messages the whole bag to the background, though the only consumers are
+  `RateLimitDetector` (`x-rate-limit-*`) and the paginator (`link`). The Fetch
+  API does not expose `set-cookie`, so nothing secret rides along today, and no
+  header value is logged anywhere — this is defense in depth, not a live leak.
+  But it leaves a bag of unfiltered response metadata one careless `log.debug`
+  away from disclosure. `D-064` made failures symmetric with successes here, so
+  the bag now crosses on more responses than before, which is what prompted the
+  review note.
+- **Done when:** the collection is narrowed to the keys the scheduler actually
+  reads, or a comment records why the full bag is deliberate. Decide also
+  whether `snapshotBridge` should relay failure headers at all — nothing
+  consumes them there, and after `D-064` it now forwards them.
+- **Risk:** Low.
+- **Status:** open
+- **Related:** `D-064`
+
+### D-088 · Two stale comments name `groupDiscovery` as the schema-less rules walk
+
+- **Category:** standards
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/shared/ruleUtils.ts:23-25`,
+  `src/shared/ruleUtils.test.ts:769-772`
+- **Verified:** 2026-08-31 — found by the `D-065` writer; both read directly.
+- **Problem:** Both comments assert as fact that "`groupDiscovery`'s
+  `fetchAndCacheAllGroupRules` walks `/api/v1/groups/rules` with no schema, so a
+  raw row reaches them exactly as Okta sent it (`D-055`)". `D-065` made that
+  false tonight. `D-055`'s guard in `formatRuleForDisplay` is still correct and
+  must stay — the function is exported and other callers exist — but its stated
+  reason now names a caller that no longer qualifies, which is precisely the
+  kind of citation that gets a future reader to delete a live guard.
+- **Done when:** both comments name a caller that is actually unvalidated, or
+  state the guard's reason without leaning on one.
+- **Risk:** Low — comments only, but the guard they justify is load-bearing.
+- **Status:** open
+- **Related:** `D-065`, `D-055`
+
+### D-089 · `useRuleConsolidation` never clears `RulesCache` after writing rules
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useRuleConsolidation.ts`,
+  `src/shared/rulesCache.ts`
+- **Verified:** 2026-08-31 — found by the `I-013` writer while wiring its own
+  invalidation; nothing in `src/` clears that cache except its own tests and,
+  as of tonight, `useCreateFeedingRule`.
+- **Problem:** `RulesCache` holds the org-wide rule inventory on a 5-minute
+  TTL. `useRuleConsolidation` creates and deletes rules and never invalidates
+  it, so for up to five minutes afterwards every surface reading the org-wide
+  snapshot serves an inventory that does not match Okta — including the
+  consolidation UI that just performed the write.
+- **Done when:** a successful consolidation clears `RulesCache` the way
+  `useCreateFeedingRule` now does; a test pins that a write invalidates.
+  Consider whether the invalidation belongs in `ruleWrites` rather than in each
+  caller, so the next write path cannot forget.
+- **Risk:** Low.
+- **Status:** open
+- **Related:** `I-013`
+
+### D-090 · `MAX_RULE_NAME` is declared twice
+
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/shared/rules/consolidation.ts` (module-private
+  `MAX_RULE_NAME`), `src/sidepanel/hooks/useCreateFeedingRule.ts`
+  (`MAX_RULE_NAME_LENGTH`)
+- **Verified:** 2026-08-31 — the second copy was added by `I-013`, which needed
+  the same 50-character Okta limit and could not import a module-private const.
+- **Problem:** Okta's 50-character rule-name limit is now encoded in two
+  places under two names. If Okta changes it, one will be missed.
+- **Done when:** one exported constant; both call sites import it.
+- **Risk:** Low.
+- **Status:** open
+- **Related:** `I-013`
+
+### D-091 · `GroupDetailView.tsx` is 514 lines, well over the ~300-line bar
+
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/sidepanel/components/groups/detail/GroupDetailView.tsx`
+- **Verified:** 2026-08-31 — measured by `ui-reviewer` on tonight's diff.
+- **Problem:** The container is 514 lines against `CLAUDE.md`'s ~300-line
+  guideline. This is pre-existing — `I-013` added roughly fifteen lines of prop
+  wiring and put all of its state in `useCreateFeedingRule`, so the diff did not
+  cause it — but the file is now the largest thing on the rung and every new
+  verb makes it worse.
+- **Done when:** the view is under the bar, with logic pushed into hooks and
+  panes rather than split arbitrarily by line count.
+- **Risk:** Low-medium — it is the detail rung's container; land it tests-first.
+- **Status:** open
+
+### D-092 · Nine backlog items carry no `Status:` line, so no session can select them
+
+- **Category:** standards
+- **Priority:** P2
+- **Size:** S
+- **Files:** `IMPROVEMENTS.md` (`I-022`–`I-028`), `DEBT.md` (`D-074`, `D-075`),
+  `scripts/check-cited-paths.mjs` (or a sibling wired into the same npm task —
+  the cheapest place to put the guard, same argument `D-080` makes)
+- **Verified:** 2026-09-01 — enumerated, not sampled. Every `### [ID]-NNN`
+  section in both ledgers was extracted and tested for a `**Status:**` line.
+  Thirteen sections lack one. Four are deliberate umbrellas whose sub-items
+  carry the status instead (`D-007`, `D-013`, `D-029`, `D-053` — each has
+  `a`/`b`/`c`… children). The remaining **nine have no sub-items and no
+  status**: `I-022`, `I-023`, `I-024`, `I-025`, `I-026`, `I-027`, `I-028`,
+  `D-074`, `D-075`.
+- **Problem:** `SESSION.md` step 3 selects by filtering to `Status: open`. An
+  item with no `Status:` line at all does not match that filter, and does not
+  match `blocked:`/`research:`/`claimed:`/`closed:`/`done:` either — so it is
+  never offered to a session and never appears in a backlog count as anything.
+  It is not deferred, it is invisible.
+
+  These nine are otherwise complete, well-formed items with **Category**,
+  **Priority**, **Size**, **Files**, **Verified** and **Problem** — they read
+  as ready to pick up. Three are P2: `I-025` (the capture fingerprint does not
+  cover the app it films), `I-028` (dormant access via
+  `lastMembershipUpdated`), and `D-075` (a profile write invalidated the
+  memberships and never re-read them, found by filming it). `D-075` is a P2
+  **correctness** bug with a reproduction.
+
+  This is `D-080`'s failure mode one step earlier. There the ledger said
+  something ambiguous; here it says nothing, and the omission is silent in the
+  same safe-looking direction — nothing errors, an item simply stops being
+  offered. `lint:cited-paths` cannot see it: it checks that cited **paths**
+  resolve, not that an item is well-formed.
+
+- **Done when:** each of the nine carries an explicit `Status:` line reflecting
+  its real state (Sam decides `open` vs `blocked:`/`research:` per item — a
+  session must not invent one, and must not silently mark them `open` and then
+  claim them in the same night), and a check fails on any `### [ID]-NNN`
+  section that has neither a `**Status:**` line nor at least one sub-item.
+  Fold that check in with `D-080`'s duplicate-header guard if `D-080` lands
+  first — same script, same npm task, one pass over the ledgers.
+- **Risk:** Low. Ledger and script only; no `src/` change.
+- **Status:** open
+- **Related:** `D-080` (the duplicate-id sibling), `D-072`

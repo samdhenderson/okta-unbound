@@ -35,7 +35,8 @@ const meta = {
           "the row at `priority: 'flex'`, mirroring `UserActionBar`'s treatment of *Add group*. " +
           '**Compare** sits beside it for the same reason that strip puts its own *Compare* in the ' +
           'row: it reads two rosters and writes nothing.\n\n' +
-          'The strip *does* have a disclosure tier, and one verb in it: **Remove deprovisioned**, ' +
+          'The strip has a disclosure tier holding two verbs, one of each shape `ActionBar` ' +
+          'offers. First, as a descriptor: **Remove deprovisioned**, ' +
           'the bulk cleanup that empties a group of every member Okta has already deprovisioned. ' +
           'It changes group state with no symmetric undo press, so per ADR-0039 it is ' +
           "`priority: 'tier'` (behind **More** from the start) behind a confirm `Modal` that names " +
@@ -43,7 +44,14 @@ const meta = {
           'It is **absent, not disabled**, whenever it cannot honestly run: no `onRemoveDeprovisioned` ' +
           'wire, an `APP_GROUP` (the operation refuses those), or a `deprovisionedCount` of `0` or ' +
           '`undefined` — `undefined` being the pre-analysis state, which is deliberately not shown ' +
-          'as zero (ADR-0032 §2a, absent is not zero).',
+          'as zero (ADR-0032 §2a, absent is not zero).\n\n' +
+          'Second, in `ActionBar`’s `expansion` slot — where it goes because it ships a line of ' +
+          'prose beside it and a descriptor can carry no JSX: **Create feeding rule**. It is ' +
+          'behind **More** for ' +
+          'its consequence, not its importance (ADR-0039 §2): a rule *grants* memberships as it ' +
+          'matches, and deleting it afterwards leaves every one of them in place. The consequence ' +
+          'is written beside the control, the way `UserLifecycleActions` writes “Blocks sign-in ' +
+          'until reversed”; the confirm dialog itself belongs to `CreateFeedingRuleModal`.',
       },
     },
   },
@@ -55,6 +63,7 @@ const meta = {
     onCompare: fn(),
     onRemoveDeprovisioned: fn(),
     deprovisionedCount: 3,
+    onCreateFeedingRule: fn(),
     // Nothing scrolls in a story, so the strip renders at its resting geometry.
     sticky: false,
   },
@@ -87,6 +96,11 @@ const meta = {
     removeError: {
       description: 'The last error the run reported, shown inside the confirm modal.',
     },
+    onCreateFeedingRule: {
+      description:
+        'Opens the create-feeding-rule confirm dialog. Lives in the disclosure tier because a ' +
+        'rule’s grants outlive the rule (ADR-0039 §2).',
+    },
     sticky: {
       description: 'Pin the strip below the header. `false` in stories — nothing scrolls.',
     },
@@ -98,7 +112,7 @@ type Story = StoryObj<typeof meta>;
 
 /**
  * Every action wired: Export members (pinned, primary), Add and Compare (flex) in
- * the row, and Remove deprovisioned behind **More**.
+ * the row, and Remove deprovisioned plus Create feeding rule behind **More**.
  */
 export const Default: Story = {};
 
@@ -124,7 +138,7 @@ export const NoConnectedTab: Story = {
 };
 
 /**
- * The tier's one verb, confirmed. **Remove deprovisioned** is `priority: 'tier'`,
+ * The tier's descriptor half, confirmed. **Remove deprovisioned** is `priority: 'tier'`,
  * so it is behind **More** from the start rather than ever sitting in the row,
  * and it is *accepting the confirm* that calls the handler — never the verb
  * itself. (The row/tier split is `actionBarFit`'s, and has its own table-driven
@@ -203,5 +217,48 @@ export const AppGroupHasNoRemove: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.queryByRole('button', { name: /deprovisioned/i })).not.toBeInTheDocument();
+  },
+};
+
+/**
+ * The tier's `expansion` half, opened: *Create feeding rule*, with what it leaves
+ * behind stated beside it rather than only inside the dialog it opens.
+ *
+ * **More** belongs to the shared `ActionBar`, not to this component — this story
+ * is what proves `GroupActionBar` wires a working one through it, and that the
+ * verb it reveals reaches the callback the page gave it.
+ */
+export const TierOpen: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const more = canvas.getByRole('button', { name: 'More' });
+    await expect(more).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(more);
+    await expect(more).toHaveAttribute('aria-expanded', 'true');
+
+    await expect(canvas.getByText('Memberships a rule grants outlive the rule')).toBeVisible();
+    const create = canvas.getByRole('button', { name: 'Create feeding rule' });
+    await expect(create).toBeVisible();
+
+    await userEvent.click(create);
+    await expect(args.onCreateFeedingRule).toHaveBeenCalledTimes(1);
+  },
+};
+
+/**
+ * No connected Okta tab, tier open: the write verb disables with a reason a
+ * reader can act on rather than disappearing — ADR-0039 §3 bans a dead control,
+ * not a gated one that says what would un-gate it.
+ */
+export const TierWithoutConnectedTab: Story = {
+  args: { targetTabId: null },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'More' }));
+
+    const create = canvas.getByRole('button', { name: 'Create feeding rule' });
+    await expect(create).toBeDisabled();
+    await expect(create).toHaveAttribute('title', 'Connect an Okta tab to create a rule');
   },
 };

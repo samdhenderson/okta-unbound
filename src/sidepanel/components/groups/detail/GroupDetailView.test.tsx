@@ -15,12 +15,13 @@
  * `GroupsTab.test.tsx` uses for its feature children.
  *
  * `GroupActionBar` is rendered for real: it is a pure-render leaf with no
- * hooks of its own, and "Export omitted/present, Add wired" is exactly the
- * kind of user-visible behavior a mock would hide.
+ * hooks of its own, and "Export omitted/present, Add wired, Create feeding rule
+ * behind **More**" is exactly the kind of user-visible behavior a mock would
+ * hide.
  *
- * The six loading hooks (`useGroupSource`, `useGroupRuleReferences`,
+ * The seven loading/mutating hooks (`useGroupSource`, `useGroupRuleReferences`,
  * `useGroupAccessGrants`, `useMemberMfaScan`, `useGroupMembersSection`,
- * `useAddGroupMember`) are mocked at the hook boundary — the established
+ * `useAddGroupMember`, `useCreateFeedingRule`) are mocked at the hook boundary — the established
  * pattern for a container test, e.g. `UserComparisonPanel.scroll.test.tsx`'s
  * `useUserComparison` mock. The one exception is `useOwedLoad`, left real,
  * because the `autoAnalyze` coverage below is exactly about the gating it
@@ -125,6 +126,28 @@ vi.mock('../../../hooks/useAddGroupMember', () => ({
   useAddGroupMember: () => addMember,
 }));
 
+const createFeedingRule = vi.hoisted(() => ({
+  isOpen: false,
+  open: vi.fn(),
+  close: vi.fn(),
+  name: '',
+  setName: vi.fn(),
+  nameError: null as string | null,
+  expression: '',
+  setExpression: vi.fn(),
+  expressionNotice: null as string | null,
+  canSubmit: false,
+  isCreating: false,
+  error: null as string | null,
+  createdRuleName: null as string | null,
+  createdRuleId: null as string | null,
+  confirm: vi.fn(),
+}));
+
+vi.mock('../../../hooks/useCreateFeedingRule', () => ({
+  useCreateFeedingRule: () => createFeedingRule,
+}));
+
 // ---------------------------------------------------------------------------
 // Section test doubles — each renders one identifiable node so a tab switch
 // reads as "which stub is mounted", not a rendered section's own internals.
@@ -149,6 +172,9 @@ vi.mock('./GroupInsightsPane', () => ({
 }));
 vi.mock('./AddGroupMemberModal', () => ({
   default: () => <div data-testid="stub-add-modal" />,
+}));
+vi.mock('./CreateFeedingRuleModal', () => ({
+  default: () => <div data-testid="stub-create-rule-modal" />,
 }));
 
 // ---------------------------------------------------------------------------
@@ -285,6 +311,38 @@ describe('GroupDetailView', () => {
 
     await user.click(screen.getByRole('button', { name: 'Add' }));
     expect(addMember.openModal).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+    ADR-0039 §2: *Create feeding rule* is the rung's one verb with no symmetric
+    undo — a rule grants memberships as it matches and deleting it leaves them in
+    place — so it starts in the strip's disclosure tier rather than in the row.
+    Asserted structurally, through the region the **More** control names: jsdom
+    honours neither `inert` nor CSS, so "is it visible" would pass either way.
+  */
+  it('keeps Create feeding rule in the disclosure tier, not the action row', () => {
+    render(<GroupDetailView group={makeGroup()} targetTabId={1} />);
+
+    const more = screen.getByRole('button', { name: /More/ });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+
+    const tierId = more.getAttribute('aria-controls');
+    const tier = tierId ? document.getElementById(tierId) : null;
+    if (!tier) throw new Error('the More control names no region');
+
+    expect(within(tier).getByRole('button', { name: 'Create feeding rule' })).toBeInTheDocument();
+    // The consequence is stated beside the control, not only inside the dialog.
+    expect(
+      within(tier).getByText(/Memberships a rule grants outlive the rule/),
+    ).toBeInTheDocument();
+  });
+
+  it("wires the tier's Create feeding rule to the confirm dialog", async () => {
+    const user = userEvent.setup();
+    render(<GroupDetailView group={makeGroup()} targetTabId={1} />);
+
+    await user.click(screen.getByRole('button', { name: 'Create feeding rule' }));
+    expect(createFeedingRule.open).toHaveBeenCalledTimes(1);
   });
 
   /*
