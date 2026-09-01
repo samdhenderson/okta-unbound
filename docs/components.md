@@ -347,7 +347,12 @@ comment at the call site:
   `elementRef` — half of what is needed — but no `tabIndex` and no `onKeyDown`, so
   it can carry neither the roving anchor nor the Up/Down handler. The gap is
   structural rather than stylistic against both, so a new variant would not
-  discharge it. (The same file records why the palette uses
+  discharge it. The row renders as an `<a>` rather than a `<button>` when it is
+  given an `href` — a kind this build cannot open in-panel has the Okta console
+  as its only route, and a link nested inside the row button is a
+  `nested-interactive` axe violation (`home/JumpResultRow` makes the same call
+  with `as`). One interactive element per row, chosen by what the row can do.
+  (The same file records why the palette uses
   roving focus rather than combobox ARIA: `Input` deliberately does not spread
   arbitrary props, and adding `role`/`aria-expanded`/`aria-controls`/
   `aria-activedescendant` to a shared primitive for one consumer is the wrong

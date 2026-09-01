@@ -52,12 +52,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertMessage, EmptyState, Input, LoadingSpinner, Modal } from './shared';
 import Icon, { type IconType } from './shared/Icon';
-import OpenInOktaLink from './shared/OpenInOktaLink';
 import PaletteRow from './palette/PaletteRow';
 import { destinationLabel, KIND_ICON } from './home/jumpDestinations';
 import { TAB_DEFS, type TabType } from '../tabs';
 import type { JumpKind, JumpMode, JumpResult } from '../hooks/useJumpResolver';
-import type { OktaAdminEntityType } from '../../shared/utils/oktaUrl';
+import { oktaAdminEntityUrl, type OktaAdminEntityType } from '../../shared/utils/oktaUrl';
 
 /**
  * The order entity sections appear in, and the copy above each.
@@ -442,16 +441,14 @@ const TabJumpPalette: React.FC<TabJumpPaletteProps> = ({
             const { row, heading } = entry;
             const reachable = canReach?.(row.kind) ?? false;
             const linkType = OKTA_LINK_TYPE[row.kind];
-            const mark = reachable ? (
-              `${destinationLabel(row.kind)} ›`
-            ) : linkType ? (
-              <OpenInOktaLink
-                oktaOrigin={oktaOrigin}
-                entityType={linkType}
-                entityId={row.id}
-                size="sm"
-              />
-            ) : null;
+            // An unreachable kind's route is the Okta console, and that route is
+            // the *whole row*, not a link tucked inside it: an `<a>` nested in
+            // the row's `<button>` is a `nested-interactive` axe violation, and
+            // a button that only wraps a working link is a control that does
+            // nothing (ADR-0039). `home/JumpResultRow` makes the same call.
+            const href =
+              !reachable && linkType ? oktaAdminEntityUrl(oktaOrigin, linkType, row.id) : null;
+            const mark = reachable ? `${destinationLabel(row.kind)} ›` : href ? 'Okta ↗' : null;
             const provenance = provenanceMark(sectionMeta?.[row.kind]);
 
             return (
@@ -479,10 +476,15 @@ const TabJumpPalette: React.FC<TabJumpPaletteProps> = ({
                     trailing={mark}
                     tabIndex={tabIndex}
                     rowRef={rowRef}
+                    href={href ?? undefined}
                     onClick={() => handleEntitySelect(row)}
                     onKeyDown={(event) => handleRowKeyDown(event, index)}
                     ariaLabel={
-                      reachable ? `${row.name} — open in ${destinationLabel(row.kind)}` : undefined
+                      reachable
+                        ? `${row.name} — open in ${destinationLabel(row.kind)}`
+                        : href
+                          ? `${row.name} — open in Okta`
+                          : undefined
                     }
                   />
                 </li>

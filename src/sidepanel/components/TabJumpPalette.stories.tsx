@@ -136,11 +136,17 @@ export const WithEntityResults: Story = {
     ).toBeVisible();
 
     // The asymmetry is stated in the headings, not buried in a footnote: apps
-    // and rules came from the local snapshot for free, users could not. Scoped
-    // per heading — two sections carry the same mark, so a bare text query is
-    // ambiguous, and `Users` also matches the Users *section row* above.
+    // and rules came from the local snapshot for free, users could not.
+    //
+    // Finding a heading needs both filters. A bare text query is ambiguous —
+    // two sections carry the same mark — and `startsWith` alone matches the
+    // *section row* of the same name sitting in the tab half above ("Apps",
+    // "Users"). What separates them is structural, not textual: a heading is the
+    // one `<li>` in the list holding no control at all.
     const heading = (name: string) =>
-      canvas.getAllByRole('listitem').find((li) => li.textContent?.startsWith(name));
+      canvas
+        .getAllByRole('listitem')
+        .find((li) => !li.querySelector('a, button') && li.textContent?.startsWith(name));
 
     await expect(heading('Apps')).toHaveTextContent('from snapshot');
     await expect(heading('Rules')).toHaveTextContent('from snapshot');
@@ -241,7 +247,19 @@ export const UnreachableKind: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getAllByRole('link', { name: /Okta/i }).length).toBeGreaterThan(0);
+
+    // The whole row becomes the link, rather than a link nested inside the row's
+    // button — which is a `nested-interactive` violation axe caught here.
+    const link = canvas.getByRole('link', { name: 'Engineering — open in Okta' });
+    await expect(link).toHaveAttribute(
+      'href',
+      'https://example.okta.com/admin/group/00gFAKE0000000000001',
+    );
+    await expect(link.querySelector('a, button')).toBeNull();
+
+    // A rule has no admin-console route, so it stays a plain row rather than
+    // gaining a link that goes nowhere.
+    await expect(canvas.queryByRole('link', { name: /Feeds Engineering/ })).toBeNull();
   },
 };
 

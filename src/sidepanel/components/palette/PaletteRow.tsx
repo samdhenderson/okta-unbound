@@ -17,6 +17,20 @@
  *
  * See `docs/components.md` §3.
  *
+ * ## Button or link, never both
+ *
+ * A row whose kind this build cannot open in-panel has one route left: the Okta
+ * admin console. That route is a **link**, and a link inside a button is a
+ * `nested-interactive` axe violation — the row's own story caught it. So the row
+ * renders as an `<a>` when it is given an `href`, and as a `<button>` otherwise.
+ * `home/JumpResultRow` solves the same problem the same way (`as={onSelect ?
+ * 'button' : 'div'}`): one interactive element per row, chosen by what the row
+ * can actually do.
+ *
+ * Both forms are focusable and carry the same roving `tabIndex`, so the list's
+ * Up/Down arithmetic stays a plain walk over its rows — no skipping, no second
+ * index space.
+ *
  * `press-subtle` (ADR-0046), not `press`: the row spans the full palette width,
  * so a button-scale depress would read as a lurch. Padding and the icon/label gap
  * consume the `--sp-row-x`/`--sp-row-y`/`--sp-inline` roles (ADR-0048).
@@ -56,8 +70,14 @@ export interface PaletteRowProps {
    * `.focus()`, which `HTMLElement` already has.
    */
   rowRef?: (element: HTMLElement | null) => void;
-  /** Activate this row. */
-  onClick: () => void;
+  /**
+   * Open this row in the Okta admin console instead of in-panel. Setting it
+   * makes the row an `<a>` rather than a `<button>` — see the module note. The
+   * caller has already validated the origin (`oktaAdminEntityUrl`).
+   */
+  href?: string;
+  /** Activate this row. Ignored, and unnecessary, when {@link PaletteRowProps.href} is set. */
+  onClick?: () => void;
   /** Arrow-key handling, owned by the list so it can see its neighbours. */
   onKeyDown?: (event: React.KeyboardEvent<HTMLElement>) => void;
   /**
@@ -94,34 +114,49 @@ const PaletteRow: React.FC<PaletteRowProps> = ({
   isCurrent = false,
   tabIndex,
   rowRef,
+  href,
   onClick,
   onKeyDown,
   ariaLabel,
-}) => (
-  <button
-    type="button"
-    ref={rowRef}
-    tabIndex={tabIndex}
-    aria-current={isCurrent ? 'page' : undefined}
-    aria-label={ariaLabel}
-    onClick={onClick}
-    onKeyDown={onKeyDown}
-    className={`press press-subtle w-full flex items-center gap-(--sp-inline) px-(--sp-row-x) py-(--sp-row-y) rounded-md text-left text-sm
+}) => {
+  const className = `press press-subtle w-full flex items-center gap-(--sp-inline) px-(--sp-row-x) py-(--sp-row-y) rounded-md text-left text-sm
       transition-colors duration-(--dur-instant)
       focus:outline-2 focus:outline-offset-2 focus:outline-primary
-      ${isCurrent ? 'bg-primary-light text-primary-text font-semibold' : 'text-neutral-900 hover:bg-neutral-50'}`}
-  >
-    <Icon
-      type={icon}
-      size="sm"
-      className={`shrink-0 ${isCurrent ? 'text-primary-text' : 'text-neutral-500'}`}
-    />
-    <span className="flex-1 min-w-0">
-      <span className="block truncate">{label}</span>
-      {secondary && <span className="block truncate text-xs text-neutral-600">{secondary}</span>}
-    </span>
-    {trailing && <span className="shrink-0 text-xs font-medium">{trailing}</span>}
-  </button>
-);
+      ${isCurrent ? 'bg-primary-light text-primary-text font-semibold' : 'text-neutral-900 hover:bg-neutral-50'}`;
+
+  const body = (
+    <>
+      <Icon
+        type={icon}
+        size="sm"
+        className={`shrink-0 ${isCurrent ? 'text-primary-text' : 'text-neutral-500'}`}
+      />
+      <span className="flex-1 min-w-0">
+        <span className="block truncate">{label}</span>
+        {secondary && <span className="block truncate text-xs text-neutral-600">{secondary}</span>}
+      </span>
+      {trailing && <span className="shrink-0 text-xs font-medium">{trailing}</span>}
+    </>
+  );
+
+  const shared = {
+    ref: rowRef,
+    tabIndex,
+    'aria-current': isCurrent ? ('page' as const) : undefined,
+    'aria-label': ariaLabel,
+    onKeyDown,
+    className,
+  };
+
+  return href ? (
+    <a {...shared} href={href} target="_blank" rel="noopener noreferrer">
+      {body}
+    </a>
+  ) : (
+    <button {...shared} type="button" onClick={onClick}>
+      {body}
+    </button>
+  );
+};
 
 export default PaletteRow;
