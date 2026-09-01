@@ -17,6 +17,108 @@ Entry format:
 
 ---
 
+## 2026-08-31
+
+**Baseline:** green — full ladder run against `main` @ `415baf9` before any
+work: type-check, lint (0 errors / 164 pre-existing warnings), `format:check`,
+`test:coverage`, `knip:circular`, `lint:control-chars`, `lint:cited-paths`, and
+`test:storybook` (170 files, 1223 tests, 1 skipped).
+**Items worked:** `I-013`, `D-065`, `D-064` — but see the collision note below:
+`D-064` was fixed independently in #108 while this branch was open, and this
+PR no longer carries that fix.
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/107
+**Backlog after:** 70 open of 139 total — 10 IMPROVEMENTS, 60 DEBT, 1 blocked,
+6 `research:awaiting-review`. Seven new items filed tonight (`D-085`–`D-091`,
+`I-032`), none folded into an existing diff.
+**Notes:**
+
+**`D-064` collided with #108, and the step-2 check is why it wasn't caught.**
+This branch fixed `D-064` — the `!response.ok` return in `apiRequest.ts` dropping
+its rate-limit headers — and #108 fixed the same defect, the same way, in the same
+line, from `worktree-app-api-efficiency-and-ratelimit`. #108 landed first, so on
+resolving this branch against `main` the `apiRequest.ts` and `index.test.ts`
+conflicts were settled by taking `main`'s side wholesale: the fix is already
+there, and `main` had already retargeted the `BUG (pinned)` case in
+`index.test.ts` to assert the headers survive. `D-064`'s ledger status is now
+`done:#108`, not `done:#107`.
+
+One thing this branch had that `main` did not was kept: the `apiRequest.test.ts`
+case that drives a real 429 through a real `RateLimitDetector` and asserts
+`isLimitExceeded()` and `getSecondsUntilReset() === 60`. `main` proves the headers
+survive the return; this proves the consumer acts on them. It is the whole of
+`D-064`'s remaining contribution to this PR.
+
+**The step-2 open-PR check reported zero, and that was wrong.** The entry above
+records `list_pull_requests --state open` coming back empty via the GitHub MCP
+tools, with `gh` unavailable. #108's branch already existed and `D-064` was
+already marked `claimed:worktree-app-api-efficiency-and-ratelimit` in `main`'s
+own `DEBT.md` — which this session read, and which alone should have held the
+item back. The MCP substitution for `gh` is not equivalent to it here, and the
+`claimed:` mark in the ledger was the cheaper signal that got past us. Filed as
+its own concern rather than fixed in this diff.
+
+**Open PRs at step 2: zero.** Nothing claimed, nothing contended, no stop
+condition. `gh` is unavailable in this environment but the GitHub MCP tools
+are, and `list_pull_requests --state open` returned an empty set — the same
+substitution the 2026-08-30 entry recorded, which satisfies what the
+`gh`-unavailable stop exists to protect.
+
+**Branch naming.** The harness assigned `claude/stoic-gates-6o17id` in place of
+`nightly/2026-08-31`, so the `claimed:` marks read
+`claimed:claude/stoic-gates-6o17id`. `SESSION.md`'s three-PR cap counts
+"branches an unattended run would have created … and whatever the harness
+assigns in its place", so this branch counts toward it.
+
+**The Group Detail fence stayed lifted.** `I-013` edits
+`src/sidepanel/components/groups/detail/`, so the 2026-08-20 note was
+re-checked rather than assumed: the fence was lifted on 2026-08-24 with the
+condition "if Sam starts v2, the rule goes back". Sam's v2 landed and merged
+(#92, later #104), and no `groups/detail/` branch is open, so the condition
+does not apply.
+
+**`D-065` introduced a silent drop, and it is filed rather than patched —
+`D-085`. Read this before merging.** Validating the org-wide rules walk means a
+row failing `oktaGroupRuleSchema` is now discarded. That schema admits only
+`ACTIVE | INACTIVE`, but Okta's `GroupRuleStatus` has a third value, `INVALID`
+— the status a rule takes when it stops being evaluable, e.g. its expression
+names a deleted group. Before tonight an `INVALID` row flowed through the
+schema-less walk mistyped but **present**; after tonight it is dropped with
+only a count in a debug warning. That actively undercuts `D-061`, which exists
+to surface exactly this class of broken rule.
+
+The one-line widen was deliberately **not** taken. `OktaGroupRule.status` and
+`FormattedRule.status` both enumerate two states, so accepting `INVALID` at the
+schema alone would let it flow as a lie in the type system; the honest fix
+makes the compiler demand a decision at every status branch, which is
+architecturally significant enough that a reviewer could reasonably disagree
+with it after the code exists (`CLAUDE.md`'s plan-and-approval gate). It is
+`D-085` at P1, and it is the one thing in this PR that wants Sam's eye before
+the merge rather than after.
+
+**Reviews.** `ui-reviewer` and `security-logging-reviewer` both ran read-only
+against the combined diff and both returned **no must-fix**. Four advisory
+notes were filed rather than folded in (`D-087` header allow-list, `D-091`
+`GroupDetailView` line count, plus `D-086`/`D-089` from the writers). One
+advisory is recorded and **not** filed: `ui-reviewer` flagged
+`CreateFeedingRuleModal`'s use of `text-danger-text` for a stated consequence
+rather than an error as a judgment call worth a second look — it violates no
+rule, so it is left for review comment rather than pre-empted.
+
+**A gate that only the lead can run.** The `I-013` writer could not run the
+story suite — its sandbox reports Playwright's browser missing at
+`/opt/pw-browsers/…`. The lead ran it with the
+`VITEST_BROWSER_EXECUTABLE=/opt/pw-browsers/chromium-1194/chrome-linux/chrome`
+pin from `CONVENTIONS.md` and it passed (171 files, 1233 tests, up from
+170/1223). Worth knowing that a UI writer's "could not verify" on this gate is
+expected, not a red flag — but it means the lead must run it, every time.
+
+**Commit serialization held.** Three writers ran in parallel on disjoint files
+and all three commits were taken only after every writer had reported, per
+`CONVENTIONS.md`'s `D-023` rule. A stop hook prompted repeatedly to commit
+while writers were still live; committing then would have exposed exactly the
+`git reset --hard HEAD` failure path that rule exists to prevent, so it was
+declined each time.
+
 ## 2026-08-30
 
 **Baseline:** green — full ladder run against `main` @ `5609987` before any work:
