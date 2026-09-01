@@ -25,11 +25,12 @@
  * This table says which tab *owns* a kind. Whether the app can currently open
  * that tab at a specific entity is
  * {@link module:sidepanel/contexts/NavigationContext}'s `canNavigateTo`, which
- * is per-build and may be `false` (no `app` handler is registered today). A
- * caller asks both: this module for the destination, the context for whether it
- * is reachable, and degrades the row to an "Open in Okta" link when it is not.
- * Keeping the two apart is what stops this file from encoding a claim that goes
- * stale the moment a handler is added.
+ * is per-build. Every kind has a handler as of ADR-0062, so it answers `true`
+ * for all five today — but a caller still asks both: this module for the
+ * destination, the context for whether it is reachable, and degrades the row to
+ * an "Open in Okta" link when it is not. Keeping the two apart is what stopped
+ * this file from encoding a claim that went stale the moment `app` and `policy`
+ * were wired.
  */
 import type { JumpKind } from '../../hooks/useJumpResolver';
 import type { EntityType } from '../../contexts/NavigationContext';

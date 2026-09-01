@@ -93,6 +93,10 @@ const App: React.FC = () => {
   // A one-shot request to open a specific user in the Users tab (e.g. from the
   // a jump into a user); cleared by the tab once consumed.
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  // One-shot requests to open a specific app or policy on its own tab (from the
+  // ⌘K palette's entity search); cleared by the tab once consumed.
+  const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
+  const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null);
   // A one-shot request to open the Export tab pre-scoped (e.g. from the group
   // a detail rung's export action); cleared by the tab once consumed.
   const [exportRequest, setExportRequest] = useState<ExportRequest | null>(null);
@@ -272,7 +276,7 @@ const App: React.FC = () => {
     }
   };
 
-  // The three cross-entity jumps. Wrapped in `useCallback` (they close over
+  // The five cross-entity jumps. Wrapped in `useCallback` (they close over
   // nothing but stable setters) so the `navigationHandlers` object below keeps a
   // stable identity — `NavigationProvider` memoizes on it, and every `EntityLink`
   // in the tree consumes that memo.
@@ -294,19 +298,44 @@ const App: React.FC = () => {
     chrome.storage.local.set({ [SELECTED_TAB_KEY]: 'users' });
   }, []);
 
+  const handleNavigateToApp = useCallback((appId: string) => {
+    setSelectedAppId(appId);
+    setActiveTab('apps');
+    chrome.storage.local.set({ [SELECTED_TAB_KEY]: 'apps' });
+  }, []);
+
+  const handleNavigateToPolicy = useCallback((policyId: string) => {
+    setSelectedPolicyId(policyId);
+    setActiveTab('policies');
+    chrome.storage.local.set({ [SELECTED_TAB_KEY]: 'policies' });
+  }, []);
+
   /**
-   * What `EntityLink` can reach today. `app` and `policy` are deliberately absent:
-   * neither tab accepts a deep-linked selection yet, and reporting them as
-   * unreachable makes an app chip render as plain text rather than as a control
-   * that does nothing (ADR-0030).
+   * What `EntityLink` can reach. Every `EntityType` now has a handler.
+   *
+   * `app` and `policy` were deliberately absent until the ⌘K palette started
+   * searching them: a searchable kind with no destination is a row that only
+   * refuses, which is worse than no row (ADR-0039). Both tabs are flat filtered
+   * lists rather than detail rungs, so "navigating" to one means arriving with
+   * the list filtered to it — a real destination, not a fabricated detail page.
+   * Every app chip and policy chip in the tree upgrades from plain text to a
+   * live control as a consequence, which is the point rather than a side effect.
    */
   const navigationHandlers = useMemo(
     () => ({
       rule: handleNavigateToRule,
       group: handleNavigateToGroup,
       user: handleNavigateToUser,
+      app: handleNavigateToApp,
+      policy: handleNavigateToPolicy,
     }),
-    [handleNavigateToRule, handleNavigateToGroup, handleNavigateToUser],
+    [
+      handleNavigateToRule,
+      handleNavigateToGroup,
+      handleNavigateToUser,
+      handleNavigateToApp,
+      handleNavigateToPolicy,
+    ],
   );
 
   // Open the Export tab pre-scoped to a descriptor + context entity (deep-linked
@@ -489,6 +518,8 @@ const App: React.FC = () => {
                 oktaOrigin={tabContext.oktaOrigin ?? undefined}
                 listView={viewFor(listViewRequest, 'apps')}
                 onListViewConsumed={clearListViewRequest}
+                selectedAppId={selectedAppId}
+                onAppSelected={() => setSelectedAppId(null)}
               />
             ))}
             {renderTabPanel('policies', (isActive) => (
@@ -496,6 +527,8 @@ const App: React.FC = () => {
                 isActive={isActive}
                 targetTabId={tabContext.targetTabId ?? undefined}
                 oktaOrigin={tabContext.oktaOrigin ?? undefined}
+                selectedPolicyId={selectedPolicyId}
+                onPolicySelected={() => setSelectedPolicyId(null)}
               />
             ))}
             {renderTabPanel('export', (isActive) => (

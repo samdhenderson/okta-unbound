@@ -10,13 +10,17 @@
  *
  * ## An unreachable kind is a link, not a disabled row
  *
- * Not every entity kind has a destination in every build:
- * `NavigationContext.canNavigateTo('app')` is `false` today, because no app
- * deep-link handler is registered. A row for one of those kinds does **not**
- * render greyed out — a control that exists only to refuse is worse than no
- * control (ADR-0039's "no verb without a wire", applied to a row). It renders as
- * an `OpenInOktaLink` instead, which is a real, working route to the same
- * entity. When the handler lands, the row upgrades itself with no change here.
+ * Not every entity kind has a destination in every build. A row for an
+ * unreachable kind does **not** render greyed out — a control that exists only
+ * to refuse is worse than no control (ADR-0039's "no verb without a wire",
+ * applied to a row). It renders as an `OpenInOktaLink` instead, which is a real,
+ * working route to the same entity.
+ *
+ * `app` was the standing example of that path: `canNavigateTo('app')` was
+ * `false` until ADR-0062 registered a handler, and when it landed **this row
+ * upgraded itself with no change here** — which is the property the design was
+ * for. Every kind is reachable today; the path stays because reachability is a
+ * per-build runtime question, not a fact about this file.
  */
 import React from 'react';
 import ListRow from '../shared/ListRow';

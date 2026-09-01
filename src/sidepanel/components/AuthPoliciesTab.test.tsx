@@ -203,6 +203,65 @@ describe('AuthPoliciesTab', () => {
     expect(api.listPolicies).not.toHaveBeenCalled();
   });
 
+  it('arrives at a deep-linked policy with the list filtered to it, once', async () => {
+    const onPolicySelected = vi.fn();
+    const { rerender } = render(
+      <AuthPoliciesTab
+        targetTabId={1}
+        selectedPolicyId="rstFAKE000000000002"
+        onPolicySelected={onPolicySelected}
+      />,
+    );
+
+    // The filter is the visible search box, keyed on the policy's name so the
+    // reader can widen it by pressing backspace.
+    expect(await screen.findByText('Default Policy')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Any two factors')).not.toBeInTheDocument());
+    expect(screen.getByDisplayValue('Default Policy')).toBeInTheDocument();
+    await waitFor(() => expect(onPolicySelected).toHaveBeenCalledTimes(1));
+
+    // One-shot: the same id arriving again must not re-apply the filter over
+    // whatever the reader has typed since.
+    rerender(
+      <AuthPoliciesTab
+        targetTabId={1}
+        selectedPolicyId="rstFAKE000000000002"
+        onPolicySelected={onPolicySelected}
+      />,
+    );
+    expect(onPolicySelected).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for the policy list before consuming a deep link into a cold tab', async () => {
+    // This tab loads on activation, so a jump lands before the policies do.
+    // Consuming the request against an empty list would silently drop it.
+    const onPolicySelected = vi.fn();
+    const { rerender } = render(
+      <AuthPoliciesTab
+        targetTabId={1}
+        isActive={false}
+        selectedPolicyId="rstFAKE000000000002"
+        onPolicySelected={onPolicySelected}
+      />,
+    );
+
+    await waitFor(() => expect(api.listPolicies).not.toHaveBeenCalled());
+    expect(onPolicySelected).not.toHaveBeenCalled();
+
+    rerender(
+      <AuthPoliciesTab
+        targetTabId={1}
+        isActive
+        selectedPolicyId="rstFAKE000000000002"
+        onPolicySelected={onPolicySelected}
+      />,
+    );
+
+    expect(await screen.findByText('Default Policy')).toBeInTheDocument();
+    await waitFor(() => expect(onPolicySelected).toHaveBeenCalledTimes(1));
+    expect(screen.getByDisplayValue('Default Policy')).toBeInTheDocument();
+  });
+
   it('defers the arrival load while the tab is mounted but not the visible one', async () => {
     // App keeps every visited tab mounted and hides the inactive ones, so the
     // auto-load must wait to be looked at rather than fire in the background.

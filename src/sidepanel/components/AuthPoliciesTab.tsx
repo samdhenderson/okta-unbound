@@ -11,7 +11,7 @@
  * only. Policy names and descriptions are end-user-controlled Okta data, rendered
  * as text through React's escaping.
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PageHeader from './shared/PageHeader';
 import Button from './shared/Button';
 import Input from './shared/Input';
@@ -36,13 +36,27 @@ interface AuthPoliciesTabProps {
    * shown rather than firing in the background. Defaults to `true`.
    */
   isActive?: boolean;
+  /**
+   * A single policy to arrive at, deep-linked from elsewhere in the panel (the
+   * ⌘K palette, an `EntityLink`). This tab is a flat filtered list with no
+   * detail rung, so arriving at a policy means arriving with the list filtered
+   * to it. Applied once, then cleared via {@link onPolicySelected}.
+   */
+  selectedPolicyId?: string | null;
+  /** Invoked once {@link selectedPolicyId} has been applied. */
+  onPolicySelected?: () => void;
 }
 
 /**
  * Renders the Auth Policies tab: the app authentication policy list with search
  * and lazily expandable per-policy rules.
  */
-const AuthPoliciesTab: React.FC<AuthPoliciesTabProps> = ({ targetTabId, isActive = true }) => {
+const AuthPoliciesTab: React.FC<AuthPoliciesTabProps> = ({
+  targetTabId,
+  isActive = true,
+  selectedPolicyId,
+  onPolicySelected,
+}) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -80,6 +94,31 @@ const AuthPoliciesTab: React.FC<AuthPoliciesTabProps> = ({ targetTabId, isActive
     () => filterPolicies(policies, searchQuery),
     [policies, searchQuery],
   );
+
+  // Arriving at one policy: filter the list down to it. Keyed on the policy's
+  // name rather than its id because the search box is the visible filter — a
+  // reader can widen it by pressing backspace, which they could not do with an
+  // id that matches nothing.
+  //
+  // Waits for a non-empty list before consuming: this tab loads on activation
+  // (`useOwedLoad` above), so a jump into a cold tab arrives before the policies
+  // do, and consuming the request against an empty list would silently drop it.
+  const selectedPolicyHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedPolicyId) {
+      selectedPolicyHandledRef.current = null;
+      return;
+    }
+    if (selectedPolicyHandledRef.current === selectedPolicyId) return;
+    if (policies.length === 0) return;
+    selectedPolicyHandledRef.current = selectedPolicyId;
+    const match = policies.find((policy) => policy.id === selectedPolicyId);
+    // An unmatched id leaves the list as it is rather than filtering it to
+    // empty — the reader asked to see a policy, and showing them nothing is a
+    // claim this tab cannot support.
+    if (match?.name) setSearchQuery(match.name);
+    onPolicySelected?.();
+  }, [selectedPolicyId, policies, onPolicySelected]);
 
   const hasPolicies = policies.length > 0;
   const lastUpdatedLabel = lastFetchTime ? getRelativeTime(lastFetchTime) : null;

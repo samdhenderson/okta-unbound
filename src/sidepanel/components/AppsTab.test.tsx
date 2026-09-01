@@ -233,6 +233,55 @@ describe('AppsTab', () => {
     expect(screen.getByRole('button', { name: /Refresh/ })).toBeDisabled();
   });
 
+  it('arrives at a deep-linked app with the list filtered to it, once', async () => {
+    const onAppSelected = vi.fn();
+    const { rerender } = render(
+      <AppsTab
+        targetTabId={1}
+        oktaOrigin={ORIGIN}
+        selectedAppId="0oaFAKE0002"
+        onAppSelected={onAppSelected}
+      />,
+    );
+
+    // The filter is the visible search box, so the reader can see why the list
+    // narrowed and can widen it — an id in a name filter would match nothing.
+    expect(await screen.findByText('Workday HR')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Salesforce')).not.toBeInTheDocument());
+    expect(screen.getByDisplayValue('Workday HR')).toBeInTheDocument();
+    await waitFor(() => expect(onAppSelected).toHaveBeenCalledTimes(1));
+
+    // One-shot: a re-render with the same id must not re-apply the filter over
+    // whatever the reader has typed since.
+    rerender(
+      <AppsTab
+        targetTabId={1}
+        oktaOrigin={ORIGIN}
+        selectedAppId="0oaFAKE0002"
+        onAppSelected={onAppSelected}
+      />,
+    );
+    expect(onAppSelected).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the list alone when the deep-linked app is not in the inventory', async () => {
+    // The inventory is the org snapshot, which may still be walking. Filtering
+    // to empty would state an absence the snapshot cannot support (ADR-0040 §7).
+    const onAppSelected = vi.fn();
+    render(
+      <AppsTab
+        targetTabId={1}
+        oktaOrigin={ORIGIN}
+        selectedAppId="0oaFAKENOSUCH"
+        onAppSelected={onAppSelected}
+      />,
+    );
+
+    expect(await screen.findByText('Salesforce')).toBeInTheDocument();
+    expect(screen.getByText('Workday HR')).toBeInTheDocument();
+    await waitFor(() => expect(onAppSelected).toHaveBeenCalledTimes(1));
+  });
+
   it('defers the auto-load while the tab is mounted but not the visible one', async () => {
     // App keeps every visited tab mounted and hides the inactive ones. Paging the
     // whole app inventory from a tab nobody is looking at is exactly the

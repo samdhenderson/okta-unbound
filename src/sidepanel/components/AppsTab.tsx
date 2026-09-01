@@ -47,6 +47,15 @@ export interface AppsTabProps {
   listView?: AppsListView | null;
   /** Invoked once {@link AppsTabProps.listView} has been applied. */
   onListViewConsumed?: () => void;
+  /**
+   * A single app to arrive at, deep-linked from elsewhere in the panel (the ⌘K
+   * palette, an `EntityLink`). This tab is a flat filtered inventory with no
+   * detail rung, so arriving at an app means arriving with the list filtered to
+   * it. Applied once, then cleared via {@link AppsTabProps.onAppSelected}.
+   */
+  selectedAppId?: string | null;
+  /** Invoked once {@link AppsTabProps.selectedAppId} has been applied. */
+  onAppSelected?: () => void;
 }
 
 /**
@@ -60,6 +69,8 @@ const AppsTab: React.FC<AppsTabProps> = ({
   isActive = true,
   listView,
   onListViewConsumed,
+  selectedAppId,
+  onAppSelected,
 }) => {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -141,6 +152,42 @@ const AppsTab: React.FC<AppsTabProps> = ({
     setGroupsFilter(listView === 'pushes-nothing' ? 'no-groups' : '');
     onListViewConsumed?.();
   }, [listView, onListViewConsumed]);
+
+  // Arriving at one app: filter the inventory down to it, clearing the other
+  // axes for the same reason `listView` does — you should see exactly the thing
+  // you asked for, not that thing minus whatever was selected last time.
+  //
+  // Deliberately keyed on the app's *label*, not its id: the search box is what
+  // the reader can see and edit, so the filter they land on is one they can
+  // widen by pressing backspace. An id typed into a name search would match
+  // nothing and read as "that app is gone".
+  //
+  // An id the inventory does not contain leaves the list alone rather than
+  // filtering it to empty. The inventory is the org snapshot, which may still be
+  // walking — an absence here is not evidence the app does not exist (ADR-0040
+  // §7), and an empty list presented as truth is exactly that claim.
+  const selectedAppHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedAppId) {
+      selectedAppHandledRef.current = null;
+      return;
+    }
+    if (selectedAppHandledRef.current === selectedAppId) return;
+    const match = apps.find((app) => app.id === selectedAppId);
+    // Not yet loaded: wait rather than consuming the request against an empty
+    // inventory. `useAppsData` fills in on activation and this effect re-runs.
+    if (!match) {
+      if (apps.length === 0) return;
+      selectedAppHandledRef.current = selectedAppId;
+      onAppSelected?.();
+      return;
+    }
+    selectedAppHandledRef.current = selectedAppId;
+    setSearchQuery(match.label || match.name || match.id);
+    setStatusFilter('');
+    setGroupsFilter('');
+    onAppSelected?.();
+  }, [selectedAppId, apps, onAppSelected]);
 
   const handleToggleSort = useCallback((field: AppSortField) => {
     setSortBy((prev) => {
