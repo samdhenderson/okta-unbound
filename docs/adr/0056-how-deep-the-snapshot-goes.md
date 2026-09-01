@@ -5,7 +5,7 @@
 - Scoped by: `I-012`
 - Extends: [ADR-0040](./0040-the-background-owns-the-org.md). The store, the
   `CollectionSpec` model and the sync engine are unchanged. What this adds is a
-  name for *how many* collections an org runs, and a control over it.
+  name for _how many_ collections an org runs, and a control over it.
 - Relates to: [ADR-0006](./0006-zod-boundary-validation.md) (every stored row is
   a parsed row), `docs/security.md` ("store no more than needed")
 
@@ -24,10 +24,10 @@ Nothing says **how far** a snapshot should go. Depth is an implicit constant —
 the four specs that happen to be passed to the sync entry point — so every
 richer question is either free or impossible with nothing in between:
 
-- *Which groups have no rule feeding them?* Free today (`groups` ∩ `rules`).
-- *Which app-sourced groups point at a deleted app?* Free today.
-- *Which rules can never match, because a target group is gone?* Free today.
-- *Which admins hold a role they have not used?* Impossible — `roles` is not a
+- _Which groups have no rule feeding them?_ Free today (`groups` ∩ `rules`).
+- _Which app-sourced groups point at a deleted app?_ Free today.
+- _Which rules can never match, because a target group is gone?_ Free today.
+- _Which admins hold a role they have not used?_ Impossible — `roles` is not a
   collection, and there is no way for an admin to ask for it.
 
 The point of naming depth is what it unlocks. With the right collections local
@@ -47,11 +47,11 @@ to whoever wires the next collection.
 A level is a set of `CollectionSpec`s, nothing more. The sync engine is
 unchanged; the level chooses its argument.
 
-| Level | Collections | Reach | Rows, 5k-group org | Cold requests |
-| --- | --- | --- | --- | --- |
-| **Essential** (default) | `groups`, `rules` | Group inventory, rule inventory, orphan and unfed-group joins | ~5.5k | ~30 |
-| **Standard** | + `apps`, `appGroups` | Everything above, plus app provenance and push/import sourcing. **Today's wired behaviour.** | ~7k | ~45 |
-| **Extended** (opt-in) | + `roles`, `policies` | Admin-role and policy reporting; recommended org actions that span governance | ~7.5k | ~60 |
+| Level                   | Collections           | Reach                                                                                        | Rows, 5k-group org | Cold requests |
+| ----------------------- | --------------------- | -------------------------------------------------------------------------------------------- | ------------------ | ------------- |
+| **Essential** (default) | `groups`, `rules`     | Group inventory, rule inventory, orphan and unfed-group joins                                | ~5.5k              | ~30           |
+| **Standard**            | + `apps`, `appGroups` | Everything above, plus app provenance and push/import sourcing. **Today's wired behaviour.** | ~7k                | ~45           |
+| **Extended** (opt-in)   | + `roles`, `policies` | Admin-role and policy reporting; recommended org actions that span governance                | ~7.5k              | ~60           |
 
 Two properties are deliberate. **Levels are cumulative and ordered** — a level
 is a prefix of the next, so a change is always "add these collections" or
@@ -133,9 +133,9 @@ needs `Extended` can explain that instead of silently returning nothing. The
 default gets cheaper than today's behaviour for orgs that only use the group and
 rule surfaces.
 
-The costs are real. Every surface reading a collection must handle *the level
-does not include this* as a distinct state from *not synced yet* and from
-*empty* — three states where there is currently one, and conflating them is the
+The costs are real. Every surface reading a collection must handle _the level
+does not include this_ as a distinct state from _not synced yet_ and from
+_empty_ — three states where there is currently one, and conflating them is the
 defect this ADR is most likely to cause. The default drops `apps`/`appGroups`,
 so any surface currently assuming they are present needs an explicit
 `Standard` requirement or a graceful empty. And the level becomes a new piece of

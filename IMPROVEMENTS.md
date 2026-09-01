@@ -1085,3 +1085,37 @@ block says they mean — same vocabulary, one definition, defined there.
   provider's identity stability is load-bearing in three more places.
 - **Status:** open
 - **Related:** ADR-0040, ADR-0062
+
+### I-034 · ⌘K is the only route to two sections, and nothing points at it
+
+- **Category:** ux
+- **Priority:** P1
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useCommandPalette.ts` (exports an unused
+  `open()`), `src/sidepanel/components/ContextBar.tsx` or
+  `src/sidepanel/components/TabNavigation.tsx` (wherever the affordance lands),
+  `src/sidepanel/tabs.ts` (read-only, for what `railHidden` costs)
+- **Verified:** 2026-09-01 — filed by the change that created the gap, rather
+  than left for someone to rediscover.
+- **Problem:** ADR-0063 took Explorer and History out of the icon rail and made
+  ⌘K their only route. The panel has **no visible ⌘K affordance anywhere**, so a
+  user who does not already know the shortcut exists cannot reach either section
+  at all. `useCommandPalette` already returns an `open()` that **no caller uses**
+  — it was written for exactly this and never wired.
+
+  This compounds with `I-018`: ADR-0057 is still Proposed, so the chord only
+  fires once focus is inside the side-panel document. Pressed from the Okta page
+  Chrome takes it for the omnibox. So today the two sections are reachable only
+  by someone who both knows the shortcut and has already clicked into the panel.
+
+  P1 rather than P2 because this is a regression in reachability for shipped
+  features, not a missing nicety.
+
+- **Done when:** One visible, always-present control opens the palette — a small
+  `⌘K` affordance in the top chrome is the obvious shape — wired to
+  `useCommandPalette().open()`, with the platform-correct glyph (⌘ vs Ctrl). It
+  is axe-clean, names itself for a screen reader, and has a story. A test pins
+  that pressing it opens the palette, so `open()` stops being dead code.
+- **Risk:** Low — additive, one new control in the chrome.
+- **Status:** open
+- **Related:** ADR-0063, ADR-0057, `I-018`

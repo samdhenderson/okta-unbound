@@ -149,6 +149,23 @@ const Tabs: React.FC<TabsProps> = ({
     reducedMotion,
   });
 
+  // The roving anchor: the one tab in the page's tab order.
+  //
+  // Normally that is the selected tab. It falls back to the first tab when
+  // `activeKey` matches nothing in this strip, which is a real state rather than
+  // a bug — the panel's rail deliberately has no seat for the rail-hidden
+  // sections (ADR-0063), so standing on one selects none of its tabs. Without
+  // the fallback every tab would carry `tabIndex={-1}` and **the whole tablist
+  // would drop out of the tab order**, leaving a keyboard user on such a section
+  // with no way to Tab back into the nav. WAI-ARIA's tabs pattern requires
+  // exactly one tab stop; this keeps that true when nothing is selected.
+  //
+  // `aria-selected` is deliberately *not* forced to match: the anchor is
+  // focusable, not selected, and claiming otherwise would announce a tab the
+  // reader is not on.
+  const activeIndex = tabs.findIndex((tab) => tab.key === activeKey);
+  const anchorIndex = activeIndex === -1 ? 0 : activeIndex;
+
   const focusTab = (index: number) => {
     const clamped = (index + tabs.length) % tabs.length;
     const tab = tabs[clamped];
@@ -241,7 +258,7 @@ const Tabs: React.FC<TabsProps> = ({
             // still has a name for `button-name`. The tooltip below is *additive* —
             // it describes, the `aria-label` names.
             aria-label={isRail ? tab.label : undefined}
-            tabIndex={active ? 0 : -1}
+            tabIndex={index === anchorIndex ? 0 : -1}
             onClick={() => onChange(tab.key)}
             onKeyDown={(event) => handleKeyDown(event, index)}
             className={tabClasses}

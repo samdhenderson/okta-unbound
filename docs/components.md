@@ -103,8 +103,13 @@ drill-in.
 `tabindex`, arrow-key nav) with three variants: `underline` (section nav),
 `segmented` (compact toggle) and `rail` (icon-first primary nav).
 
-The **`rail`** variant is what `TabNavigation` uses for the panel's nine
-top-level sections. Inactive tabs are icon-only (`TabItem.icon`, an `IconType`);
+The **`rail`** variant is what `TabNavigation` uses for the panel's top-level
+sections — `RAIL_TAB_DEFS`, which is **seven** of the nine in `TAB_DEFS`.
+Explorer and History carry `railHidden` and are reached through the ⌘K palette
+instead (ADR-0063); the rail is the only consumer that reads the shorter list.
+On a rail-hidden section no tab matches `activeKey`, so the strip shows no
+selection and no indicator, and the roving anchor falls back to the first tab
+so the tablist keeps its one tab stop. Inactive tabs are icon-only (`TabItem.icon`, an `IconType`);
 the active tab's label unfurls via `grid-template-columns: 0fr → 1fr` at
 `--dur-move`, so the strip never toggles `display` to make room. What still
 overflows scrolls, with the scrollbar hidden and `mask-image` edge fades keyed

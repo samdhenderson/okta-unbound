@@ -2,10 +2,13 @@
  * @module sidepanel/components/TabNavigation
  * @description The top icon rail for switching between the side panel's main views.
  *
- * Renders the tabs from the central {@link module:sidepanel/tabs} registry via the
- * shared accessible {@link Tabs} strip (`rail` variant) and highlights the active
- * one. Nine text tabs need well past 590px of strip; the panel opens at 480 and the
- * user can drag it to 360, so inactive tabs render as icons only and the active
+ * Renders `RAIL_TAB_DEFS` from the central {@link module:sidepanel/tabs} registry
+ * via the shared accessible {@link Tabs} strip (`rail` variant) and highlights the
+ * active one. That is a **subset** of the sections the panel has: Explorer and
+ * History carry `railHidden` and are reached through the ⌘K palette instead
+ * (ADR-0063), so on either of them this rail shows no active tab and no
+ * indicator — which is the honest rendering, not a bug. Even seven text tabs need well past 450px of strip; the panel opens at 480 and
+ * the user can drag it to 360, so inactive tabs render as icons only and the active
  * tab's label unfurls beside its glyph. Every tab keeps its label as its accessible
  * name whether or not that label is currently visible, and carries a `Tooltip`
  * naming it on hover and on focus.

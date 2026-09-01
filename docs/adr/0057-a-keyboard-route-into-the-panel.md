@@ -21,7 +21,7 @@ actually is when they want to jump — Chrome takes ⌘K for the omnibox and the
 panel never sees it.
 
 Home's jump bar softens this: it is a real autofocused input on a real tab, so
-the *capability* has a route. But the *shortcut* is still a control that does
+the _capability_ has a route. But the _shortcut_ is still a control that does
 nothing from the place a person would use it, which is worse than not having one.
 
 The only mechanism that can hear a chord outside the panel document is a
@@ -91,7 +91,7 @@ once you are in it. Nothing is rewired, and the item ships no change to
 `_execute_action` toggles per Chrome's own behaviour for the action, and this
 ADR does not fight it. Opening the panel does not force the palette open, does
 not change tabs, and does not steal focus from a field the admin is typing in.
-The shortcut's promise is *the panel is now in front of you* — arriving on a
+The shortcut's promise is _the panel is now in front of you_ — arriving on a
 surface other than the one you left would make it unpredictable, and the
 palette's own chord is one keystroke away.
 
@@ -111,7 +111,7 @@ rather than hidden. And any UI that displays the chord now depends on
 ## Alternatives considered
 
 **A custom command plus an `onCommand` listener.** More expressive — it could
-open the panel *and* focus the jump bar. It needs a service-worker listener, a
+open the panel _and_ focus the jump bar. It needs a service-worker listener, a
 new message action into the panel, and its own sender validation, and Chrome's
 user-gesture rules make reliably opening a side panel from a custom command the
 awkward path rather than the supported one. Rejected for a mechanism that does

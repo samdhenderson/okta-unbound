@@ -20,7 +20,7 @@
 - **`useGroupContext`** — a group-specific specialization, feeding every tab's
   `targetTabId` and `oktaOrigin`.
 - **`useOktaPageContext`** — probes for all page types (`group | user | app |
-  policy | admin | unknown`), feeding the `ContextBar` masthead.
+policy | admin | unknown`), feeding the `ContextBar` masthead.
 
 They have always overlapped: each sends its own `getOktaOrigin` plus its own
 entity probes on every navigation. The overlap used to be bounded, because the
@@ -29,7 +29,7 @@ program) made it always-on, so the duplication is now paid on **every**
 navigation rather than on some of them.
 
 The two are not redundant in what they compute — one narrows to groups, the
-other classifies five page types — but they are redundant in what they *cost*:
+other classifies five page types — but they are redundant in what they _cost_:
 the same tab, the same origin resolution, the same content-script round trip,
 twice. Folding one into the other would roughly halve probe traffic.
 
@@ -65,7 +65,7 @@ everything; the specialization is a `useMemo` over its result.
 This is the load-bearing choice. Today:
 
 - `useOktaTabContext` exposes `connectionStatus: 'connecting' | 'connected' |
-  'error'` plus an `error: string | null`, and it **latches**: a terminal failure
+'error'` plus an `error: string | null`, and it **latches**: a terminal failure
   sets `error` and drops the same-entity latch so a document reload always
   re-probes (`useOktaTabContext.ts:228-240, 306-307`).
 - `useOktaPageContext` falls back to `'admin'` when nothing matches
@@ -75,10 +75,10 @@ These are not the same kind of statement, and merging them naively would destroy
 information. **They must stay distinct after the merge**, because they answer
 different questions:
 
-- `pageType: 'admin'` means *the probe succeeded and this is not an entity page*.
+- `pageType: 'admin'` means _the probe succeeded and this is not an entity page_.
   That is a real, useful answer, and it is the common case on an admin console
   landing page.
-- `connectionStatus: 'error'` means *the probe did not succeed*, and nothing is
+- `connectionStatus: 'error'` means _the probe did not succeed_, and nothing is
   known about the page at all.
 
 The merged hook keeps both fields. What changes is that `pageType` is only
@@ -113,7 +113,7 @@ disagree. `D-059` addressed the other cost the Home re-gate exposed; this closes
 the pair.
 
 The costs: `App`'s single context becomes a genuine single point of failure —
-one failed probe now blanks the masthead *and* the group-dependent tabs, where
+one failed probe now blanks the masthead _and_ the group-dependent tabs, where
 today one could succeed while the other failed. That is more honest and less
 resilient, and it is the right trade only because the two disagreeing was itself
 a defect.
@@ -131,7 +131,7 @@ general hook with a misleading name.
 
 **Share a cache between the two hooks, keeping both.** Smaller diff, keeps both
 failure semantics untouched, halves the traffic. It leaves two engines that can
-still disagree about state derived *after* the cached probe, and adds a cache
+still disagree about state derived _after_ the cached probe, and adds a cache
 whose invalidation is a third thing to get wrong. Rejected as the change that
 buys the traffic win without the correctness one.
 
