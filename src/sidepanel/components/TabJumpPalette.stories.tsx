@@ -136,9 +136,15 @@ export const WithEntityResults: Story = {
     ).toBeVisible();
 
     // The asymmetry is stated in the headings, not buried in a footnote: apps
-    // and rules came from the local snapshot for free, users could not.
-    await expect(canvas.getByText('from snapshot', { exact: false })).toBeVisible();
-    await expect(canvas.getByText(/Users/).closest('li')).toHaveTextContent('live');
+    // and rules came from the local snapshot for free, users could not. Scoped
+    // per heading — two sections carry the same mark, so a bare text query is
+    // ambiguous, and `Users` also matches the Users *section row* above.
+    const heading = (name: string) =>
+      canvas.getAllByRole('listitem').find((li) => li.textContent?.startsWith(name));
+
+    await expect(heading('Apps')).toHaveTextContent('from snapshot');
+    await expect(heading('Rules')).toHaveTextContent('from snapshot');
+    await expect(heading('Users')).toHaveTextContent('live');
   },
 };
 
@@ -208,10 +214,14 @@ export const BelowMinChars: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const field = await canvas.findByRole('searchbox', { name: 'Search sections' });
-    await userEvent.type(field, 'en');
+    // `ex`, not `en`: it has to be a query that actually matches a section, or
+    // this asserts the empty state and calls it "sections still filter".
+    await userEvent.type(field, 'ex');
 
     // Sections still filter instantly at two characters — only the org search waits.
-    await expect(canvas.getByRole('button', { name: /^Home/ })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: /^Export/ })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: /^Explorer/ })).toBeVisible();
+    await expect(canvas.queryByRole('button', { name: /^Home/ })).not.toBeInTheDocument();
     await expect(canvas.getByText('Type 3 characters to search the org.')).toBeVisible();
   },
 };

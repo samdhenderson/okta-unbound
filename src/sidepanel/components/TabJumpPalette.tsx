@@ -30,9 +30,13 @@
  * a list of lists. The roving-focus model — one anchor, wrapping Up/Down, Enter
  * from the field taking the top row — is index arithmetic over that array, and
  * every one of those behaviours would need re-deriving if the rows were grouped
- * first and flattened after. Build flat, slice to render; never the reverse. The
- * headings themselves are `role="presentation"` so they cannot land in the
- * roving order.
+ * first and flattened after. Build flat, slice to render; never the reverse.
+ *
+ * A heading cannot land in the roving order because that order *is* the flat
+ * array, which holds rows only — not because of anything on the heading element.
+ * It is a plain `<li>`: `role="presentation"` would strip its list-item
+ * semantics, and a `<ul>` whose direct child is not an `<li>` is an axe
+ * violation.
  *
  * ## Why roving focus and not a combobox
  *
@@ -453,12 +457,14 @@ const TabJumpPalette: React.FC<TabJumpPaletteProps> = ({
             return (
               <React.Fragment key={`entity:${row.kind}:${row.id}`}>
                 {heading && (
-                  // `role="presentation"` so a heading can never land in the
-                  // roving order — the flat array holds rows only.
-                  <li
-                    role="presentation"
-                    className="mt-3 mb-1 px-(--sp-row-x) text-xs font-semibold uppercase tracking-wide text-neutral-500"
-                  >
+                  // A plain `<li>`, deliberately: `role="presentation"` strips a
+                  // list item's semantics, and axe rejects a `<ul>` whose direct
+                  // child is not an `<li>` — CI caught exactly that. Nothing was
+                  // gained by the role anyway. A heading cannot enter the roving
+                  // order because the order is index arithmetic over `flatRows`,
+                  // which holds rows only; the headings are drawn beside it and
+                  // are never focusable to begin with.
+                  <li className="mt-3 mb-1 px-(--sp-row-x) text-xs font-semibold uppercase tracking-wide text-neutral-500">
                     {heading}
                     {provenance && (
                       <span className="ml-2 font-normal normal-case">· {provenance}</span>

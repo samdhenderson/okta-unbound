@@ -31,7 +31,7 @@
  */
 import React from 'react';
 import { Tabs, type TabItem } from './shared';
-import { TAB_DEFS, type TabType } from '../tabs';
+import { RAIL_TAB_DEFS, type TabType } from '../tabs';
 
 export type { TabType } from '../tabs';
 
@@ -43,7 +43,16 @@ interface TabNavigationProps {
   onTabChange: (tab: TabType) => void;
 }
 
-const TAB_ITEMS: TabItem[] = TAB_DEFS.map(({ id, label, icon }) => ({ key: id, label, icon }));
+// `RAIL_TAB_DEFS`, not `TAB_DEFS`: Explorer and History are sections without a
+// rail seat, reached through the ⌘K palette (ADR-0063). The rail is the only
+// consumer that reads the shorter list — everything enumerating *sections* reads
+// the full registry, or a rail-hidden tab becomes unreachable rather than
+// keyboard-only.
+const TAB_ITEMS: TabItem[] = RAIL_TAB_DEFS.map(({ id, label, icon }) => ({
+  key: id,
+  label,
+  icon,
+}));
 
 /** Renders the horizontal tab navigation and reports selection via `onTabChange`. */
 const TabNavigation: React.FC<TabNavigationProps> = ({ activeTab, onTabChange }) => (
