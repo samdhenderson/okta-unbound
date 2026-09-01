@@ -22,6 +22,9 @@ const RULE_ID = '0prFAKE0000000000001';
 function makeIndex(answers: Partial<Record<string, LocalLookup>> = {}): OrgEntityIndex {
   return {
     lookup: (kind) => answers[kind] ?? { status: 'unknown' },
+    // This hook resolves ids and never searches names — the name search lives in
+    // the caller's `searchers`, which these tests supply directly.
+    searchByName: () => [],
     isAuthoritative: () => true,
     // The snapshot handles are not read by this hook; the figures card uses them.
     groups: {} as OrgEntityIndex['groups'],

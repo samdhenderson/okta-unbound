@@ -55,7 +55,7 @@
  * both resolve to the panel's measured width, so the stack sits tighter at
  * 360px and roomier at 720px with no prop threaded down.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import JumpBar from './home/JumpBar';
 import WorkingSet from './home/WorkingSet';
 import OrgSnapshotCard from './home/OrgSnapshotCard';
@@ -66,10 +66,10 @@ import { useWorkingSet } from '../hooks/useWorkingSet';
 import { useOrgFigures } from '../hooks/useOrgFigures';
 import { useHomeReports } from '../hooks/useHomeReports';
 import { useJumpResolver, type JumpResult } from '../hooks/useJumpResolver';
+import { useEntitySearchSources } from '../hooks/useEntitySearchSources';
 import { useStaggerReveal } from '../hooks/useStaggerReveal';
 import { useEntityNavigation } from '../contexts/NavigationContext';
 import { navigationTarget } from './home/jumpDestinations';
-import type { OktaIdKind } from '../../shared/utils/oktaId';
 import type { WorkingSetRef } from '../../shared/storage/workingSetStore';
 import type { ListViewRequest, ListViewTab } from '../listViewRequest';
 
@@ -99,6 +99,17 @@ export interface HomeTabProps {
  *
  * @param props - See {@link HomeTabProps}.
  */
+/**
+ * The kinds Home's jump bar fans out over.
+ *
+ * Two, not the five the ⌘K palette searches. Home is a landing surface whose bar
+ * is typed into casually, and every kind added here is another endpoint queried
+ * per settle. Module-level and frozen by `as const` because
+ * {@link module:sidepanel/hooks/useEntitySearchSources} memoizes on this
+ * reference — an inline literal would re-issue the fan-out every render.
+ */
+const HOME_JUMP_KINDS = ['group', 'user'] as const;
+
 const HomeTab: React.FC<HomeTabProps> = ({
   isActive,
   targetTabId,
@@ -128,96 +139,10 @@ const HomeTab: React.FC<HomeTabProps> = ({
   // open-but-hidden must not pull focus when it is eventually shown.
   const [autoFocus] = useState(() => isActive && document.visibilityState === 'visible');
 
-  const { searchUsers, searchGroups, getUserById, getGroupById, getAppById, getRawGroupRule } = api;
-
-  // Stable identity is part of `useJumpResolver`'s contract: the debounced
-  // search effect depends on this object, so a fresh literal per render would
-  // re-issue the search on every render of this component.
-  const searchers = useMemo(() => {
-    const built: Partial<Record<OktaIdKind, (query: string) => Promise<JumpResult[]>>> = {};
-    if (nav.canNavigateTo('group')) {
-      built.group = async (query) =>
-        (await searchGroups(query)).map((group) => ({
-          kind: 'group' as const,
-          id: group.id,
-          name: group.name,
-          secondary: group.description || undefined,
-        }));
-    }
-    if (nav.canNavigateTo('user')) {
-      built.user = async (query) =>
-        (await searchUsers(query)).map((user) => ({
-          kind: 'user' as const,
-          id: user.id,
-          name: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.login,
-          secondary: user.email || user.login,
-        }));
-    }
-    return built;
-  }, [nav, searchGroups, searchUsers]);
-
-  // Needs no memoization — only ever reached from `submit`, an event handler.
-  const fetchers: Partial<Record<OktaIdKind, (id: string) => Promise<JumpResult | null>>> = {
-    group: async (id) => {
-      const group = await getGroupById(id);
-      return group
-        ? {
-            kind: 'group',
-            id: group.id,
-            name: group.name,
-            secondary: group.description || undefined,
-          }
-        : null;
-    },
-    user: async (id) => {
-      const user = await getUserById(id);
-      return user
-        ? {
-            kind: 'user',
-            id: user.id,
-            name: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.login,
-            secondary: user.email || user.login,
-          }
-        : null;
-    },
-    // The only fetcher that can tell "Okta says no such app" apart from "we
-    // never got an answer" (`AppLookup`, D-007a). `null` here means the jump bar
-    // reports an authoritative absence, so only a real 404 may return it —
-    // a throttled or unauthenticated lookup throws instead, and `useJumpResolver`
-    // renders it as the error it is rather than as a missing app.
-    app: async (id) => {
-      const lookup = await getAppById(id);
-      switch (lookup.kind) {
-        case 'found':
-          return {
-            kind: 'app',
-            id: lookup.app.id,
-            name: lookup.app.label || lookup.app.name || lookup.app.id,
-          };
-        case 'missing':
-          return null;
-        case 'session-expired':
-          throw new Error('Your Okta session has expired. Sign in again on the Okta tab.');
-        case 'failed':
-          // Deliberately not "could not reach Okta": this arm also covers 403 and
-          // 429, where Okta answered and the answer was no. Say only what is true
-          // of every arm — the lookup did not complete — rather than asserting a
-          // connectivity failure that did not happen.
-          throw new Error('Could not look that app up. Try again.');
-      }
-    },
-    rule: async (id) => {
-      const rule = await getRawGroupRule(id);
-      return rule
-        ? {
-            kind: 'rule',
-            id: rule.id,
-            name: rule.name || rule.id,
-            secondary: rule.status === 'INACTIVE' ? 'Paused' : 'Active',
-          }
-        : null;
-    },
-  };
+  // Home searches exactly two kinds. Module-level so the `searchers` memo in
+  // `useEntitySearchSources` holds — an inline literal here would re-issue the
+  // fan-out on every render of this tab.
+  const { searchers, fetchers } = useEntitySearchSources({ api, index, kinds: HOME_JUMP_KINDS });
 
   const jump = useJumpResolver({ index, searchers, fetchers, enabled: isActive });
 
