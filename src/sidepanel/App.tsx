@@ -7,7 +7,7 @@
  * `useGroupContext`/`useOktaPageContext` and renders the {@link ContextBar} masthead
  * (app wordmark + entity identity + connection), {@link TabNavigation}, the per-tab
  * content, the fixed {@link ActivityBar} (the unified scheduler + progress bar), the
- * ⌘K {@link TabJumpPalette}, and the modal layer every `Modal` overlay portals into
+ * ⌘K {@link CommandPalette}, and the modal layer every `Modal` overlay portals into
  * ({@link MODAL_LAYER_ID}), all inside the SchedulerProvider.
  *
  * The shell is also the **single owner of app-wide keyboard shortcuts**
@@ -45,7 +45,7 @@ import PageHeader from './components/shared/PageHeader';
 import { MODAL_LAYER_ID } from './components/shared/Modal';
 import TabNavigation from './components/TabNavigation';
 import TabPanel from './components/TabPanel';
-import TabJumpPalette from './components/TabJumpPalette';
+import CommandPalette from './components/CommandPalette';
 import { useCommandPalette } from './hooks/useCommandPalette';
 import { migrateLegacyTabId, type TabType } from './tabs';
 import HomeTab from './components/HomeTab';
@@ -568,11 +568,13 @@ const App: React.FC = () => {
         {/* Rendered outside the scroll root: it is a viewport-fixed overlay, not
           part of any tab's scrollable content. Selecting a result goes through
           the same `handleTabChange` the icon rail calls. */}
-        <TabJumpPalette
+        <CommandPalette
           isOpen={jumpPalette.isOpen}
           onClose={jumpPalette.close}
           activeTab={activeTab}
           onSelect={handleTabChange}
+          targetTabId={tabContext.targetTabId ?? null}
+          oktaOrigin={tabContext.oktaOrigin}
         />
 
         {/* The modal layer: every `Modal` overlay in the panel portals in here.

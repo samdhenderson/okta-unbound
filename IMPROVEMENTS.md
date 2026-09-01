@@ -1050,3 +1050,38 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Low-medium — touches the hook every Group Detail pane reads.
 - **Status:** open
 - **Related:** `I-013`
+
+### I-033 · Two mounts of the org snapshot index, for one org
+
+- **Category:** performance
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/sidepanel/hooks/useOrgEntityIndex.ts`,
+  `src/sidepanel/components/CommandPalette.tsx`,
+  `src/sidepanel/components/HomeTab.tsx`, `src/sidepanel/App.tsx`
+- **Verified:** 2026-09-01 — found while wiring the ⌘K palette's entity search,
+  which shipped the second mount deliberately rather than lifting a shared hook
+  into a provider inside a feature PR.
+- **Problem:** `useOrgEntityIndex` opens four `useOrgSnapshot` reads (groups,
+  rules, apps, appGroups) and registers four `snapshotUpdated` listeners. Its
+  own module header says two hooks reading the same collection is the thing it
+  exists to prevent — and there are now two hooks doing exactly that: `HomeTab`
+  mounts one, `CommandPalette` mounts another. Eight IndexedDB reads and eight
+  broadcast listeners for one org's four collections.
+
+  `CommandPalette` softens it: it passes `oktaOrigin: null` until the palette
+  has been opened once, so a session that never presses ⌘K pays nothing, and
+  `enabled: isOpen` keeps it from ever driving a sync. So this is duplicated
+  _reads and listeners_, never duplicated _requests_. That is why it is a P3 and
+  not a defect.
+
+- **Done when:** One `OrgEntityIndexProvider` mounted in `App` serves both
+  surfaces, `useOrgEntityIndex` becomes its hook, and a test pins that rendering
+  Home and the palette together opens one set of `useOrgSnapshot` reads rather
+  than two. The lazy-until-opened behaviour must survive the lift, or Home's
+  mount silently starts paying for the palette's collections at panel open.
+- **Risk:** Medium — every Home consumer of `index` (`useOrgFigures`,
+  `useHomeReports`, the jump bar) reads through the same object, so the
+  provider's identity stability is load-bearing in three more places.
+- **Status:** open
+- **Related:** ADR-0040, ADR-0062
