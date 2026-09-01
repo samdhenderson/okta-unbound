@@ -17,6 +17,75 @@ Entry format:
 
 ---
 
+## 2026-09-01
+
+**Baseline:** red — `test:storybook` failed on `main` @ `069ef48`, 1 failed /
+1282 passed: `RulesListActionBar.stories.tsx:115`, the `NothingLoaded` story,
+asserting no **More** control where one renders. Every other gate green
+(type-check, lint 0 errors / 179 warnings, `format:check`, `test:coverage`,
+`knip:circular`, `lint:control-chars`, `lint:cited-paths`).
+**Items worked:** none — baseline repair only. `D-092` filed, not fixed.
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/114
+**Backlog after:** 76 open of 142 total — 13 IMPROVEMENTS, 63 DEBT, 3 blocked,
+6 `research:awaiting-review`. One new item tonight (`D-092`), filed as its own
+commit rather than folded into the repair.
+**Notes:**
+
+**The red gate was real, and it had been red for two days.** It reproduces in
+isolation in ~6s, so it is not the largest-first bystander flake this file and
+`CONVENTIONS.md` both warn about — that trap names a file the diff never
+touched, and this named its own story with a concrete DOM mismatch. It landed
+with #109 on 2026-08-31 and `main` has been red since. This is `D-017`'s
+history repeating with a different story file, and the reason
+`CONVENTIONS.md` now requires `test:storybook` at step 1 is exactly this. It
+paid for itself tonight.
+
+**Cause worth remembering, because the shape will recur.** `NothingLoaded`
+overrode `hasRules`, `duplicateClusterCount` and `currentGroupRelationCount`
+but not `hasCurrentGroup`, which stayed `true` from `meta.args`. _This group_
+is gated on a **detected group**, never on the loaded rules — a deliberate
+carve-out the component's module doc argues at length — so the verb was still
+emitted and `ActionBar` grew a tier to hold it. A story that overrides _most_
+of a meta's args to describe an "empty" state is the failure mode: the one
+arg you forget is the one whose gate differs from all the others. The fix is
+one arg; the assertions were not touched. The state the story was
+accidentally rendering is now `NothingLoadedWithGroupInContext`, so narrowing
+`NothingLoaded` did not drop coverage — it went 11 tests → 12.
+
+**Step 2: three open PRs, none of them unattended, so no stop.** #111, #112
+and #113 are all Sam's, on `feat/*`, `beta/*` and `worktree-*` branches. The
+three-open-PRs cap counts `nightly/*` and harness-assigned branches only, so
+it did not trip — but they contend for 34 files and that is what the next
+session needs from this entry:
+
+- **Claimed by id:** `I-030` (#113); `D-041`, `D-048`, `D-053a`–`D-053f`,
+  `D-054`, `D-061` (#112). Mentioned in bodies and also treated as claimed:
+  `D-052`, `D-029b`.
+- **Contended by file, under no item id at all** — the case step 2 was
+  rewritten to catch: `D-085`, the backlog's **only open P1**, is out because
+  #112 touches `src/shared/types.ts`, `fetchGroupRulesRequest.ts` and
+  `snapshotSync.ts`. Also out: `I-010`, `I-016`, `I-017`, `I-019`, `I-021`,
+  `I-031`, `D-012`, `D-033`, `D-036`, `D-040`, `D-043`, `D-045`, `D-060`,
+  `D-063`, `D-066`, `D-088`, `D-091`.
+
+**The picks a green baseline would have taken:** `D-086`, `D-089` and `D-062`
+(the security one — see the `D-080` caveat about that id). All P2, all `S`,
+all verified inside 14 days, mutually disjoint, disjoint from all three open
+PRs, and none touching a file from the last three nightly branches. Still
+clean candidates; take them next run if the PRs above have not moved onto
+those files.
+
+**`D-092` is `D-080`'s failure mode one step earlier.** Nine well-formed items
+carry no `Status:` line at all — `I-022`–`I-028`, `D-074`, `D-075` — so they
+match neither `Status: open` nor any excluded status and step 3 can never
+offer them. Enumerated, not sampled: every `### [ID]-NNN` section was
+extracted and tested. Four _other_ status-less sections are deliberate
+umbrellas whose sub-items carry the status (`D-007`, `D-013`, `D-029`,
+`D-053`) and are correctly excluded from the finding. Three of the nine are
+P2 and `D-075` is a P2 correctness bug with a reproduction. Left `open` for
+Sam to status rather than guessed at — a session must not invent a status and
+then claim the item in the same night.
+
 ## 2026-08-31
 
 **Baseline:** green — full ladder run against `main` @ `415baf9` before any
