@@ -121,6 +121,20 @@ const ScrollableList: React.FC<ScrollableListProps> = ({
   const boxClasses = (leading: string) =>
     [leading, fillAvailable ? 'flex-1 min-h-0' : '', className].filter(Boolean).join(' ');
 
+  /**
+   * The reserved scrollbar channel, on every branch that can ever have one.
+   *
+   * `.scrollable-list` carries `scrollbar-gutter: stable` (`D-053g`), and it used
+   * to sit only on the scrolling branch — so the loaded box reserved 6px that the
+   * loading and empty boxes did not, and content still jumped sideways the moment
+   * a spinner was replaced by rows: the exact reflow the gutter exists to remove
+   * (`D-054`). It is gated on `scrolls` rather than applied unconditionally,
+   * because a list the page scrolls has no scrollbar of its own on *any* branch,
+   * and reserving a channel there would re-introduce the mismatch pointing the
+   * other way.
+   */
+  const gutter = scrolls ? 'scrollable-list' : '';
+
   // Container style for explicit max-height
   const containerStyle: React.CSSProperties | undefined = maxHeight ? { maxHeight } : undefined;
 
@@ -130,7 +144,11 @@ const ScrollableList: React.FC<ScrollableListProps> = ({
   // and over whatever sits below.
   if (loading) {
     return (
-      <div className={boxClasses('overflow-hidden')} style={containerStyle} data-testid={testId}>
+      <div
+        className={boxClasses(`overflow-hidden ${gutter}`.trim())}
+        style={containerStyle}
+        data-testid={testId}
+      >
         {skeleton ?? (
           <div className="flex items-center justify-center py-12">
             <LoadingSpinner size="2xl" message={loadingMessage} centered />
@@ -143,7 +161,11 @@ const ScrollableList: React.FC<ScrollableListProps> = ({
   // Empty state
   if (isEmpty && emptyState) {
     return (
-      <div className={boxClasses('overflow-hidden')} style={containerStyle} data-testid={testId}>
+      <div
+        className={boxClasses(`overflow-hidden ${gutter}`.trim())}
+        style={containerStyle}
+        data-testid={testId}
+      >
         {emptyState}
       </div>
     );
@@ -157,11 +179,11 @@ const ScrollableList: React.FC<ScrollableListProps> = ({
   return (
     <div
       ref={scrollRef}
-      // `scrollable-list` styles the custom scrollbar, so it belongs only on the
-      // branch that actually has one — and only when this list is a scroller at
-      // all. With `scrolls={false}` the box keeps its class names and its ref and
-      // simply lets the page scroll it.
-      className={boxClasses(scrolls ? 'overflow-y-auto scrollable-list' : '')}
+      // `scrollable-list` styles the custom scrollbar *and* reserves its channel,
+      // so it belongs on every branch that can have one — see `gutter` above. With
+      // `scrolls={false}` the box keeps its class names and its ref and simply
+      // lets the page scroll it.
+      className={boxClasses(scrolls ? `overflow-y-auto ${gutter}` : '')}
       style={containerStyle}
       data-testid={testId}
     >

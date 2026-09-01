@@ -2415,7 +2415,7 @@ affects every scroll box in the app, on every platform.
   be inert) before assuming the one-word change is enough.
 - **Risk:** Low — but it is the remaining tail of `D-053g`, so verify against the
   same story set that item used.
-- **Status:** open
+- **Status:** claimed:beta/trust-and-polish
 - **Related:** `D-053g`
 
 ### D-055 · `formatRuleForDisplay` does unguarded string work on a field it does not validate
