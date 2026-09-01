@@ -46,6 +46,13 @@
  * The members section piggybacks on `useGroupSource`'s gated member read rather
  * than fetching a second time — see that hook's module doc.
  *
+ * The strip's third mutating surface is its **disclosure tier**: *Create feeding
+ * rule*, the rung's one verb with no symmetric undo, whose state lives in
+ * {@link module:sidepanel/hooks/useCreateFeedingRule.useCreateFeedingRule} and
+ * whose confirm is {@link CreateFeedingRuleModal}. It is wired to the same
+ * `onNavigateToRule` the Rules pane uses, so the created (inactive) rule is one
+ * press from the tab that activates it.
+ *
  * The action bar's "Add" button opens {@link AddGroupMemberModal}, backed by
  * its own {@link module:sidepanel/hooks/useAddGroupMember.useAddGroupMember}
  * instance — the only add path now that `GroupMembersSection`'s inline add
@@ -66,6 +73,7 @@ import GroupInsightsPane from './GroupInsightsPane';
 import GroupActionBar from './GroupActionBar';
 import AddGroupMemberModal from './AddGroupMemberModal';
 import CompareGroupModal from './CompareGroupModal';
+import CreateFeedingRuleModal from './CreateFeedingRuleModal';
 import GroupComparisonModal from '../GroupComparisonModal';
 import { Tabs, type TabItem } from '../../shared';
 import { useGroupSource } from '../../../hooks/useGroupSource';
@@ -77,6 +85,7 @@ import { useGroupComparison } from '../../../hooks/useGroupComparison';
 import { useMemberMfaScan } from '../../../hooks/useMemberMfaScan';
 import { useGroupMembersSection } from './useGroupMembersSection';
 import { useAddGroupMember } from '../../../hooks/useAddGroupMember';
+import { useCreateFeedingRule } from '../../../hooks/useCreateFeedingRule';
 import { useWorkingSetEntry } from '../../../hooks/useWorkingSetEntry';
 import { OKTA_PAGE_SIZE } from '../../../../shared/utils/oktaPagination';
 import type { GroupSummary } from '../../../../shared/types';
@@ -257,6 +266,12 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
     addMember.closeModal();
   };
 
+  // The strip's disclosure tier. The write is one POST that already exists
+  // (`ruleWrites.createGroupRule`), and Okta creates the rule INACTIVE, so this
+  // hook grants nothing on its own — see its module doc for why the verb is
+  // behind a confirm regardless, and for what it declines to predict.
+  const createFeedingRule = useCreateFeedingRule({ targetTabId, group });
+
   // Compare with another group. Two dialogs in sequence, deliberately: the picker
   // supplies the second operand, and the comparison itself is the same
   // `GroupComparisonModal` the Groups list opens from a multi-select — this rung
@@ -313,6 +328,7 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
           onExportGroup={onExportGroup}
           onAddMember={openAddMemberModal}
           onCompare={comparison.openPicker}
+          onCreateFeedingRule={createFeedingRule.open}
         />
 
         <div>
@@ -461,6 +477,25 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
         canSearch={targetTabId !== null}
         onClose={comparison.closePicker}
         onConfirm={comparison.confirm}
+      />
+
+      <CreateFeedingRuleModal
+        isOpen={createFeedingRule.isOpen}
+        groupName={group.name}
+        name={createFeedingRule.name}
+        onNameChange={createFeedingRule.setName}
+        nameError={createFeedingRule.nameError}
+        expression={createFeedingRule.expression}
+        onExpressionChange={createFeedingRule.setExpression}
+        expressionNotice={createFeedingRule.expressionNotice}
+        canSubmit={createFeedingRule.canSubmit}
+        isCreating={createFeedingRule.isCreating}
+        error={createFeedingRule.error}
+        createdRuleName={createFeedingRule.createdRuleName}
+        createdRuleId={createFeedingRule.createdRuleId}
+        onClose={createFeedingRule.close}
+        onConfirm={createFeedingRule.confirm}
+        onNavigateToRule={onNavigateToRule}
       />
 
       <GroupComparisonModal
