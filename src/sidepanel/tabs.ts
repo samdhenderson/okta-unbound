@@ -7,6 +7,15 @@
  * migration of retired tab ids persisted by older versions. Adding a new
  * top-level section (e.g. Applications, Authentication Policies) means adding
  * one entry here — the navigation bar and persistence-restore pick it up.
+ *
+ * ## A section is not the same thing as a rail seat
+ *
+ * {@link TAB_DEFS} is every section the panel has. {@link RAIL_TAB_DEFS} is the
+ * subset the icon rail gives a permanent glyph to. They differ by
+ * {@link TabDef.railHidden}, which Explorer and History carry: both are reached
+ * through the ⌘K palette instead (ADR-0063). Enumerating sections — the palette,
+ * the id migration, a destination label — reads `TAB_DEFS`; only the rail itself
+ * reads the shorter list.
  */
 import type { IconType } from './components/shared/Icon';
 
@@ -30,6 +39,19 @@ export interface TabDef {
    * so a tab without a distinct glyph is not addable here.
    */
   icon: IconType;
+  /**
+   * Set when this section has **no seat in the icon rail** and is reached only
+   * through the ⌘K palette (ADR-0063).
+   *
+   * The tab still exists in every other sense — it is a real `TabType`, it is
+   * persisted and restored, `EntityLink` can send you to it, and the palette
+   * lists it beside the rest. What it does not have is a permanent glyph in a
+   * strip that has to survive a 360px panel.
+   *
+   * Deliberately optional rather than a boolean on all nine: the rail is the
+   * default, and a tab opting out of it is the thing worth reading in this file.
+   */
+  railHidden?: true;
 }
 
 /**
@@ -48,9 +70,24 @@ export const TAB_DEFS: ReadonlyArray<TabDef> = [
   { id: 'rules', label: 'Rules', icon: 'bolt' },
   { id: 'policies', label: 'Policies', icon: 'shield' },
   { id: 'export', label: 'Export', icon: 'download' },
-  { id: 'explorer', label: 'Explorer', icon: 'terminal' },
-  { id: 'history', label: 'History', icon: 'clipboard' },
+  // The two power-user sections. Both are destinations you go to on purpose,
+  // having decided to — not things you browse into — so neither earns a
+  // permanent seat in a strip that has to fit nine glyphs into 360px. ⌘K is
+  // their route. See ADR-0063 for the trade, including what it costs.
+  { id: 'explorer', label: 'Explorer', icon: 'terminal', railHidden: true },
+  { id: 'history', label: 'History', icon: 'clipboard', railHidden: true },
 ];
+
+/**
+ * The tabs the icon rail actually renders, in display order.
+ *
+ * A strict subset of {@link TAB_DEFS} — never a second registry. Everything that
+ * enumerates *sections* (the ⌘K palette, `migrateLegacyTabId`,
+ * `destinationLabel`) reads `TAB_DEFS`; only the rail reads this. Getting that
+ * backwards would make a rail-hidden section unreachable rather than
+ * keyboard-only.
+ */
+export const RAIL_TAB_DEFS: ReadonlyArray<TabDef> = TAB_DEFS.filter((def) => !def.railHidden);
 
 /**
  * Retired tab ids from earlier versions mapped to their current equivalents.

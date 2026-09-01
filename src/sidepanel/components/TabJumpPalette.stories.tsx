@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import TabJumpPalette from './TabJumpPalette';
+import type { JumpResult } from '../hooks/useJumpResolver';
 
 /** ⌘K jump-to palette for the panel's nine top-level sections. */
 const meta = {
@@ -14,7 +15,8 @@ const meta = {
         component:
           "⌘K jump-to palette for the side panel's nine top-level sections.\n\n" +
           'The primary nav is an icon rail, so inactive tabs are icon-only — compact, but it asks the user to aim at a small target. This palette is the keyboard route to the same destinations: it costs no horizontal space and no clicks. Filtering is a case-insensitive substring match on the section label; the section you are already on is marked `aria-current="page"` and labelled **Current**; choosing a result calls the same `onTabChange` the rail calls and then closes.\n\n' +
-          'Scope is deliberately navigation destinations only — searching groups, users or rules from here is a later feature, and the result list is shaped as a generic `{ id, label, icon }` row so that lands as extra sections rather than a rewrite.\n\n' +
+          '**Two halves, one list.** Sections filter synchronously on every keystroke; org entities — groups, apps, rules, policies, users — arrive from `useJumpResolver` on their own debounced schedule, handed in by the `CommandPalette` container. A section jump must not get slower because the org is also being searched, so only one of the two waits. Section headings are a render-time partition over **one** flat rows array, which is what keeps the roving-focus arithmetic (wrapping Up/Down, Enter takes the top row) working unchanged across the boundary; the headings are `role="presentation"` so they can never land in the roving order.\n\n' +
+          '**Every entity prop is optional.** Omit them all — as the stories below that do not name them do — and this is exactly the sections-only palette it has always been. That is the property that keeps these stories free of API mocking.\n\n' +
           '**Keyboard model — roving focus, not a combobox.** The shared `Input` does not spread arbitrary props, and bending a shared primitive with `role`/`aria-expanded`/`aria-controls`/`aria-activedescendant` for one consumer is the wrong trade. So: Down leaves the field for the first result, Up/Down move within the list (Up off the top returns to the field), Enter or Space activates, Escape closes. Exactly one row is in the tab order at a time.\n\n' +
           '**Related internals:** [Hooks](?path=/docs/internals-hooks--docs) — the ⌘K listener itself lives in `useCommandPalette`, called once by `App`, because every tab stays mounted (ADR-0018) and a `window` listener inside a tab would be registered once per tab.',
       },
@@ -48,6 +50,14 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+/** Three kinds, so the section boundaries and their provenance marks are visible. */
+const ENTITY_RESULTS: JumpResult[] = [
+  { kind: 'group', id: '00gFAKE0000000000001', name: 'Engineering', secondary: 'All engineers' },
+  { kind: 'app', id: '0oaFAKE0000000000001', name: 'Salesforce' },
+  { kind: 'rule', id: '0prFAKE0000000000001', name: 'Feeds Engineering', secondary: 'Active' },
+  { kind: 'user', id: '00uFAKE0000000000001', name: 'Ada Lovelace', secondary: 'ada@example.com' },
+];
 
 /** Freshly opened: the unfiltered list of every section in the rail. */
 export const Default: Story = {};
@@ -88,6 +98,168 @@ export const Empty: Story = {
     const field = await canvas.findByRole('searchbox', { name: 'Search sections' });
     await userEvent.type(field, 'zzz');
     await canvas.findByText('No sections match');
+  },
+};
+
+/**
+ * Both halves at once: sections on top, then org results grouped by kind.
+ *
+ * Prop-fed, like every story here — the container owns the hooks, so nothing is
+ * mocked to get this on screen.
+ */
+export const WithEntityResults: Story = {
+  args: {
+    onEntityQueryChange: fn(),
+    entityMode: 'results',
+    entityResults: ENTITY_RESULTS,
+    canReach: () => true,
+    sectionMeta: {
+      group: { fromSnapshot: false, complete: true },
+      app: { fromSnapshot: true, complete: true },
+      rule: { fromSnapshot: true, complete: true },
+      user: { fromSnapshot: false, complete: true },
+    },
+    onEntitySelect: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // Named, not counted: a bare count rots the moment a section is added, which
+    // is exactly how the `Filtered` story below broke once.
+    await expect(canvas.getByRole('button', { name: /^Home/ })).toBeVisible();
+    await expect(
+      canvas.getByRole('button', { name: 'Engineering — open in Groups' }),
+    ).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Salesforce — open in Apps' })).toBeVisible();
+    await expect(
+      canvas.getByRole('button', { name: 'Ada Lovelace — open in Users' }),
+    ).toBeVisible();
+
+    // The asymmetry is stated in the headings, not buried in a footnote: apps
+    // and rules came from the local snapshot for free, users could not.
+    //
+    // Finding a heading needs both filters. A bare text query is ambiguous —
+    // two sections carry the same mark — and `startsWith` alone matches the
+    // *section row* of the same name sitting in the tab half above ("Apps",
+    // "Users"). What separates them is structural, not textual: a heading is the
+    // one `<li>` in the list holding no control at all.
+    const heading = (name: string) =>
+      canvas
+        .getAllByRole('listitem')
+        .find((li) => !li.querySelector('a, button') && li.textContent?.startsWith(name));
+
+    await expect(heading('Apps')).toHaveTextContent('from snapshot');
+    await expect(heading('Rules')).toHaveTextContent('from snapshot');
+    await expect(heading('Users')).toHaveTextContent('live');
+  },
+};
+
+/** Mid-search: the spinner is in the field and the previous rows are held. */
+export const EntitySearching: Story = {
+  args: {
+    onEntityQueryChange: fn(),
+    entityMode: 'searching',
+    entityResults: ENTITY_RESULTS,
+    canReach: () => true,
+    onEntitySelect: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // Held across a refining search: emptying the list mid-word would replay the
+    // entrance animation and read as the palette losing its place.
+    await expect(
+      canvas.getByRole('button', { name: 'Engineering — open in Groups' }),
+    ).toBeVisible();
+  },
+};
+
+/** The org search failed — a `danger` banner, not a list that reads as "nothing". */
+export const EntityError: Story = {
+  args: {
+    onEntityQueryChange: fn(),
+    entityMode: 'error',
+    entityResults: [],
+    entityError: 'Search failed. Check the connection to Okta and try again.',
+    canReach: () => true,
+    onEntitySelect: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByRole('alert')).toHaveTextContent('Search failed');
+  },
+};
+
+/**
+ * A snapshot walk that has not finished. The heading says so rather than letting
+ * a partial collection pass for the whole org (ADR-0040 §7).
+ */
+export const PartialSnapshot: Story = {
+  args: {
+    onEntityQueryChange: fn(),
+    entityMode: 'results',
+    entityResults: [ENTITY_RESULTS[1]],
+    canReach: () => true,
+    sectionMeta: { app: { fromSnapshot: true, complete: false } },
+    onEntitySelect: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText(/partial snapshot/)).toBeVisible();
+  },
+};
+
+/** Below the character floor: the palette says what it is waiting for. */
+export const BelowMinChars: Story = {
+  args: {
+    onEntityQueryChange: fn(),
+    entityMode: 'idle',
+    entityResults: [],
+    canReach: () => true,
+    onEntitySelect: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const field = await canvas.findByRole('searchbox', { name: 'Search sections' });
+    // `ex`, not `en`: it has to be a query that actually matches a section, or
+    // this asserts the empty state and calls it "sections still filter".
+    await userEvent.type(field, 'ex');
+
+    // Sections still filter instantly at two characters — only the org search waits.
+    await expect(canvas.getByRole('button', { name: /^Export/ })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: /^Explorer/ })).toBeVisible();
+    await expect(canvas.queryByRole('button', { name: /^Home/ })).not.toBeInTheDocument();
+    await expect(canvas.getByText('Type 3 characters to search the org.')).toBeVisible();
+  },
+};
+
+/**
+ * A kind this build cannot open renders a working Okta link rather than a
+ * control that only refuses (ADR-0039).
+ */
+export const UnreachableKind: Story = {
+  args: {
+    onEntityQueryChange: fn(),
+    entityMode: 'results',
+    entityResults: ENTITY_RESULTS,
+    canReach: () => false,
+    oktaOrigin: 'https://example.okta.com',
+    onEntitySelect: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // The whole row becomes the link, rather than a link nested inside the row's
+    // button — which is a `nested-interactive` violation axe caught here.
+    const link = canvas.getByRole('link', { name: 'Engineering — open in Okta' });
+    await expect(link).toHaveAttribute(
+      'href',
+      'https://example.okta.com/admin/group/00gFAKE0000000000001',
+    );
+    await expect(link.querySelector('a, button')).toBeNull();
+
+    // A rule has no admin-console route, so it stays a plain row rather than
+    // gaining a link that goes nowhere.
+    await expect(canvas.queryByRole('link', { name: /Feeds Engineering/ })).toBeNull();
   },
 };
 

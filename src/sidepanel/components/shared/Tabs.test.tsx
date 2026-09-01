@@ -23,6 +23,24 @@ describe('Tabs', () => {
     expect(screen.getByRole('tab', { name: 'Org' })).toHaveAttribute('tabindex', '-1');
   });
 
+  it('keeps one tab stop when activeKey matches no tab, without claiming a selection', () => {
+    // A real state, not a bug: the panel's rail deliberately has no seat for the
+    // rail-hidden sections (ADR-0063), so standing on one selects none of its
+    // tabs. Anchoring to the first tab is what stops the whole tablist from
+    // dropping out of the page's tab order — WAI-ARIA's tabs pattern requires
+    // exactly one tab stop, and a keyboard user needs it to Tab back into the nav.
+    render(<Tabs tabs={TABS} activeKey="not-a-tab" onChange={vi.fn()} />);
+
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs.filter((tab) => tab.getAttribute('tabindex') === '0')).toHaveLength(1);
+    expect(tabs[0]).toHaveAttribute('tabindex', '0');
+    // Focusable is not selected: announcing a selection here would name a
+    // section the reader is not on.
+    for (const tab of tabs) {
+      expect(tab).toHaveAttribute('aria-selected', 'false');
+    }
+  });
+
   it('fires onChange with the tab key when clicked', async () => {
     const onChange = vi.fn();
     render(<Tabs tabs={TABS} activeKey="account" onChange={onChange} />);

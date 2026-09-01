@@ -73,13 +73,26 @@ export const JUMP_SEARCH_MIN_CHARS = 3;
  */
 export const JUMP_SEARCH_DEBOUNCE_MS = 600;
 
+/**
+ * A kind this surface can *search for by name*.
+ *
+ * Deliberately wider than {@link OktaIdKind}: searchable is not the same as
+ * identifiable. {@link module:shared/utils/oktaId} refuses to classify a policy
+ * id — the prefixes (`00p`, `rst`) collide with other objects and a policy has
+ * no `OktaAdminEntityType` — and that refusal is correct and stays. But a policy
+ * *name* is perfectly searchable, so the search half of this hook is keyed on
+ * this union while the id-resolution half stays keyed on `OktaIdKind`. The two
+ * answer different questions, and this is where they part.
+ */
+export type JumpKind = OktaIdKind | 'policy';
+
 /** What the jump bar is currently doing. */
 export type JumpMode = 'idle' | 'searching' | 'resolving' | 'results' | 'error';
 
 /** One row in the jump bar's result list. */
 export interface JumpResult {
   /** Which kind of entity, deciding the glyph and the destination tab. */
-  kind: OktaIdKind;
+  kind: JumpKind;
   /** The Okta id, and the row's React key. */
   id: string;
   /** Primary line. */
@@ -138,7 +151,7 @@ export interface UseJumpResolverOptions {
    * writing an object into a ref during render, and a silent staleness bug is a
    * worse trade than an explicit contract with one call site.
    */
-  searchers: Partial<Record<OktaIdKind, (query: string) => Promise<JumpResult[]>>>;
+  searchers: Partial<Record<JumpKind, (query: string) => Promise<JumpResult[]>>>;
   /**
    * Fetch one entity by id from Okta, for a local miss.
    *
@@ -192,7 +205,7 @@ export function useJumpResolver({
 
       // Only the kinds the caller supplied a searcher for — which is how the
       // fan-out stays tied to what this build can actually navigate to.
-      const kinds = Object.keys(searchers) as OktaIdKind[];
+      const kinds = Object.keys(searchers) as JumpKind[];
       const settled = await Promise.allSettled(
         kinds.map((kind) => searchers[kind]?.(needle) ?? Promise.resolve([])),
       );

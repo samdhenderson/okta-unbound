@@ -13,6 +13,9 @@
  * - **"How big is this org?"** — the snapshot card's counts, which are
  *   `rows.length` over the same three collections, plus the sub-counts joined
  *   from them and from `appGroups`.
+ * - **"What is called `eng`?"** — {@link OrgEntityIndex.searchByName}, the same
+ *   zero-request answer for a name that `lookup` gives for an id. Added for the
+ *   ⌘K palette, which searches names rather than resolving pasted ids.
  *
  * `appGroups` is the one collection here that is not an entity kind: nothing
  * resolves to an app-group assignment, and {@link OrgEntityIndex.lookup} never
@@ -88,6 +91,26 @@ export interface OrgEntityIndex {
    */
   lookup: (kind: OktaIdKind, id: string) => LocalLookup;
   /**
+   * Search one collection by name, locally.
+   *
+   * The zero-request half of a *name* search, the way {@link lookup} is the
+   * zero-request half of an id resolution. It scans the same flattened
+   * {@link IndexedEntity} rows `lookup` returns, so a group found by name and a
+   * group found by id are the same row with the same fallbacks — there is no
+   * second place that decides what an app is called.
+   *
+   * Deliberately returns rows and nothing else: it cannot report absence. A
+   * collection whose walk never finished still matches what it has, and it is
+   * the caller's job to say so — see {@link isAuthoritative}.
+   *
+   * @param kind - Which collection to scan.
+   * @param query - Case-insensitive substring of the entity's name. Blank
+   * returns `[]` rather than the whole org.
+   * @param limit - Most rows to return. Defaults to 20, matching what Okta's own
+   * type-ahead searches cap at, so a local section and a live one are the same size.
+   */
+  searchByName: (kind: IndexedKind, query: string, limit?: number) => IndexedEntity[];
+  /**
    * Whether a collection's last walk finished, so a miss in it means "absent"
    * rather than "not fetched yet".
    */
@@ -117,6 +140,13 @@ export interface UseOrgEntityIndexOptions {
    */
   enabled?: boolean;
 }
+
+/**
+ * Most rows {@link OrgEntityIndex.searchByName} returns when the caller does not
+ * say. 20, the same cap Okta's own `q=` type-ahead searches use, so a local
+ * section and a live one in the same list are the same length.
+ */
+const DEFAULT_NAME_SEARCH_LIMIT = 20;
 
 /** Reads a group's display name, falling back to its id rather than to blank. */
 function groupName(group: RawOktaGroup): string {
@@ -203,6 +233,22 @@ export function useOrgEntityIndex({
     [groups.complete, rules.complete, apps.complete],
   );
 
+  const searchByName = useCallback(
+    (kind: IndexedKind, query: string, limit: number = DEFAULT_NAME_SEARCH_LIMIT) => {
+      const needle = query.trim().toLowerCase();
+      if (!needle) return [];
+      const byId = kind === 'group' ? groupsById : kind === 'rule' ? rulesById : appsById;
+      const found: IndexedEntity[] = [];
+      for (const entity of byId.values()) {
+        if (!entity.name.toLowerCase().includes(needle)) continue;
+        found.push(entity);
+        if (found.length >= limit) break;
+      }
+      return found;
+    },
+    [groupsById, rulesById, appsById],
+  );
+
   const lookup = useCallback(
     (kind: OktaIdKind, id: string): LocalLookup => {
       // Users are deliberately not in the snapshot: ADR-0040 §5 keeps the
@@ -219,5 +265,5 @@ export function useOrgEntityIndex({
     [groupsById, rulesById, appsById, isAuthoritative],
   );
 
-  return { lookup, isAuthoritative, groups, rules, apps, appGroups };
+  return { lookup, searchByName, isAuthoritative, groups, rules, apps, appGroups };
 }

@@ -17,8 +17,8 @@
 
 `SUPPORTED_FUNCTIONS` in `src/shared/ruleEvaluator.ts` holds seven `String.*`
 entries and nothing else. A group rule whose condition calls anything outside
-that set evaluates to `UNRESOLVED`, so the admin asking *why is this person in
-this group* gets no answer for precisely the rules that are hardest to work out
+that set evaluates to `UNRESOLVED`, so the admin asking _why is this person in
+this group_ gets no answer for precisely the rules that are hardest to work out
 by hand.
 
 The module states the principle it was built on, and this ADR's job is to extend
@@ -120,7 +120,7 @@ ship:
 2. **Total.** Returns `UNRESOLVED` for every input it does not handle. It may
    not throw — a throw inside evaluation escapes into a render path.
 3. **Non-amplifying.** No function may allocate or iterate proportionally to an
-   attacker-controlled *value*. `String.len` is safe; a repeat or join primitive
+   attacker-controlled _value_. `String.len` is safe; a repeat or join primitive
    turning a 200-character attribute into a 200MB string is not, and none is
    proposed.
 4. **No new parser.** Everything continues to run on jsep's AST under ADR-0017's

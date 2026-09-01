@@ -19,8 +19,8 @@
 When an admin's Okta session ends mid-use — signed out in another tab, or simply
 timed out — the panel does not notice. Every queued request comes back as an
 ordinary "request failed", so a dozen unrelated surfaces break at once and the
-honest conclusion a user draws is *the extension is broken*, not *I need to sign
-in again*. Nothing stops the scheduler draining a full queue into the same 401
+honest conclusion a user draws is _the extension is broken_, not _I need to sign
+in again_. Nothing stops the scheduler draining a full queue into the same 401
 thirty times over, and each of those thirty failures paints its own error state.
 
 The diagnosis is no longer the hard part. PR #102 (`D-007a`) made every failure
@@ -94,7 +94,7 @@ The panel does not poll to see whether the session came back — polling a dead
 session is exactly the wasted traffic this ADR exists to stop. Suspension clears
 on one of two things:
 
-- **The admin acts.** The banner carries a *Retry* control that issues a single
+- **The admin acts.** The banner carries a _Retry_ control that issues a single
   cheap probe. Success clears the suspension and resumes normal scheduling;
   another 401 leaves it suspended and says so.
 - **The Okta tab reloads or navigates.** A document load installs a fresh

@@ -22,6 +22,9 @@ const RULE_ID = '0prFAKE0000000000001';
 function makeIndex(answers: Partial<Record<string, LocalLookup>> = {}): OrgEntityIndex {
   return {
     lookup: (kind) => answers[kind] ?? { status: 'unknown' },
+    // This hook resolves ids and never searches names — the name search lives in
+    // the caller's `searchers`, which these tests supply directly.
+    searchByName: () => [],
     isAuthoritative: () => true,
     // The snapshot handles are not read by this hook; the figures card uses them.
     groups: {} as OrgEntityIndex['groups'],
@@ -287,6 +290,32 @@ describe('useJumpResolver', () => {
 
       await waitFor(() => expect(result.current.mode).toBe('results'));
       // One real answer beats an error banner over a result the user can use.
+      expect(result.current.results).toHaveLength(1);
+      expect(result.current.error).toBeNull();
+    });
+
+    it('runs a policy leg alongside the id-classified kinds, and survives it failing', async () => {
+      // `policy` is in `JumpKind` but not `OktaIdKind`: searchable by name,
+      // deliberately unclassifiable from an id prefix. The fan-out must not care.
+      const searchPolicies = vi.fn<Searcher>(async () => {
+        throw new Error('boom');
+      });
+      const searchGroups = vi.fn<Searcher>(async () => [
+        { kind: 'group' as const, id: GROUP_ID, name: 'Engineering' },
+      ]);
+      const searchers = { group: searchGroups, policy: searchPolicies };
+      const { result } = renderHook(() =>
+        useJumpResolver({ index: makeIndex(), searchers, fetchers: {}, enabled: true }),
+      );
+
+      act(() => result.current.setQuery('eng'));
+      await act(async () => {
+        vi.advanceTimersByTime(JUMP_SEARCH_DEBOUNCE_MS);
+      });
+
+      await waitFor(() => expect(result.current.mode).toBe('results'));
+      expect(searchPolicies).toHaveBeenCalledWith('eng');
+      // One leg down is a partial answer, not an error.
       expect(result.current.results).toHaveLength(1);
       expect(result.current.error).toBeNull();
     });

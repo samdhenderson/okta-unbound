@@ -12,6 +12,13 @@
  *    move within the list, Up off the top returns to the field, and exactly one
  *    row is in the tab order at a time.
  *
+ * 3. **The entity half is layered on, not merged in.** Section rows keep
+ *    filtering synchronously while org results arrive on the container's
+ *    schedule, both live in one flat roving-focus list, and the sections-only
+ *    palette — every prop below `onSelect` omitted — behaves exactly as it did
+ *    before entity search existed. That last property is why every assertion in
+ *    blocks 1 and 2 is unchanged.
+ *
  * The shortcut itself is exercised through a harness that wires
  * `useCommandPalette` the way `App` does, because the listener's whole reason for
  * living in the shell is that it must be registered exactly once (ADR-0018 keeps
@@ -24,9 +31,11 @@ import userEvent from '@testing-library/user-event';
 import TabJumpPalette from './TabJumpPalette';
 import { useCommandPalette } from '../hooks/useCommandPalette';
 import { TAB_DEFS, type TabType } from '../tabs';
+import type { JumpResult } from '../hooks/useJumpResolver';
 
 const onSelect = vi.fn();
 const onClose = vi.fn();
+const onEntitySelect = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -42,12 +51,36 @@ function renderPalette(props: Partial<React.ComponentProps<typeof TabJumpPalette
 /** The search field. Named, not labelled, because it sits inline in the panel. */
 const field = () => screen.getByRole('searchbox', { name: 'Search sections' });
 
+/**
+ * The palette's sr-only announcement. Matched on its class rather than its role:
+ * `LoadingSpinner` also carries `role="status"`, so during a search there are two.
+ */
+const announcement = () => screen.getByText(/sections? available/, { selector: 'p.sr-only' });
+
 /** Every result row, in render order (the modal's own close button excluded). */
 const rows = () =>
   screen.getAllByRole('button').filter((el) => el.getAttribute('aria-label') !== 'Close modal');
 
 /** One result row, matched on its visible label. */
 const row = (label: string) => screen.getByRole('button', { name: new RegExp(`^${label}`) });
+
+/** Two entity results in two kinds, enough to exercise section boundaries. */
+const ENTITY_RESULTS: JumpResult[] = [
+  { kind: 'group', id: '00gFAKE0000000000001', name: 'Engineering', secondary: 'All engineers' },
+  { kind: 'user', id: '00uFAKE0000000000001', name: 'Ada Lovelace', secondary: 'ada@example.com' },
+];
+
+/** The palette with its entity half wired, as `CommandPalette` supplies it. */
+function renderWithEntities(props: Partial<React.ComponentProps<typeof TabJumpPalette>> = {}) {
+  return renderPalette({
+    onEntityQueryChange: vi.fn(),
+    entityMode: 'results',
+    entityResults: ENTITY_RESULTS,
+    onEntitySelect: onEntitySelect,
+    canReach: () => true,
+    ...props,
+  });
+}
 
 describe('TabJumpPalette', () => {
   describe('rendering and filtering', () => {
@@ -340,5 +373,151 @@ describe('useCommandPalette (shell-owned shortcut)', () => {
 
     expect(keydownRegistrations).toHaveLength(1);
     addSpy.mockRestore();
+  });
+});
+
+describe('TabJumpPalette entity search', () => {
+  it('renders entity rows under their section headings, after the sections', () => {
+    renderWithEntities();
+
+    // Sections keep their place at the top: the palette is still primarily a
+    // jump-to, and the org search is layered under it.
+    expect(rows()[0]).toHaveTextContent('Home');
+    expect(screen.getByText('Groups', { selector: 'li' })).toBeInTheDocument();
+    expect(screen.getByText('Users', { selector: 'li' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Engineering/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Ada Lovelace/ })).toBeInTheDocument();
+  });
+
+  it('names an entity row\u2019s destination in its accessible name', () => {
+    renderWithEntities();
+
+    // "Engineering" alone does not say where the row goes.
+    expect(
+      screen.getByRole('button', { name: 'Engineering \u2014 open in Groups' }),
+    ).toBeInTheDocument();
+  });
+
+  it('walks Down out of the last section row into the first entity row', async () => {
+    renderWithEntities();
+    // The open-focus timer lands the caret in the field; racing it with a manual
+    // `.focus()` loses, so the walk starts from where the reader actually is.
+    await waitFor(() => expect(field()).toHaveFocus());
+
+    // Down once per section lands on the last one; once more crosses into the
+    // org results. The boundary is the whole point — the two halves are one list.
+    await userEvent.keyboard('{ArrowDown}'.repeat(TAB_DEFS.length));
+    expect(row(TAB_DEFS[TAB_DEFS.length - 1].label)).toHaveFocus();
+
+    await userEvent.keyboard('{ArrowDown}');
+    expect(screen.getByRole('button', { name: /^Engineering/ })).toHaveFocus();
+    // Exactly one row in the tab order, across both halves.
+    expect(rows().filter((el) => el.getAttribute('tabindex') === '0')).toHaveLength(1);
+  });
+
+  it('activates the top row from the field even when entity results are present', async () => {
+    renderWithEntities();
+
+    field().focus();
+    await userEvent.keyboard('{Enter}');
+
+    // The top row is still a section — Enter must not jump to an entity just
+    // because the org search happened to answer.
+    expect(onSelect).toHaveBeenCalledWith('home');
+    expect(onEntitySelect).not.toHaveBeenCalled();
+  });
+
+  it('opens an entity row and closes', async () => {
+    renderWithEntities();
+
+    await userEvent.click(screen.getByRole('button', { name: /^Ada Lovelace/ }));
+
+    expect(onEntitySelect).toHaveBeenCalledWith(ENTITY_RESULTS[1]);
+    expect(onClose).toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('appends the entity count to the announcement without disturbing the sections clause', () => {
+    renderWithEntities();
+
+    // Append-only: the sections clause is byte-identical to the sections-only
+    // palette's, which is what keeps the existing assertions above green.
+    expect(announcement()).toHaveTextContent(`${TAB_DEFS.length} sections available, 2 results`);
+  });
+
+  it('says it is searching, and holds the previous rows while it does', () => {
+    renderWithEntities({ entityMode: 'searching' });
+
+    expect(announcement()).toHaveTextContent(', searching');
+    // Held across a refining search: emptying the list mid-word would replay the
+    // entrance animation and read as the palette losing its place.
+    expect(screen.getByRole('button', { name: /^Engineering/ })).toBeInTheDocument();
+  });
+
+  it('surfaces a failed search as a danger banner, not an empty list', () => {
+    renderWithEntities({
+      entityMode: 'error',
+      entityResults: [],
+      entityError: 'Search failed. Check the connection to Okta and try again.',
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Search failed');
+    expect(announcement()).toHaveTextContent(', search failed');
+  });
+
+  it('says what it is waiting for below the character floor', async () => {
+    renderWithEntities({ entityMode: 'idle', entityResults: [], entityMinChars: 3 });
+
+    await userEvent.type(field(), 'en');
+
+    expect(screen.getByText('Type 3 characters to search the org.')).toBeInTheDocument();
+  });
+
+  it('reports a fruitless search as a search, never as an absence', async () => {
+    renderWithEntities({ entityMode: 'results', entityResults: [] });
+
+    // Not "no groups exist" — a 20-row capped search cannot support that claim.
+    expect(screen.getByText('Nothing in the org matched that search.')).toBeInTheDocument();
+  });
+
+  it('marks a section whose snapshot walk has not finished as partial', () => {
+    renderWithEntities({
+      entityResults: [{ kind: 'rule', id: '0prFAKE0000000000001', name: 'Feeds Engineering' }],
+      sectionMeta: { rule: { fromSnapshot: true, complete: false } },
+    });
+
+    expect(screen.getByText(/partial snapshot/)).toBeInTheDocument();
+  });
+
+  it('gives an unreachable kind a working Okta link instead of a dead row', () => {
+    renderWithEntities({ canReach: () => false, oktaOrigin: 'https://example.okta.com' });
+
+    // Not a disabled row: a control that exists only to refuse is worse than no
+    // control (ADR-0039), so an unreachable kind gets a real route out instead.
+    const links = screen.getAllByRole('link', { name: /Okta/i });
+    expect(links).toHaveLength(ENTITY_RESULTS.length);
+    for (const link of links) {
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+      expect(link.getAttribute('href')).toMatch(/^https:\/\/example\.okta\.com\//);
+    }
+    // And no row claims a destination it cannot reach. (Matched on the label the
+    // reachable form sets, not on loose text — the Okta link's own title says
+    // "Open this group in the Okta Admin Console" and would match a laxer regex.)
+    expect(rows().some((el) => /\u2014 open in /.test(el.getAttribute('aria-label') ?? ''))).toBe(
+      false,
+    );
+  });
+
+  it('pushes the query to the resolver while filtering sections synchronously', async () => {
+    const onEntityQueryChange = vi.fn();
+    renderWithEntities({ onEntityQueryChange, entityResults: [], entityMode: 'idle' });
+
+    await userEvent.type(field(), 'rul');
+
+    // One call per keystroke — the debounce is the resolver's job, not the
+    // palette's, and sections must not wait for it.
+    expect(onEntityQueryChange).toHaveBeenLastCalledWith('rul');
+    expect(row('Rules')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Groups$/ })).not.toBeInTheDocument();
   });
 });
