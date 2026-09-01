@@ -334,11 +334,15 @@ comment at the call site:
   in two files. The two entries that remain are the ones where the delta is larger
   than that, and they still need a design call rather than a mechanical swap.
 
-- **Roving-focus rows:** `TabJumpPalette`'s result rows. A palette row is a
-  left-aligned icon + label + status row carrying a roving `tabIndex` and a ref
-  for programmatic focus; `Button` is a centred CTA and exposes neither
-  `tabIndex` nor a ref, so the gap is structural rather than stylistic and a new
-  variant would not discharge it. (The same file records why the palette uses
+- **Roving-focus rows:** `palette/PaletteRow`, the row the ⌘K palette renders for
+  both its sections and its entity results. A palette row is a left-aligned icon +
+  label + trailing-mark row carrying a roving `tabIndex` and a ref for
+  programmatic focus, and **neither** shared primitive can host that: `Button` is
+  a centred CTA and exposes neither `tabIndex` nor a ref, and `ListRow` exposes
+  `elementRef` — half of what is needed — but no `tabIndex` and no `onKeyDown`, so
+  it can carry neither the roving anchor nor the Up/Down handler. The gap is
+  structural rather than stylistic against both, so a new variant would not
+  discharge it. (The same file records why the palette uses
   roving focus rather than combobox ARIA: `Input` deliberately does not spread
   arbitrary props, and adding `role`/`aria-expanded`/`aria-controls`/
   `aria-activedescendant` to a shared primitive for one consumer is the wrong
