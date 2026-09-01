@@ -40,7 +40,10 @@
  * loads) — and hands their state to pure sections/panes.
  *
  * It also owns the view's mutating surfaces: a page-level "Export members"
- * action and an "Add" action in {@link GroupActionBar} (ADR-0030, ADR-0039),
+ * action, an "Add" action, and — behind that strip's **More** — a bulk "Remove
+ * deprovisioned" cleanup in {@link GroupActionBar} (ADR-0030, ADR-0039), whose
+ * run state lives in
+ * {@link module:sidepanel/components/groups/detail/useRemoveDeprovisioned.useRemoveDeprovisioned};
  * and per-member add/remove in {@link GroupMembersSection}, whose state lives
  * in {@link module:sidepanel/components/groups/detail/useGroupMembersSection.useGroupMembersSection}.
  * The members section piggybacks on `useGroupSource`'s gated member read rather
@@ -63,7 +66,7 @@
  * logic even though the modal's mutation state lives in a separate hook
  * instance from the roster it writes into.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import GroupOverviewPane from './GroupOverviewPane';
 import GroupMembersSection from './GroupMembersSection';
 import GroupAccessSection from './GroupAccessSection';
@@ -84,9 +87,12 @@ import { useGroupAccessGrants } from '../../../hooks/useGroupAccessGrants';
 import { useGroupComparison } from '../../../hooks/useGroupComparison';
 import { useMemberMfaScan } from '../../../hooks/useMemberMfaScan';
 import { useGroupMembersSection } from './useGroupMembersSection';
+import { useRemoveDeprovisioned } from './useRemoveDeprovisioned';
 import { useAddGroupMember } from '../../../hooks/useAddGroupMember';
 import { useCreateFeedingRule } from '../../../hooks/useCreateFeedingRule';
 import { useWorkingSetEntry } from '../../../hooks/useWorkingSetEntry';
+import { invalidate } from '../../../cache/entityCache';
+import { cacheKeys } from '../../../cache/keys';
 import { OKTA_PAGE_SIZE } from '../../../../shared/utils/oktaPagination';
 import type { GroupSummary } from '../../../../shared/types';
 
@@ -224,6 +230,25 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
     targetTabId: targetTabId ?? undefined,
   });
 
+  // The action bar's bulk cleanup: remove every member Okta has already
+  // deprovisioned. The count is derived from the roster this page has already
+  // loaded — no extra read — and stays `undefined` until the gated member
+  // analysis lands, which is what keeps the verb absent rather than claiming a
+  // count we have not paid for (see `GroupActionBar`'s module doc).
+  const deprovisionedCount = useMemo(
+    () => membersSection.members?.filter((user) => user.status === 'DEPROVISIONED').length,
+    [membersSection.members],
+  );
+  // Re-walk rather than filter locally: the run stops at the first 403, so only
+  // Okta knows who is actually left. The walk is a real one — each successful
+  // DELETE already dropped `groupMembers` — and the MFA scan is keyed to a roster
+  // that just changed, so it goes with it.
+  const onCleanupDone = useCallback(() => {
+    invalidate(cacheKeys.mfaScan(group.id));
+    source.analyzeMembers();
+  }, [group.id, source]);
+  const removeDeprovisioned = useRemoveDeprovisioned(group.id, targetTabId, onCleanupDone);
+
   // The Members tab's per-row ADR-0031 proof: one call about one membership, from
   // a click on an already-open row. This view holds no other `useOktaApi`
   // instance, and this one issues nothing on mount — `useOktaApi` only hands back
@@ -328,6 +353,10 @@ const GroupDetailView: React.FC<GroupDetailViewProps> = ({
           onExportGroup={onExportGroup}
           onAddMember={openAddMemberModal}
           onCompare={comparison.openPicker}
+          deprovisionedCount={deprovisionedCount}
+          onRemoveDeprovisioned={removeDeprovisioned.run}
+          isRemoving={removeDeprovisioned.isRemoving}
+          removeError={removeDeprovisioned.error}
           onCreateFeedingRule={createFeedingRule.open}
         />
 

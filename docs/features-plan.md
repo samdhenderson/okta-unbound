@@ -54,6 +54,13 @@ Status legend: `[ ]` todo · `[~]` partially done · `[x]` done.
 | Rule read + write                       | `getGroupRulesForGroup`; `ruleWrites` (create/delete/(de)activate) | `groupDiscovery.ts`, `hooks/useOktaApi/ruleWrites.ts`        |
 | Population diff (who gains/loses)       | `classifyGroupImpact`, `summarizeRuleImpact`                       | `shared/membership/ruleImpact.ts`                            |
 
+> `removeDeprovisioned` spent the interval after the Overview tab was deleted on the
+> facade with no call site at all. It is reachable again from the group-detail rung —
+> `GroupActionBar`'s **More** tier, behind a count-only confirm, wired by
+> `groups/detail/useRemoveDeprovisioned.ts` — and it stays the model for this pattern:
+> one aggregate undo entry rather than one per user, an `AuditLogEntry`, an
+> `APP_GROUP` guard, and every DELETE paced through `runOperation`.
+
 The two primitives worth building **once** and reusing across C/D:
 
 - **`BulkTargetList`** — paste/CSV or search → resolve via `searchUsers`/`getUserById`
