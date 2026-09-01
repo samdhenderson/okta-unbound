@@ -47,8 +47,8 @@ info`) — never `error`.
 `Textarea`, `PageHeader`, `EntityIdentity`, `EntityLink`, `Badge`, `Breadcrumbs`, `Tabs`,
 `Tooltip`,
 `CollapsibleSection`, `DetailSection`, `ActionBar`, `AlertMessage`, `EmptyState`,
-`Eyebrow`, `LoadingSpinner`, `Skeleton`, `ListRow`, `ScrollableList`, `SearchDropdown`,
-`SelectionChips`.
+`Eyebrow`, `StableWidth`, `LoadingSpinner`, `Skeleton`, `ListRow`, `ScrollableList`,
+`SearchDropdown`, `SelectionChips`.
 
 There are **two** copy primitives and they are not interchangeable. `CopyButton` is a
 labelled `Button` for copying a _body_ of text (a list of emails, a CSV). `CopyableId` is
@@ -62,6 +62,17 @@ never the interior — the interior follows the typography contract in
 `docs/design-system.md`. Never hand-roll a row container. Prefer
 `StretchedButton` over `as="button"` when the row holds its own controls, since
 a button cannot legally contain a checkbox or another button.
+
+`StableWidth` holds a slot open at the width of its widest state, so a readout that
+changes after mount cannot re-lay-out the text beside it. It is the mechanical half of
+ADR-0044's layout-stability convention (`D-053`): a chip whose label swaps, a badge that
+lands with a fetch, a button label that runs through three lengths, each sitting beside a
+`min-w-0` column free to absorb the difference. Pass the widest state as `reserve` — it
+renders invisibly in the same grid cell, so the browser measures it in the reader's own
+font rather than trusting a hard-coded `min-w-[...]`. The twin is `aria-hidden` and carries
+`data-reserve-width`, which both test setups add to Testing Library's `defaultIgnore`, so
+a text query never sees it. It reserves the **box**; a numeric readout still needs
+`tabular-nums` to stop its own digits twitching inside it — the two are used together.
 
 `Eyebrow` is the **uppercase section label** — `text-xs font-semibold uppercase
 tracking-wide text-neutral-600`, fixed. That one recipe had been hand-rolled across

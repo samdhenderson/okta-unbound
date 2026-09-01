@@ -34,6 +34,7 @@
 import React from 'react';
 import Icon, { type IconType } from '../../shared/Icon';
 import CauseWorklistRow from './CauseWorklistRow';
+import { StableWidth } from '../../shared';
 import { groupCausesByRemedy, type AccessCause, type AccessRemedy } from './accessCause';
 import type { ClauseGroupReference } from '../../../../shared/rules/explainExpression';
 
@@ -261,9 +262,25 @@ const RemedyGroup: React.FC<RemedyGroupProps> = ({
           </h5>
           <p className="mt-0.5 text-xs text-neutral-700">{presentation.description}</p>
         </div>
-        <span className="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-0.5 text-xs font-medium text-neutral-700">
-          {causes.length} {causes.length === 1 ? 'group' : 'groups'}
-        </span>
+        {/*
+          The badge arrives with the causes, and its width then moves with the
+          digit count and the singular/plural swap — all of which used to come out
+          of the wrapping description beside it (D-053c). Its slot is reserved from
+          first render at the widest form this list can reach.
+        */}
+        <StableWidth
+          reserve={
+            <span className="rounded-md border px-2 py-0.5 text-xs font-medium">
+              {`${causes.length} groups`}
+            </span>
+          }
+          align="end"
+          className="shrink-0"
+        >
+          <span className="rounded-md border border-neutral-200 bg-white px-2 py-0.5 text-xs font-medium tabular-nums whitespace-nowrap text-neutral-700">
+            {causes.length} {causes.length === 1 ? 'group' : 'groups'}
+          </span>
+        </StableWidth>
       </div>
 
       <ul className="mt-2 space-y-2">

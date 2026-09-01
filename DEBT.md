@@ -2205,7 +2205,7 @@ affects every scroll box in the app, on every platform.
   truncation point stay put. Per ADR-0023 that stays a visual check rather than a
   class assertion.
 - **Risk:** Low. One row, no behaviour.
-- **Status:** open
+- **Status:** claimed:beta/trust-and-polish
 - **Related:** `D-053`, ADR-0044. The reel masks this with a settle gate; the
   defect is unchanged for real users.
 
@@ -2233,7 +2233,7 @@ affects every scroll box in the app, on every platform.
   with a fixed chip track rather than `justify-between`. Note `D-036` already has
   this file over the 300-line bar; do not land the two together.
 - **Risk:** Low. Presentation only.
-- **Status:** open
+- **Status:** claimed:beta/trust-and-polish
 - **Related:** `D-053`, `D-036` (same file, over the line bar), ADR-0044. The reel
   masks this with a settle gate.
 
@@ -2254,7 +2254,7 @@ affects every scroll box in the app, on every platform.
   is laid out so the badge cannot change the description's width (its own track,
   or the badge dropped below the heading). The count carries `tabular-nums`.
 - **Risk:** Low. Presentation only.
-- **Status:** open
+- **Status:** claimed:beta/trust-and-polish
 - **Related:** `D-053`, ADR-0044. The reel masks this with a settle gate.
 
 ### D-053d · The MFA scan paragraph re-wraps three times as the button label changes
@@ -2283,7 +2283,7 @@ affects every scroll box in the app, on every platform.
   width of its widest label, so a scan changes what the row says and not how it is
   laid out.
 - **Risk:** Low. Presentation only.
-- **Status:** open
+- **Status:** claimed:beta/trust-and-polish
 - **Related:** `D-053`, ADR-0044. The reel masks this with a settle gate.
 
 ### D-053e · Three tab labels slide sideways when their count badges materialise
@@ -2306,7 +2306,7 @@ affects every scroll box in the app, on every platform.
   space. The badge carries `tabular-nums`.
 - **Risk:** Low. Presentation only, though it touches the tab rail's alignment, so
   check the four-tab and two-column (`sm:grid-cols-4`) breakpoints both.
-- **Status:** open
+- **Status:** claimed:beta/trust-and-polish
 - **Related:** `D-053`, ADR-0044. The reel masks this with a settle gate.
 
 ### D-053f · The Filters button shrinks the search field, and the member count grows in place
@@ -2330,7 +2330,7 @@ affects every scroll box in the app, on every platform.
   reserves its widest form or renders both parts from first paint (`250 of 250`),
   with `tabular-nums` either way.
 - **Risk:** Low. Presentation only.
-- **Status:** open
+- **Status:** claimed:beta/trust-and-polish
 - **Related:** `D-053`, ADR-0044. The reel masks this with a settle gate.
 
 ### D-053g · Classic scrollbars take 6px out of content width the instant a list overflows

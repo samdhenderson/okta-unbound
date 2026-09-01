@@ -11,6 +11,7 @@
 import React from 'react';
 import type { MemberMfaResult, MfaScanStatus } from '../../../shared/types';
 import Button from '../shared/Button';
+import StableWidth from '../shared/StableWidth';
 
 /** Props for {@link MfaScanButton}. */
 interface MfaScanButtonProps {
@@ -44,7 +45,16 @@ const MfaScanButton: React.FC<MfaScanButtonProps> = ({
       disabled={scanning || memberCount === 0}
       onClick={onScanClick}
     >
-      {scanning ? 'Scanning…' : mfaResults ? 'Rescan' : 'Run MFA scan'}
+      {/*
+        The label runs `Run MFA scan` (12 characters), `Scanning…` (9, plus a
+        spinner) and `Rescan` (6), so the button took three widths during one scan
+        and re-wrapped whatever sat beside it each time (D-053d). Fixed here rather
+        than at the three hosts: the widths are the button's property, and only one
+        of the three rows was laid out in a way that showed it.
+      */}
+      <StableWidth reserve="Run MFA scan" align="center">
+        {scanning ? 'Scanning…' : mfaResults ? 'Rescan' : 'Run MFA scan'}
+      </StableWidth>
     </Button>
   );
 };

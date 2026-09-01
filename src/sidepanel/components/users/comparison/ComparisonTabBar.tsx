@@ -19,6 +19,7 @@
  */
 import React from 'react';
 import Icon from '../../shared/Icon';
+import { StableWidth } from '../../shared';
 import type { IconType } from '../../shared/Icon';
 import type { TabKey } from './comparisonAnalytics';
 
@@ -94,14 +95,35 @@ const ComparisonTabBar: React.FC<ComparisonTabBarProps> = ({
           >
             <Icon type={t.icon} size="sm" />
             <span>{t.label}</span>
-            {t.badge !== undefined && t.badge > 0 && (
-              <span
-                className={`ml-0.5 inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 text-xs font-medium leading-none ${
-                  active ? 'bg-primary text-white' : 'bg-neutral-200 text-neutral-700'
-                }`}
+            {/*
+              The badge lands when the comparison resolves, and the cell is
+              centred — so adding it used to push the icon and the label left
+              rather than appending to their right, on three tabs in the same
+              frame (D-053e). The slot is held open from first render, so the
+              badge's arrival changes what is in it and moves nothing.
+            */}
+            {t.badge !== undefined && (
+              <StableWidth
+                // Two digits, not the current count: a badge that lands as `12`
+                // would otherwise widen the slot it was measured at as `0`. A tab
+                // that never carries a badge (Overview) renders no slot at all,
+                // so nothing pays for space it cannot use.
+                reserve={
+                  <span className="inline-flex min-w-[18px] px-1.5 text-xs leading-none">00</span>
+                }
+                align="center"
+                className="ml-0.5 shrink-0"
               >
-                {t.badge}
-              </span>
+                {t.badge > 0 && (
+                  <span
+                    className={`inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 text-xs font-medium tabular-nums leading-none ${
+                      active ? 'bg-primary text-white' : 'bg-neutral-200 text-neutral-700'
+                    }`}
+                  >
+                    {t.badge}
+                  </span>
+                )}
+              </StableWidth>
             )}
           </button>
         );
