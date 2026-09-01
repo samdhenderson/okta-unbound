@@ -141,6 +141,14 @@ const RuleCard: React.FC<RuleCardProps> = memo(
     */
     const opensInRulesTab = !onOpenRule && Boolean(onOpenInRulesTab);
     const hasConflicts = Boolean(rule.conflicts && rule.conflicts.length > 0);
+    /*
+      A rule assigning into a group the org no longer has does nothing, and looked
+      exactly like a working one from this list (D-061). The producer decides
+      whether the question could be asked at all — `missingGroupIds` is `undefined`
+      when the group walk had not finished — so an empty or absent list is silence,
+      never a clean bill of health drawn from a half-read inventory.
+    */
+    const missingTargets = rule.missingGroupIds?.length ?? 0;
 
     return (
       <ListRow
@@ -180,6 +188,11 @@ const RuleCard: React.FC<RuleCardProps> = memo(
             {rule.affectsCurrentGroup && (
               <Badge variant="primary" solid>
                 Current Group
+              </Badge>
+            )}
+            {missingTargets > 0 && (
+              <Badge variant="warning">
+                {missingTargets === 1 ? 'Target missing' : `${missingTargets} targets missing`}
               </Badge>
             )}
             {hasConflicts && (

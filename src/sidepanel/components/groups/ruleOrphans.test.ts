@@ -15,6 +15,7 @@ import { describe, it, expect } from 'vitest';
 import {
   appNamesByGroup,
   findCleanupCandidates,
+  findRulesWithMissingTargets,
   findUnmaintainedAppAccess,
   groupIdsFilledByRules,
   type OrphanCandidateGroup,
@@ -152,5 +153,48 @@ describe('findUnmaintainedAppAccess', () => {
       new Map([['00gFAKE1', ['Slack']]]),
     );
     expect(Object.keys(found).sort()).toEqual(['detail', 'id', 'name']);
+  });
+});
+
+describe('findRulesWithMissingTargets', () => {
+  const rule = { id: '0prFAKE1', name: 'Contractor intake', groupIds: ['00gFAKE1', '00gFAKE2'] };
+
+  it('says nothing when every target still exists', () => {
+    const found = findRulesWithMissingTargets([rule], new Set(['00gFAKE1', '00gFAKE2']), true);
+    expect(found).toEqual([]);
+  });
+
+  it('names only the targets with no group behind them', () => {
+    const found = findRulesWithMissingTargets([rule], new Set(['00gFAKE1']), true);
+    expect(found).toEqual([
+      { id: '0prFAKE1', name: 'Contractor intake', missingGroupIds: ['00gFAKE2'] },
+    ]);
+  });
+
+  it('suppresses the finding entirely when the group walk did not finish', () => {
+    // The gate, and the reason this join is not a one-liner: the group
+    // collection is read *negatively*, so against a half-read inventory every
+    // rule in the org looks broken. Silence is the only honest answer — not a
+    // hedged wording, and not the subset that happened to be on disk.
+    const found = findRulesWithMissingTargets([rule], new Set(['00gFAKE1']), false);
+    expect(found).toEqual([]);
+  });
+
+  it('reports a rule whose every target is gone, and keeps the rule order', () => {
+    const second = { id: '0prFAKE2', name: 'Alpha rule', groupIds: ['00gFAKE9'] };
+    const found = findRulesWithMissingTargets([rule, second], new Set(), true);
+    expect(found.map((f) => f.id)).toEqual(['0prFAKE1', '0prFAKE2']);
+    expect(found[0].missingGroupIds).toEqual(['00gFAKE1', '00gFAKE2']);
+  });
+
+  it('is silent about a rule that assigns to nothing at all', () => {
+    // "Assigns nowhere" is a different finding with its own copy on the rule
+    // rung. Reporting it here would put two unrelated defects behind one badge.
+    const found = findRulesWithMissingTargets(
+      [{ id: '0prFAKE3', name: 'Inert', groupIds: [] }],
+      new Set(),
+      true,
+    );
+    expect(found).toEqual([]);
   });
 });

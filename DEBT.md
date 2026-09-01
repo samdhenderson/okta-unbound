@@ -2629,7 +2629,7 @@ affects every scroll box in the app, on every platform.
   says which target is missing rather than rendering a dead rule as a live one.
 - **Risk:** Low to compute, medium to present — claiming a rule is broken is a
   strong claim, and it must not be made off a half-read group list.
-- **Status:** open
+- **Status:** claimed:beta/trust-and-polish
 - **Related:** `D-060`, ADR-0040 §7
 
 ### D-062 · Two context engines probe the same page twice on every navigation

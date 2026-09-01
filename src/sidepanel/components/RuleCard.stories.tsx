@@ -121,6 +121,35 @@ export const WithConflicts: Story = {
 };
 
 /**
+ * A rule assigning into a group the org no longer has (D-061).
+ *
+ * Okta does not validate `actions.assignUserToGroups.groupIds` against the group
+ * inventory on read, so the rule still lists the id, still reports `ACTIVE`, and adds
+ * nobody — and from this list it looked exactly like a working rule. The badge is only
+ * ever rendered off a **completed** group walk: `missingGroupIds` is `undefined` until the
+ * inventory can support the negative read, so an unfinished walk shows nothing rather than
+ * calling every rule in the org broken.
+ */
+export const MissingTargetGroup: Story = {
+  args: { rule: { ...baseRule, missingGroupIds: ['00g9z8y7x6w5v4u3t2s1'] } },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText('Target missing')).toBeInTheDocument();
+  },
+};
+
+/**
+ * Two gone at once — the badge counts rather than repeating itself.
+ */
+export const SeveralMissingTargetGroups: Story = {
+  args: {
+    rule: { ...baseRule, missingGroupIds: ['00g9z8y7x6w5v4u3t2s1', '00g1122334455667788a'] },
+  },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText('2 targets missing')).toBeInTheDocument();
+  },
+};
+
+/**
  * The Group Detail rules section's wiring: the press leaves this tab, so the control says
  * where it lands rather than promising a detail view that opens in place.
  */

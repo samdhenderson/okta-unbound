@@ -23,6 +23,7 @@ import { detectConflicts, formatRuleForDisplay } from '../../shared/ruleUtils';
 import { nextPageUrl } from './useOktaApi/utilities';
 import { orgSnapshotStore } from '../../shared/snapshot/orgSnapshotStore';
 import type { RawOktaGroup } from '../components/groups/groupSummary';
+import { findRulesWithMissingTargets } from '../components/groups/ruleOrphans';
 import { createLogger } from '../../shared/utils/logger';
 import { oktaGroupRuleSchema, parseOktaList } from '../../shared/schemas/okta';
 
@@ -84,14 +85,57 @@ function groupIdsReferencedBy(rule: OktaGroupRule): string[] {
 export async function loadCachedGroupNames(
   origin: string | null | undefined,
 ): Promise<Map<string, string>> {
+  return (await loadCachedGroupIndex(origin)).nameById;
+}
+
+/** What the snapshot can say about the org's groups in one read. */
+export interface CachedGroupIndex {
+  /** Group id → display name, for every group the snapshot holds. */
+  nameById: Map<string, string>;
+  /**
+   * Every group id the snapshot holds — including the ones with no usable name,
+   * which {@link CachedGroupIndex.nameById} necessarily drops. A membership
+   * question asked of this set must not turn on whether a row happened to carry
+   * a `profile.name`.
+   */
+  idsHeld: Set<string>;
+  /**
+   * Whether the group walk finished. `false` for an interrupted walk, an org
+   * that has never been walked, and a missing origin alike — so a reader that
+   * gates on it degrades to saying nothing rather than to a claim built on a
+   * partial inventory (ADR-0040 §7).
+   */
+  complete: boolean;
+}
+
+/**
+ * The group snapshot read as both a naming source and an inventory.
+ *
+ * {@link loadCachedGroupNames} answers "what is this id called?", which needs
+ * only the rows that have names. Deciding an id has **no** group behind it is a
+ * different question with a different failure mode — a negative read — and it
+ * needs two things that map cannot supply: every id held, named or not, and
+ * whether the walk that produced them finished.
+ *
+ * @param origin - The connected org's origin. A missing one yields an empty,
+ * incomplete index rather than another org's rows.
+ * @returns See {@link CachedGroupIndex}.
+ */
+export async function loadCachedGroupIndex(
+  origin: string | null | undefined,
+): Promise<CachedGroupIndex> {
   const nameById = new Map<string, string>();
-  if (!origin) return nameById;
+  const idsHeld = new Set<string>();
+  if (!origin) return { nameById, idsHeld, complete: false };
   const groups = await orgSnapshotStore.getCollection<RawOktaGroup>('groups', origin);
   for (const group of groups) {
+    if (!group.id) continue;
+    idsHeld.add(group.id);
     const name = group.profile?.name;
-    if (group.id && name) nameById.set(group.id, name);
+    if (name) nameById.set(group.id, name);
   }
-  return nameById;
+  const meta = await orgSnapshotStore.getMeta('groups', origin);
+  return { nameById, idsHeld, complete: meta.complete };
 }
 
 /**
@@ -155,17 +199,41 @@ export async function fetchGroupRulesRequest(
     //    calls. Loading rules costs only the page fetches above; the snapshot is
     //    the single source of id→name. Ids absent from it fall back to the id in
     //    the display. Skipped when the caller only needs ids/expressions.
-    const groupNameMap = resolveGroupNames
-      ? await loadCachedGroupNames(origin)
-      : new Map<string, string>();
+    const groupIndex = resolveGroupNames
+      ? await loadCachedGroupIndex(origin)
+      : { nameById: new Map<string, string>(), idsHeld: new Set<string>(), complete: false };
+    const groupNameMap = groupIndex.nameById;
 
     // 3. Detect conflicts between active rules (O(n²), active-only).
     const conflicts = detectConflicts(rules);
 
     // 4. Format each rule for display, layering on the resolved group names.
+    //    Target ids with no group behind them are stamped on here too — a set
+    //    difference over rows already in hand, suppressed wholesale unless the
+    //    group walk finished (D-061). `findRulesWithMissingTargets` owns the
+    //    gate; this is only the projection onto its input shape.
+    const missingTargetsByRule = new Map<string, string[]>(
+      findRulesWithMissingTargets(
+        rules.map((rule) => ({
+          id: rule.id,
+          name: rule.name,
+          groupIds: rule.actions?.assignUserToGroups?.groupIds ?? [],
+        })),
+        groupIndex.idsHeld,
+        groupIndex.complete,
+      ).map((finding) => [finding.id, finding.missingGroupIds]),
+    );
+
     const formattedRules: FormattedRule[] = rules.map((rule) => {
       const base = formatRuleForDisplay(rule, currentGroupId, conflicts);
       const groupNames = base.groupIds.map((id) => groupNameMap.get(id) || id);
+      // Stamped whenever the question could be *asked*, so `[]` (asked, clean)
+      // stays distinguishable from `undefined` (never asked). A surface that
+      // could not tell them apart would have to treat a half-read inventory as
+      // a clean bill of health.
+      const missingGroupIds = groupIndex.complete
+        ? (missingTargetsByRule.get(rule.id) ?? [])
+        : undefined;
 
       // Map of ALL referenced group ids (targets + condition) → resolved names.
       const allGroupNamesMap: Record<string, string> = {};
@@ -174,7 +242,9 @@ export async function fetchGroupRulesRequest(
         if (name) allGroupNamesMap[id] = name;
       });
 
-      return { ...base, groupNames, allGroupNamesMap };
+      return missingGroupIds
+        ? { ...base, groupNames, allGroupNamesMap, missingGroupIds }
+        : { ...base, groupNames, allGroupNamesMap };
     });
 
     const activeCount = rules.filter((r) => r.status === 'ACTIVE').length;
