@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import AddGroupMemberModal from './AddGroupMemberModal';
 import type { OktaUser } from '../../../../shared/types';
 
@@ -75,7 +75,7 @@ const meta = {
     selectedUser: { description: 'The chosen user, or null when none is selected yet.' },
     onSelectUser: { description: 'Choose a user from the dropdown.' },
     onClearSelectedUser: {
-      description: 'Clear the chosen user (the selected-user "Clear" button).',
+      description: 'Clear the chosen user (the selected-user clear affordance).',
     },
     isAddingMember: {
       description: 'True while the add request is in flight (drives the confirm button spinner).',
@@ -94,11 +94,26 @@ type Story = StoryObj<typeof meta>;
 /** Empty type-ahead; the confirm button is disabled until a user is chosen. */
 export const Default: Story = {};
 
-/** A query with an open results dropdown to pick from. */
+/**
+ * A query with an open results list to pick from.
+ *
+ * The play function reaches the **last** row deliberately: the results used to
+ * be an absolutely-positioned panel inside the modal's `overflow-y-auto` body,
+ * which clipped everything past the first row or two out of view. In flow, every
+ * hit is reachable and still reports its selection upward.
+ */
 export const WithResults: Story = {
   args: {
     addQuery: 'a',
     addResults: users,
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const dialog = await canvas.findByRole('dialog');
+    const lastResult = within(dialog).getByRole('button', { name: /Katherine Johnson/ });
+
+    await userEvent.click(lastResult);
+    await expect(args.onSelectUser).toHaveBeenCalledWith(users[2]);
   },
 };
 

@@ -58,7 +58,7 @@ const meta = {
     selectedGroup: { description: 'The chosen group, or null when none is selected yet.' },
     onSelectGroup: { description: 'Choose a group from the dropdown.' },
     onClearSelectedGroup: {
-      description: 'Clear the chosen group (the selected-group "Clear" button).',
+      description: 'Clear the chosen group (the selected-group clear affordance).',
     },
     isAddingToGroup: {
       description: 'True while the add request is in flight (drives the confirm button spinner).',

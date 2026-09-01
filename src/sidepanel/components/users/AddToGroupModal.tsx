@@ -3,13 +3,14 @@
  * @description Presentational Add-to-Group modal for the Users tab.
  *
  * A pure view over the {@link useAddToGroup} state machine: a debounced group
- * type-ahead (shared `Input` + results dropdown), the chosen-group chip, and the
- * confirm/cancel footer built from the shared `Button` and `Modal` primitives. All
+ * type-ahead (shared `SearchDropdown`), the chosen-group chip it renders in its
+ * selected state, and the confirm/cancel footer built from the shared `Button`
+ * and `Modal` primitives. All
  * state (the query, the debounced search, the add-in-flight flag) lives in the hook;
  * this component only renders it and forwards user intent through callbacks.
  */
 import React from 'react';
-import { Button, Modal, Input, LoadingSpinner } from '../shared';
+import { Button, Modal, SearchDropdown } from '../shared';
 import type { GroupSearchResult } from '../../hooks/useAddToGroup';
 
 /** Props for {@link AddToGroupModal}. */
@@ -32,7 +33,7 @@ interface AddToGroupModalProps {
   selectedGroup: GroupSearchResult | null;
   /** Choose a group from the dropdown. */
   onSelectGroup: (group: GroupSearchResult) => void;
-  /** Clear the chosen group (the selected-group "Clear" button). */
+  /** Clear the chosen group (the selected-group clear affordance). */
   onClearSelectedGroup: () => void;
   /** True while the add request is in flight (drives the confirm button spinner). */
   isAddingToGroup: boolean;
@@ -41,6 +42,18 @@ interface AddToGroupModalProps {
   /** Confirm the add of the selected group. */
   onConfirm: () => void;
 }
+
+/**
+ * One group as a two-line row — name over type. Shared by the dropdown results
+ * and the selected-group summary so the chosen row does not restyle itself the
+ * moment it is picked.
+ */
+const groupRow = (group: GroupSearchResult) => (
+  <>
+    <div className="text-sm font-medium text-neutral-900">{group.name}</div>
+    <div className="text-xs text-neutral-500">{group.type}</div>
+  </>
+);
 
 /**
  * The Users tab's Add-to-Group modal. Renders the group type-ahead, the selected
@@ -85,51 +98,21 @@ const AddToGroupModal: React.FC<AddToGroupModalProps> = ({
       }
     >
       <div className="space-y-(--sp-field)">
-        {/*
-          Type-ahead composite: the results dropdown is absolutely positioned
-          against this `.relative` wrapper, below the shared <Input> (label +
-          field). The dropdown rows are left-aligned two-line rows, not
-          centered CTAs, so they stay raw <button>s rather than <Button>.
-        */}
-        <div className="relative">
-          <Input
-            label="Search for a group"
-            type="text"
-            value={groupSearchQuery}
-            onChange={onGroupSearchQueryChange}
-            placeholder="Type to search by group name..."
-            trailing={isSearchingGroups ? <LoadingSpinner size="sm" /> : undefined}
-          />
-
-          {/* Search results dropdown */}
-          {showGroupDropdown && groupSearchResults.length > 0 && !selectedGroup && (
-            <div className="absolute z-10 w-full mt-1 bg-white border border-neutral-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
-              {groupSearchResults.map((group) => (
-                <button
-                  key={group.id}
-                  onClick={() => onSelectGroup(group)}
-                  className="press-subtle w-full text-left px-(--sp-row-x) py-(--sp-row-y) hover:bg-neutral-50 border-b border-neutral-100 last:border-0"
-                >
-                  <div className="text-sm font-medium text-neutral-900">{group.name}</div>
-                  <div className="text-xs text-neutral-500">{group.type}</div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Selected group display */}
-        {selectedGroup && (
-          <div className="flex items-center justify-between p-(--sp-card) bg-primary-light border border-primary-highlight rounded-md">
-            <div>
-              <div className="text-sm font-medium text-neutral-900">{selectedGroup.name}</div>
-              <div className="text-xs text-neutral-500">{selectedGroup.type}</div>
-            </div>
-            <Button variant="ghost" size="sm" onClick={onClearSelectedGroup}>
-              Clear
-            </Button>
-          </div>
-        )}
+        <SearchDropdown<GroupSearchResult>
+          label="Search for a group"
+          placeholder="Type to search by group name..."
+          query={groupSearchQuery}
+          onQueryChange={onGroupSearchQueryChange}
+          isSearching={isSearchingGroups}
+          results={groupSearchResults}
+          showDropdown={showGroupDropdown}
+          onSelect={onSelectGroup}
+          getKey={(group) => group.id}
+          renderResult={groupRow}
+          selectedItem={selectedGroup}
+          renderSelected={groupRow}
+          onClear={onClearSelectedGroup}
+        />
       </div>
     </Modal>
   );
