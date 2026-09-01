@@ -98,13 +98,23 @@ export const Default: Story = {
 };
 
 /**
- * Nothing loaded yet. The verb names the thing that has to happen first, and every
- * panel toggle is gone — there is nothing to analyse and nothing to search.
+ * Nothing loaded yet, and no group in context. The verb names the thing that has to
+ * happen first, and every panel toggle is gone — there is nothing to analyse and
+ * nothing to search, so the strip has no tier at all.
+ *
+ * `hasCurrentGroup: false` is load-bearing here rather than scenery. *This group* is
+ * gated on a **detected group**, never on the loaded rules (see the module doc), so
+ * leaving the meta default of `true` in place still emits that verb — and with it a
+ * **More** control — while the story claims the tier is empty. That is precisely what
+ * this story did until it was corrected, and it is the one state in the file where the
+ * distinction between the two gates is observable.
+ * {@link NothingLoadedWithGroupInContext} now covers what it was accidentally rendering.
  */
 export const NothingLoaded: Story = {
   args: {
     hasRules: false,
     duplicateClusterCount: 0,
+    hasCurrentGroup: false,
     currentGroupRelationCount: 0,
     search: undefined,
   },
@@ -115,6 +125,30 @@ export const NothingLoaded: Story = {
     await expect(canvas.queryByRole('button', { name: 'More' })).not.toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: /^Stats/ })).not.toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: /^Duplicates/ })).not.toBeInTheDocument();
+  },
+};
+
+/**
+ * Nothing loaded, but a group **is** detected on the Okta page — the carve-out the
+ * module doc argues for. *This group*'s object is the detected group rather than the
+ * loaded rule list, so the verb is offered before a single rule has been fetched, and
+ * the tier exists to hold it. *Stats*, whose object genuinely is the loaded rules, is
+ * omitted in the same breath — which is what makes this a test of the two gates being
+ * different rather than of the tier merely being open.
+ */
+export const NothingLoadedWithGroupInContext: Story = {
+  args: {
+    hasRules: false,
+    duplicateClusterCount: 0,
+    currentGroupRelationCount: 0,
+    search: undefined,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: 'Load rules' })).toBeInTheDocument();
+    await openTier(canvas);
+    await expect(canvas.getByRole('button', { name: 'This group' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: /^Stats/ })).not.toBeInTheDocument();
   },
 };
 
