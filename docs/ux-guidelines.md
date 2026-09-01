@@ -131,7 +131,10 @@ single control that stops the operation and drains the queue.
   components gives you this for free).
 - Preserve the visible focus ring (`Button` already has
   `focus:outline-2 focus:outline-offset-2 focus:outline-primary`).
-- Decorative SVG/dividers get `aria-hidden="true"`.
+- Decorative SVG/dividers get `aria-hidden="true"`. The shared `Icon` does this
+  for you — every glyph is hidden unless you pass `label`, which is reserved for
+  the rare icon that _is_ the answer rather than decorating one. An icon-only
+  control still takes its name from the control, never from the glyph (`D-041`).
 
 ## Copy
 

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, within } from 'storybook/test';
 import Icon, { type IconType } from './Icon';
 
 /**
@@ -18,7 +19,16 @@ const meta = {
           '`currentColor`-stroked SVG, so stat cards, quick actions, and facets can ' +
           'reference glyphs by name without an external icon library. Size is one of ' +
           '`xs` (12px), `sm` (16px), `md` (20px), `lg` (24px), `xl` (32px); pass a color ' +
-          'token through `className`. See `AllIcons` for the full catalog.',
+          'token through `className`. See `AllIcons` for the full catalog.\n\n' +
+          '**Decorative by default.** Every glyph is `aria-hidden` unless `label` says it carries ' +
+          'meaning of its own, because an icon beside the label it illustrates announces a ' +
+          'duplicate of what the reader has already heard. None of the app’s ~214 call sites hid ' +
+          'its icon before this default (`D-041`), and defaulting the other way is what makes the ' +
+          'quiet case the cheap one: a call site has to *state* that its icon is the answer, ' +
+          'rather than remember that it is not.\n\n' +
+          '`label` is **not** how an icon-only control gets its name — that comes from the ' +
+          'control (`IconButton`’s `label`, or an `aria-label`), because the button is the thing ' +
+          'a reader activates.',
       },
     },
   },
@@ -27,6 +37,10 @@ const meta = {
     className: { description: 'Extra classes merged after the size class (e.g. a color token).' },
     size: {
       description: 'Preset square dimensions: xs=12px, sm=16px, md=20px, lg=24px, xl=32px.',
+    },
+    label: {
+      description:
+        'Accessible name, for the rare glyph that *is* the answer. Omit it and the icon leaves the accessibility tree.',
     },
   },
   args: {
@@ -37,8 +51,23 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Default icon (check, medium size). */
+/** Default icon (check, medium size) — decorative, and absent from the accessibility tree. */
 export const Default: Story = {};
+
+/**
+ * The opt-out: a glyph standing alone as a status, with no text beside it to
+ * duplicate. It takes `role="img"` and the name it is given.
+ *
+ * The check the pair is worth making: the labelled icon is reachable by role, and
+ * the default one is not there at all.
+ */
+export const NamedWhenTheGlyphIsTheAnswer: Story = {
+  args: { type: 'shield', label: 'MFA enrolled' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('img', { name: 'MFA enrolled' })).toBeInTheDocument();
+  },
+};
 
 /** Extra-small size. */
 export const ExtraSmall: Story = {

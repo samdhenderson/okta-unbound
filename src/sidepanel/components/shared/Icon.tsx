@@ -58,6 +58,20 @@ interface IconProps {
   className?: string;
   /** Preset square dimensions: xs=12px, sm=16px, md=20px, lg=24px, xl=32px. */
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+  /**
+   * The glyph's accessible name, for the rare icon that **is** the answer rather
+   * than decorating one — a standalone status marker with no text beside it.
+   *
+   * Omit it, which is the overwhelmingly common case: an icon sitting next to the
+   * label it illustrates is decorative, and announcing it duplicates the label a
+   * reader has already heard. Without this prop the glyph is `aria-hidden` and
+   * leaves the accessibility tree entirely (`docs/ux-guidelines.md`, `D-041`).
+   *
+   * This is **not** the way to name a control. An icon-only button takes its name
+   * from the button (`IconButton`'s `label`, or an `aria-label`), because that is
+   * the thing a reader activates.
+   */
+  label?: string;
 }
 
 /** Maps a {@link IconProps.size} to its Tailwind width/height classes. */
@@ -72,8 +86,16 @@ const sizeClasses = {
 /**
  * Renders the named inline SVG icon. Returns `null` for an unknown `type`.
  * Color follows `currentColor`, so set it via `className` or an ancestor.
+ *
+ * **Decorative by default.** Every glyph leaves the accessibility tree unless a
+ * {@link IconProps.label} says it carries meaning of its own. Before this, none
+ * of the app's ~214 call sites hid its icon, so an entity chip announced a
+ * decorative glyph immediately before the label that same glyph illustrated
+ * (`D-041`). Defaulting the other way is what makes the quiet case the cheap one:
+ * a call site has to *state* that its icon is the answer, rather than remember
+ * that it is not.
  */
-const Icon: React.FC<IconProps> = ({ type, className = '', size = 'md' }) => {
+const Icon: React.FC<IconProps> = ({ type, className = '', size = 'md', label }) => {
   const baseClasses = `${sizeClasses[size]} ${className}`;
 
   const icons: Record<IconType, React.ReactElement> = {
@@ -410,7 +432,21 @@ const Icon: React.FC<IconProps> = ({ type, className = '', size = 'md' }) => {
     ),
   };
 
-  return icons[type] || null;
+  const glyph = icons[type];
+  if (!glyph) return null;
+
+  /*
+    Cloned rather than threaded through thirty-odd literals: the accessibility
+    contract is a property of *every* glyph, and a rule that has to be re-typed
+    per icon is a rule the next icon will miss. `focusable="false"` goes with it
+    because IE-era SVGs are focusable by default and still are in some engines,
+    which would put a decorative glyph in the tab order.
+  */
+  const a11y: React.SVGProps<SVGSVGElement> = label
+    ? { role: 'img', 'aria-label': label }
+    : { 'aria-hidden': true, focusable: 'false' };
+
+  return React.cloneElement(glyph, a11y);
 };
 
 export default Icon;

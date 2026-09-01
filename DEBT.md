@@ -1718,7 +1718,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   where the glyph _is_ the accessible name is the cheapest route, but check for
   that case first rather than assuming it does not exist. Stories stay axe-clean.
 - **Risk:** Low, but it touches every icon in the app, so land it on its own.
-- **Status:** open
+- **Status:** claimed:beta/trust-and-polish
 
 ### D-042 · The `idb` fake is copy-pasted across four test files
 
