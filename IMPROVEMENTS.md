@@ -973,7 +973,7 @@ block says they mean — same vocabulary, one definition, defined there.
   query these labels. Note that changing a panel trigger's label changes its
   accessible name, so `GroupsTab.test.tsx` queries for `Cross-search` and
   `Bulk actions` need checking against the open state, not only the closed one.
-- **Status:** open
+- **Status:** claimed:worktree-rules-actionbar
 - **Related:** ADR-0061, ADR-0051 §1, ADR-0038
 
 ---
