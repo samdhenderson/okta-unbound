@@ -48,10 +48,13 @@ the same playbook for any future large component:
 
 - Good: `useOktaApi/` (module split), `components/members/` (small focused
   components), `ProgressContext` (documented, `useMemo`d).
-- The once near-identical `useGroupContext`/`useUserContext` now share a
-  `useOktaTabContext` base (`src/sidepanel/hooks/useOktaTabContext.ts`);
-  `useGroupContext.ts` and `useUserContext.ts` are thin wrappers over it — a worked
-  example of the extract-a-hook pattern.
+- The once near-identical `useGroupContext`/`useUserContext` both used to run their
+  own `useOktaTabContext` instance (`src/sidepanel/hooks/useOktaTabContext.ts`) as
+  a thin wrapper — a worked example of the extract-a-hook pattern.
+  `useUserContext.ts` still is. ADR-0058 took `useGroupContext` a step further: it
+  is now a pure selector over the panel's single `useOktaPageContext` engine
+  (`src/sidepanel/hooks/useGroupContext.ts`) — no `useOktaTabContext` instance, no
+  probe, no listener, no state of its own.
 - **Lift only what a neighbour reads.** `useUserDetailPanes` owns the user rung's
   three panes but lifts exactly one thing: _which_ pane is on screen, because the
   action bar and the page header above the card both read it. Every filter, pill and

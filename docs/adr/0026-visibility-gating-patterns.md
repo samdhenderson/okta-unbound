@@ -48,13 +48,13 @@ describes precisely the bug these two hooks avoid by having a latch.
 
 An audit of every visibility-gated site found:
 
-| Pattern                    | Behaviour                                                                                | Sites                                                                                               |
-| -------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| **Owed-load latch**        | fires once per real input change; deferred while hidden; never on a bare reshow          | `useGroupRuleReferences`, `GroupDetailView`, `useAppsData`, `AuthPoliciesTab`                       |
-| **Refetch-on-every-show**  | no idempotency beyond a debounce; re-runs whenever shown                                 | `useExportTab`'s match-count probe, `useGroupLiveSearch`, `useDebouncedUserSearch`, `useAddToGroup` |
-| **Reset-on-hide**          | does work when the surface goes **invisible**                                            | `useUserComparison`                                                                                 |
-| **Bookkeeping-on-arrival** | fires per arrival; no data, no cache, nothing to key                                     | `RulesTab`'s `markTabVisited`                                                                       |
-| **Dual-axis owed-resync**  | gated on `enabled` **and** `document.hidden`, with `!isPinned` folded into the same flag | `useOktaTabContext`                                                                                 |
+| Pattern                    | Behaviour                                                                                                                             | Sites                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **Owed-load latch**        | fires once per real input change; deferred while hidden; never on a bare reshow                                                       | `useGroupRuleReferences`, `GroupDetailView`, `useAppsData`, `AuthPoliciesTab`                       |
+| **Refetch-on-every-show**  | no idempotency beyond a debounce; re-runs whenever shown                                                                              | `useExportTab`'s match-count probe, `useGroupLiveSearch`, `useDebouncedUserSearch`, `useAddToGroup` |
+| **Reset-on-hide**          | does work when the surface goes **invisible**                                                                                         | `useUserComparison`                                                                                 |
+| **Bookkeeping-on-arrival** | fires per arrival; no data, no cache, nothing to key                                                                                  | `RulesTab`'s `markTabVisited`                                                                       |
+| **Dual-axis owed-resync**  | gated on `enabled` **and** `document.hidden`, with `!isPinned` folded into the same flag (historical — see the 2026-09-02 note below) | `useOktaTabContext`                                                                                 |
 
 Only the first two are load-triggering, so "two patterns" is defensible as a
 description of _loads_ — but the assignment is wrong, and the other three shapes are
@@ -80,6 +80,17 @@ The data-layer plan proposed adding `visible` and `revalidateOnShow` to
    > ADR-0018 for why the tab dropped out of it. The finding is unaffected: the
    > point was that these keys are frozen _upstream_, and they still are. What
    > changed is which condition freezes them.
+   >
+   > **Note, 2026-09-02.** ADR-0058 removed `useOktaPageContext(!isPinned)` — the
+   > engine is now always on, and `App` freezes the identity selection instead
+   > (`pinContext.ts`'s `deriveTabContext`). The keys these six call sites depend
+   > on are still frozen upstream of `useEntityQuery`, just by that selection
+   > rather than by suspending the probe; finding 2 stands unchanged.
+   > `useOktaTabContext`'s `enabled`/`resyncPending` dual-axis gate — the pattern
+   > this ADR's table calls out as `useOktaTabContext`'s own row — still exists and
+   > is still exercised by its tests, but no production call site passes
+   > `enabled: false` any more, so it is no longer a live example of the pattern
+   > in this codebase, only a documented capability.
 
 3. **`useAppsData` cannot take it.** Its latch identity is `(targetTabId, oktaOrigin)`
    while its cache key is `oktaOrigin` alone — deliberately, so two Chrome tabs on one

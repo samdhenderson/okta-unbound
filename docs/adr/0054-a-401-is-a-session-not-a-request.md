@@ -1,6 +1,6 @@
 # ADR-0054: A 401 is a session, not a request
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-29
 - Scoped by: `D-007b`
 - Relates to: [ADR-0008](./0008-activity-bar-and-cancellation.md) (the one
@@ -146,3 +146,21 @@ happens today. It is the defect.
 writes: it would silently re-issue a bulk operation the admin walked away from.
 Rejected wholesale rather than split by verb, because the split would put the
 riskiest case behind the subtlest rule.
+
+## Implementation note — 2026-09-02
+
+Accepted and implemented under `D-007b`/`D-007c`. Two deliberate departures,
+recorded so the ADR describes what ships:
+
+- **Suspension is keyed by tab, not by origin.** A scheduler request carries a
+  `tabId`, not an origin, and one tab is one origin's session — so the tab is
+  the key the code actually has. Same granularity in practice; different field.
+- **§4's explicit Retry control was not built.** Recovery is automatic: while a
+  tab is suspended the scheduler lets exactly one request per settled round
+  through as a probe, and a success resumes the tab. A 403/404 does not, since
+  neither says anything about credentials. The banner therefore carries no
+  button and no new message action was needed.
+
+Still outstanding, filed rather than folded in: §3's "render last-known content
+under the banner" (surfaces still show their own failed-request states) and
+§5's `interrupted` / `not attempted` audit outcomes — see `D-104`, `D-105`.

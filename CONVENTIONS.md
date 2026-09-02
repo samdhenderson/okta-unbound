@@ -36,8 +36,9 @@ call sites in `pageContext.ts`; keep it that way.
 `MutationObserver`, no `popstate`/`pushstate` hook) in the content script,
 and that's deliberate, not a gap. Page context (current group/user/app/policy)
 is derived fresh from `window.location.href` + the DOM **at the moment a
-message handler runs** (`handleGetGroupInfo`, `handleGetUserInfo`, etc. in
-`src/content/index.ts`), not cached against a watched route. A nightly run
+message handler runs** (`handleGetGroupInfo` in `src/content/groupHandlers.ts`,
+`handleGetUserInfo` in `src/content/userHandlers.ts`, etc. — `src/content/index.ts`
+only routes the incoming message to them), not cached against a watched route. A nightly run
 should not "fix" this by adding a watcher — it would add persistent listener
 state to a context that currently has none, and none of the four extraction
 functions need staleness protection they don't already have.
@@ -51,7 +52,14 @@ functions need staleness protection they don't already have.
   call that fetches Okta directly.
 - Direct `sendMessage` to the content script is legitimate **only** for
   non-API page-context reads (`getGroupInfo`, `getUserInfo`, `getOktaOrigin`,
-  etc.) — it carries no Okta API traffic and doesn't touch the scheduler.
+  etc.) — it never touches the scheduler. It is not necessarily free of Okta
+  traffic, though: `handleGetGroupInfo`/`handleGetAppInfo`/`handleGetPolicyInfo`
+  fall back to an unscheduled `handleMakeApiRequest` call when the DOM comes up
+  empty (`D-059` made this fallback less frequent, not absent). That bypass is
+  deliberate and acceptable here — it is a single best-effort read, not
+  bulk/multi-call traffic — but it is a real exception to "all raw Okta API
+  traffic goes through the scheduler path" above, not evidence the rule has no
+  exceptions.
 - Every message listener (background **and** content script) validates
   `sender.id !== chrome.runtime.id` and rejects foreign senders before doing
   anything else. Background additionally rejects any scheduler/tab-state
@@ -107,20 +115,29 @@ that there is now something to call instead of improvising: use
 `isSessionExpired`, never a hand-rolled `status === 401` or a one-off
 try/catch.
 
-Two things remain unsolved, so don't read the predicate as the whole fix:
+Both gaps the predicate left open are now closed (`D-007b`, `D-007c`,
+2026-09-02, ADR-0054 Accepted):
 
-- **Exactly one surface distinguishes an expired session.** `getAppById`
-  (`src/sidepanel/hooks/useOktaApi/appOperations.ts`) returns an `AppLookup`
-  of `found | missing | session-expired | failed{status}`, and HomeTab's jump
-  bar is its only consumer. There is **no app-wide session-expiry UX**:
-  everywhere else, an expired session still surfaces as an ordinary
-  failed-request error state. That is `D-007b`, and it is gated on an accepted
-  ADR before any `src/` change.
-- **Retry behavior is unchanged.** `makeApiCall` still _resolves_ a failure
-  rather than throwing, so a 429 takes the success path in `executeRequest` and
-  is never routed into `retryRequest` — backoff still covers transport throws
-  and timeouts only. That is `D-007c`'s job, not a side-effect to fold into
-  unrelated work.
+- **Session expiry is app-wide, not one surface.** The scheduler observes every
+  settled result; the first `isSessionExpired` hit suspends that tab, settles
+  its queued work without sending it, and publishes the tab on
+  `SchedulerState.expiredSessionTabIds`. `App` renders one `danger`
+  `AlertMessage` from that state — one banner, not nine. Recovery is on
+  evidence, never a timer: one probe request per settled round is allowed
+  through, and only a success resumes the tab. Use `isSessionExpired`; never
+  hand-roll a `status === 401` check or a one-off try/catch.
+- **A 429 is retried; a 401 is not.** `executeRequest` routes a resolved
+  failure whose status is retryable (429 only — 503 is deliberately excluded,
+  since re-issuing a write whose fate this layer cannot know is not the same
+  bet) into the existing `retryRequest` backoff, honouring `cancelGeneration`.
+  Retrying an expired session is just a slower way to fail, so a 401 never
+  enters that path. A resolved failure also no longer counts as a success in
+  `metrics.successfulRequests`, nor as `success` in the audit trail.
+
+Two pieces of ADR-0054 remain outstanding and are filed, not forgotten: surfaces
+still render their own failed-request error states rather than last-known
+content under the banner (`D-104`), and the `interrupted` / `not attempted`
+audit outcomes do not exist (`D-105`).
 
 ## Test expectations
 

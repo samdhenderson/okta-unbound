@@ -5,9 +5,10 @@
  *
  * The Overview tab can *pin* the current group/user so the panel holds that entity
  * while the admin navigates another Okta page to cross-reference. Without a pin the
- * feature tabs follow the live, always-on tab context (`useGroupContext`); with one
- * they must follow the frozen snapshot instead — otherwise "View Rules" or an export
- * launched while pinned would silently target whatever the live tab drifted to.
+ * feature tabs follow the live tab context (`useGroupContext`, a selector over the
+ * panel's single `useOktaPageContext` engine per ADR-0058); with one they must
+ * follow the frozen snapshot instead — otherwise "View Rules" or an export launched
+ * while pinned would silently target whatever the live tab drifted to.
  */
 import type { GroupInfo, UserInfo } from '../shared/types';
 import { isOktaUrl } from '../shared/utils/oktaUrl';
@@ -40,7 +41,10 @@ export interface PinnedContext {
   oktaOrigin: string | null;
 }
 
-/** The live, always-on tab context (from `useGroupContext`) used when unpinned. */
+/**
+ * The live tab context (from `useGroupContext`, a selector over the panel's
+ * single always-on `useOktaPageContext` engine — ADR-0058) used when unpinned.
+ */
 export interface LiveTabContext {
   targetTabId: number | null;
   groupInfo: GroupInfo | null;
@@ -59,14 +63,17 @@ export interface TabContext {
 
 /**
  * Resolve the context the feature tabs should use: the pinned snapshot when a pin
- * is active, otherwise the live always-on context.
+ * is active, otherwise the live context.
  *
- * Deliberately uses the live `useGroupContext` values (not the Overview-only page
- * probe) for the unpinned case, so the tabs keep a live tab id even while the user
- * is away from the Overview tab.
+ * Deliberately uses the `useGroupContext` selector's values (the panel's single
+ * `useOktaPageContext` engine, narrowed to a group — ADR-0058) for the unpinned
+ * case, so the tabs keep a live tab id regardless of which tab the user is on. The
+ * pin freezes the *identity selection* here, not the engine — the engine keeps
+ * probing while pinned so the masthead's connection status and "live tab moved"
+ * hint stay accurate.
  *
  * @param pinned - The active pin snapshot, or null when following live detection.
- * @param live - The live always-on tab context.
+ * @param live - The live tab context.
  * @returns The `targetTabId`/`currentGroupId`/`oktaOrigin` the tabs should consume.
  */
 export function deriveTabContext(pinned: PinnedContext | null, live: LiveTabContext): TabContext {
