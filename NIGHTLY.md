@@ -30,7 +30,7 @@ first; that is environment, not `main`.
 
 **Items worked:** `I-034`, `D-086`, `D-089`. Five new items filed from
 findings: `D-093`, `D-094`, `D-095`, `D-096`, `I-035`.
-**PR:** (filled in below)
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/117
 **Backlog after:** 68 open of 149 total — 14 IMPROVEMENTS, 54 DEBT, 3 blocked,
 7 `research:awaiting-review`.
 

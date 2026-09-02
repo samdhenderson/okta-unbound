@@ -1117,7 +1117,7 @@ block says they mean — same vocabulary, one definition, defined there.
   is axe-clean, names itself for a screen reader, and has a story. A test pins
   that pressing it opens the palette, so `open()` stops being dead code.
 - **Risk:** Low — additive, one new control in the chrome.
-- **Status:** claimed:claude/stoic-gates-vcbg8k
+- **Status:** done:#117
 - **Related:** ADR-0063, ADR-0057, `I-018`, `I-035` (found while siting it).
   Note that this relieves only half of the compound problem it describes: the
   chord still does not fire from the Okta page (`I-018`/ADR-0057), so the new
