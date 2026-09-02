@@ -42,122 +42,213 @@ consumer count that was wrong by nine, `D-027` named a file that had been
 deleted, `D-029` named a writer that was only a doc comment. A filing is a
 claim about code, and code moves.
 
----
-
-### D-001 · User Detail's rule badge under-evaluates isMemberOfAnyGroup
+**A `done:*`/`closed:*` item eventually moves to the `### D-101 · `rule-inactive` cannot tell a paused rule from a broken one
 
 - **Category:** correctness
-- **Priority:** P1
-- **Size:** M
-- **Files:** `src/sidepanel/components/users/GroupMembershipsList.tsx`
-  (holds `memberships`, never threads it down),
-  `src/sidepanel/components/users/GroupMembershipRow.tsx:126`,
-  `src/sidepanel/components/users/MembershipRuleEvidence.tsx:159`,
-  `src/sidepanel/components/groups/detail/ClauseChecklist.tsx:118,215`
-- **Problem:** `ClauseChecklist` calls
-  `explainRuleExpression(expression, user, { maxClauses })` with no `groups`
-  context, so every `isMemberOf*` clause hits the unevaluable branch and
-  renders "Cannot be determined" — even though `GroupMembershipsList` (one
-  call away in the tree) already holds the full `memberships` list needed to
-  build that context. Compare Users (`accessCause.ts`) and the profile-edit
-  blast-radius report (`shared/membership/blastRadius.ts`) both build and
-  pass a `RuleGroupContext` correctly from the same kind of data, proving
-  this is a wiring gap, not an evaluator limitation.
-- **Done when:** User Detail's rule badges resolve `isMemberOfAnyGroup`/
-  `isMemberOfGroup*` clauses whenever the user's group memberships are
-  already loaded, matching what Compare Users already shows for the same
-  rule+user. A regression test pins a previously-"Cannot be determined" case
-  now resolving correctly — prove it fails without the fix first.
-- **Risk:** Low-medium — additive data threading through 4 files, no
-  evaluator changes.
-- **Status:** done:#67
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/users/BlastRadiusGroupRow.tsx`
+  (`withheldReasonText`), `src/shared/membership/blastRadius.ts`
+  (`additionEffect`/`removalEffect`, where the reason is set),
+  `src/shared/membership/blastRadiusTypes.ts` (`WithheldReason`)
+- **Verified:** 2026-09-02 — found while closing `D-085`'s last branch site.
+  The reason is set whenever `active.length === 0`, and `active` is
+  `rule.status === 'ACTIVE'`, which collapses `INACTIVE` and `INVALID`.
+- **Problem:** The `rule-inactive` withheld reason fires for two different
+  situations that call for opposite responses: an admin deliberately paused the
+  rule, or Okta can no longer evaluate it. Its sentence used to assert the
+  first — "The rule is inactive, so it grants nothing either way" — which is a
+  confident wrong statement in the second case, on a report an admin reads
+  before making an access decision. `D-085` corrected the copy to name both
+  possibilities honestly, which is true but vaguer than the data now allows:
+  `RuleEffect.status` carries the real status since `D-085`, so the report
+  could say which one applies rather than listing both.
+- **Done when:** the withheld reason distinguishes a deactivated rule from an
+  unevaluable one — most likely a distinct `WithheldReason` code set where
+  `active` is computed — and each renders its own sentence. The retargeted
+  `Not Predicted Rule Inactive` story pins the current combined wording; retire
+  or split it deliberately, with a note (ADR-0022).
+- **Risk:** Low — additive reason code plus copy; the engine already has the
+  status it needs.
+- **Status:** open
+- **Related:** `D-085` (which surfaced this and made `status` available)
 
-### D-002 · Dedupe the group-context builder duplicated in two files
+### D-102 · `useOktaTabContext`'s `enabled`/`resyncPending` have no production caller
 
 - **Category:** cleanup
 - **Priority:** P3
 - **Size:** S
-- **Files:** `src/sidepanel/components/users/comparison/accessCause.ts`
-  (`groupContextOf`, ~line 226),
-  `src/shared/membership/blastRadius.ts:107` (`groupContextOf`)
-- **Problem:** Two near-identical implementations of the same
-  `RuleGroupContext`-building helper. Fixing D-001 would add a third copy if
-  this isn't deduped first.
-- **Done when:** One shared `groupContextOf` (or equivalent) lives in one
-  file; both existing call sites import it. Do this before or alongside
-  D-001 so D-001 reuses the shared helper rather than adding a fourth copy.
-- **Risk:** Low.
-- **Status:** done:#67
+- **Files:** `src/sidepanel/hooks/useOktaTabContext.ts`,
+  `src/sidepanel/hooks/useOktaTabContext.test.tsx`,
+  `docs/adr/0026-visibility-gating-patterns.md`
+- **Verified:** 2026-09-02 — enumerated by the ADR-0058 implementer while
+  merging the two context engines. The pin used to be expressed as
+  `useOktaPageContext(!isPinned)`; it is now expressed as frozen identity
+  selection in `App`, and no production call site passes `enabled: false`.
+- **Problem:** `enabled` and `resyncPending` remain implemented, documented and
+  tested as the generic ADR-0026 visibility gate, but nothing in `src/` uses
+  them any more. They are a maintained API with no consumer — the same shape
+  ADR-0039 rejects for unwired action descriptors, one layer down. Either they
+  are the repo's general gating mechanism and something should use them, or
+  they are dead weight that future readers will mistake for the live mechanism
+  (ADR-0026's own audit table already had to be annotated as historical).
+- **Done when:** either removed, with ADR-0026 updated to name the surviving
+  mechanism, or explicitly kept with a comment saying why an unused gate is
+  worth maintaining. Deciding is the work; both outcomes are acceptable.
+- **Risk:** Low — the tests that cover them pass either way, but they are the
+  thing that has to be retargeted or retired.
+- **Status:** open
+- **Related:** ADR-0058, ADR-0026, `D-062` (the merge)
 
-### D-003 · Silent app-label resolution failures in pushGroupOps
+### D-103 · Two disclosure controls still collide on duplicate names
 
-- **Category:** correctness
-- **Priority:** P2
+- **Category:** ux
+- **Priority:** P3
 - **Size:** S
-- **Files:** `pushGroupOps.ts:117`, then under
-  `src/sidepanel/hooks/useOktaApi/` — the module was deleted by `f1e8def`
-  after this item closed.
-- **Problem:** The catch around per-app label resolution
-  (`catch { // Keep existing name on failure }`) has no logging at all,
-  unlike every sibling catch in this file. A systemic label-resolution
-  failure (auth/rate-limit issue) would leave apps silently stuck showing
-  raw ids with zero trace to diagnose why.
-- **Done when:** The catch logs via the shared `logger` (outcome only, no
-  payload) matching the sibling catches' pattern in the same file.
-- **Risk:** Low.
-- **Status:** done:#70
+- **Files:** `src/sidepanel/components/policies/PolicyCard.tsx`
+  (`Show/Hide rules for <name>`), `src/sidepanel/components/apps/AppListItem.tsx`
+  (`Expand`/`Collapse`), and the assertion sites
+  `src/sidepanel/components/AuthPoliciesTab.test.tsx`,
+  `AuthPoliciesTab.stories.tsx`,
+  `src/sidepanel/cache/appAssignmentsSharing.test.tsx`
+- **Verified:** 2026-09-02 — left behind deliberately while closing `I-010`,
+  and marked with explaining comments at both call sites.
+- **Problem:** `I-010` folded the entity id into every `Copy <type> id for
+<name>` label so two same-named entities stop presenting one accessible name.
+  The disclosure controls beside them were not folded: `PolicyCard`'s
+  `Show/Hide rules for <name>` still collides for two policies sharing a name,
+  and `AppListItem`'s `Expand`/`Collapse` is ambiguous for every row on the
+  page, not merely duplicates. A screen-reader user tabbing the list hears the
+  same control name repeatedly with nothing distinguishing the rows.
+- **Done when:** both disclosure labels name their entity unambiguously, the
+  way the copy controls now do, and the four assertion sites are retargeted to
+  the new exact strings — not loosened to regexes or index lookups.
+- **Risk:** Low — label text plus assertion retargets across four files.
+- **Status:** open
+- **Related:** `I-009`, `I-010`
 
-### D-004 · useRuleLifecycle.ts has zero test coverage on a security-sensitive audit path
+### D-104 · A suspended session blanks every surface instead of holding last-known content
 
-- **Category:** correctness
-- **Priority:** P1
-- **Size:** M
-- **Files:** `src/sidepanel/hooks/useRuleLifecycle.ts` (no `.test.ts` exists)
-- **Problem:** This hook writes audit-trail entries for rule
-  activate/deactivate. Its catch at `:104-106` silently defaults
-  `currentUserEmail` to `'unknown@unknown.com'` on a failed `/users/me`
-  lookup — an audit entry can misattribute who performed a rule change, with
-  nothing surfaced to the user. The `response.success === false` branch
-  (`:149-173`) and the outer exception branch (`:174-203`) are also
-  untested.
-- **Done when:** A test file exists covering the unknown-email fallback, the
-  failure-response branch, and the exception branch; `npm run test:coverage`
-  stays green.
-- **Risk:** Medium — touches audit logging; route through
-  `security-logging-reviewer` before merge.
-- **Status:** done:#67
-
-### D-005 · useRuleImpact.ts has zero test coverage on its race guards
-
-- **Category:** correctness
+- **Category:** ux
 - **Priority:** P2
 - **Size:** M
-- **Files:** `src/sidepanel/hooks/useRuleImpact.ts` (no `.test.ts` exists)
-- **Problem:** Two stale-capture guards (`:90`, `:96`) exist specifically to
-  stop a "reopened for another rule" race from clobbering state, plus the
-  error path (`:95-101`) — none of it is tested. A regression here would
-  only surface as a user-visible race, not a test failure.
-- **Done when:** A test file covers both stale-capture guards (simulating a
-  reopen-for-another-rule mid-flight) and the error path.
-- **Risk:** Low-medium.
-- **Status:** done:#70
+- **Files:** `docs/adr/0054-a-401-is-a-session-not-a-request.md` §3, and the
+  per-surface error states across `src/sidepanel/components/**`
+- **Verified:** 2026-09-02 — the `D-007b` implementer stopped here deliberately;
+  the banner ships, the per-surface half does not.
+- **Problem:** ADR-0054 §3 says a suspended session should leave each surface
+  showing its **last-known content** under the one global banner, because the
+  data on screen was true a moment ago and an expired session does not make it
+  false. What ships instead: the banner appears, and every surface independently
+  renders its own failed-request error state, so the admin loses the view they
+  were reading at the moment they most need it — the session expired, nothing
+  about the org changed.
+- **Done when:** a suspended session leaves already-loaded content rendered,
+  with the banner as the single explanation, and only surfaces with no content
+  yet show an empty/error state.
+- **Risk:** Medium — touches many surfaces' loading/error branches; needs the
+  ADR-0018 stay-mounted behaviour respected.
+- **Status:** open
+- **Related:** `D-007b`, ADR-0054 §3
 
-### D-006 · Untested error/guard branches in three hooks
+### D-105 · `interrupted` and `not attempted` audit outcomes do not exist
 
-- **Category:** standards
-- **Priority:** P2
+- **Category:** correctness
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/shared/requestLog.ts` (`recordRequest`'s two-outcome
+  vocabulary), `src/shared/scheduler/apiScheduler.ts` (the short-circuit path)
+- **Verified:** 2026-09-02 — enumerated by the `D-007b` implementer while
+  wiring suspension; `requestLog.ts` was outside its ownership.
+- **Problem:** ADR-0054 §5 asks for `interrupted` and `not attempted` as audit
+  outcomes, so a request the scheduler settled without sending is
+  distinguishable from one that was tried and failed. `recordRequest` has a
+  two-outcome vocabulary and no third state, so today a short-circuited request
+  writes **no audit row at all**. The audit trail therefore under-reports: it
+  shows the requests that were attempted and is silent about the ones the panel
+  chose not to send, which is exactly the information someone reconstructing an
+  incident would want.
+- **Done when:** a request settled without being sent records an outcome saying
+  so, distinct from both success and failure, and the history surface renders it.
+- **Risk:** Low — additive vocabulary; the audit store already validates rows on
+  read-back (`D-043`), so the schema is the thing to extend.
+- **Status:** open
+- **Related:** `D-007b`, `D-043`, ADR-0054 §5
+
+### D-106 · A narrowed error message can still be Okta's own `errorSummary`
+
+- **Category:** security
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaApi/ruleImpact.ts` (~line 168),
+  `src/sidepanel/hooks/useUserMemberships.ts` (~line 412), and any sibling
+  adopting the same `error instanceof Error ? error.message : …` shape
+- **Verified:** 2026-09-02 — found while reviewing `D-051`'s own fix. Both
+  catch blocks wrap Okta API calls, so the caught `Error.message` can carry an
+  `errorSummary` the org's data shaped.
+- **Problem:** `D-051` replaced two `log.*` calls that passed the **raw caught
+  error** with ones that pass `error.message` — a clear improvement, since the
+  raw object carried a stack and whatever else rode on it. But CLAUDE.md's rule
+  is "identifiers and outcomes only", and a message derived from an Okta
+  failure is neither: Okta's `errorSummary` frequently interpolates the entity
+  that failed, so a group or user name can still reach the log.
+  The repo already decided this exact question the other way one layer down:
+  `apiScheduler.ts` deliberately sets `lastError` to `` `HTTP ${status}` ``
+  rather than `result.error`, with a comment saying Okta's `errorSummary` must
+  not reach `SchedulerState`. These two sites are the same class of value
+  treated differently, which is the part worth closing — not because the log is
+  dangerous today, but because the inconsistency is how the rule erodes.
+- **Done when:** both sites log an outcome the app controls (a status, a code,
+  or a fixed string) rather than a message Okta wrote, matching
+  `apiScheduler`'s precedent; or a comment records why a message is acceptable
+  here when it was not there.
+- **Risk:** Low — two log lines. Note the messages are still shown to the user
+  via `reportError`, which is a different question and out of scope.
+- **Status:** open
+- **Related:** `D-051` (the fix that surfaced this), `D-007b`
+
+### D-107 · Two same-named entities share one chip name for a screen-reader user
+
+- **Category:** ux
+- **Priority:** P3
 - **Size:** M
-- **Files:** `src/sidepanel/hooks/useGroupSource.ts:120,125,161,175,199`,
-  `src/sidepanel/hooks/useSearchWithDropdown.ts:128,132-137,134,139`,
-  `src/sidepanel/hooks/useUserContext.ts:43`
-- **Problem:** Each has real conditional logic (stale-run guards,
-  post-unmount guards, a `success===false` fallback) with thin or no
-  dedicated test coverage (coverage report: useGroupSource 68%/40%
-  branches, useSearchWithDropdown 52%/41%, useUserContext 60%/20%).
-- **Done when:** Each named branch has at least one test proving both sides
-  of the condition.
-- **Risk:** Low.
-- **Status:** done:#70
+- **Files:** `src/sidepanel/components/shared/EntityLink.tsx` (the chip's
+  `aria-label`/`title`), `src/sidepanel/components/shared/EntityLink.test.tsx`
+  (where the accepted residual is pinned)
+- **Verified:** 2026-09-02 — decided deliberately by Sam while closing `I-009`,
+  after `ui-reviewer` pushed back on the first attempt.
+- **Problem:** `I-009` fixed a real ambiguity: two entities can share a display
+  name, so `Open group Engineering` could name two different chips on one
+  screen. The first fix folded the entity id into every chip's accessible name.
+  That removed the ambiguity and introduced a worse everyday cost — a screen
+  reader then read ~20 opaque characters (`00g1a2b3c4d5e6f7g8h9`) on **every
+  row of every list**, to disambiguate a collision that is usually absent.
+  The id-fold was therefore kept on the **copy control**, where the id is the
+  thing the control copies and naming it is honest, and reverted on the chip.
+  What remains is the original ambiguity, scoped down to one case: two
+  same-named entities rendered together are indistinguishable when opened.
+- **Done when:** a chip disambiguates **only when it has to** — the id (or a
+  shorter discriminator) is appended just for entities whose rendered name
+  collides with another in the same list, or moved into a description rather
+  than the name. Either shape keeps the common case quiet. The accepted-residual
+  assertion in `EntityLink.test.tsx` is retargeted with a note when it lands.
+- **Risk:** Medium — collision detection has to see the whole rendered list,
+  which `EntityLink` does not today; a context or a caller-supplied hint are
+  both plausible and the choice is the work.
+- **Status:** open
+- **Related:** `I-009`, `I-010`, `D-103`
+
+## Archive` section at
+
+the bottom of this file, collapsed to one line.** The verbose
+Problem/Done-when/Risk prose is not repeated there — it stays recoverable
+from git history at the linked commit, which is the point of moving it out.
+An id that reaches the archive is retired permanently: never reuse it for a
+new item (`scripts/check-cited-paths.mjs` enforces this across both
+ledgers, archive included). See `SESSION.md` step 7 for exactly when an item
+makes that move.
+
+---
 
 ### D-007 · No session-expiry / 401 handling anywhere in the API path
 
@@ -177,39 +268,12 @@ already browsing, using that page's own session cookie — Okta answers a genuin
 "you may not do this" with a 403, not a 401. So `401 ⇒ expired` needs no
 heuristic and no allow-list of endpoints.
 
-### D-007a · A failure result that can say what failed
-
-- **Category:** correctness
-- **Priority:** P2
-- **Size:** S
-- **Files:** `src/shared/scheduler/types.ts:82-91`,
-  `src/sidepanel/hooks/useOktaApi/core.ts:200-229`,
-  `src/sidepanel/hooks/useOktaApi/appOperations.ts:88-98`
-- **Verified:** 2026-08-24 — read end to end during the D-007 scoping pass.
-- **Problem:** `RequestResult` is one non-discriminated interface with
-  `success: boolean` and an optional `status`, so a caller that checks
-  `!result.success` still gets `status` typed as possibly-absent and has no
-  reason to look at it. Every failure mode reads the same at the type level:
-  expired session, rate limit, deleted entity, malformed response.
-- **Done when:** `RequestResult` is a discriminated union whose failure arm
-  carries a non-optional `status` (transport throws, which have no HTTP status,
-  get an explicit sentinel rather than an absent field — see
-  `apiRequest.ts:171-179`); a single `isSessionExpired(result)` predicate lives
-  in `src/shared/scheduler/` and matches 401 only; `getAppById` uses it to stop
-  collapsing rate-limited into missing. No behavior change beyond `getAppById`'s
-  return — this slice is types plus one caller.
-- **Risk:** Low. Touches the shape every API caller reads, so it is wide, but the
-  compiler finds every site. Route through `security-logging-reviewer` anyway:
-  it is the request path.
-- **Status:** done:#102
-- **Related:** absorbs what `D-027` wanted before that item was overtaken.
-
 ### D-007b · One expired session, not thirty failed requests
 
 - **Category:** correctness
 - **Priority:** P2
 - **Size:** M
-- **Files:** `docs/adr/0050-a-401-is-a-session-not-a-request.md` (to be created),
+- **Files:** `docs/adr/0054-a-401-is-a-session-not-a-request.md` (to be created),
   `src/shared/scheduler/apiScheduler.ts`, `src/sidepanel/App.tsx`
 - **Verified:** 2026-08-29 — still holds, but on narrower ground than the
   original filing: `D-007a` shipped `isSessionExpired` (401 only), so a 401 is
@@ -271,172 +335,6 @@ heuristic and no allow-list of endpoints.
 - **Status:** open
 - **Depends on:** `D-007a`
 
-### D-008 · Confirm useEntityQuery.ts's abandoned-abstraction status
-
-- **Category:** cleanup
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/sidepanel/cache/useEntityQuery.ts`
-- **Verified:** 2026-08-24 — **refuted.** Every importer enumerated, not sampled.
-- **Problem:** ~~Zero production consumers found~~ — **this was wrong.** The
-  filing claimed no production consumer used the hook and that every real
-  consumer hand-rolled an effect around `entityCache`. There are **9 production
-  importers across 11 call sites**: `PolicyCard.tsx:52`, `UserOverview.tsx:60`,
-  `AuthPolicyOverview.tsx:82`, `GroupOverview.tsx:133`, `AppListItem.tsx:55`,
-  `useUserApps.ts:157`, `useUserDetailPanes.ts:207,215`,
-  `useAppOverviewData.ts:69,76`, `useUserComparison.ts:329`. The only test
-  importer is its own co-located suite.
-
-  `docs/adr/0026-visibility-gating-patterns.md:100` affirms those consumers as
-  correct as written, and `CLAUDE.md:157` names the hook as part of the panel's
-  caching layer. It is live infrastructure, not a seam kept for a future caller.
-
-  The evidence the filing rested on had also moved: the cited
-  `useAppsData.ts:189-192` comment explaining why that hook cannot use
-  `useEntityQuery` was rewritten by `b2ab617` when `useAppsData` moved onto
-  `useOrgSnapshot`. The live restatement of the same point — latch identity is
-  the (tab, origin) pair, not the cache key — is now
-  `src/sidepanel/hooks/useOwedLoad.ts:14-21`.
-
-- **Done when:** Closed. Nothing to build. **A nightly that had acted on the
-  original filing would have deleted a hook nine surfaces depend on**, and the
-  ledger would have read as a tidy P3 cleanup while it happened — which is why
-  the `Verified` line now exists in the format above.
-- **Risk:** n/a.
-- **Status:** closed:refuted-2026-08-24
-
-### D-009 · Modal content can render underneath ActivityBar
-
-- **Category:** correctness
-- **Priority:** P1
-- **Size:** M
-- **Files:** `src/sidepanel/components/shared/Modal.tsx`,
-  `src/sidepanel/App.tsx` (mount order), and the ~14 modal call sites still
-  inside their tab panels: `UserComparisonModal`, `GroupComparisonModal`,
-  `AddToGroupModal`, `ProfileSaveModal`, `RuleConsolidationModal`,
-  `GroupMergeModal`, `GroupExportModal`, `AuditLogUndoModal`,
-  `RuleImpactModal`, `GroupMembersSection.tsx:254`, `ProfileDisplayModal`,
-  `CopyMembersModal`, `BreakdownDetailsModal`
-- **Problem:** `ActivityBar` renders `fixed bottom-0 z-50` — the same
-  z-index as `Modal`'s `fixed inset-0 z-50`. `ActivityBar` mounts last in
-  `App.tsx`, so at equal z-index it paints on top, visually covering the
-  bottom of any open modal from one of those ~14 call sites (footer action
-  buttons included). `TabJumpPalette` was already moved outside the scroll
-  root specifically to dodge this exact bug — the fix was never applied
-  anywhere else.
-- **Done when:** No open modal's interactive content can render underneath
-  `ActivityBar`, verified with a story/test rendering a modal alongside
-  `ActivityBar` at typical heights. Fix should be structural (Modal's own
-  stacking, or a documented mount-order rule) — not a per-call-site patch,
-  since a 15th modal would reintroduce the bug otherwise.
-- **Risk:** Medium — shared `Modal` used everywhere; needs the story suite
-  re-verified across call sites.
-- **Status:** done:#68
-
-### D-010 · CI's `verify` job has been red on `main` since at least 2026-08-15, unrelated to any one PR
-
-- **Category:** standards
-- **Priority:** P1
-- **Size:** L
-- **Files:** `src/sidepanel/components/UsersTab.test.tsx` (the `membershipRow`
-  helper and its 5 call sites),
-  `src/sidepanel/components/UsersTab.navigation.test.tsx`
-  (`pops back to the profile when a cross-tab deep-link arrives`),
-  `src/sidepanel/hooks/useRulesData.ts` (the two `completeProgress` timers)
-- **Problem:** Discovered while investigating why PR #66 (a same-night baseline
-  repair, unrelated to any of these files) came back with a red `verify` check
-  on GitHub Actions despite `npm run test:coverage` passing clean locally on 2
-  consecutive full runs. Checking GitHub Actions' history for `main` itself
-  shows the same job has been failing on every push for at least the last 4
-  commits back to 2026-08-15 (`114e676`, `74893fb`, `5ad0b8a`, `61075d8`,
-  `b1b0515`) — i.e. this is pre-existing on `main`, not something PR #66
-  introduced; confirmed directly by running `verify` against `b1b0515` (PR
-  #66's own base commit, zero diff) and seeing the identical failure. Two
-  distinct symptoms recur across runs:
-  1. `UsersTab.test.tsx`'s `membershipRow('Engineering')` helper can't find the
-     group heading — the DOM snapshot at failure time shows `role="status"`
-     "Loading group memberships..." still present and the action strip's buttons
-     still `disabled`, i.e. the membership fetch had not resolved by assertion
-     time on GitHub's runner.
-  2. A separate run additionally threw an **uncaught exception** — `TypeError:
-window is not defined` inside `resolveUpdatePriority` (React DOM),
-     originating from a `Timeout._onTimeout` in `useRulesData.ts` calling into
-     `ProgressContext.tsx` — a timer set during `RulesTab.test.tsx` outliving
-     that test's jsdom teardown and firing against a torn-down `window`.
-- **Root cause (found — the "needs scoping" note below is now answered):** Both
-  symptoms were reproduced deterministically **locally**, which the original
-  filing thought impossible. The trick is that neither depends on GitHub at
-  all — they depend on the membership fetch being slow. Adding a delay to the
-  `/users/{id}/groups` route in a scratch copy of the suite reproduces the exact
-  same 5 failures, at the same helper, on the same line.
-  1. **The wait never waited.** `expect(await screen.findByText('Engineering'))
-.toBeInTheDocument()` preceded every `membershipRow('Engineering')` call.
-     It looks like it waits for the group row; it does not. The `oktaUser()`
-     fixture gives the user a **`department` of `Engineering`** and
-     `rawGroup()` names the group `Engineering`, and the detail rung keeps all
-     three panes mounted (ADR-0018) — so `findByText` resolved against the
-     Profile pane's department `<span>` the instant the user was selected. A
-     probe confirmed it: at the moment that wait resolved, the matched node was
-     `SPAN` inside a `<dd>`, there was exactly **one** `Engineering` node in the
-     DOM, and `queryAllByRole('heading', { level: 4 })` returned `[]`. The
-     assertion was also tautological (`findBy*` throws if it finds nothing, so
-     `.toBeInTheDocument()` can never fail). The row lookup then raced the
-     membership load with no wait of its own and lost on any runner slow
-     enough — hence green locally, red on GitHub.
-  2. **A real leaked timer.** `useRulesData.ts` closed its progress bar via a
-     bare `setTimeout(() => completeProgress(), …)` on both the cache-hit
-     (500ms) and fetch-success (1000ms) paths, fired from inside an async
-     callback with nothing cancelling it on unmount. When it outlived a test's
-     jsdom teardown it called into `ProgressContext` against a torn-down
-     `window` — a genuine production-code bug, not test flakiness, and exactly
-     the "may cause false positive tests" vitest warned about.
-- **Done when:** ~~Not yet defined~~ — **done.** (1) `membershipRow` is now
-  async and awaits `findByRole('heading', { level: 4, name })` — the wait the
-  callers always meant — with an explicit 5s budget matching the existing
-  `findByText('Ada Lovelace', …, { timeout: 2000 })` pattern, since reaching a
-  row costs a three-request chain. The bogus `findByText` preamble is deleted at
-  all 5 call sites; every real assertion is untouched. The same
-  under-specified-wait bug in `UsersTab.navigation.test.tsx`'s cross-tab
-  deep-link case (its `waitFor` was satisfied by `resetNav()`, before the
-  `loadUserById` it precedes resolved) is fixed by awaiting the header text
-  instead of reading it synchronously. (2) `useRulesData.ts` now holds the
-  pending completion in a ref, clears it on unmount and before re-arming, and
-  checks a `mountedRef` before calling `completeProgress()`.
-  **Proof it is not vacuous:** with a 1200ms delay injected into the membership
-  route, the pre-fix suite fails exactly the 5 CI tests; post-fix, the suite
-  passes 22/22 even at a 2500ms delay.
-- **Risk:** ~~High to leave alone~~ — resolved. The fix adds no behavior change
-  to shipped UI beyond the timer cleanup, and weakens no assertion (ADR-0012):
-  the deleted `findByText` lines were tautological waits on the wrong element,
-  which is ADR-0022's "the assertion pins something that is not what it claims"
-  carve-out, and each is replaced by a strictly stronger wait on the element the
-  caller actually goes on to assert against.
-- **Status:** done:#66
-
-### D-011 · App.tabpersistence.test.tsx's tab-mount waits are under-budgeted
-
-- **Category:** standards
-- **Priority:** P1
-- **Size:** S
-- **Files:** `src/sidepanel/App.tabpersistence.test.tsx`
-- **Problem:** The file passed inside a full-suite `test:coverage` run and
-  failed when run on its own (2 of 3 isolated runs red at
-  `findByLabelText('Select Engineering')`). Not environmental: every tab in
-  this suite is lazy — that is what the suite exists to pin — so the first
-  `openTab` for a tab pays a dynamic `import()` a later one does not, and
-  Testing Library's default `findBy*` budget of 1s is under that cost on a
-  cold module graph. In a full-suite run an earlier file had already warmed
-  the chunk, so the race was invisible. It surfaced through the pre-commit
-  `vitest related` hook, which pulled the file in as related to an unrelated
-  staged change and blocked the commit.
-- **Done when:** The waits that cross a tab's first mount carry an explicit
-  budget rather than the 1s default, and the file passes in isolation on
-  repeated runs.
-- **Risk:** Low — test-only, and strictly strengthening: each wait is on the
-  element its caller goes on to assert against, for longer. No assertion
-  weakened or removed (ADR-0012).
-- **Status:** done:#67
-
 ### D-012 · `conditionExpressionOf` is replicated in four files
 
 - **Category:** cleanup
@@ -461,168 +359,6 @@ window is not defined` inside `resolveUpdatePriority` (React DOM),
 - **Risk:** Low — behavior-preserving if the identity check above holds.
 - **Status:** open
 
-### D-013 · An audit entry can misattribute who changed a rule, silently
-
-**Decided 2026-08-24 and split.** The item was `blocked:needs-human` because
-"what should the audit trail say when we do not know who acted" is a product
-call. It has been made.
-
-**The policy:** the extension never writes an actor it did not resolve. An
-unresolved actor is represented **explicitly**, so no reader can mistake it for
-a real person; the operation still goes ahead, because refusing a legitimate
-admin action over a failed metadata lookup is a worse failure than a labelled
-gap — and `/users/me` failing is exactly what an expiring session looks like
-(`D-007`); and the user is told once, non-blockingly, so the gap is not a
-surprise discovered months later in an export.
-
-**The surface is wider than this item's original filing said**, in two ways the
-implementer must not lose:
-
-1. **Four independent implementations**, not one. `useRuleLifecycle.ts:93,102`,
-   `useRuleConsolidation.ts:213,217`, `useGroupMerge.ts:131,135` each hand-roll
-   the same `/api/v1/users/me` call with the same three silent paths, and
-   `CoreApi.getCurrentUser` (`core.ts:250,258,261`) does it a fourth time behind
-   the facade, serving group cleanup and every CSV export. A fix scoped to
-   `useRuleLifecycle` would leave three surfaces contradicting the new policy.
-2. **Three paths reach the placeholder**, and only one of them is a thrown
-   error: the `catch` (the lookup threw), a resolved `success: false`, and a
-   200 whose profile carries no `email`. From the hook's side that third case is
-   a **successful** call — a fix that asks "did the lookup fail?" misses it. It
-   is also the one that gets **cached** for five minutes (`core.ts:250` feeding
-   `:253-255`), so a single empty profile can mislabel every audited operation
-   on that tab until the TTL turns over.
-
-**Why the representation change is nearly free right now:** nothing in the
-shipping UI renders `performedBy` — `grep -rn "performedBy"
-src/sidepanel/components/` is empty. The component named like the audit viewer,
-`AuditLogViewer.tsx` (the History tab, mounted at `App.tsx:486`), reads
-`undoManager` via `chrome.storage`, a different store with a different shape.
-The IndexedDB audit trail is **write-only in the shipping product**: its only
-production callers are `logOperation` and the background retention sweep. So
-changing what an actor is breaks zero rendering code today, and gets materially
-more expensive the day an audit viewer ships.
-
-### D-013a · The facade resolves an actor, or says it could not
-
-- **Category:** correctness
-- **Priority:** P1
-- **Size:** M
-- **Files:** `src/sidepanel/hooks/useOktaApi/core.ts:239-263`,
-  `src/sidepanel/hooks/useOktaApi/currentUserCache.ts:19,45`,
-  `src/shared/types.ts:445-461`, `src/shared/storage/auditStore.ts:186-201`,
-  `src/sidepanel/hooks/useOktaApi/groupCleanup.ts:110,240`,
-  `src/sidepanel/hooks/useOktaApi/exportEngine.ts:190,196`,
-  `src/sidepanel/hooks/useOktaApi/core.getCurrentUser.test.ts:83`
-- **Verified:** 2026-08-24 — all paths and all callers read directly.
-- **Problem:** `getCurrentUser()` returns `{ email, id }` with
-  `unknown@unknown.com` / `unknown` substituted on all three failure paths, so
-  its callers are handed a string that is indistinguishable in type and in
-  shape from a real identity. `AuditLogEntry.performedBy` is a bare `string`
-  with no discriminant, so there is nowhere for "we could not tell" to live even
-  if a caller wanted to record it.
-- **Done when:** `getCurrentUser()` returns a discriminated
-  `Actor = { kind: 'resolved'; email: string; id: string } | { kind: 'unavailable'; reason: 'threw' | 'failed' | 'no-email' }`;
-  `AuditLogEntry` carries `performedBy: string | null` plus
-  `actorResolution: 'resolved' | 'unavailable'`; the literal
-  `unknown@unknown.com` no longer appears anywhere in `src/`, including
-  `currentUserCache.ts:19`'s doc comment; **only `kind: 'resolved'` is ever
-  cached** (today the no-email placeholder is); `exportAuditLog`'s
-  "Performed By" column renders `(actor unavailable)` for a null actor, through
-  `csvUtils.escapeCSV` like every other cell; `groupCleanup` and `exportEngine`
-  are updated at both their lookup and their `performedBy` sites; and
-  `core.getCurrentUser.test.ts:83` is retargeted assertion-by-assertion with an
-  ADR-0022 note.
-
-  **Check, do not assume:** `auditStore.ts:73-79` declares an index on
-  `performedBy`. IndexedDB does not index null keys, so unavailable-actor
-  entries fall out of a `performedBy`-filtered `getHistory` query. That is the
-  correct outcome — they have no actor to filter by — but confirm it and record
-  the confirmation in the PR. No DB version bump: the store and its indexes are
-  unchanged, only a value becomes nullable.
-
-- **Risk:** Medium — audit-trail semantics and a shared facade. Route through
-  `security-logging-reviewer`.
-- **Status:** done:#94
-
-### D-013b · The three hand-rolled copies use the facade
-
-- **Category:** correctness
-- **Priority:** P1
-- **Size:** M
-- **Files:** `src/sidepanel/hooks/useRuleLifecycle.ts:93,98-107,131,160,192`,
-  `src/sidepanel/hooks/useRuleConsolidation.ts:213,217,300`,
-  `src/sidepanel/hooks/useGroupMerge.ts:131,135,240,241`,
-  `src/sidepanel/hooks/useRuleLifecycle.test.ts:105,123,135,285`,
-  `src/sidepanel/hooks/useRuleConsolidation.test.ts:106`,
-  `src/sidepanel/hooks/useGroupMerge.test.ts:106`
-- **Verified:** 2026-08-24 — all three copies and all six tests read directly.
-- **Problem:** Three hooks re-implement the identical `/api/v1/users/me` lookup
-  the facade already performs and caches per tab, each with its own copy of the
-  three silent paths. Beyond the duplication, it means the `D-013a` policy would
-  apply to exports and group cleanup but not to the three operations most likely
-  to need an audit trail.
-- **Done when:** All three hooks take their actor from `getCurrentUser()`; the
-  hand-rolled requests are deleted; `useGroupMerge`'s two entries (`:240,241`)
-  both carry the resolved actor; and **six** tests are retargeted
-  assertion-by-assertion, each with an ADR-0022 note naming what still covers
-  the case. Four are the `CURRENT BEHAVIOUR` cases in `useRuleLifecycle.test.ts`
-  — note there are **four**, at `:105`, `:123`, `:135` and `:285`; the original
-  filing said three and missed the failure-path one. The other two,
-  `useRuleConsolidation.test.ts:106` and `useGroupMerge.test.ts:106`, assert the
-  placeholder as _expected_ behaviour with no marker at all, so they will pass
-  silently until someone reads them.
-- **Risk:** Medium. Behavior change on an audit path, deliberately.
-- **Status:** done:#94
-- **Depends on:** `D-013a`
-- **Closes:** `D-014` — the per-tab TTL cache comes along with the facade.
-
-### D-013c · Tell the admin their identity could not be confirmed
-
-- **Category:** correctness
-- **Priority:** P2
-- **Size:** S
-- **Files:** `src/sidepanel/components/` (the existing notification surface —
-  find it, do not add one), plus the three hooks from `D-013b`
-- **Verified:** 2026-08-24.
-- **Problem:** Under `D-013a`/`D-013b` the trail stops lying, but the admin
-  still learns nothing at the time. The gap would first be noticed in a CSV
-  export, long after the context that would explain it is gone.
-- **Done when:** An operation whose actor resolved `unavailable` shows one
-  non-blocking notice — "Couldn't confirm your signed-in identity. This action
-  will be recorded without an actor." — and the operation proceeds regardless.
-  Reuse what is already in `components/shared`; a new surface for this needs a
-  reason. Ships with a story, axe-clean (ADR-0010/ADR-0014).
-- **Risk:** Low.
-- **Resolution note:** the surface is `AlertMessage` (`warning` — a degraded
-  outcome, not a failure), driven by a new `useActorNotice` hook that owns the
-  copy and the state so all three flows say the same thing. It renders in
-  **two** places, not one: `RulesTab`'s existing alert stack for
-  activate/deactivate, and inside `RuleConsolidationModal` /`GroupMergeModal`
-  for the two wizard flows — those run behind an open modal, where a banner on
-  the tab underneath would never be seen. `noteActor` is pure state called after
-  `getCurrentUser()`; it never gates the write.
-- **Status:** done:#99
-- **Depends on:** `D-013b`
-
-### D-014 · useRuleLifecycle re-implements CoreApi.getCurrentUser
-
-- **Category:** perf
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/sidepanel/hooks/useRuleLifecycle.ts:99-106`,
-  `src/sidepanel/hooks/useOktaApi/core.ts:239-263`
-- **Verified:** 2026-08-24 — still true, and now subsumed.
-- **Problem:** `CoreApi.getCurrentUser()` already does exactly what the hook
-  hand-rolls — the same `/api/v1/users/me` call with the same fallback — plus a
-  per-tab TTL cache. The hook bypasses it and re-hits the endpoint on every
-  activate/deactivate.
-- **Done when:** Nothing to do separately. `D-013b` moves this hook and two
-  others onto the facade, which is this item's entire content; doing it first
-  would bake the old fallback into the shared helper, which is what the original
-  "sequence it after D-013" note was protecting against.
-- **Risk:** n/a.
-- **Status:** done:#94 (closed by D-013b)
-
 ### D-015 · The ghost copy-id recipe is now duplicated in EntityLink and CopyableId
 
 - **Category:** cleanup
@@ -646,233 +382,6 @@ more expensive the day an audit viewer ships.
   without being retargeted.
 - **Risk:** Low — behaviour-preserving extraction behind two stable APIs.
 - **Status:** open
-
-### D-016 · Modal's a11y contract is only regression-tested on the fallback render path
-
-- **Category:** standards
-- **Priority:** P2
-- **Size:** S
-- **Files:** `src/sidepanel/components/shared/Modal.test.tsx` (the
-  `Modal accessibility` and `Modal exit transition` describes, and the
-  `Modal stacking` describe's `mountShell()` harness)
-- **Problem:** D-009 made `Modal` portal into a shell-declared layer when one
-  exists, and render in place when none does. `App` always mounts the layer,
-  so **every modal in production takes the portal branch** — but the
-  `role="dialog"` / `aria-modal` / focus-trap / Escape / focus-restore
-  assertions all render `Modal` with no layer present, i.e. they only cover
-  the fallback. The three stacking tests that do mount a layer assert
-  document position only. The branch that ships is the one least covered for
-  the property `CLAUDE.md`'s modal rule actually cares about. Raised by
-  `ui-reviewer` on PR #68.
-- **Done when:** The modal a11y contract (dialog role, `aria-modal`, Tab
-  trap, Escape-to-close, focus restore, and the `aria-hidden`/`inert` exit
-  window) is asserted with a mounted modal layer as well as without —
-  parametrising the existing describes over both configurations is the
-  cheapest route. No existing assertion weakened or deleted (ADR-0012).
-- **Risk:** Low — test-only, strictly additive coverage.
-- **Status:** done:#72
-
-### D-017 · The `storybook` CI job is red on `main` — a story file dies on a mid-run dep re-optimization
-
-- **Category:** standards
-- **Priority:** P1
-- **Size:** S
-- **Files:** `.storybook/main.ts` (the `viteFinal` `optimizeDeps.include` list),
-  `src/sidepanel/components/shared/Modal.tsx:41` (the `react-dom` import that
-  triggers it)
-- **Problem:** The `storybook` job has failed on every run since PR #68 merged
-  — on both of that PR's commits, on a re-run of the same head, and on the
-  merge commit itself (`808ab30`) — while `verify` stays green. It always
-  fails the same way:
-
-  ```
-  Failed to import test file .../shared/ActionBar.stories.tsx
-  Caused by: Vitest failed to find the current suite.
-  ```
-
-  `ActionBar.stories.tsx` is a bystander and was never touched. D-009's fix
-  added `import { createPortal } from 'react-dom'` to `Modal.tsx` — the only
-  new bare specifier in that PR, and distinct from the `react-dom/client`
-  `main.tsx` imports, which Vite optimizes as a separate entry. So `react-dom`
-  is discovered lazily when the browser runner first loads `Modal`, and the
-  resulting dep re-optimization reloads the page and invalidates
-  already-served module URLs; whichever story file is in flight dies, and when
-  the reload lands during collection the story's `test()` calls arrive with no
-  current suite, which is the second line above.
-
-  `.storybook/main.ts` already documents this exact failure mode and already
-  carries the remedy for `zod` — the fix is `react-dom` beside it.
-
-- **Done when:** ~~Not yet defined~~ — **done.** `react-dom` is pre-bundled in
-  `.storybook/main.ts`'s `optimizeDeps.include`, beside the `zod` entry that
-  was already there for the same reason.
-- **Correction to the filing above:** `ActionBar.stories.tsx` is the **first**
-  file the run processes, not the last. Vitest orders test files largest-first
-  and it is the biggest story file in the tree — confirmed by reading the local
-  run's completion order, where it is file 1 of 149. That is precisely the slot
-  a dep-optimizer reload lands in, so the diagnosis is stronger than the filing
-  thought, and "the run's tail behaviour" is **not** the right fallback
-  hypothesis if this does not work.
-- **Proof:** CI only, as the filing predicted. The suite passes locally with
-  **and** without the fix (149 files / 1042 tests green both ways, run on the
-  fix branch before and after the change), so there is no local red-then-green
-  to show. `npm run build-storybook` was also re-run clean against the change.
-  If the `storybook` job does not go green on `main` after #69 lands, reopen
-  this item rather than patching further — the diagnosis is then wrong.
-- **Risk:** Low to fix (one line in a build config, no product code). High to
-  leave: a red gate on `main` trains everyone to ignore the job, which is how
-  D-010 went unnoticed for four commits.
-- **Note for whoever picks this up:** ~~a nightly session may not catch this at
-  step 1~~ — addressed. `CONVENTIONS.md` now lists `test:storybook` as an
-  unconditional baseline gate with the sandbox invocation it needs, so the
-  red-baseline rule fires on its own. (It did, on 2026-08-21's 4th run: the
-  baseline check caught this without the item having to be claimed by name.)
-- **Status:** done:#69
-
-### D-018 · `lint:cited-paths` cannot see the nightly ledgers, and three citations there are already dead
-
-- **Category:** standards
-- **Priority:** P2
-- **Size:** S
-- **Files:** `scripts/check-cited-paths.mjs:53-54` (the `IN_SCOPE` predicate)
-- **Problem:** `IN_SCOPE` admits `CLAUDE.md`, `AGENTS.md`, and anything under
-  `docs/` or `.claude/` — which excludes every file the nightly maintenance
-  system actually runs on: `DEBT.md`, `IMPROVEMENTS.md`, `SESSION.md`,
-  `CONVENTIONS.md`, `NIGHTLY.md`. The gate reported "All cited src/ paths
-  resolve, across 50 tracked docs/skill files" on a green baseline while three
-  citations in `IMPROVEMENTS.md` pointed at files that do not exist:
-  `groups/GroupPushSection.tsx` (I-003, really `groups/detail/GroupPushSection.tsx`),
-  `components/PolicyCard.tsx` and `components/AppListItem.tsx` (I-004, really
-  `components/policies/` and `components/apps/`). All three were corrected in
-  the ledger on 2026-08-21 (5th run); this item is the systemic half.
-  This is not cosmetic. A nightly session selects items by their **Files**
-  list — it is how disjointness is checked, how the `groups/detail/`
-  off-limits rule is applied, and what the writer agent is handed as its
-  scope. A stale path defeats all three: I-003's wrong path hid the fact that
-  the item reaches into the off-limits directory, which is exactly the check
-  that was supposed to catch it.
-- **Done when:** `check-cited-paths.mjs` also covers the tracked root ledger
-  files (`DEBT.md`, `IMPROVEMENTS.md`, `SESSION.md`, `CONVENTIONS.md`,
-  `NIGHTLY.md`), and `npm run lint:cited-paths` is green with them in scope.
-  Note that `NIGHTLY.md` is an append-only historical log, so a path that was
-  correct when written may since have moved — decide deliberately whether to
-  include it or exclude it the way `docs/adr/` already is, and record the
-  reason in the script's header comment either way.
-- **Risk:** Low — one predicate in a lint script, no product code. The only
-  real work is whatever dead citations it surfaces on first run.
-- **Status:** done:#72
-
-### D-019 · The non-throwing half of app-label resolution is still silent
-
-- **Category:** correctness
-- **Priority:** P2
-- **Size:** S
-- **Files:** `pushGroupOps.ts:103-125` (the `Resolve app names`
-  `runOperation` block), then under `src/sidepanel/hooks/useOktaApi/` — the
-  module was deleted by `f1e8def` after this item closed.
-- **Problem:** D-003 fixed the `catch`. It did not fix the two ways the same
-  block fails without throwing, and those are the likelier ones:
-  `if (response.success && response.data)` falls straight through when the
-  request resolves with `success: false`, and the inner `if (label)` falls
-  through when a 200 carries neither `label` nor `name`. Either way the app
-  stays on its raw id with nothing logged — the exact symptom D-003 was filed
-  about. A scheduler-level 401 or 429 surfaces as `success: false`, not as a
-  throw, so the most likely systemic failure mode still leaves no trace.
-  Additionally, this phase's `runOperation` result is discarded (a bare
-  `await` with no assignment), unlike the mapping phase below it whose
-  outcome is inspected — so a wholly-failed or cancelled label phase is
-  indistinguishable from a clean one at the call site.
-  `appOperations.getAppById:110-119` shows the house pattern for the same
-  endpoint: `log.error('getAppById failed', { code, appId })`.
-- **Done when:** Both non-throwing paths log via the shared `logger`
-  (identifiers and outcomes only, no payload), and the label phase's
-  `runOperation` outcome is either inspected or has a comment saying why it
-  deliberately is not. Existing `pushGroupOps.test.ts` cases stay green; new
-  cases proven non-vacuous the same way D-003's was.
-- **Risk:** Low — logging plus one outcome check, no change to the degrade
-  behavior itself. Touches logging, so route through
-  `security-logging-reviewer`.
-- **Status:** done:#72
-
-### D-020 · pushGroupOps reads an Okta app response unvalidated, one call away from a validated helper
-
-- **Category:** standards
-- **Priority:** P2
-- **Size:** S
-- **Files:** `pushGroupOps.ts:108-118` (then under
-  `src/sidepanel/hooks/useOktaApi/`; deleted by `f1e8def` after this item
-  closed), `src/sidepanel/hooks/useOktaApi/appOperations.ts` (`getAppById`,
-  then at `:110-119`, now `:88-98`)
-- **Problem:** ADR-0006 requires every Okta response to be validated with zod
-  at the boundary. `applyPushGroupMappings` branches on
-  `response.data.label || response.data.name` straight off a raw
-  `makeApiRequest` to `/api/v1/apps/{id}`, with no parse — while the sibling
-  list call _in the same function_ validates through
-  `oktaAppGroupAssignmentSchema`, and `getAppById` resolves that identical
-  endpoint through `parseOkta(oktaAppListItemSchema, …)`. The label is
-  rendered as an app name in the UI, so it is end-user-influenced text
-  reaching the DOM unvalidated. `getAppById` also `encodeURIComponent`s the
-  id, which the raw call here does not.
-- **Done when:** The label lookup goes through `getAppById` (preferred — it
-  already returns a validated `OktaAppListItem`, caches nothing, and logs its
-  own failure) or parses with the same schema inline. Behavior for a
-  resolvable app is unchanged. Sequence **after D-019**, or fold D-019 into
-  it: adopting `getAppById` changes what the failure paths look like, so
-  doing them in the other order means writing the logging twice.
-- **Risk:** Low-medium — swapping the call changes the failure surface
-  (`getAppById` returns `null` rather than throwing). Touches
-  Okta-response handling: route through `security-logging-reviewer`.
-- **Resolution note:** shipped with the **inline parse**, not `getAppById`.
-  That helper calls `makeApiRequest` at default priority (this phase runs at
-  `low`), and collapses every failure into `null`, discarding the HTTP
-  `status` that D-019's test asserts by value — adopting it would have meant
-  deleting a field from a live assertion. Recorded in the module's
-  `@remarks`. The consequence is filed as `D-027`.
-- **Status:** done:#74
-
-### D-021 · `CONVENTIONS.md`'s mandated `pkill -9 -f vitest` kills the shell that runs it
-
-- **Category:** standards
-- **Priority:** P2
-- **Size:** S
-- **Files:** `CONVENTIONS.md` (the "Test expectations" bullet on the external
-  timeout wrapper), and by inheritance every agent file that repeats it
-- **Problem:** The mandated cleanup is
-  `perl -e 'alarm 240; exec @ARGV' npx vitest run <file>`, then
-  `pkill -9 -f vitest`. But `pkill -f` matches against the **full command
-  line of every process**, and when the two are chained in one shell
-  invocation (`… vitest run x && … ; pkill -9 -f vitest`) the invoking
-  shell's own command line contains the string `vitest` — so the `pkill`
-  SIGKILLs its own parent shell along with the runner. Anything sequenced
-  after it in that command never runs, and the command reports a bare
-  non-zero exit with no output explaining why.
-  Observed twice on 2026-08-21 (5th run), independently: the D-005 writer
-  agent had a mutation-test run truncated mid-flight this way, briefly
-  leaving a mutated copy of `useRuleImpact.ts` on disk (it restored it), and
-  the session lead lost a `git commit` that was chained after the same
-  `pkill` — the commit silently did not happen and only a follow-up
-  `git status` revealed it. The failure mode is quiet and it can leave
-  mutated production files behind, which is the dangerous part.
-  Second-order: a stray `pkill -f vitest` from one agent also kills any other
-  agent's in-flight run, so this gets worse the moment a night runs writers
-  in parallel — which `SESSION.md` step 4 explicitly permits.
-- **Done when:** `CONVENTIONS.md` states that the `pkill` must be its own
-  final command, never chained after anything that still needs to run, and
-  narrows the pattern so it cannot match the invoking shell (e.g.
-  `pkill -9 -f 'node.*vitest'`, verified against a live run to confirm it
-  still reaps the runner). Any agent file repeating the recipe is updated to
-  match.
-- **Risk:** Low to fix. Non-trivial to leave: it silently truncates commands
-  and can strand a mutated source file in the working tree.
-- **Resolution note:** the suggested `pkill -9 -f 'node.*vitest'` was tested
-  and **rejected** — the recipe's own `pkill` argument puts both words on the
-  invoking shell's command line, so it still matches itself; the `[n]ode`
-  bracket trick fails too, on any `node_modules/…vitest` path. Shipped
-  pattern is `^[^ ]*node[^ ]* .*vitest`, anchored to a command line that
-  _starts_ with a node binary, verified on both halves against live
-  processes. `docs/testing.md` was added to the scope: it repeats the recipe
-  and is the authority the three skill files cite as its source.
-- **Status:** done:#74
 
 ### D-022 · Half of a React-warning assertion cannot fire under React 19
 
@@ -899,74 +408,6 @@ more expensive the day an audit viewer ships.
   assertion outright: the surviving half is real, and ADR-0012 applies.
 - **Risk:** Low. Cosmetic in effect — no coverage changes either way.
 - **Status:** open
-
-### D-023 · `lint-staged` stashes the working tree mid-commit, racing concurrent writer agents
-
-- **Category:** standards
-- **Priority:** P2
-- **Size:** S
-- **Files:** `package.json` (the `lint-staged` config), `.husky/pre-commit`
-- **Problem:** Same family as `D-021`, found the same way — by it nearly
-  biting. `lint-staged` opens every run with "Backing up original state... in
-  git stash", which stashes **unstaged** changes across the whole working
-  tree, runs its tasks, then restores them. `SESSION.md` step 4 explicitly
-  permits running writer agents in parallel when their files are disjoint, and
-  the session lead commits each item as its agent reports. So a commit for
-  item A routinely runs while agent B still has uncommitted edits to its own
-  file — and for the duration of A's `vitest related` run (tens of seconds),
-  B's edits are not on disk. If B reads, writes, or runs a test against its
-  file inside that window it sees the pre-edit content, and a write lands on a
-  tree that is about to be overwritten by the stash pop.
-  Observed on 2026-08-21 (6th run): two commits ran while another agent was
-  live. Both restored cleanly and nothing was lost, so this is a latent race,
-  not a confirmed loss — but the failure mode is silent and would present as
-  "the agent's edit vanished", which is exactly the kind of thing that gets
-  misdiagnosed as the agent misbehaving.
-  Note this is **not** a reason to stop parallelising writers; it is a reason
-  the lead should not commit while a writer is live, or the hook should not
-  stash what it does not need.
-- **Done when:** Either the sequencing rule is written down where a nightly
-  session will read it (`SESSION.md` step 4, plus `CONVENTIONS.md` if the
-  agent files repeat it) — "do not commit while another writer agent is
-  live" — or `lint-staged` is configured not to stash the unrelated working
-  tree (`--no-stash`, weighing what that gives up on a failed hook run).
-  Whichever is chosen, the reasoning is recorded, because the two options
-  trade different things away.
-- **Risk:** Low to fix. The bug it prevents is rare but silent and would be
-  misattributed when it happens.
-- **Correction to the filing above:** the stated mechanism is wrong, checked
-  against the installed `lint-staged` (16.2.6). It does not stash unstaged
-  changes off disk here. The tree-clearing
-  `git stash push --keep-index` branch runs only under `hideUnstaged`, which
-  defaults false and is not set in `package.json`; the branch that runs is
-  `git stash create` + `git stash store`, a snapshot that leaves every file in
-  place. There is therefore no window in which a concurrent agent's file is
-  missing from disk, and the "reads see pre-edit content" half of the filing
-  does not happen. **The real hazard is the failure path, and it is worse:**
-  on any task error `restoreOriginalState` runs `git reset --hard HEAD` and
-  re-applies the hook-start snapshot, discarding every working-tree
-  modification repo-wide — and an edit a live writer made after that snapshot
-  is in neither the stash nor the tree afterwards. `vitest related --run` runs
-  on every `*.{ts,tsx}` commit here, so a red related test reaches that path
-  routinely. The rule the item asks for is right; only its reasoning needed
-  replacing.
-- **Resolution note:** shipped the **sequencing rule**, not `--no-stash`, with
-  the corrected reasoning recorded in `CONVENTIONS.md` as the item requires.
-  `--no-stash` would genuinely close the hole — it implies `--no-revert`, so
-  the destructive reset can never fire — but it removes the rollback net for
-  every contributor's commit (a failed hook leaves half-`eslint --fix`ed files
-  on disk), which is a shared-contract change, and it edits hook wiring, which
-  `CLAUDE.md` puts outside an unattended session's authority. It stays a
-  decision for Sam. Note the diff touches neither file in the **Files** list
-  above: the rule went to `SESSION.md` step 4 and `CONVENTIONS.md`, which is
-  the item's own first "Done when" option.
-- **Prior art:** PR #73 (2026-08-22, branch `claude/stoic-gates-sd14ng`)
-  reached the same conclusion about the mechanism and never landed on `main`,
-  which is why this item was still `open`. That analysis was not consulted
-  while implementing — it surfaced afterwards in the branch's CI history, and
-  the source read above was done independently. Worth knowing that an
-  unmerged nightly branch can carry findings the ledger never received.
-- **Status:** done:#75
 
 ### D-024 · `check-cited-paths` still cannot see any path that is not under `src/`
 
@@ -1025,70 +466,6 @@ more expensive the day an audit viewer ships.
   full-suite run gets a truncated run and may diagnose a red suite that is
   really just the alarm firing.
 - **Status:** open
-
-### D-026 · `getAppPushGroupMappings` interpolates an unencoded app id
-
-- **Category:** standards
-- **Priority:** P3
-- **Size:** S
-- **Files:** `pushGroupOps.ts:64`, then under
-  `src/sidepanel/hooks/useOktaApi/` — the module was deleted by `f1e8def`
-  after this item closed.
-- **Problem:** `` `/api/v1/apps/${appId}/groups?limit=${OKTA_PAGE_SIZE}` ``
-  interpolates `appId` raw, one function above the label lookup that `D-020`
-  just taught to `encodeURIComponent` it, and inconsistent with the sibling
-  `appOperations.getAppGroupAssignments`, which already encodes the same path
-  segment.
-  **Deliberately filed P3, not P2** (assessed by `security-logging-reviewer`
-  on PR #74): `appId` here is `group.sourceAppId`, which `groupSummary.ts:41-54`
-  sources from `group.source.id` (an Okta-assigned system id) or a
-  regex-extracted segment of `_links.apps.href` — not free-form
-  end-user-controllable text like a group name or rule expression. Even given
-  a crafted value containing `/`, `?` or `#`, the request stays `GET`-only and
-  both the background's `isValidScheduleRequest` and the content script's
-  independent `isSameOriginPath` guard re-parse the URL against the Okta
-  origin and enforce the method allow-list (`docs/security.md` §5), so an
-  altered path cannot leave the origin or escalate beyond a GET the admin's
-  own session already permits. Unlike `D-020`'s target, this value is never
-  rendered — it only shapes the outbound path. A hardening/consistency gap,
-  not an injection vector.
-- **Done when:** The path segment is encoded the way `getAppById` and
-  `getAppGroupAssignments` encode theirs; existing `pushGroupOps.test.ts`
-  cases stay green and one new case pins the encoding.
-- **Risk:** Low.
-- **Status:** open
-
-### D-027 · `getAppById` cannot express why it failed, so callers that need to know can't use it
-
-- **Category:** standards
-- **Priority:** P3
-- **Size:** M
-- **Files:** ~~`pushGroupOps.ts`~~ (deleted), `appOperations.ts:88-98`
-- **Verified:** 2026-08-24 — **overtaken.** The motivating caller no longer exists.
-- **Problem:** The filing's whole argument rested on one caller:
-  the deleted push-group module (`useOktaApi/pushGroupOps.ts`, gone as of
-  `f1e8def`) needed a `low`-priority
-  single-app read and needed to keep the numeric status that distinguishes "we
-  are rate-limited" from "this app has no label", so it parsed the endpoint
-  inline rather than adopt `getAppById` — leaving the endpoint parsed in two
-  places. **`f1e8def` deleted `pushGroupOps.ts` entirely**, along with
-  `applyPushGroupMappings` and the `Resolve app names` block, when app-group
-  assignments became the `appGroups` collection and `useGroupsLoader` became a
-  pure reader. The duplicate parse is gone; one parse site remains.
-
-  What is left of the complaint is true but unmotivated. `getAppById` (now
-  `appOperations.ts:88-98`; the filing's `:110-119` is stale) still collapses
-  request failure, validation failure and a thrown request into one `null` and
-  discards `response.status`. Its only production caller is now
-  `useAppOverviewData.ts:63,71`, rendering one app's overview, which has no need
-  to tell 429 from 404.
-
-- **Done when:** Closed. The contract change it asked for is the same one
-  `D-007a` needs for session detection, and `getAppById` is named there as its
-  first consumer — one change, motivated by a caller that actually exists.
-- **Risk:** n/a.
-- **Status:** closed:overtaken-by-f1e8def
-- **Related:** `D-007a`
 
 ### D-028 · Independently audit the ADR-0040 org snapshot against a real org
 
@@ -1229,58 +606,6 @@ then `formatRuleForDisplay(rule, undefined, conflicts)` — note the `undefined`
 second argument, for the reason `groupDiscovery.ts:75-77` gives), with the
 rationale that caching a join is only one more thing to invalidate.
 
-### D-029a · Rule impact reads the snapshot
-
-- **Category:** correctness
-- **Priority:** P2
-- **Size:** S
-- **Files:** `src/sidepanel/hooks/useOktaApi/ruleImpact.ts:14,77,83-97`
-- **Verified:** 2026-08-24 — sole read, confirmed by enumerating importers.
-- **Problem:** Reads `RulesCache.get()` for `rawRules` only — which is exactly
-  what the snapshot's `rules` collection stores (`RULES_SPEC`,
-  `snapshotSync.ts:718-723`, zod-parsed `OktaGroupRule` rows). Nothing here needs
-  the cache's formatted/stats/conflicts bundle.
-- **Done when:** It reads the snapshot instead. Note it lives in an operation
-  factory, not a React hook, so it takes `orgSnapshotStore.getRecords('rules',
-origin)` imperatively rather than `useOrgSnapshot` —
-  `createRuleImpactOperations` does not currently take an `origin` and needs one
-  threaded from its caller. Its existing paginated fallback at `:83-97` stays,
-  unchanged, covering a cold snapshot.
-- **Risk:** Low — one read site, one shape, and the fallback already handles an
-  empty result.
-- **Resolution note:** shipped with `orgSnapshotStore.getCollection`, not
-  `getRecords` as the filing said. The store's own TypeDoc says to prefer
-  `getCollection` everywhere except a composed-key collection (`appGroups`), and
-  it returns unwrapped entities — which is exactly `rawRules`, with no
-  `.map(r => r.entity)`. Rules are keyed from `row.id`, so the envelope carries
-  nothing here. The origin is threaded `RulesTab` → a new optional
-  `UseOktaApiOptions.oktaOrigin` → `useOktaApi.ts` → the factory; four files
-  beyond this item's **Files** list, forced by its own "needs one threaded from
-  its caller". The fallback is unchanged and now covers three cases rather than
-  one: no origin resolved yet, a cold snapshot, and a snapshot holding only
-  another org. One consequence was filed rather than folded in: `D-038`.
-- **Status:** done:#95
-
-### D-029b · User memberships derive their rules
-
-- **Category:** correctness
-- **Priority:** P2
-- **Size:** M
-- **Files:** `src/sidepanel/hooks/useUserMemberships.ts:38,212,234,249-250`
-- **Verified:** 2026-08-24.
-- **Problem:** Two reads of `RulesCache.get()` for `cached.rules` — the
-  _formatted_ shape, which the snapshot does not store. This is the surface that
-  answers "why is this user in this group", so it is one half of the
-  disagreement described above.
-- **Done when:** It derives formatted rules from the snapshot's raw rows the way
-  `useGroupsLoader.ts:167-188` does. It already republishes through
-  `entityCache`'s `RULE_INVENTORY_KEY`, so the derive happens once per key rather
-  than per consumer. The deliberate no-write-back at `:249-250` (rules there
-  carry ids in place of names) stops being a concern and its comment goes.
-- **Risk:** Low-medium — correctness-critical read that surfaces render verdicts
-  from. Pin the derived output against the current cached output first.
-- **Status:** done:#97
-
 ### D-029c · The Rules tab stops owning a cache
 
 - **Category:** correctness
@@ -1363,66 +688,6 @@ origin)` imperatively rather than `useOrgSnapshot` —
   lands; no further decision from Sam is needed or should be waited for.
 - **Depends on:** `D-029a` (done:#95), `D-029b` (done:#97), `D-029c` (open)
 
-### D-030 · `lint:cited-paths` is red on `main` right now
-
-- **Category:** standards
-- **Priority:** P1
-- **Size:** S
-- **Files:** `DEBT.md` (four `done:` items citing a deleted file),
-  `docs/security.md:230`
-- **Verified:** 2026-08-24 — reproduced on a clean head, then confirmed
-  against `origin/main` itself: `git ls-tree origin/main` shows the push-group
-  module absent, while `git show origin/main:DEBT.md` still cites it five
-  times.
-- **Problem:** `npm run lint:cited-paths` is **red on `main`** — not merely on
-  a working branch. `1fc6dd2` squash-merged ADR-0040 into `main` (PR #76) and
-  carried the deletions with it, but not the citations, so the gate has been
-  red on the default branch since that merge and no session has reported it.
-  It was red before any of 2026-08-24's ledger work began. `f1e8def` deleted the push-group module under
-  `src/sidepanel/hooks/useOktaApi/` and an earlier commit deleted the groups
-  cache under `src/sidepanel/components/groups/`; citations of both survived.
-  (Both are named without a filename here on purpose — spelling either path
-  out would make this item fail the very gate it is filed about.)
-
-  As of this filing, five citations remain: four in `DEBT.md` naming the
-  push-group module, and `docs/security.md:230` naming the groups cache. The
-  2026-08-24 ledger pass reworded two others rather than leave them.
-
-  All four `DEBT.md` hits sit inside **`done:`** items — `D-003`, `D-019`,
-  `D-020`, `D-026` — closed records of work against a file that no longer
-  exists. That is the interesting part. The checker's own header argues that
-  `docs/adr/` and `NIGHTLY.md` are excluded because they are dated records
-  whose paths describe the repo as it was, and "correcting" them would
-  falsify the record. A `done:` item is the same kind of artifact and is
-  currently scanned as live prose.
-
-- **Done when:** Done. Fixed in the same PR that filed it, because
-  `lint:cited-paths` is a **hard gate** in `ci.yml`'s `verify` job (no
-  `continue-on-error`), so the PR could not merge green while it stood — and
-  merging past it with `--admin` is the exact behaviour `D-010` and `D-017`
-  were about. Folding it in beat both alternatives; the five citations live in
-  the same two files this PR already rewrites.
-
-  **Chosen: annotate, don't restructure.** The four `DEBT.md` sites now name
-  the file without a resolvable `src/` path and say where it used to live and
-  which commit removed it, so the closed record still points a reader at the
-  right place. `docs/security.md`'s TTL bullet was **factually** stale, not
-  just a broken link — it listed a cache ADR-0040 retired — so it was rewritten
-  rather than annotated.
-
-  **Not chosen:** teaching the checker that a `done:`/`closed:` item is a dated
-  record. That is the better structural answer and it is filed separately as
-  `D-031`; making that call inside a merge would have been a design decision
-  taken for the wrong reason.
-
-- **Risk:** Low to fix. The risk is leaving it: a red gate on `main` teaches
-  everyone to ignore the job, which is exactly how `D-010` and `D-017`
-  happened — both of those were also "red on `main`, unnoticed for weeks".
-  This is the third instance of the same pattern, which is itself worth a
-  look: nothing routinely runs the ladder against `main`.
-- **Status:** done:#82
-- **Related:** `D-018`, `D-024` (the same checker's known blind spots), `D-031`
-
 ### D-031 · `check-cited-paths` scans closed ledger items as if they were live prose
 
 - **Category:** standards
@@ -1459,51 +724,6 @@ origin)` imperatively rather than `useOrgSnapshot` —
   scoped by a status field the file already parses.
 - **Status:** open
 - **Related:** `D-030`, `D-018`, `D-024`
-
-### D-032 · Audit rows written before `actorResolution` contradict their own type
-
-- **Category:** correctness
-- **Priority:** P2
-- **Size:** S
-- **Files:** `src/shared/types.ts` (`AuditLogEntry`),
-  `src/shared/storage/auditStore.ts` (`getHistory`, `logOperation`)
-- **Verified:** 2026-08-25 — noticed by the `D-013b` writer while making the
-  field required.
-- **Problem:** `AuditLogEntry` is both the write shape and the IndexedDB row
-  shape, and since `D-013b` those genuinely differ. `actorResolution` is
-  required, but rows persisted before `D-013a` have no such field, so
-  `getHistory` hands callers `AuditLogEntry` objects that do not satisfy the
-  type. Nothing reads the field today, which is the only reason this is latent
-  rather than a live bug — `D-013c`, or any audit-trail UI that branches on
-  `actorResolution`, would hit it immediately and would read `undefined` as a
-  falsy "unavailable" without ever having been told.
-- **Done when:** Either a `PersistedAuditLogEntry` (field optional) is split
-  from the write-side `AuditLogEntry` and `getHistory` returns it, or
-  `getHistory` normalises at read time so every row it returns really does carry
-  the field. Whichever is chosen, the `AuditLogEntry` TypeDoc note that
-  currently warns readers to decide display from `performedBy === null` is
-  updated to say what the code now guarantees.
-- **Risk:** Low — no DB migration either way; this is a type/read-path fix.
-- **Resolution note:** shipped the **split type**, not read-time normalisation,
-  and the argument matters for whoever reads this next. Normalising cannot be
-  done honestly here: before `D-013a` an unresolvable actor was written as the
-  literal `unknown@unknown.com`, **not** as `null`, so a legacy row is never
-  `performedBy === null`. Mapping every legacy row to `'unavailable'` would
-  misreport the majority that name a real admin; mapping to `'resolved'` (or
-  deriving it from `performedBy !== null`, which is the same thing for legacy
-  rows) would relabel the placeholder rows as resolved — the exact invention
-  `D-013`'s policy forbids. The only rule separating the two populations is
-  sniffing for a literal `D-013a` deliberately deleted from `src/`.
-  So `PersistedAuditLogEntry` carries the field as optional and is what the
-  `AuditDB` row schema and `getHistory` return; the absent field **is** the
-  third state. `ActorResolution` was deliberately **not** widened with a third
-  member — it is also the write-side type, and a writer must not be able to
-  record "I did not check" as an answer. Confirmed: `exportAuditLog` decides its
-  cell from `performedBy` alone, so a legacy row still exports its stored actor
-  rather than `(actor unavailable)`, still through `escapeCSV`. No `DB_VERSION`
-  bump, no migration, no index change.
-- **Status:** done:#95
-- **Related:** `D-013a`, `D-013b`, `D-013c`
 
 ### D-033 · Two docs still cite `unknown@unknown.com` as current behavior
 
@@ -1600,74 +820,6 @@ origin)` imperatively rather than `useOrgSnapshot` —
   expect the first attempt to reveal more than it fixes.
 - **Status:** open
 
-### D-038 · Rule impact trusts a snapshot that may be mid-walk
-
-- **Category:** correctness
-- **Priority:** P2
-- **Size:** S
-- **Files:** `src/sidepanel/hooks/useOktaApi/ruleImpact.ts` (`fetchRawRules`),
-  `src/shared/snapshot/orgSnapshotStore.ts` (`getMeta`),
-  `src/shared/snapshot/syncMeta.ts`,
-  `src/sidepanel/cache/useOrgSnapshot.ts:14-21` (the contract being bypassed)
-- **Verified:** 2026-08-26 — raised independently by the `D-029a` writer **and**
-  by `security-logging-reviewer` on the same diff.
-- **Problem:** `D-029a` moved the impact preview onto the org snapshot, and it
-  trusts the snapshot whenever it returns at least one row. It never reads
-  `complete` from the collection's sync meta. `useOrgSnapshot.ts:14-21` states
-  the contract this bypasses in so many words — "a partial walk is labelled
-  partial … so a caller can caveat rather than render a truncated inventory as
-  the org" (ADR-0040 §7) — and exposes `complete` precisely so a consumer can
-  honour it. `ruleImpact` reads the store imperatively (it is an operation
-  factory, not a hook) and so never sees it.
-  The question this feature answers is "who loses access if I deactivate this
-  rule". The dangerous direction is not a missing rule but a **stale** one: a
-  rule deleted in Okta but not yet swept from an incomplete walk makes the tool
-  believe a member is still covered by another active rule when they are not,
-  which **understates** the impact of the deactivation. That is a wrong answer
-  to an access question, presented unqualified.
-- **Done when:** Either `fetchRawRules` requires `complete` before serving from
-  the snapshot and falls through to its existing paginated fetch otherwise, or
-  the impact summary carries the incompleteness through to the UI so the admin
-  is not given an unqualified answer. Pick one deliberately and record why — the
-  first is cheaper and costs a walk; the second is more informative and is the
-  direction ADR-0040 §7 points. A test pins that a partial snapshot does not
-  silently become the answer.
-- **Risk:** Low to fix. The risk is leaving it: the failure is a confident wrong
-  answer, not an error state.
-- **Status:** done:#97
-- **Related:** `D-029a` (introduced the read), `D-029`
-- **Also noticed:** an org with genuinely zero group rules can never satisfy
-  "at least one row", so it re-paginates `/api/v1/groups/rules` on every impact
-  preview even when fully synced. Correctness-safe — it never serves wrong data
-  — so it is a missed optimisation, not a second defect. A `complete` check
-  would incidentally fix it, which is one more argument for that option.
-
-### D-039 · `RuleCard`'s memo comparator omits the group props it renders
-
-- **Category:** correctness
-- **Priority:** P2
-- **Size:** S
-- **Files:** `src/sidepanel/components/RuleCard.tsx` (the `memo` comparator)
-- **Verified:** 2026-08-26 — raised by the `I-003` writer while working in the file.
-- **Problem:** The custom `memo` comparator does not compare `groupIds`,
-  `groupNames` or `allGroupNamesMap`, so a card whose group names resolve _after_
-  first paint can keep rendering the stale set. `docs/components.md` states the
-  rule directly: a custom comparator must be kept in step with the props the
-  component actually reads.
-  `I-003` makes this materially more visible. Before it, an unresolved group and
-  a resolved one differed by a colour and a truncated id; now they are two
-  different components — an `EntityLink` chip that opens the group versus a
-  stated "name not loaded". A missed re-render used to look like a styling
-  quirk; it now looks like the app not knowing a group it does know.
-- **Done when:** The comparator covers every prop the render reads, or is
-  removed in favour of the default shallow compare with a note saying why the
-  custom one was not needed. A test pins that late-arriving group names repaint
-  the card.
-- **Risk:** Low. Widening a comparator can only cause _more_ re-renders, never
-  a stale one.
-- **Status:** done:#97
-- **Related:** `I-003`
-
 ### D-040 · `RuleCard.tsx` is well over the ~300-line bar and hand-rolls its icons
 
 - **Category:** cleanup
@@ -1696,29 +848,6 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   (the Rules tab and the Group Detail Rules tab), so verify both.
 - **Status:** open
 - **Related:** `I-003`, `D-036` (the same bar, one file over)
-
-### D-041 · Decorative icons carry no `aria-hidden`, app-wide
-
-- **Category:** standards
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/sidepanel/components/shared/Icon.tsx`,
-  `src/sidepanel/components/shared/EntityLink.tsx`,
-  `src/sidepanel/components/shared/CopyableId.tsx`
-- **Verified:** 2026-08-26 — raised by `ui-reviewer` on the `I-003` diff, which
-  added three fresh instances of a pre-existing gap.
-- **Problem:** `docs/ux-guidelines.md` requires decorative SVG and dividers to
-  carry `aria-hidden="true"`. `Icon` never sets it itself, and its call sites
-  inside `EntityLink` and `CopyableId` do not either — so every entity chip in
-  the app announces a decorative glyph that duplicates the label beside it.
-  This is systemic and pre-existing; `I-003` did not introduce it, which is why
-  it was filed rather than folded into that diff (`CLAUDE.md`).
-- **Done when:** Decorative `Icon` usages are hidden from the accessibility tree
-  — defaulting `aria-hidden` inside `Icon` with an opt-out for the rare case
-  where the glyph _is_ the accessible name is the cheapest route, but check for
-  that case first rather than assuming it does not exist. Stories stay axe-clean.
-- **Risk:** Low, but it touches every icon in the app, so land it on its own.
-- **Status:** claimed:beta/trust-and-polish
 
 ### D-042 · The `idb` fake is copy-pasted across four test files
 
@@ -1892,48 +1021,6 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Status:** open
 - **Related:** `D-038`, ADR-0040 §7
 
-### D-048 · A rule's exclusion list never reaches the user-path classifier
-
-- **Category:** correctness
-- **Priority:** P2
-- **Size:** M
-- **Files:** `src/shared/ruleUtils.ts` (`formatRuleForDisplay`, the producer),
-  `src/shared/types.ts` (`FormattedRule`),
-  `src/shared/utils/membershipAnalysis.ts:138-172` (the documented hole),
-  `src/sidepanel/components/UsersTab.test.tsx` (where it is now characterized)
-- **Verified:** 2026-08-27 — surfaced by `D-029b` when rule seeding moved onto a
-  path that actually formats what it is given; the producer and the type were
-  both read, not inferred.
-- **Problem:** `isUserExcludedFromRule` reads
-  `conditions.people.users.exclude`, which only a **raw** Okta rule carries.
-  Every rule that reaches the user-path classifier is a `FormattedRule`, and
-  that shape has no `conditions` at all — `formatRuleForDisplay` keeps
-  `groupIds`, `conditionExpression` and `userAttributes` and drops the rest. So
-  the function always returns `false` on this surface, and a user on a rule's
-  exclusion list is still attributed to the very rule that excludes them: the
-  row says `Rule?` where the truth is `Direct`.
-  `membershipAnalysis.ts` documents this in full and deliberately leaves it to
-  the producer to close, which is why this is its own item. It is **pre-existing
-  and long-standing** — `RulesCache` stored the same formatted shape, so no
-  migration caused it; `D-029b` only made it visible, and pinned it as a
-  `CHARACTERIZED (defect)` case rather than deleting the assertion that had
-  been passing on a fixture no producer emits.
-- **Bounded, and worth stating:** it cannot invent a membership, only mis-name
-  its source — exclusion is consulted to _downgrade_ an attribution, never to
-  create one. Okta applies exclusions before it reports membership, so the
-  primary attribution source (`_embedded['group-rules']`) is unaffected. Only
-  this fallback over-attributes, and only on the user path.
-- **Done when:** The formatted shape carries what the classifier needs to see an
-  exclusion — widening `FormattedRule` alone changes nothing, so the producer
-  must populate it — and `UsersTab.test.tsx`'s characterization case is restored
-  to asserting `Direct` with the rule unnamed, which is what it asserted before
-  `D-029b` and what the admin should see. `membershipAnalysis.ts`'s "Known hole"
-  block comes out with it.
-- **Risk:** Medium. It changes an attribution verdict an admin acts on, and the
-  producer feeds every formatted-rule consumer, not just this one.
-- **Status:** claimed:beta/trust-and-polish
-- **Related:** `D-029b`
-
 ### D-049 · `RULE_INVENTORY_KEY` is a cache-key literal outside `keys.ts`
 
 - **Category:** standards
@@ -1956,58 +1043,6 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Risk:** Low, provided the string is preserved verbatim.
 - **Status:** open
 - **Related:** `D-029b`
-
-### D-050 · The group-rules fallback fetch validates nothing
-
-- **Category:** correctness
-- **Priority:** P2
-- **Size:** S
-- **Files:** `src/sidepanel/hooks/fetchGroupRulesRequest.ts` (the pagination
-  loop), `src/shared/schemas/okta.ts` (`oktaGroupRuleSchema`),
-  `src/shared/utils/oktaPagination.ts` (`parseOktaList`, the validated helper)
-- **Verified:** 2026-08-27 — raised as **blocking** by `security-logging-reviewer`
-  on the `D-029b`/`D-038` diff, then independently confirmed: the file contains
-  no `zod`, `parseOktaList` or `schema` reference of any kind, and is untouched
-  by that diff.
-- **Problem:** `fetchGroupRulesRequest` concatenates `response.data` straight
-  into `OktaGroupRule[]` — a raw cast, with no boundary validation at all. ADR-0006
-  requires every Okta response to be validated with zod before it is rendered or
-  branched on, and rule `conditions.expression` and
-  `actions.assignUserToGroups.groupIds` are named in `docs/security.md` as
-  end-user-controllable.
-  This diverges from the write side and from its own sibling: the snapshot's
-  `RULES_SPEC` (`snapshotSync.ts`) validates every rule row through
-  `oktaGroupRuleSchema` before storing it, and `ruleImpact.fetchRawRules`'
-  inline fallback re-validates with the same schema. Only this path does not.
-- **Not introduced by `D-029b`, but newly load-bearing.** It is long-standing
-  shared infrastructure with **five non-test consumers** — `useRulesData.ts`,
-  `useBlastRadius.ts`, `useUserComparison.ts`, `useUserMemberships.ts` and
-  `RuleCard.tsx` — which is why it was filed rather than folded into that item's
-  diff. `D-029b` makes it the sole fallback for user-membership rule attribution
-  once `RulesCache` stops serving that flow, so a malformed row now reaches a
-  surface that answers "why is this user in this group".
-- **Done when:** The pagination loop validates each page with
-  `oktaGroupRuleSchema` through `parseOktaList`, mirroring
-  `ruleImpact.ts`'s fallback, and drops or reports a row that fails rather than
-  casting it. A test pins that a malformed rule row does not reach a consumer.
-  Check all five consumers still behave when a row is rejected — a lenient
-  schema that keeps the rest of the page is likely the right shape here.
-- **Risk:** Low to fix, and it closes an ADR-0006 gap on a surface that renders
-  access verdicts.
-- **Resolution note:** `oktaGroupRuleSchema` needed no change — it is already
-  `.passthrough()` with only `id`/`name`/`status` required, and `parseOktaList`
-  already drops the offending row, keeps the page, and logs counts only. **The
-  gap was worse than this filing said:** a rule whose
-  `conditions.expression.value` is not a string made `formatRuleForDisplay`
-  throw, so one malformed row returned `{ success: false }` for the _whole_
-  rules load. The empty-page guard deliberately still reads pre-validation
-  `response.data.length`; using the validated count would let a page whose rows
-  were all dropped look like an empty final page and silently truncate the list.
-  Two of the five named consumers (`useBlastRadius`, `useUserComparison`) import
-  only `loadCachedGroupNames` from this module, not `fetchGroupRulesRequest` —
-  they consume a different export and are unaffected.
-- **Status:** done:#99
-- **Related:** `D-029b`, `D-038`, ADR-0006
 
 ### D-051 · Two always-on log calls pass a raw caught error
 
@@ -2038,412 +1073,6 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Risk:** Low. Console output changes; nothing else.
 - **Status:** open
 - **Related:** `D-029b`, `D-038`
-
-### D-052 · `ruleImpact` models rule deactivation as retracting membership
-
-- **Category:** correctness
-- **Priority:** P1
-- **Size:** M
-- **Files:** `src/shared/membership/ruleImpact.ts` (`classifyGroupImpact`
-  :114-118, and the module/function docs at :5-6, :132, :153),
-  `src/sidepanel/components/rules/RulesListPanel.tsx` (:41-42, the deactivate
-  gate), the Preview Impact modal's copy, `ruleImpact`'s tests, and
-  `.claude/skills/okta-api/references/groups-and-rules.md` (:154, :311, and the
-  `[verified: shared/membership/ruleImpact]` citation on that section)
-- **Verified:** 2026-08-26 — raised by Sam while reviewing the demo reel's
-  rule-impact scene, then checked against Okta's documentation.
-- **Problem:** `classifyGroupImpact` puts every member held **only** by the
-  subject rule into `losing`, and the module documents itself as answering "who
-  loses access if this rule is deactivated?". Okta does not work that way.
-  Deactivating a group rule removes nobody: per _Impact of Deactivating and
-  Deleting Okta Group Rules_, "Okta does not remove users that the rule added to
-  a group. The group membership remains, but the rule no longer applies to new
-  users." The choice to retract exists only on **delete**, where the admin picks
-  between leaving the users as now-unmanaged members and removing them
-  outright — surfaced as the `removeUsers` query parameter on
-  `DELETE /api/v1/groups/rules/{ruleId}`, and irreversible either way.
-
-  So the set `losing` computes is the correct answer to _delete with
-  `removeUsers=true`_ and the wrong answer to _deactivate_, where the answer is
-  always nobody. The repo already disagrees with itself about this:
-  `groups-and-rules.md:154` states that former members "remain in the group —
-  deactivation does not retract membership", and `:311` warns that "a 'what
-  breaks' report that assumes retraction overstates the impact" — while the
-  surrounding section cites `[verified: shared/membership/ruleImpact]` as its
-  evidence. The skill is vouching for a module that contradicts it.
-
-  It escaped notice because the hero rule's `losing` set happens to be empty, so
-  every screenshot and every test of the happy path shows `0` either way.
-
-  Docs:
-  - https://support.okta.com/help/s/article/what-happens-if-group-rules-are-deactivated-and-deleted?language=en_US
-  - https://developer.okta.com/docs/api/openapi/okta-management/management/tag/GroupRule/#tag/GroupRule/operation/deleteGroupRule
-
-- **Done when:** The module names the case it actually computes rather than
-  conflating two verbs. `losing` is renamed for the delete-with-removal case;
-  deactivate reports the set that genuinely changes, which is the members who
-  become **unattributed** (still in the group, no longer explained by any rule)
-  rather than members who leave. Every consumer is audited against the new
-  names: the Preview Impact modal's copy, `RulesListPanel.tsx`'s deactivate
-  gate, and the tests. `groups-and-rules.md`'s `[verified:]` citation is correct
-  once module and skill agree.
-- **Risk:** Medium. This changes a contract and user-facing claims, so it is
-  **architecturally significant** and goes through the plan-and-approval gate as
-  its own PR. Do not fold it into unrelated work.
-- **Status:** done:#106
-- **Approved 2026-08-29 by Sam**, conditional on establishing what Okta actually
-  does on delete. That was done before approving; the verdict is below and the
-  item is now scoped enough to implement without re-researching it.
-
-  **The three cases, verified against Okta's own documentation:**
-
-  | Verb                                         | What happens to existing members                                                                                                                      | Reversible?       |
-  | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-  | **Deactivate**                               | Nobody moves. "Okta does not remove users that the rule added to a group. The group membership remains, but the rule no longer applies to new users." | Yes — reactivate. |
-  | **Delete, `removeUsers=false`** (or omitted) | "Users remain members of the group, but the rule no longer manages the membership." They become ordinary manual members.                              | **No.**           |
-  | **Delete, `removeUsers=true`**               | "Okta removes the users from the group entirely."                                                                                                     | **No.**           |
-
-  Okta states the delete choice plainly: _"The choice an administrator makes when
-  deleting a group rule is permanent and irreversible."_ Recreating the rule
-  afterwards does not undo either branch — it re-evaluates against the directory
-  as it is now, which is a different set.
-
-  `removeUsers` is an **optional Boolean** query parameter on
-  `DELETE /api/v1/groups/rules/{ruleId}`, documented as "Indicates whether to
-  keep or remove users from groups assigned by this rule". **Omitting it keeps
-  the users.** Any UI this item produces must send the parameter explicitly
-  rather than relying on that default, because the safe default and the
-  destructive one differ by a single absent query string.
-
-  **Two corrections to this item's own filing, found while verifying it:**
-
-  1. The support-article URL it cited 404s. The live article is
-     `what-happens-if-group-rules-are-deactivated-and-deleted`, and the citation
-     above has been repointed. The quotes in the original filing are accurate —
-     only the link had rotted.
-  2. `.claude/skills/okta-api/references/groups-and-rules.md` documents the
-     deactivate case correctly at `:154` and `:311` but **says nothing about
-     `removeUsers` at all** — the delete endpoint is listed at `:163` with no
-     mention of the parameter or the choice it encodes. That is the same blind
-     spot the module has, in the reference that is supposed to catch it. Filed
-     as `D-073`.
-
-  **Scope confirmation:** implement as the **Done when** above already states —
-  rename `losing` for the delete-with-removal case, have deactivate report the
-  newly-**unattributed** set, audit all three consumers, fix the `[verified:]`
-  citation. No preliminary ADR: the semantics are now documented facts rather
-  than a design space, and the two-verb model is Okta's, not ours to choose. It
-  remains its own PR and must not be folded into unrelated work.
-
-- **Related:** ADR-0043 (the demo reel's rule-impact chapter is held out of the
-  reel until this lands; when it returns it argues **both verbs side by side** —
-  deactivate, where nobody moves but N members become unattributed, and delete,
-  where N are removed or N are kept as now-manual members, with `removeUsers` as
-  the irreversible choice between them)
-
-### D-053 · Late-landing content re-lays-out the text beside it
-
-**One defect in seven places, filed as a cluster because the remedy is one
-convention rather than seven fixes.** In each case an element changes size after
-mount — a chip whose label swaps, a count badge that only appears once a fetch
-resolves, a button whose label runs through three lengths — while sitting in a
-flex or grid row beside text that is `min-w-0` and therefore free to absorb the
-change. The neighbour re-truncates, re-wraps, or changes its line count, and the
-row visibly re-lays-out under the reader's eye.
-
-**How it was found.** Filming the demo reel (ADR-0043) put the panel on camera at
-2.6x, where the reflow is unmissable. The Layout Instability API names the shape
-directly: clicking a group row reports sources `DIV.flex-1.min-w-0` and
-`DIV.shrink-0.flex.items-center`, a `shrink-0` cluster widening beside a
-`flex-1 min-w-0` column. The measurement and the reasoning are in
-[ADR-0044](docs/adr/0044-a-reel-that-can-fail.md).
-
-**Why the reel does not close it.** The reel absorbs the symptom reel-side and
-touches no file under `src/`: a settle gate waits for the page to go quiet before
-each beat, and `SHOWCASE_CSS` sets `scrollbar-gutter: stable`. Waiting conceals a
-late-landing badge; it does not reserve room for one. Real users get neither the
-gate nor the gutter. These items exist so the workaround does not retire the
-symptom it was written against.
-
-**The convention the fixes should converge on**, rather than seven ad-hoc
-patches:
-
-- A numeric readout that changes width renders with `tabular-nums`. The
-  precedent and its rationale are already written down in
-  `src/sidepanel/components/shared/StatCard.tsx:10` and
-  `src/sidepanel/hooks/useCountUp.ts:70`.
-- A `shrink-0` element whose content can change length reserves its widest state,
-  by `min-w-` or by a fixed basis, so its neighbour never has to move.
-- A late-arriving badge occupies its slot before it has a value, or the row is
-  laid out so that its arrival cannot change any other track's width.
-
-`D-053g` is the one that is not per-component and is worth doing first: it
-affects every scroll box in the app, on every platform.
-
-### D-053a · The match percentage goes from 2 characters to 4, beside a truncating label
-
-- **Category:** standards
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/sidepanel/components/users/comparison/ComparisonHero.tsx:78-88`
-- **Verified:** 2026-08-27 — read against the file while writing ADR-0044; this is
-  the symptom Sam reported verbatim from the reel.
-- **Problem:** The row is `flex items-baseline justify-between gap-2`. The right
-  span renders a two-glyph placeholder while loading and `${similarity}%` after,
-  so it goes from two characters to three or four, in a proportional font, with no
-  `tabular-nums`, no reserved width and no `shrink-0`. The left span is
-  `min-w-0 truncate text-xs …` and additionally swaps its own placeholder for
-  `Match · ${scopeNote}`, so both sides change at once and the label re-truncates
-  at whatever width the percentage leaves it. Because the digits are proportional,
-  it keeps twitching afterwards: `9%` and `100%` are different widths and so are
-  `11%` and `88%`.
-- **Done when:** The percentage cannot change the label's available width. It
-  carries `tabular-nums` and `shrink-0`, and it reserves the width of its widest
-  state (`100%`) so the loading placeholder occupies the same box as the value.
-  `ComparisonHero.stories.tsx` already has `Default` and `Loading`; the fix is
-  checkable by flipping between them at side-panel width and seeing the label's
-  truncation point stay put. Per ADR-0023 that stays a visual check rather than a
-  class assertion.
-- **Risk:** Low. One row, no behaviour.
-- **Status:** claimed:beta/trust-and-polish
-- **Related:** `D-053`, ADR-0044. The reel masks this with a settle gate; the
-  defect is unchanged for real users.
-
-### D-053b · A status chip swings between 4 and 13 characters beside a wrapping mono expression
-
-- **Category:** standards
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/sidepanel/components/groups/detail/ClauseChecklist.tsx:183-197`
-  (the clause row), `:238-248` (the summary row), `:126,132,138` (the labels)
-- **Verified:** 2026-08-27 — read against the file while writing ADR-0044.
-- **Problem:** `ClauseRow` is `flex items-start justify-between gap-3` holding a
-  `min-w-0 flex-1 font-mono … break-words whitespace-pre-wrap` expression beside a
-  `shrink-0` chip. The chip's label is `Pass` (4 characters), `Fail` (4) or
-  `Not evaluated` (13), and which one it is flips when `groupContext` resolves and
-  an `isMemberOf*` clause stops being unevaluable. The chip is `shrink-0`, so the
-  whole difference comes out of the expression column, which is set to wrap: the
-  row changes line count, and every row below it moves. `ChecklistSummary`
-  (`:238-248`) has the same shape with `Rule matches this user` /
-  `Rule does not match` / `Cannot be determined`, 22 characters against 18 against
-  20, beside a counts sentence that also changes.
-- **Done when:** The chip column has a stable width across all three labels, so
-  resolving group context changes the chip's contents and nothing else. Either the
-  chip reserves the width of its longest label, or the row is a two-track grid
-  with a fixed chip track rather than `justify-between`. Note `D-036` already has
-  this file over the 300-line bar; do not land the two together.
-- **Risk:** Low. Presentation only.
-- **Status:** claimed:beta/trust-and-polish
-- **Related:** `D-053`, `D-036` (same file, over the line bar), ADR-0044. The reel
-  masks this with a settle gate.
-
-### D-053c · A group-count badge takes width out of a multi-line description
-
-- **Category:** standards
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/sidepanel/components/users/comparison/CauseWorklist.tsx:254-267`
-- **Verified:** 2026-08-27 — read against the file while writing ADR-0044.
-- **Problem:** The remedy header is `flex items-start gap-2` holding an icon, a
-  `min-w-0 flex-1` column (heading plus a wrapping description) and a `shrink-0`
-  `{n} group` / `{n} groups` badge. The badge appears with the causes, so it goes
-  from absent to present, and its width then depends on the digit count and on the
-  singular/plural swap. Every one of those changes comes out of the `flex-1`
-  column, which wraps, so the description re-flows each time.
-- **Done when:** The badge's slot is reserved before it has a value, or the header
-  is laid out so the badge cannot change the description's width (its own track,
-  or the badge dropped below the heading). The count carries `tabular-nums`.
-- **Risk:** Low. Presentation only.
-- **Status:** claimed:beta/trust-and-polish
-- **Related:** `D-053`, ADR-0044. The reel masks this with a settle gate.
-
-### D-053d · The MFA scan paragraph re-wraps three times as the button label changes
-
-- **Category:** standards
-- **Priority:** P3
-- **Size:** S
-- **Files:**
-  `src/sidepanel/components/groups/detail/GroupMfaCoverageSection.tsx:72-86`,
-  `src/sidepanel/components/members/MfaScanButton.tsx:47` (the three labels).
-  The same button is also hosted by
-  `src/sidepanel/components/members/MemberFilterPanel.tsx:118` and
-  `src/sidepanel/components/members/CompositionReports.tsx:150`; check whether
-  their rows have the same shape before fixing only one.
-- **Verified:** 2026-08-27 — read against the file while writing ADR-0044.
-- **Problem:** The row is `flex flex-wrap items-center justify-between gap-3` with
-  a `<p>` that carries no `flex-1` and no `min-w-0`, beside `MfaScanButton`. The
-  button's label runs `Run MFA scan` (12 characters) then `Scanning…` (9, plus a
-  loading spinner) then `Rescan` (6), and it changes variant, so it takes three
-  different widths during one scan. The paragraph's own text also swaps from the
-  instruction to the result sentence when the scan completes. Because the
-  paragraph is a plain flex item with no basis, it sizes off its content and gets
-  re-wrapped at each of those transitions, and on a narrow panel the row can
-  `flex-wrap` and unwrap mid-scan.
-- **Done when:** The paragraph is `min-w-0 flex-1` and the button reserves the
-  width of its widest label, so a scan changes what the row says and not how it is
-  laid out.
-- **Risk:** Low. Presentation only.
-- **Status:** claimed:beta/trust-and-polish
-- **Related:** `D-053`, ADR-0044. The reel masks this with a settle gate.
-
-### D-053e · Three tab labels slide sideways when their count badges materialise
-
-- **Category:** standards
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/sidepanel/components/users/comparison/ComparisonTabBar.tsx:82-99`
-- **Verified:** 2026-08-27 — read against the file while writing ADR-0044.
-- **Problem:** Each tab is `flex items-center justify-center gap-1.5` holding an
-  icon, a label and an optional badge rendered only when
-  `t.badge !== undefined && t.badge > 0`. The badge lands when the comparison
-  resolves, and because the cell is `justify-center`, adding it pushes the icon and
-  the label left within the cell rather than appending to their right. Three of the
-  four tabs (Groups, Apps, Attributes) do it in the same frame, so the whole rail
-  appears to shuffle.
-- **Done when:** The badge's arrival does not move the icon or the label. Either
-  the badge occupies a reserved slot from first render, or the cell's content is
-  left-aligned with the badge pushed to the trailing edge so it grows into empty
-  space. The badge carries `tabular-nums`.
-- **Risk:** Low. Presentation only, though it touches the tab rail's alignment, so
-  check the four-tab and two-column (`sm:grid-cols-4`) breakpoints both.
-- **Status:** claimed:beta/trust-and-polish
-- **Related:** `D-053`, ADR-0044. The reel masks this with a settle gate.
-
-### D-053f · The Filters button shrinks the search field, and the member count grows in place
-
-- **Category:** standards
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/sidepanel/components/members/MemberExplorer.tsx:346-374` (the
-  search row and the Filters button), `:415-422` (the member count)
-- **Verified:** 2026-08-27 — read against the file while writing ADR-0044.
-- **Problem:** Two instances in one component. The search row is `flex gap-2` with
-  a `flex-1` search box beside a Filters button that has neither a basis nor
-  `shrink-0`; when `activeFilterCount` becomes non-zero the button gains a count
-  pill, so the button grows and the search field shrinks under a typing user.
-  Separately, the member count at `:418-421` renders `sorted.length` and appends
-  ` of ${members.length}` only while a filter is active, so `250` becomes
-  `47 of 250` in a `justify-between` row: the heading widens and the Copy button
-  beside it moves.
-- **Done when:** The Filters button is `shrink-0` and reserves the width of its
-  badged state, so filtering never resizes the search field; and the count either
-  reserves its widest form or renders both parts from first paint (`250 of 250`),
-  with `tabular-nums` either way.
-- **Risk:** Low. Presentation only.
-- **Status:** claimed:beta/trust-and-polish
-- **Related:** `D-053`, ADR-0044. The reel masks this with a settle gate.
-
-### D-053g · Classic scrollbars take 6px out of content width the instant a list overflows
-
-- **Category:** standards
-- **Priority:** P2
-- **Size:** S
-- **Files:** `src/sidepanel/tailwind.css:297-313` (the
-  `.scrollable-list::-webkit-scrollbar` rules). Consumers:
-  `src/sidepanel/components/shared/Modal.tsx:273` (every modal body),
-  `src/sidepanel/components/shared/ScrollableList.tsx:148`,
-  `src/sidepanel/components/users/comparison/ComparisonDiffTab.tsx:180` (whose
-  `grid-cols-[minmax(0,1fr)_2rem_minmax(0,1fr)]` tracks at `:246` truncate against
-  the width it takes),
-  `src/sidepanel/components/users/comparison/ComparisonAttributesTab.tsx:255`,
-  `src/sidepanel/components/users/ProfileDisplayAttributesTab.tsx:252`,
-  `src/sidepanel/components/RuleImpactModal.tsx:152`,
-  `src/sidepanel/components/RuleConsolidationModal.tsx:112`
-- **Verified:** 2026-08-27 — `grep -rn scrollbar-gutter src/` returns nothing;
-  consumer list enumerated, not sampled.
-- **Problem:** Styling `::-webkit-scrollbar` opts a box out of Chrome's overlay
-  scrollbars entirely and gives it a classic one, whose width comes out of the
-  content box. Nothing anywhere in the repo sets `scrollbar-gutter`, so every
-  `.scrollable-list` box loses 6px of content width at the exact moment it crosses
-  from fitting to overflowing — a row arriving from a fetch, a disclosure opening,
-  a filter clearing — and every string under a `truncate` or a wrap inside it
-  re-lays-out. This is the one member of `D-053` that is not waitable: there is no
-  quiet period to sit through, the available width simply changes. It applies on
-  every platform, because the `::-webkit-scrollbar` rules override the overlay
-  behaviour macOS would otherwise give.
-- **Done when:** `.scrollable-list` sets `scrollbar-gutter: stable`, so the channel
-  is reserved whether or not the bar is showing and the transition costs nothing.
-  Check the app's own scroll root at the same time: the panel is 360px wide at its
-  narrowest and 6px of permanently reserved gutter is a real trade, so confirm the
-  reserved variant reads better than the reflow before shipping it everywhere
-  rather than assuming it does.
-- **Risk:** Low to change, but it is a one-line rule affecting every scroll box in
-  the app, so land it alone and look at the narrow breakpoint.
-- **Resolution note:** shipped on `.scrollable-list` only. The app scroll root
-  was looked at, as the item required, and **deliberately left alone**: it is
-  unstyled, so it keeps the platform scrollbar (an overlay bar on macOS, against
-  which `scrollbar-gutter` is spec'd as a no-op); where it is classic it is
-  ~15px and already overflowing in most states; and decisively,
-  `scrollbar-gutter` reserves inside the scroll container's padding box, so it
-  would inset every full-bleed sticky band inside the root — `ContextBar` and
-  `PageHeader` — leaving their background and bottom border ~15px short of the
-  panel edge as a permanent seam. 6px inside a bordered list card reads as
-  padding; 15px beside a white header band reads as a defect. The reflow is the
-  lesser artifact there.
-- **Status:** done:#99
-- **Related:** `D-053`, ADR-0044. **The reel works around this by setting
-  `scrollbar-gutter: stable` in `SHOWCASE_CSS`, which is reel-side only and does
-  nothing for real users.** When this lands, that rule becomes a harmless
-  restatement rather than a mask. **Correction, found while implementing:** the
-  reel rule (now `.storybook/scripts/capture/stage.mjs:139`, not `SHOWCASE_CSS`)
-  targets **two** selectors. Its `.scrollable-list` half is indeed a harmless
-  restatement now. Its `[data-testid='app-scroll-root']` half is **not** — given
-  the decision above it stays reel-only, and therefore stays a mask. Defensible
-  on its own terms (the reel shoots at a fixed, wider viewport where a shifting
-  root on camera is unacceptable and the header-seam cost does not bite), but it
-  is a deliberate divergence now rather than a duplicate.
-
-### D-054 · `ScrollableList` still shifts 6px on load→loaded
-
-- **Category:** correctness
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/sidepanel/components/shared/ScrollableList.tsx` (the loading
-  branch and the empty branch, versus the scrolling branch at `:148`)
-- **Verified:** 2026-08-28 — found by the `D-053g` writer while implementing it.
-- **Problem:** `D-053g` reserved the scrollbar channel on `.scrollable-list`, but
-  `ScrollableList` puts that class **only** on its scrolling branch. Its loading
-  branch and its empty branch render `boxClasses('overflow-hidden')` without it,
-  so those boxes have no reserved gutter while the loaded box does — content
-  still jumps 6px the moment a spinner is replaced by rows, which is the exact
-  reflow `D-053g` exists to remove. The CSS fix cannot reach this from
-  `tailwind.css`, because the class is the hook.
-- **Done when:** The reserved gutter applies across all three branches, so the
-  box's content width does not change between loading, empty and loaded. Check
-  whether adding `scrollable-list` to the non-scrolling branches has any other
-  effect (they are `overflow-hidden`, so the `::-webkit-scrollbar` rules should
-  be inert) before assuming the one-word change is enough.
-- **Risk:** Low — but it is the remaining tail of `D-053g`, so verify against the
-  same story set that item used.
-- **Status:** claimed:beta/trust-and-polish
-- **Related:** `D-053g`
-
-### D-055 · `formatRuleForDisplay` does unguarded string work on a field it does not validate
-
-- **Category:** correctness
-- **Priority:** P2
-- **Size:** S
-- **Files:** `src/shared/ruleUtils.ts` (`formatRuleForDisplay`, the `.replace(…)`
-  around `:117`), `src/sidepanel/hooks/useOktaApi/groupDiscovery.ts` (a caller
-  that formats rules from its own source)
-- **Verified:** 2026-08-28 — found by the `D-050` writer; the throw was
-  reproduced as the pre-fix failure of that item's first new test.
-- **Problem:** `formatRuleForDisplay` types its input as an already-validated
-  `OktaGroupRule` and then performs unguarded string operations on
-  `rule.conditions.expression.value`. When that field is not a string the
-  function **throws**, and because it runs inside a `.map` over a whole page, one
-  bad row takes down the entire rules load rather than costing one row. `D-050`
-  closed the boundary on `fetchGroupRulesRequest`'s path, so that specific
-  entry is now safe — but the function is exported and reachable from at least
-  `groupDiscovery.ts`, which formats rules obtained its own way.
-- **Done when:** Every `formatRuleForDisplay` caller is **enumerated** (not
-  sampled — use the `okta-claim-check` skill) and either shown to validate
-  upstream, or the function is made to defend itself against a non-string
-  expression. A test pins whichever guarantee is chosen.
-- **Risk:** Low to investigate. The defect it protects against is a whole-surface
-  outage from a single malformed row, which is why this is P2 and not P3.
-- **Status:** done:#102
-- **Related:** `D-050`
 
 ### D-056 · `AlertMessage` hand-rolls two raw buttons inside `components/shared`
 
@@ -2526,43 +1155,6 @@ affects every scroll box in the app, on every platform.
 - **Status:** open
 - **Related:** `D-013c` (how it was found)
 
-### D-059 · `handleGetAppInfo` fetches the app on every app page, even when the DOM already answered
-
-- **Category:** perf
-- **Priority:** P2
-- **Size:** S
-- **Files:** `src/content/index.ts:190-208` (the unconditional fetch),
-  `src/content/groupHandlers.ts:46-62` (the DOM-first pattern to mirror),
-  `src/sidepanel/hooks/useOktaPageContext.ts` (the caller)
-- **Verified:** 2026-08-28 — read at the commit that removed the Overview tab;
-  the fetch is issued whether or not `extractAppNameFromPage()` returned a name.
-- **Problem:** `handleGetAppInfo` scrapes the name from the DOM and then issues
-  `GET /api/v1/apps/{id}` regardless, using the response only to fill a name it
-  usually already has. `handleGetGroupInfo` next door does the opposite and
-  correct thing: it fetches **only** when the DOM came up empty.
-
-  This was harmless while `useOktaPageContext` was gated to the active Overview
-  tab. That tab is gone and the hook is now the `ContextBar` masthead's feed,
-  gated on `!isPinned` alone — so an admin browsing app pages now pays one
-  request per app page, on every tab, forever. Accepted knowingly when the
-  re-gate landed, and filed here rather than folded into that commit.
-
-  **The nuance that makes this not a one-line change:** the API response also
-  supplies `appLabel`, which the DOM cannot. A naive "skip the fetch when the DOM
-  gave a name" drops the label. Decide deliberately whether `appLabel` is worth a
-  request on every app page — `AppInfo.appLabel` is optional, and its consumers
-  should be enumerated before it is quietly stopped being populated.
-
-- **Done when:** The app fetch is conditional in the same shape
-  `groupHandlers.ts` uses, `src/content/index.test.ts`'s `getAppInfo` block gains
-  a case proving the request is **not** issued when the DOM supplies a name, and
-  whatever is decided about `appLabel` is stated in the handler's doc comment
-  rather than left to be rediscovered.
-- **Risk:** Low — one handler, already covered by `content/index.test.ts`.
-- **Status:** done:#102
-- **Related:** the Overview-tab removal (which promoted this from harmless to
-  per-page), `D-007a`
-
 ### D-060 · Can `/api/v1/apps` report group assignments, or must the snapshot fan out?
 
 - **Category:** correctness
@@ -2600,37 +1192,6 @@ affects every scroll box in the app, on every platform.
   so it needs the honesty rules re-checked, not just the query swapped.
 - **Status:** open
 - **Related:** ADR-0040, `I-012`
-
-### D-061 · A rule can point at a group that no longer exists, and nothing says so
-
-- **Category:** correctness
-- **Priority:** P2
-- **Size:** M
-- **Files:** `src/shared/rules/groupRuleIndex.ts`,
-  `src/sidepanel/components/groups/ruleOrphans.ts` (the sibling module this
-  would join), `src/sidepanel/components/RuleCard.tsx`
-- **Verified:** 2026-08-28 — noticed while building the Home reports; the
-  snapshot holds both collections, so the join is free and simply is not made.
-- **Problem:** `actions.assignUserToGroups.groupIds` is a list of ids Okta does
-  not validate against the group inventory on read. A rule whose target group
-  was deleted still lists it, still shows as `ACTIVE`, and does nothing — and
-  the panel renders it exactly like a working rule. The org snapshot already
-  holds `groups` and `rules`, so "target ids with no matching group" is a set
-  difference over rows on disk: **zero requests.**
-
-  The honesty rule from the Home reports applies unchanged and is the reason
-  this is not a five-line change: groups is read _negatively_ here (a missing id
-  is only meaningful if the group walk finished), so the finding must be
-  suppressed entirely unless that collection is `complete`. Reusing
-  `resolveCount`'s `gates` is the intended shape.
-
-- **Done when:** The join lives beside the others in `ruleOrphans.ts` with its
-  own unit cases, an incomplete group walk suppresses it, and the rule surface
-  says which target is missing rather than rendering a dead rule as a live one.
-- **Risk:** Low to compute, medium to present — claiming a rule is broken is a
-  strong claim, and it must not be made off a half-read group list.
-- **Status:** claimed:beta/trust-and-polish
-- **Related:** `D-060`, ADR-0040 §7
 
 ### D-062 · Two context engines probe the same page twice on every navigation
 
@@ -2670,7 +1231,7 @@ affects every scroll box in the app, on every platform.
 - **Related:** `D-059` (the other traffic cost the re-gate exposed), ADR-0018,
   ADR-0026
 
-### D-062 · `handleGetAppInfo` reads an Okta response with no zod boundary
+### D-097 · `handleGetAppInfo` reads an Okta response with no zod boundary
 
 - **Category:** security
 - **Priority:** P2
@@ -2694,6 +1255,11 @@ affects every scroll box in the app, on every platform.
   validation miss, and the test whose title concedes the gap is retargeted.
 - **Risk:** Low — one handler, already covered by `content/index.test.ts`.
 - **Status:** open
+- **Renumbered 2026-09-02 (`D-080`):** filed as `D-062` against an id
+  already taken on 2026-08-28 by the context-engine item. This security item was
+  the later filing and carried no `docs/` citations, so it moved. Any reference
+  to "`D-062`" dated 2026-08-29 or later that concerns the content-script zod
+  boundary means this item.
 - **Related:** `D-059`, ADR-0006
 
 ### D-063 · `AppInfo` is declared twice, verbatim, in two files
@@ -2715,68 +1281,6 @@ affects every scroll box in the app, on every platform.
 - **Risk:** Low — mechanical, and the compiler proves the merge.
 - **Status:** open
 - **Related:** `D-059`
-
-### D-064 · A non-ok response drops its headers, so a 429 arrives with no rate-limit headers
-
-- **Category:** correctness
-- **Priority:** P2
-- **Size:** S
-- **Files:** `src/content/apiRequest.ts` (the `!response.ok` return, which omits
-  `headers` although the function has already built them),
-  `src/shared/scheduler/rateLimitDetector.ts` (the consumer that needs them),
-  `src/content/index.test.ts` (which already pins the drop as a `BUG (pinned)`)
-- **Verified:** 2026-08-29 — surfaced by the `D-007a` writer and confirmed
-  directly against the file: `headers` is populated from `response.headers` and
-  then included on the success return and on the `DELETE` return, but not on the
-  `!response.ok` return.
-- **Problem:** `RateLimitDetector` exists to read `X-Rate-Limit-Remaining` /
-  `-Limit` / `-Reset` off Okta responses, and `CONVENTIONS.md` describes cooldowns
-  driven by them. A 429 is exactly the response whose headers matter most — and
-  it is a `!response.ok` response, so its headers never leave the content script.
-  Rate limiting is therefore steered only by the headers of requests that
-  succeeded, and the one response that says "you are being throttled, here is
-  when to come back" tells the scheduler nothing.
-- **Why it is filed now:** it directly limits `D-007c`. That item routes a
-  retryable resolved failure into `retryRequest` with backoff; honest backoff
-  wants `X-Rate-Limit-Reset`, which under this defect is not there to read.
-  `D-007c` should not be started before this is fixed or consciously accepted.
-- **Done when:** the `!response.ok` return carries `headers` like its siblings,
-  the pinned `BUG (pinned)` case in `content/index.test.ts` is retargeted to
-  assert the headers survive, and `RateLimitDetector` is shown to observe them on
-  a 429.
-- **Risk:** Low to fix. The behavior change is that the scheduler starts seeing
-  headers it currently cannot, which is the point.
-- **Status:** done:#108
-- **Related:** `D-007a`, `D-007c`
-
-### D-065 · `fetchAndCacheAllGroupRules` walks a whole endpoint with no boundary schema
-
-- **Category:** security
-- **Priority:** P2
-- **Size:** S
-- **Files:** `src/sidepanel/hooks/useOktaApi/groupDiscovery.ts`
-  (`fetchAndCacheAllGroupRules`), `src/shared/utils/oktaPagination.ts` (the
-  `schema`-less branch that casts `response.data` straight to `T[]`)
-- **Verified:** 2026-08-29 — found by the `D-055` writer while enumerating that
-  item's callers; the pagination cast was read directly, not inferred.
-- **Problem:** `fetchAllPages<OktaGroupRule>(…)` is called with **no `schema`
-  option**, so `oktaPagination.ts` casts the raw page straight to `OktaGroupRule[]`
-  and unvalidated rows flow into `RulesCache` and on to every consumer. This is
-  the second half of what `D-050` closed on `fetchGroupRulesRequest`'s path.
-  `D-055` stopped the specific outage (a non-string expression no longer throws
-  out of a `.map`), but malformed `groupIds` and other fields still reach
-  consumers unchecked. The path is live: `ensureGroupRulesLoaded` →
-  `useGroupRuleReferences`, and `getGroupRulesForGroup` → `useGroupSource`,
-  `useGroupMerge`.
-- **Done when:** the walk passes `{ schema: oktaGroupRuleSchema, context: 'GET
-/api/v1/groups/rules' }` — `fetchAllPages` already supports it — and what
-  happens to a row that fails validation is a stated decision, since this changes
-  what reaches the cache.
-- **Risk:** Medium — it changes what gets cached, so a row Okta sends that the
-  schema rejects would stop appearing. That is the intended effect but it is a
-  behavior change, not a pure hardening.
-- **Status:** done:#107
-- **Related:** `D-050`, `D-055`, ADR-0006
 
 ### D-066 · `groupIdsReferencedBy` carries the identical unguarded expression read `D-055` just fixed
 
@@ -3047,60 +1551,11 @@ affects every scroll box in the app, on every platform.
   number to a different item. Main's numbering is the published one, so this moved
   rather than main's. Exactly the failure `D-072` describes for ADR numbers, one
   ledger over.
-
-### D-075 · A profile write invalidated the memberships and never re-read them
-
-- **Category:** correctness
-- **Priority:** P2
-- **Size:** S
-- **Files:** `src/sidepanel/hooks/useUsersTabProfileEdit.ts`,
-  `src/sidepanel/hooks/useUsersTabState.ts`
-- **Verified:** 2026-08-28 — found by filming it. The reel's Users chapter saves
-  a corrected `department`, switches to the Groups pane, and waits for the group
-  the rule then fills. The row never arrived; the capture refused the take.
-- **Problem:** `useProfileEdit` invalidates `cacheKeys.userMemberships(userId)`
-  on a confirmed save, on explicit grounds recorded in its own comment: a group
-  rule reads profile attributes, so a write to one can move a membership.
-  Invalidating was all it did. The Groups pane stays mounted (ADR-0018) and
-  holds the analysis it last loaded, so dropping the cache behind it changed
-  nothing on screen and the pane went on showing the memberships from before the
-  write until something else happened to reload them.
-
-  The remedy already existed and was already wired for the two neighbouring
-  paths. `useUsersTabState.refreshSelectedUserMemberships` invalidates _and_
-  re-loads with `{ force: true }`, and both the add-to-group flow and the
-  compare-copy flow call it. The profile-write path was the one that did not.
-
-  Worse than a stale count: the save modal's blast-radius report had, seconds
-  earlier, named the exact groups the edit would move. So the panel predicted
-  the change, wrote it, and then declined to show it arriving — which reads as
-  the prediction having been wrong.
-
-  And the reload has to be handed **the user the write produced**. Membership
-  analysis classifies each group by evaluating the org's rules against the
-  user's attributes, so a reload given the pre-write user re-fetches the right
-  groups and then decides none of them are rule-fed - the corrected attribute is
-  the very thing the rule reads. That failure is louder than the one above: the
-  group arrives carrying a `Direct` badge, which is a confident wrong answer
-  rather than a stale one. Caught in a still from the reel, where the row the
-  chapter had just narrated as a rule applying was labelled `Added directly`.
-
-- **Done when:** a confirmed save, and an undo of one, both re-read the selected
-  user's memberships, classified against the profile the write produced. Unit
-  tests cover that a `failed` outcome does not refresh at all.
-- **Risk:** Low. One callback threaded through a hook that already takes four.
-- **Related:** ADR-0035 (the three-state write), ADR-0018 (tabs stay mounted),
-  ADR-0052 (the writable demo org that made this filmable)
-
-- **Fixed:** 2026-08-28 on `feat/demo-org-writes`, as its own commit. Filed here
-  rather than folded into the reel commit that found it (CLAUDE.md), and kept in
-  the ledger because the finding is the useful part: an `invalidate` with no
-  reload beside it is invisible on a surface that does not remount, and this
-  codebase has three of them.
-- **Renumbered:** filed as `D-064` on `feat/demo-org-writes` while `main` gave that
-  number to a different item. Main's numbering is the published one, so this moved
-  rather than main's. Exactly the failure `D-072` describes for ADR numbers, one
-  ledger over.
+- **Status:** open
+- **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
+  `SESSION.md` step 3's filter could never offer it. Set to `open` because the
+  filing is complete and its Problem was re-read and still holds; it was invisible,
+  not deferred.
 
 ### D-076 · The org snapshot's delta cannot see a membership change
 
@@ -3465,33 +1920,6 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
 - **Status:** open
 - **Related:** `D-065` (introduced the drop), `D-061`, `D-050`, `D-078`
 
-### D-086 · `RateLimitDetector.parseHeaders` has no `NaN` guard, so it fails open
-
-- **Category:** correctness
-- **Priority:** P2
-- **Size:** S
-- **Files:** `src/shared/scheduler/rateLimitDetector.ts` (`parseHeaders`),
-  `src/shared/scheduler/rateLimitDetector.test.ts:76` (the case that already
-  pins the `NaN` outcome)
-- **Verified:** 2026-08-31 — raised by the `D-064` writer while proving the
-  detector observes headers on a 429; read directly.
-- **Problem:** `parseHeaders` uses bare `parseInt` on the `X-Rate-Limit-*`
-  values with no `Number.isNaN` check. A malformed or absent-but-present header
-  yields `NaN`, and every downstream comparison then fails **open**:
-  `NaN <= threshold` is `false`, so `isApproachingLimit` reports calm and no
-  cooldown is taken. There is already a test pinning the `NaN` outcome, so this
-  is a known shape rather than a surprise — but it is pinned, not fixed.
-  `D-064` makes it newly reachable: rate-limit headers now arrive on failure
-  responses too, so `parseHeaders` sees strictly more input than before.
-- **Done when:** a value that does not parse to a finite number is treated as
-  "unknown", not as zero-or-calm; the pinning test is retargeted to assert the
-  safe outcome with an ADR-0022 note.
-- **Risk:** Low. Behavior change is in the safe direction (unknown capacity
-  stops reading as spare capacity).
-- **Status:** done:#117
-- **Related:** `D-064`, `D-007c`, `D-094` (the `limit: 0` sibling, split out
-  while fixing this)
-
 ### D-087 · The content script forwards the whole response header bag
 
 - **Category:** security
@@ -3538,31 +1966,6 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
 - **Risk:** Low — comments only, but the guard they justify is load-bearing.
 - **Status:** open
 - **Related:** `D-065`, `D-055`
-
-### D-089 · `useRuleConsolidation` never clears `RulesCache` after writing rules
-
-- **Category:** correctness
-- **Priority:** P2
-- **Size:** S
-- **Files:** `src/sidepanel/hooks/useRuleConsolidation.ts`,
-  `src/shared/rulesCache.ts`
-- **Verified:** 2026-08-31 — found by the `I-013` writer while wiring its own
-  invalidation; nothing in `src/` clears that cache except its own tests and,
-  as of tonight, `useCreateFeedingRule`.
-- **Problem:** `RulesCache` holds the org-wide rule inventory on a 5-minute
-  TTL. `useRuleConsolidation` creates and deletes rules and never invalidates
-  it, so for up to five minutes afterwards every surface reading the org-wide
-  snapshot serves an inventory that does not match Okta — including the
-  consolidation UI that just performed the write.
-- **Done when:** a successful consolidation clears `RulesCache` the way
-  `useCreateFeedingRule` now does; a test pins that a write invalidates.
-  Consider whether the invalidation belongs in `ruleWrites` rather than in each
-  caller, so the next write path cannot forget.
-- **Risk:** Low.
-- **Status:** done:#117
-- **Related:** `I-013`, `D-095` (the third write path, still unfixed),
-  `D-096` (the centralisation this item asked about, filed research-only
-  rather than acted on)
 
 ### D-090 · `MAX_RULE_NAME` is declared twice
 
@@ -3810,3 +2213,151 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
 - **Risk:** Research only.
 - **Status:** research:awaiting-review
 - **Related:** `D-089`, `D-095`, `I-013`
+
+### D-098 · Two doc comments cite `getAppPushGroupMappings`, deleted by `f1e8def`
+
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaApi/appOperations.ts:229`,
+  `src/sidepanel/hooks/useOktaApi/policyOperations.ts:17`
+- **Verified:** 2026-09-02 — enumerated while closing `D-026`. `grep -rn
+'getAppPushGroupMappings' src/` returns exactly these two lines and no
+  declaration; the module was deleted by `f1e8def`.
+- **Problem:** Both comments name `getAppPushGroupMappings` as the precedent a
+  reader should follow — one for an encoding convention, one for an endpoint
+  shape. The function does not exist, so a reader who goes looking finds
+  nothing and cannot tell whether the convention was abandoned or merely moved.
+  Same class as `D-088` and `D-070`: a comment that outlived the code it points
+  at, and that `lint:cited-paths` cannot catch because it checks cited _paths_,
+  not cited _symbols_.
+- **Done when:** each comment either names a live precedent or states the
+  convention directly without citing a deleted symbol.
+- **Risk:** None — comments only.
+- **Status:** open
+- **Related:** `D-026` (the closure that surfaced this), `D-088`, `D-070`
+
+### D-099 · `handleGetPolicyInfo` fetches on every policy page for a field nothing reads
+
+- **Category:** perf
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/content/index.ts` (`handleGetPolicyInfo`)
+- **Verified:** 2026-09-02 — enumerated by the `D-070` writer, not sampled.
+  `PolicyInfo.policyStatus` has **zero** readers in `src/`: `App.tsx:205` reads
+  `policyInfo?.policyName` and nothing else touches the field.
+  (`policyStatus.ts`'s helpers are unrelated — they take `policy.status` off a
+  different type.)
+- **Problem:** `handleGetPolicyInfo` fetches unconditionally on every policy
+  page. `D-059` made the sibling `handleGetAppInfo` fetch only when the page
+  heading is missing, on the grounds that a request whose answer the DOM already
+  holds is a request spent for nothing. The policy handler never got the same
+  treatment, and the enumeration above makes its case stronger, not weaker: the
+  one field the fetch exists to populate beyond the DOM's answer is read by
+  nobody. `D-070` corrected the doc comment that claimed the two handlers
+  mirrored each other; this item is the behaviour half it deliberately declined
+  to bundle in.
+- **Done when:** either the fetch becomes conditional the way `D-059` made
+  `handleGetAppInfo`'s conditional, or `policyStatus` is removed and the fetch
+  with it — whichever the evidence supports at the time. A test pins that a
+  policy page whose heading answers the question issues no request.
+- **Risk:** Low — one handler, already covered by `content/index.test.ts`.
+- **Status:** open
+- **Related:** `D-059` (the precedent), `D-070` (the comment half)
+
+### D-100 · A transport failure mid-merge discards the undo for copies that already landed
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useGroupMerge.ts` (`execute`, the fatal-rethrow
+  path), `src/sidepanel/hooks/useGroupMerge.test.ts` (where the current
+  behaviour is now pinned as `CHARACTERIZED:`)
+- **Verified:** 2026-09-02 — found by the `D-034` writer while building that
+  item's characterization suite, and pinned rather than changed: a transport
+  throw re-raises before `logAction` runs, so no undo entry is written for the
+  memberships that had already been copied.
+- **Problem:** Group merge is destructive and its undo is the only way back. If
+  the copy leg throws for a transport reason — the session drops, the tab
+  closes, the network fails — after N users have already been copied into the
+  survivor, those N copies are real in Okta and the panel records nothing about
+  them. The admin is left with a partially-merged pair of groups and no undo
+  entry naming what moved.
+  This is parity with the pre-`D-034` hand-rolled loop, which is exactly why
+  `D-034` preserved it: that item's contract was to move the writes onto
+  `runOperation` while keeping the progress and undo bookkeeping identical, so
+  changing this at the same time would have made the refactor unreviewable.
+  Now that the behaviour is pinned by a named test, it can be changed on its own
+  evidence.
+- **Done when:** an undo entry is written for whatever actually landed before a
+  fatal throw, the same way the partial-failure path already does it, and the
+  `CHARACTERIZED:` pin is retargeted to assert the new contract with a note
+  saying what replaced it. The `all-copies-failed still empties the source` pin
+  should be re-examined in the same pass — it is the other half of this shape.
+- **Risk:** Medium — it changes what a destructive operation records on its
+  worst path, so the test must drive it.
+- **Status:** open
+- **Related:** `D-034` (the refactor that pinned this), `D-013b`
+
+## Archive
+
+Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk
+prose that used to live here is recoverable from git history at the linked
+commit — that is the point of moving it out of this file. Ids here are
+permanently retired: never reuse an archived id for a new item (the
+uniqueness guard in `scripts/check-cited-paths.mjs` enforces this across both
+ledgers). See `SESSION.md` step 7 and `CLAUDE.md`'s "Nightly maintenance
+system" section for when an item moves here.
+
+- **D-001** — User Detail's rule badge under-evaluates isMemberOfAnyGroup — done:#67 ([9ea42a3](https://github.com/samdhenderson/okta-unbound/commit/9ea42a3))
+- **D-002** — Dedupe the group-context builder duplicated in two files — done:#67 ([9ea42a3](https://github.com/samdhenderson/okta-unbound/commit/9ea42a3))
+- **D-003** — Silent app-label resolution failures in pushGroupOps — done:#70 ([c2d0109](https://github.com/samdhenderson/okta-unbound/commit/c2d0109))
+- **D-004** — useRuleLifecycle.ts has zero test coverage on a security-sensitive audit path — done:#67 ([9ea42a3](https://github.com/samdhenderson/okta-unbound/commit/9ea42a3))
+- **D-005** — useRuleImpact.ts has zero test coverage on its race guards — done:#70 ([c2d0109](https://github.com/samdhenderson/okta-unbound/commit/c2d0109))
+- **D-006** — Untested error/guard branches in three hooks — done:#70 ([c2d0109](https://github.com/samdhenderson/okta-unbound/commit/c2d0109))
+- **D-007a** — A failure result that can say what failed — done:#102 ([82a5ce4](https://github.com/samdhenderson/okta-unbound/commit/82a5ce4))
+- **D-008** — Confirm useEntityQuery.ts's abandoned-abstraction status — closed:refuted-2026-08-24 (investigated; the Problem no longer held, no code change)
+- **D-009** — Modal content can render underneath ActivityBar — done:#68 ([808ab30](https://github.com/samdhenderson/okta-unbound/commit/808ab30))
+- **D-010** — CI's `verify` job has been red on `main` since at least 2026-08-15, unrelated to any one PR — done:#66 ([25f5e45](https://github.com/samdhenderson/okta-unbound/commit/25f5e45))
+- **D-011** — App.tabpersistence.test.tsx's tab-mount waits are under-budgeted — done:#67 ([9ea42a3](https://github.com/samdhenderson/okta-unbound/commit/9ea42a3))
+- **D-013** — An audit entry can misattribute who changed a rule, silently — umbrella; decided 2026-08-24 and split into D-013a/b/c, all closed (no direct commit of its own — see those three entries)
+- **D-013a** — The facade resolves an actor, or says it could not — done:#94 ([ca07a02](https://github.com/samdhenderson/okta-unbound/commit/ca07a02))
+- **D-013b** — The three hand-rolled copies use the facade — done:#94 ([ca07a02](https://github.com/samdhenderson/okta-unbound/commit/ca07a02))
+- **D-013c** — Tell the admin their identity could not be confirmed — done:#99 ([a5903c4](https://github.com/samdhenderson/okta-unbound/commit/a5903c4))
+- **D-014** — useRuleLifecycle re-implements CoreApi.getCurrentUser — done:#94 (closed by D-013b) ([ca07a02](https://github.com/samdhenderson/okta-unbound/commit/ca07a02))
+- **D-016** — Modal's a11y contract is only regression-tested on the fallback render path — done:#72 ([de2ae3e](https://github.com/samdhenderson/okta-unbound/commit/de2ae3e))
+- **D-017** — The `storybook` CI job is red on `main` — a story file dies on a mid-run dep re-optimization — done:#69 ([a7b72eb](https://github.com/samdhenderson/okta-unbound/commit/a7b72eb))
+- **D-018** — `lint:cited-paths` cannot see the nightly ledgers, and three citations there are already dead — done:#72 ([de2ae3e](https://github.com/samdhenderson/okta-unbound/commit/de2ae3e))
+- **D-019** — The non-throwing half of app-label resolution is still silent — done:#72 ([de2ae3e](https://github.com/samdhenderson/okta-unbound/commit/de2ae3e))
+- **D-020** — pushGroupOps reads an Okta app response unvalidated, one call away from a validated helper — done:#74 ([bcf5a39](https://github.com/samdhenderson/okta-unbound/commit/bcf5a39))
+- **D-021** — `CONVENTIONS.md`'s mandated `pkill -9 -f vitest` kills the shell that runs it — done:#74 ([bcf5a39](https://github.com/samdhenderson/okta-unbound/commit/bcf5a39))
+- **D-023** — `lint-staged` stashes the working tree mid-commit, racing concurrent writer agents — done:#75 ([9d71a26](https://github.com/samdhenderson/okta-unbound/commit/9d71a26))
+- **D-026** — `getAppPushGroupMappings` interpolates an unencoded app id — closed:overtaken-by-f1e8def ([f1e8def](https://github.com/samdhenderson/okta-unbound/commit/f1e8def))
+- **D-027** — `getAppById` cannot express why it failed, so callers that need to know can't use it — closed:overtaken-by-f1e8def ([f1e8def](https://github.com/samdhenderson/okta-unbound/commit/f1e8def))
+- **D-029a** — Rule impact reads the snapshot — done:#95 ([3930f4b](https://github.com/samdhenderson/okta-unbound/commit/3930f4b))
+- **D-029b** — User memberships derive their rules — done:#97 ([59c1539](https://github.com/samdhenderson/okta-unbound/commit/59c1539))
+- **D-030** — `lint:cited-paths` is red on `main` right now — done:#82 ([50c0743](https://github.com/samdhenderson/okta-unbound/commit/50c0743))
+- **D-032** — Audit rows written before `actorResolution` contradict their own type — done:#95 ([3930f4b](https://github.com/samdhenderson/okta-unbound/commit/3930f4b))
+- **D-038** — Rule impact trusts a snapshot that may be mid-walk — done:#97 ([59c1539](https://github.com/samdhenderson/okta-unbound/commit/59c1539))
+- **D-039** — `RuleCard`'s memo comparator omits the group props it renders — done:#97 ([59c1539](https://github.com/samdhenderson/okta-unbound/commit/59c1539))
+- **D-041** — Decorative icons carry no `aria-hidden`, app-wide — done:#112 ([a376dff](https://github.com/samdhenderson/okta-unbound/commit/a376dff))
+- **D-048** — A rule's exclusion list never reaches the user-path classifier — done:#112 ([a376dff](https://github.com/samdhenderson/okta-unbound/commit/a376dff))
+- **D-050** — The group-rules fallback fetch validates nothing — done:#99 ([a5903c4](https://github.com/samdhenderson/okta-unbound/commit/a5903c4))
+- **D-052** — `ruleImpact` models rule deactivation as retracting membership — done:#106 ([415baf9](https://github.com/samdhenderson/okta-unbound/commit/415baf9))
+- **D-053** — Late-landing content re-lays-out the text beside it — umbrella; one defect filed as a seven-part cluster (D-053a–g), all closed (no direct commit of its own — see those entries; convention recorded in ADR-0044)
+- **D-053a** — The match percentage goes from 2 characters to 4, beside a truncating label — done:#112 ([a376dff](https://github.com/samdhenderson/okta-unbound/commit/a376dff))
+- **D-053b** — A status chip swings between 4 and 13 characters beside a wrapping mono expression — done:#112 ([a376dff](https://github.com/samdhenderson/okta-unbound/commit/a376dff))
+- **D-053c** — A group-count badge takes width out of a multi-line description — done:#112 ([a376dff](https://github.com/samdhenderson/okta-unbound/commit/a376dff))
+- **D-053d** — The MFA scan paragraph re-wraps three times as the button label changes — done:#112 ([a376dff](https://github.com/samdhenderson/okta-unbound/commit/a376dff))
+- **D-053e** — Three tab labels slide sideways when their count badges materialise — done:#112 ([a376dff](https://github.com/samdhenderson/okta-unbound/commit/a376dff))
+- **D-053f** — The Filters button shrinks the search field, and the member count grows in place — done:#112 ([a376dff](https://github.com/samdhenderson/okta-unbound/commit/a376dff))
+- **D-053g** — Classic scrollbars take 6px out of content width the instant a list overflows — done:#99 ([a5903c4](https://github.com/samdhenderson/okta-unbound/commit/a5903c4))
+- **D-054** — `ScrollableList` still shifts 6px on load→loaded — done:#112 ([a376dff](https://github.com/samdhenderson/okta-unbound/commit/a376dff))
+- **D-055** — `formatRuleForDisplay` does unguarded string work on a field it does not validate — done:#102 ([82a5ce4](https://github.com/samdhenderson/okta-unbound/commit/82a5ce4))
+- **D-059** — `handleGetAppInfo` fetches the app on every app page, even when the DOM already answered — done:#102 ([82a5ce4](https://github.com/samdhenderson/okta-unbound/commit/82a5ce4))
+- **D-061** — A rule can point at a group that no longer exists, and nothing says so — done:#112 ([a376dff](https://github.com/samdhenderson/okta-unbound/commit/a376dff))
+- **D-064** — A non-ok response drops its headers, so a 429 arrives with no rate-limit headers — done:#108 ([e500796](https://github.com/samdhenderson/okta-unbound/commit/e500796))
+- **D-065** — `fetchAndCacheAllGroupRules` walks a whole endpoint with no boundary schema — done:#107 ([069ef48](https://github.com/samdhenderson/okta-unbound/commit/069ef48))
+- **D-075** — A profile write invalidated the memberships and never re-read them — fixed 2026-08-28 on `feat/demo-org-writes` as its own commit, landed via PR #103 ([ee1ec88](https://github.com/samdhenderson/okta-unbound/commit/ee1ec88)); the ledger's own `done:#112-era` status was a label picked when the item was closed retroactively on 2026-09-02, not the PR that shipped the fix
+- **D-086** — `RateLimitDetector.parseHeaders` has no `NaN` guard, so it fails open — done:#117 ([4c28cd2](https://github.com/samdhenderson/okta-unbound/commit/4c28cd2))
+- **D-089** — `useRuleConsolidation` never clears `RulesCache` after writing rules — done:#117 ([4c28cd2](https://github.com/samdhenderson/okta-unbound/commit/4c28cd2))

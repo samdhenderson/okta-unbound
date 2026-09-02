@@ -32,178 +32,6 @@ block says they mean — same vocabulary, one definition, defined there.
 
 ---
 
-### I-001 · A reusable resolved-name badge with copy + open
-
-- **Category:** ux
-- **Priority:** P2
-- **Size:** M
-- **Files:** `src/sidepanel/components/shared/EntityLink.tsx`,
-  `src/sidepanel/components/shared/CopyableId.tsx`,
-  `src/sidepanel/components/shared/index.ts`
-- **Problem:** No single component resolves an entity id to a name badge
-  _and_ offers copy-id _and_ open-in-detail together. `EntityLink` does
-  name+open (falls back to inert text + tooltip when unlinkable);
-  `CopyableId` does truncated-id+copy. Zero files import both — every call
-  site that wants all three currently can't get them from one import.
-- **Done when:** A shared component (new, or an `EntityLink` variant) renders
-  a name badge, a copy-to-clipboard button for the raw id, and an open
-  action into the entity's detail view; exported from the `components/shared`
-  barrel; co-located `.stories.tsx`, axe-clean, TypeDoc header + prop
-  comments.
-- **Risk:** Low — additive, no existing call site changes yet.
-- **Status:** done:#68
-
-### I-002 · Resolve group ids inside rule-condition expression text
-
-- **Category:** ux
-- **Priority:** P2
-- **Size:** M
-- **Files:** `src/sidepanel/components/groups/detail/ClauseChecklist.tsx:154`,
-  `src/sidepanel/components/users/comparison/CauseWorklistRow.tsx:198`
-- **Verified:** 2026-08-24 — both call sites still render raw ids.
-- **Problem:** The flagship example from Sam's dump. `explainRuleExpression`'s
-  reconstructed source text (e.g. `isMemberOfAnyGroup("00g1abc…")`) renders
-  as opaque `<code>` with raw group ids, even though the sibling
-  `ClauseGroupList` component in the same view already resolves and links
-  the same ids via a `resolveGroupName` prop. An admin reading why a rule
-  matched has to go look the id up somewhere else.
-- **Done when:** Both call sites render group-id literals inside the
-  expression text using I-001's badge wherever the id is resolvable from
-  whatever data the view already has in hand (no new fetch); falls back to
-  today's raw-id rendering when the name isn't loaded, with a story/test
-  proving that fallback still renders cleanly.
-- **Risk:** Low-medium — user-facing rule display; needs both the resolved
-  and unresolved cases tested.
-- **Status:** done:#94
-- **Depends on:** I-001
-- **Ungated 2026-08-24:** the `groups/detail/` off-limits window was lifted
-  (`CLAUDE.md`, `NIGHTLY.md` 2026-08-24). This item is implementable whole; it
-  had been skipped on 2026-08-21 despite sorting to the top of the open list.
-
-### I-003 · Extend the id badge to RuleCard and push-mapping fallbacks
-
-- **Category:** ux
-- **Priority:** P2
-- **Size:** M
-- **Files:** `src/sidepanel/components/RuleCard.tsx:98-99,259`,
-  `src/sidepanel/components/groups/GroupListItemDetails.tsx:83`,
-  `src/sidepanel/components/groups/detail/GroupPushSection.tsx:51`
-  (**path corrected 2026-08-21** — the original filing said
-  `groups/GroupPushSection.tsx`, which does not exist)
-- **Verified:** 2026-08-24 — three call sites, all still raw.
-- **Problem:** Same class of bug as I-002. `RuleCard` shows a raw group id
-  when `allGroupNamesMap` doesn't have it; the two push-mapping sites show
-  `mapping.appId` as plain text when `mapping.appName` is missing.
-- **Done when:** Each site uses I-001's badge when a name is available, and
-  visibly (not silently) indicates when only the id is known. Render-time fix
-  only — no new fetch.
-- **Risk:** Low.
-- **Resolution note:** all three sites shipped together, as the item requires.
-  A named entity goes through `EntityLink` with `copyId`; an id-only entity
-  renders a local chip that **states** the gap — an `Icon`, a muted-italic
-  "Group/App name not loaded", and the raw id through `CopyableId` — rather than
-  letting the id occupy the name's slot. `RuleCard`'s truncated `(00g1a2b3…)`
-  suffix was dropped: it was never enough to paste anywhere, and `copyId`
-  replaces it with the whole id. Two consequences were filed rather than folded
-  in: the id-only chip cannot **open** the entity (`EntityLink` requires a name),
-  and the chip recipe now exists three times — both are `I-017`.
-- **Status:** done:#95
-- **Depends on:** I-001
-- **Ungated 2026-08-24:** the `groups/detail/` window was lifted, so all three
-  sites ship together. Do **not** split this into "the two easy ones" — a
-  two-thirds-done item reads as complete in the ledger, which is why it was
-  skipped whole rather than partially on 2026-08-21.
-
-### I-004 · Copy affordance on self-referencing ids that have none today
-
-- **Category:** ux
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/sidepanel/components/RuleCard.tsx:311`,
-  `src/sidepanel/components/policies/PolicyCard.tsx:94`,
-  `src/sidepanel/components/apps/AppListItem.tsx:133`
-  (**paths corrected 2026-08-21** — the filing cited both files directly under
-  `components/`; they live in the `policies/` and `apps/` subdirectories. Line
-  numbers are from the original filing and unverified against the moved files.)
-- **Problem:** Each row shows the entity's own id in its own expanded detail
-  row as bare `<code>`, no copy button — unlike `UserIdentityCard` and
-  `GroupListItemDetails`, which already pair id text with `CopyableId`/
-  `CopyButton`.
-- **Done when:** Each site uses `CopyableId` instead of bare `<code>`.
-- **Risk:** Low.
-- **Resolution note:** only `AppListItem` actually used a bare `<code>`; the
-  other two used a `font-mono` `<span>`. The substance of the item was the
-  missing copy affordance, not the tag name. Labels fold the entity name in,
-  falling back to the id when the name is empty (both schemas accept
-  `name: ""`). The residual same-name collision is filed as `I-010`.
-- **Status:** done:#74
-
-### I-005 · Compare Users view has no scroll preservation
-
-- **Category:** ux
-- **Priority:** P2
-- **Size:** M
-- **Files:** `src/sidepanel/components/users/UserComparisonView.tsx`,
-  `src/sidepanel/components/users/UserComparisonPanel.tsx`,
-  `src/sidepanel/hooks/useScrollPreservation.ts`
-- **Problem:** Neither file wires `useScrollPreservation`, unlike
-  `GroupsTab`/`TabPanel`/`GroupsListPanel`, which do. A hide/show or push/pop
-  cycle of a comparison has no defined scroll behavior — whatever the browser
-  happens to do, instead of restoring the saved offset the way list views do.
-  (Row _reordering_ while editing is intentionally stable per
-  `attributeParity.ts` — that's not the bug; the missing hook is.)
-- **Done when:** The comparison view's scroll offset survives a push/pop or
-  tab hide/show cycle the same way `GroupDetailView`'s does, verified with
-  the same test pattern used for the working views.
-- **Risk:** Low — additive hook wiring, proven pattern.
-- **Status:** done:#68
-
-### I-006 · Lead the Compare view's diff-filter pills with "All"
-
-- **Category:** ux
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/sidepanel/components/users/comparison/ComparisonDiffTab.tsx:152-160`,
-  `ComparisonAttributesToolbar.tsx:160-168`
-- **Problem:** Both render filter pills in order Differences, Shared, All.
-  Sam wants All to lead.
-- **Done when:** Both files render All, Differences, Shared in that reading
-  order. The _default selected_ filter stays `'differences'` — this item is
-  about pill order, not which filter opens active; don't change the default
-  without checking with Sam first.
-- **Risk:** Low.
-- **Resolution note:** pill order only. The default stayed `'differences'` in
-  both views — there was no one to check with on an unattended run, so the
-  item's own instruction to leave it alone was taken literally. One added
-  assertion per file reads the row in DOM order and pins each whole label, so
-  a later reorder cannot carry a count onto the wrong pill.
-- **Status:** done:#75
-
-### I-007 · Normalize verdict-badge placement in GroupMembershipRow
-
-- **Category:** ux
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/sidepanel/components/users/GroupMembershipRow.tsx:165-168,183-186`
-- **Problem:** The row's "On page" badge sits inline with the name; its
-  verdict badge (the row's primary classification — same role as the inline
-  badges in `GroupListItem.tsx:213-218` and `BlastRadiusGroupRow.tsx:192-196`)
-  is instead pushed to a trailing slot next to the expand/collapse button.
-- **Done when:** Verdict badge placement matches the inline-with-name
-  convention the other two rows use — unless there's a deliberate reason for
-  the current layout, in which case record it as a comment instead of moving
-  the badge.
-- **Risk:** Low.
-- **Resolution note:** no deliberate reason found, and the evidence ran the
-  other way — the file's module header already describes the row as "name,
-  verdict, source line", and `membershipVerdict.ts`'s short-label rule
-  presumes the badge sits _beside_ the name. Badge moved. The name line gained
-  `flex-wrap`, because it now carries two `shrink-0` badges and at the 360px
-  floor they no longer share a line with a long name; the `<h4>` keeps
-  `truncate` and a `LongGroupName` story pins that case. The residual — a
-  clipped name has no way to reveal itself — is filed as `I-011`.
-- **Status:** done:#75
-
 ### I-008 · Propose Okta Expression Language function coverage
 
 - **Category:** feature-completeness
@@ -399,37 +227,6 @@ block says they mean — same vocabulary, one definition, defined there.
   `D-072`. Status stays `research:awaiting-review` deliberately: only Sam's
   acceptance moves it to `open`, never the session that wrote it.
 
-### I-013 · Create a feeding rule from the Group Detail action bar
-
-- **Category:** feature-completeness
-- **Priority:** P2
-- **Size:** M
-- **Files:** `src/sidepanel/components/groups/detail/GroupActionBar.tsx`,
-  `src/sidepanel/components/groups/detail/GroupDetailView.tsx`,
-  `src/sidepanel/hooks/useOktaApi/ruleWrites.ts` (the POST already exists),
-  `src/shared/membership/blastRadius.ts` (read-only, for the consequence copy)
-- **Verified:** 2026-08-24 — the group-detail strip ships _Export members_,
-  _Add_ and _Compare_, and has **no disclosure tier**; `ruleWrites.ts` already
-  holds the create call, wired only from the Rules tab.
-- **Problem:** The Rules tab now shows, in place, both rule relationships a
-  group has — and the most common answer to "no rule assigns users to this
-  group" is that someone wants to create one. Today that means leaving the
-  group, going to the Rules tab, and rebuilding the context by hand. The verb
-  the page is missing is the one its own empty state implies.
-- **Done when:** The group-detail action bar offers _Create feeding rule_
-  **behind More**, not in the row — ADR-0039 puts it there because it changes
-  state with no symmetric undo: deleting a rule does **not** un-grant the
-  memberships it already made. It ships with a confirm `Modal` stating that
-  consequence in plain language, and the confirm respects ADR-0036 — a new
-  rule's blast radius is a **prediction**, never asserted. This gives the strip
-  its first tier, so `ActionBar`'s `expansion` slot gets its first group-side
-  consumer. Co-located stories, axe-clean; the empty state on the Rules tab
-  gains a companion assertion beside its existing one rather than a rewrite.
-- **Risk:** Medium. It is the first group-level _write_ on this rung that is
-  not a membership change, and the first thing on the page that cannot be
-  undone by pressing the opposite button.
-- **Status:** done:#107
-
 ### I-014 · Normalize an attribute across the filtered members
 
 - **Category:** feature-completeness
@@ -437,7 +234,9 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Size:** L
 - **Files:** `docs/features-plan.md` item C (the full inventory of what exists
   and what remains lives there, not duplicated here);
-  `docs/adr/0044-the-first-many-user-write.md` (to be created);
+  an ADR titled "The first many-user write" (not yet written, and deliberately
+  **not** naming a number — `D-072`: ADR-0044 was claimed by an unrelated decision
+  while this item held it in reserve);
   `src/shared/undoManager.ts`;
   `src/sidepanel/hooks/useOktaApi/profileOperations.ts`
 - **Verified:** 2026-08-24 — the Members tab's filter and the Insights tab's
@@ -721,6 +520,11 @@ block says they mean — same vocabulary, one definition, defined there.
   gains a short section stating that toolbar rhythm is deliberately outside
   the role system and why, so the raw values stop reading as unfinished work.
 - **Risk:** Low — either outcome is additive or documentation-only.
+- **Status:** open
+- **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
+  `SESSION.md` step 3's filter could never offer it. Set to `open` because the
+  filing is complete and its Problem was re-read and still holds; it was invisible,
+  not deferred.
 
 ### I-023 · PolicyCard's header is not click-to-toggle like its siblings
 
@@ -740,6 +544,11 @@ block says they mean — same vocabulary, one definition, defined there.
   either kept as a redundant affordance or removed — and the story covers
   both the header click and the keyboard path.
 - **Risk:** Low — one component, existing pattern to copy from two siblings.
+- **Status:** open
+- **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
+  `SESSION.md` step 3's filter could never offer it. Set to `open` because the
+  filing is complete and its Problem was re-read and still holds; it was invisible,
+  not deferred.
 
 ### I-024 · Org-snapshot findings say "of 1 applications"
 
@@ -763,6 +572,11 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Low — display string only, no API or cache behaviour. Note
   `useOrgFigures.test.tsx:130-131` asserts the current plural nouns and will
   need retargeting to the new contract.
+- **Status:** open
+- **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
+  `SESSION.md` step 3's filter could never offer it. Set to `open` because the
+  filing is complete and its Problem was re-read and still holds; it was invisible,
+  not deferred.
 
 ### I-025 · The capture fingerprint does not cover the app it films
 
@@ -793,6 +607,11 @@ block says they mean — same vocabulary, one definition, defined there.
   is chosen is recorded next to `SHARED_INPUTS`, since the current list reads as
   complete and is not.
 - **Related:** ADR-0045 (capture thin, compose in React), D-064
+- **Status:** open
+- **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
+  `SESSION.md` step 3's filter could never offer it. Set to `open` because the
+  filing is complete and its Problem was re-read and still holds; it was invisible,
+  not deferred.
 
 ### I-026 · The demo org derives memberships from rules it does not declare
 
@@ -825,6 +644,11 @@ block says they mean — same vocabulary, one definition, defined there.
   rather than the predicates. Note this re-films every chapter and moves Home's
   `unruled` figure.
 - **Related:** ADR-0043 (memberships are derived, not asserted), ADR-0052
+- **Status:** open
+- **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
+  `SESSION.md` step 3's filter could never offer it. Set to `open` because the
+  filing is complete and its Problem was re-read and still holds; it was invisible,
+  not deferred.
 
 ### I-027 · A snapshot cannot ask for a field it did not used to store
 
@@ -860,6 +684,11 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Medium. Getting it wrong in the eager direction re-walks every
   collection on every release, which is exactly the cost ADR-0040 exists to
   avoid. Wants an ADR before code.
+- **Status:** open
+- **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
+  `SESSION.md` step 3's filter could never offer it. Set to `open` because the
+  filing is complete and its Problem was re-read and still holds; it was invisible,
+  not deferred.
 
 ### I-028 · Dormant access: the report `lastMembershipUpdated` actually unlocks
 
@@ -895,6 +724,11 @@ block says they mean — same vocabulary, one definition, defined there.
   claims it makes are stronger than the existing ones, so it wants an ADR
   fixing the wording before the code. Depends on `D-076` for the numbers to be
   trustworthy on a long-lived snapshot.
+- **Status:** open
+- **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
+  `SESSION.md` step 3's filter could never offer it. Set to `open` because the
+  filing is complete and its Problem was re-read and still holds; it was invisible,
+  not deferred.
 
 ### I-029 · The reel's rule-impact chapter can come back, arguing both verbs
 
@@ -931,52 +765,6 @@ block says they mean — same vocabulary, one definition, defined there.
   the count is non-zero or it will demonstrate nothing.
 - **Status:** open
 - **Related:** `D-052` (the defect that held it out), ADR-0043, ADR-0045
-
-### I-030 · The Groups list strip has no `primary`, and reads as six equal buttons
-
-- **Category:** ux
-- **Priority:** P3
-- **Size:** S
-- **Verified:** 2026-08-31
-- **Files:** `src/sidepanel/components/groups/GroupsListActionBar.tsx`,
-  `src/sidepanel/components/groups/GroupsListActionBar.stories.tsx`,
-  `docs/adr/0061-a-list-rungs-primary-is-its-page-verb.md`
-- **Problem:** Sam, on the strip that ADR-0051 shipped: _"groups tab has no blue
-  buttons and it should."_ With no inline panel open — the state the rung rests
-  in — every control on it is `secondary`, so six identically-weighted buttons
-  sit above the list with nothing saying where to start.
-
-  `ADR-0061` fixed the _mechanism_ while building the Rules strip: `primary` now
-  names a rung's page-level verb, and an open panel states itself in its label
-  (`Cross-search (5)` → `Hide cross-search`) rather than in a colour a screen
-  reader cannot read. It deliberately did **not** convert this strip, because
-  applying the new rule mechanically would just delete its `primary` and leave it
-  with none: the Groups rung has no page-level verb to promote. _Compare (3)_,
-  _Merge (3)_, _Export (3)_ are all selection-scoped, and _Export list_ acts on
-  the filter.
-
-  So this is a design question, not a mechanical port, and it is the reason it is
-  filed rather than folded into the Rules commit: **does the Groups rung have a
-  page-level verb it is not currently offering?** The candidates worth weighing
-  are a _Load_/_Refresh_ equivalent (the Groups list does load on arrival, unlike
-  Rules, so this may be a genuine "no") and _Export list_, which acts on the whole
-  filtered rung and is the closest thing to a page-level verb the strip has today.
-
-- **Done when:** either `GroupsListActionBar` carries a `primary` under ADR-0061's
-  rule with the choice justified in its docblock, **or** an explicit note in that
-  docblock records that this rung has no page-level verb and therefore ships with
-  no `primary` on purpose — so the next reader does not re-open the question. In
-  both cases the open-panel marker moves from `variant` to the label + explicit
-  `priority: 'pinned'`, and the stories assert the label swap the way
-  `RulesListActionBar.stories.tsx`'s `TheOpenPanelSaysSo` does.
-- **Risk:** Low — one component, its stories, and seventeen `GroupsTab` tests that
-  query these labels. Note that changing a panel trigger's label changes its
-  accessible name, so `GroupsTab.test.tsx` queries for `Cross-search` and
-  `Bulk actions` need checking against the open state, not only the closed one.
-- **Status:** claimed:worktree-rules-actionbar
-- **Related:** ADR-0061, ADR-0051 §1, ADR-0038
-
----
 
 ### I-031 · Group Detail's rules section answers "what does it say?" by leaving the tab
 
@@ -1086,44 +874,6 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Status:** open
 - **Related:** ADR-0040, ADR-0062
 
-### I-034 · ⌘K is the only route to two sections, and nothing points at it
-
-- **Category:** ux
-- **Priority:** P1
-- **Size:** S
-- **Files:** `src/sidepanel/hooks/useCommandPalette.ts` (exports an unused
-  `open()`), `src/sidepanel/components/ContextBar.tsx` or
-  `src/sidepanel/components/TabNavigation.tsx` (wherever the affordance lands),
-  `src/sidepanel/tabs.ts` (read-only, for what `railHidden` costs)
-- **Verified:** 2026-09-01 — filed by the change that created the gap, rather
-  than left for someone to rediscover.
-- **Problem:** ADR-0063 took Explorer and History out of the icon rail and made
-  ⌘K their only route. The panel has **no visible ⌘K affordance anywhere**, so a
-  user who does not already know the shortcut exists cannot reach either section
-  at all. `useCommandPalette` already returns an `open()` that **no caller uses**
-  — it was written for exactly this and never wired.
-
-  This compounds with `I-018`: ADR-0057 is still Proposed, so the chord only
-  fires once focus is inside the side-panel document. Pressed from the Okta page
-  Chrome takes it for the omnibox. So today the two sections are reachable only
-  by someone who both knows the shortcut and has already clicked into the panel.
-
-  P1 rather than P2 because this is a regression in reachability for shipped
-  features, not a missing nicety.
-
-- **Done when:** One visible, always-present control opens the palette — a small
-  `⌘K` affordance in the top chrome is the obvious shape — wired to
-  `useCommandPalette().open()`, with the platform-correct glyph (⌘ vs Ctrl). It
-  is axe-clean, names itself for a screen reader, and has a story. A test pins
-  that pressing it opens the palette, so `open()` stops being dead code.
-- **Risk:** Low — additive, one new control in the chrome.
-- **Status:** done:#117
-- **Related:** ADR-0063, ADR-0057, `I-018`, `I-035` (found while siting it).
-  Note that this relieves only half of the compound problem it describes: the
-  chord still does not fire from the Okta page (`I-018`/ADR-0057), so the new
-  button is now the **only** route that works without first clicking into the
-  panel. That raises `I-018`'s value rather than lowering it.
-
 ### I-035 · `ContextBar`'s "Unpin & switch" is a raw `<button>` on nobody's list
 
 - **Category:** architecture
@@ -1160,3 +910,24 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Low. Documentation and a comment, unless `TextLink` lands first.
 - **Status:** open
 - **Related:** `I-034` (found it), `docs/components.md` §3
+
+## Archive
+
+Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk
+prose that used to live here is recoverable from git history at the linked
+commit — that is the point of moving it out of this file. Ids here are
+permanently retired: never reuse an archived id for a new item (the
+uniqueness guard in `scripts/check-cited-paths.mjs` enforces this across both
+ledgers). See `SESSION.md` step 7 and `CLAUDE.md`'s "Nightly maintenance
+system" section for when an item moves here.
+
+- **I-001** — A reusable resolved-name badge with copy + open — done:#68 ([808ab30](https://github.com/samdhenderson/okta-unbound/commit/808ab30))
+- **I-002** — Resolve group ids inside rule-condition expression text — done:#94 ([ca07a02](https://github.com/samdhenderson/okta-unbound/commit/ca07a02))
+- **I-003** — Extend the id badge to RuleCard and push-mapping fallbacks — done:#95 ([3930f4b](https://github.com/samdhenderson/okta-unbound/commit/3930f4b))
+- **I-004** — Copy affordance on self-referencing ids that have none today — done:#74 ([bcf5a39](https://github.com/samdhenderson/okta-unbound/commit/bcf5a39))
+- **I-005** — Compare Users view has no scroll preservation — done:#68 ([808ab30](https://github.com/samdhenderson/okta-unbound/commit/808ab30))
+- **I-006** — Lead the Compare view's diff-filter pills with "All" — done:#75 ([9d71a26](https://github.com/samdhenderson/okta-unbound/commit/9d71a26))
+- **I-007** — Normalize verdict-badge placement in GroupMembershipRow — done:#75 ([9d71a26](https://github.com/samdhenderson/okta-unbound/commit/9d71a26))
+- **I-013** — Create a feeding rule from the Group Detail action bar — done:#107 ([069ef48](https://github.com/samdhenderson/okta-unbound/commit/069ef48))
+- **I-030** — The Groups list strip has no `primary`, and reads as six equal buttons — done:#113 ([1d54e77](https://github.com/samdhenderson/okta-unbound/commit/1d54e77))
+- **I-034** — ⌘K is the only route to two sections, and nothing points at it — done:#117 ([4c28cd2](https://github.com/samdhenderson/okta-unbound/commit/4c28cd2))

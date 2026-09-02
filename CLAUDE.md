@@ -164,7 +164,9 @@ be reviewed with `security-logging-reviewer`.
 - Shared utils: `src/shared/utils/` (`logger`, `oktaUrl`, `dateFormat`, …).
 - Nightly maintenance system: `SESSION.md` (the sequence), `CONVENTIONS.md`
   (technical standards it enforces), `IMPROVEMENTS.md` / `DEBT.md` (the two
-  backlogs, `I-NNN` / `D-NNN`), `NIGHTLY.md` (append-only session log).
+  backlogs, `I-NNN` / `D-NNN` — each ends in a `## Archive` section holding one
+  line per closed item; live items only carry the full Problem/Done-when
+  write-up), `NIGHTLY.md` (append-only session log).
 
 ## Plan-and-approval gate for risky changes
 
@@ -236,6 +238,14 @@ that can't drift out of sync with itself:
   not a skipped one.** Three of the five items gated as of 2026-08-24 had
   gone stale under code that moved, one of them badly enough that acting on
   it would have deleted a hook nine surfaces depend on.
+- **A closed item eventually collapses to one line in `## Archive`** — id,
+  title, how it ended, and a link to the commit that addressed it; the
+  verbose Problem/Done-when/Risk prose is dropped because it stays
+  recoverable from git history. Never archive an item closed by the PR
+  still in flight — its commit does not exist yet. Archive it once that PR
+  has actually merged to `main`, per `SESSION.md` step 7. An archived id is
+  retired for good: `scripts/check-cited-paths.mjs` fails the build if a new
+  item reuses one.
 
 ## Working agreement
 

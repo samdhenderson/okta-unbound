@@ -14,7 +14,10 @@ wrong to right.
 ## Load first
 
 - The exact `DEBT.md` (or `IMPROVEMENTS.md`) item you were handed — its
-  **Problem** and **Done when** are your scope. Don't expand past them.
+  **Problem** and **Done when** are your scope. Don't expand past them. If
+  the id you were handed is a one-line entry in the file's `## Archive`
+  section rather than a full `### ` item, it is already closed — stop and
+  say so rather than trying to re-derive a Problem from a title.
 - `docs/architecture.md` if the fix touches the message-passing pipeline.
 - `CONVENTIONS.md` for the house pattern in the area you're touching (DOM
   selectors, messaging, throttling, session-expiry) — match it, don't
