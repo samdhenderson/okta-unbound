@@ -19,6 +19,16 @@
  * (`D-013`/`D-013b`). When it is unresolved the hook also raises
  * {@link UseRuleLifecycleReturn.actorNotice} so the admin is told at the time
  * rather than discovering the gap in a later export (`D-013c`).
+ *
+ * ## Cache
+ *
+ * Activating or deactivating a rule changes both that rule's cached `status` and
+ * the org-wide snapshot's active/inactive totals. This hook makes no
+ * invalidation call of its own: the write layer drops the snapshot as part of the
+ * successful `activateGroupRule`/`deactivateGroupRule` write
+ * ({@link module:hooks/useOktaApi/ruleWrites}, ADR-0064). Before that, this was
+ * the one rule-write path that had never remembered to (`D-095`), which is the
+ * whole argument for putting the effect under the write instead of above it.
  */
 
 import { useCallback } from 'react';

@@ -25,8 +25,15 @@ export interface CreateRulePayload {
 /** Suffix appended to a consolidated rule's name (Okta rule names must be unique). */
 export const CONSOLIDATED_SUFFIX = ' (consolidated)';
 
-/** Okta caps rule names at 50 chars; keep the suffix and truncate the base. */
-const MAX_RULE_NAME = 50;
+/**
+ * Okta caps a group rule's name at 50 characters.
+ *
+ * The one declaration of that limit (`D-090`): consolidation keeps its suffix and
+ * truncates the base against it, and the group rung's create-a-rule draft checks
+ * a typed name against the same number, so a change to Okta's cap lands in one
+ * place rather than two that can drift.
+ */
+export const MAX_RULE_NAME_LENGTH = 50;
 
 /**
  * Derive the name for a consolidated rule: the base name plus a suffix, truncated
@@ -36,7 +43,7 @@ const MAX_RULE_NAME = 50;
  * @returns A unique, length-capped consolidated name.
  */
 export function consolidatedRuleName(baseName: string): string {
-  const room = MAX_RULE_NAME - CONSOLIDATED_SUFFIX.length;
+  const room = MAX_RULE_NAME_LENGTH - CONSOLIDATED_SUFFIX.length;
   const base = baseName.length > room ? baseName.slice(0, room) : baseName;
   return `${base}${CONSOLIDATED_SUFFIX}`;
 }

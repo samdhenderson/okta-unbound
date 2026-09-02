@@ -42,9 +42,11 @@
  *
  * ## Cache, and the one thing it does not refresh
  *
- * A successful create clears the org-wide {@link RulesCache}: it is a 5-minute
- * TTL snapshot of every group rule, and leaving it in place would hide the new
- * rule from every surface that reads it. The open Rules pane's own list is
+ * A successful create drops the org-wide rules snapshot — a 5-minute TTL copy of
+ * every group rule that would otherwise hide the new one from every surface that
+ * reads it. This hook does not make that call: it belongs to the write itself and
+ * lives in {@link module:hooks/useOktaApi/ruleWrites} (ADR-0064), so no rule
+ * write can skip it. The open Rules pane's own list is
  * **not** re-fetched in place — `useGroupSource.open` is the only reload it has
  * and it resets the member-source analysis with it, which would silently throw
  * away a walk the admin already paid for. The created rule is reachable from
@@ -57,9 +59,9 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { useOktaApi } from './useOktaApi';
-import { RulesCache } from '../../shared/rulesCache';
 import { parseRuleExpression } from '../../shared/ruleEvaluator';
 import { unevaluableReasonText } from '../../shared/rules/unevaluableReasonText';
+import { MAX_RULE_NAME_LENGTH } from '../../shared/rules/consolidation';
 import { createLogger } from '../../shared/utils/logger';
 import type { GroupSummary } from '../../shared/types';
 
@@ -70,12 +72,6 @@ const OKTA_EXPRESSION_TYPE = 'urn:okta:expression:1.0';
 
 /** Okta's rule `type` for a group rule. */
 const OKTA_GROUP_RULE_TYPE = 'group_rule';
-
-/**
- * Okta caps a group rule's name at 50 characters. Checked here so the reader
- * learns it while typing rather than from a rejected write.
- */
-export const MAX_RULE_NAME_LENGTH = 50;
 
 /** Options for {@link useCreateFeedingRule}. */
 export interface UseCreateFeedingRuleOptions {
@@ -217,9 +213,8 @@ export function useCreateFeedingRule({
         return;
       }
 
-      // The org-wide rule snapshot is now a rule short. Dropping it is cheaper
-      // than every surface that reads it showing a five-minute-old inventory.
-      await RulesCache.clear();
+      // The org-wide rule snapshot was dropped by the write layer itself
+      // (ADR-0064); nothing to invalidate here.
       log.info('Created group rule', { ruleId: created.rule.id, groupId: group.id });
       setCreatedRuleName(created.rule.name);
       setCreatedRuleId(created.rule.id);

@@ -9,6 +9,14 @@
  * reason to abort the consolidation (`D-013`/`D-013b`) — but is surfaced to the
  * admin at the time as a non-blocking `actorNotice` (`D-013c`). The Okta API
  * (`useOktaApi`), the audit store, and the undo manager are fully mocked.
+ *
+ * Rules-cache invalidation is no longer sequenced by this hook (ADR-0064): it
+ * happens inside each write, below the mocked facade, so the `D-089` assertions
+ * that used to live here are retargeted onto `useOktaApi/ruleWrites.test.ts`
+ * ("drops the org-wide snapshot when a rule is created", the same for a created
+ * rule whose response failed validation — the abort path — and "leaves the
+ * snapshot alone when the create is rejected"). What stays here is the ordering
+ * those assertions depended on: which writes this hook issues before it aborts.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
@@ -35,14 +43,6 @@ const api = {
 
 vi.mock('./useOktaApi', () => ({
   useOktaApi: () => api,
-}));
-
-// `chrome.storage`-backed, so mocked here the same way `useCreateFeedingRule`'s
-// suite mocks it — what is pinned is the invalidation call, not the storage.
-const rulesCache = vi.hoisted(() => ({ clear: vi.fn() }));
-
-vi.mock('../../shared/rulesCache', () => ({
-  RulesCache: rulesCache,
 }));
 
 const mockedAuditStore = vi.mocked(auditStore);
@@ -83,7 +83,6 @@ async function runMerge() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  rulesCache.clear.mockResolvedValue(undefined);
   api.getRawGroupRule.mockResolvedValue(rawRule);
   api.createGroupRule.mockResolvedValue({
     success: true,
@@ -126,21 +125,25 @@ describe('useRuleConsolidation audit attribution', () => {
   });
 });
 
-describe('useRuleConsolidation rules-cache invalidation', () => {
+describe('useRuleConsolidation write ordering', () => {
   /*
-    D-089: `RulesCache` is the org-wide rule inventory on a 5-minute TTL. A
-    consolidation creates a rule and deletes the sources, so leaving the entry in
-    place serves every surface that reads it an inventory Okta no longer has.
+    D-089/ADR-0064: the org-wide snapshot is dropped by the create write itself.
+    What this hook is still responsible for is issuing that write before anything
+    that can abort the run, so these pin which writes each path reaches — the
+    invalidation they imply is pinned at the write layer.
   */
-  it('drops the org-wide rules cache once the consolidation lands', async () => {
+  it('creates the replacement rule before any source is retired', async () => {
     await runMerge();
 
-    expect(rulesCache.clear).toHaveBeenCalledTimes(1);
+    expect(api.createGroupRule).toHaveBeenCalledTimes(1);
+    expect(api.createGroupRule.mock.invocationCallOrder[0]).toBeLessThan(
+      api.deleteGroupRule.mock.invocationCallOrder[0],
+    );
   });
 
-  it('drops the cache even when the run aborts after the replacement rule exists', async () => {
+  it('has already created the rule when the run aborts at the activate step', async () => {
     // Activation fails, so no source is retired — but the created rule is real,
-    // and a snapshot taken before it is now a rule short.
+    // and the snapshot went with the create that made it.
     api.activateGroupRule.mockResolvedValue({ success: false, error: 'Activation failed' });
 
     const { result } = renderHook(() =>
@@ -159,11 +162,11 @@ describe('useRuleConsolidation rules-cache invalidation', () => {
     });
 
     expect(result.current.phase).toBe('error');
+    expect(api.createGroupRule).toHaveBeenCalledTimes(1);
     expect(api.deleteGroupRule).not.toHaveBeenCalled();
-    expect(rulesCache.clear).toHaveBeenCalledTimes(1);
   });
 
-  it('leaves the cache alone when nothing was written', async () => {
+  it('writes nothing at all when the create is rejected', async () => {
     api.createGroupRule.mockResolvedValue({ success: false, error: 'Rule name already in use' });
 
     const { result } = renderHook(() =>
@@ -182,7 +185,9 @@ describe('useRuleConsolidation rules-cache invalidation', () => {
     });
 
     expect(result.current.phase).toBe('error');
-    expect(rulesCache.clear).not.toHaveBeenCalled();
+    expect(api.activateGroupRule).not.toHaveBeenCalled();
+    expect(api.deactivateGroupRule).not.toHaveBeenCalled();
+    expect(api.deleteGroupRule).not.toHaveBeenCalled();
   });
 });
 
