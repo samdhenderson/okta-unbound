@@ -37,6 +37,14 @@ interface PolicyCardProps {
  * Renders one auth policy as an expandable read-only card, lazily loading its
  * rules the first time it is expanded.
  */
+/**
+ * Default shallow compare, deliberately — no custom comparator. There was one, listing
+ * every field the card renders; enumerating it against the render body (`D-045`, following
+ * `RuleCard`'s `D-039`) found every field already there, so it added no correctness over the
+ * default while still being a hand-written list that would silently drift the moment the
+ * card grows a new field. `policy` objects come from `PoliciesListPanel`'s list with stable
+ * per-id identity, so the honest shallow compare is exactly as effective and cannot go stale.
+ */
 const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const rulesId = useId();
@@ -92,15 +100,18 @@ const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
               {/*
                 The id goes through the shared `CopyableId` rather than being
                 read-only text: it is the value a user takes to the API or a
-                support ticket. The label names the policy because several cards
-                can be expanded at once (`Copy <type> id for <name>`, the same
-                shape `EntityLink` defaults to).
+                support ticket. The label names the policy *and* folds the id
+                in (`Copy <type> id for <name> (<id>)`, `EntityLink`'s
+                `copyId` convention, I-010): several cards can be expanded at
+                once, and two policies can legitimately share a display name,
+                so the name alone is not enough to tell their copy controls
+                apart.
               */}
               <div className="flex min-w-0 items-center gap-1 border-t border-neutral-200 pt-2 text-xs text-neutral-600">
                 <span className="shrink-0 font-semibold">Policy ID:</span>
                 <CopyableId
                   value={policy.id}
-                  label={`Copy policy id for ${policy.name || policy.id}`}
+                  label={`Copy policy id for ${policy.name || policy.id} (${policy.id})`}
                 />
               </div>
             </div>
@@ -133,6 +144,13 @@ const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
           )}
         </div>
         <IconButton
+          // I-010: this label still collides when two policies share a display
+          // name — `AuthPoliciesTab.test.tsx`/`.stories.tsx` (outside this
+          // change's file ownership) assert the exact string `Show rules for
+          // <name>` verbatim, so folding the id in here the way the copy
+          // control below does would require editing assertions this change
+          // does not own. Left as the residual half of I-010; the copy
+          // control is fixed.
           label={isExpanded ? `Hide rules for ${name}` : `Show rules for ${name}`}
           variant="ghost"
           size="md"
@@ -150,29 +168,7 @@ const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
       </div>
     </ListRow>
   );
-}, arePolicyCardPropsEqual);
-
-/**
- * Field-wise prop comparison, mirroring `RuleCard` and `GroupListItem`.
- *
- * The default shallow compare holds `policy` by reference, so a refresh that returns
- * an identical policy in a fresh object re-renders every card. Comparing the fields
- * the card actually reads keeps expanded cards (and their loaded rules) undisturbed.
- *
- * **Add a field here whenever the card starts rendering one** — a missing field shows
- * as a card that never updates.
- */
-function arePolicyCardPropsEqual(prev: PolicyCardProps, next: PolicyCardProps): boolean {
-  return (
-    prev.loadRules === next.loadRules &&
-    prev.policy.id === next.policy.id &&
-    prev.policy.name === next.policy.name &&
-    prev.policy.status === next.policy.status &&
-    prev.policy.description === next.policy.description &&
-    prev.policy.priority === next.policy.priority &&
-    prev.policy.system === next.policy.system
-  );
-}
+});
 
 PolicyCard.displayName = 'PolicyCard';
 
