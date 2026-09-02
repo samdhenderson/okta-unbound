@@ -11,7 +11,12 @@ function member(id: string): OktaUser {
   return {
     id,
     status: 'ACTIVE',
-    profile: { login: `${id}@x.io`, email: `${id}@x.io`, firstName: id, lastName: 'U' },
+    profile: {
+      login: `${id}@example.com`,
+      email: `${id}@example.com`,
+      firstName: id,
+      lastName: 'U',
+    },
   };
 }
 
