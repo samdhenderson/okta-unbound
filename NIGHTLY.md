@@ -17,6 +17,86 @@ Entry format:
 
 ---
 
+## 2026-09-02
+
+**Baseline:** green on `main` @ `58f77d9`. Every gate: type-check, lint (0
+errors / 191 warnings), `format:check`, `test:coverage`, `knip:circular`,
+`lint:control-chars`, `lint:cited-paths`, and `test:storybook` (179 files /
+1319 tests, run with the pinned `chromium-1194` executable per
+`CONVENTIONS.md`). The container started with **no `node_modules`** — the first
+ladder run produced a wall of missing-`@types` and missing-`@eslint/js`
+failures that look exactly like a red baseline and are not one. `npm ci`
+first; that is environment, not `main`.
+
+**Items worked:** `I-034`, `D-086`, `D-089`. Five new items filed from
+findings: `D-093`, `D-094`, `D-095`, `D-096`, `I-035`.
+**PR:** https://github.com/samdhenderson/okta-unbound/pull/117
+**Backlog after:** 68 open of 149 total — 14 IMPROVEMENTS, 54 DEBT, 3 blocked,
+7 `research:awaiting-review`.
+
+**Branch note:** this run was given `claude/stoic-gates-vcbg8k` by the harness
+rather than `nightly/2026-09-02`, and pushed there because pushing anywhere
+else was not authorised. `SESSION.md` step 2 anticipates this ("whatever the
+harness assigns in its place"); the three-open-PR cap should keep counting it
+as an unattended run's branch.
+
+**Notes:**
+
+**No open PRs at all tonight**, so the contention filter excluded nothing and
+none of the three hard stops fired. Worth recording because it is the first
+session since the step-2 survey was added where the survey came back empty —
+the queue Sam was warned about on 2026-09-01 has drained.
+
+**`D-085` was passed over despite being the highest-priority open item**, and
+this is the one decision here that deserves a second opinion. It is P1 and its
+`Verified` date is fresh, so nothing in `SESSION.md`'s sort says to skip it.
+It was skipped because widening `OktaGroupRule.status` / `FormattedRule.status`
+to admit `INVALID` is exactly what `CLAUDE.md`'s plan-and-approval gate
+describes — it changes an existing contract and is cross-cutting. Enumerated
+rather than assumed: the union is declared in five places
+(`schemas/okta.ts:136`, `types.ts:133/182/281/737`, `ruleImpact.ts:51`,
+`useRuleConsolidation.ts:46`) and branched on in at least eight more, where
+each branch is a product decision rather than a mechanical edit — does an
+`INVALID` rule count toward the `inactive` stat, what badge does it carry,
+which lifecycle verbs does it offer, does the Rules filter grow a third
+option. The item's own **Risk** note says a reviewer could reasonably disagree
+with the result after the code exists, which is the gate's own test verbatim.
+
+I did **not** change its status. `D-092`'s own **Done when** says a session
+must not invent a status for an item, and the same restraint applies to
+re-classifying one. So `D-085` is still `open` and the next unattended session
+will reach this same wall. **The unblocking action is Sam's**: either re-mark
+it `research:awaiting-review` (which lets a night produce a Proposed ADR for
+the eight branch decisions, `docs/`-only), or say the widening is uncontentious
+and leave it `open`. Until then it is a P1 that no unattended run can take.
+
+**The ledgers are drifting out of sync with what has merged**, which is what
+`D-093` records. Eleven items sit at `claimed:` for two branches that no longer
+exist; six of them demonstrably shipped (five in #112, `I-030` in #113) and
+just never got their `done:` line, so step 3's filter can never offer them
+again. `D-092`'s count has also grown — thirteen items now carry no `Status:`
+line, not nine. Three separate items (`D-080`, `D-092`, `D-093`) now describe
+one gap: nothing validates the ledgers as data. They are cheap and they should
+probably be done together, as `D-093`'s **Done when** suggests.
+
+**On `test:storybook`:** the `I-034` writer could not run it — its Playwright
+resolution asked for `chromium_headless_shell-1228`, which is not installed,
+and the download is blocked. The lead ran it with the
+`VITEST_BROWSER_EXECUTABLE` pin `CONVENTIONS.md` documents and it passed,
+including 13 tests in the new `TabNavigation.stories.tsx` and its axe pass. So
+the ADR-0014 axe requirement for `I-034` is **proven here, not deferred to
+CI** — but the pin needs to reach the writer agents, not just the lead, or
+every UI item will keep reporting its stories unverified.
+
+**Review outcome:** `security-logging-reviewer` and `ui-reviewer` both ran
+against the combined diff. No must-fix findings from either. One `ui-reviewer`
+finding was fixed by amending `I-034`'s own commit: the button carried a native
+`title=`, which `docs/components.md:155` bans in new code, and which here also
+produced a near-duplicate accessible description on top of the `sr-only` name.
+Two advisory findings were left, deliberately, and are named in the PR body.
+
+---
+
 ## 2026-09-01
 
 **Baseline:** red — `test:storybook` failed on `main` @ `069ef48`, 1 failed /

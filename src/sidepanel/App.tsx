@@ -434,7 +434,14 @@ const App: React.FC = () => {
             onReconnect={handleReconnect}
           />
 
-          <TabNavigation activeTab={activeTab} onTabChange={handleTabChange} />
+          {/* The rail's trailing ⌘K button is the only visible route to the two
+              rail-hidden sections (ADR-0063), so it opens the same palette state
+              the chord toggles — `open`, not a second `useCommandPalette()`. */}
+          <TabNavigation
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
+            onOpenCommandPalette={jumpPalette.open}
+          />
 
           {/* `flex-1 min-h-0` + `overflow-y-auto` make *this* div the scroller, not
             the document and not the shell — every root-scrolling tab shares it,
