@@ -37,7 +37,7 @@
  * @see {@link summarizeRuleImpact}
  */
 
-import type { OktaGroupRule, OktaUser, GroupType } from '../types';
+import type { OktaGroupRule, OktaUser, GroupType, GroupRuleStatus } from '../types';
 
 /**
  * A group rule reduced to just the fields impact analysis needs: its lifecycle
@@ -47,8 +47,12 @@ import type { OktaGroupRule, OktaUser, GroupType } from '../types';
 export interface ImpactRule {
   /** Rule id. */
   id: string;
-  /** Whether the rule is currently in force. Only `ACTIVE` rules place members. */
-  status: 'ACTIVE' | 'INACTIVE';
+  /**
+   * Whether the rule is currently in force. Only `ACTIVE` rules place members —
+   * `INACTIVE` (paused by an admin) and `INVALID` (Okta can no longer evaluate
+   * the rule) both place nobody, for very different reasons. See `D-085`.
+   */
+  status: GroupRuleStatus;
   /** Ids of the groups the rule assigns matched users to. */
   targetGroupIds: string[];
   /** Ids of users explicitly excluded from the rule (never placed by it). */
@@ -177,6 +181,17 @@ export interface RuleImpactSummary {
    * `removeUsers=true` it is who is removed. It is never, on its own, a loss.
    */
   totalHeldSolely: number;
+  /**
+   * Whether the classification above ran against zero other rules to compare
+   * against (`rules` was empty), as opposed to a populated inventory that
+   * happened to yield no overlap. Both cases can leave `totalHeldSolely` at 0,
+   * but they mean different things to an admin: one is "there was nothing to
+   * collide with", the other is "this was checked and nothing collides" (D-047).
+   * Distinguishing them is a caller/UI concern only — the set math above is
+   * identical either way. Optional and defaults to "treat as evaluated" (`false`-like)
+   * for summaries built by hand rather than through {@link summarizeRuleImpact}.
+   */
+  emptyRuleInventory?: boolean;
 }
 
 /**
@@ -219,5 +234,6 @@ export function summarizeRuleImpact(
     targetGroups,
     distinctMemberCount: distinctMembers.size,
     totalHeldSolely: distinctHeldSolely.size,
+    emptyRuleInventory: rules.length === 0,
   };
 }
