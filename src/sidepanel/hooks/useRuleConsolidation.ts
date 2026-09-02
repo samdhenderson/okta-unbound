@@ -13,6 +13,15 @@
  * never as a placeholder identity — `D-013`/`D-013b`, and surfaced to the admin
  * as {@link UseRuleConsolidationReturn.actorNotice} while the run proceeds —
  * `D-013c`) and captures the retired rules' definitions for undo.
+ *
+ * ## Cache
+ *
+ * The moment the replacement rule exists, the org-wide {@link RulesCache} — a
+ * 5-minute TTL snapshot of every group rule — describes an inventory Okta no
+ * longer has, so the run drops it there rather than at the end (`D-089`): a run
+ * that aborts at the activate step has still created a rule, and the retire
+ * loop that follows only makes a surviving snapshot wronger. The tab's own
+ * `reload` is a force-refresh, so it repopulates the entry from Okta.
  */
 
 import { useCallback, useState } from 'react';
@@ -23,6 +32,7 @@ import { useOktaApi } from './useOktaApi';
 import { useActorNotice } from './useActorNotice';
 import { logAction } from '../../shared/undoManager';
 import { auditStore } from '../../shared/storage/auditStore';
+import { RulesCache } from '../../shared/rulesCache';
 import {
   buildConsolidatedRulePayload,
   consolidatedRuleName,
@@ -240,6 +250,11 @@ export function useRuleConsolidation({
         setPhase('error');
         return;
       }
+
+      // The org-wide rule snapshot is now a rule short. Dropped here, before the
+      // steps that can abort the run, because the rule exists either way and a
+      // stale snapshot outlives the failure by up to its 5-minute TTL (`D-089`).
+      await RulesCache.clear();
 
       // 2) Activate it if any source was active. Abort before deleting on failure.
       if (preview.willActivate) {
