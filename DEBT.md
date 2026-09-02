@@ -104,7 +104,7 @@ heuristic and no allow-list of endpoints.
   must also say what happens to an audit entry for an operation interrupted this
   way — the `D-013` policy and this one meet there.
 - **Risk:** None to write. Medium to implement, which is why the ADR comes first.
-- **Status:** research:awaiting-review
+- **Status:** done:#118
 - **ADR written 2026-08-29** (`chore/unstick-backlog`), at Status: Proposed:
   `docs/adr/0054-a-401-is-a-session-not-a-request.md`. The number this item reserved on 2026-08-24 had been taken by an
   unrelated ADR before the item was picked up, so the proposal is **ADR-0054** — see
@@ -135,7 +135,7 @@ heuristic and no allow-list of endpoints.
   session is just a slower way to fail.
 - **Risk:** Medium — changes retry behavior against a live rate limiter. Land it
   after `D-007a`, which gives it the typed status to branch on.
-- **Status:** open
+- **Status:** done:#118
 - **Depends on:** `D-007a`
 
 ### D-012 · `conditionExpressionOf` is replicated in four files
@@ -160,7 +160,7 @@ heuristic and no allow-list of endpoints.
   (different fallbacks, one lowercases and strips whitespace); they are not
   part of this item.
 - **Risk:** Low — behavior-preserving if the identity check above holds.
-- **Status:** open
+- **Status:** done:#118
 
 ### D-015 · The ghost copy-id recipe is now duplicated in EntityLink and CopyableId
 
@@ -184,7 +184,7 @@ heuristic and no allow-list of endpoints.
   not-navigable cases — is unchanged. Existing tests for both stay green
   without being retargeted.
 - **Risk:** Low — behaviour-preserving extraction behind two stable APIs.
-- **Status:** open
+- **Status:** done:#118
 
 ### D-022 · Half of a React-warning assertion cannot fire under React 19
 
@@ -210,7 +210,7 @@ heuristic and no allow-list of endpoints.
   deliberately as a guard against a React downgrade. Do **not** delete the
   assertion outright: the surviving half is real, and ADR-0012 applies.
 - **Risk:** Low. Cosmetic in effect — no coverage changes either way.
-- **Status:** open
+- **Status:** done:#118
 
 ### D-024 · `check-cited-paths` still cannot see any path that is not under `src/`
 
@@ -240,7 +240,7 @@ heuristic and no allow-list of endpoints.
   the existing exclusions are recorded.
 - **Risk:** Low to fix; the effort is in the boundary decision and whatever
   dead citations first light-up surfaces.
-- **Status:** open
+- **Status:** done:#118
 
 ### D-025 · The vitest timeout recipe carries two different `alarm` values
 
@@ -268,7 +268,7 @@ heuristic and no allow-list of endpoints.
 - **Risk:** Low. Left alone, an agent that follows the recipe verbatim on a
   full-suite run gets a truncated run and may diagnose a red suite that is
   really just the alarm firing.
-- **Status:** open
+- **Status:** done:#118
 
 ### D-028 · Independently audit the ADR-0040 org snapshot against a real org
 
@@ -525,7 +525,7 @@ rationale that caching a join is only one more thing to invalidate.
   other dated record in the repo. Not a silent config tweak either way.
 - **Risk:** Low. Narrowing a gate needs care, but the narrowing is precisely
   scoped by a status field the file already parses.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-030`, `D-018`, `D-024`
 
 ### D-033 · Two docs still cite `unknown@unknown.com` as current behavior
@@ -543,7 +543,7 @@ rationale that caching a join is only one more thing to invalidate.
   unresolved actor is recorded as `performedBy: null` with
   `actorResolution: 'unavailable'`, and the operation proceeds anyway.
 - **Risk:** None — documentation only.
-- **Status:** open
+- **Status:** done:#118
 
 ### D-034 · `useGroupMerge` copies members with a hand-rolled loop, not `runOperation`
 
@@ -563,7 +563,7 @@ rationale that caching a join is only one more thing to invalidate.
   bookkeeping is the reason this was not folded into `D-013b`.
 - **Risk:** Medium — rewrites the progress and undo paths of a destructive
   operation. Needs its own tests before the change, not after.
-- **Status:** open
+- **Status:** done:#118
 
 ### D-035 · `currentUserSchema` lives in `core.ts`, away from every other Okta schema
 
@@ -583,7 +583,7 @@ rationale that caching a join is only one more thing to invalidate.
   siblings, or a one-line comment in `okta.ts` records why hook-local response
   schemas are allowed to stay local.
 - **Risk:** Low.
-- **Status:** open
+- **Status:** done:#118
 
 ### D-036 · `ClauseChecklist.tsx` is over the ~300-line bar
 
@@ -671,7 +671,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Done when:** One fake in `src/test/factories/`; all four files import it.
   Purely test-side, behaviour-preserving; every existing assertion stays.
 - **Risk:** Low.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-029a`, `D-029b`, `D-029c`
 
 ### D-043 · Nothing validates an audit row on the way out of IndexedDB
@@ -698,7 +698,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   and Okta's responses are not.
 - **Risk:** Low either way. The cost of leaving it is a silent wrong branch in
   whatever audit UI ships next.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-032`, `D-013c`
 
 ### D-044 · `--bar-bleed` is measured through the rung's entrance transform
@@ -769,7 +769,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   `RuleCard` no longer follows.
 - **Risk:** Low. Widening or dropping a comparator can only cause _more_
   re-renders, never a stale one.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-039`
 
 ### D-046 · The Rules tab re-creates every handler it hands to a `RuleCard`
@@ -794,7 +794,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   `useCallback` (or hoisted), so `RuleCard`'s shallow compare can actually
   skip unchanged rows. No behavior change — this is purely render volume.
 - **Risk:** Low. Nothing changes but how often a row re-renders.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-039`
 
 ### D-047 · A fully-walked org with no rules reads the same as a rule that hits nobody
@@ -821,7 +821,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   attach to, and it is the cheaper half of the remedy `D-038` declined for
   scope.
 - **Risk:** Low — it is a copy/state distinction, not a data change.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-038`, ADR-0040 §7
 
 ### D-049 · `RULE_INVENTORY_KEY` is a cache-key literal outside `keys.ts`
@@ -844,7 +844,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   others and the hook imports it. No behavior change — the key string itself
   must not change, or in-flight cached inventories are orphaned.
 - **Risk:** Low, provided the string is preserved verbatim.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-029b`
 
 ### D-051 · Two always-on log calls pass a raw caught error
@@ -874,7 +874,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   other `log.warn`/`log.error` call sites passing a bare caught value is worth
   doing in the same pass, since the fix is mechanical.
 - **Risk:** Low. Console output changes; nothing else.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-029b`, `D-038`
 
 ### D-056 · `AlertMessage` hand-rolls two raw buttons inside `components/shared`
@@ -898,7 +898,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   Existing tests and stories stay green without retargeting.
 - **Risk:** Low-medium — behaviour-preserving in intent, but the blast radius is
   every alert in the app, so lean on the story suite.
-- **Status:** open
+- **Status:** done:#118
 
 ### D-057 · `RulesTab`'s alert states cannot be reached by a story
 
@@ -955,7 +955,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   and fix every hit, rather than the three modals named here.
 - **Risk:** Low — presentational, behind two components that already have story
   coverage.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-013c` (how it was found)
 
 ### D-060 · Can `/api/v1/apps` report group assignments, or must the snapshot fan out?
@@ -993,7 +993,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   get a line citing this item so the next reader does not re-open the question.
 - **Risk:** Medium — a widened filter changes what three shipped surfaces claim,
   so it needs the honesty rules re-checked, not just the query swapped.
-- **Status:** open
+- **Status:** closed:refuted-2026-09-02
 - **Related:** ADR-0040, `I-012`
 
 ### D-062 · Two context engines probe the same page twice on every navigation
@@ -1025,7 +1025,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   hook's shape, what happens to the two failure semantics, and how a pin
   interacts with a single engine. **Zero files under `src/`.**
 - **Risk:** n/a — research only.
-- **Status:** research:awaiting-review
+- **Status:** done:#118
 - **ADR written 2026-08-29** (`chore/unstick-backlog`), at Status: Proposed:
   `docs/adr/0058-one-context-engine.md`. The number this item reserved on 2026-08-28 had been taken by an
   unrelated ADR before the item was picked up, so the proposal is **ADR-0058** — see
@@ -1057,7 +1057,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   same way `handleGetPolicyInfo` does, degrading rather than throwing on a
   validation miss, and the test whose title concedes the gap is retargeted.
 - **Risk:** Low — one handler, already covered by `content/index.test.ts`.
-- **Status:** open
+- **Status:** done:#118
 - **Renumbered 2026-09-02 (`D-080`):** filed as `D-062` against an id
   already taken on 2026-08-28 by the context-engine item. This security item was
   the later filing and carried no `docs/` citations, so it moved. Any reference
@@ -1082,7 +1082,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Done when:** One declaration survives, in `shared/types.ts`, and the hook
   imports it. Any re-export it needs is a re-export of that type.
 - **Risk:** Low — mechanical, and the compiler proves the merge.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-059`
 
 ### D-066 · `groupIdsReferencedBy` carries the identical unguarded expression read `D-055` just fixed
@@ -1101,7 +1101,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Done when:** it reads its expression through the same string-or-`''` guard
   `ruleUtils.ts` now uses, or the two share one helper.
 - **Risk:** Low — no behavior change for any well-formed rule.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-055`, `D-050`
 
 ### D-067 · No story reaches any arm of HomeTab's jump-bar app lookup
@@ -1151,7 +1151,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   gap.
 - **Risk:** Low to thread, medium to present — a permissions claim to an admin is
   a strong claim and needs the honesty rules re-checked.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-007a`, ADR-0040
 
 ### D-069 · Two dead remnants around the app-lookup path
@@ -1175,7 +1175,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   given the producer it implies, each verified with the `okta-claim-check` skill
   rather than a grep for the name.
 - **Risk:** Low. `knip` is advisory here and will not catch either.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-007a`
 
 ### D-070 · `handleGetPolicyInfo`'s "mirrors handleGetAppInfo" is no longer true
@@ -1200,7 +1200,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   `policyStatus`'s consumers are enumerated so the unconditional fetch is either
   justified in the comment or filed as its own perf item.
 - **Risk:** Low — a comment, plus an enumeration that may produce a follow-up.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-059`
 
 ### D-071 · Two stale claims in `CONVENTIONS.md`'s messaging sections
@@ -1234,7 +1234,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Risk:** None — documentation only. The risk is in leaving it: `CONVENTIONS.md`
   is what an unattended run is told to match, so a wrong claim there propagates
   into code.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-059`
 
 ### D-072 · A backlog item that reserves an ADR number always loses it
@@ -1276,7 +1276,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Risk:** None — a convention change plus a handful of prose edits. The five
   affected items were repointed by hand on `chore/unstick-backlog`; this item
   is about stopping the sixth.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-030` (the other way a citation goes stale without failing a
   gate)
 
@@ -1315,7 +1315,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
 - **Risk:** None to the app — skill documentation only. The risk in leaving it
   is that the skill is what a future session reads _before_ implementing
   `D-052`, and it currently omits the parameter that item turns on.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-052` (the module-side defect this reference failed to catch)
 
 ### D-074 · A null figure on Home renders an em dash, on camera
@@ -1462,7 +1462,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   ordering operators — so a range and an ordering cannot be requested in one
   call. Marked `[docs]` with the OpenAPI URL.
 - **Risk:** None to the app — skill documentation only.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `0247c9f`, `D-073` (the other stale claim in the same skill)
 
 ### D-079 · `expand=stats` embeds `hasAdminPrivlege`, spelled Okta's way
@@ -1480,7 +1480,7 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   it. Nothing in `src/` reads it today; this is pre-emptive.
 - **Risk:** None today. It is a trap laid for whoever adds admin-privilege
   reporting.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-078`
 
 ### D-080 · `D-062` names two different items, and the ledger cannot tell them apart
@@ -1529,7 +1529,7 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
 - **Risk:** Low to fix — a renumber plus a mechanical citation sweep. The risk
   in leaving it is that the security item stays invisible to step 2 the next
   time either id appears in a PR.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-072` (the reserved-ADR-number failure — same quiet-citation
   class), `D-031`, `D-024`
 
@@ -1557,7 +1557,7 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
   component's internal `status === 'error'` union member is a different thing
   from the visual token and does not need renaming here.
 - **Risk:** Low — one arm of one modal, already story-covered.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-056` (the same primitive hand-rolling its own buttons),
   `D-057` (alert states no story can reach)
 
@@ -1590,7 +1590,7 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
   across `src/` comes back empty.
 - **Risk:** Low — fixture inputs only. Check each suite for an assertion that
   happens to hard-code the old string before swapping.
-- **Status:** open
+- **Status:** done:#118
 
 ### D-083 · The docked strip and the header merge into one surface with two content margins
 
@@ -1720,7 +1720,7 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
   left `INVALID` flowing as a lie in the type system, and the honest fix is
   architecturally significant enough that a reviewer could reasonably disagree
   with it after the code exists (`CLAUDE.md`'s plan-and-approval gate).
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-065` (introduced the drop), `D-061`, `D-050`, `D-078`
 
 ### D-087 · The content script forwards the whole response header bag
@@ -1746,7 +1746,7 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
   whether `snapshotBridge` should relay failure headers at all — nothing
   consumes them there, and after `D-064` it now forwards them.
 - **Risk:** Low.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-064`
 
 ### D-088 · Two stale comments name `groupDiscovery` as the schema-less rules walk
@@ -1767,7 +1767,7 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
 - **Done when:** both comments name a caller that is actually unvalidated, or
   state the guard's reason without leaning on one.
 - **Risk:** Low — comments only, but the guard they justify is load-bearing.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-065`, `D-055`
 
 ### D-090 · `MAX_RULE_NAME` is declared twice
@@ -1784,7 +1784,7 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
   places under two names. If Okta changes it, one will be missed.
 - **Done when:** one exported constant; both call sites import it.
 - **Risk:** Low.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `I-013`
 
 ### D-091 · `GroupDetailView.tsx` is 514 lines, well over the ~300-line bar
@@ -1847,7 +1847,7 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
   Fold that check in with `D-080`'s duplicate-header guard if `D-080` lands
   first — same script, same npm task, one pass over the ledgers.
 - **Risk:** Low. Ledger and script only; no `src/` change.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-080` (the duplicate-id sibling), `D-072`
 
 ### D-093 · Eleven items are stranded at `claimed:` by branches that no longer exist
@@ -1900,7 +1900,7 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
 - **Risk:** Low. Ledger and script only; no `src/` change. The per-item
   re-verification of `D-053b` … `D-053f` is the real cost, and it is what
   `SESSION.md`'s 14-day staleness rule exists for.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-092` (missing status), `D-080` (duplicate ids), `D-072`
 
 ### D-094 · A rate-limit budget of `0` still fails open, for a different reason than `D-086`
@@ -1937,7 +1937,7 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
   helper rather than being guarded twice; if so, say so in the PR.
 - **Risk:** Low. Behavior change is in the safe direction, and matches the
   precedent `D-086` just set.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-086` (the sibling it was split from), `D-064`, `D-007c`
 
 ### D-095 · `useRuleLifecycle` never clears `RulesCache` either
@@ -1966,7 +1966,7 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
   way `useCreateFeedingRule` and `useRuleConsolidation` now do; a test pins
   that each of the two verbs invalidates, and that a failed write does not.
 - **Risk:** Low. Matches a shape that already ships in two hooks.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `D-089`, `D-096`, `I-013`
 
 ### D-096 · Rule-write cache invalidation is remembered per caller, not enforced once
@@ -2014,7 +2014,7 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
   each. **This item ships no code**: its PR touches `docs/` only, zero files
   under `src/`. Sam moves it to `open` by accepting the ADR.
 - **Risk:** Research only.
-- **Status:** research:awaiting-review
+- **Status:** done:#118
 - **Related:** `D-089`, `D-095`, `I-013`
 
 ### D-098 · Two doc comments cite `getAppPushGroupMappings`, deleted by `f1e8def`

@@ -111,6 +111,17 @@ block says they mean — same vocabulary, one definition, defined there.
   story it asks for should render two badges with the same name and different
   ids, which nothing in the repo does today.
 
+- **Partially addressed in #118 (still open).** The copy half is closed: the
+  ghost copy-id recipe became the shared `CopyIconButton` and its label now
+  always names what it copies, id included. The **chip** half was deliberately
+  not taken. Folding the id into every chip's `aria-label` makes each one
+  unique, but a screen-reader user then hears ~20 opaque characters on every
+  row of every list to disambiguate a collision that is usually absent — a
+  constant cost for a rare problem. Sam's call on 2026-09-02 was to keep the id
+  on copy and drop it from open, so `EntityLink.tsx` carries that reasoning as
+  a comment and the residual is filed as `D-107`. Close this item only when the
+  chip disambiguates _conditionally_, per `D-107`.
+
 ### I-010 · The `Copy <type> id for <name>` label still collides on duplicate names
 
 - **Category:** ux
@@ -142,6 +153,14 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Status:** open
 - **Related:** `I-009` (same defect on `EntityLink`'s derived
   `copyIdLabel` default), `I-004` (introduced these three call sites)
+
+- **Partially addressed in #118 (still open).** The three copy controls
+  (`RuleCard`, `PolicyCard`, `AppListItem`) now carry labels that name the
+  entity and its id. The **disclosure** half is untouched: `PolicyCard`'s
+  `Show/Hide rules for <name>` and `AppListItem`'s bare `Expand`/`Collapse`
+  still collide on duplicate names. Both were left with explaining comments
+  rather than changed, because their assertion files sat outside the lane that
+  found them. Filed as `D-103`; close this item alongside it.
 
 ### I-011 · A truncated list-row name has no way to reveal itself
 
@@ -908,7 +927,7 @@ block says they mean — same vocabulary, one definition, defined there.
   three. Not both, and the choice is a scoping call about `TextLink`, not
   about this file.
 - **Risk:** Low. Documentation and a comment, unless `TextLink` lands first.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `I-034` (found it), `docs/components.md` §3
 
 ## Archive
