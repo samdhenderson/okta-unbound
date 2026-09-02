@@ -1119,3 +1119,40 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Low — additive, one new control in the chrome.
 - **Status:** open
 - **Related:** ADR-0063, ADR-0057, `I-018`
+
+### I-035 · `ContextBar`'s "Unpin & switch" is a raw `<button>` on nobody's list
+
+- **Category:** architecture
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/ContextBar.tsx:207-213`,
+  `docs/components.md` (the §3 documented-exception list)
+- **Verified:** 2026-09-02 — spotted by the `I-034` writer while evaluating
+  `ContextBar` as a home for the ⌘K affordance, then confirmed directly: it is
+  the only raw `<button>` in the file, and it carries no `§3 exception`
+  comment.
+- **Problem:** `CLAUDE.md` bans hand-rolled `<button>`s outside the exceptions
+  `docs/components.md` §3 records, and each surviving raw control is supposed
+  to carry an inline `§3 exception` marker at its call site. The
+  "Unpin & switch" control in the live-context-changed hint is a raw
+  `<button type="button">` with `font-semibold underline hover:no-underline`,
+  and it has neither: it is absent from the exception list and unmarked in the
+  file.
+
+  It is not a rogue control so much as an unlisted member of a class the doc
+  already knows about. §3's "awaiting a new shared primitive" bullet describes
+  chromeless **text-links** exactly like this one and names
+  `GroupFilterPanel`, `AttributeFacet` and `ComparisonOverviewTab` as the
+  sites a future `TextLink` would discharge. `ContextBar` belongs in that
+  enumeration and is missing from it, which is the part that actually costs
+  something: the list is what a future `TextLink` change would be scoped
+  against, so a site absent from it is a site that migration would miss.
+
+- **Done when:** either `ContextBar` is added to §3's text-link enumeration
+  and its call site carries the inline `§3 exception` comment the convention
+  requires, or — if `TextLink` is built first — it is migrated with the other
+  three. Not both, and the choice is a scoping call about `TextLink`, not
+  about this file.
+- **Risk:** Low. Documentation and a comment, unless `TextLink` lands first.
+- **Status:** open
+- **Related:** `I-034` (found it), `docs/components.md` §3

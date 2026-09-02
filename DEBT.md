@@ -3640,3 +3640,170 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
 - **Risk:** Low. Ledger and script only; no `src/` change.
 - **Status:** open
 - **Related:** `D-080` (the duplicate-id sibling), `D-072`
+
+### D-093 · Eleven items are stranded at `claimed:` by branches that no longer exist
+
+- **Category:** standards
+- **Priority:** P2
+- **Size:** S
+- **Files:** `DEBT.md` (the ten `claimed:beta/trust-and-polish` items),
+  `IMPROVEMENTS.md` (`I-030`, `claimed:worktree-rules-actionbar`),
+  `scripts/check-cited-paths.mjs` (the natural home for the guard, alongside
+  `D-080`/`D-092`'s checks)
+- **Verified:** 2026-09-02 — enumerated, not sampled. Every `claimed:` status
+  in both ledgers was listed and cross-checked against `git branch -a` and
+  against the squash-merged commit bodies on `main`.
+- **Problem:** `SESSION.md` step 7 turns a shipped item into `done:<PR#>`.
+  When that final ledger commit does not happen, the item stays `claimed:` on
+  `main` forever — and step 3's filter excludes `claimed:*`, so **no future
+  session can ever select it again**. Eleven items are in that state today,
+  claimed by two branches that no longer exist locally or on the remote:
+
+  - `claimed:beta/trust-and-polish` (10): `D-041`, `D-048`, `D-053a`,
+    `D-053b`, `D-053c`, `D-053d`, `D-053e`, `D-053f`, `D-054`, `D-061`.
+  - `claimed:worktree-rules-actionbar` (1): `I-030`.
+
+  The two groups fail differently, which is why this needs a human read rather
+  than a bulk rewrite. Five of the ten (`D-041`, `D-048`, `D-053a`, `D-054`,
+  `D-061`) are named in the body of the squash-merged `a376dff` (#112), and
+  `I-030` is named in `1d54e77` (#113) — those six **shipped** and are simply
+  missing their `done:` line. The other five (`D-053b` … `D-053f`) are named
+  in no merged commit body on `main`: they were claimed by a branch that is
+  gone and either never shipped or shipped unnamed. Nothing in the ledger
+  distinguishes the two cases, and a session cannot tell them apart from the
+  status alone.
+
+  This is the same silent-exclusion failure as `D-092`, from the opposite
+  direction: there an item had no status and fell out of every filter; here it
+  has a status that is a lie about work that finished, and falls out of the
+  one filter that matters. `D-080`, `D-092` and this item are three instances
+  of one gap — nothing validates the ledgers as data.
+
+- **Done when:** each of the eleven carries a status reflecting its real state
+  — the six confirmed-shipped become `done:#112`/`done:#113`, and the five
+  unaccounted-for (`D-053b` … `D-053f`) are re-verified against current code
+  and moved to `open` or `closed:overtaken-by-<sha>` on the evidence, one at a
+  time. Sam decides any case the evidence does not settle; a session must not
+  guess. Plus a check that fails on any `claimed:<branch>` whose branch exists
+  neither locally nor on the remote, folded in with `D-080`'s duplicate-header
+  guard and `D-092`'s missing-status guard — same script, same npm task, one
+  pass over the ledgers.
+- **Risk:** Low. Ledger and script only; no `src/` change. The per-item
+  re-verification of `D-053b` … `D-053f` is the real cost, and it is what
+  `SESSION.md`'s 14-day staleness rule exists for.
+- **Status:** open
+- **Related:** `D-092` (missing status), `D-080` (duplicate ids), `D-072`
+
+### D-094 · A rate-limit budget of `0` still fails open, for a different reason than `D-086`
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/shared/scheduler/rateLimitDetector.ts` (`isApproachingLimit`),
+  `src/shared/scheduler/apiScheduler.ts` (`shouldEnterCooldown`)
+- **Verified:** 2026-09-02 — raised by the `D-086` writer while proving its own
+  guard, and read directly at both call sites. Deliberately not folded into
+  `D-086`: different root cause, and one of the two files is outside that
+  item's scope.
+- **Problem:** `D-086` closes the case where a header does not parse to a
+  finite number. It does not close the case where it parses to a perfectly
+  finite `0`. `X-Rate-Limit-Limit: 0` clears the new guard and is stored, and
+  the percentage is then computed as `(remaining / limit) * 100` — so
+  `(n / 0) * 100` is `Infinity`, and `(0 / 0) * 100` is `NaN`. Both
+  `Infinity <= threshold` and `NaN <= threshold` are `false`, so the detector
+  reports calm and no cooldown is taken.
+
+  This is the identical fail-open shape `D-086` exists to remove, arrived at
+  from the other direction: there the non-finite value came from the parse,
+  here it is derived from a division the parse cannot catch. The guard
+  therefore has to sit at the division, not only at the parse, and it has to
+  sit in **both** readers — `RateLimitDetector.isApproachingLimit` and
+  `ApiScheduler.shouldEnterCooldown` each compute the ratio independently.
+
+- **Done when:** a `limit` that is not a positive number is treated as
+  "unknown" at both ratio sites — the same outcome `D-086` gives an unreadable
+  header, so an unknown budget falls back to the most-restrictive observation
+  anywhere rather than reading as spare capacity. A test pins each site.
+  Check whether the two ratio computations should collapse into one shared
+  helper rather than being guarded twice; if so, say so in the PR.
+- **Risk:** Low. Behavior change is in the safe direction, and matches the
+  precedent `D-086` just set.
+- **Status:** open
+- **Related:** `D-086` (the sibling it was split from), `D-064`, `D-007c`
+
+### D-095 · `useRuleLifecycle` never clears `RulesCache` either
+
+- **Category:** correctness
+- **Priority:** P2
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useRuleLifecycle.ts`,
+  `src/shared/rulesCache.ts`
+- **Verified:** 2026-09-02 — found by the `D-089` writer while wiring that
+  item's own invalidation, and read directly. It is the third rule-write path
+  and the only one still missing the clear.
+- **Problem:** `D-089` gave `useRuleConsolidation` the `RulesCache.clear()`
+  that `useCreateFeedingRule` already had. `useRuleLifecycle` — activate and
+  deactivate — is the remaining write path and still has none. Activating or
+  deactivating a rule changes both the cached `status` on that row and the
+  cached `stats.active` / `stats.inactive` counts, so for up to the cache's
+  5-minute TTL every surface reading the org-wide inventory reports a rule in
+  the state it was in before the admin changed it, and the totals to match.
+
+  Same class as `D-089`, different write path, and deliberately not folded
+  into it — one concern per commit. That three separate hooks now each have to
+  remember the same call is the argument `D-096` makes.
+
+- **Done when:** a successful activate or deactivate clears `RulesCache` the
+  way `useCreateFeedingRule` and `useRuleConsolidation` now do; a test pins
+  that each of the two verbs invalidates, and that a failed write does not.
+- **Risk:** Low. Matches a shape that already ships in two hooks.
+- **Status:** open
+- **Related:** `D-089`, `D-096`, `I-013`
+
+### D-096 · Rule-write cache invalidation is remembered per caller, not enforced once
+
+- **Category:** architecture
+- **Priority:** P2
+- **Size:** M
+- **Files:** `src/sidepanel/hooks/useOktaApi/ruleWrites.ts`,
+  `src/sidepanel/hooks/useCreateFeedingRule.ts`,
+  `src/sidepanel/hooks/useRuleConsolidation.ts`,
+  `src/sidepanel/hooks/useRuleLifecycle.ts`, `src/shared/rulesCache.ts`
+- **Verified:** 2026-09-02 — this is `D-089`'s own "consider" clause, deferred
+  by its writer with reasons; every caller of `createRuleWriteOperations` was
+  enumerated while deciding.
+- **Problem:** Three hooks write rules through `createRuleWriteOperations`,
+  and each is separately responsible for calling `RulesCache.clear()`
+  afterwards. Two do it today (`useCreateFeedingRule`, and
+  `useRuleConsolidation` as of `D-089`); the third does not (`D-095`). The
+  invariant "a rule write invalidates the org-wide inventory" is real, but
+  nothing enforces it — it is re-derived by each caller, and `D-089` and
+  `D-095` are both instances of a caller forgetting.
+
+  The obvious shape is a single invalidation wired into
+  `createRuleWriteOperations`, with the two existing per-caller `clear()`
+  calls removed in the same change. That is **not** a nightly writer's call
+  and is filed research-only for exactly the reasons `D-089`'s writer gave:
+  `ruleWrites.ts` is a pure transport factory over `coreApi.makeApiRequest`
+  and its own module doc says so, so giving it a `chrome.storage`-backed
+  global side effect changes what that layer is; and it changes
+  `useRuleLifecycle`'s behavior as a side effect of a refactor rather than as
+  a decision. That is `CLAUDE.md`'s plan-and-approval gate — a reviewer could
+  reasonably disagree with the layering after the code exists.
+
+  Noted while scoping, not part of this item: there is also a narrow
+  repopulation race — between a create and its follow-up deletes, a
+  concurrent `loadRules(false)` can refill the entry with a pre-delete
+  inventory that then lives its full TTL. Closing that is cache-generation
+  work, not another `clear()`, and should be decided with the layering rather
+  than bolted onto it.
+
+- **Done when:** a Proposed-status ADR under `docs/adr/` argues where
+  rule-write invalidation belongs — in the transport factory, in a thin
+  wrapper above it, or left per-caller with a lint or test that fails when a
+  write path forgets — and says what happens to the repopulation race under
+  each. **This item ships no code**: its PR touches `docs/` only, zero files
+  under `src/`. Sam moves it to `open` by accepting the ADR.
+- **Risk:** Research only.
+- **Status:** research:awaiting-review
+- **Related:** `D-089`, `D-095`, `I-013`
