@@ -3488,8 +3488,9 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
   safe outcome with an ADR-0022 note.
 - **Risk:** Low. Behavior change is in the safe direction (unknown capacity
   stops reading as spare capacity).
-- **Status:** open
-- **Related:** `D-064`, `D-007c`
+- **Status:** claimed:claude/stoic-gates-vcbg8k
+- **Related:** `D-064`, `D-007c`, `D-094` (the `limit: 0` sibling, split out
+  while fixing this)
 
 ### D-087 · The content script forwards the whole response header bag
 
@@ -3558,8 +3559,10 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
   Consider whether the invalidation belongs in `ruleWrites` rather than in each
   caller, so the next write path cannot forget.
 - **Risk:** Low.
-- **Status:** open
-- **Related:** `I-013`
+- **Status:** claimed:claude/stoic-gates-vcbg8k
+- **Related:** `I-013`, `D-095` (the third write path, still unfixed),
+  `D-096` (the centralisation this item asked about, filed research-only
+  rather than acted on)
 
 ### D-090 · `MAX_RULE_NAME` is declared twice
 

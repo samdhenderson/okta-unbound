@@ -1117,8 +1117,12 @@ block says they mean — same vocabulary, one definition, defined there.
   is axe-clean, names itself for a screen reader, and has a story. A test pins
   that pressing it opens the palette, so `open()` stops being dead code.
 - **Risk:** Low — additive, one new control in the chrome.
-- **Status:** open
-- **Related:** ADR-0063, ADR-0057, `I-018`
+- **Status:** claimed:claude/stoic-gates-vcbg8k
+- **Related:** ADR-0063, ADR-0057, `I-018`, `I-035` (found while siting it).
+  Note that this relieves only half of the compound problem it describes: the
+  chord still does not fire from the Okta page (`I-018`/ADR-0057), so the new
+  button is now the **only** route that works without first clicking into the
+  panel. That raises `I-018`'s value rather than lowering it.
 
 ### I-035 · `ContextBar`'s "Unpin & switch" is a raw `<button>` on nobody's list
 
