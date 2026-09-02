@@ -7,6 +7,8 @@
  */
 import React from 'react';
 import Icon from '../shared/Icon';
+import Button from './Button';
+import IconButton from './IconButton';
 import { type StatusType } from './status';
 
 /** The content of an alert: display text plus its severity. */
@@ -130,30 +132,22 @@ const AlertMessage: React.FC<AlertMessageProps> = ({
 
         {/* Action button */}
         {action && (
-          <button
-            type="button"
+          <Button
+            variant={action.variant === 'danger' || status === 'danger' ? 'danger' : 'primary'}
+            size="sm"
             onClick={action.onClick}
-            className={`ml-3 px-3 py-1.5 text-sm font-medium rounded-md transition-colors duration-(--dur-instant) ${
-              action.variant === 'danger' || status === 'danger'
-                ? 'bg-danger text-white hover:bg-danger-text'
-                : 'bg-primary text-white hover:bg-primary-dark'
-            }`}
+            className="ml-3"
           >
             {action.label}
-          </button>
+          </Button>
         )}
       </div>
 
       {/* Dismiss button */}
       {onDismiss && (
-        <button
-          type="button"
-          className="text-neutral-400 hover:text-neutral-600 transition-colors duration-(--dur-instant) p-1 rounded-full hover:bg-white/50"
-          onClick={onDismiss}
-          aria-label="Dismiss message"
-        >
+        <IconButton label="Dismiss message" variant="ghost" size="md" onClick={onDismiss}>
           <Icon type="close" size="md" />
-        </button>
+        </IconButton>
       )}
     </div>
   );
