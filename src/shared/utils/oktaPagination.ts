@@ -152,6 +152,37 @@ export interface PaginatedPageResult {
   headers?: Record<string, string>;
   /** Transport/HTTP error message when `success` is `false`. */
   error?: string;
+  /**
+   * HTTP status of the page request, when the transport supplied one — a real
+   * status (401, 403, 429…) on failure, or `NO_HTTP_STATUS` when the request
+   * never produced a response at all. Optional so a transport that predates
+   * this field (or a test's hand-built result) still satisfies the shape; a
+   * caller that cares about *why* a walk stopped should treat an absent status
+   * the same as an unknown one, not as success.
+   */
+  status?: number;
+}
+
+/**
+ * Thrown by {@link fetchAllPages} when a page request fails, carrying the same
+ * status the failing {@link PaginatedPageResult} reported.
+ *
+ * A plain `Error` cannot say *why* a walk stopped — a 401, a 429 and a
+ * transport failure with no HTTP response at all would all arrive at a
+ * `catch` block looking identical. Callers that need to distinguish them
+ * (`shared/snapshot/snapshotSync`'s `WalkOutcome.status`) narrow on
+ * `error instanceof PaginatedFetchError` rather than re-deriving a status from
+ * the message string.
+ */
+export class PaginatedFetchError extends Error {
+  /** The failing page's HTTP status, or `undefined` when none was reported. */
+  readonly status?: number;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = 'PaginatedFetchError';
+    this.status = status;
+  }
 }
 
 /** Options for {@link fetchAllPages}. */
@@ -218,9 +249,11 @@ export interface FetchAllPagesOptions<T> {
  * @param firstUrl - Origin-relative URL of the first page.
  * @param options - See {@link FetchAllPagesOptions}.
  * @returns All items accumulated across pages (validated when `schema` is given).
- * @throws Error when any page returns `success: false` — the message is the
- * response's `error`, else `options.errorMessage`, else a generic label. Callers
- * that prefer partial results accumulate via `onPage` and catch.
+ * @throws {@link PaginatedFetchError} when any page returns `success: false` —
+ * the message is the response's `error`, else `options.errorMessage`, else a
+ * generic label, and `status` carries the response's HTTP status (or
+ * `undefined`) so a caller can tell *why* the walk stopped. Callers that
+ * prefer partial results accumulate via `onPage` and catch.
  * @remarks The termination guard keys off the RAW page length (before schema
  * validation), so an all-malformed page still advances the cursor rather than
  * silently truncating the walk.
@@ -244,7 +277,10 @@ export async function fetchAllPages<T = unknown>(
 
     const response = await request(url);
     if (!response.success) {
-      throw new Error(response.error || errorMessage || `Paginated fetch failed (${context})`);
+      throw new PaginatedFetchError(
+        response.error || errorMessage || `Paginated fetch failed (${context})`,
+        response.status,
+      );
     }
 
     const rawPageSize = Array.isArray(response.data) ? response.data.length : 0;

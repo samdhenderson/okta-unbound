@@ -98,6 +98,19 @@ export interface SyncMeta {
    */
   complete: boolean;
   /**
+   * The failing page's HTTP status from this collection's most recent sync
+   * attempt (`WalkOutcome.status`, D-068), or `null` when that attempt
+   * succeeded or reported no status.
+   *
+   * Overwritten on **every** sync attempt, success or failure — never merged
+   * or left stale. A collection that failed with 403 an hour ago and has since
+   * synced cleanly must not go on claiming a permission problem: the panel's
+   * `unavailableNote` (`components/home/orgFigures.ts`) reads this to name a
+   * 401/403 specifically, and a stale value here would be a wrong claim to an
+   * admin, not just an outdated one.
+   */
+  status: number | null;
+  /**
    * For a **sharded** collection, the shard keys already walked under the
    * current {@link walkStartedAt} mark.
    *
