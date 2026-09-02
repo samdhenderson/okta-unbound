@@ -531,6 +531,87 @@ describe('AuditStore', () => {
     });
   });
 
+  // -------------------------------------------------------------------------
+  // D-043: nothing validated a row read back out of IndexedDB. A row can be
+  // corrupted by anything with devtools access to the (plaintext) database, or
+  // written by a build whose shape has since changed.
+  // -------------------------------------------------------------------------
+  describe('malformed rows read back from storage (D-043)', () => {
+    const goodRow = (): PersistedAuditLogEntry => ({
+      id: 'good-1',
+      timestamp: new Date('2025-06-01T00:00:00.000Z'),
+      action: 'remove_users',
+      groupId: 'group1',
+      groupName: 'Group 1',
+      performedBy: 'admin@example.com',
+      actorResolution: 'resolved',
+      affectedUsers: ['user1'],
+      result: 'success',
+      details: { usersSucceeded: 1, usersFailed: 0, apiRequestCount: 1, durationMs: 500 },
+    });
+
+    /** A row whose `actorResolution` was overwritten to a value the type never allows. */
+    const rowWithGarbageActorResolution = (): PersistedAuditLogEntry => ({
+      ...goodRow(),
+      id: 'garbage-actor-resolution',
+      // Cast past the type on purpose: this simulates devtools tampering or a
+      // future build writing a value this build's union doesn't know about.
+      actorResolution: 'totally-made-up' as unknown as ActorResolution,
+    });
+
+    /** A row corrupted badly enough that it cannot be presented or summed safely. */
+    const unusableRow = (): unknown => ({
+      ...goodRow(),
+      id: 'unusable-1',
+      // `getStats` sums this field directly; a string here silently corrupts
+      // `totalApiRequests` (string concatenation instead of addition).
+      details: { usersSucceeded: 1, usersFailed: 0, apiRequestCount: 'lots', durationMs: 500 },
+    });
+
+    it('getHistory degrades a garbled actorResolution to undefined, and drops an unusable row (logging only a count)', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mockDB.getAll.mockResolvedValueOnce([
+        goodRow(),
+        rowWithGarbageActorResolution(),
+        unusableRow(),
+      ]);
+
+      const result = await auditStore.getHistory();
+
+      // The unusable row is gone; the good row and the degraded row survive.
+      expect(result.map((r) => r.id).sort()).toEqual(['garbage-actor-resolution', 'good-1']);
+
+      const degraded = result.find((r) => r.id === 'garbage-actor-resolution');
+      // Degraded, not dropped, and not passed through as the garbage string:
+      // the field reverts to the same "attribution unknown" state a genuinely
+      // legacy pre-D-013a row reports, rather than inventing or keeping a claim
+      // nobody made.
+      expect(degraded?.actorResolution).toBeUndefined();
+      expect(degraded?.performedBy).toBe('admin@example.com');
+
+      // The drop is never silent, but never leaks row contents either.
+      expect(warn).toHaveBeenCalledTimes(1);
+      const logged = JSON.stringify(warn.mock.calls[0]);
+      expect(logged).toContain('"dropped":1');
+      expect(logged).toContain('"total":3');
+      expect(logged).not.toContain('admin@example.com');
+      expect(logged).not.toContain('lots');
+    });
+
+    it('getStats never sums a field out of a row that failed validation', async () => {
+      mockDB.getAll.mockResolvedValueOnce([goodRow(), unusableRow()]);
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const stats = await auditStore.getStats();
+
+      // Only the valid row is counted; the corrupted `apiRequestCount` never
+      // reaches the sum (a string there would otherwise coerce `+=` into
+      // concatenation and corrupt the aggregate silently).
+      expect(stats.totalOperations).toBe(1);
+      expect(stats.totalApiRequests).toBe(1);
+    });
+  });
+
   describe('settings cache', () => {
     it('logOperation skips the per-write settings read once updateSettings primed the cache', async () => {
       mockDB.put.mockResolvedValueOnce(undefined);
