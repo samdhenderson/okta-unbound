@@ -150,17 +150,18 @@ block says they mean — same vocabulary, one definition, defined there.
   per-call-site convention — they are the same problem and should not get two
   different fixes.
 - **Risk:** Low.
-- **Status:** open
+- **Status:** done:#118
 - **Related:** `I-009` (same defect on `EntityLink`'s derived
   `copyIdLabel` default), `I-004` (introduced these three call sites)
 
-- **Partially addressed in #118 (still open).** The three copy controls
-  (`RuleCard`, `PolicyCard`, `AppListItem`) now carry labels that name the
-  entity and its id. The **disclosure** half is untouched: `PolicyCard`'s
-  `Show/Hide rules for <name>` and `AppListItem`'s bare `Expand`/`Collapse`
-  still collide on duplicate names. Both were left with explaining comments
-  rather than changed, because their assertion files sat outside the lane that
-  found them. Filed as `D-103`; close this item alongside it.
+- **Closed by #118.** The three copy controls (`RuleCard`, `PolicyCard`,
+  `AppListItem`) name the entity and its id. The disclosure half was finished
+  in the same PR under `D-103`: `AppListItem` and `GroupListItem` went from a
+  bare `Expand`/`Collapse` to naming their row. The residue is narrower than
+  this item and belongs to `D-107` — two entities that genuinely share a
+  display name still sound alike, on chips and on `PolicyCard`'s toggle alike,
+  and `D-107` now carries the agreed mechanism for disambiguating **only** the
+  rows that collide.
 
 ### I-011 · A truncated list-row name has no way to reveal itself
 

@@ -255,7 +255,11 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
               )}
 
               <IconButton
-                label={expanded ? 'Collapse' : 'Expand'}
+                // Names the group for the same reason `AppListItem` names its
+                // app (D-103): a bare "Expand" repeated down a list tells a
+                // screen-reader user nothing about which row they are on. No id
+                // — see `D-107` for the duplicate-name case.
+                label={expanded ? `Collapse ${group.name}` : `Expand ${group.name}`}
                 onClick={toggleExpanded}
                 expanded={expanded}
                 controls={detailsId}

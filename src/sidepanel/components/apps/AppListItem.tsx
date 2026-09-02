@@ -223,14 +223,15 @@ const AppListItem: React.FC<AppListItemProps> = memo(
 
               <div className="flex items-center gap-1 shrink-0">
                 <IconButton
-                  // I-010 also names this control: unlike `PolicyCard`'s "Show
-                  // rules for <name>", this carries no app name at all, so two
-                  // rows are ambiguous by more than just a collision.
-                  // `appAssignmentsSharing.test.tsx` (outside this change's file
-                  // ownership) asserts this exact bare string, so widening it
-                  // is left as a documented residual alongside the disclosure
-                  // half of `PolicyCard`'s own I-010 fix.
-                  label={expanded ? 'Collapse' : 'Expand'}
+                  // Names the app, and deliberately stops there (D-103). A bare
+                  // "Expand" is ambiguous on *every* row, which is a real defect
+                  // worth the words; the id is not appended because two apps
+                  // sharing a display label is rare and every row would pay for
+                  // it — the same trade that keeps ids out of `EntityLink`'s
+                  // chip. Disambiguating only the rows that actually collide is
+                  // `D-107`. The copy control below still carries the id,
+                  // because the id is what that control copies.
+                  label={expanded ? `Collapse ${label}` : `Expand ${label}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     toggleExpanded();

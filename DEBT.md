@@ -2160,32 +2160,45 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
 - **Status:** open
 - **Related:** ADR-0058, ADR-0026, `D-062` (the merge)
 
-### D-103 · Two disclosure controls still collide on duplicate names
+### D-103 · A bare `Expand` names no row
 
 - **Category:** ux
 - **Priority:** P3
 - **Size:** S
-- **Files:** `src/sidepanel/components/policies/PolicyCard.tsx`
-  (`Show/Hide rules for <name>`), `src/sidepanel/components/apps/AppListItem.tsx`
-  (`Expand`/`Collapse`), and the assertion sites
-  `src/sidepanel/components/AuthPoliciesTab.test.tsx`,
-  `AuthPoliciesTab.stories.tsx`,
-  `src/sidepanel/cache/appAssignmentsSharing.test.tsx`
+- **Files:** `src/sidepanel/components/apps/AppListItem.tsx`,
+  `src/sidepanel/components/groups/GroupListItem.tsx`, and the assertion sites
+  `src/sidepanel/cache/appAssignmentsSharing.test.tsx`,
+  `src/sidepanel/components/apps/AppListItem.stories.tsx`,
+  `src/sidepanel/components/groups/GroupListItem.test.tsx`,
+  `src/sidepanel/components/groups/GroupListItem.stories.tsx`,
+  `src/sidepanel/App.tabpersistence.test.tsx`,
+  `src/sidepanel/components/GroupsTab.navigation.test.tsx`
 - **Verified:** 2026-09-02 — left behind deliberately while closing `I-010`,
-  and marked with explaining comments at both call sites.
-- **Problem:** `I-010` folded the entity id into every `Copy <type> id for
-<name>` label so two same-named entities stop presenting one accessible name.
-  The disclosure controls beside them were not folded: `PolicyCard`'s
-  `Show/Hide rules for <name>` still collides for two policies sharing a name,
-  and `AppListItem`'s `Expand`/`Collapse` is ambiguous for every row on the
-  page, not merely duplicates. A screen-reader user tabbing the list hears the
-  same control name repeatedly with nothing distinguishing the rows.
-- **Done when:** both disclosure labels name their entity unambiguously, the
-  way the copy controls now do, and the four assertion sites are retargeted to
-  the new exact strings — not loosened to regexes or index lookups.
-- **Risk:** Low — label text plus assertion retargets across four files.
-- **Status:** open
-- **Related:** `I-009`, `I-010`
+  then rescoped on 2026-09-02 when the fix was written: the filing named
+  `PolicyCard` and `AppListItem`, but `GroupListItem` carries the identical
+  bare label and is the one the navigation suites drive.
+- **Problem:** `AppListItem` and `GroupListItem` labelled their disclosure
+  control just `Expand`/`Collapse`. That is ambiguous on **every** row, not
+  merely on duplicates — a screen-reader user tabbing a list of forty groups
+  hears "Expand" forty times with nothing saying which group. `PolicyCard`
+  next door already did it correctly (`Show rules for <name>`).
+- **Done when:** ~~both~~ the two bare labels name their entity, and every
+  assertion site is retargeted to the new exact string — not loosened to a
+  regex or an index lookup.
+- **Resolution:** `Expand <app>` / `Collapse <app>` and `Expand <group>` /
+  `Collapse <group>`; eight assertion sites retargeted to the exact new
+  strings. The id is **not** appended, which is a deliberate narrowing of the
+  original filing: it asked for these labels to disambiguate "the way the copy
+  controls now do", i.e. with the id folded in, and Sam's call on 2026-09-02
+  was that a disclosure control is not a copy control. A copy control carries
+  the id because the id is what it copies; making every row of every list
+  announce ~20 opaque characters to pre-empt a collision that usually is not
+  there is the same cost that kept ids out of `EntityLink`'s chip. `PolicyCard`
+  is therefore untouched — it already names its policy, and its remaining
+  duplicate-name gap is `D-107`'s, not a second fix here.
+- **Risk:** Low — label text plus assertion retargets.
+- **Status:** done:#118
+- **Related:** `I-009`, `I-010`, `D-107` (the duplicate-name half)
 
 ### D-104 · A suspended session blanks every surface instead of holding last-known content
 
@@ -2295,6 +2308,25 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
 - **Risk:** Medium — collision detection has to see the whole rendered list,
   which `EntityLink` does not today; a context or a caller-supplied hint are
   both plausible and the choice is the work.
+- **Mechanism chosen 2026-09-02 (Sam).** The disambiguation is **conditional and
+  caller-driven**: a component rendering a list of entities already holds the
+  whole array, so it computes which display names occur more than once and
+  passes a discriminator down to _only_ those chips. `EntityLink` gains one
+  optional prop (e.g. `disambiguator`), left `undefined` in the overwhelmingly
+  common case, and its `aria-label` appends the discriminator only when the
+  prop is set. Rejected alternatives, with why:
+  - **A context provider that auto-detects.** Chips would register their names
+    on mount and the provider would recompute collisions. Nobody could forget
+    it — but the accessible name then _mutates after_ a screen reader may have
+    already announced it, and the registration has to happen during render.
+    Correctness-by-construction is not worth a label that changes underneath
+    the user.
+  - **Always appending the id (or a short suffix).** Uniform and simple, and
+    the reason this item exists: it charges every row for a rare problem.
+    This decision also absorbs `PolicyCard`'s duplicate-name gap, which `D-103`
+    deliberately did not fix — `Show rules for <name>` collides for two
+    same-named policies in exactly the same way and wants exactly the same
+    conditional treatment. Scope this item to cover both controls.
 - **Status:** open
 - **Related:** `I-009`, `I-010`, `D-103`
 

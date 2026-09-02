@@ -214,11 +214,11 @@ beforeEach(() => {
   });
 });
 
-// The row's expand affordance is an IconButton labelled "Expand"; scope the click
-// to the row so a multi-group fixture stays unambiguous.
+// The row's expand affordance is an IconButton labelled "Expand <group>" (D-103);
+// still scoped to the row, because two rows can share a display name.
 async function expandRow(uev: ReturnType<typeof userEvent.setup>, name: string) {
   const row = screen.getByLabelText(`Select ${name}`).closest('[data-group-id]') as HTMLElement;
-  await uev.click(within(row).getByRole('button', { name: 'Expand' }));
+  await uev.click(within(row).getByRole('button', { name: `Expand ${name}` }));
 }
 
 async function drillInto(uev: ReturnType<typeof userEvent.setup>, name: string) {

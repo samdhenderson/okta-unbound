@@ -144,13 +144,12 @@ const PolicyCard: React.FC<PolicyCardProps> = memo(({ policy, loadRules }) => {
           )}
         </div>
         <IconButton
-          // I-010: this label still collides when two policies share a display
-          // name — `AuthPoliciesTab.test.tsx`/`.stories.tsx` (outside this
-          // change's file ownership) assert the exact string `Show rules for
-          // <name>` verbatim, so folding the id in here the way the copy
-          // control below does would require editing assertions this change
-          // does not own. Left as the residual half of I-010; the copy
-          // control is fixed.
+          // Already names its policy, which is the part `D-103` was about. What
+          // remains is the rare case of two policies sharing a display name,
+          // and that is `D-107`'s problem, not a second fix here: appending the
+          // id unconditionally would make every policy in the list announce an
+          // opaque string to disambiguate a collision that usually is not
+          // there. `D-107` disambiguates only the rows that collide.
           label={isExpanded ? `Hide rules for ${name}` : `Show rules for ${name}`}
           variant="ghost"
           size="md"

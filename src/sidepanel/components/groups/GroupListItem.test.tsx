@@ -174,7 +174,7 @@ describe('GroupListItem open affordances', () => {
   it('gives the chevron and the row body distinct accessible names', () => {
     renderRow({ onOpenDetail: vi.fn() });
 
-    expect(screen.getByRole('button', { name: 'Expand' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Expand Engineering' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View group details' })).toBeInTheDocument();
   });
 
@@ -194,7 +194,7 @@ describe('GroupListItem open affordances', () => {
   it('expands inline through a real disclosure button', async () => {
     const { container } = renderRow({ group: group({ created: new Date('2020-01-01') }) });
 
-    const trigger = screen.getByRole('button', { name: 'Expand' });
+    const trigger = screen.getByRole('button', { name: 'Expand Engineering' });
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
 
     const regionId = trigger.getAttribute('aria-controls');
@@ -203,14 +203,14 @@ describe('GroupListItem open affordances', () => {
 
     await userEvent.click(trigger);
 
-    const toggled = screen.getByRole('button', { name: 'Collapse' });
+    const toggled = screen.getByRole('button', { name: 'Collapse Engineering' });
     expect(toggled).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('button', { name: 'Copy ID' })).toBeInTheDocument();
   });
 
   it('auto-expands a deep-linked row', () => {
     renderRow({ isHighlighted: true });
-    expect(screen.getByRole('button', { name: 'Collapse' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Collapse Engineering' })).toHaveAttribute(
       'aria-expanded',
       'true',
     );

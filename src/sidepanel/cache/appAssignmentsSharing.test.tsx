@@ -53,7 +53,7 @@ async function renderExpandedRow() {
       }
     />,
   );
-  await userEvent.click(screen.getByRole('button', { name: 'Expand' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Expand Payroll' }));
   return view;
 }
 

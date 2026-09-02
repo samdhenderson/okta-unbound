@@ -67,7 +67,7 @@ export const Default: Story = {};
 export const Expanded: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: 'Expand' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Expand Salesforce' }));
     await waitFor(() =>
       expect(
         canvas.getByRole('button', {
@@ -83,9 +83,11 @@ export const Expanded: Story = {
  * Two rows sharing a display label, different ids — legitimate in Okta (e.g. two
  * app instances both labelled "Salesforce"). The copy control folds the id in, so
  * the two stay distinguishable by accessible name alone (I-010). The
- * Expand/Collapse control does not yet — see the comment on `AppListItem`'s
- * `IconButton` label for why that half is a documented residual rather than
- * fixed here.
+ * Expand/Collapse control names the app but stops there (D-103) — which fixes
+ * the every-row ambiguity a bare "Expand" had, and leaves this rarer
+ * same-label case for `D-107` to disambiguate conditionally. Both toggles
+ * below therefore still read "Expand Salesforce"; that is the current
+ * contract, asserted deliberately rather than by accident.
  */
 export const DuplicateLabelsStayDistinguishable: Story = {
   render: (args) => (
@@ -96,7 +98,7 @@ export const DuplicateLabelsStayDistinguishable: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const toggles = canvas.getAllByRole('button', { name: 'Expand' });
+    const toggles = canvas.getAllByRole('button', { name: 'Expand Salesforce' });
     expect(toggles).toHaveLength(2);
     await userEvent.click(toggles[0]);
     await userEvent.click(toggles[1]);
