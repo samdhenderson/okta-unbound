@@ -20,21 +20,8 @@ import type jsep from 'jsep';
 import { Badge, EntityLink, Eyebrow } from '../shared';
 import ClauseChecklist from '../groups/detail/ClauseChecklist';
 import { parseRuleExpression, type RuleGroupContext } from '../../../shared/ruleEvaluator';
+import { conditionExpressionOf } from '../../../shared/membership/ruleExpression';
 import type { MembershipRule, OktaUser } from '../../../shared/types';
-
-/**
- * A rule's condition expression, whichever shape the rule arrived in — the same
- * two-source fallback the classifier uses
- * (`shared/utils/membershipAnalysis.conditionExpressionOf`, which is
- * module-private). The Users tab supplies a `FormattedRule`, which carries
- * `conditionExpression` and no `conditions` at all, so reading only
- * `conditions.expression.value` here rendered nothing on this surface.
- *
- * An empty result is *not* "no conditions, so everything passes": it is reported
- * as unevaluable, and {@link ClauseChecklist} says so.
- */
-const conditionExpressionOf = (rule: MembershipRule): string =>
-  rule.conditionExpression || rule.conditions?.expression?.value || '';
 
 /** Recursion guard for the attribute walk — conditions are untrusted input. */
 const MAX_WALK_DEPTH = 64;

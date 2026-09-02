@@ -33,29 +33,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // ---------------------------------------------------------------------------
 // jsdom has no IndexedDB and `fake-indexeddb` is not a dependency, so `idb` is
 // faked with a Map, exactly as `shared/snapshot/orgSnapshotStore.test.ts` does.
-const { fakeDB, idbTables } = vi.hoisted(() => {
-  const idbTables = new Map<string, Map<string, unknown>>();
-  const keyOf = (key: unknown) => (Array.isArray(key) ? key.join('::') : String(key));
-  const table = (name: string) => {
-    if (!idbTables.has(name)) idbTables.set(name, new Map());
-    return idbTables.get(name) as Map<string, unknown>;
-  };
-  const fakeDB = {
-    get: async (name: string, key: unknown) => table(name).get(keyOf(key)),
-    put: async () => {},
-    delete: async () => {},
-    getAllFromIndex: async (name: string, _i: string, origin: string) =>
-      [...table(name).values()].filter((v) => (v as { origin: string }).origin === origin),
-    getAllKeysFromIndex: async () => [],
-    transaction: () => ({
-      store: { put: async () => {}, delete: async () => {} },
-      done: Promise.resolve(),
-    }),
-  };
-  return { fakeDB, idbTables };
+const { fakeDB, idbTables } = await vi.hoisted(async () => {
+  const { createFakeIdb } = await import('@/test/factories/idb');
+  const { fakeDB, tables } = createFakeIdb();
+  return { fakeDB, idbTables: tables };
 });
 
 vi.mock('idb', () => ({ openDB: vi.fn(async () => fakeDB) }));
+
+// D-051: the group-meta fetch's catch must log a narrowed string, never the
+// raw caught error object — `warn` always emits, including in production.
+const { logWarn } = vi.hoisted(() => ({ logWarn: vi.fn() }));
+vi.mock('../../../shared/utils/logger', () => ({
+  createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: logWarn, error: vi.fn() }),
+}));
 
 import { createRuleImpactOperations } from './ruleImpact';
 import type { CoreApi } from './core';
@@ -135,6 +126,45 @@ describe('captureRuleImpact boundary validation', () => {
     expect(summary.targetGroups).toHaveLength(1);
     expect(summary.targetGroups[0].heldSolelyCount).toBe(1);
     expect(summary.totalHeldSolely).toBe(1);
+  });
+});
+
+describe('captureRuleImpact group-meta fetch failure logging (D-051)', () => {
+  it('falls back to the rule-supplied name and logs a narrowed message, never the raw error', async () => {
+    const makeApiRequest = vi.fn(async (endpoint: string): Promise<RequestResult> => {
+      if (endpoint.startsWith('/api/v1/groups/rules')) {
+        return { success: true, data: [], headers: {} };
+      }
+      if (endpoint === '/api/v1/groups/00gFAKE1') {
+        throw new Error('boundary validation failed');
+      }
+      throw new Error(`Unrouted test endpoint: ${endpoint}`);
+    });
+    const core = makeCore({ makeApiRequest });
+    const getAllGroupMembers = vi.fn().mockResolvedValue([member]);
+    const { captureRuleImpact } = createRuleImpactOperations(core, getAllGroupMembers);
+
+    const summary = await captureRuleImpact({
+      id: '0prFAKE1',
+      name: 'Rule One',
+      groupIds: ['00gFAKE1'],
+      groupNames: ['Fallback Group Name'],
+    });
+
+    // The group-meta fetch failing does not fail the whole capture — the
+    // rule-supplied fallback name is used instead.
+    expect(summary.targetGroups[0].groupName).toBe('Fallback Group Name');
+
+    expect(logWarn).toHaveBeenCalledWith(
+      'Failed to fetch group meta for impact preview',
+      expect.objectContaining({ groupId: '00gFAKE1', message: 'boundary validation failed' }),
+    );
+    // Never the raw Error instance, and never anything by reference — only strings.
+    for (const call of logWarn.mock.calls) {
+      for (const arg of call) {
+        expect(arg).not.toBeInstanceOf(Error);
+      }
+    }
   });
 });
 

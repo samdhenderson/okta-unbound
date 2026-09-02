@@ -68,6 +68,7 @@ import type {
   MembershipAttribution,
 } from '../types';
 import { tryEvaluateRuleExpression, type RuleMatchOutcome } from '../ruleEvaluator';
+import { conditionExpressionOf } from '../membership/ruleExpression';
 import { createLogger } from './logger';
 
 const log = createLogger('membershipAnalysis');
@@ -160,15 +161,6 @@ function isUserExcludedFromRule(rule: MembershipRule, userId: string): boolean {
     (rule.excludedUserIds?.includes(userId) ?? false) ||
     (rule.conditions?.people?.users?.exclude?.includes(userId) ?? false)
   );
-}
-
-/**
- * A rule's condition expression, whichever shape the rule arrived in. Empty
- * when the rule carries no expression at all — which the evaluator reports as
- * `unevaluable`, not as "matches nothing".
- */
-function conditionExpressionOf(rule: MembershipRule): string {
-  return rule.conditionExpression || rule.conditions?.expression?.value || '';
 }
 
 /**
