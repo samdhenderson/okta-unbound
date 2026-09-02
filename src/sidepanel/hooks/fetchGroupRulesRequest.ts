@@ -19,7 +19,7 @@
 
 import type { OktaGroupRule, FormattedRule, RuleConflict, RuleStats } from '../../shared/types';
 import type { CoreApi } from './useOktaApi/core';
-import { detectConflicts, formatRuleForDisplay } from '../../shared/ruleUtils';
+import { detectConflicts, expressionText, formatRuleForDisplay } from '../../shared/ruleUtils';
 import { nextPageUrl } from './useOktaApi/utilities';
 import { orgSnapshotStore } from '../../shared/snapshot/orgSnapshotStore';
 import type { RawOktaGroup } from '../components/groups/groupSummary';
@@ -53,11 +53,16 @@ const GROUP_ID_IN_EXPRESSION = /\b00g[a-zA-Z0-9]{17}\b/g;
 /**
  * Collect every group id a rule references — both its assignment targets and any
  * group ids embedded in its condition expression.
+ *
+ * The expression is read through `ruleUtils.expressionText`, the shared
+ * string-or-`''` guard, rather than a local falsy check: `expression.value` is
+ * typed `string` but that is a claim about an Okta response, not a check of one,
+ * and a non-string here would throw `.match` out of the caller's `.map` and cost
+ * the whole rules surface for one malformed row (D-066, the twin of D-055).
  */
 function groupIdsReferencedBy(rule: OktaGroupRule): string[] {
   const ids = rule.actions?.assignUserToGroups?.groupIds || [];
-  const expression = rule.conditions?.expression?.value || '';
-  const inExpression = expression.match(GROUP_ID_IN_EXPRESSION) || [];
+  const inExpression = expressionText(rule).match(GROUP_ID_IN_EXPRESSION) || [];
   return [...ids, ...inExpression];
 }
 

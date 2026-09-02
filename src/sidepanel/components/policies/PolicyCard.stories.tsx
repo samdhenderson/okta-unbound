@@ -95,7 +95,8 @@ export const Inactive: Story = {
 
 /**
  * Expanded, with the lazily-fetched rules rendered and the policy's own id offered
- * with a copy control named after the policy — several cards can be open at once.
+ * with a copy control named after the policy and its id — several cards can be
+ * open at once, and two policies can share a display name (I-010).
  */
 export const Expanded: Story = {
   play: async ({ canvasElement }) => {
@@ -103,7 +104,9 @@ export const Expanded: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Show rules for Any two factors' }));
     await waitFor(() => expect(canvas.getByText('Trusted device, no prompt')).toBeInTheDocument());
     await expect(
-      canvas.getByRole('button', { name: 'Copy policy id for Any two factors' }),
+      canvas.getByRole('button', {
+        name: `Copy policy id for Any two factors (${samplePolicy.id})`,
+      }),
     ).toBeInTheDocument();
   },
 };
@@ -119,5 +122,39 @@ export const RulesLoadFailure: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: 'Show rules for Any two factors' }));
     await waitFor(() => expect(canvas.getByText(/Could not load rules/)).toBeInTheDocument());
+  },
+};
+
+/**
+ * Two policies sharing a display name, different ids — legitimate in Okta. The
+ * copy control folds the id in, so the two copy controls stay distinguishable
+ * by accessible name alone (I-010). The disclosure control does not yet —
+ * see the comment on `PolicyCard`'s `IconButton` label for why that half is a
+ * documented residual rather than fixed here.
+ */
+export const DuplicateNamesStayDistinguishable: Story = {
+  render: (args) => (
+    <div className="space-y-2">
+      <PolicyCard {...args} policy={{ ...samplePolicy, id: 'rstFAKE000000000001' }} />
+      <PolicyCard {...args} policy={{ ...samplePolicy, id: 'rstFAKE000000000004' }} />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggles = canvas.getAllByRole('button', { name: 'Show rules for Any two factors' });
+    expect(toggles).toHaveLength(2);
+    await userEvent.click(toggles[0]);
+    await userEvent.click(toggles[1]);
+
+    await expect(
+      canvas.getByRole('button', {
+        name: 'Copy policy id for Any two factors (rstFAKE000000000001)',
+      }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole('button', {
+        name: 'Copy policy id for Any two factors (rstFAKE000000000004)',
+      }),
+    ).toBeInTheDocument();
   },
 };

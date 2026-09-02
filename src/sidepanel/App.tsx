@@ -3,12 +3,16 @@
  * @description Root side-panel component: wires page context to the tabbed UI shell.
  *
  * Owns the active-tab selection (persisted to `chrome.storage.local` with legacy-tab
- * migration) and the highlighted rule id. Reads live Okta page context via
- * `useGroupContext`/`useOktaPageContext` and renders the {@link ContextBar} masthead
+ * migration) and the highlighted rule id. Reads live Okta page context from the
+ * panel's single `useOktaPageContext` engine (narrowed for the feature tabs by
+ * `useGroupContext`) and renders the {@link ContextBar} masthead
  * (app wordmark + entity identity + connection), {@link TabNavigation}, the per-tab
  * content, the fixed {@link ActivityBar} (the unified scheduler + progress bar), the
  * ⌘K {@link CommandPalette}, and the modal layer every `Modal` overlay portals into
- * ({@link MODAL_LAYER_ID}), all inside the SchedulerProvider.
+ * ({@link MODAL_LAYER_ID}), all inside the SchedulerProvider. Between the masthead
+ * and the rail it also mounts the single session-expiry banner (ADR-0054): a 401
+ * is a property of the connection, so it is stated once here rather than as a
+ * failed-request error state on each of nine surfaces.
  *
  * The shell is also the **single owner of app-wide keyboard shortcuts**
  * ({@link useCommandPalette}) — see the tab-lifetime note below for why a `window`
@@ -29,18 +33,36 @@
  * traffic.
  *
  * The masthead is the exception, and deliberately so. `useOktaPageContext` below
- * is gated on `!isPinned` alone rather than on any tab, because {@link ContextBar}
- * renders above the rail on *every* tab: gating its feed on one of them would
- * leave it describing a page the browser left minutes ago from the other eight —
- * the ADR-0032 defect where the bar misdescribes the live page. ADR-0018's rule
- * is that no hidden **tab** issues Okta traffic; the masthead is shell chrome,
- * which is why `useGroupContext` beside it has always been always-on. ADR-0026's
- * visibility gate still applies and lives inside `useOktaTabContext` itself
- * (`document.hidden` defers and resyncs), so a hidden panel still probes
- * nothing.
+ * is ungated by tab, because {@link ContextBar} renders above the rail on *every*
+ * tab: gating its feed on one of them would leave it describing a page the browser
+ * left minutes ago from the other eight — the ADR-0032 defect where the bar
+ * misdescribes the live page. ADR-0018's rule is that no hidden **tab** issues
+ * Okta traffic; the masthead is shell chrome, which is why the context engine has
+ * always been always-on. ADR-0026's visibility gate still applies and lives inside
+ * `useOktaTabContext` itself (`document.hidden` defers and resyncs), so a hidden
+ * panel still probes nothing.
+ *
+ * ## One context engine (ADR-0058)
+ *
+ * There is exactly **one** `useOktaTabContext` instance in the panel, reached
+ * through `useOktaPageContext`. `App` used to run two — a group-specific one
+ * feeding every tab's `targetTabId`/`oktaOrigin`, and a page-classifying one
+ * feeding the masthead — which meant a second `getOktaOrigin` plus a second entity
+ * probe on every navigation, and two latches that could in principle disagree
+ * about which tab was live. `useGroupContext` is now a selector over the single
+ * engine's result.
+ *
+ * The pin moved with it. Suspending detection while pinned is no longer available:
+ * the same engine now carries the connection health the pinned masthead must keep
+ * reporting honestly. So the pin is applied here, where identity is *selected* —
+ * `effective` and `deriveTabContext` already read the frozen snapshot in
+ * preference to the live one — and "the live tab moved" is derived by comparing
+ * live detection against the snapshot rather than inferred from a suppressed
+ * engine's owed resync.
  */
 import React, { useState, useEffect, useCallback, useMemo, useRef, lazy } from 'react';
 import ContextBar from './components/ContextBar';
+import AlertMessage from './components/shared/AlertMessage';
 import PageHeader from './components/shared/PageHeader';
 import { MODAL_LAYER_ID } from './components/shared/Modal';
 import TabNavigation from './components/TabNavigation';
@@ -69,14 +91,73 @@ const ApiExplorerTab = lazy(() => import('./components/ApiExplorerTab'));
 const AuditLogViewer = lazy(() => import('./components/AuditLogViewer'));
 import { useGroupContext } from './hooks/useGroupContext';
 import { useOktaPageContext } from './hooks/useOktaPageContext';
+import { useSessionExpiry } from './hooks/useSessionExpiry';
 import { SchedulerProvider } from './contexts/SchedulerContext';
 import { NavigationProvider } from './contexts/NavigationContext';
-import { deriveTabContext, revalidatePinnedContext, type PinnedContext } from './pinContext';
+import {
+  deriveTabContext,
+  revalidatePinnedContext,
+  type PinnablePageType,
+  type PinnedContext,
+} from './pinContext';
+import type { OktaPageContext } from './hooks/useOktaPageContext';
 
 /** Storage key under which the last-active tab is persisted in `chrome.storage.local`. */
 const SELECTED_TAB_KEY = 'okta_unbound_selected_tab';
 /** Storage key under which the pinned context snapshot is persisted. */
 const PINNED_CONTEXT_KEY = 'okta_unbound_pinned_context';
+
+/** The entity a live page context is showing, when it is one a pin could hold. */
+interface LiveIdentity {
+  pageType: PinnablePageType;
+  id: string;
+  name: string;
+}
+
+/**
+ * Reduce a live page context to the pinnable entity it describes.
+ *
+ * @param page - The engine's current detection.
+ * @returns The group/user on screen, or `null` when the live tab is on anything
+ *   else (an app, a policy, a plain admin page — or a page nothing is known about
+ *   because the probe failed).
+ */
+function liveIdentityOf(page: OktaPageContext): LiveIdentity | null {
+  if (page.connectionStatus !== 'connected') return null;
+  if (page.pageType === 'group' && page.groupInfo) {
+    return { pageType: 'group', id: page.groupInfo.groupId, name: page.groupInfo.groupName };
+  }
+  if (page.pageType === 'user' && page.userInfo) {
+    return { pageType: 'user', id: page.userInfo.userId, name: page.userInfo.userName };
+  }
+  return null;
+}
+
+/** The id a pin is holding, whichever entity kind it holds. */
+function pinnedEntityId(pinned: PinnedContext): string | undefined {
+  return pinned.pageType === 'group' ? pinned.groupInfo?.groupId : pinned.userInfo?.userId;
+}
+
+/**
+ * Has the live Okta tab left the pinned entity?
+ *
+ * Derived by comparing live detection against the snapshot, rather than read off
+ * the engine's `resyncPending`. Under two engines the pinned one was suspended, so
+ * "a navigation was observed while suppressed" was the only signal available; the
+ * single engine never suspends, so the honest question is simply whether what it
+ * currently sees is still what the pin froze (ADR-0058). Answered only from a
+ * probe that landed — a dead content script means the live page is unknown, which
+ * is not the same statement as "it moved".
+ *
+ * @param pinned - The active pin, or `null` when following the live tab.
+ * @param live - The live pinnable entity, from {@link liveIdentityOf}.
+ * @returns `true` only while pinned and the live tab is demonstrably elsewhere.
+ */
+function hasLiveContextMoved(pinned: PinnedContext | null, live: LiveIdentity | null): boolean {
+  if (!pinned) return false;
+  if (live === null) return false;
+  return live.pageType !== pinned.pageType || live.id !== pinnedEntityId(pinned);
+}
 
 /**
  * Root application shell for the Okta Unbound side panel.
@@ -125,21 +206,15 @@ const App: React.FC = () => {
   // fire once per mounted tab.
   const jumpPalette = useCommandPalette();
 
-  // Always-on tab targeting + connection health (used by every tab and the header).
-  const {
-    groupInfo,
-    connectionStatus,
-    targetTabId,
-    error,
-    isLoading,
-    oktaOrigin,
-    refetch: refetchGroupContext,
-  } = useGroupContext();
-  // Single live page detector feeding the ContextBar. It re-probes whenever the
-  // bar is showing live detection rather than a pin; when pinned it holds the
-  // last-known context (and records that a resync is owed, surfaced as
-  // `resyncPending`). See the module header for why this is not tab-gated.
-  const page = useOktaPageContext(!isPinned);
+  // The panel's one page-context engine (ADR-0058): one tab lookup, one
+  // `getOktaOrigin`, one entity probe and one connection latch per navigation,
+  // feeding both the ContextBar masthead and every feature tab. Always on — see
+  // the module header for why it is neither tab-gated nor pin-gated.
+  const page = useOktaPageContext();
+  // The same engine, narrowed to "the group on screen" for tab targeting and
+  // connection health. A pure selector, not a second probe.
+  const { groupInfo, connectionStatus, targetTabId, error, isLoading, oktaOrigin } =
+    useGroupContext(page);
 
   // Restore a persisted pin on mount. The snapshot's `targetTabId` is a per-session
   // Chrome id, so it is revalidated before use: it may be re-targeted at a live Okta
@@ -172,8 +247,9 @@ const App: React.FC = () => {
         oktaOrigin: pinned.oktaOrigin,
         // Identity stays frozen, but connection health must not: a pinned panel
         // reporting a permanent green "connected" hid genuinely dead sessions.
-        // These come from the always-on `useGroupContext`, which keeps probing
-        // while pinned.
+        // These come from the always-on engine, which keeps probing while pinned —
+        // which is precisely why the pin can no longer be expressed as
+        // `enabled: false` on it (ADR-0058).
         connectionStatus,
         error,
         isLoading: false,
@@ -204,6 +280,14 @@ const App: React.FC = () => {
           : effective.pageType === 'policy'
             ? (page.policyInfo?.policyName ?? undefined)
             : undefined;
+
+  // While pinned, what the live tab has drifted to — the masthead's "live tab
+  // moved to X / Unpin & switch" hint. The engine keeps detecting while pinned, so
+  // the hint can now name the entity instead of only announcing that something
+  // changed.
+  const liveIdentity = liveIdentityOf(page);
+  const liveContextChanged = hasLiveContextMoved(pinned, liveIdentity);
+
   const handleTogglePin = () => {
     if (pinned) {
       setPinned(null);
@@ -223,18 +307,15 @@ const App: React.FC = () => {
     }
   };
 
-  // Re-probe *both* context engines. The panel runs two independent
-  // `useOktaTabContext` instances — the always-on `useGroupContext` (which drives
-  // the ContextBar's connection dot and the feature tabs' target tab) and the
-  // masthead-scoped `useOktaPageContext`. Every recovery affordance used to nudge
-  // only the latter, so a latched `error` on the always-on engine had no manual
-  // exit and the bar stayed "Disconnected" forever. Both promises are fired and
-  // voided: the hooks own their own error handling and never reject.
+  // Re-probe the context engine. There is one, so there is one thing to nudge:
+  // the recovery affordances used to reach only the masthead's engine, leaving a
+  // latched `error` on the always-on one with no manual exit and the bar stuck on
+  // "Disconnected" forever. Fired and voided — the hook owns its own error
+  // handling and never rejects.
   const refetchPageContext = page.refetch;
   const handleRefreshAll = useCallback(() => {
-    void refetchGroupContext();
     void refetchPageContext();
-  }, [refetchGroupContext, refetchPageContext]);
+  }, [refetchPageContext]);
 
   // Reconnect: reload the Okta tab so a fresh content script is injected, then
   // re-detect. Used when the connection is genuinely down (e.g. the script was
@@ -428,11 +509,19 @@ const App: React.FC = () => {
             error={error}
             isPinned={isPinned}
             canPin={isLivePinnable}
-            liveContextChanged={isPinned && page.resyncPending}
+            liveContextChanged={liveContextChanged}
+            liveEntityName={liveIdentity?.name}
             onTogglePin={handleTogglePin}
             onRefresh={handleRefreshAll}
             onReconnect={handleReconnect}
           />
+
+          {/* One statement, once, for a fact that belongs to the connection
+              rather than to any one surface (ADR-0054 §3). It sits beside
+              `ContextBar` because that is where the connection is already
+              described — a per-surface error state would multiply one expired
+              session into nine, which is the defect `D-007b` names. */}
+          <SessionExpiryNotice targetTabId={tabContext.targetTabId ?? null} />
 
           {/* The rail's trailing ⌘K button is the only visible route to the two
               rail-hidden sections (ADR-0063), so it opens the same palette state
@@ -594,6 +683,34 @@ const App: React.FC = () => {
         <div id={MODAL_LAYER_ID} />
       </NavigationProvider>
     </SchedulerProvider>
+  );
+};
+
+/**
+ * The masthead banner for an expired Okta session (ADR-0054, `D-007b`).
+ *
+ * Rendered inside `SchedulerProvider` — which is why it is a component rather
+ * than a branch in `App`, whose own body sits above the provider. It states the
+ * cause and the remedy in the ADR-0002 vocabulary (`danger`, never `error`), and
+ * it carries no control of its own: recovery is evidence-driven, so signing back
+ * in and using the panel is the remedy, and the scheduler unpublishes the tab —
+ * unmounting this banner — the moment a request for it succeeds.
+ *
+ * @param props.targetTabId - The Okta tab the panel is driving, or `null`.
+ */
+const SessionExpiryNotice: React.FC<{ targetTabId: number | null }> = ({ targetTabId }) => {
+  const expired = useSessionExpiry(targetTabId);
+  if (!expired) return null;
+
+  return (
+    <div className="px-(--sp-gutter) pt-(--sp-card)">
+      <AlertMessage
+        message={{
+          type: 'danger',
+          text: 'Your Okta session has expired. Sign in again in the Okta tab — the panel has stopped sending requests and picks up again on its own once Okta answers.',
+        }}
+      />
+    </div>
   );
 };
 

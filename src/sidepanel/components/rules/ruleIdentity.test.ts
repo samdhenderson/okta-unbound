@@ -72,6 +72,16 @@ describe('ruleIdentity status', () => {
     expect(identity.badge).toEqual({ text: 'Paused', variant: 'warning' });
     expect(identity.rows.flat().filter((f) => f.kind === 'status')).toHaveLength(0);
   });
+
+  it('marks an INVALID rule Broken, never Paused (D-085)', () => {
+    // `isPaused = status !== 'ACTIVE'` gave a rule Okta can no longer evaluate the
+    // *Paused* badge, which asserts a decision no admin made. It is the one rule
+    // status ADR-0032 §2's `danger`-only badge rule was actually written for.
+    const identity = ruleIdentity(rule({ status: 'INVALID' }));
+
+    expect(identity.badge).toEqual({ text: 'Broken', variant: 'danger' });
+    expect(identity.rows.flat().filter((f) => f.kind === 'status')).toHaveLength(0);
+  });
 });
 
 describe('ruleIdentity counts', () => {

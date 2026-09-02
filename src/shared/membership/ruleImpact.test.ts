@@ -18,7 +18,12 @@ function member(id: string): OktaUser {
   return {
     id,
     status: 'ACTIVE',
-    profile: { login: `${id}@x.io`, email: `${id}@x.io`, firstName: id, lastName: 'U' },
+    profile: {
+      login: `${id}@example.com`,
+      email: `${id}@example.com`,
+      firstName: id,
+      lastName: 'U',
+    },
   };
 }
 
@@ -226,5 +231,34 @@ describe('summarizeRuleImpact', () => {
     const summary = summarizeRuleImpact('r1', 'Rule One', targets, rules);
     expect(summary.totalHeldSolely).toBe(0);
     expect(summary.targetGroups[0].heldSolelyCount).toBe(0);
+    // Evaluated against a real (non-empty) inventory of other rules.
+    expect(summary.emptyRuleInventory).toBe(false);
+  });
+
+  // D-047: `totalHeldSolely === 0` alone cannot tell an admin "there was
+  // nothing to check this rule against" apart from "this was checked against
+  // the full inventory and nothing collides" — both leave it at 0. The flag
+  // must distinguish them.
+  it('flags an empty rule inventory (nothing to check the rule against) distinctly from an evaluated-and-empty result', () => {
+    const targets: TargetGroupMembers[] = [
+      { groupId: 'g1', groupName: 'G1', members: [member('u1')] },
+    ];
+
+    // Genuinely zero rules in the org to compare against.
+    const nothingToCompare = summarizeRuleImpact('r1', 'Rule One', targets, []);
+    expect(nothingToCompare.totalHeldSolely).toBe(0);
+    expect(nothingToCompare.emptyRuleInventory).toBe(true);
+
+    // A populated inventory (this rule plus another) that happens to yield no
+    // overlap for this target — same totalHeldSolely, different meaning.
+    const evaluatedAndEmpty = summarizeRuleImpact('r1', 'Rule One', targets, [
+      rule('r1', ['g2']),
+      rule('r2', ['g2']),
+    ]);
+    expect(evaluatedAndEmpty.totalHeldSolely).toBe(0);
+    expect(evaluatedAndEmpty.emptyRuleInventory).toBe(false);
+
+    // The two cases must not read identically.
+    expect(nothingToCompare.emptyRuleInventory).not.toBe(evaluatedAndEmpty.emptyRuleInventory);
   });
 });

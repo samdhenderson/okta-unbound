@@ -55,7 +55,7 @@ import type {
 import { detectConflicts, formatRuleForDisplay } from '../../shared/ruleUtils';
 import { orgSnapshotStore } from '../../shared/snapshot/orgSnapshotStore';
 import { getOrFetch, peek, setEntry, invalidate } from '../cache/entityCache';
-import { cacheKeys } from '../cache/keys';
+import { cacheKeys, RULE_INVENTORY_KEY } from '../cache/keys';
 import { analyzeMemberships, unclassifiedMemberships } from '../../shared/utils/membershipAnalysis';
 import { createLogger } from '../../shared/utils/logger';
 import { useOktaApi } from './useOktaApi';
@@ -63,21 +63,6 @@ import { getUserGroupsRequest } from './getUserGroupsRequest';
 import { fetchGroupRulesRequest } from './fetchGroupRulesRequest';
 
 const log = createLogger('useUserMemberships');
-
-/**
- * Entity-cache key for the org-wide rule inventory.
- *
- * Its own key rather than a field of one user's cached analysis: the inventory is
- * org-wide, so every user's load asks the same question and should share one
- * answer. Caching it here is what lets a *memberships* cache hit — which skips the
- * fetcher entirely — still end up holding the rules without paying a second fetch
- * per user.
- *
- * It also holds the derived join: `detectConflicts` is quadratic in the org's
- * rule count, so paying it once per key rather than once per consumer is the
- * point of publishing here rather than deriving in each caller.
- */
-const RULE_INVENTORY_KEY = 'groupRuleInventory';
 
 /**
  * What is known about the org's group-rule inventory.
@@ -424,9 +409,10 @@ export function useUserMemberships({
         setMemberships(analyzedMemberships);
         log.debug('Loaded memberships:', { count: analyzedMemberships.length, degraded });
       } catch (err) {
-        reportError(err instanceof Error ? err.message : 'Failed to load user memberships');
+        const message = err instanceof Error ? err.message : 'Failed to load user memberships';
+        reportError(message);
         setMemberships([]);
-        log.error('Membership loading error:', err);
+        log.error('Membership loading error:', message);
       } finally {
         reportLoading(false);
       }

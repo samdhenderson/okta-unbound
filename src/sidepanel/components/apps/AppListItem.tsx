@@ -141,13 +141,15 @@ const AppListItem: React.FC<AppListItemProps> = memo(
                       20-character app id lays out on one line and its
                       `truncate` never actually bites.
 
-                      The label names the app: several rows can be expanded at
-                      once, so a screenful of controls all called "Copy
-                      application id" would not say copy *which*.
+                      The label names the app and folds the id in (I-010):
+                      several rows can be expanded at once, so a screenful of
+                      controls all called "Copy application id" would not say
+                      copy *which* — and two apps can legitimately share a
+                      display label, so the name alone is not always enough.
                     */}
                     <CopyableId
                       value={app.id}
-                      label={`Copy application id for ${label}`}
+                      label={`Copy application id for ${label} (${app.id})`}
                       className="w-full"
                     />
                   </div>
@@ -221,7 +223,15 @@ const AppListItem: React.FC<AppListItemProps> = memo(
 
               <div className="flex items-center gap-1 shrink-0">
                 <IconButton
-                  label={expanded ? 'Collapse' : 'Expand'}
+                  // Names the app, and deliberately stops there (D-103). A bare
+                  // "Expand" is ambiguous on *every* row, which is a real defect
+                  // worth the words; the id is not appended because two apps
+                  // sharing a display label is rare and every row would pay for
+                  // it — the same trade that keeps ids out of `EntityLink`'s
+                  // chip. Disambiguating only the rows that actually collide is
+                  // `D-107`. The copy control below still carries the id,
+                  // because the id is what that control copies.
+                  label={expanded ? `Collapse ${label}` : `Expand ${label}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     toggleExpanded();

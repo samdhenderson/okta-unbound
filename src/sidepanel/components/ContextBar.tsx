@@ -204,6 +204,7 @@ const ContextBar: React.FC<ContextBarProps> = ({
               'The live Okta tab has changed'
             )}
           </span>
+          {/* §3 exception: chromeless text-link awaiting a shared `TextLink` primitive (I-035). */}
           <button
             type="button"
             onClick={onTogglePin}

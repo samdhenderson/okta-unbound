@@ -120,7 +120,12 @@ function withheldReasonText(effect: GroupEffect): string {
     case 'rule-unevaluable-after':
       return 'Another rule targeting this group could not be evaluated here, so we cannot say the membership ends.';
     case 'rule-inactive':
-      return 'The rule is inactive, so it grants nothing either way.';
+      // Deliberately does not say "inactive": this reason fires whenever no
+      // candidate rule is ACTIVE, and since D-085 that set includes INVALID —
+      // a rule Okta can no longer evaluate, which nobody chose to pause. The
+      // engine's `active` boolean collapses the two, so the honest sentence
+      // names both. Distinguishing them needs a reason code of its own (D-101).
+      return 'Okta is not applying this rule — it is deactivated or no longer evaluable — so it grants nothing either way.';
     case 'app-mastered-group':
       return 'This group is managed by its application, not by group rules.';
     default:

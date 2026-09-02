@@ -44,6 +44,39 @@ function parseCount(value: string): number | null {
 }
 
 /**
+ * What fraction of a bucket's budget is left, as a percentage — or `null` when
+ * the budget is not something a percentage can be computed from.
+ *
+ * **The guard has to sit here, at the division, not only at the parse.**
+ * `D-086` stops a header that is not a finite number from ever being recorded.
+ * It cannot stop `X-Rate-Limit-Limit: 0`, which is perfectly finite and is
+ * recorded — and then `(n / 0) * 100` is `Infinity` and `(0 / 0) * 100` is
+ * `NaN`, and *both* `Infinity <= threshold` and `NaN <= threshold` are `false`.
+ * So a zero budget used to read as calm, which is the identical fail-open
+ * `D-086` exists to remove, reached from the other direction. (`D-094`)
+ *
+ * `null` means **unknown**, exactly as an unrecorded observation does; it never
+ * means "plenty". Callers fall back to the most-restrictive usable observation
+ * anywhere rather than reading it as headroom.
+ *
+ * Shared by both readers of the ratio — this module's {@link
+ * RateLimitDetector.isApproachingLimit} and `ApiScheduler.shouldEnterCooldown` —
+ * so the guard cannot be present in one and missing in the other, which is how
+ * `D-094` came to exist in two places at once.
+ *
+ * @param info - A recorded observation.
+ * @param inFlightCount - Requests already dispatched whose headers have not come
+ * back; subtracted from `remaining` because they have spent budget nothing has
+ * counted yet.
+ * @returns Percentage of budget remaining, or `null` when the budget is unusable.
+ */
+export function percentRemaining(info: RateLimitInfo, inFlightCount: number = 0): number | null {
+  if (!Number.isFinite(info.limit) || info.limit <= 0) return null;
+  const effectiveRemaining = Math.max(0, info.remaining - inFlightCount);
+  return (effectiveRemaining / info.limit) * 100;
+}
+
+/**
  * The Okta rate-limit bucket an endpoint's quota belongs to.
  *
  * Okta does not enforce one org-wide number: quotas are bucketed by endpoint
@@ -213,6 +246,12 @@ export class RateLimitDetector {
    * header has not counted yet.
    * @param bucket - Ask about one bucket's budget. Omit to ask about the
    * most-restrictive bucket seen anywhere, which is the global backstop.
+   * @remarks A bucket whose quota is not a positive number has an **unknown**
+   * budget, not a spare one ({@link percentRemaining}, `D-094`). The question
+   * then falls through to the most-restrictive *usable* observation anywhere —
+   * the same conservative fallback `ApiScheduler` applies to a bucket Okta has
+   * said nothing about. When nothing readable exists anywhere, this still
+   * declines to judge, which is `D-086`'s outcome for an unobserved detector.
    */
   isApproachingLimit(
     thresholdPercent: number = 10,
@@ -222,21 +261,53 @@ export class RateLimitDetector {
     const info = bucket === undefined ? this.getMostRestrictive() : this.getForBucket(bucket);
     if (!info) return false;
 
-    const effectiveRemaining = Math.max(0, info.remaining - inFlightCount);
-    const percentRemaining = (effectiveRemaining / info.limit) * 100;
-    const approaching = percentRemaining <= thresholdPercent;
+    let judged = info;
+    let percent = percentRemaining(info, inFlightCount);
+    if (percent === null) {
+      const fallback = this.mostRestrictiveUsable(info.bucket);
+      if (!fallback) return false;
+      judged = fallback;
+      percent = percentRemaining(fallback, inFlightCount);
+      if (percent === null) return false;
+    }
+
+    const approaching = percent <= thresholdPercent;
 
     if (approaching) {
       log.warn('Approaching rate limit:', {
-        bucket: info.bucket,
-        remaining: info.remaining,
-        limit: info.limit,
-        percentRemaining: percentRemaining.toFixed(1) + '%',
-        resetIn: this.getSecondsUntilReset(info),
+        bucket: judged.bucket,
+        askedAbout: info.bucket,
+        remaining: judged.remaining,
+        limit: judged.limit,
+        percentRemaining: percent.toFixed(1) + '%',
+        resetIn: this.getSecondsUntilReset(judged),
       });
     }
 
     return approaching;
+  }
+
+  /**
+   * The live observation with the least headroom whose budget can actually be
+   * judged, ignoring one bucket.
+   *
+   * Exists for {@link isApproachingLimit}'s `D-094` fallback: when the bucket it
+   * was asked about quotes an unusable budget, the honest reading is not "calm"
+   * but "whatever the most pressured *readable* bucket says". Expired entries
+   * are skipped via {@link getForBucket}, which also reaps them.
+   *
+   * @param exceptBucket - The bucket being asked about, whose own answer is the
+   * unusable one.
+   */
+  private mostRestrictiveUsable(exceptBucket: string): RateLimitInfo | null {
+    let best: RateLimitInfo | null = null;
+    for (const bucket of [...this.limits.keys()]) {
+      if (bucket === exceptBucket) continue;
+      const info = this.getForBucket(bucket);
+      if (!info || percentRemaining(info) === null) continue;
+      if (!best || info.remaining < best.remaining) best = info;
+    }
+    return best;
   }
 
   /**

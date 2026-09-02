@@ -22,7 +22,6 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const api = vi.hoisted(() => ({
-  getAppById: vi.fn(async () => null as unknown),
   getAppAssignmentCounts: vi.fn(async () => null as unknown),
   isLoading: false,
 }));
@@ -41,7 +40,6 @@ const COUNTS = { users: 1284, groups: 12 };
 beforeEach(() => {
   vi.clearAllMocks();
   resetEntityCache();
-  api.getAppById.mockResolvedValue({ id: APP_ID, label: 'Payroll', status: 'ACTIVE' });
   api.getAppAssignmentCounts.mockResolvedValue(COUNTS);
 });
 
@@ -55,7 +53,7 @@ async function renderExpandedRow() {
       }
     />,
   );
-  await userEvent.click(screen.getByRole('button', { name: 'Expand' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Expand Payroll' }));
   return view;
 }
 

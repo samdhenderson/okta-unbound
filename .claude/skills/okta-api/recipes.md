@@ -271,8 +271,10 @@ assignment view. The effective-membership expansion in step 4 is what costs.
 - **Empty is not unused.** A group may be empty because its rule matches nobody
   today, or because it exists to receive an app assignment. Deleting on emptiness
   alone breaks access grants.
-- Do not report `_embedded.stats.hasAdminPrivileges` — it has a known accuracy
-  defect for groups with custom admin roles.
+- Do not report `_embedded.stats.hasAdminPrivlege` — note Okta's own misspelling
+  (missing `i`, singular; not `hasAdminPrivileges`), so don't "correct" it in
+  code that reads it — it has a known accuracy defect for groups with custom
+  admin roles regardless of spelling. `[docs]`
 - `BUILT_IN` groups are not cleanup candidates.
 
 **Verified.** `useOktaApi/groupDiscovery`, `sidepanel/export/descriptors/groups`.

@@ -28,9 +28,10 @@
  * Presentational: the caller owns the loaded rule list and the focus callback.
  */
 import React from 'react';
-import { Button } from '../shared';
+import { Badge, Button } from '../shared';
 import { splitCurrentGroupRuleRelations } from '../../../shared/rules/currentGroupRelations';
-import type { FormattedRule } from '../../../shared/types';
+import { ruleStatusBadge } from '../../../shared/ruleUtils';
+import type { FormattedRule, GroupRuleStatus } from '../../../shared/types';
 
 /** Props for {@link CurrentGroupRuleRelations}. */
 interface CurrentGroupRuleRelationsProps {
@@ -42,18 +43,24 @@ interface CurrentGroupRuleRelationsProps {
   onFocusRule?: (ruleId: string) => void;
 }
 
-/** A rule's ACTIVE/INACTIVE state, exactly as Okta returns it. */
-const RuleStatusPill: React.FC<{ status: string }> = ({ status }) => (
-  <span
-    className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide border ${
-      status === 'ACTIVE'
-        ? 'bg-success-light text-success-text border-success-light'
-        : 'bg-neutral-100 text-neutral-500 border-neutral-200'
-    }`}
-  >
-    {status === 'ACTIVE' ? 'Active' : 'Inactive'}
-  </span>
-);
+/**
+ * A rule's lifecycle status mark, from the shared exhaustive mapping.
+ *
+ * Was a hand-rolled two-way `ACTIVE`/else pill that rendered Okta's `INVALID`
+ * status — a rule that can no longer be evaluated, typically because a group
+ * its expression names was deleted — as a plain "Inactive" lookalike, which
+ * reads as a deliberate pause nobody chose (D-085). {@link ruleStatusBadge}
+ * fixes that with the same `danger` **Broken** mark every other rule surface
+ * uses, so this panel cannot drift into a second, incompatible palette.
+ */
+const RuleStatusPill: React.FC<{ status: GroupRuleStatus }> = ({ status }) => {
+  const { text, variant, title } = ruleStatusBadge(status);
+  return (
+    <Badge variant={variant} title={title}>
+      {text}
+    </Badge>
+  );
+};
 
 /** One rule row: name, status, optional condition line, and a "View" jump. */
 const RuleRow: React.FC<{

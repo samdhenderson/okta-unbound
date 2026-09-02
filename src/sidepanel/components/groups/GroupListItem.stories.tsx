@@ -258,11 +258,15 @@ export const Selected: Story = {
 /** Expanded through the chevron, showing the inline record preview. */
 export const Expanded: Story = {
   args: { group: appGroup },
-  play: async ({ canvasElement }) => {
+  // The disclosure control names its group since `D-103`, so this play reads
+  // the name off `args` rather than hard-coding one: `ExpandedWithMeter` below
+  // reuses this exact function against a different group.
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: 'Expand' }));
+    const { name } = args.group;
+    await userEvent.click(canvas.getByRole('button', { name: `Expand ${name}` }));
     await waitFor(() =>
-      expect(canvas.getByRole('button', { name: 'Collapse' })).toHaveAttribute(
+      expect(canvas.getByRole('button', { name: `Collapse ${name}` })).toHaveAttribute(
         'aria-expanded',
         'true',
       ),

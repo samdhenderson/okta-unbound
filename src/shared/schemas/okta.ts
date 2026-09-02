@@ -126,6 +126,15 @@ export const oktaGroupSchema = z
   .passthrough();
 
 /**
+ * Okta's `GroupRuleStatus`, in full: a rule is `ACTIVE`, deliberately `INACTIVE`,
+ * or `INVALID` — the state Okta reports when the rule stopped being evaluable,
+ * e.g. its expression or target names a group that has since been deleted.
+ * `INVALID` must stay in the enum: rejecting it would drop exactly the broken
+ * rows the rules surface exists to show (D-085).
+ */
+export const groupRuleStatusSchema = z.enum(['ACTIVE', 'INACTIVE', 'INVALID']);
+
+/**
  * A group rule as returned by `POST`/`GET /api/v1/groups/rules`. Only the fields
  * the consolidation flow relies on are typed; org-specific extras pass through.
  */
@@ -133,7 +142,7 @@ export const oktaGroupRuleSchema = z
   .object({
     id: z.string(),
     name: z.string(),
-    status: z.enum(['ACTIVE', 'INACTIVE']),
+    status: groupRuleStatusSchema,
     type: z.string().optional(),
     conditions: z
       .object({
@@ -877,3 +886,21 @@ export const oktaUserProfileSchemaSchema = z
 
 /** Inferred type of a validated {@link oktaUserProfileSchemaSchema} response. */
 export type OktaUserProfileSchema = z.infer<typeof oktaUserProfileSchemaSchema>;
+
+/**
+ * The slice of `GET /api/v1/users/me` audit attribution needs.
+ *
+ * Deliberately lenient (`passthrough`, everything optional): the only field
+ * that decides anything is `profile.email`, and its absence is a valid answer
+ * (`reason: 'no-email'`) rather than an error — so this schema classifies the
+ * response instead of rejecting it.
+ */
+export const currentUserSchema = z
+  .object({
+    id: z.string().optional(),
+    profile: z.object({ email: z.string().optional() }).passthrough().optional(),
+  })
+  .passthrough();
+
+/** Inferred type of a validated {@link currentUserSchema} response. */
+export type CurrentUserResponse = z.infer<typeof currentUserSchema>;

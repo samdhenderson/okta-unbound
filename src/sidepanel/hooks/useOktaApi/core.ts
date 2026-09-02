@@ -19,7 +19,7 @@ import type { PlanEstimate, PlanLegInput } from '@/shared/scheduler/plan';
 import { fanOutEstimate, atLeastFanOutEstimate } from '@/shared/scheduler/planEstimate';
 import type { OperationPlanUpdate } from '@/shared/types';
 import { createLogger } from '@/shared/utils/logger';
-import { z } from 'zod';
+import { currentUserSchema } from '@/shared/schemas/okta';
 import {
   getCachedCurrentUser,
   cacheCurrentUser,
@@ -39,21 +39,6 @@ const TRANSIENT_PORT_ERROR_PATTERNS = [
   'message port closed before a response',
   'receiving end does not exist',
 ];
-
-/**
- * The slice of `GET /api/v1/users/me` audit attribution needs.
- *
- * Deliberately lenient (`passthrough`, everything optional): the only field
- * that decides anything is `profile.email`, and its absence is a valid answer
- * (`reason: 'no-email'`) rather than an error — so this schema classifies the
- * response instead of rejecting it.
- */
-const currentUserSchema = z
-  .object({
-    id: z.string().optional(),
-    profile: z.object({ email: z.string().optional() }).passthrough().optional(),
-  })
-  .passthrough();
 
 /** Retries allowed after a transient port failure (GET only). */
 const TRANSIENT_PORT_MAX_RETRIES = 2;

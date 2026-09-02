@@ -4,7 +4,13 @@
  *
  * Loads a {@link MergePlan} preview (members + feeding rules for the survivor and
  * sources), then executes it: copy distinct source members into the survivor and
- * empty each source, all through the rate-limited scheduler with live progress.
+ * empty each source. Both legs are fan-outs, so both run through
+ * `coreApi.runOperation` (`D-034`) rather than a hand-rolled loop — the same
+ * rate-limited scheduler path as before, now with the activity bar's live counts
+ * and a Cancel that abandons the merge. A cancelled run keeps everything that
+ * already landed: the counts are reported, the copies stay undoable, and the two
+ * audit entries are written, with {@link UseGroupMergeReturn.error} saying what
+ * was left undone.
  * Every run records two audit entries (both attributed to the signed-in admin,
  * resolved through the facade's `getCurrentUser()`) and a bulk undo action per
  * affected group so the operation can be inspected and reversed. When the actor
@@ -17,6 +23,7 @@
 
 import { useCallback, useState } from 'react';
 import type { GroupSummary, AuditLogEntry, OktaUser } from '../../shared/types';
+import type { BatchOutcome } from '../../shared/scheduler/runBatch';
 import type { AlertMessageData } from '../components/shared/AlertMessage';
 import { useOktaApi } from './useOktaApi';
 import { useActorNotice } from './useActorNotice';
@@ -74,6 +81,48 @@ function toBulkUserInfo(u: OktaUser) {
 }
 
 /**
+ * A membership write Okta answered with a failure result.
+ *
+ * The merge counts these and carries on — one member who could not be copied is
+ * a tallied failure, not a reason to abandon the run. It is a distinct type so
+ * the batch runner can tell it apart from a transport error (no target tab, the
+ * extension reloaded underneath the panel), which aborts the whole merge.
+ */
+class MergeWriteRejectedError extends Error {
+  /** @param message - Okta's error text, when it supplied one. */
+  constructor(message = 'Membership write rejected') {
+    super(message);
+    this.name = 'MergeWriteRejectedError';
+    Object.setPrototypeOf(this, MergeWriteRejectedError.prototype);
+  }
+}
+
+/** Users whose write settled successfully, in plan order. */
+function settledUsers(outcome: BatchOutcome<OktaUser, OktaUser>): OktaUser[] {
+  return outcome.results.filter((r) => r.status === 'fulfilled').map((r) => r.item);
+}
+
+/** How many writes Okta rejected (transport failures are not counted — they abort). */
+function rejectedByOkta(outcome: BatchOutcome<OktaUser, OktaUser>): number {
+  return outcome.results.filter((r) => r.error instanceof MergeWriteRejectedError).length;
+}
+
+/**
+ * Re-raise the first error that is not an Okta rejection, if the batch halted on
+ * one.
+ *
+ * Preserves the pre-`D-034` serial loop's abort semantics exactly: a transport
+ * throw ended the merge on the spot, with the partial counts kept and no audit
+ * entry written, while a `success: false` response was tallied and stepped over.
+ */
+function rethrowFatal(outcome: BatchOutcome<OktaUser, OktaUser>): void {
+  const fatal = outcome.results.find(
+    (r) => r.status === 'rejected' && !(r.error instanceof MergeWriteRejectedError),
+  );
+  if (fatal) throw fatal.error;
+}
+
+/**
  * Manage the group-merge wizard: preview then execute a consolidation.
  *
  * @param targetTabId - Connected Okta tab id (operations no-op when absent).
@@ -87,8 +136,9 @@ export function useGroupMerge(targetTabId?: number): UseGroupMergeReturn {
     getCurrentUser,
     makeApiRequest,
     removeUserFromGroup,
+    runOperation,
   } = api;
-  const { startProgress, updateProgress, completeProgress } = useProgress();
+  const { completeProgress } = useProgress();
   const { actorNotice, noteActor, dismissActorNotice } = useActorNotice();
 
   const [phase, setPhase] = useState<MergePhase>('idle');
@@ -141,8 +191,6 @@ export function useGroupMerge(targetTabId?: number): UseGroupMergeReturn {
     setError(null);
 
     const startTime = Date.now();
-    const total = plan.totalCopies + plan.totalRemovals;
-    let done = 0;
     const res: MergeResults = { copied: 0, copyFailed: 0, removed: 0, removeFailed: 0 };
 
     // Resolve the signed-in admin for audit attribution through the facade: one
@@ -153,72 +201,16 @@ export function useGroupMerge(targetTabId?: number): UseGroupMergeReturn {
     // notice is informational and never gates the merge below (`D-013c`).
     noteActor(actor);
 
-    startProgress('Merging groups', `Copying members into ${plan.survivor.name}…`, total, false);
-
-    try {
-      // 1) Copy distinct source members into the survivor (PUT membership directly
-      // so we log ONE bulk undo instead of flooding history per user).
-      const copiedUsers: OktaUser[] = [];
-      for (const user of plan.toCopy) {
-        const result = await makeApiRequest(`/api/v1/groups/${plan.survivor.id}/users/${user.id}`, {
-          method: 'PUT',
-          // Static label, not the survivor's name: `reason` is never redacted before
-          // storage (only `endpoint` is), so a tenant group name has no business in it.
-          reason: 'Merge groups: copy member into survivor',
-        });
-        if (result.success) {
-          res.copied++;
-          copiedUsers.push(user);
-        } else {
-          res.copyFailed++;
-        }
-        updateProgress(
-          ++done,
-          total,
-          `Copied ${res.copied}/${plan.totalCopies} into ${plan.survivor.name}`,
-        );
-      }
-
-      if (copiedUsers.length > 0) {
-        await logAction(
-          `Merged ${copiedUsers.length} member${copiedUsers.length === 1 ? '' : 's'} into ${plan.survivor.name}`,
-          {
-            type: 'BULK_ADD_USERS_TO_GROUP',
-            users: copiedUsers.map(toBulkUserInfo),
-            groupId: plan.survivor.id,
-            groupName: plan.survivor.name,
-          },
-        );
-      }
-
-      // 2) Empty each source group (skip per-user undo; log one bulk undo per source).
-      for (const source of plan.sources) {
-        const removedUsers: OktaUser[] = [];
-        for (const user of source.membersToRemove) {
-          const result = await removeUserFromGroup(source.id, source.name, user, true);
-          if (result.success) {
-            res.removed++;
-            removedUsers.push(user);
-          } else {
-            res.removeFailed++;
-          }
-          updateProgress(++done, total, `Emptying ${source.name}…`);
-        }
-
-        if (removedUsers.length > 0) {
-          await logAction(
-            `Emptied ${removedUsers.length} member${removedUsers.length === 1 ? '' : 's'} from ${source.name} (merge into ${plan.survivor.name})`,
-            {
-              type: 'BULK_REMOVE_USERS_FROM_GROUP',
-              users: removedUsers.map(toBulkUserInfo),
-              groupId: source.id,
-              groupName: source.name,
-              operationType: 'custom_status',
-            },
-          );
-        }
-      }
-
+    /**
+     * Close the run out: two audit entries (one add for the survivor, one
+     * aggregate remove for the sources), the counts, and a terminal phase.
+     *
+     * `cancelledMessage` is passed only when the admin stopped the merge. The
+     * writes that had already landed are just as real as a completed run's, so
+     * they are audited and shown the same way — the message is what tells the
+     * admin the rest never happened.
+     */
+    const finish = (cancelledMessage?: string) => {
       // Audit trail: one add entry (survivor) + one aggregate remove entry (sources).
       const auditBase = {
         performedBy: actor.kind === 'resolved' ? actor.email : null,
@@ -260,7 +252,118 @@ export function useGroupMerge(targetTabId?: number): UseGroupMergeReturn {
       auditStore.logOperation(removeEntry).catch((e) => log.error('audit remove failed', e));
 
       setResults(res);
+      if (cancelledMessage) {
+        setError(cancelledMessage);
+        setPhase('error');
+        return;
+      }
       setPhase('done');
+    };
+
+    try {
+      // 1) Copy distinct source members into the survivor (PUT membership directly
+      // so we log ONE bulk undo instead of flooding history per user).
+      //
+      // The fan-out runs through the shared operation runner rather than a
+      // hand-rolled loop (`D-034`, CONVENTIONS "Okta API throttling"): same
+      // scheduler path as before, but with the activity bar's live
+      // done/active/failed counts and — new — a Cancel that stops the merge.
+      const copyOutcome = await runOperation<OktaUser, OktaUser>(
+        'Merging groups',
+        plan.toCopy,
+        async (user, _index, planId) => {
+          const result = await makeApiRequest(
+            `/api/v1/groups/${plan.survivor.id}/users/${user.id}`,
+            {
+              method: 'PUT',
+              // Static label, not the survivor's name: `reason` is never redacted before
+              // storage (only `endpoint` is), so a tenant group name has no business in it.
+              reason: 'Merge groups: copy member into survivor',
+              planId,
+            },
+          );
+          if (!result.success) throw new MergeWriteRejectedError(result.error);
+          return user;
+        },
+        {
+          // An Okta rejection is tallied and stepped over; anything else ends the run.
+          stopOnError: (error) => !(error instanceof MergeWriteRejectedError),
+          message: (p) => `Copied ${p.completed}/${p.total} into ${plan.survivor.name}`,
+          // One PUT per member that is not already in the survivor.
+          plan: { endpoint: '/api/v1/groups', method: 'PUT' },
+        },
+      );
+      // Tally before re-raising: a run aborted by a transport failure still
+      // reports the writes that did land, exactly as the serial loop's
+      // incremented counters did.
+      const copiedUsers = settledUsers(copyOutcome);
+      res.copied = copiedUsers.length;
+      res.copyFailed = rejectedByOkta(copyOutcome);
+      rethrowFatal(copyOutcome);
+
+      if (copiedUsers.length > 0) {
+        await logAction(
+          `Merged ${copiedUsers.length} member${copiedUsers.length === 1 ? '' : 's'} into ${plan.survivor.name}`,
+          {
+            type: 'BULK_ADD_USERS_TO_GROUP',
+            users: copiedUsers.map(toBulkUserInfo),
+            groupId: plan.survivor.id,
+            groupName: plan.survivor.name,
+          },
+        );
+      }
+
+      if (copyOutcome.cancelled) {
+        // Cancelled before a single source was touched. The copies that already
+        // landed are real writes: they stay recorded, undoable, and reported.
+        finish('Merge cancelled. The source groups were not emptied.');
+        return;
+      }
+
+      // 2) Empty each source group (skip per-user undo; log one bulk undo per source).
+      for (const source of plan.sources) {
+        const removeOutcome = await runOperation<OktaUser, OktaUser>(
+          'Merging groups',
+          source.membersToRemove,
+          async (user, _index, planId) => {
+            const result = await removeUserFromGroup(source.id, source.name, user, true, planId);
+            if (!result.success) throw new MergeWriteRejectedError(result.error);
+            return user;
+          },
+          {
+            stopOnError: (error) => !(error instanceof MergeWriteRejectedError),
+            message: () => `Emptying ${source.name}…`,
+            // One DELETE per member currently in this source.
+            plan: { endpoint: '/api/v1/groups', method: 'DELETE' },
+          },
+        );
+        const removedUsers = settledUsers(removeOutcome);
+        res.removed += removedUsers.length;
+        res.removeFailed += rejectedByOkta(removeOutcome);
+        rethrowFatal(removeOutcome);
+
+        if (removedUsers.length > 0) {
+          await logAction(
+            `Emptied ${removedUsers.length} member${removedUsers.length === 1 ? '' : 's'} from ${source.name} (merge into ${plan.survivor.name})`,
+            {
+              type: 'BULK_REMOVE_USERS_FROM_GROUP',
+              users: removedUsers.map(toBulkUserInfo),
+              groupId: source.id,
+              groupName: source.name,
+              operationType: 'custom_status',
+            },
+          );
+        }
+
+        if (removeOutcome.cancelled) {
+          finish(
+            `Merge cancelled. ${source.name} was not fully emptied, and any later source group was left untouched.`,
+          );
+          return;
+        }
+      }
+
+      finish();
     } catch (err) {
       log.error('Merge execution failed:', err);
       setError(err instanceof Error ? err.message : 'Merge failed');
@@ -275,8 +378,7 @@ export function useGroupMerge(targetTabId?: number): UseGroupMergeReturn {
     noteActor,
     makeApiRequest,
     removeUserFromGroup,
-    startProgress,
-    updateProgress,
+    runOperation,
     completeProgress,
   ]);
 

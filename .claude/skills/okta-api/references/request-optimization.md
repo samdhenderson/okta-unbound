@@ -55,8 +55,15 @@ work. `[verified: shared/utils/oktaPagination + useOktaApi/groupDiscovery]`
 Contrast this with `expand=group-rules` below, which Okta drops. The two behave
 differently on the same walk, and assuming either behaviour universally is a bug.
 
-`_embedded.stats.hasAdminPrivileges` has a known accuracy defect for groups holding
-custom admin roles. Do not report admin-privilege status from this field. `[docs]`
+`_embedded.stats.hasAdminPrivlege` — **spelled exactly like that in Okta's own
+schema, missing the `i` and singular, not `hasAdminPrivileges`.** Do not "fix"
+the spelling when writing code against it; the misspelled key is what the API
+actually returns, and correcting it to the grammatical spelling silently reads
+`undefined` forever. It also has a known accuracy defect for groups holding
+custom admin roles — do not report admin-privilege status from this field at
+all, regardless of spelling.
+`[docs: group `stats`embed, github.com/okta/okta-management-openapi-spec —
+property name`hasAdminPrivlege`, type boolean]`
 
 The documented `expand` values on `GET /api/v1/groups` are **`stats` and `app`**.
 `expand=app` embeds the source application for app-sourced groups, removing a

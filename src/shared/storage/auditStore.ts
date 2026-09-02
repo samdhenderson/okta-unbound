@@ -16,11 +16,18 @@
  * whose `actorResolution` is optional. The database predates that field, so a row
  * written before `D-013a` has no value for it — and this store never invents one
  * on the way out (`D-032`).
+ *
+ * Every row `getHistory`/`getStats` read back from IndexedDB is validated through
+ * `auditSchema.ts` before reaching a caller — IndexedDB is plaintext and
+ * long-lived, so a row can be tampered with or predate the current shape just as
+ * easily as an Okta response can be malformed (ADR-0006, one storage layer down;
+ * `D-043`). See `auditSchema.ts` for the drop-vs-degrade decision.
  */
 
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { createLogger } from '../utils/logger';
 import { escapeCSV } from '../utils/csvUtils';
+import { parsePersistedAuditRows } from './auditSchema';
 import type {
   AuditLogEntry,
   PersistedAuditLogEntry,
@@ -190,6 +197,12 @@ class AuditStore {
           : await db.getAll(STORE_NAME);
       }
 
+      // Validate every row at this storage boundary before it reaches a caller
+      // that branches on its fields (ADR-0006, applied one layer down; D-043).
+      // A row that fails validation is dropped here, never thrown on — see
+      // `auditSchema.ts` for the drop-vs-degrade split.
+      results = parsePersistedAuditRows(results, 'getHistory');
+
       // Apply additional filters
       results = results.filter((entry) => {
         if (filters.groupId && entry.groupId !== filters.groupId) return false;
@@ -306,7 +319,10 @@ class AuditStore {
   async getStats(): Promise<AuditStats> {
     try {
       const db = await this.getDB();
-      const allEntries = await db.getAll(STORE_NAME);
+      // Validated the same way as `getHistory` (D-043): a row that fails
+      // validation must not silently corrupt an aggregate below (e.g. a
+      // non-numeric `apiRequestCount` turning `+=` into string concatenation).
+      const allEntries = parsePersistedAuditRows(await db.getAll(STORE_NAME), 'getStats');
 
       // Calculate stats
       const totalOperations = allEntries.length;

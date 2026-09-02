@@ -42,7 +42,8 @@ const makeCore = (overrides: Partial<CoreApi> = {}): CoreApi =>
 
 /**
  * One `/api/v1/groups/rules` row in the minimal shape `oktaGroupRuleSchema`
- * accepts: `id`, `name` and an `ACTIVE`/`INACTIVE` `status` are all required.
+ * accepts: `id`, `name` and a `GroupRuleStatus` (`ACTIVE`, `INACTIVE` or
+ * `INVALID` — D-085) are all required.
  *
  * D-065 made the org-wide rules walk validate every page at the Okta boundary,
  * so a fixture missing one of those fields is now dropped before it reaches
@@ -506,7 +507,51 @@ describe('fetchAndCacheAllGroupRules boundary validation (D-065)', () => {
     expect(stats).toEqual({ total: 1, active: 1, inactive: 0, conflicts: 0 });
   });
 
-  it('drops a rule whose status is outside the ACTIVE/INACTIVE vocabulary', async () => {
+  // D-085: `INVALID` is the third value of Okta's `GroupRuleStatus` — the state a
+  // rule takes when it stops being evaluable, e.g. its expression or its target
+  // names a deleted group. D-065 put this walk behind `oktaGroupRuleSchema`,
+  // which admitted only two of the three, so exactly the rows a broken-rule
+  // surface exists to show were the ones being discarded.
+  it('caches an INVALID rule rather than dropping it (D-085)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const core = makeCore({
+        makeApiRequest: vi.fn().mockResolvedValue({
+          success: true,
+          data: [
+            rule('r1', { actions: { assignUserToGroups: { groupIds: ['g1'] } } }),
+            rule('rBROKEN', {
+              status: 'INVALID',
+              actions: { assignUserToGroups: { groupIds: ['gGONE'] } },
+            }),
+          ],
+        }),
+      });
+
+      await createGroupDiscoveryOperations(core).ensureGroupRulesLoaded();
+
+      const [formattedRules, rawRules, stats] = setMock.mock.calls[0];
+      expect(rawRules.map((r) => r.id)).toEqual(['r1', 'rBROKEN']);
+      // The status survives the formatter too, so the row can mark it.
+      expect(formattedRules.map((r) => [r.id, r.status])).toEqual([
+        ['r1', 'ACTIVE'],
+        ['rBROKEN', 'INVALID'],
+      ]);
+      // Counted in the total, but claimed by neither ACTIVE nor INACTIVE: a
+      // broken rule is not a paused one.
+      expect(stats).toEqual({ total: 2, active: 1, inactive: 0, conflicts: 0 });
+      // Nothing was dropped, so the walk has nothing to warn about.
+      expect(
+        warn.mock.calls.find(
+          ([, message]) => message === 'Dropped malformed group rules before caching',
+        ),
+      ).toBeUndefined();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('drops a rule whose status is outside Okta’s GroupRuleStatus vocabulary', async () => {
     const core = makeCore({
       makeApiRequest: vi.fn().mockResolvedValue({
         success: true,

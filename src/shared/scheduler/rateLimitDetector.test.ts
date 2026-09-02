@@ -244,6 +244,45 @@ describe('RateLimitDetector', () => {
       expect(d.isApproachingLimit(50)).toBe(true);
       expect(d.isApproachingLimit(30)).toBe(false);
     });
+
+    describe('a non-positive budget is unknown, not spare capacity (D-094)', () => {
+      it('does not report calm for a bucket whose limit is zero', () => {
+        const d = new RateLimitDetector();
+        // A low but readable budget elsewhere: 5 of 100 left is under 10%.
+        d.parseHeaders(headers('100', '5', String(NOW_SECONDS + 60)), '/a');
+        // `X-Rate-Limit-Limit: 0` parses finite, so D-086's guard passes it
+        // through; the ratio is then (0 / 0) * 100 === NaN.
+        d.parseHeaders(headers('0', '0', String(NOW_SECONDS + 60)), '/b');
+        // The zero budget is unknown, so `/b` inherits the most-restrictive
+        // *usable* reading anywhere (`/a`, at 5%) instead of reading as calm.
+        expect(d.isApproachingLimit(10, 0, '/b')).toBe(true);
+      });
+
+      it('does not report calm when the most-restrictive observation has a zero limit', () => {
+        const d = new RateLimitDetector();
+        d.parseHeaders(headers('100', '5', String(NOW_SECONDS + 60)), '/a');
+        // remaining 0 < 5, so this becomes the most-restrictive-anywhere entry.
+        d.parseHeaders(headers('0', '0', String(NOW_SECONDS + 60)), '/b');
+        // The global reader takes the same fallback rather than dividing by zero.
+        expect(d.isApproachingLimit(10)).toBe(true);
+      });
+
+      it('does not report calm for a positive remaining over a zero limit', () => {
+        const d = new RateLimitDetector();
+        d.parseHeaders(headers('100', '5', String(NOW_SECONDS + 60)), '/a');
+        // (7 / 0) * 100 === Infinity, and Infinity <= 10 is false.
+        d.parseHeaders(headers('0', '7', String(NOW_SECONDS + 60)), '/b');
+        expect(d.isApproachingLimit(10, 0, '/b')).toBe(true);
+      });
+
+      it('still declines to judge when no usable observation exists anywhere', () => {
+        const d = new RateLimitDetector();
+        d.parseHeaders(headers('0', '0', String(NOW_SECONDS + 60)), '/b');
+        // Nothing readable anywhere is the D-086 outcome: unobserved, not calm
+        // and not alarmed. This expectation is correct today and must stay.
+        expect(d.isApproachingLimit(10, 0, '/b')).toBe(false);
+      });
+    });
   });
 
   describe('isLimitExceeded', () => {

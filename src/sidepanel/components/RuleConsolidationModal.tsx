@@ -13,6 +13,7 @@ import Button from './shared/Button';
 import Input from './shared/Input';
 import LoadingSpinner from './shared/LoadingSpinner';
 import AlertMessage, { type AlertMessageData } from './shared/AlertMessage';
+import Eyebrow from './shared/Eyebrow';
 import type {
   ConsolidationPhase,
   ConsolidationPreview,
@@ -157,9 +158,7 @@ const RuleConsolidationModal: React.FC<RuleConsolidationModalProps> = ({
       {phase === 'preview' && preview && (
         <div className="space-y-(--sp-card)">
           <div className="rounded-md border border-neutral-200 bg-neutral-50 p-(--sp-card) space-y-1.5">
-            <div className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
-              New rule
-            </div>
+            <Eyebrow as="div">New rule</Eyebrow>
             <p className="text-sm font-medium text-neutral-900">{preview.resultingName}</p>
             <p className="text-xs text-neutral-500">
               {preview.willActivate ? 'Created active' : 'Created inactive'} · same condition as{' '}
@@ -168,9 +167,9 @@ const RuleConsolidationModal: React.FC<RuleConsolidationModalProps> = ({
           </div>
 
           <div>
-            <div className="text-xs font-semibold uppercase tracking-wider text-neutral-600 mb-2">
+            <Eyebrow as="div" className="mb-2">
               Target groups ({preview.resultingGroupIds.length})
-            </div>
+            </Eyebrow>
             <div className="flex flex-wrap gap-(--sp-inline)">
               {preview.resultingGroupIds.map((id) => {
                 const added = addedSet.has(id);
@@ -192,9 +191,9 @@ const RuleConsolidationModal: React.FC<RuleConsolidationModalProps> = ({
           </div>
 
           <div>
-            <div className="text-xs font-semibold uppercase tracking-wider text-neutral-600 mb-2">
+            <Eyebrow as="div" className="mb-2">
               Will retire ({preview.retireRules.length})
-            </div>
+            </Eyebrow>
             <ul className="space-y-1.5">
               {preview.retireRules.map((r) => (
                 <li

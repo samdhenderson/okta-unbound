@@ -28,7 +28,9 @@
  * **The status is stated in text, not hue.** It was a coloured dot — green ring for
  * `ACTIVE`, grey for anything else — with no accompanying label, so the one fact the card
  * most needed to carry was available only to a reader who could see the colour *and* knew
- * the convention.
+ * the convention. The label itself comes from `ruleUtils.ruleStatusBadge`, an exhaustive
+ * map over Okta's three-state `GroupRuleStatus`: an `INVALID` rule reads **Broken** in
+ * `danger`, never as a second flavour of `INACTIVE` (D-085).
  *
  * The row is {@link sidepanel/components/shared/ListRow} (ADR-0029), and the arrival flash
  * is its shared `flash` prop rather than a hand-applied `animate-affirm-flash`.
@@ -47,6 +49,7 @@
  */
 import React, { useState, useCallback, useEffect, useId, useRef, memo } from 'react';
 import type { FormattedRule } from '../../shared/types';
+import { ruleStatusBadge } from '../../shared/ruleUtils';
 import { Badge, ListRow, StretchedButton } from './shared';
 import Icon from './shared/Icon';
 
@@ -149,6 +152,15 @@ const RuleCard: React.FC<RuleCardProps> = memo(
       never a clean bill of health drawn from a half-read inventory.
     */
     const missingTargets = rule.missingGroupIds?.length ?? 0;
+    /*
+      `INVALID` is not a third shade of paused. Okta reports it when a rule has
+      stopped being evaluable — typically because a group its expression or its
+      assignment names has been deleted — and rendering it in the same neutral
+      pill as `INACTIVE` told the reader an admin had chosen this (D-085). The
+      exhaustive mapping lives in `ruleUtils.ruleStatusBadge` so the header, the
+      duplicates panel and this row cannot drift apart on it.
+    */
+    const statusBadge = ruleStatusBadge(rule.status);
 
     return (
       <ListRow
@@ -184,7 +196,9 @@ const RuleCard: React.FC<RuleCardProps> = memo(
             <h3 id={nameId} className="text-sm font-semibold text-neutral-900">
               {rule.name}
             </h3>
-            <Badge variant={rule.status === 'ACTIVE' ? 'success' : 'neutral'}>{rule.status}</Badge>
+            <Badge variant={statusBadge.variant} title={statusBadge.title}>
+              {statusBadge.text}
+            </Badge>
             {rule.affectsCurrentGroup && (
               <Badge variant="primary" solid>
                 Current Group

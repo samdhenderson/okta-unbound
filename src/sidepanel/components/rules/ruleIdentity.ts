@@ -9,12 +9,18 @@
  *
  * ## Two decisions this file makes
  *
- * **`INACTIVE` is the loud badge; `ACTIVE` is a quiet dot.** ADR-0032 §2 reserves the
+ * **Only `ACTIVE` is a quiet dot; the other two take the badge.** ADR-0032 §2 reserves the
  * header's trailing badge for `danger` and demotes everything else into the identity row.
  * A paused rule is not `danger` — nothing is broken — but it is the fact a reader most
  * needs off the header, because every other number on the page describes what the rule
  * *would* do and the status says whether it is doing it. So it takes the badge as
  * `warning`, and an active rule takes none: the normal case does not need announcing.
+ * `INVALID` is the status the `danger` reservation was written for, and it is the reason
+ * this decision is now a switch rather than an `isPaused = status !== 'ACTIVE'` flag
+ * (D-085): that flag handed a rule Okta can no longer evaluate the **Paused** badge,
+ * asserting a decision no admin made. Its word and treatment come from
+ * {@link shared/ruleUtils.ruleStatusBadge}, so the detail header and the rule's card
+ * cannot drift apart on what a broken rule is called.
  *
  * **There is no `link`.** {@link shared/utils/oktaUrl.OktaAdminEntityType} is
  * `'group' | 'user' | 'app'`, and Okta's Admin Console has no per-rule route — the best
@@ -25,12 +31,40 @@
  * deep link into this rule and deliver a search page.
  */
 import type { FormattedRule } from '../../../shared/types';
+import { ruleStatusBadge } from '../../../shared/ruleUtils';
 import type {
   EntityIdentityDescriptor,
   IdentityFact,
   IdentityRow,
 } from '../shared/identityDescriptor';
 import { getRelativeTime } from '../../../shared/utils/dateFormat';
+
+/**
+ * The header's trailing badge for a rule's status, or `undefined` when the status
+ * belongs in the identity row instead.
+ *
+ * Exhaustive over the status union on purpose: a fourth Okta status becomes a compile
+ * error here rather than silently inheriting whichever arm a ternary happened to
+ * default to (D-085).
+ *
+ * @param status - The rule's status exactly as Okta reported it.
+ * @returns The badge to render beside the title, or `undefined` for `ACTIVE`.
+ */
+function statusBadge(
+  status: FormattedRule['status'],
+): NonNullable<EntityIdentityDescriptor['badge']> | undefined {
+  switch (status) {
+    case 'ACTIVE':
+      return undefined;
+    case 'INACTIVE':
+      return { text: 'Paused', variant: 'warning' };
+    case 'INVALID': {
+      // One source for the word and the treatment, shared with RuleCard's mark.
+      const { text, variant } = ruleStatusBadge('INVALID');
+      return { text, variant };
+    }
+  }
+}
 
 /** A counted fact, with its label pluralised to match. */
 const metric = (
@@ -63,12 +97,12 @@ const metric = (
  * @returns The descriptor `PageHeader` renders through `EntityIdentity`.
  */
 export function ruleIdentity(rule: FormattedRule): EntityIdentityDescriptor {
-  const isPaused = rule.status !== 'ACTIVE';
+  const badge = statusBadge(rule.status);
 
   const identityRow: IdentityRow = [];
-  // An active rule states so quietly in the row; a paused one takes the header badge
-  // below and is not repeated here.
-  if (!isPaused) {
+  // An active rule states so quietly in the row; a rule that is not in force takes the
+  // header badge above and is not repeated here.
+  if (!badge) {
     identityRow.push({ kind: 'status', variant: 'success', text: 'Active' });
   }
   identityRow.push({ kind: 'id', value: rule.id, copyLabel: `Copy rule id ${rule.id}` });
@@ -112,7 +146,7 @@ export function ruleIdentity(rule: FormattedRule): EntityIdentityDescriptor {
   return {
     key: rule.id,
     name: rule.name,
-    badge: isPaused ? { text: 'Paused', variant: 'warning' } : undefined,
+    badge,
     rows: [identityRow, counts, timestamps],
   };
 }

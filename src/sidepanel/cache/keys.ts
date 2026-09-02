@@ -190,3 +190,21 @@ export const cacheKeys = {
    */
   mfaScan: (groupId: string): EntityKey => ['mfaScan', groupId],
 } as const;
+
+/**
+ * Entity-cache key for the org-wide rule inventory.
+ *
+ * Its own key rather than a field of one user's cached analysis: the inventory is
+ * org-wide, so every user's load asks the same question and should share one
+ * answer. Caching it here is what lets a *memberships* cache hit — which skips the
+ * fetcher entirely — still end up holding the rules without paying a second fetch
+ * per user.
+ *
+ * It also holds the derived join: `detectConflicts` is quadratic in the org's
+ * rule count, so paying it once per key rather than once per consumer is the
+ * point of publishing here rather than deriving in each caller.
+ *
+ * A singleton, unlike every other entry above: nothing scopes it, so it is a bare
+ * string rather than a `(...) => EntityKey` function. Read by `useUserMemberships`.
+ */
+export const RULE_INVENTORY_KEY = 'groupRuleInventory';

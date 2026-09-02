@@ -25,6 +25,16 @@ export type AppStatusFilter = '' | 'ACTIVE' | 'INACTIVE';
  * means *we never asked*. Widening the bucket to those apps would report the
  * whole inventory as unassigned. Answering it properly costs one request per
  * app, which is not a list filter.
+ *
+ * D-060 checked whether Okta offers a single listing that yields app→group
+ * assignments for every app at once (an `expand` on `GET /api/v1/apps`, or
+ * any equivalent) so this fan-out could collapse to one walk. It does not:
+ * `GET /api/v1/apps` supports only `expand=user/{userId}`, paired with a
+ * filter for that same user. The only documented routes are the per-app
+ * `GET /api/v1/apps/{id}/groups` and the mirror per-group
+ * `GET /api/v1/groups/{id}/apps` — a fan-out either way. Do not re-open this
+ * question without a new Okta API surface to point at; see
+ * `.claude/skills/okta-api/references/apps-and-policies.md`.
  */
 export type AppGroupsFilter = '' | 'no-groups';
 

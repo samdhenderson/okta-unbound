@@ -126,7 +126,25 @@ silently dropping it.
 against the branch. Update `IMPROVEMENTS.md`/`DEBT.md`: shipped items become
 `done:<PR#>` (fill in after `gh pr create` returns a number, then push a
 final small commit to the same branch), anything demoted to `blocked` stays
-that way with its reason. Append tonight's `NIGHTLY.md` entry. Open one
+that way with its reason. **Do not archive tonight's own closed items yet** —
+their PR has not merged, so no commit exists for the `## Archive` line to
+link to; they archive next time a session touches the ledger, once this
+PR is on `main`.
+
+**Archive items closed by an already-merged PR.** Before writing tonight's
+own updates, run `node scripts/check-cited-paths.mjs` and read its
+"closed but not yet archived" advisory — it resolves a commit sha from local
+history for every eligible `done:#N`/`closed:*` item and skips (with a
+reason) anything it can't yet resolve, which is exactly the case for an item
+whose PR is still open. For every candidate it _did_ resolve, move that
+item from the ledger's live section to its `## Archive` line, using the
+tool's suggested id/title/status/commit — collapsing the verbose
+Problem/Done-when/Risk prose, which stays recoverable from git history at
+that commit. Fold this into the same ledger-update commit as tonight's own
+`done:<PR#>` edits; it is ledger housekeeping, not a backlog item, and does
+not count against the 2–3 item file cap.
+
+Append tonight's `NIGHTLY.md` entry. Open one
 combined PR against `main` (`gh pr create`). **Every item the PR touches must
 appear as a bare `I-NNN`/`D-NNN` token in the title or body** — that string
 is what the next session's step 2 greps for, so an item described only in

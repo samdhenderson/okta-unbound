@@ -22,6 +22,8 @@ interface StubOptions {
   isReading?: boolean;
   complete?: boolean;
   ruleStatuses?: Array<'ACTIVE' | 'INACTIVE'>;
+  /** HTTP status of the collection's last sync attempt (D-068). */
+  status?: number | null;
   /** Overrides applied to the rules handle only, so one collection can lag. */
   rulesOver?: Partial<StubOptions>;
 }
@@ -35,7 +37,7 @@ function stub(
   options: StubOptions,
   records: { id: string }[] = [],
 ) {
-  const { lastFullWalkAt = NOW, isReading = false, complete = true } = options;
+  const { lastFullWalkAt = NOW, isReading = false, complete = true, status = null } = options;
   return {
     rows,
     records,
@@ -44,6 +46,7 @@ function stub(
     lastFullWalkAt,
     isSyncing: false,
     error: null,
+    status,
     sync: vi.fn(async (force = false) => {
       syncs.push({ collection, force });
       return null;
@@ -172,6 +175,57 @@ describe('useOrgFigures', () => {
     expect(sub(result.current.boxes, 'groups-unruled')?.note).toBe(
       'Needs group rules, which have not been read.',
     );
+  });
+
+  /**
+   * A groups handle with no rows and no finished walk, so `figureStatus`
+   * lands on `unavailable` rather than `partial` — the branch
+   * `unavailableNote` actually names a permission problem from.
+   */
+  function unwalkedGroupsIndex(status: number | null): OrgEntityIndex {
+    const index = makeIndex();
+    return {
+      ...index,
+      groups: stub('groups', [], { lastFullWalkAt: null, complete: false, status }),
+    } as unknown as OrgEntityIndex;
+  }
+
+  it('names the permission problem when a collection’s last walk stopped on a 403 (D-068)', () => {
+    // The status is threaded from the snapshot handle into `FigureSource`, so
+    // `unavailableNote` can tell a 401/403 apart from any other failure — this
+    // is the wiring D-068 closes: before it, `toSource` dropped the status and
+    // this note read the generic "have not been read yet" line instead.
+    const { result } = render(unwalkedGroupsIndex(403));
+    const groupsBox = result.current.boxes.find((box) => box.key === 'groups');
+    expect(groupsBox?.note).toBe('You are not allowed to read groups.');
+  });
+
+  it('keeps the generic copy for a non-permission failure (429, a dropped connection)', () => {
+    // Only 401/403 earn the specific claim; every other status is not evidence
+    // of a permissions problem and must not be reported as one.
+    const { result } = render(unwalkedGroupsIndex(429));
+    const groupsBox = result.current.boxes.find((box) => box.key === 'groups');
+    expect(groupsBox?.note).toBe('Groups have not been read yet.');
+  });
+
+  it('drops the permission note once a later walk succeeds', () => {
+    // The recovery case: a stale 403 must not outlive the walk that cleared
+    // it. Pinned here at the render boundary — `useOrgSnapshot` persisting
+    // `SyncMeta.status: null` on a successful sync is pinned separately in
+    // `orgSnapshotStore.test.ts` — this proves the card stops showing the
+    // permission copy the moment the handle it reads reports `status: null`
+    // again.
+    const { result, rerender } = render(unwalkedGroupsIndex(403));
+    expect(result.current.boxes.find((box) => box.key === 'groups')?.note).toBe(
+      'You are not allowed to read groups.',
+    );
+
+    const recovered = makeIndex({ lastFullWalkAt: NOW, complete: true, status: null });
+    rerender({ index: recovered });
+
+    const groupsBox = result.current.boxes.find((box) => box.key === 'groups');
+    expect(groupsBox?.note).toBeUndefined();
+    expect(groupsBox?.value).toBe(2);
   });
 
   it('spends nothing when the figures are fresh', async () => {

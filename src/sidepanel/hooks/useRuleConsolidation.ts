@@ -16,23 +16,29 @@
  *
  * ## Cache
  *
- * The moment the replacement rule exists, the org-wide {@link RulesCache} — a
- * 5-minute TTL snapshot of every group rule — describes an inventory Okta no
- * longer has, so the run drops it there rather than at the end (`D-089`): a run
- * that aborts at the activate step has still created a rule, and the retire
- * loop that follows only makes a surviving snapshot wronger. The tab's own
- * `reload` is a force-refresh, so it repopulates the entry from Okta.
+ * The moment the replacement rule exists, the org-wide rules snapshot — a
+ * 5-minute TTL copy of every group rule — describes an inventory Okta no longer
+ * has, and a run that aborts at the activate step has still created a rule
+ * (`D-089`). That invalidation is no longer sequenced here: it belongs to each
+ * write and lives in {@link module:hooks/useOktaApi/ruleWrites} (ADR-0064), which
+ * drops the snapshot as soon as the create `POST` returns — before any step that
+ * can abort — and again on each retire. The tab's own `reload` is a
+ * force-refresh, so it repopulates the entry from Okta.
  */
 
 import { useCallback, useState } from 'react';
-import type { FormattedRule, OktaGroupRule, AuditLogEntry } from '../../shared/types';
+import type {
+  FormattedRule,
+  OktaGroupRule,
+  AuditLogEntry,
+  GroupRuleStatus,
+} from '../../shared/types';
 import type { RetiredRuleSnapshot } from '../../shared/undoTypes';
 import type { AlertMessageData } from '../components/shared/AlertMessage';
 import { useOktaApi } from './useOktaApi';
 import { useActorNotice } from './useActorNotice';
 import { logAction } from '../../shared/undoManager';
 import { auditStore } from '../../shared/storage/auditStore';
-import { RulesCache } from '../../shared/rulesCache';
 import {
   buildConsolidatedRulePayload,
   consolidatedRuleName,
@@ -53,7 +59,12 @@ export type ConsolidationMode = 'add-target' | 'merge';
 export interface RetireRuleRef {
   id: string;
   name: string;
-  status: 'ACTIVE' | 'INACTIVE';
+  /**
+   * Carries Okta's full status vocabulary, including `INVALID` — a rule that can
+   * no longer be evaluated is still a rule the admin may want to retire, and
+   * narrowing here would make it unrepresentable in the preview. See `D-085`.
+   */
+  status: GroupRuleStatus;
 }
 
 /** The structural preview of the resulting consolidated rule. */
@@ -251,10 +262,8 @@ export function useRuleConsolidation({
         return;
       }
 
-      // The org-wide rule snapshot is now a rule short. Dropped here, before the
-      // steps that can abort the run, because the rule exists either way and a
-      // stale snapshot outlives the failure by up to its 5-minute TTL (`D-089`).
-      await RulesCache.clear();
+      // The org-wide rule snapshot went with the create itself (ADR-0064), so it
+      // is already dropped before the steps below that can abort the run.
 
       // 2) Activate it if any source was active. Abort before deleting on failure.
       if (preview.willActivate) {

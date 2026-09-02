@@ -86,6 +86,20 @@ instance of the pattern. As audited at the time of this decision:
 >
 > The Overview row of the table is therefore retired. Home's row reads: the jump
 > bar's debounced search, and one org-snapshot top-up per activation.
+>
+> **Note, 2026-09-02.** ADR-0058 removed the `useOktaPageContext(!isPinned)` call
+> entirely — the pin no longer suspends the engine at all (a second, always-on
+> engine was quietly load-bearing for the masthead's connection status, which a
+> suspended single engine would have frozen too). `App` now calls
+> `useOktaPageContext()` unconditionally and freezes the _identity selection_
+> instead (`src/sidepanel/App.tsx`, `deriveTabContext` in `pinContext.ts`). The
+> reasoning in the paragraph above is unaffected — the masthead is still shell
+> chrome, not a tab, and still should not be tab-gated — but it is no longer the
+> reference example of `enabled`-style visibility gating, since no production call
+> site passes `enabled: false` any more. `useOktaTabContext`'s `enabled` and
+> `resyncPending` params still exist as the generic gate ADR-0026 describes and
+> still have tests; they are just unused by `useOktaPageContext` in production
+> today.
 
 ### Two patterns for gating, and when to use which
 

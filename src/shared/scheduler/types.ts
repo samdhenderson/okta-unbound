@@ -168,6 +168,21 @@ export interface SchedulerState {
    * read "fine" while the scheduler was already cooling down.
    */
   minRemainingThresholdPercent: number;
+  /**
+   * Tabs whose Okta session the scheduler has watched expire (a 401), and for
+   * which it is therefore holding requests rather than spending them.
+   *
+   * This is what carries session expiry to the panel: it rides the existing
+   * `schedulerStateChanged` broadcast, so one 401 becomes **one** statement in
+   * the masthead instead of a failed-request error state on every mounted
+   * surface (ADR-0054, `D-007b`). Per tab because a tab is what holds a session
+   * — two orgs in two tabs do not lose their sessions together.
+   *
+   * Empty is the normal case. Optional because a `SchedulerState` built by hand
+   * (a fixture, an older background build) predates the field; absent reads the
+   * same as empty — *nothing is known to have expired* — and never as "expired".
+   */
+  expiredSessionTabIds?: number[];
 }
 
 /**
@@ -187,8 +202,6 @@ export interface RequestSuccess {
   headers?: Record<string, string>;
   /** HTTP status of the successful response, when the producer supplied one. */
   status?: number;
-  /** Reserved for a future response cache; no producer sets it today. */
-  fromCache?: boolean;
 }
 
 /**

@@ -228,7 +228,7 @@ const tabHeading = (name: string) =>
 /** Drill into a group row: expand it, then open its detail view. */
 async function drillInto(uev: ReturnType<typeof userEvent.setup>, name: string) {
   const row = screen.getByLabelText(`Select ${name}`).closest('[data-group-id]') as HTMLElement;
-  await uev.click(within(row).getByRole('button', { name: 'Expand' }));
+  await uev.click(within(row).getByRole('button', { name: `Expand ${name}` }));
   await uev.click(within(row).getByRole('button', { name: 'View group details' }));
 }
 

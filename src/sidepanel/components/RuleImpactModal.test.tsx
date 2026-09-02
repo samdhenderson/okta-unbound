@@ -9,7 +9,12 @@ function member(id: string, first: string): OktaUser {
   return {
     id,
     status: 'ACTIVE',
-    profile: { login: `${id}@x.io`, email: `${id}@x.io`, firstName: first, lastName: 'U' },
+    profile: {
+      login: `${id}@example.com`,
+      email: `${id}@example.com`,
+      firstName: first,
+      lastName: 'U',
+    },
   };
 }
 
@@ -113,6 +118,9 @@ describe('RuleImpactModal', () => {
       />,
     );
     expect(screen.getByText('Failed to fetch group rules')).toBeInTheDocument();
+    // D-081: the error is announced via the shared AlertMessage's role="alert",
+    // not silently swapped in as a plain <div> a screen reader never hears.
+    expect(screen.getByRole('alert')).toHaveTextContent('Failed to fetch group rules');
   });
 
   it('deep-links a target group to the Groups tab when navigation is wired (B → A2)', async () => {

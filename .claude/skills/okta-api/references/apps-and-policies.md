@@ -97,6 +97,22 @@ GET /api/v1/apps/{appId}/group-push/mappings
 Older tooling infers push mappings from the group assignment listing because this
 endpoint did not exist. Use it for anything push-related now.
 
+**There is no single listing that answers "app → groups" for every app at
+once (D-060).** `GET /api/v1/apps` accepts exactly one `expand` value —
+`expand=user/{userId}`, and only paired with a `user.id eq "{userId}"` filter
+for that same user — with no equivalent for group assignments. The only
+documented route to an app's assigned groups is the per-app
+`GET /api/v1/apps/{appId}/groups` above, and the only documented route to a
+group's assigned apps is the mirror-image per-group
+`GET /api/v1/groups/{groupId}/apps`. Whichever side an org-wide app↔group
+report chooses to walk, it is a fan-out — one call per app or one call per
+group — not a single listing. Checked directly against the `queryAppsExpand`
+parameter in Okta's published OpenAPI spec, which enumerates only the
+`user/{userId}` case.
+`[docs: GET /api/v1/apps, github.com/okta/okta-management-openapi-spec —
+component `queryAppsExpand`, description: "Only supports
+`expand=user/{userId}`..."]`
+
 Note the direction: an `APP_GROUP` is a group _sourced from_ an app, while an app
 group assignment grants an app _to_ a group. They are unrelated, and confusing them
 inverts the access story. See `groups-and-rules.md`.

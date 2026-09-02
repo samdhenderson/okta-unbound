@@ -26,7 +26,12 @@ import {
   oktaGroupRuleSchema,
   type OktaAppListItem,
 } from '../schemas/okta';
-import { fetchAllPages, OKTA_PAGE_SIZE, type PaginatedPageResult } from '../utils/oktaPagination';
+import {
+  fetchAllPages,
+  OKTA_PAGE_SIZE,
+  PaginatedFetchError,
+  type PaginatedPageResult,
+} from '../utils/oktaPagination';
 import { createLogger } from '../utils/logger';
 import { orgSnapshotStore } from './orgSnapshotStore';
 import {
@@ -144,6 +149,18 @@ export interface WalkOutcome {
   swept: number;
   /** Failure message when `complete` is `false` and the walk threw. */
   error?: string;
+  /**
+   * The failing page's HTTP status, when the walk stopped on a
+   * {@link PaginatedFetchError} — a real status (401, 403, 429…) or
+   * `undefined` when the transport never produced one (a dropped connection,
+   * a rejected schedule). Lets a reader (`orgFigures.ts`) tell "you are not
+   * allowed to read this" apart from "this failed for some other reason"
+   * instead of every stopped walk reading identically (D-068). Absent for a
+   * walk that never failed, and — for {@link runShardedWalk} — absent even on
+   * failure, since a fan-out's shards can fail with different statuses and
+   * there is no single one to report.
+   */
+  status?: number;
   /** Which mode actually ran, after any escalation. */
   mode?: SyncMode;
 }
@@ -289,11 +306,12 @@ export async function runFullWalk<T>(
     await drained.catch(() => undefined);
     // Identifiers and outcomes only — never a response body or an entity name.
     const message = error instanceof Error ? error.message : 'Walk failed';
-    log.error('Full walk did not complete', { code: 'snapshot_walk_failed', collection });
+    const status = error instanceof PaginatedFetchError ? error.status : undefined;
+    log.error('Full walk did not complete', { code: 'snapshot_walk_failed', collection, status });
     // The cursor and `complete: false` are left exactly as the last page set
     // them, which is what lets the next attempt resume rather than restart.
     await orgSnapshotStore.patchMeta(collection, origin, { watermark });
-    return { collection, complete: false, written, swept: 0, error: message };
+    return { collection, complete: false, written, swept: 0, error: message, status };
   }
 
   const swept = await orgSnapshotStore.sweepStale(collection, origin, mark);
@@ -472,8 +490,13 @@ async function runDelta<T>(
   } catch (error) {
     await drained.catch(() => undefined);
     const message = error instanceof Error ? error.message : 'Delta failed';
+    const status = error instanceof PaginatedFetchError ? error.status : undefined;
     // Identifiers and outcomes only — never a response body or an entity name.
-    log.error('Delta sync did not complete', { code: 'snapshot_delta_failed', collection });
+    log.error('Delta sync did not complete', {
+      code: 'snapshot_delta_failed',
+      collection,
+      status,
+    });
     // `complete` is deliberately left alone: the snapshot is still whole as of
     // its last full walk, it is merely no fresher than it already was. Leaving
     // `lastDeltaAt` unmoved is what makes the next attempt retry.
@@ -483,6 +506,7 @@ async function runDelta<T>(
       written,
       swept: 0,
       error: message,
+      status,
       mode: 'delta',
     };
   }

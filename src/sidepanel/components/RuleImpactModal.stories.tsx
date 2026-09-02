@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { expect, fn, within } from 'storybook/test';
 import RuleImpactModal from './RuleImpactModal';
 import type { RuleImpactSummary, TargetGroupImpact } from '../../shared/membership/ruleImpact';
 import { mockUsers } from '../../test/mocks/fixtures';
@@ -59,6 +59,39 @@ const mockEmptySummary: RuleImpactSummary = {
   targetGroups: [],
   distinctMemberCount: 0,
   totalHeldSolely: 0,
+};
+
+/**
+ * D-047: `totalHeldSolely === 0` alone cannot tell "nothing to check this rule
+ * against" apart from "checked, and nothing collides" — both `Default`-shape
+ * summaries below share that count but must render distinct copy.
+ */
+const targetNoOverlap: TargetGroupImpact = {
+  groupId: 'grp4',
+  groupName: 'Engineering',
+  memberCount: 12,
+  heldSolelyCount: 0,
+  heldSolelyByRule: [],
+};
+
+/** The org holds no other group rules — there was nothing to compare against. */
+const mockNoRuleInventorySummary: RuleImpactSummary = {
+  ruleId: 'rule4',
+  ruleName: 'Only Rule',
+  targetGroups: [targetNoOverlap],
+  distinctMemberCount: 12,
+  totalHeldSolely: 0,
+  emptyRuleInventory: true,
+};
+
+/** The org's other rules were checked and none of them collide with this one. */
+const mockEvaluatedNoOverlapSummary: RuleImpactSummary = {
+  ruleId: 'rule5',
+  ruleName: 'Engineering - US',
+  targetGroups: [targetNoOverlap],
+  distinctMemberCount: 12,
+  totalHeldSolely: 0,
+  emptyRuleInventory: false,
 };
 
 /**
@@ -144,4 +177,42 @@ export const NoTargetGroups: Story = {
 /** A large solely-held list, exercising the per-group "and N more…" overflow. */
 export const LargeSoleHoldList: Story = {
   args: { ruleName: 'Engineering - EU', summary: mockLargeSummary },
+};
+
+/**
+ * D-047: the org genuinely has no other group rules, so there was nothing to
+ * check this rule against — distinct from `EvaluatedNoOverlap` below, which
+ * reads identically on the stat tile alone (`totalHeldSolely` is 0 either way).
+ */
+export const NoOtherRulesInOrg: Story = {
+  args: { ruleName: 'Only Rule', summary: mockNoRuleInventorySummary },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
+    await expect(
+      canvas.getByText(
+        'This org has no other group rules, so there was nothing to check this rule against.',
+      ),
+    ).toBeVisible();
+    await expect(
+      canvas.queryByText(/Checked against every other group rule in the org/),
+    ).not.toBeInTheDocument();
+  },
+};
+
+/**
+ * D-047: other group rules exist and were checked against this one — none of
+ * them collide. Same `totalHeldSolely` as `NoOtherRulesInOrg` above, but a
+ * different fact, so the copy must not read the same.
+ */
+export const EvaluatedNoOverlap: Story = {
+  args: { summary: mockEvaluatedNoOverlapSummary },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
+    await expect(
+      canvas.getByText(
+        'Checked against every other group rule in the org — none collide with this one.',
+      ),
+    ).toBeVisible();
+    await expect(canvas.queryByText(/no other group rules/)).not.toBeInTheDocument();
+  },
 };

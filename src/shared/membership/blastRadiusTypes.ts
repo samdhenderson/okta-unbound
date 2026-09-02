@@ -38,7 +38,7 @@
  */
 
 import type { RuleUnevaluableReason } from '../ruleEvaluator';
-import type { GroupMembership, MembershipRule, OktaUser } from '../types';
+import type { GroupMembership, GroupRuleStatus, MembershipRule, OktaUser } from '../types';
 import type { MembershipBucket } from '../../sidepanel/components/users/membershipVerdict';
 
 /**
@@ -151,8 +151,17 @@ export interface RuleEffect {
    * there would silently drop a real effect rather than merely mislabel one.
    */
   readonly touchedAttributes: readonly string[];
-  /** Whether the rule is `ACTIVE`. An `INACTIVE` rule places nobody. */
+  /** Whether the rule is `ACTIVE`. Neither `INACTIVE` nor `INVALID` places anybody. */
   readonly active: boolean;
+  /**
+   * The rule's {@link GroupRuleStatus} exactly as Okta reported it, so a caller
+   * can distinguish a deactivated rule from a broken one — the distinction
+   * {@link active} collapses on purpose, because the removal/addition gates in
+   * `blastRadius.ts` only need "does this rule place anybody", not why not
+   * (D-085). Optional so a fixture built before this field existed still
+   * type-checks; the engine itself always sets it.
+   */
+  readonly status?: GroupRuleStatus;
 }
 
 /**

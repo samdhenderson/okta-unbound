@@ -256,9 +256,11 @@ Carried forward from the A/B build (surfaced while working, none blocking):
   the repo and hasn't been exercised against a live tenant. Add a `useRuleConsolidation`
   hook test (mock the write ops) pinning the create → activate → retire sequencing and
   the abort-before-delete guarantee; consider a post-create verification read.
-- **A3/A4 audit attribution.** Both write a placeholder `performedBy:
-'unknown@unknown.com'` (they don't fetch `/users/me` like the rule lifecycle does).
-  Thread the current user through for accurate audit trails.
+- ~~**A3/A4 audit attribution.**~~ Resolved (`D-013b`): both now resolve the
+  current admin through `useOktaApi`'s `getCurrentUser()` facade, same as the
+  rule lifecycle. An unresolvable actor records `performedBy: null` with
+  `actorResolution: 'unavailable'` rather than a fabricated placeholder — see
+  `useRuleConsolidation.ts:237,312-313`.
 - **`RulesCache` stores `rawRules: []`.** Anything needing exclusion lists (the impact
   engine) must re-fetch raw rules. Populating `rawRules` once would let impact capture
   skip its rules fetch entirely.

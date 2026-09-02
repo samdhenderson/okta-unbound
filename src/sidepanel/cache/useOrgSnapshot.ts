@@ -53,6 +53,16 @@ export interface UseOrgSnapshotResult<T> {
   /** Message from the last failed sync, or `null`. */
   error: string | null;
   /**
+   * HTTP status of this collection's most recent sync attempt, from
+   * `SyncMeta.status` — `null` when it succeeded or reported no status.
+   * Read back from the store like {@link complete} and {@link lastFullWalkAt}
+   * rather than held as request-local state, so a collection whose own `sync`
+   * was never called (only one collection's `sync` drives an org-wide walk;
+   * see `useOrgFigures`) still picks up its status once the background writes
+   * it and this hook's broadcast listener re-reads (D-068).
+   */
+  status: number | null;
+  /**
    * Ask the background to sync this org.
    *
    * @param force - Skip the cheap delta/drift modes and walk the org in full.
@@ -111,6 +121,7 @@ export function useOrgSnapshot<T>(
   const [lastFullWalkAt, setLastFullWalkAt] = useState<number | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<number | null>(null);
 
   // Guards every async settle against an org change that happened mid-read. A
   // late resolve must never write one org's rows into another org's render —
@@ -123,6 +134,7 @@ export function useOrgSnapshot<T>(
       setRecords([]);
       setComplete(false);
       setLastFullWalkAt(null);
+      setStatus(null);
       return;
     }
     const [stored, meta] = await Promise.all([
@@ -133,6 +145,11 @@ export function useOrgSnapshot<T>(
     setRecords(stored);
     setComplete(meta.complete);
     setLastFullWalkAt(meta.lastFullWalkAt);
+    // Read the same way as `complete`/`lastFullWalkAt` rather than kept as
+    // request-local state (D-068): a collection whose own `sync` was never
+    // called still learns its status once the background writes it and a
+    // `snapshotUpdated` broadcast triggers this re-read.
+    setStatus(meta.status);
   }, [collection, origin]);
 
   // Seed from the store whenever the org changes. This is the read that makes a
@@ -177,9 +194,31 @@ export function useOrgSnapshot<T>(
           origin,
           tabId,
           force,
-        })) as { success?: boolean; error?: string } | undefined;
+        })) as
+          | {
+              success?: boolean;
+              error?: string;
+              outcomes?: Array<{ collection: SnapshotCollection; status?: number | null }>;
+            }
+          | undefined;
         if (!response?.success) {
           failure = response?.error || 'Failed to load from Okta';
+        }
+        // `syncSnapshot` walks the whole org (ADR-0040), so one response
+        // reports every collection's status, not just this hook's own — write
+        // all of them so a collection whose own `sync` is never called (see
+        // `useOrgFigures`'s "one sync, not one per collection") still gets its
+        // status persisted. Every collection present is written, success or
+        // failure, which is what clears a stale failure once a later walk
+        // succeeds (D-068).
+        if (response?.outcomes && originRef.current === origin) {
+          await Promise.all(
+            response.outcomes.map((outcome) =>
+              orgSnapshotStore.patchMeta(outcome.collection, origin, {
+                status: outcome.status ?? null,
+              }),
+            ),
+          );
         }
         // Re-read regardless of the verdict: a failed walk still wrote every page
         // it did reach, and those rows are real.
@@ -199,5 +238,5 @@ export function useOrgSnapshot<T>(
 
   const rows = useMemo(() => records.map((record) => record.entity), [records]);
 
-  return { rows, records, isReading, complete, lastFullWalkAt, isSyncing, error, sync };
+  return { rows, records, isReading, complete, lastFullWalkAt, isSyncing, error, status, sync };
 }

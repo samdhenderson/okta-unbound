@@ -4,12 +4,29 @@
  * These pin the request shape (endpoint / method / body) each operation sends
  * through the scheduler path, plus the transformed result on success, on
  * `success: false`, and on a zod-validation failure at the boundary (ADR-0006).
+ *
+ * They also pin this layer's one non-transport effect (ADR-0064): a write that
+ * reaches Okta drops the org-wide rules snapshot, and a write that does not
+ * leaves it alone. `RulesCache` is `chrome.storage`-backed, so it is mocked here
+ * the way the hook suites that used to own this assertion mocked it — what is
+ * pinned is the invalidation call, not the storage.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createRuleWriteOperations } from './ruleWrites';
 import type { CoreApi } from './core';
 import type { CreateRulePayload } from '../../../shared/rules/consolidation';
 import { makeFakeCore } from '@/test/factories/coreApi';
+
+const rulesCache = vi.hoisted(() => ({ clear: vi.fn() }));
+
+vi.mock('../../../shared/rulesCache', () => ({
+  RulesCache: rulesCache,
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  rulesCache.clear.mockResolvedValue(undefined);
+});
 
 /** Build a fake CoreApi whose transport is fully mocked. */
 const makeCore = (overrides: Partial<CoreApi> = {}): CoreApi =>
@@ -224,5 +241,103 @@ describe('deactivateGroupRule', () => {
     const { deactivateGroupRule } = createRuleWriteOperations(core);
 
     expect(await deactivateGroupRule('0prFAKERULE')).toEqual({ success: false, error: 'boom' });
+  });
+});
+
+/*
+  ADR-0064 moved rule-cache invalidation out of the three calling hooks and under
+  the write itself, so that a rule write cannot silently skip it. These assertions
+  are the retargeted versions of the ones `useCreateFeedingRule` and
+  `useRuleConsolidation` used to own (`D-089`), plus the activate/deactivate pair
+  nobody owned at all (`D-095`).
+*/
+describe('rule-write cache invalidation', () => {
+  /** A core whose single request resolves to `response`. */
+  const coreReturning = (response: unknown) =>
+    makeCore({ makeApiRequest: vi.fn().mockResolvedValue(response) });
+
+  it('drops the org-wide snapshot when a rule is created', async () => {
+    const ops = createRuleWriteOperations(coreReturning({ success: true, data: validRule() }));
+
+    await ops.createGroupRule(createPayload());
+
+    expect(rulesCache.clear).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the snapshot alone when the create is rejected', async () => {
+    const ops = createRuleWriteOperations(
+      coreReturning({ success: false, error: 'Rule name already in use' }),
+    );
+
+    await ops.createGroupRule(createPayload());
+
+    expect(rulesCache.clear).not.toHaveBeenCalled();
+  });
+
+  /*
+    The rule exists in Okta even though we could not read the response, so the
+    snapshot is a rule short regardless of what this call returns. This is also
+    what makes the consolidation flow's abort path safe (`D-089`): invalidation
+    happens with the create, before the activate step that can abort the run.
+  */
+  it('drops the snapshot for a created rule whose response failed validation', async () => {
+    const ops = createRuleWriteOperations(
+      coreReturning({ success: true, data: { id: 'x', name: 'y' } }),
+    );
+
+    const result = await ops.createGroupRule(createPayload());
+
+    expect(result.success).toBe(false);
+    expect(rulesCache.clear).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['deleteGroupRule', (o: ReturnType<typeof createRuleWriteOperations>) => o.deleteGroupRule],
+    ['activateGroupRule', (o: ReturnType<typeof createRuleWriteOperations>) => o.activateGroupRule],
+    [
+      'deactivateGroupRule',
+      (o: ReturnType<typeof createRuleWriteOperations>) => o.deactivateGroupRule,
+    ],
+  ] as const)('drops the org-wide snapshot when %s succeeds', async (_name, pick) => {
+    const ops = createRuleWriteOperations(coreReturning({ success: true }));
+
+    await pick(ops)('0prFAKERULE');
+
+    expect(rulesCache.clear).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['deleteGroupRule', (o: ReturnType<typeof createRuleWriteOperations>) => o.deleteGroupRule],
+    ['activateGroupRule', (o: ReturnType<typeof createRuleWriteOperations>) => o.activateGroupRule],
+    [
+      'deactivateGroupRule',
+      (o: ReturnType<typeof createRuleWriteOperations>) => o.deactivateGroupRule,
+    ],
+  ] as const)('leaves the snapshot alone when %s fails', async (_name, pick) => {
+    const ops = createRuleWriteOperations(coreReturning({ success: false, error: 'boom' }));
+
+    await pick(ops)('0prFAKERULE');
+
+    expect(rulesCache.clear).not.toHaveBeenCalled();
+  });
+
+  it('never invalidates on a read', async () => {
+    const ops = createRuleWriteOperations(coreReturning({ success: true, data: validRule() }));
+
+    await ops.getRawGroupRule('0prFAKERULE');
+
+    expect(rulesCache.clear).not.toHaveBeenCalled();
+  });
+
+  /*
+    A stale snapshot expires on its own inside the TTL; a write reported as failed
+    when Okta accepted it does not recover. So the cache is never allowed to
+    decide the write's result.
+  */
+  it('still reports a successful write when invalidation itself fails', async () => {
+    rulesCache.clear.mockRejectedValue(new Error('storage unavailable'));
+    const ops = createRuleWriteOperations(coreReturning({ success: true }));
+
+    await expect(ops.activateGroupRule('0prFAKERULE')).resolves.toEqual({ success: true });
   });
 });

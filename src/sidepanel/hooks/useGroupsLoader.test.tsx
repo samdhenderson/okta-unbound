@@ -26,30 +26,19 @@ import { useGroupsLoader } from './useGroupsLoader';
 // faked with a Map, as `shared/snapshot/orgSnapshotStore.test.ts` does. The
 // extra `gate` is what makes the superseded-org case constructible: it holds a
 // collection read open until the test lets it resolve.
-const { fakeDB, idbTables, gate } = vi.hoisted(() => {
-  const idbTables = new Map<string, Map<string, any>>();
+const { fakeDB, idbTables, gate } = await vi.hoisted(async () => {
+  const { createFakeIdb } = await import('@/test/factories/idb');
+  const { fakeDB: baseDB, tables: idbTables } = createFakeIdb();
   // Held by ORIGIN, not by a flag the test can clear before the read even
   // reaches the store — the whole case depends on one org's read still being in
   // flight when the panel has moved to another.
   const gate = { origin: null as string | null, waited: Promise.resolve(), release: () => {} };
-  const keyOf = (key: unknown) => (Array.isArray(key) ? key.join('::') : String(key));
-  const table = (name: string) => {
-    if (!idbTables.has(name)) idbTables.set(name, new Map());
-    return idbTables.get(name)!;
-  };
   const fakeDB = {
-    get: async (name: string, key: unknown) => table(name).get(keyOf(key)),
-    put: async () => {},
-    delete: async () => {},
-    getAllFromIndex: async (name: string, _i: string, origin: string) => {
+    ...baseDB,
+    getAllFromIndex: async (name: string, index: string, origin: string) => {
       if (name === 'groups' && origin === gate.origin) await gate.waited;
-      return [...table(name).values()].filter((v) => v.origin === origin);
+      return baseDB.getAllFromIndex(name, index, origin);
     },
-    getAllKeysFromIndex: async () => [],
-    transaction: () => ({
-      store: { put: async () => {}, delete: async () => {} },
-      done: Promise.resolve(),
-    }),
   };
   return { fakeDB, idbTables, gate };
 });

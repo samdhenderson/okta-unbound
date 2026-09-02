@@ -9,6 +9,12 @@
  * calls: the "held by this rule alone" answer comes from rules metadata + the
  * members already fetched. What that population means depends on the verb the
  * caller is about to perform — see `shared/membership/ruleImpact`'s header.
+ *
+ * The rule list this module fetches (`fetchRawRules`, snapshot-served or
+ * paginated) is exactly the `rules` inventory `summarizeRuleImpact` classifies
+ * against, so `RuleImpactSummary.emptyRuleInventory` — "there was nothing to
+ * compare this rule to" versus "this was checked and nothing collided" (D-047)
+ * — falls out of that same list with no extra plumbing here.
  */
 
 import type { CoreApi } from './core';
@@ -159,7 +165,8 @@ export function createRuleImpactOperations(
         };
       }
     } catch (error) {
-      log.warn('Failed to fetch group meta for impact preview', { groupId }, error);
+      const message = error instanceof Error ? error.message : 'unknown';
+      log.warn('Failed to fetch group meta for impact preview', { groupId, message });
     }
     return { name: fallbackName };
   };

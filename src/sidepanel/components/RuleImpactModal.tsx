@@ -32,6 +32,8 @@ import IconButton from './shared/IconButton';
 import LoadingSpinner from './shared/LoadingSpinner';
 import StatCard from './shared/StatCard';
 import Icon from './shared/Icon';
+import AlertMessage from './shared/AlertMessage';
+import Eyebrow from './shared/Eyebrow';
 import type { RuleImpactSummary, TargetGroupImpact } from '../../shared/membership/ruleImpact';
 import type { RuleImpactMode, RuleImpactStatus, RuleImpactProgress } from '../hooks/useRuleImpact';
 import { userDisplayName } from '../../shared/utils/userDisplay';
@@ -131,7 +133,6 @@ const TargetGroupRow: React.FC<{
               label={`${expanded ? 'Hide' : 'Show'} members held by this rule alone in ${group.groupName}`}
               variant="ghost"
               size="sm"
-
               expanded={expanded}
               controls={disclosureId}
               onClick={() => setExpanded((v) => !v)}
@@ -211,7 +212,6 @@ const RuleImpactModal: React.FC<RuleImpactModalProps> = ({
       {isDeactivate && (
         <Button
           variant="danger"
-
           onClick={onConfirmDeactivate}
           disabled={status === 'loading'}
           title={status === 'loading' ? 'Wait for the impact analysis to finish' : undefined}
@@ -255,9 +255,9 @@ const RuleImpactModal: React.FC<RuleImpactModalProps> = ({
         )}
 
         {status === 'error' && (
-          <div className="rounded-md border border-danger-light bg-danger-light p-(--sp-card)">
-            <p className="text-sm text-danger-text">{error || 'Failed to analyze rule impact.'}</p>
-          </div>
+          <AlertMessage
+            message={{ text: error || 'Failed to analyze rule impact.', type: 'danger' }}
+          />
         )}
 
         {status === 'done' && summary && (
@@ -282,12 +282,25 @@ const RuleImpactModal: React.FC<RuleImpactModalProps> = ({
               />
             </div>
 
+            {/* D-047: totalHeldSolely === 0 reads the same whether this rule was
+                checked against a real inventory of other rules or there was no
+                inventory to check it against at all — call out which one this is. */}
+            {totalHeldSolely === 0 &&
+              (summary.emptyRuleInventory ? (
+                <p className="text-sm text-neutral-500">
+                  This org has no other group rules, so there was nothing to check this rule
+                  against.
+                </p>
+              ) : (
+                <p className="text-sm text-neutral-500">
+                  Checked against every other group rule in the org — none collide with this one.
+                </p>
+              ))}
+
             {/* Per-group breakdown */}
             {summary.targetGroups.length > 0 ? (
               <div className="space-y-(--sp-rung)">
-                <p className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
-                  Target groups
-                </p>
+                <Eyebrow>Target groups</Eyebrow>
                 {summary.targetGroups.map((group) => (
                   <TargetGroupRow
                     key={group.groupId}

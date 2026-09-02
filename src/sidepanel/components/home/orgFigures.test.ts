@@ -114,6 +114,44 @@ describe('buildFigure', () => {
     expect(figure.note).not.toMatch(/403|permission|admin/i);
   });
 
+  it('names the permission problem when the failure status says so (D-068)', () => {
+    // A 403 (or 401) is distinguishable from a 429 or a dropped connection now
+    // that the walk's HTTP status survives into `WalkOutcome` — this is the
+    // curtailed-for-a-known-reason case the generic "did not finish" copy
+    // above still covers for every other status.
+    const figure = buildFigure(
+      'rules',
+      'Rules',
+      'bolt',
+      source({
+        complete: false,
+        lastFullWalkAt: null,
+        count: 0,
+        error: 'Forbidden',
+        status: 403,
+      }),
+    );
+    expect(figure.note).toBe('You are not allowed to read rules.');
+  });
+
+  it('does not claim a permission problem for a non-403/401 status', () => {
+    // A 429 stopped the walk too, but that is not evidence of a permissions
+    // problem — reporting it as one would be a stronger, wrong claim.
+    const figure = buildFigure(
+      'rules',
+      'Rules',
+      'bolt',
+      source({
+        complete: false,
+        lastFullWalkAt: null,
+        count: 0,
+        error: 'Too Many Requests',
+        status: 429,
+      }),
+    );
+    expect(figure.note).toBe('The last read of rules did not finish.');
+  });
+
   it('counts a subset when one is passed, keeping the source collection’s status', () => {
     // "Rules paused" is a filter over the rules collection, so it inherits that
     // collection's trustworthiness rather than being judged on its own count.

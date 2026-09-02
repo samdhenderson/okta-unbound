@@ -45,7 +45,7 @@ import RulesListPanel from './rules/RulesListPanel';
 import RulesDuplicatesPanel from './rules/RulesDuplicatesPanel';
 import CurrentGroupRuleRelations from './rules/CurrentGroupRuleRelations';
 import RuleConsolidationModal from './RuleConsolidationModal';
-import type { FormattedRule, OktaGroupRule } from '../../shared/types';
+import type { FormattedRule, GroupRuleStatus, OktaGroupRule } from '../../shared/types';
 import { filterRules } from '../../shared/ruleUtils';
 import { findMergeableRuleGroups, type MergeableRuleGroup } from '../../shared/rules/consolidation';
 import { sortRules, type RuleSortMode } from '../../shared/rules/similarity';
@@ -129,6 +129,27 @@ interface RulesTabProps {
  * Renders the Rules tab, orchestrating the rule data/lifecycle/impact hooks and
  * their presentational panels, plus search/filter state and TabState persistence.
  */
+/**
+ * Whether a rule with this status is actually maintaining its groups right now.
+ *
+ * A `Record` over the whole status union rather than a `=== 'ACTIVE'` /
+ * `=== 'INACTIVE'` pair, so a fourth Okta status is a compile error here instead
+ * of a rule that quietly falls out of every chip.
+ *
+ * `INVALID` is grouped with the chips' *not in force* side (D-085). The two chips
+ * partition the list by one question — is this rule placing anyone? — and a rule
+ * Okta can no longer evaluate answers no, exactly as a deactivated one does. It was
+ * previously in neither arm, which made the rule an admin most needs to find the
+ * only rule on the tab no filter could reach. It is not labelled a pause anywhere:
+ * the card it lands on carries `ruleStatusBadge`'s `danger` **Broken** mark, which
+ * states the difference at the point the reader is actually looking at the rule.
+ */
+const IN_FORCE: Record<GroupRuleStatus, boolean> = {
+  ACTIVE: true,
+  INACTIVE: false,
+  INVALID: false,
+};
+
 const RulesTab: React.FC<RulesTabProps> = ({
   targetTabId,
   currentGroupId,
@@ -352,14 +373,26 @@ const RulesTab: React.FC<RulesTabProps> = ({
     groupNames: rule.groupNames,
   });
 
-  const handlePreviewImpact = (rule: FormattedRule) =>
-    impact.open(toRuleImpactInput(rule), 'preview');
+  // `impact` itself is a fresh object every render (its hook returns a plain object
+  // literal), so depending on it would defeat the point — only `impact.open` needs to
+  // be stable, and it already is (memoised inside `useRuleImpact`).
+  const handlePreviewImpact = useCallback(
+    (rule: FormattedRule) => impact.open(toRuleImpactInput(rule), 'preview'),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see the note above.
+    [impact.open],
+  );
 
   /** Gate deactivation behind the impact preview; commit only after confirm. */
-  const handleRequestDeactivate = (ruleId: string) => {
-    const rule = rules.find((r) => r.id === ruleId);
-    if (rule) impact.open(toRuleImpactInput(rule), 'deactivate');
-  };
+  const handleRequestDeactivate = useCallback(
+    (ruleId: string) => {
+      const rule = rules.find((r) => r.id === ruleId);
+      if (rule) impact.open(toRuleImpactInput(rule), 'deactivate');
+    },
+    // Same as `handlePreviewImpact` above: `impact.open` is the only stable piece of
+    // `impact` this callback needs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rules, impact.open],
+  );
 
   const handleConfirmDeactivate = () => {
     const ruleId = impact.rule?.id;
@@ -405,12 +438,12 @@ const RulesTab: React.FC<RulesTabProps> = ({
     let result = filterRules(scopedRules, searchQuery);
     switch (activeFilter) {
       case 'active':
-        result = result.filter((r) => r.status === 'ACTIVE');
+        result = result.filter((r) => IN_FORCE[r.status]);
         break;
-      // A paused rule is a rule that has stopped maintaining its groups. Nothing
-      // in Okta says when it was paused or by whom, so the list is the finding.
+      // A rule that has stopped maintaining its groups. Nothing in Okta says when
+      // it was paused or by whom, so the list is the finding.
       case 'paused':
-        result = result.filter((r) => r.status === 'INACTIVE');
+        result = result.filter((r) => !IN_FORCE[r.status]);
         break;
       case 'conflicts':
         result = result.filter((r) => r.conflicts && r.conflicts.length > 0);
@@ -491,6 +524,22 @@ const RulesTab: React.FC<RulesTabProps> = ({
     (panel: RulesPanel) => setActivePanel((prev) => (prev === panel ? 'none' : panel)),
     [],
   );
+
+  /**
+   * The strip's Load/Refresh verb — cache-first once rules are already loaded, forced
+   * the first time. Stabilised so it (and the plain `onLoad` below) don't hand
+   * `RuleCard`'s memoised siblings a fresh function identity on every render, which
+   * would defeat the shallow compare they rely on for skipping unaffected rows
+   * (`D-046`).
+   */
+  const handleLoadOrRefresh = useCallback(() => {
+    loadRules(rules.length > 0);
+  }, [loadRules, rules.length]);
+
+  /** Load rules on demand from the empty-state prompt inside the list panel. */
+  const handleLoadFromEmptyState = useCallback(() => {
+    loadRules(false);
+  }, [loadRules]);
 
   /*
     A requested rule — a cross-tab deep-link, or a "View" press inside one of the analysis
@@ -575,7 +624,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
           }
           hasRules={rules.length > 0}
           isLoading={data.isLoading}
-          onLoad={() => loadRules(rules.length > 0)}
+          onLoad={handleLoadOrRefresh}
           duplicateClusterCount={mergeableClusters.length}
           hasCurrentGroup={Boolean(currentGroupId)}
           currentGroupRelationCount={currentGroupRelationCount}
@@ -641,7 +690,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
           isLoading={data.isLoading}
           hasRules={rules.length > 0}
           filteredRules={filteredRules}
-          onLoad={() => loadRules(false)}
+          onLoad={handleLoadFromEmptyState}
           onOpenRule={handleOpenRule}
           selectedRuleId={activeRuleId}
         />

@@ -126,11 +126,23 @@ export interface OktaGroup {
 /** How a group is sourced: native Okta, app-mastered, or built-in. */
 export type GroupType = 'OKTA_GROUP' | 'APP_GROUP' | 'BUILT_IN';
 
+/**
+ * Okta's `GroupRuleStatus` lifecycle, in full.
+ *
+ * `INVALID` is the state a rule falls into when it stops being evaluable — most
+ * commonly because its expression or its assignment target names a group that
+ * has since been deleted. It places nobody, exactly like `INACTIVE`, but it is
+ * not a state an admin chose: it is Okta reporting a broken rule, and the whole
+ * point of surfacing it (D-061, D-085) is that it must not read as a deliberate
+ * pause. Branch on it explicitly; never fold it into the `INACTIVE` arm.
+ */
+export type GroupRuleStatus = 'ACTIVE' | 'INACTIVE' | 'INVALID';
+
 /** A group rule as returned by the Okta Group Rules API. */
 export interface OktaGroupRule {
   id: string;
   name: string;
-  status: 'ACTIVE' | 'INACTIVE';
+  status: GroupRuleStatus;
   type: string;
   created: string;
   lastUpdated: string;
@@ -179,7 +191,7 @@ export interface RuleConflict {
 export interface FormattedRule {
   id: string;
   name: string;
-  status: 'ACTIVE' | 'INACTIVE';
+  status: GroupRuleStatus;
   condition: string;
   conditionExpression?: string;
   groupIds: string[];
@@ -278,7 +290,13 @@ export interface UserMembershipTrace {
 export interface MembershipRule {
   id: string;
   name: string;
-  status: 'ACTIVE' | 'INACTIVE';
+  /**
+   * The full {@link GroupRuleStatus}, so an `INVALID` rule is carried into the
+   * membership analysis rather than being rejected at the type boundary (D-085).
+   * Every consumer decides membership on `status === 'ACTIVE'`, so `INVALID`
+   * places nobody — the same answer as `INACTIVE`, for a different reason.
+   */
+  status: GroupRuleStatus;
   conditions?: RuleConditions;
   actions?: RuleActions;
   groupIds?: string[];
@@ -478,8 +496,19 @@ export type UpdateOperationPlanMessage = { action: 'updateOperationPlan' } & Ope
 
 /** Aggregate counts across a set of rules. */
 export interface RuleStats {
+  /** Every rule counted, whatever its {@link GroupRuleStatus}. */
   total: number;
+  /** Rules whose status is exactly `ACTIVE`. */
   active: number;
+  /**
+   * Rules whose status is exactly `INACTIVE` — a deliberate pause.
+   *
+   * `INVALID` rules are counted in {@link RuleStats.total} but in neither
+   * `active` nor `inactive`, so the two need not sum to the total (D-085).
+   * Folding them in here would report a broken rule as one an admin chose to
+   * pause, which is the exact confusion `INVALID` exists to prevent; they are
+   * surfaced per-row as a `danger` **Broken** mark instead of as a count.
+   */
   inactive: number;
   conflicts: number;
 }

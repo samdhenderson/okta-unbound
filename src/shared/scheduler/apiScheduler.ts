@@ -18,9 +18,9 @@
 import { createLogger } from '../utils/logger';
 import { flushAllPending, recordRequest } from '../requestLog';
 import { OperationCancelledError } from './cancellation';
-import { RateLimitDetector, bucketOf } from './rateLimitDetector';
+import { RateLimitDetector, bucketOf, percentRemaining } from './rateLimitDetector';
 import { PlanRegistry, type PlanDeclaration, type PlanEstimate } from './plan';
-import { normalizeRequestResult } from './requestResult';
+import { isSessionExpired, normalizeRequestResult } from './requestResult';
 import type {
   QueuedRequest,
   RequestPriority,
@@ -28,6 +28,7 @@ import type {
   SchedulerConfig,
   SchedulerState,
   SchedulerMetrics,
+  RequestFailure,
   RequestResult,
   RateLimitInfo,
   BucketState,
@@ -57,6 +58,25 @@ const GLOBAL_GATE = '*';
  * the operations that were cancelled, which is a matter of seconds.
  */
 const MAX_CANCELLED_PLANS = 64;
+
+/**
+ * Statuses a *resolved* failure may be retried on.
+ *
+ * **429 only, deliberately.** `makeApiCall` resolves the content script's
+ * failure object rather than throwing, so before `D-007c` a 429 took the success
+ * path: counted as a success, reported to the caller as a generic failure, and
+ * never routed into the one thing wired to backoff. 429 is the one status that
+ * means *"the same request will work shortly"* — the session is live and Okta is
+ * asking us to slow down.
+ *
+ * Nothing else is in here. **401** is an expired session, and retrying it is
+ * only a slower way to fail (it is handled as suspension instead — ADR-0054).
+ * **403** returns the same 403 forever. **5xx, including 503,** is not sanctioned
+ * by ADR-0054 and would mean re-issuing a write whose fate this layer cannot
+ * know, so it stays out until an ADR says otherwise; transport throws and
+ * timeouts already reach {@link ApiScheduler.retryRequest} through the `catch`.
+ */
+const RETRYABLE_STATUSES: ReadonlySet<number> = new Set([429]);
 
 /**
  * Priority queue and executor for Okta API requests. One instance is created in
@@ -118,6 +138,23 @@ export class ApiScheduler {
   // the operation carry on regardless.
   private cancelledPlans: string[] = [];
 
+  /**
+   * Tabs whose Okta session the scheduler has watched expire, each holding the
+   * 401 failure that proved it (ADR-0054, `D-007b`).
+   *
+   * **Session state is scheduler state.** The content script sees one request at
+   * a time and has no queue to pause; the panel sees only the surfaces that
+   * happen to be mounted. The scheduler sees every request and is the only layer
+   * that can decline to send the next one, which is the whole of why the signal
+   * lives here.
+   *
+   * Keyed by tab because a tab is what holds a session: an admin with two orgs
+   * open has not lost both because one expired. (ADR-0054 phrases this per Okta
+   * *origin*; a request carries a `tabId` and not an origin, and one tab is one
+   * origin's session, so the tab is the available — and equivalent — key.)
+   */
+  private expiredSessions: Map<number, RequestFailure> = new Map();
+
   // Metrics
   private metrics: SchedulerMetrics = {
     totalRequests: 0,
@@ -177,6 +214,17 @@ export class ApiScheduler {
     // decides whether an operation is still running, not how much it may spend.
     if (planId && this.cancelledPlans.includes(planId)) {
       throw new OperationCancelledError();
+    }
+
+    // The session behind this tab is known to be gone, and something is already
+    // out there finding out whether it came back. Settle against the fact we
+    // have instead of spending another request discovering it again — this is
+    // the "thirty failed requests" half of `D-007b`. It is settled, not
+    // rejected: callers already handle a `RequestResult` failure, and this is
+    // the same failure the session's own 401 produced.
+    const expired = this.expiredSessions.get(tabId);
+    if (expired && !this.canProbe(tabId)) {
+      return this.sessionExpiredFailure(expired);
     }
 
     const dedupKey = this.getGetDedupKey(method, endpoint, tabId);
@@ -531,15 +579,50 @@ export class ApiScheduler {
         }
       }
 
+      // What this result says about the session, before anything is decided
+      // about the request itself: a 401 suspends the tab, and any success is the
+      // evidence that lifts a suspension (ADR-0054, `D-007b`).
+      this.observeSessionHealth(request, result);
+
+      // A *resolved* failure Okta says to try again on. `makeApiCall` resolves
+      // rather than throws, so without this branch a 429 fell through to the
+      // success path below and was never routed into backoff (`D-007c`). A 401
+      // is deliberately not in {@link RETRYABLE_STATUSES}: it is suspended
+      // above, and retrying it is only a slower way to fail.
+      if (
+        !result.success &&
+        RETRYABLE_STATUSES.has(result.status) &&
+        request.retryCount < request.maxRetries
+      ) {
+        log.warn('Retryable failure; backing off:', {
+          id: request.id,
+          status: result.status,
+          attempt: request.retryCount + 1,
+        });
+        await this.retryRequest(request, new Error(`HTTP ${result.status}`));
+        return;
+      }
+
       // Calculate execution time
       const executionTime = Date.now() - startTime;
       this.updateAverageExecutionTime(executionTime);
 
-      // Success
-      this.metrics.successfulRequests++;
+      // Settle. A resolved failure is a failure: it used to increment
+      // `successfulRequests` (and be audited as a success) purely because it
+      // arrived resolved rather than thrown (`D-007c`).
+      if (result.success) {
+        this.metrics.successfulRequests++;
+      } else {
+        this.metrics.failedRequests++;
+        // The **status**, not `result.error`. That string is Okta's own
+        // `errorSummary`, which routinely names the resource that failed
+        // ("Not found: … user@example.com"), and `lastError` is broadcast to
+        // the panel in `SchedulerState`. Outcomes and identifiers only.
+        this.lastError = `HTTP ${result.status}`;
+      }
       this.activeRequests.delete(request.id);
       request.resolve(result);
-      this.recordSettledRequest(request, true);
+      this.recordSettledRequest(request, result.success);
 
       log.debug('Request completed:', {
         id: request.id,
@@ -570,6 +653,125 @@ export class ApiScheduler {
       // itself) — drain immediately instead of waiting for the fallback tick.
       this.processQueue();
     }
+  }
+
+  /**
+   * Read one settled result for what it says about the tab's Okta session, and
+   * suspend or resume accordingly (ADR-0054, `D-007b`).
+   *
+   * Only two results are evidence. A **401** — the one status
+   * `isSessionExpired` (`shared/scheduler/requestResult`) recognises — means the
+   * session is gone. **Any success** means it is back, and is the only thing
+   * that lifts a suspension: a 403 or a 404 says nothing about credentials, and
+   * clearing on one would drop the banner while nothing yet works.
+   *
+   * @param request - The request that just settled.
+   * @param result - Its result.
+   */
+  private observeSessionHealth(request: QueuedRequest, result: RequestResult): void {
+    if (isSessionExpired(result)) {
+      this.suspendSession(request.tabId, result as RequestFailure);
+    } else if (result.success) {
+      this.resumeSession(request.tabId);
+    }
+  }
+
+  /**
+   * Stop spending the queue on a session that cannot serve it.
+   *
+   * Everything already queued for the tab is settled immediately with the same
+   * failure, **without being sent** — the queue discovers the 401 once instead
+   * of thirty times. In-flight requests are left to land: cancelling a request
+   * that may already have reached Okta is worse than letting it finish,
+   * especially for a write.
+   *
+   * Nothing is remembered for replay. A retry queue that re-issued writes after
+   * a re-authentication would re-run an operation the admin may have abandoned
+   * (ADR-0054 §2).
+   *
+   * @param tabId - The tab whose session ended.
+   * @param failure - The 401 that proved it; reused verbatim as the settled
+   * result for the work that never got sent.
+   */
+  private suspendSession(tabId: number, failure: RequestFailure): void {
+    if (this.expiredSessions.has(tabId)) return;
+    this.expiredSessions.set(tabId, failure);
+
+    const stranded = this.queue.filter((queued) => queued.tabId === tabId);
+    if (stranded.length > 0) {
+      this.queue = this.queue.filter((queued) => queued.tabId !== tabId);
+    }
+
+    // Identifiers and outcomes only — no token, no body, no PII.
+    log.warn('Okta session expired; holding requests for this tab', {
+      tabId,
+      dropped: stranded.length,
+    });
+
+    for (const queued of stranded) {
+      // The coalescing-aware wrapper for a GET, so joined waiters are settled
+      // and the coalescing slot is cleared with it.
+      queued.resolve(this.sessionExpiredFailure(failure));
+    }
+
+    this.notifyStateChange();
+  }
+
+  /**
+   * Lift a suspension because a request for that tab succeeded.
+   *
+   * This is the whole recovery path, and it clears on **evidence, never on a
+   * timer** — nothing here polls a dead session. The evidence arrives because
+   * one request per settled round is still allowed through as a probe (see
+   * {@link canProbe}), so the admin's next action after signing back in is what
+   * proves the session works.
+   *
+   * @param tabId - The tab that just answered successfully.
+   */
+  private resumeSession(tabId: number): void {
+    if (!this.expiredSessions.delete(tabId)) return;
+    log.info('Okta session is answering again; resuming', { tabId });
+    this.notifyStateChange();
+    this.startProcessing();
+    this.processQueue();
+  }
+
+  /**
+   * A fresh failure meaning "this never went out, because the session is gone".
+   *
+   * Deliberately **not** the observed 401 itself. That object carries the `data`
+   * and `headers` of one particular request's 401 response, and handing it to a
+   * caller that asked for a different endpoint would describe someone else's
+   * request — spreading an unvalidated Okta payload (ADR-0006) across call sites
+   * that never made the request it came from. The one thing worth keeping is the
+   * status, taken from the observation rather than restated, so the single
+   * definition of "session expired" stays `isSessionExpired`'s.
+   *
+   * @param observed - The 401 that proved the session had ended.
+   */
+  private sessionExpiredFailure(observed: RequestFailure): RequestFailure {
+    return { success: false, status: observed.status, error: 'Okta session expired' };
+  }
+
+  /**
+   * May a request for a suspended tab go out as the probe that would end the
+   * suspension?
+   *
+   * At most one at a time: with nothing queued and nothing in flight for the
+   * tab, the next request becomes the probe; while it is outstanding every other
+   * request for that tab is settled against the known 401 instead of being sent.
+   * That is what bounds a suspended session's traffic to one request per round
+   * while still leaving a way back — a queue that refused *everything* could
+   * never learn it had recovered, and polling for it is exactly the wasted
+   * traffic ADR-0054 exists to stop.
+   *
+   * @param tabId - The suspended tab.
+   */
+  private canProbe(tabId: number): boolean {
+    for (const active of this.activeRequests.values()) {
+      if (active.tabId === tabId) return false;
+    }
+    return !this.queue.some((queued) => queued.tabId === tabId);
   }
 
   /**
@@ -665,12 +867,26 @@ export class ApiScheduler {
   }
 
   /**
-   * Check if we should enter cooldown based on rate limit info
+   * Should this response's bucket cool down?
+   *
+   * @param info - The observation just parsed off a response.
+   * @remarks A quota that is not a positive number cannot be divided by, and the
+   * result of trying (`Infinity`/`NaN`) compares `false` against every
+   * threshold — so a zero budget used to read as spare capacity here exactly as
+   * it did in the detector. `percentRemaining` (`shared/scheduler/rateLimitDetector`) is
+   * the one guarded ratio both readers now share, and an unusable budget falls
+   * back to the most-restrictive observation anywhere rather than to calm.
+   * (`D-094`)
    */
   private shouldEnterCooldown(info: RateLimitInfo): boolean {
-    const effectiveRemaining = Math.max(0, info.remaining - this.activeRequests.size);
-    const percentRemaining = (effectiveRemaining / info.limit) * 100;
-    return percentRemaining <= this.config.minRemainingThreshold;
+    const percent = percentRemaining(info, this.activeRequests.size);
+    if (percent === null) {
+      return this.rateLimitDetector.isApproachingLimit(
+        this.config.minRemainingThreshold,
+        this.activeRequests.size,
+      );
+    }
+    return percent <= this.config.minRemainingThreshold;
   }
 
   /**
@@ -821,6 +1037,7 @@ export class ApiScheduler {
       buckets: this.buildBucketStates(),
       plans: this.plans.summarize(),
       minRemainingThresholdPercent: this.config.minRemainingThreshold,
+      expiredSessionTabIds: [...this.expiredSessions.keys()],
     };
   }
 

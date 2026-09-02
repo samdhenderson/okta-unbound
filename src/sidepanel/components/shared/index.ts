@@ -16,6 +16,7 @@ export { default as FilterPill } from './FilterPill';
 export { default as SortPill } from './SortPill';
 export { default as CopyButton } from './CopyButton';
 export { default as CopyableId } from './CopyableId';
+export { default as CopyIconButton } from './CopyIconButton';
 export { default as OpenInOktaLink } from './OpenInOktaLink';
 export { default as Modal } from './Modal';
 export { default as Input } from './Input';

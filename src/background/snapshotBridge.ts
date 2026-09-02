@@ -102,7 +102,13 @@ function broadcast(message: SnapshotUpdatedMessage): void {
  * @remarks A rejected schedule (a dropped message port, a cancelled queue) is
  * turned into a `success: false` result rather than being allowed to throw, so
  * the walk records it as an incomplete page and keeps its resume cursor instead
- * of unwinding with a partially written snapshot and no way back.
+ * of unwinding with a partially written snapshot and no way back. Both arms relay the
+ * response header bag; see the note at the projection for why the failure arm
+ * keeps its headers even though no reader consumes them yet (D-087). Both arms
+ * also relay `RequestResult.status` (D-068), so a caller can tell a 401/403
+ * from a 429 or a dropped connection instead of every failure mode arriving as
+ * the same bare `error` string. A rejected schedule (caught above) has no HTTP
+ * status at all and is reported with `status` simply absent.
  */
 export function createSchedulerPageRequest(scheduler: ApiScheduler, tabId: number): PageRequest {
   return async (url, reason) => {
@@ -110,9 +116,29 @@ export function createSchedulerPageRequest(scheduler: ApiScheduler, tabId: numbe
       const result = await scheduler.scheduleRequest(url, 'GET', undefined, tabId, 'low', reason);
       // `error` lives only on the failure arm of `RequestResult`, so narrow
       // before projecting into the walk's page shape.
+      //
+      // **Failure headers are relayed deliberately (D-087).** Nothing in
+      // `snapshotSync` reads them today: both `readTotalCount(result.headers)`
+      // call sites sit behind an `if (!result.success) return` guard, so the
+      // failure arm's bag is currently write-only here. It is kept anyway, on two
+      // grounds. First, exposure: since D-087 the content script forwards an
+      // allow-list of five keys with named consumers (rate-limit counters, `link`,
+      // `x-total-count`) rather than the whole response bag, so relaying the
+      // failure arm costs no metadata the success arm does not already carry.
+      // Second, the most plausible future reader is a failure-arm one: a page that
+      // fails with 429 carries the `x-rate-limit-reset` that says when the walk may
+      // resume, and dropping it here would rebuild one hop later exactly the
+      // asymmetry D-064 removed from the content script. Dropping it should be a
+      // decision about that reader, not a default.
       return result.success
-        ? { success: true, data: result.data, headers: result.headers }
-        : { success: false, data: result.data, headers: result.headers, error: result.error };
+        ? { success: true, data: result.data, headers: result.headers, status: result.status }
+        : {
+            success: false,
+            data: result.data,
+            headers: result.headers,
+            error: result.error,
+            status: result.status,
+          };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Request failed' };
     }

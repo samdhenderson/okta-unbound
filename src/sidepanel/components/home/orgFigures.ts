@@ -37,15 +37,18 @@
  * complete, and hiding those rows entirely would be the opposite error — they
  * are real rows, they are just not all of them.
  *
- * ## Why the failure copy is generic
+ * ## The 403 copy
  *
- * The design handoff specifies a literal 403 message. That cannot be earned
- * today: `RequestResult.status` exists on the scheduler but
- * `createSchedulerPageRequest` drops it, `WalkOutcome` carries no status field,
- * and the background collapses all four collections into one `{success, error}`.
- * Claiming a permission problem on what may have been a dropped connection is
- * the same class of lie the omit-not-zero rule exists to prevent, so the copy
- * says only what is known.
+ * The design handoff specifies a literal 403 message, and that is now earned:
+ * `RequestResult.status` survives `createSchedulerPageRequest` into
+ * {@link module:shared/utils/oktaPagination}'s `PaginatedFetchError`, and from
+ * there into `WalkOutcome.status` (D-068). `unavailableNote` reads it and
+ * names the permission specifically rather than only saying a read failed —
+ * still never inventing a number, per the zero trap above, just naming the
+ * reason more precisely when the reason is known. Every other status (429, a
+ * dropped connection, `undefined`) keeps the generic copy: only 401/403 read
+ * as "you are not allowed to", because every other failure could just as
+ * easily be transient.
  */
 import type { IconType } from '../shared/Icon';
 import type { ListViewRequest, ListViewTab } from '../../listViewRequest';
@@ -65,6 +68,13 @@ export interface FigureSource {
   count: number;
   /** Message from the last failed sync, or `null`. */
   error?: string | null;
+  /**
+   * HTTP status of the last failed sync, or `null`/`undefined` when there is
+   * no failure or the failure carried no status (`WalkOutcome.status`,
+   * D-068). Only 401/403 change the copy `unavailableNote` shows; every other
+   * value reads the same as no status at all.
+   */
+  status?: number | null;
 }
 
 /** One rendered figure. */
@@ -102,8 +112,25 @@ export function figureStatus(source: FigureSource): OrgFigureStatus {
   return source.count > 0 ? 'partial' : 'unavailable';
 }
 
+/**
+ * `true` for the two statuses that mean "the credential behind this read is
+ * not allowed to see this collection" — never a broader range: a 429 or a
+ * dropped connection is not evidence of a permissions problem, and reporting
+ * one as such would be a stronger, and wrong, claim to an admin.
+ */
+function isPermissionDenied(status: number | null | undefined): boolean {
+  return status === 401 || status === 403;
+}
+
 /** The sentence shown instead of a number, for a figure that has none. */
-function unavailableNote(label: string, error: string | null | undefined): string {
+function unavailableNote(
+  label: string,
+  error: string | null | undefined,
+  status?: number | null,
+): string {
+  if (isPermissionDenied(status)) {
+    return `You are not allowed to read ${label.toLowerCase()}.`;
+  }
   return error
     ? `The last read of ${label.toLowerCase()} did not finish.`
     : `${label} have not been read yet.`;
@@ -138,7 +165,7 @@ export function buildFigure(
       status === 'partial'
         ? 'At least — the last read did not finish.'
         : status === 'unavailable'
-          ? unavailableNote(label, source.error)
+          ? unavailableNote(label, source.error, source.status)
           : undefined,
   };
 }

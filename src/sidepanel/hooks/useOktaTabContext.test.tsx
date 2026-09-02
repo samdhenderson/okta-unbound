@@ -44,6 +44,19 @@ function mockOktaTab(responder: (action: string) => SendResponse, tabs?: unknown
   chrome.tabs.get = vi.fn();
 }
 
+/**
+ * The composition `App` runs: one engine, narrowed to the group on screen.
+ *
+ * RETARGETED (ADR-0058). `useGroupContext` no longer starts a probe of its own — it
+ * is a selector over the single `useOktaPageContext` engine — so every case below
+ * that used it as the vehicle for exercising the shared engine now drives it
+ * through the engine it selects over. Each assertion is carried across unchanged:
+ * the same probe responses still yield the same `groupInfo`, `connectionStatus`,
+ * `error`, `targetTabId` and `oktaOrigin`, and the same listener/latch/backoff
+ * machinery is under test. Nothing was thinned.
+ */
+const useGroupContextEngine = () => useGroupContext(useOktaPageContext());
+
 const origin = (action: string): SendResponse =>
   action === 'getOktaOrigin'
     ? { success: true, data: 'https://acme.okta.com' }
@@ -61,7 +74,7 @@ describe('useOktaTabContext (via context hooks)', () => {
       return origin(action);
     });
 
-    const { result } = renderHook(() => useGroupContext());
+    const { result } = renderHook(() => useGroupContextEngine());
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.connectionStatus).toBe('connected');
@@ -74,7 +87,7 @@ describe('useOktaTabContext (via context hooks)', () => {
   it('reports connected-with-null when on Okta admin but not a group page', async () => {
     mockOktaTab(origin); // getGroupInfo → { success: false }
 
-    const { result } = renderHook(() => useGroupContext());
+    const { result } = renderHook(() => useGroupContextEngine());
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.connectionStatus).toBe('connected');
@@ -125,7 +138,7 @@ describe('useOktaTabContext (via context hooks)', () => {
           new Error('Could not establish connection. Receiving end does not exist.'),
         ) as unknown as typeof chrome.tabs.sendMessage;
 
-      const { result } = renderHook(() => useGroupContext());
+      const { result } = renderHook(() => useGroupContextEngine());
 
       // Exhaust the full capped-backoff retry budget (~11.5s of timers). Wrapped
       // in act so React flushes the state updates fired from timer callbacks.
@@ -150,6 +163,58 @@ describe('useOktaTabContext (via context hooks)', () => {
     expect(result.current.pageType).toBe('admin');
     expect(result.current.connectionStatus).toBe('connected');
   });
+
+  it('reports pageType "unknown" — never "admin" — when the probe never landed', async () => {
+    // ADR-0058's behaviour change, and the reason the two failure semantics stay
+    // two fields. `admin` is the *successful* answer "an admin console page that
+    // carries no entity"; claiming it for a probe that learnt nothing let a dead
+    // content script render a masthead indistinguishable from a healthy landing
+    // page. A failed probe now says it knows nothing.
+    vi.useFakeTimers();
+    try {
+      (chrome as unknown as { windows: unknown }).windows = {
+        getCurrent: vi.fn().mockResolvedValue({ id: 1 }),
+      };
+      chrome.tabs.query = vi
+        .fn()
+        .mockResolvedValue([{ id: 42, url: 'https://acme.okta.com/admin/groups', active: true }]);
+      chrome.tabs.get = vi.fn();
+      chrome.tabs.sendMessage = vi
+        .fn()
+        .mockRejectedValue(
+          new Error('Could not establish connection. Receiving end does not exist.'),
+        ) as unknown as typeof chrome.tabs.sendMessage;
+
+      const { result } = renderHook(() => useOktaPageContext());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20000);
+      });
+
+      expect(result.current.connectionStatus).toBe('error');
+      expect(result.current.pageType).toBe('unknown');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('narrows the one engine to null on a non-group page, keeping tab + origin', async () => {
+    // The whole of `useGroupContext` after ADR-0058: a selector, not a probe. The
+    // group is dropped because the page is a user page, while the transport state
+    // every feature tab consumes comes straight through.
+    mockOktaTab((action) => {
+      if (action === 'getUserInfo')
+        return { success: true, data: { userId: '00u1', userName: 'Jane Doe' } };
+      return origin(action);
+    });
+
+    const { result } = renderHook(() => useGroupContextEngine());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.groupInfo).toBeNull();
+    expect(result.current.connectionStatus).toBe('connected');
+    expect(result.current.targetTabId).toBe(42);
+    expect(result.current.oktaOrigin).toBe('https://acme.okta.com');
+  });
 });
 
 describe('useOktaTabContext detection hygiene', () => {
@@ -169,7 +234,7 @@ describe('useOktaTabContext detection hygiene', () => {
 
   it('does not refetch on a hash-only URL change', async () => {
     mockOktaTab(groupResponder); // initial tab url: .../admin/groups
-    const { result } = renderHook(() => useGroupContext());
+    const { result } = renderHook(() => useGroupContextEngine());
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     const before = sendCount();
@@ -187,7 +252,7 @@ describe('useOktaTabContext detection hygiene', () => {
 
   it('refetches when navigating to a different entity URL', async () => {
     mockOktaTab(groupResponder);
-    const { result } = renderHook(() => useGroupContext());
+    const { result } = renderHook(() => useGroupContextEngine());
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     const before = sendCount();
@@ -203,7 +268,7 @@ describe('useOktaTabContext detection hygiene', () => {
 
   it('defers refetch while the panel is hidden and catches up when shown', async () => {
     mockOktaTab(groupResponder);
-    const { result } = renderHook(() => useGroupContext());
+    const { result } = renderHook(() => useGroupContextEngine());
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     const before = sendCount();
@@ -274,7 +339,7 @@ describe('useOktaTabContext reload recovery', () => {
     vi.useFakeTimers();
     const sendMessage = mockUnreachableTab();
 
-    const { result } = renderHook(() => useGroupContext());
+    const { result } = renderHook(() => useGroupContextEngine());
 
     // Burn the whole retry budget so the hook lands in the terminal error state.
     await act(async () => {
@@ -301,7 +366,7 @@ describe('useOktaTabContext reload recovery', () => {
 
   it('re-probes on a same-URL document reload while already connected', async () => {
     mockOktaTab(groupResponder);
-    const { result } = renderHook(() => useGroupContext());
+    const { result } = renderHook(() => useGroupContextEngine());
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.connectionStatus).toBe('connected');
 
@@ -317,7 +382,7 @@ describe('useOktaTabContext reload recovery', () => {
     vi.useFakeTimers();
     mockUnreachableTab();
 
-    const { result } = renderHook(() => useGroupContext());
+    const { result } = renderHook(() => useGroupContextEngine());
     await act(async () => {
       await vi.advanceTimersByTimeAsync(20000);
     });
@@ -341,7 +406,7 @@ describe('useOktaTabContext reload recovery', () => {
     mockUnreachableTab();
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const { unmount } = renderHook(() => useGroupContext());
+    const { unmount } = renderHook(() => useGroupContextEngine());
 
     // Let the first attempt fail and schedule a backoff retry (first delay: 500ms).
     await act(async () => {
@@ -357,10 +422,15 @@ describe('useOktaTabContext reload recovery', () => {
     });
 
     expect(sendCount()).toBe(afterFirstAttempt);
+    // The failure this guards is React's "state update on an unmounted component"
+    // — a retry timer firing after teardown. React 19 (this repo pins ^19.2.0)
+    // deleted that warning's text outright in favour of the act() one, so the old
+    // `/not wrapped in act|unmounted component/i` alternation could only ever
+    // match on its first half: the second described a warning no installed React
+    // can emit. Naming only the message that can actually fire makes the
+    // assertion say what it checks; it does not narrow what it catches. (D-022)
     expect(
-      consoleError.mock.calls.filter(([first]) =>
-        /not wrapped in act|unmounted component/i.test(String(first)),
-      ),
+      consoleError.mock.calls.filter(([first]) => /not wrapped in act/i.test(String(first))),
     ).toEqual([]);
     consoleError.mockRestore();
   });
@@ -371,8 +441,13 @@ describe('useOktaTabContext reload recovery', () => {
  *
  * `App` used to pass `activeTab === 'overview' && !isPinned` here, which was
  * correct only while the one consumer of the detection *was* that tab. The
- * `ContextBar` masthead renders above the rail on every tab, so the gate is now
- * `!isPinned` alone — and these cases are what stop it drifting back.
+ * `ContextBar` masthead renders above the rail on every tab, so it is ungated by
+ * tab — and these cases are what stop it drifting back.
+ *
+ * Since ADR-0058 `App` passes nothing at all: the pin can no longer be expressed
+ * as `enabled: false`, because the one engine also carries the connection health a
+ * pinned masthead must keep reporting. `enabled` remains the engine's own
+ * dual-axis gate (ADR-0026) and is pinned here on its own terms.
  */
 describe('useOktaPageContext enablement', () => {
   const groupResponder = (action: string): SendResponse =>
@@ -409,11 +484,12 @@ describe('useOktaPageContext enablement', () => {
     await waitFor(() => expect(sendCount()).toBeGreaterThan(before));
   });
 
-  it('stays inert once pinned', async () => {
-    // A pin is a deliberate freeze on one entity, so a navigation must not move
-    // it — that is the one thing `enabled: false` still exists for. Driven
-    // through the real transition (detect, then pin) rather than mounting
-    // already-disabled, which is what a person pressing Pin actually does.
+  it('stays inert once disabled', async () => {
+    // RETARGETED (ADR-0058): the case was written as "stays inert once pinned",
+    // when `App` passed `!isPinned` here. The pin now lives in `App` — see
+    // `App.contextengine.test.tsx` — so what this pins is the engine's own
+    // contract: once disabled, a navigation must not move it. Same transition
+    // (detect, then disable), same assertion, unchanged.
     mockOktaTab(groupResponder);
     const { result, rerender } = renderHook(
       ({ enabled }: { enabled: boolean }) => useOktaPageContext(enabled),

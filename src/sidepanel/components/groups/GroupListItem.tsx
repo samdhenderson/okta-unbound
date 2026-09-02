@@ -37,8 +37,13 @@
  * rows must never do it on its own; the row instead offers an explicit "analyze"
  * action that hands the job to the detail view.
  *
- * Memoised with a custom comparator so unaffected rows skip re-render in long
- * lists — every field rendered below is compared there.
+ * **Default shallow compare, deliberately — no custom comparator.** There was one,
+ * listing every field the row renders plus the callback props; enumerating it against
+ * the render body (`D-045`, following `RuleCard`'s `D-039`) found every field already
+ * there, so it added no correctness over the default while still being a hand-written
+ * list that will silently drift the moment the row grows a new field. `group` objects
+ * come from the groups list with stable per-id identity, so the honest shallow compare
+ * skips unaffected rows exactly as effectively and cannot go stale.
  */
 import React, { useState, useCallback, useMemo, memo } from 'react';
 import { Checkbox, IconButton, ListRow, StretchedButton } from '../shared';
@@ -250,7 +255,11 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
               )}
 
               <IconButton
-                label={expanded ? 'Collapse' : 'Expand'}
+                // Names the group for the same reason `AppListItem` names its
+                // app (D-103): a bare "Expand" repeated down a list tells a
+                // screen-reader user nothing about which row they are on. No id
+                // — see `D-107` for the duplicate-name case.
+                label={expanded ? `Collapse ${group.name}` : `Expand ${group.name}`}
                 onClick={toggleExpanded}
                 expanded={expanded}
                 controls={detailsId}
@@ -284,27 +293,6 @@ const GroupListItem: React.FC<GroupListItemProps> = memo(
       </ListRow>
     );
   },
-  (prev, next) =>
-    // Every field the row renders, plus the callbacks whose presence/identity
-    // decides which controls render. Miss one and long lists show stale rows.
-    prev.group.id === next.group.id &&
-    prev.group.name === next.group.name &&
-    prev.group.description === next.group.description &&
-    prev.group.type === next.group.type &&
-    prev.group.memberCount === next.group.memberCount &&
-    prev.group.ruleCount === next.group.ruleCount &&
-    prev.group.usedInRuleCount === next.group.usedInRuleCount &&
-    prev.group.sourceAppName === next.group.sourceAppName &&
-    prev.group.created === next.group.created &&
-    prev.group.lastUpdated === next.group.lastUpdated &&
-    prev.group.lastMembershipUpdated === next.group.lastMembershipUpdated &&
-    prev.group.pushMappings === next.group.pushMappings &&
-    prev.selected === next.selected &&
-    prev.oktaOrigin === next.oktaOrigin &&
-    prev.isHighlighted === next.isHighlighted &&
-    prev.onToggleSelect === next.onToggleSelect &&
-    prev.onOpenDetail === next.onOpenDetail &&
-    prev.onAnalyzeSource === next.onAnalyzeSource,
 );
 
 GroupListItem.displayName = 'GroupListItem';

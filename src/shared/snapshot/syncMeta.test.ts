@@ -44,6 +44,9 @@ describe('emptySyncMeta', () => {
     expect(meta.watermark).toBeNull();
     expect(meta.cursor).toBeNull();
     expect(meta.complete).toBe(false);
+    // `status: null` is "no failure on record" — never a stand-in for "checked
+    // and it was fine" (D-068).
+    expect(meta.status).toBeNull();
   });
 });
 

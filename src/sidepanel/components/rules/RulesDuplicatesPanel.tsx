@@ -26,8 +26,10 @@
  * chevrons stay: with several sets, expanding all of them at once is a wall.
  */
 import React, { useState } from 'react';
-import Button from '../shared/Button';
+import { Badge, Button } from '../shared';
+import { ruleStatusBadge } from '../../../shared/ruleUtils';
 import type { MergeableRuleGroup } from '../../../shared/rules/consolidation';
+import type { OktaGroupRule } from '../../../shared/types';
 
 interface RulesDuplicatesPanelProps {
   /** Clusters of identical-expression rules (2+ each). */
@@ -38,19 +40,25 @@ interface RulesDuplicatesPanelProps {
   onFocusRule?: (ruleId: string) => void;
 }
 
-/** A small ACTIVE/INACTIVE status pill matching the app's status vocabulary. */
-const StatusPill: React.FC<{ status: string }> = ({ status }) => {
-  const active = status === 'ACTIVE';
+/**
+ * A member rule's status mark.
+ *
+ * Was a hand-rolled pill rendering everything that was not `ACTIVE` as *Inactive* —
+ * two defects in nine lines. It carried a fourth private badge palette (CLAUDE.md
+ * bans hand-rolling a badge), and it told a reader that a rule Okta reports as
+ * `INVALID` — one it can no longer evaluate, usually because a group its expression
+ * names was deleted — had been deliberately switched off (D-085). The shared `Badge`
+ * fed by {@link shared/ruleUtils.ruleStatusBadge} fixes both: one palette, and a
+ * `danger` **Broken** mark that says what a broken rule is, with the explanation on
+ * the `title`. It matters most here of all places, because this panel's whole
+ * purpose is to offer these rules for merging.
+ */
+const RuleStatusMark: React.FC<{ status: OktaGroupRule['status'] }> = ({ status }) => {
+  const { text, variant, title } = ruleStatusBadge(status);
   return (
-    <span
-      className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide border ${
-        active
-          ? 'bg-success-light text-success-text border-success-light'
-          : 'bg-neutral-100 text-neutral-500 border-neutral-200'
-      }`}
-    >
-      {active ? 'Active' : 'Inactive'}
-    </span>
+    <Badge variant={variant} title={title}>
+      {text}
+    </Badge>
   );
 };
 
@@ -110,7 +118,7 @@ const MergeClusterRow: React.FC<{
                   className="flex items-center justify-between gap-2 rounded border border-neutral-100 px-2 py-1.5"
                 >
                   <div className="flex min-w-0 items-center gap-(--sp-inline)">
-                    <StatusPill status={rule.status} />
+                    <RuleStatusMark status={rule.status} />
                     <span className="truncate text-sm text-neutral-800">{rule.name}</span>
                     <span className="shrink-0 text-xs text-neutral-400">
                       {targetCount} group{targetCount === 1 ? '' : 's'}

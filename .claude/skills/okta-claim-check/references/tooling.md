@@ -140,7 +140,7 @@ The technique is the same in both: break the production code, not the test.
 # 1. Change the source so the claimed behaviour no longer holds.
 #    e.g. `if (!needle) return policies;` -> `return [...policies];`
 # 2. Run only the suite that is supposed to catch it, with a hard external timeout.
-perl -e 'alarm 180; exec @ARGV' npx vitest run src/sidepanel/components/policies/policyFilters.test.ts
+perl -e 'alarm 240; exec @ARGV' npx vitest run src/sidepanel/components/policies/policyFilters.test.ts
 # 3. Restore.
 git checkout -- src/sidepanel/components/policies/policyFilters.ts
 ```

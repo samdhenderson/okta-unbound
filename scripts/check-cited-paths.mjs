@@ -84,8 +84,31 @@ const IN_SCOPE = (f) =>
   !f.startsWith('docs/adr/') &&
   (ROOT_FILES.has(f) || f.startsWith('docs/') || f.startsWith('.claude/'));
 
-/** A bare or `../`-prefixed path rooted at `src/`, ending in a real segment. */
-const SRC_PATH_RE = /^(?:\.\.\/)+src\/[\w.-]+(?:\/[\w.-]+)*$|^src\/[\w.-]+(?:\/[\w.-]+)*$/;
+/**
+ * A bare or `../`-prefixed path rooted in a directory or root file this repo
+ * treats as source-of-record, ending in a real segment.
+ *
+ * `D-024`: originally rooted at `src/` only, so every citation of a `scripts/`,
+ * `docs/`, or `.claude/` path — including `docs/adr/NNNN-*.md`, which may be
+ * *cited* even though `docs/adr/` is excluded above as a *citing* corpus — was
+ * invisible to this check, despite `CLAUDE.md`'s routing table and the ledgers
+ * themselves being made almost entirely of exactly those citations. The
+ * boundary chosen is deliberately narrow: the six directories this repo
+ * actually tracks as source-of-record (`src/`, `scripts/`, `docs/`, `.claude/`,
+ * `.storybook/`, `.github/`) plus the root pointer/ledger files by exact name.
+ * It does **not** pull in every bare word that looks path-shaped — a
+ * `package.json` script name (`npm run docs`) has no `/` and never matches;
+ * a `.storybook/` or `.github/` directory reference without a `.ext` is still
+ * a directory, not a file, per `HAS_EXTENSION_RE` below.
+ */
+const KNOWN_ROOT_DIRS = 'src|scripts|docs|\\.claude|\\.storybook|\\.github';
+const KNOWN_ROOT_FILES =
+  'CLAUDE\\.md|AGENTS\\.md|DEBT\\.md|IMPROVEMENTS\\.md|SESSION\\.md|CONVENTIONS\\.md|package\\.json';
+const SRC_PATH_RE = new RegExp(
+  `^(?:\\.\\./)+(?:${KNOWN_ROOT_DIRS})/[\\w.-]+(?:/[\\w.-]+)*$` +
+    `|^(?:${KNOWN_ROOT_DIRS})/[\\w.-]+(?:/[\\w.-]+)*$` +
+    `|^(?:${KNOWN_ROOT_FILES})$`,
+);
 
 /**
  * Trailing line reference on a citation — `:311`, `:103-125`, `:93,99-106`.
@@ -141,10 +164,58 @@ function citationsOnLine(line) {
     .filter(({ path }) => SRC_PATH_RE.test(path) && HAS_EXTENSION_RE.test(path));
 }
 
+/** A ledger item heading — `### D-024 · <title>` or `### I-035 · <title>`. */
+const SECTION_HEADING_RE = /^### /;
+
+/** A ledger item's status bullet — `- **Status:** done:#67`, `closed:refuted-2026-08-24`, `open`. */
+const STATUS_BULLET_RE = /^-\s*\*\*Status:\*\*\s*(\S+)/;
+
+/**
+ * `D-031`: a `done:*`/`closed:*` ledger item is a dated record of finished
+ * work, by the same argument the header above already makes for `docs/adr/`
+ * and `NIGHTLY.md` — a path it cites describes the repo *as it was* when the
+ * item closed, so "fixing" a citation that a later deletion broke falsifies
+ * the record rather than repairing it. This computes, per line, which
+ * `### `-delimited section it falls in and whether that section's `Status:`
+ * bullet reads `done:*`/`closed:*`; such lines are skipped before citations
+ * are even extracted. Files with no `### `/`Status:` ledger-item shape (most
+ * of `docs/` and `.claude/`) simply have one un-skippable section spanning
+ * the whole file, so this is a no-op outside `DEBT.md`/`IMPROVEMENTS.md`.
+ */
+function closedSectionLines(lines) {
+  const skip = new Array(lines.length).fill(false);
+  let sectionStart = 0;
+
+  const closeSection = (end) => {
+    let status = null;
+    for (let j = sectionStart; j < end; j++) {
+      const match = STATUS_BULLET_RE.exec(lines[j]);
+      if (match) {
+        status = match[1];
+        break;
+      }
+    }
+    if (status && /^(?:done|closed):/i.test(status)) {
+      for (let j = sectionStart; j < end; j++) skip[j] = true;
+    }
+  };
+
+  for (let i = 1; i < lines.length; i++) {
+    if (SECTION_HEADING_RE.test(lines[i])) {
+      closeSection(i);
+      sectionStart = i;
+    }
+  }
+  closeSection(lines.length);
+
+  return skip;
+}
+
 const offenders = [];
 
 for (const file of files) {
   const lines = readFileSync(file, 'utf8').split('\n');
+  const skip = closedSectionLines(lines);
   let inFence = false;
 
   for (let i = 0; i < lines.length; i++) {
@@ -153,7 +224,7 @@ for (const file of files) {
       inFence = !inFence;
       continue;
     }
-    if (inFence) continue;
+    if (inFence || skip[i]) continue;
 
     for (const { raw, path } of citationsOnLine(line)) {
       if (!resolveCitation(file, path)) {
@@ -163,16 +234,229 @@ for (const file of files) {
   }
 }
 
+let failed = false;
+
 if (offenders.length > 0) {
+  failed = true;
   console.error('Cited paths that do not exist on disk:\n');
   for (const { file, line, rawPath } of offenders) {
     console.error(`  ${file}:${line} — ${rawPath}`);
   }
   console.error("\nUpdate the citation to the file's real location, note that it was");
-  console.error('removed, or drop the reference if it no longer serves the sentence.');
-  process.exit(1);
+  console.error('removed, or drop the reference if it no longer serves the sentence.\n');
 }
 
+/**
+ * Ledger-integrity guards (`D-080`, `D-092`, `D-093`).
+ *
+ * These read `DEBT.md`/`IMPROVEMENTS.md` structurally — as a sequence of
+ * `### D-NNN`/`### I-NNN` item sections — rather than as prose, catching three
+ * silent failure modes a nightly session's own item-selection logic depends on:
+ * a duplicate id (one item hiding behind another's number), an item with no
+ * `Status:` line (invisible to both "what's open" and "what's claimed"), and a
+ * `claimed:<branch>` pointing at a branch that no longer exists anywhere (the
+ * item is stuck forever, looking claimed to every future session).
+ */
+const LEDGER_FILES = ['DEBT.md', 'IMPROVEMENTS.md'];
+
+/** `### D-007a · A failure result that can say what failed` — base id + optional letter suffix. */
+const ITEM_HEADING_RE = /^### ([DI]-[0-9]+)([a-z]*) · /;
+
+/**
+ * `- **D-001** — <title> — done:#67 (…)` — one archived item, collapsed to a
+ * plain list line (not a `### ` heading, deliberately, so `D-092`'s
+ * missing-Status-line check never looks at it — an archive line has no
+ * `Status:` bullet of its own by design).
+ */
+const ARCHIVE_ITEM_RE = /^- \*\*([DI]-[0-9]+[a-z]*)\*\* — /;
+
+/**
+ * Every id retired to a ledger's `## Archive` section. An archived id is
+ * permanently spoken for — reusing it for a new live item would let that new
+ * item hide behind a closed one's history, the exact hazard `D-080`'s
+ * live-id uniqueness check exists to catch, so archived ids are folded into
+ * the same uniqueness check below rather than exempted from it.
+ */
+function parseArchiveIds() {
+  const ids = [];
+  for (const file of LEDGER_FILES) {
+    const lines = readFileSync(resolve(repoRoot, file), 'utf8').split('\n');
+    let inArchive = false;
+    for (let i = 0; i < lines.length; i++) {
+      if (/^## Archive/.test(lines[i])) {
+        inArchive = true;
+        continue;
+      }
+      if (!inArchive) continue;
+      const match = ARCHIVE_ITEM_RE.exec(lines[i]);
+      if (match) ids.push({ file, line: i + 1, id: match[1] });
+    }
+  }
+  return ids;
+}
+
+/** Every `### `/`- **Status:**` ledger item across both ledgers, in file order. */
+function parseLedgerItems() {
+  const items = [];
+  for (const file of LEDGER_FILES) {
+    const lines = readFileSync(resolve(repoRoot, file), 'utf8').split('\n');
+    let inFence = false;
+    const headings = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim().startsWith('```')) {
+        inFence = !inFence;
+        continue;
+      }
+      if (inFence) continue;
+      const match = ITEM_HEADING_RE.exec(lines[i]);
+      if (match) headings.push({ line: i, base: match[1], suffix: match[2] });
+    }
+
+    for (let i = 0; i < headings.length; i++) {
+      const { line, base, suffix } = headings[i];
+      const end = i + 1 < headings.length ? headings[i + 1].line : lines.length;
+      let status = null;
+      for (let j = line; j < end; j++) {
+        const match = STATUS_BULLET_RE.exec(lines[j]);
+        if (match) {
+          status = match[1];
+          break;
+        }
+      }
+      items.push({ file, line: line + 1, id: base + suffix, base, suffix, status });
+    }
+  }
+  return items;
+}
+
+const ledgerItems = parseLedgerItems();
+const archiveIds = parseArchiveIds();
+
+// --- D-080: every item id is unique across both ledgers, live sections and
+// archives together — an archived id is retired permanently and must never
+// come back as a new live item. ---
+const idLocations = new Map();
+for (const item of ledgerItems) {
+  const locs = idLocations.get(item.id) ?? [];
+  locs.push(`${item.file}:${item.line}`);
+  idLocations.set(item.id, locs);
+}
+for (const item of archiveIds) {
+  const locs = idLocations.get(item.id) ?? [];
+  locs.push(`${item.file}:${item.line} (archive)`);
+  idLocations.set(item.id, locs);
+}
+const duplicateIds = [...idLocations.entries()].filter(([, locs]) => locs.length > 1);
+if (duplicateIds.length > 0) {
+  failed = true;
+  console.error('Duplicate ledger item ids:\n');
+  for (const [id, locs] of duplicateIds) {
+    console.error(`  ${id} — ${locs.join(', ')}`);
+  }
+  console.error('\nEvery `D-NNN`/`I-NNN` id must be unique across DEBT.md and IMPROVEMENTS.md,');
+  console.error('live sections and the `## Archive` section together — a duplicate lets one');
+  console.error('item hide behind another, and an archived id is retired for good.\n');
+}
+
+// --- D-092: every item has a Status line, except umbrella items whose lettered ---
+// --- children (D-007 -> D-007a/b/c) carry it instead. Detected structurally: an ---
+// --- item with no suffix is an umbrella exactly when the very next item shares ---
+// --- its base id and does carry a suffix. ---
+const missingStatus = [];
+for (let i = 0; i < ledgerItems.length; i++) {
+  const item = ledgerItems[i];
+  if (item.status) continue;
+  const next = ledgerItems[i + 1];
+  const isUmbrella = item.suffix === '' && next && next.base === item.base && next.suffix !== '';
+  if (!isUmbrella) missingStatus.push(item);
+}
+if (missingStatus.length > 0) {
+  failed = true;
+  console.error('Ledger items with no `- **Status:**` line:\n');
+  for (const item of missingStatus) {
+    console.error(`  ${item.file}:${item.line} — ${item.id}`);
+  }
+  console.error('\nEvery item needs a Status line so a nightly session can tell what is open,');
+  console.error('claimed, or done. An umbrella item (like D-007) is exempt only when its lettered');
+  console.error('children carry the status instead.\n');
+}
+
+// --- D-093 (optional): a claimed:<branch> whose branch exists nowhere. ---
+// Best-effort — a git failure here degrades to a skipped check, never a false failure.
+try {
+  const localBranches = execFileSync('git', ['branch', '--format=%(refname:short)'], {
+    encoding: 'utf8',
+  })
+    .split('\n')
+    .map((b) => b.trim())
+    .filter(Boolean);
+  const remoteBranches = execFileSync('git', ['branch', '-r', '--format=%(refname:short)'], {
+    encoding: 'utf8',
+  })
+    .split('\n')
+    .map((b) => b.replace(/^[^/]+\//, '').trim())
+    .filter(Boolean);
+  const knownBranches = new Set([...localBranches, ...remoteBranches]);
+
+  const deadClaims = ledgerItems.filter((item) => {
+    const match = /^claimed:(.+)$/.exec(item.status ?? '');
+    return match && !knownBranches.has(match[1]);
+  });
+  if (deadClaims.length > 0) {
+    console.warn('Warning: ledger items claimed by a branch that no longer exists:\n');
+    for (const item of deadClaims) {
+      console.warn(`  ${item.file}:${item.line} — ${item.id} (${item.status})`);
+    }
+    console.warn('\nThese look claimed to every future session but the branch is gone — reset the');
+    console.warn('Status or confirm the branch under a different name.\n');
+  }
+} catch (e) {
+  console.warn(`Skipping the dead-claimed-branch check — \`git branch\` failed: ${e.message}\n`);
+}
+
+/**
+ * Advisory: flag live items ready to move to `## Archive`, and resolve the
+ * commit for each where that's possible from local history — so archiving
+ * a night's worth of closed items is "check this list, paste the suggested
+ * lines" rather than a `gh pr view` per id. Never fails the build: a
+ * candidate this run can't resolve a sha for is exactly the common case
+ * right after a PR merges before the ledger update is archived, and is
+ * flagged as such rather than invented.
+ */
+const archivedIdSet = new Set(archiveIds.map((a) => a.id));
+const archiveCandidates = ledgerItems.filter(
+  (item) => item.status && /^(done|closed):/i.test(item.status) && !archivedIdSet.has(item.id),
+);
+if (archiveCandidates.length > 0) {
+  console.warn(`Ledger items closed but not yet archived (${archiveCandidates.length}):\n`);
+  for (const item of archiveCandidates) {
+    const prMatch = /^done:#(\d+)/.exec(item.status);
+    let suggestion = item.status;
+    if (prMatch) {
+      try {
+        const sha = execFileSync(
+          'git',
+          ['log', '--format=%H', '--grep', `(#${prMatch[1]})`, '-1'],
+          { encoding: 'utf8' },
+        ).trim();
+        suggestion = sha
+          ? `commit ${sha.slice(0, 7)} — https://github.com/samdhenderson/okta-unbound/commit/${sha}`
+          : `PR #${prMatch[1]} has no matching merge commit in local history yet (not on main?)`;
+      } catch {
+        suggestion = 'could not query git log for a matching commit';
+      }
+    }
+    console.warn(`  ${item.file}:${item.line} — ${item.id} (${item.status}) — ${suggestion}`);
+  }
+  console.warn(
+    '\nSee CLAUDE.md\'s "Nightly maintenance system" and SESSION.md step 7 for when to move\n' +
+      'these into `## Archive` — only once the closing PR is actually merged to `main`.\n',
+  );
+}
+
+if (failed) process.exit(1);
+
 console.log(
-  `All cited src/ paths resolve, across ${files.length} tracked docs, skill, and ledger files.`,
+  `All cited paths resolve and both ledgers are structurally sound, across ${files.length} tracked docs, skill, and ledger files.`,
 );

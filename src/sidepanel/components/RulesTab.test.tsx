@@ -423,6 +423,28 @@ describe('RulesTab characterization', () => {
     expect(screen.queryByTestId('rule-r2')).not.toBeInTheDocument();
   });
 
+  it('keeps a broken rule reachable — it is neither active nor hidden (D-085)', async () => {
+    // An INVALID rule is one Okta can no longer evaluate. The chips were
+    // `=== 'ACTIVE'` and `=== 'INACTIVE'`, so it fell through both and became the
+    // one rule on the tab no filter could reach — the rule an admin most needs to
+    // find. It is not active, so it belongs with the rules that are not running.
+    rulesFetchResponse = () => ({
+      success: true,
+      data: [...DEFAULT_RAW_RULES, rawRule({ id: 'r3', name: 'Broken Rule', status: 'INVALID' })],
+    });
+    renderTab();
+    await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
+    await waitFor(() => expect(screen.getByTestId('rule-r3')).toBeInTheDocument());
+
+    await openFilters();
+    await userEvent.click(screen.getByRole('button', { name: 'Active Only' }));
+    expect(screen.queryByTestId('rule-r3')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Paused' }));
+    expect(screen.getByTestId('rule-r3')).toBeInTheDocument();
+    expect(screen.queryByTestId('rule-r1')).not.toBeInTheDocument();
+  });
+
   it('surfaces a load failure in the error banner', async () => {
     // §8: the rules read fails at the scheduler; the helper returns it verbatim.
     rulesFetchResponse = () => ({ success: false, error: 'Okta said no' });

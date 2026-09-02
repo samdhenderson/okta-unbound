@@ -408,6 +408,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               mode: outcome.mode,
               complete: outcome.complete,
               written: outcome.written,
+              // Relayed so the panel can persist it alongside the rest of the
+              // outcome (`useOrgSnapshot`), which is what lets
+              // `orgFigures.ts` tell a 401/403 apart from any other failure
+              // (D-068). `null` for a walk that succeeded or carried no status.
+              status: outcome.status ?? null,
             })),
           });
         })

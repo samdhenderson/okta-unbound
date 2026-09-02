@@ -95,14 +95,27 @@ lower confidence, which is the whole point of having it.
 
 ### What the API cannot tell you
 
-**There is no membership timestamp.** `GET /api/v1/users/{userId}/groups` returns no
-"added on" date, and neither does the group member listing. "When was this user
-added to this group" is unanswerable from the Management API. Do not synthesise it
-from `lastUpdated` or `created` — those describe the user and the group, not the
-membership. `[verified: useOktaApi/getUserGroupsRequest]`
+**There is no per-member membership timestamp.** `GET /api/v1/users/{userId}/groups`
+returns no "added on" date, and neither does the group member listing. "When was
+_this_ user added to _this_ group" is unanswerable from the Management API. Do not
+synthesise it from `lastUpdated` or `created` — those describe the user and the
+group, not the membership. `[verified: useOktaApi/getUserGroupsRequest]`
 
-The System Log is the only route to that answer, within its retention window, via
-`group.user_membership.add` events. See `system-log.md`.
+The System Log is the only route to that per-member answer, within its retention
+window, via `group.user_membership.add` events. See `system-log.md`.
+
+That said, Okta does return a **group-level** timestamp: `lastMembershipUpdated`
+on the group object, default-returned by both `GET /api/v1/groups` and
+`GET /api/v1/groups/{groupId}`. It records the last time _any_ member changed on
+that group, not which member or which direction — useful for "which groups have
+had membership churn since X", not for attributing a change to a person. It is
+one of only four `filter`-able group properties (`id`, `type`, `lastUpdated`,
+`lastMembershipUpdated`); `created` is searchable but not filterable.
+`sortBy`/`sortOrder` work only alongside `search`, and `search` on groups
+supports only the `sw`/`eq`/`co` operators (`co` limited to `profile.name` and
+`profile.description`) — so a range check (`lastMembershipUpdated gt "..."`) and
+a `sortBy` on the same request both require `search`, not `filter`.
+`[docs: GET /api/v1/groups, github.com/okta/okta-management-openapi-spec]`
 
 **The user-side listing carries no attribution embed.** `GET /api/v1/users/{userId}/
 groups` has no equivalent of `expand=group-rules`, so a user-centric view sees
@@ -150,8 +163,17 @@ stack in a chart), and label it. `[verified: shared/membership/groupSource]`
 
 `[docs]` `[verified: shared/schemas/okta → oktaGroupRuleSchema]`
 
-`status` is `ACTIVE` or `INACTIVE`. An `INACTIVE` rule feeds nobody, but its former
-members **remain in the group** — deactivation does not retract membership.
+`status` is `ACTIVE`, `INACTIVE`, or `INVALID` — three values, not two. An
+`INACTIVE` rule feeds nobody, but its former members **remain in the group** —
+deactivation does not retract membership. `INVALID` is Okta's own signal that a
+rule has stopped being evaluable — e.g. its expression references a group that
+has since been deleted. An `INVALID` rule can no longer be updated, activated,
+or deactivated; deleting it is the only lifecycle move left. Treat `INVALID`
+as its own state in any code that switches on `status`, not as a variant of
+`INACTIVE` — collapsing it there silently hides a broken rule as a
+merely-paused one.
+`[docs: GroupRuleStatus enum, github.com/okta/okta-management-openapi-spec —
+type: string, enum: ACTIVE | INACTIVE | INVALID]`
 
 ### Endpoints
 
@@ -160,7 +182,7 @@ GET    /api/v1/groups/rules?limit=200                    # list (paginated)
 GET    /api/v1/groups/rules/{ruleId}                     # one rule
 POST   /api/v1/groups/rules                              # create
 PUT    /api/v1/groups/rules/{ruleId}                     # update
-DELETE /api/v1/groups/rules/{ruleId}                     # delete
+DELETE /api/v1/groups/rules/{ruleId}?removeUsers={bool}  # delete (see below)
 POST   /api/v1/groups/rules/{ruleId}/lifecycle/activate
 POST   /api/v1/groups/rules/{ruleId}/lifecycle/deactivate
 ```
@@ -320,6 +342,33 @@ Two facts that change the answer, and are easy to get backwards:
 - Consolidating rules requires the **union** of target groups, and the union must
   still respect the 100-target and 50-character-name limits.
   `[verified: shared/rules/consolidation]`
+
+### Three verbs, three outcomes — deactivate, delete-keep, delete-remove
+
+Deactivate and delete are not two shades of the same action; delete itself
+branches on a query parameter, and only one of the three outcomes below is
+reversible:
+
+| Verb                                                             | What happens to existing members                                                                                                                           | Reversible?      |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `POST .../lifecycle/deactivate`                                  | Kept — they remain group members, now unexplained by any rule                                                                                              | Yes — reactivate |
+| `DELETE .../{ruleId}` (no `removeUsers`, or `removeUsers=false`) | Kept — they remain group members, **and the rule is gone**, so the "unmanaged member" state is permanent unless something else re-adds or re-explains them | No               |
+| `DELETE .../{ruleId}?removeUsers=true`                           | Removed — every member the rule was managing is taken out of the target group(s) as part of the delete                                                     | No               |
+
+`removeUsers` is an optional Boolean query parameter on the delete operation;
+it defaults to `false` when omitted. `[docs: DELETE /api/v1/groups/rules/{ruleId},
+github.com/okta/okta-management-openapi-spec — parameter removeUsers, type
+boolean, default false, "If set to true, removes users from groups assigned
+by this rule"]`
+
+Both delete branches are **irreversible** — unlike deactivate, there is no
+lifecycle call that undoes a delete. The distinction that matters before
+running one: deactivate and delete-keep both leave the same people in the
+group (the only difference is whether the rule still exists to potentially be
+reactivated or edited); delete-remove is the only one of the three that
+actually changes who is in the group. A "blast radius" report that treats
+delete as symmetric with deactivate — or that treats the two delete branches
+as the same call — understates what is about to happen.
 
 ## Sources
 
