@@ -89,8 +89,13 @@ Every async view handles all three explicitly — never a blank panel:
   the full spinner/skeleton split live in `docs/motion.md`.
 - **Empty**: `EmptyState` with a clear message and (where useful) an action.
 - **Error**: `AlertMessage` with `type="danger"` and an actionable message. Do not
-  swallow errors silently or show raw sentinels (e.g. `unknown@unknown.com`, see
-  `useOktaApi/core.ts:63-77`). An error state is never a candidate for `Skeleton`
+  swallow errors silently or paper over an unresolved value with a fabricated
+  placeholder — an audit entry whose actor could not be resolved records
+  `performedBy: null` with `actorResolution: 'unavailable'` (see
+  `AuditLogEntry` in `src/shared/types.ts`), never an invented string like
+  `unknown@unknown.com`. `useActorNotice` surfaces this to the admin at the
+  time as a `warning` `AlertMessage`, non-blocking — the write still goes
+  through. An error state is never a candidate for `Skeleton`
   — it isn't "content arriving," so `LoadingSpinner` (or, once it's resolved to an
   error, `AlertMessage`) is always the right shape here.
 

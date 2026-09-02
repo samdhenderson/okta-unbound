@@ -95,7 +95,7 @@ fake every `useOktaApi/*` suite builds on; pass per-suite defaults through its
   pure-render component that already has a story. Fixtures used by 3+ files live in
   `src/test/`.
 - **Always put a hard external timeout around any local `vitest run`** —
-  `perl -e 'alarm 180; exec @ARGV' npx vitest run <file>`. `--testTimeout` does
+  `perl -e 'alarm 240; exec @ARGV' npx vitest run <file>`. `--testTimeout` does
   **not** stop a render loop (an infinite loop starves the timer). If a runner
   survives the wrapper, reap it with `pkill -9 -f '^[^ ]*node[^ ]* .*vitest'`, and
   make that `pkill` **its own final command** — never chain it ahead of anything
