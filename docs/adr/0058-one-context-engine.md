@@ -1,7 +1,7 @@
 # ADR-0058: One context engine
 
-- Status: Proposed
-- Date: 2026-08-29
+- Status: Accepted
+- Date: 2026-08-29 (accepted and implemented 2026-09-02)
 - Scoped by: `D-062`
 - Relates to: [ADR-0018](./0018-tabs-stay-mounted.md) (why an always-on hook is
   paid on every navigation), [ADR-0026](./0026-visibility-gating-patterns.md)
@@ -91,13 +91,42 @@ connected check**, and a failed probe reports `pageType: 'unknown'` rather than
 That is a behaviour change, and it is the one to test: today a `ContextBar`
 whose probe failed can render as if it were on an admin page.
 
-### A pin reads the same engine
+### A pin reads the same engine — and no longer suspends it
 
 Whatever pinning exists (an admin holding context while navigating away) applies
 to the single engine and is therefore consistent across the masthead and the
-tabs by construction. Today two engines can in principle disagree about what the
+tabs by construction. Two engines could in principle disagree about what the
 active tab is — a bug that has not been observed but is not prevented by
 anything.
+
+**Implementation note (this is a departure from the draft above, which left the
+mechanism unspecified).** The pin used to be expressed as
+`useOktaPageContext(!isPinned)` — `enabled: false` froze the masthead's engine.
+That was only ever safe because a _second_, always-on engine kept probing for the
+connection dot: `App` deliberately took `connectionStatus`/`error` from
+`useGroupContext` while pinned, because "a pinned panel reporting a permanent
+green _connected_ hid genuinely dead sessions". With one engine that trick is
+gone — suspending it would freeze the health readout too, reintroducing exactly
+that defect.
+
+So the pin moves to where identity is **selected**, in `App`, and the engine is
+always on:
+
+- `App`'s `effective` and `deriveTabContext` already prefer the frozen snapshot
+  over live detection, so freezing the _engine_ was never what made the pin work.
+  Nothing about the pinned identity changes.
+- `resyncPending` — "a navigation was observed while detection was suppressed" —
+  is no longer the signal for the masthead's _live tab moved_ hint, because
+  nothing is ever suppressed. `App` compares live detection against the snapshot
+  instead (`hasLiveContextMoved`), which is the question the hint was always
+  asking, answered directly rather than inferred.
+- Because the engine keeps detecting while pinned, the hint can now name the
+  entity the live tab moved to (`ContextBar`'s `liveEntityName`, previously
+  unfeedable) and _Unpin & switch_ lands on an already-current context instead of
+  waiting for an owed resync.
+- `enabled` and `resyncPending` survive on `useOktaTabContext` as the generic
+  engine's dual-axis gate (ADR-0026) and keep their tests, but no production call
+  site passes `enabled: false` any more.
 
 ### Probe payload is the union, fetched once
 
@@ -108,8 +137,10 @@ saving is a whole probe per navigation, not a smaller one.
 
 ## Consequences
 
-Probe traffic on navigation roughly halves, and the two engines can no longer
-disagree. `D-059` addressed the other cost the Home re-gate exposed; this closes
+Probe traffic on navigation roughly halves — one tab lookup, one `getOktaOrigin`
+and one entity probe per navigation instead of two of each (7 content-script
+messages per navigation to 5, and one `chrome.tabs.onUpdated` listener instead of
+two) — and the two engines can no longer disagree. `D-059` addressed the other cost the Home re-gate exposed; this closes
 the pair.
 
 The costs: `App`'s single context becomes a genuine single point of failure —
@@ -121,6 +152,12 @@ a defect.
 Every consumer of `useGroupContext` inherits `useOktaPageContext`'s timing
 rather than its own, so anything that races on first paint may reorder. And the
 `'admin'`-on-failure change is user-visible on a failed probe.
+
+One further user-visible change falls out of the pin no longer suspending
+detection: restoring a persisted pin while the live tab is already on a different
+entity now raises the _live tab moved_ hint immediately, where before it appeared
+only on the next navigation. The hint is true in both cases; it is simply
+reported sooner.
 
 ## Alternatives considered
 

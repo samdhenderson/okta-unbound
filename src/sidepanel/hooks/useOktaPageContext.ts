@@ -1,13 +1,30 @@
 /**
  * @module sidepanel/hooks/useOktaPageContext
- * @description Detects whether the active Okta tab is a group / user / app / policy / admin page.
+ * @description The side panel's **single** live page-context engine: detects whether
+ * the active Okta tab is a group / user / app / policy / admin page.
  *
  * A thin wrapper over `useOktaTabContext` that probes the content script for all
  * four entity kinds at once and exposes whichever one matched.
+ *
+ * Since ADR-0058 this is the one always-on `useOktaTabContext` instance in the
+ * panel: `App` calls it once and {@link useGroupContext} is a pure selector over
+ * its result rather than a second probe. One engine means one `getOktaOrigin`, one
+ * entity probe and one connection latch per navigation, and the masthead and the
+ * feature tabs can no longer disagree about which page the browser is on.
+ *
+ * Two fields describe the outcome and they are deliberately **not** merged
+ * (ADR-0058):
+ *
+ * - `connectionStatus` says whether the probe succeeded at all.
+ * - `pageType` says what the page is, and is only meaningful once
+ *   `connectionStatus === 'connected'`. A probe that failed reports
+ *   `'unknown'` — never `'admin'`, which would claim the successful answer
+ *   "this is an admin console page that is not an entity" for a probe that
+ *   learnt nothing.
  */
 
 import { useCallback } from 'react';
-import type { GroupInfo, UserInfo, PolicyInfo } from '../../shared/types';
+import type { AppInfo, GroupInfo, UserInfo, PolicyInfo } from '../../shared/types';
 import {
   useOktaTabContext,
   type ConnectionStatus,
@@ -16,13 +33,6 @@ import {
 
 /** Kind of Okta page the side panel detects for the active tab. */
 export type PageType = 'group' | 'user' | 'app' | 'policy' | 'admin' | 'unknown';
-
-/** Identifying details for an Okta application page. */
-export interface AppInfo {
-  appId: string;
-  appName: string;
-  appLabel?: string;
-}
 
 /** The entity state the page-context hook detects for the active Okta tab. */
 interface PageDetection {
@@ -55,22 +65,31 @@ const ADMIN: PageDetection = { pageType: 'admin', ...NO_ENTITY };
 /**
  * Detects which kind of Okta entity page (group / user / app / policy) the active
  * tab is on by probing the content script for all four in parallel, and exposes the
- * matching info. Falls back to `admin` when none match. Thin wrapper over
- * {@link useOktaTabContext}.
+ * matching info. Falls back to `admin` when none match **and the probe succeeded**.
+ * Thin wrapper over {@link useOktaTabContext}, and the panel's only instance of it
+ * (ADR-0058).
  *
  * @param enabled - When `false`, live re-detection on navigation is suspended
  *   (a resync is deferred until re-enabled while the panel is visible). Defaults
- *   to `true`. `App` passes `!isPinned`: a pinned masthead is deliberately
- *   describing a page the browser may have left, so it must not re-detect. It is
- *   **not** gated on any tab — {@link ContextBar} renders above the rail on every
- *   one of them, and a tab-gated feed would leave the bar misdescribing the live
- *   page from the other eight (ADR-0032). ADR-0018's rule is that no hidden *tab*
- *   issues Okta traffic; ADR-0026's visibility gate lives inside
+ *   to `true`, which is what `App` uses.
+ *
+ *   It is **not** gated on any tab — {@link ContextBar} renders above the rail on
+ *   every one of them, and a tab-gated feed would leave the bar misdescribing the
+ *   live page from the other eight (ADR-0032). ADR-0018's rule is that no hidden
+ *   *tab* issues Okta traffic; ADR-0026's visibility gate lives inside
  *   {@link useOktaTabContext} and still stops a hidden panel probing.
+ *
+ *   It is no longer gated on `!isPinned` either. Under two engines a pin could
+ *   freeze this one because connection health came from the *other* one; with a
+ *   single engine, freezing it would freeze the health readout too, and a pinned
+ *   panel reporting a permanent green "connected" is exactly the defect the
+ *   always-on group engine existed to prevent. The pin is therefore applied where
+ *   identity is *selected*, in `App`, not by suspending detection (ADR-0058).
  * @returns The detected `pageType` with the corresponding `groupInfo` /
  *   `userInfo` / `appInfo` / `policyInfo` (the others `null`), plus shared
  *   connection state (`connectionStatus`, `targetTabId`, `error`, `isLoading`,
- *   `refetch`, `oktaOrigin`).
+ *   `refetch`, `oktaOrigin`). `pageType` is only meaningful while
+ *   `connectionStatus === 'connected'`.
  */
 export function useOktaPageContext(enabled = true): OktaPageContext {
   const loadEntity = useCallback(
@@ -102,7 +121,12 @@ export function useOktaPageContext(enabled = true): OktaPageContext {
   const { data, ...rest } = useOktaTabContext<PageDetection>({
     scope: 'useOktaPageContext',
     initialData: UNKNOWN,
-    commsFailedData: ADMIN,
+    // A probe that never landed knows nothing about the page, so it reports
+    // `unknown`. It used to report `admin`, which is the *successful* answer
+    // "this is an admin console page carrying no entity" — so a dead content
+    // script rendered a masthead indistinguishable from a healthy landing page
+    // (ADR-0058).
+    commsFailedData: UNKNOWN,
     loadEntity,
     enabled,
   });
