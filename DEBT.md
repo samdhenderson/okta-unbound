@@ -42,204 +42,7 @@ consumer count that was wrong by nine, `D-027` named a file that had been
 deleted, `D-029` named a writer that was only a doc comment. A filing is a
 claim about code, and code moves.
 
-**A `done:*`/`closed:*` item eventually moves to the `### D-101 · `rule-inactive` cannot tell a paused rule from a broken one
-
-- **Category:** correctness
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/sidepanel/components/users/BlastRadiusGroupRow.tsx`
-  (`withheldReasonText`), `src/shared/membership/blastRadius.ts`
-  (`additionEffect`/`removalEffect`, where the reason is set),
-  `src/shared/membership/blastRadiusTypes.ts` (`WithheldReason`)
-- **Verified:** 2026-09-02 — found while closing `D-085`'s last branch site.
-  The reason is set whenever `active.length === 0`, and `active` is
-  `rule.status === 'ACTIVE'`, which collapses `INACTIVE` and `INVALID`.
-- **Problem:** The `rule-inactive` withheld reason fires for two different
-  situations that call for opposite responses: an admin deliberately paused the
-  rule, or Okta can no longer evaluate it. Its sentence used to assert the
-  first — "The rule is inactive, so it grants nothing either way" — which is a
-  confident wrong statement in the second case, on a report an admin reads
-  before making an access decision. `D-085` corrected the copy to name both
-  possibilities honestly, which is true but vaguer than the data now allows:
-  `RuleEffect.status` carries the real status since `D-085`, so the report
-  could say which one applies rather than listing both.
-- **Done when:** the withheld reason distinguishes a deactivated rule from an
-  unevaluable one — most likely a distinct `WithheldReason` code set where
-  `active` is computed — and each renders its own sentence. The retargeted
-  `Not Predicted Rule Inactive` story pins the current combined wording; retire
-  or split it deliberately, with a note (ADR-0022).
-- **Risk:** Low — additive reason code plus copy; the engine already has the
-  status it needs.
-- **Status:** open
-- **Related:** `D-085` (which surfaced this and made `status` available)
-
-### D-102 · `useOktaTabContext`'s `enabled`/`resyncPending` have no production caller
-
-- **Category:** cleanup
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/sidepanel/hooks/useOktaTabContext.ts`,
-  `src/sidepanel/hooks/useOktaTabContext.test.tsx`,
-  `docs/adr/0026-visibility-gating-patterns.md`
-- **Verified:** 2026-09-02 — enumerated by the ADR-0058 implementer while
-  merging the two context engines. The pin used to be expressed as
-  `useOktaPageContext(!isPinned)`; it is now expressed as frozen identity
-  selection in `App`, and no production call site passes `enabled: false`.
-- **Problem:** `enabled` and `resyncPending` remain implemented, documented and
-  tested as the generic ADR-0026 visibility gate, but nothing in `src/` uses
-  them any more. They are a maintained API with no consumer — the same shape
-  ADR-0039 rejects for unwired action descriptors, one layer down. Either they
-  are the repo's general gating mechanism and something should use them, or
-  they are dead weight that future readers will mistake for the live mechanism
-  (ADR-0026's own audit table already had to be annotated as historical).
-- **Done when:** either removed, with ADR-0026 updated to name the surviving
-  mechanism, or explicitly kept with a comment saying why an unused gate is
-  worth maintaining. Deciding is the work; both outcomes are acceptable.
-- **Risk:** Low — the tests that cover them pass either way, but they are the
-  thing that has to be retargeted or retired.
-- **Status:** open
-- **Related:** ADR-0058, ADR-0026, `D-062` (the merge)
-
-### D-103 · Two disclosure controls still collide on duplicate names
-
-- **Category:** ux
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/sidepanel/components/policies/PolicyCard.tsx`
-  (`Show/Hide rules for <name>`), `src/sidepanel/components/apps/AppListItem.tsx`
-  (`Expand`/`Collapse`), and the assertion sites
-  `src/sidepanel/components/AuthPoliciesTab.test.tsx`,
-  `AuthPoliciesTab.stories.tsx`,
-  `src/sidepanel/cache/appAssignmentsSharing.test.tsx`
-- **Verified:** 2026-09-02 — left behind deliberately while closing `I-010`,
-  and marked with explaining comments at both call sites.
-- **Problem:** `I-010` folded the entity id into every `Copy <type> id for
-<name>` label so two same-named entities stop presenting one accessible name.
-  The disclosure controls beside them were not folded: `PolicyCard`'s
-  `Show/Hide rules for <name>` still collides for two policies sharing a name,
-  and `AppListItem`'s `Expand`/`Collapse` is ambiguous for every row on the
-  page, not merely duplicates. A screen-reader user tabbing the list hears the
-  same control name repeatedly with nothing distinguishing the rows.
-- **Done when:** both disclosure labels name their entity unambiguously, the
-  way the copy controls now do, and the four assertion sites are retargeted to
-  the new exact strings — not loosened to regexes or index lookups.
-- **Risk:** Low — label text plus assertion retargets across four files.
-- **Status:** open
-- **Related:** `I-009`, `I-010`
-
-### D-104 · A suspended session blanks every surface instead of holding last-known content
-
-- **Category:** ux
-- **Priority:** P2
-- **Size:** M
-- **Files:** `docs/adr/0054-a-401-is-a-session-not-a-request.md` §3, and the
-  per-surface error states across `src/sidepanel/components/**`
-- **Verified:** 2026-09-02 — the `D-007b` implementer stopped here deliberately;
-  the banner ships, the per-surface half does not.
-- **Problem:** ADR-0054 §3 says a suspended session should leave each surface
-  showing its **last-known content** under the one global banner, because the
-  data on screen was true a moment ago and an expired session does not make it
-  false. What ships instead: the banner appears, and every surface independently
-  renders its own failed-request error state, so the admin loses the view they
-  were reading at the moment they most need it — the session expired, nothing
-  about the org changed.
-- **Done when:** a suspended session leaves already-loaded content rendered,
-  with the banner as the single explanation, and only surfaces with no content
-  yet show an empty/error state.
-- **Risk:** Medium — touches many surfaces' loading/error branches; needs the
-  ADR-0018 stay-mounted behaviour respected.
-- **Status:** open
-- **Related:** `D-007b`, ADR-0054 §3
-
-### D-105 · `interrupted` and `not attempted` audit outcomes do not exist
-
-- **Category:** correctness
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/shared/requestLog.ts` (`recordRequest`'s two-outcome
-  vocabulary), `src/shared/scheduler/apiScheduler.ts` (the short-circuit path)
-- **Verified:** 2026-09-02 — enumerated by the `D-007b` implementer while
-  wiring suspension; `requestLog.ts` was outside its ownership.
-- **Problem:** ADR-0054 §5 asks for `interrupted` and `not attempted` as audit
-  outcomes, so a request the scheduler settled without sending is
-  distinguishable from one that was tried and failed. `recordRequest` has a
-  two-outcome vocabulary and no third state, so today a short-circuited request
-  writes **no audit row at all**. The audit trail therefore under-reports: it
-  shows the requests that were attempted and is silent about the ones the panel
-  chose not to send, which is exactly the information someone reconstructing an
-  incident would want.
-- **Done when:** a request settled without being sent records an outcome saying
-  so, distinct from both success and failure, and the history surface renders it.
-- **Risk:** Low — additive vocabulary; the audit store already validates rows on
-  read-back (`D-043`), so the schema is the thing to extend.
-- **Status:** open
-- **Related:** `D-007b`, `D-043`, ADR-0054 §5
-
-### D-106 · A narrowed error message can still be Okta's own `errorSummary`
-
-- **Category:** security
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/sidepanel/hooks/useOktaApi/ruleImpact.ts` (~line 168),
-  `src/sidepanel/hooks/useUserMemberships.ts` (~line 412), and any sibling
-  adopting the same `error instanceof Error ? error.message : …` shape
-- **Verified:** 2026-09-02 — found while reviewing `D-051`'s own fix. Both
-  catch blocks wrap Okta API calls, so the caught `Error.message` can carry an
-  `errorSummary` the org's data shaped.
-- **Problem:** `D-051` replaced two `log.*` calls that passed the **raw caught
-  error** with ones that pass `error.message` — a clear improvement, since the
-  raw object carried a stack and whatever else rode on it. But CLAUDE.md's rule
-  is "identifiers and outcomes only", and a message derived from an Okta
-  failure is neither: Okta's `errorSummary` frequently interpolates the entity
-  that failed, so a group or user name can still reach the log.
-  The repo already decided this exact question the other way one layer down:
-  `apiScheduler.ts` deliberately sets `lastError` to `` `HTTP ${status}` ``
-  rather than `result.error`, with a comment saying Okta's `errorSummary` must
-  not reach `SchedulerState`. These two sites are the same class of value
-  treated differently, which is the part worth closing — not because the log is
-  dangerous today, but because the inconsistency is how the rule erodes.
-- **Done when:** both sites log an outcome the app controls (a status, a code,
-  or a fixed string) rather than a message Okta wrote, matching
-  `apiScheduler`'s precedent; or a comment records why a message is acceptable
-  here when it was not there.
-- **Risk:** Low — two log lines. Note the messages are still shown to the user
-  via `reportError`, which is a different question and out of scope.
-- **Status:** open
-- **Related:** `D-051` (the fix that surfaced this), `D-007b`
-
-### D-107 · Two same-named entities share one chip name for a screen-reader user
-
-- **Category:** ux
-- **Priority:** P3
-- **Size:** M
-- **Files:** `src/sidepanel/components/shared/EntityLink.tsx` (the chip's
-  `aria-label`/`title`), `src/sidepanel/components/shared/EntityLink.test.tsx`
-  (where the accepted residual is pinned)
-- **Verified:** 2026-09-02 — decided deliberately by Sam while closing `I-009`,
-  after `ui-reviewer` pushed back on the first attempt.
-- **Problem:** `I-009` fixed a real ambiguity: two entities can share a display
-  name, so `Open group Engineering` could name two different chips on one
-  screen. The first fix folded the entity id into every chip's accessible name.
-  That removed the ambiguity and introduced a worse everyday cost — a screen
-  reader then read ~20 opaque characters (`00g1a2b3c4d5e6f7g8h9`) on **every
-  row of every list**, to disambiguate a collision that is usually absent.
-  The id-fold was therefore kept on the **copy control**, where the id is the
-  thing the control copies and naming it is honest, and reverted on the chip.
-  What remains is the original ambiguity, scoped down to one case: two
-  same-named entities rendered together are indistinguishable when opened.
-- **Done when:** a chip disambiguates **only when it has to** — the id (or a
-  shorter discriminator) is appended just for entities whose rendered name
-  collides with another in the same list, or moved into a description rather
-  than the name. Either shape keeps the common case quiet. The accepted-residual
-  assertion in `EntityLink.test.tsx` is retargeted with a note when it lands.
-- **Risk:** Medium — collision detection has to see the whole rendered list,
-  which `EntityLink` does not today; a context or a caller-supplied hint are
-  both plausible and the choice is the work.
-- **Status:** open
-- **Related:** `I-009`, `I-010`, `D-103`
-
-## Archive` section at
-
+**A `done:*`/`closed:*` item eventually moves to the `## Archive` section at
 the bottom of this file, collapsed to one line.** The verbose
 Problem/Done-when/Risk prose is not repeated there — it stays recoverable
 from git history at the linked commit, which is the point of moving it out.
@@ -2298,6 +2101,202 @@ handleGetAppInfo reads an Okta response with no zod boundary` — category
   worst path, so the test must drive it.
 - **Status:** open
 - **Related:** `D-034` (the refactor that pinned this), `D-013b`
+
+### D-101 · `rule-inactive` cannot tell a paused rule from a broken one
+
+- **Category:** correctness
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/users/BlastRadiusGroupRow.tsx`
+  (`withheldReasonText`), `src/shared/membership/blastRadius.ts`
+  (`additionEffect`/`removalEffect`, where the reason is set),
+  `src/shared/membership/blastRadiusTypes.ts` (`WithheldReason`)
+- **Verified:** 2026-09-02 — found while closing `D-085`'s last branch site.
+  The reason is set whenever `active.length === 0`, and `active` is
+  `rule.status === 'ACTIVE'`, which collapses `INACTIVE` and `INVALID`.
+- **Problem:** The `rule-inactive` withheld reason fires for two different
+  situations that call for opposite responses: an admin deliberately paused the
+  rule, or Okta can no longer evaluate it. Its sentence used to assert the
+  first — "The rule is inactive, so it grants nothing either way" — which is a
+  confident wrong statement in the second case, on a report an admin reads
+  before making an access decision. `D-085` corrected the copy to name both
+  possibilities honestly, which is true but vaguer than the data now allows:
+  `RuleEffect.status` carries the real status since `D-085`, so the report
+  could say which one applies rather than listing both.
+- **Done when:** the withheld reason distinguishes a deactivated rule from an
+  unevaluable one — most likely a distinct `WithheldReason` code set where
+  `active` is computed — and each renders its own sentence. The retargeted
+  `Not Predicted Rule Inactive` story pins the current combined wording; retire
+  or split it deliberately, with a note (ADR-0022).
+- **Risk:** Low — additive reason code plus copy; the engine already has the
+  status it needs.
+- **Status:** open
+- **Related:** `D-085` (which surfaced this and made `status` available)
+
+### D-102 · `useOktaTabContext`'s `enabled`/`resyncPending` have no production caller
+
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaTabContext.ts`,
+  `src/sidepanel/hooks/useOktaTabContext.test.tsx`,
+  `docs/adr/0026-visibility-gating-patterns.md`
+- **Verified:** 2026-09-02 — enumerated by the ADR-0058 implementer while
+  merging the two context engines. The pin used to be expressed as
+  `useOktaPageContext(!isPinned)`; it is now expressed as frozen identity
+  selection in `App`, and no production call site passes `enabled: false`.
+- **Problem:** `enabled` and `resyncPending` remain implemented, documented and
+  tested as the generic ADR-0026 visibility gate, but nothing in `src/` uses
+  them any more. They are a maintained API with no consumer — the same shape
+  ADR-0039 rejects for unwired action descriptors, one layer down. Either they
+  are the repo's general gating mechanism and something should use them, or
+  they are dead weight that future readers will mistake for the live mechanism
+  (ADR-0026's own audit table already had to be annotated as historical).
+- **Done when:** either removed, with ADR-0026 updated to name the surviving
+  mechanism, or explicitly kept with a comment saying why an unused gate is
+  worth maintaining. Deciding is the work; both outcomes are acceptable.
+- **Risk:** Low — the tests that cover them pass either way, but they are the
+  thing that has to be retargeted or retired.
+- **Status:** open
+- **Related:** ADR-0058, ADR-0026, `D-062` (the merge)
+
+### D-103 · Two disclosure controls still collide on duplicate names
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/policies/PolicyCard.tsx`
+  (`Show/Hide rules for <name>`), `src/sidepanel/components/apps/AppListItem.tsx`
+  (`Expand`/`Collapse`), and the assertion sites
+  `src/sidepanel/components/AuthPoliciesTab.test.tsx`,
+  `AuthPoliciesTab.stories.tsx`,
+  `src/sidepanel/cache/appAssignmentsSharing.test.tsx`
+- **Verified:** 2026-09-02 — left behind deliberately while closing `I-010`,
+  and marked with explaining comments at both call sites.
+- **Problem:** `I-010` folded the entity id into every `Copy <type> id for
+<name>` label so two same-named entities stop presenting one accessible name.
+  The disclosure controls beside them were not folded: `PolicyCard`'s
+  `Show/Hide rules for <name>` still collides for two policies sharing a name,
+  and `AppListItem`'s `Expand`/`Collapse` is ambiguous for every row on the
+  page, not merely duplicates. A screen-reader user tabbing the list hears the
+  same control name repeatedly with nothing distinguishing the rows.
+- **Done when:** both disclosure labels name their entity unambiguously, the
+  way the copy controls now do, and the four assertion sites are retargeted to
+  the new exact strings — not loosened to regexes or index lookups.
+- **Risk:** Low — label text plus assertion retargets across four files.
+- **Status:** open
+- **Related:** `I-009`, `I-010`
+
+### D-104 · A suspended session blanks every surface instead of holding last-known content
+
+- **Category:** ux
+- **Priority:** P2
+- **Size:** M
+- **Files:** `docs/adr/0054-a-401-is-a-session-not-a-request.md` §3, and the
+  per-surface error states across `src/sidepanel/components/**`
+- **Verified:** 2026-09-02 — the `D-007b` implementer stopped here deliberately;
+  the banner ships, the per-surface half does not.
+- **Problem:** ADR-0054 §3 says a suspended session should leave each surface
+  showing its **last-known content** under the one global banner, because the
+  data on screen was true a moment ago and an expired session does not make it
+  false. What ships instead: the banner appears, and every surface independently
+  renders its own failed-request error state, so the admin loses the view they
+  were reading at the moment they most need it — the session expired, nothing
+  about the org changed.
+- **Done when:** a suspended session leaves already-loaded content rendered,
+  with the banner as the single explanation, and only surfaces with no content
+  yet show an empty/error state.
+- **Risk:** Medium — touches many surfaces' loading/error branches; needs the
+  ADR-0018 stay-mounted behaviour respected.
+- **Status:** open
+- **Related:** `D-007b`, ADR-0054 §3
+
+### D-105 · `interrupted` and `not attempted` audit outcomes do not exist
+
+- **Category:** correctness
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/shared/requestLog.ts` (`recordRequest`'s two-outcome
+  vocabulary), `src/shared/scheduler/apiScheduler.ts` (the short-circuit path)
+- **Verified:** 2026-09-02 — enumerated by the `D-007b` implementer while
+  wiring suspension; `requestLog.ts` was outside its ownership.
+- **Problem:** ADR-0054 §5 asks for `interrupted` and `not attempted` as audit
+  outcomes, so a request the scheduler settled without sending is
+  distinguishable from one that was tried and failed. `recordRequest` has a
+  two-outcome vocabulary and no third state, so today a short-circuited request
+  writes **no audit row at all**. The audit trail therefore under-reports: it
+  shows the requests that were attempted and is silent about the ones the panel
+  chose not to send, which is exactly the information someone reconstructing an
+  incident would want.
+- **Done when:** a request settled without being sent records an outcome saying
+  so, distinct from both success and failure, and the history surface renders it.
+- **Risk:** Low — additive vocabulary; the audit store already validates rows on
+  read-back (`D-043`), so the schema is the thing to extend.
+- **Status:** open
+- **Related:** `D-007b`, `D-043`, ADR-0054 §5
+
+### D-106 · A narrowed error message can still be Okta's own `errorSummary`
+
+- **Category:** security
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/hooks/useOktaApi/ruleImpact.ts` (~line 168),
+  `src/sidepanel/hooks/useUserMemberships.ts` (~line 412), and any sibling
+  adopting the same `error instanceof Error ? error.message : …` shape
+- **Verified:** 2026-09-02 — found while reviewing `D-051`'s own fix. Both
+  catch blocks wrap Okta API calls, so the caught `Error.message` can carry an
+  `errorSummary` the org's data shaped.
+- **Problem:** `D-051` replaced two `log.*` calls that passed the **raw caught
+  error** with ones that pass `error.message` — a clear improvement, since the
+  raw object carried a stack and whatever else rode on it. But CLAUDE.md's rule
+  is "identifiers and outcomes only", and a message derived from an Okta
+  failure is neither: Okta's `errorSummary` frequently interpolates the entity
+  that failed, so a group or user name can still reach the log.
+  The repo already decided this exact question the other way one layer down:
+  `apiScheduler.ts` deliberately sets `lastError` to `` `HTTP ${status}` ``
+  rather than `result.error`, with a comment saying Okta's `errorSummary` must
+  not reach `SchedulerState`. These two sites are the same class of value
+  treated differently, which is the part worth closing — not because the log is
+  dangerous today, but because the inconsistency is how the rule erodes.
+- **Done when:** both sites log an outcome the app controls (a status, a code,
+  or a fixed string) rather than a message Okta wrote, matching
+  `apiScheduler`'s precedent; or a comment records why a message is acceptable
+  here when it was not there.
+- **Risk:** Low — two log lines. Note the messages are still shown to the user
+  via `reportError`, which is a different question and out of scope.
+- **Status:** open
+- **Related:** `D-051` (the fix that surfaced this), `D-007b`
+
+### D-107 · Two same-named entities share one chip name for a screen-reader user
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/sidepanel/components/shared/EntityLink.tsx` (the chip's
+  `aria-label`/`title`), `src/sidepanel/components/shared/EntityLink.test.tsx`
+  (where the accepted residual is pinned)
+- **Verified:** 2026-09-02 — decided deliberately by Sam while closing `I-009`,
+  after `ui-reviewer` pushed back on the first attempt.
+- **Problem:** `I-009` fixed a real ambiguity: two entities can share a display
+  name, so `Open group Engineering` could name two different chips on one
+  screen. The first fix folded the entity id into every chip's accessible name.
+  That removed the ambiguity and introduced a worse everyday cost — a screen
+  reader then read ~20 opaque characters (`00g1a2b3c4d5e6f7g8h9`) on **every
+  row of every list**, to disambiguate a collision that is usually absent.
+  The id-fold was therefore kept on the **copy control**, where the id is the
+  thing the control copies and naming it is honest, and reverted on the chip.
+  What remains is the original ambiguity, scoped down to one case: two
+  same-named entities rendered together are indistinguishable when opened.
+- **Done when:** a chip disambiguates **only when it has to** — the id (or a
+  shorter discriminator) is appended just for entities whose rendered name
+  collides with another in the same list, or moved into a description rather
+  than the name. Either shape keeps the common case quiet. The accepted-residual
+  assertion in `EntityLink.test.tsx` is retargeted with a note when it lands.
+- **Risk:** Medium — collision detection has to see the whole rendered list,
+  which `EntityLink` does not today; a context or a caller-supplied hint are
+  both plausible and the choice is the work.
+- **Status:** open
+- **Related:** `I-009`, `I-010`, `D-103`
 
 ## Archive
 
