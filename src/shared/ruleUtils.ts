@@ -11,7 +11,7 @@
  * @see {@link detectConflicts}
  * @see {@link formatRuleForDisplay}
  */
-import type { OktaGroupRule, RuleConflict, FormattedRule } from '../shared/types';
+import type { OktaGroupRule, RuleConflict, FormattedRule, GroupRuleStatus } from '../shared/types';
 
 /**
  * Read a rule's condition expression as a string, or `''` when it does not have
@@ -19,10 +19,12 @@ import type { OktaGroupRule, RuleConflict, FormattedRule } from '../shared/types
  *
  * `conditions.expression.value` is typed `string` on {@link OktaGroupRule}, but
  * the type is a *claim about* an Okta response, not a check of one — and the
- * field is end-user-controllable (`docs/security.md`). Not every caller of the
- * helpers below validates its rules at a zod boundary: `groupDiscovery`'s
- * `fetchAndCacheAllGroupRules` walks `/api/v1/groups/rules` with no schema, so a
- * raw row reaches them exactly as Okta sent it (D-055).
+ * field is end-user-controllable (`docs/security.md`). The helpers below are
+ * exported and take a bare {@link OktaGroupRule}, so nothing in their signature
+ * requires a caller to have parsed that row at a zod boundary; the guard holds
+ * regardless of who calls, rather than resting on an audit of today's callers
+ * (D-055, D-088). Every rules path in `src/` does validate as of D-065, which
+ * makes the guard belt-and-braces — not removable.
  *
  * Every caller formats a whole page inside a `.map`, so an unguarded string
  * operation on one malformed row throws out of the map and costs the entire
@@ -30,10 +32,14 @@ import type { OktaGroupRule, RuleConflict, FormattedRule } from '../shared/types
  * expression" state a missing one already produces — one field lost, never a
  * thrown error (`CONVENTIONS.md`, "never throw on a missing selector").
  *
+ * Exported so the one other place that reads the same field —
+ * `fetchGroupRulesRequest`'s `groupIdsReferencedBy`, which scans it for embedded
+ * group ids — shares this guard instead of carrying a fourth copy of it (D-066).
+ *
  * @param rule - The rule whose condition expression to read.
  * @returns The expression text, or `''` when it is absent or not a string.
  */
-function expressionText(rule: OktaGroupRule): string {
+export function expressionText(rule: OktaGroupRule): string {
   const value: unknown = rule.conditions?.expression?.value;
   return typeof value === 'string' ? value : '';
 }
@@ -241,4 +247,56 @@ export function filterRules(rules: FormattedRule[], query: string): FormattedRul
       rule.userAttributes.some((attr) => attr.toLowerCase().includes(lowerQuery))
     );
   });
+}
+
+/**
+ * How a rule's {@link GroupRuleStatus} is marked in a list or a header.
+ *
+ * Plain data, not JSX, so `shared/` stays free of a `components/` import: the
+ * `variant` is a subset of the shared `BadgeVariant` vocabulary and drops
+ * straight into `<Badge variant={…}>` with no mapping layer. Status words follow
+ * ADR-0002 — `danger`, never `error`.
+ */
+export interface RuleStatusBadge {
+  /** The label to render. */
+  text: string;
+  /** Badge treatment, from the shared status vocabulary. */
+  variant: 'success' | 'neutral' | 'danger';
+  /** A one-line explanation, for the badge's `title`. */
+  title: string;
+}
+
+/**
+ * Mark a rule's lifecycle status.
+ *
+ * The switch is exhaustive over {@link GroupRuleStatus} on purpose (D-085): the
+ * old `status === 'ACTIVE' ? success : neutral` ternary rendered `INVALID` as an
+ * `INACTIVE` lookalike, which reads as "an admin paused this" when what Okta is
+ * actually reporting is "this rule no longer evaluates". `INVALID` therefore
+ * gets its own `danger` **Broken** mark, visibly distinct from a pause. Adding a
+ * fourth status to the union makes this a compile error rather than a silent
+ * default — which is the point.
+ *
+ * @param status - The rule's status exactly as Okta reported it.
+ * @returns The label, treatment and tooltip for the status mark.
+ */
+export function ruleStatusBadge(status: GroupRuleStatus): RuleStatusBadge {
+  switch (status) {
+    case 'ACTIVE':
+      return { text: 'ACTIVE', variant: 'success', title: 'This rule is in force.' };
+    case 'INACTIVE':
+      return {
+        text: 'INACTIVE',
+        variant: 'neutral',
+        title:
+          'This rule is deactivated, so it places nobody. Members it placed before remain in the group.',
+      };
+    case 'INVALID':
+      return {
+        text: 'Broken',
+        variant: 'danger',
+        title:
+          'Okta reports this rule as INVALID: it can no longer be evaluated — usually because a group it references was deleted — so it places nobody.',
+      };
+  }
 }

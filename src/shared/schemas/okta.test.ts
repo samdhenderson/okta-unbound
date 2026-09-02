@@ -10,6 +10,7 @@ import {
   extractAppAssignmentScope,
   extractAppGrantGroupId,
   isProfileSourceApp,
+  oktaGroupRuleSchema,
   oktaPolicyListItemSchema,
   oktaPolicyRuleSchema,
   parseOkta,
@@ -698,5 +699,42 @@ describe('extractAppGrantGroupId (_embedded.user._links.group.href)', () => {
     expect(extractAppAssignmentScope({ user: rows[0] })).toBe('USER');
     expect(extractAppGrantGroupId({ user: rows[0] })).toBeUndefined();
     vi.restoreAllMocks();
+  });
+});
+
+// D-085: Okta's `GroupRuleStatus` has three values, not two. The schema admitted
+// only `ACTIVE | INACTIVE`, so once D-065 put every rules walk behind it, an
+// `INVALID` rule — Okta's own signal that a rule references something that no
+// longer exists — failed validation and was dropped with only a count in a debug
+// warning. `INVALID` is the one status a rules surface most needs to show.
+describe('oktaGroupRuleSchema status vocabulary (D-085)', () => {
+  /** A minimal rules row, with the status under test. */
+  const ruleWith = (status: string) => ({
+    id: '0prFAKE000000000001',
+    name: 'Engineering intake',
+    status,
+    actions: { assignUserToGroups: { groupIds: ['00gFAKE0000000000001'] } },
+  });
+
+  it.each(['ACTIVE', 'INACTIVE', 'INVALID'])('accepts a rule whose status is %s', (status) => {
+    const parsed = oktaGroupRuleSchema.safeParse(ruleWith(status));
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.status).toBe(status);
+  });
+
+  it('still rejects a status outside the enum', () => {
+    expect(oktaGroupRuleSchema.safeParse(ruleWith('PENDING')).success).toBe(false);
+  });
+
+  it('keeps an INVALID row in a page rather than dropping it', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const page = parseOktaList(
+      oktaGroupRuleSchema,
+      [ruleWith('ACTIVE'), ruleWith('INVALID')],
+      'GET /api/v1/groups/rules',
+    );
+    expect(page.map((r) => r.status)).toEqual(['ACTIVE', 'INVALID']);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

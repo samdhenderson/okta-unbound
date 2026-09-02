@@ -7,6 +7,8 @@ import {
   formatRuleForDisplay,
   timeAgo,
   filterRules,
+  expressionText,
+  ruleStatusBadge,
 } from './ruleUtils';
 import type { OktaGroupRule, FormattedRule } from './types';
 
@@ -766,10 +768,11 @@ describe('ruleUtils', () => {
       expect(formatted.condition).toContain('is member of group');
     });
 
-    // D-055: this function is exported and reachable from callers that do NOT
-    // validate their rules at an Okta boundary — `groupDiscovery`'s
-    // `fetchAndCacheAllGroupRules` walks `/api/v1/groups/rules` with
-    // `fetchAllPages` and no schema, so the raw response reaches here as-is.
+    // D-055: this function is exported and takes a bare `OktaGroupRule`, so
+    // nothing in its signature requires the caller to have parsed that row at an
+    // Okta boundary. Every rules path in `src/` does validate as of D-065, which
+    // makes this belt-and-braces rather than dead — the guarantee is a property
+    // of the function, not an audit of today's callers (D-088).
     // `conditions.expression.value` is end-user-controllable (`docs/security.md`),
     // and every caller formats a whole page inside a `.map`, so a throw on one
     // row is a whole-surface outage. The guarantee: a non-string expression
@@ -975,5 +978,71 @@ describe('ruleUtils', () => {
       const filtered = filterRules(sampleRules, 'depart');
       expect(filtered.length).toBeGreaterThan(0);
     });
+  });
+});
+
+// D-066: `fetchGroupRulesRequest.groupIdsReferencedBy` carried a byte-identical
+// copy of the falsy-only `expression.value || ''` read that D-055 fixed here.
+// The guard is exported rather than duplicated a fourth time, so this pins the
+// contract the other module now depends on.
+describe('expressionText (D-055 / D-066)', () => {
+  /** A rule whose `conditions.expression.value` is whatever the case supplies. */
+  const withExpression = (value: unknown): OktaGroupRule =>
+    ({
+      id: '0prFAKE000000000001',
+      name: 'Rule',
+      status: 'ACTIVE',
+      type: 'group_rule',
+      created: '2024-01-01T00:00:00Z',
+      lastUpdated: '2024-01-01T00:00:00Z',
+      conditions: { expression: { value, type: 'urn:okta:expression:1.0' } },
+    }) as unknown as OktaGroupRule;
+
+  it('returns the expression when it is a string', () => {
+    expect(expressionText(withExpression('user.department == "Eng"'))).toBe(
+      'user.department == "Eng"',
+    );
+  });
+
+  it.each([[42], [null], [{ value: 'x' }], [['a']], [true]])(
+    'degrades a non-string expression (%s) to "" instead of throwing',
+    (value) => {
+      expect(expressionText(withExpression(value))).toBe('');
+    },
+  );
+
+  it('returns "" when the rule has no conditions at all', () => {
+    expect(
+      expressionText({
+        id: '0prFAKE000000000002',
+        name: 'Rule',
+        status: 'ACTIVE',
+      } as unknown as OktaGroupRule),
+    ).toBe('');
+  });
+});
+
+// D-085: the status mark is an exhaustive map over Okta's three-state
+// `GroupRuleStatus`, not a two-arm ternary that quietly files `INVALID` under
+// "not active". A broken rule and a paused rule are different facts and must not
+// share a mark.
+describe('ruleStatusBadge (D-085)', () => {
+  it('marks an ACTIVE rule as in force', () => {
+    expect(ruleStatusBadge('ACTIVE')).toMatchObject({ text: 'ACTIVE', variant: 'success' });
+  });
+
+  it('marks an INACTIVE rule neutrally — a pause is not a failure', () => {
+    expect(ruleStatusBadge('INACTIVE')).toMatchObject({ text: 'INACTIVE', variant: 'neutral' });
+  });
+
+  it('marks an INVALID rule as Broken, in danger', () => {
+    expect(ruleStatusBadge('INVALID')).toMatchObject({ text: 'Broken', variant: 'danger' });
+  });
+
+  it('gives every status a distinct label, treatment and explanation', () => {
+    const marks = (['ACTIVE', 'INACTIVE', 'INVALID'] as const).map(ruleStatusBadge);
+    expect(new Set(marks.map((m) => m.text)).size).toBe(3);
+    expect(new Set(marks.map((m) => m.variant)).size).toBe(3);
+    expect(new Set(marks.map((m) => m.title)).size).toBe(3);
   });
 });

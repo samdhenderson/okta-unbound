@@ -94,6 +94,23 @@ export const Inactive: Story = {
   },
 };
 
+/**
+ * **Broken.** Okta reports `INVALID` when a rule can no longer be evaluated — most often
+ * because a group its expression or its assignment names has been deleted. It places
+ * nobody, exactly like a paused rule, but nobody chose it: it is a fault to go and fix,
+ * so it takes a `danger` mark reading **Broken** rather than the neutral pill `INACTIVE`
+ * gets. Sitting next to {@link Inactive} in this file is the point — the two must not be
+ * mistakable for one another at a glance (D-085).
+ */
+export const Broken: Story = {
+  args: { rule: { ...baseRule, status: 'INVALID' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Broken')).toBeInTheDocument();
+    await expect(canvas.queryByText('INACTIVE')).not.toBeInTheDocument();
+  },
+};
+
 /** Assigns into the group you arrived from — takes `ListRow`'s shared `selected` state. */
 export const AffectsCurrentGroup: Story = {
   args: { rule: { ...baseRule, affectsCurrentGroup: true } },
