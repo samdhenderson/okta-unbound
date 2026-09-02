@@ -131,12 +131,27 @@ becomes its verdict for the whole org. The profile source is on the **app row**
 (`features` contains `PROFILE_MASTERING`), free on the assigned-apps call. See
 `users-and-mfa.md` § Profile sourcing.
 
-**Okta exposes no group-membership timestamp.** Neither the group member listing nor
-`GET /api/v1/users/{id}/groups` carries an "added on" date, and the user-side
-listing has no attribution embed at all. "When was this user added to this group" is
-unanswerable from the Management API — only the System Log answers it, and only
-within its 90-day retention window. Never synthesise the date from `created` or
-`lastUpdated`; those describe the entities, not the membership.
+**Okta exposes no per-member membership timestamp.** Neither the group member
+listing nor `GET /api/v1/users/{id}/groups` carries an "added on" date for a given
+user, and the user-side listing has no attribution embed at all. "When was this
+specific user added to this specific group" is unanswerable from the Management
+API — only the System Log answers it, and only within its 90-day retention
+window. Never synthesise that per-member date from `created` or `lastUpdated`;
+those describe the entities, not the membership.
+
+This is narrower than "Okta has no membership timestamp at all" — it does, at the
+**group** level. `GET /api/v1/groups` and `GET /api/v1/groups/{id}` both
+default-return `lastMembershipUpdated` on every group: the last time _any_
+membership on that group changed, group-wide, not per-member. It is one of only
+four group properties the `filter` query parameter accepts —
+`id`, `type`, `lastUpdated`, `lastMembershipUpdated` (`created` is searchable but
+**not** filterable) — and `search` additionally supports ordering on it via
+`sortBy`/`sortOrder`, though those only apply to `search` queries, never to
+`filter`. Use it to answer "which groups changed recently" org-wide; it cannot
+answer "who changed, or when, for one member."
+`[docs: GET /api/v1/groups, github.com/okta/okta-management-openapi-spec —
+`lastMembershipUpdated`on the group schema and the`filter`/`search` parameter
+descriptions]`
 
 ## Two API surfaces
 
