@@ -618,9 +618,22 @@ describe('rule rows carry the evidence without carrying prose', () => {
       targetGroupIds: [ENGINEERING.id],
       targetGroupNames: ['Engineering'],
       active: true,
+      status: 'ACTIVE',
     });
     expect(report.rules[0].beforeReason).toBeUndefined();
     expect(report.rules[0].afterReason).toBeUndefined();
+  });
+
+  it("carries the rule's full status, not just the ACTIVE/not-ACTIVE boolean (D-085)", () => {
+    // `active` alone cannot tell a caller whether a non-matching rule was
+    // deactivated on purpose or is `INVALID` (unevaluable, typically because a
+    // group it names was deleted) — `status` is what lets `BlastRadiusRuleRow`
+    // show `Broken` instead of the generic "Not in force" for the second case.
+    const invalidFeeder = ruleOf({ ...ENG_FEEDER, status: 'INVALID' });
+    const report = analyze({ rules: [invalidFeeder] });
+
+    expect(report.rules[0].active).toBe(false);
+    expect(report.rules[0].status).toBe('INVALID');
   });
 
   it('falls back to the id when no name is cached for a target group', () => {

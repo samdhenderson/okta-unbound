@@ -70,6 +70,7 @@ import {
 } from '../ruleEvaluator';
 import { explainRuleExpression, type ClauseGroupReference } from '../rules/explainExpression';
 import { groupContextOf } from './groupContext';
+import { conditionExpressionOf } from './ruleExpression';
 import {
   membershipBucket,
   membershipVerdict,
@@ -89,19 +90,6 @@ import type {
 // ---------------------------------------------------------------------------
 // Shape helpers — each one deliberately mirrors an existing module.
 // ---------------------------------------------------------------------------
-
-/**
- * A rule's condition expression, whichever shape the rule arrived in.
- *
- * Mirrors `accessCause.conditionExpressionOf`. Note what is **not** consulted:
- * `FormattedRule.condition` is a display string with `user.` stripped off, so it
- * does not parse and reading it here would silently turn every formatted rule
- * into a `parse-error`. An empty result means the rule carries no condition —
- * `unevaluable`, never "matches nothing".
- */
-function conditionExpressionOf(rule: MembershipRule): string {
-  return rule.conditionExpression || rule.conditions?.expression?.value || '';
-}
 
 /**
  * The groups a rule assigns matched users into, from either rule shape. Same
@@ -213,6 +201,7 @@ function evaluateRule(
       targetGroupNames: targetGroupIds.map((id) => groupNames.get(id) ?? id),
       touchedAttributes: touchedAttributesOf(rule, expression, draftKeys),
       active: rule.status === 'ACTIVE',
+      status: rule.status,
     },
   };
 }

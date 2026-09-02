@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import RulesDuplicatesPanel from './RulesDuplicatesPanel';
 import type { MergeableRuleGroup } from '../../../shared/rules/consolidation';
 
@@ -99,6 +99,39 @@ export const SingleCluster: Story = {
 /** No `onFocusRule` handler — the per-rule "View" link is omitted. */
 export const WithoutFocusLink: Story = {
   args: { onFocusRule: undefined },
+};
+
+/**
+ * A cluster holding a rule Okta reports as `INVALID` — one it can no longer evaluate,
+ * usually because a group its expression names was deleted.
+ *
+ * The mark is `danger` **Broken**, not the neutral *Inactive* the old hand-rolled pill
+ * gave everything that was not `ACTIVE` (D-085). It is worth seeing here specifically:
+ * this panel's whole purpose is to offer these rules for merging, and "somebody paused
+ * it" and "Okta cannot run it" call for opposite decisions.
+ */
+export const BrokenMemberRule: Story = {
+  args: {
+    clusters: [
+      {
+        ...clusters[0],
+        rules: [
+          clusters[0].rules[0],
+          {
+            ...clusters[0].rules[1],
+            id: 'rul5',
+            name: 'Engineering Contractors',
+            status: 'INVALID',
+          },
+        ],
+      },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: /2 rules/ }));
+    await expect(canvas.getByText('Broken')).toBeInTheDocument();
+  },
 };
 
 /** No mergeable clusters — the component renders nothing. */

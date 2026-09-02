@@ -45,12 +45,41 @@
 import { useCallback, useMemo } from 'react';
 import { useOrgSnapshot, type UseOrgSnapshotResult } from '../cache/useOrgSnapshot';
 import type { OktaIdKind } from '../../shared/utils/oktaId';
-import type { OktaGroupRule } from '../../shared/types';
+import type { GroupRuleStatus, OktaGroupRule } from '../../shared/types';
+import { ruleStatusBadge } from '../../shared/ruleUtils';
 import type { OktaAppGroupAssignment, OktaAppListItem } from '../../shared/schemas/okta';
 import type { RawOktaGroup } from '../components/groups/groupSummary';
 
 /** The collections this index covers. `user` is deliberately absent — see below. */
 export type IndexedKind = Extract<OktaIdKind, 'group' | 'rule' | 'app'>;
+
+/**
+ * The one fact a rule row can state for free, and the one an admin looking up a
+ * rule most often wants: is it actually running?
+ *
+ * Exhaustive over {@link GroupRuleStatus} rather than a two-way ternary (D-085).
+ * The old `status === 'INACTIVE' ? 'Paused' : 'Active'` had no arm for `INVALID`
+ * and so defaulted a rule Okta can no longer evaluate into the *Active* label —
+ * the most confidently wrong thing a search result can say about a rule that
+ * places nobody. Neither existing word fits it: nobody paused it, and it is not
+ * running. The word comes from {@link ruleStatusBadge}, the one place that names
+ * a rule's status, so a broken rule reads *Broken* here and on its card alike;
+ * `ACTIVE`/`INACTIVE` keep the sentence-case wording this surface has always
+ * used, since a jump result is prose, not a badge.
+ *
+ * @param status - The rule's status exactly as Okta reported it.
+ * @returns The secondary line for the rule's jump-result row.
+ */
+export function ruleSearchSecondary(status: GroupRuleStatus): string {
+  switch (status) {
+    case 'ACTIVE':
+      return 'Active';
+    case 'INACTIVE':
+      return 'Paused';
+    case 'INVALID':
+      return ruleStatusBadge('INVALID').text;
+  }
+}
 
 /** A resolved entity, flattened to what a jump result row needs. */
 export interface IndexedEntity {
@@ -203,9 +232,7 @@ export function useOrgEntityIndex({
         kind: 'rule',
         id: rule.id,
         name: rule.name || rule.id,
-        // The one fact a rule row can state for free, and the one an admin
-        // looking up a rule most often wants: is it actually running?
-        secondary: rule.status === 'INACTIVE' ? 'Paused' : 'Active',
+        secondary: ruleSearchSecondary(rule.status),
       });
     }
     return byId;

@@ -131,14 +131,20 @@ export const Undetermined: Story = {
   },
 };
 
-/** An INACTIVE rule says so: it places nobody, whichever way its verdict moves. */
-export const InactiveRule: Story = {
+/**
+ * A rule an admin deactivated says so: it places nobody, whichever way its
+ * verdict moves — the neutral, unremarkable case. `effect.status` is
+ * `'INACTIVE'` here, which keeps the generic "Not in force" pill rather than
+ * the `INVALID` rule's `Broken` mark below (D-085).
+ */
+export const NotInForceRule: Story = {
   args: {
     effect: effect({
       ruleId: '0prFAKErule00004',
       ruleName: 'Legacy intern auto-add',
       transition: 'stops-matching',
       active: false,
+      status: 'INACTIVE',
       expression: 'user.title == "Intern"',
       targetGroupIds: ['00gFAKE00000000000004'],
       targetGroupNames: ['Legacy-Interns'],
@@ -147,7 +153,43 @@ export const InactiveRule: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText('Inactive')).toBeInTheDocument();
+    await expect(canvas.getByText('Not in force')).toBeInTheDocument();
+    // Never a status word this row cannot support — and never the `INVALID` mark.
+    await expect(canvas.queryByText(/INACTIVE|Inactive/)).toBeNull();
+    await expect(canvas.queryByText('Broken')).toBeNull();
+  },
+};
+
+/**
+ * A rule Okta reports as `INVALID` — it can no longer be evaluated, typically
+ * because a group its expression names was deleted — gets the same `Broken`
+ * mark every other rule surface uses (`ruleStatusBadge`), not the generic
+ * "Not in force" pill a deactivated rule keeps.
+ *
+ * Before this fix, `effect.active` being `false` was the only signal this row
+ * had, and it read identically to a rule an admin merely paused — exactly the
+ * D-085 defect the shared `Broken` mark exists to close everywhere else.
+ */
+export const BrokenRule: Story = {
+  args: {
+    effect: effect({
+      ruleId: '0prFAKErule00009',
+      ruleName: 'Contractors — deleted group reference',
+      transition: 'stops-matching',
+      active: false,
+      status: 'INVALID',
+      expression: 'isMemberOfGroup("00gDELETEDFAKE00001")',
+      targetGroupIds: ['00gFAKE00000000000004'],
+      targetGroupNames: ['Legacy-Interns'],
+      touchedAttributes: [],
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Broken')).toBeInTheDocument();
+    // Never the generic pill once the specific one applies.
+    await expect(canvas.queryByText('Not in force')).toBeNull();
+    await expect(canvas.queryByText(/INACTIVE|Inactive/)).toBeNull();
   },
 };
 

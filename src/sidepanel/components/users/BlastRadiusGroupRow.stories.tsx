@@ -224,7 +224,11 @@ export const NotPredictedRuleInactive: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText(/inactive, so it grants nothing/i)).toBeInTheDocument();
+    // Retargeted (D-085): the sentence no longer says "inactive". This reason
+    // fires whenever no candidate rule is ACTIVE, which now includes INVALID,
+    // so the copy names both cases. Same strength, corrected subject.
+    await expect(canvas.getByText(/deactivated or no longer evaluable/i)).toBeInTheDocument();
+    await expect(canvas.queryByText(/rule is inactive/i)).not.toBeInTheDocument();
   },
 };
 

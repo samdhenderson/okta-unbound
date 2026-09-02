@@ -19,6 +19,16 @@
  * and a `danger` palette would assert in colour what the sentence declines to
  * assert in words (ADR-0017, ADR-0020).
  *
+ * ## "Not in force" is not one thing
+ *
+ * `effect.active` is `false` for both a rule an admin deactivated and one Okta
+ * reports as `INVALID` (unevaluable, typically because a group it names was
+ * deleted) — a boolean that cannot distinguish "paused on purpose" from
+ * "broken" (D-085). `effect.status`, when present, resolves that: `INVALID`
+ * gets the shared `ruleStatusBadge` mark — **Broken**, `danger` — the same
+ * one every other rule surface uses, instead of the generic neutral "Not in
+ * force" pill a deactivated rule keeps.
+ *
  * ## The expression wraps; it never truncates
  *
  * A condition clipped at the row's edge and set beside a verdict is actively
@@ -37,6 +47,7 @@ import React from 'react';
 import { Badge, ListRow, type BadgeVariant } from '../shared';
 import Icon, { type IconType } from '../shared/Icon';
 import { unevaluableReasonText } from '../../../shared/rules/unevaluableReasonText';
+import { ruleStatusBadge } from '../../../shared/ruleUtils';
 import type { RuleEffect, RuleTransition } from '../../../shared/membership/blastRadiusTypes';
 
 /** Props for {@link BlastRadiusRuleRow}. */
@@ -120,6 +131,7 @@ const BlastRadiusRuleRow: React.FC<BlastRadiusRuleRowProps> = ({ effect }) => {
     effect.transition === 'undetermined'
       ? unevaluableReasonText(effect.afterReason ?? effect.beforeReason)
       : null;
+  const broken = effect.status === 'INVALID' ? ruleStatusBadge('INVALID') : null;
 
   return (
     <ListRow as="li" density="compact">
@@ -137,10 +149,30 @@ const BlastRadiusRuleRow: React.FC<BlastRadiusRuleRowProps> = ({ effect }) => {
             {effect.ruleName}
           </span>
           <Badge variant={presentation.variant}>{presentation.label}</Badge>
-          {!effect.active && (
-            <Badge variant="neutral" title="This rule is INACTIVE in Okta, so it places nobody.">
-              Inactive
+          {/*
+            `effect.status` is what makes the second badge specific rather than a
+            shrug. It used to read only `effect.active` — a boolean that collapses
+            a deactivated rule and an `INVALID` one into the same "Not in force"
+            (D-085) — which is true of both but tells an admin nothing about which
+            action to take. When Okta reports `INVALID` this now reuses the shared
+            `ruleStatusBadge` mapping (the same **Broken**, `danger` mark every
+            other rule surface uses) instead of the generic neutral pill; a
+            genuinely deactivated rule, or an older fixture with no `status`,
+            keeps the original neutral "Not in force" treatment.
+          */}
+          {broken ? (
+            <Badge variant={broken.variant} title={broken.title}>
+              {broken.text}
             </Badge>
+          ) : (
+            !effect.active && (
+              <Badge
+                variant="neutral"
+                title="Okta is not applying this rule — it is deactivated — so it places nobody."
+              >
+                Not in force
+              </Badge>
+            )
           )}
         </div>
 

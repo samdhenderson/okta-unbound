@@ -46,7 +46,8 @@ import { getOrFetch } from '../cache/entityCache';
 import { AUTH_POLICY_TYPE, POLICIES_CACHE_KEY } from './usePoliciesData';
 import { filterPolicies } from '../components/policies/policyFilters';
 import type { JumpKind, JumpResult } from './useJumpResolver';
-import type { OrgEntityIndex } from './useOrgEntityIndex';
+import { ruleSearchSecondary, type OrgEntityIndex } from './useOrgEntityIndex';
+import type { GroupRuleStatus } from '../../shared/types';
 import type { OktaIdKind } from '../../shared/utils/oktaId';
 import type { OktaPolicyListItem } from '../../shared/schemas/okta';
 import type { OktaPolicyType } from './useOktaApi/policyOperations';
@@ -96,8 +97,17 @@ export interface EntitySearchApi {
     | { kind: 'session-expired' }
     | { kind: 'failed'; status: number }
   >;
-  /** By-id rule lookup. */
-  getRawGroupRule: (id: string) => Promise<{ id: string; name?: string; status?: string } | null>;
+  /**
+   * By-id rule lookup.
+   *
+   * `status` is required and typed to the union, not `string | undefined`: the one
+   * supplier parses the response with `oktaGroupRuleSchema`, so a rule that reaches
+   * here has a status Okta stated. That is what lets the row's label be decided by an
+   * exhaustive switch with no "unknown status" arm to invent a word for (D-085).
+   */
+  getRawGroupRule: (
+    id: string,
+  ) => Promise<{ id: string; name?: string; status: GroupRuleStatus } | null>;
 }
 
 /** Options for {@link useEntitySearchSources}. */
@@ -295,7 +305,9 @@ export function useEntitySearchSources({
             kind: 'rule',
             id: rule.id,
             name: rule.name || rule.id,
-            secondary: rule.status === 'INACTIVE' ? 'Paused' : 'Active',
+            // Exhaustive over the status union, so an INVALID rule reads
+            // *Broken* rather than defaulting into *Active* (D-085).
+            secondary: ruleSearchSecondary(rule.status),
           }
         : null;
     },
