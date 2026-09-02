@@ -26,6 +26,15 @@
  * ({@link sidepanel/contexts/NavigationContext.EntityNavigation.canNavigateTo}),
  * so a link is never a control that does nothing.
  *
+ * ## Two entities, one name
+ *
+ * A display name is not unique — two groups, two rules, two app instances can
+ * legitimately share one (I-009). So the chip's accessible name folds the id in
+ * (`"Open <type> <name> (<id>)"`), the same convention the `copyId` control's
+ * derived default already used: the id is the one part guaranteed unique, and
+ * folding it in means two same-named chips stay distinguishable without either
+ * caller passing an override.
+ *
  * ## Copying the raw id
  *
  * Set `copyId` and the chip gains a sibling ghost copy control for the raw Okta id —
@@ -42,9 +51,8 @@
  */
 import React from 'react';
 import Icon, { type IconType } from '../shared/Icon';
-import IconButton from './IconButton';
+import CopyIconButton from './CopyIconButton';
 import { useEntityNavigation, type EntityType } from '../../contexts/NavigationContext';
-import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 
 /** The glyph that identifies each entity kind, from the shared `Icon` registry. */
 const typeIcon: Record<EntityType, IconType> = {
@@ -71,6 +79,11 @@ export interface EntityLinkProps {
   /**
    * The entity's Okta id. **Omit when the reference carries only a name**; the
    * chip then renders as plain text rather than as a control that cannot work.
+   * When present and the chip is linkable, the id is folded into the chip's
+   * own accessible name (`"Open <type> <name> (<id>)"`) for the same reason
+   * {@link EntityLinkProps.copyIdLabel}'s derived default folds it in (I-009):
+   * two entities can legitimately share a display name, and the id is the one
+   * part guaranteed unique.
    */
   id?: string;
   /** The visible name. Truncates rather than overflowing. */
@@ -91,8 +104,12 @@ export interface EntityLinkProps {
   copyId?: boolean;
   /**
    * Accessible name for that copy control, e.g. `"Copy group id"`. Defaults to
-   * `"Copy <type> id for <name>"` — several of these can share a screen, so the name
-   * has to say copy *what*, the way {@link CopyableId}'s required `label` does.
+   * `"Copy <type> id for <name> (<id>)"` — several of these can share a screen,
+   * so the name has to say copy *what*, the way {@link CopyableId}'s required
+   * `label` does. The id is folded into the default itself (not just the name)
+   * because two entities can legitimately share a display name (I-009); the id
+   * is guaranteed unique, so the derived default never collides even when the
+   * caller does not pass this prop.
    */
   copyIdLabel?: string;
   /** Extra classes merged after the chip classes. */
@@ -134,7 +151,6 @@ const EntityLink: React.FC<EntityLinkProps> = ({
   testId,
 }) => {
   const { navigateTo, canNavigateTo } = useEntityNavigation();
-  const { copied, copy } = useCopyToClipboard();
   const linkable = Boolean(id) && canNavigateTo(type);
 
   const chip = linkable ? (
@@ -143,6 +159,18 @@ const EntityLink: React.FC<EntityLinkProps> = ({
       onClick={() => navigateTo({ type, id: id as string })}
       // The visible name is contained in the accessible name (WCAG "Label in
       // Name"); the verb is what the chevron conveys visually.
+      //
+      // The id is folded in the same way `copyIdLabel`'s derived default
+      // folds it in (I-009): two entities can legitimately share a display
+      // name (this module's own header calls out the case), and the id is
+      // the one part guaranteed unique even when the caller passes no
+      // override at all.
+      // Deliberately NOT `${name} (${id})`. Folding the id in here makes every
+      // chip unique, but a screen reader then reads ~20 opaque characters on
+      // every row of every list to disambiguate a collision that is usually
+      // absent — a constant cost for a rare problem. The copy control below
+      // keeps its id because the id is the thing that control copies. Two
+      // same-named entities still sound alike when opened: see `D-107`.
       aria-label={`Open ${typeNoun[type]} ${name}`}
       title={`Open ${typeNoun[type]} ${name}`}
       data-testid={testId}
@@ -183,19 +211,10 @@ const EntityLink: React.FC<EntityLinkProps> = ({
   return (
     <span className="inline-flex min-w-0 max-w-full items-center gap-1">
       {chip}
-      <IconButton
-        label={copied ? 'Copied!' : (copyIdLabel ?? `Copy ${typeNoun[type]} id for ${name}`)}
-        onClick={() => copy(id)}
-        variant="ghost"
-        size="sm"
-        className="shrink-0"
-      >
-        <Icon
-          type={copied ? 'clipboard-check' : 'clipboard'}
-          size="sm"
-          className={copied ? 'text-success-text' : ''}
-        />
-      </IconButton>
+      <CopyIconButton
+        value={id}
+        label={copyIdLabel ?? `Copy ${typeNoun[type]} id for ${name} (${id})`}
+      />
     </span>
   );
 };

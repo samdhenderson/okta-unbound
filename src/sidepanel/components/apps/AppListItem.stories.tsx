@@ -60,8 +60,9 @@ export const Default: Story = {};
 
 /**
  * Expanded — the detail grid, the copyable application id, and the lazily-fetched
- * assignment counts. The copy control is named after the app (`Copy application id
- * for Salesforce`) because several rows can be open at once.
+ * assignment counts. The copy control is named after the app *and* its id
+ * (`Copy application id for Salesforce (0oaFAKE0001)`) because several rows can
+ * be open at once and two apps can share a display label (I-010).
  */
 export const Expanded: Story = {
   play: async ({ canvasElement }) => {
@@ -69,10 +70,45 @@ export const Expanded: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Expand' }));
     await waitFor(() =>
       expect(
-        canvas.getByRole('button', { name: 'Copy application id for Salesforce' }),
+        canvas.getByRole('button', {
+          name: `Copy application id for Salesforce (${salesforce.id})`,
+        }),
       ).toBeInTheDocument(),
     );
     await waitFor(() => expect(canvas.getByText('128 users')).toBeInTheDocument());
+  },
+};
+
+/**
+ * Two rows sharing a display label, different ids — legitimate in Okta (e.g. two
+ * app instances both labelled "Salesforce"). The copy control folds the id in, so
+ * the two stay distinguishable by accessible name alone (I-010). The
+ * Expand/Collapse control does not yet — see the comment on `AppListItem`'s
+ * `IconButton` label for why that half is a documented residual rather than
+ * fixed here.
+ */
+export const DuplicateLabelsStayDistinguishable: Story = {
+  render: (args) => (
+    <div className="space-y-2">
+      <AppListItem {...args} app={{ ...salesforce, id: '0oaFAKE0001' }} />
+      <AppListItem {...args} app={{ ...salesforce, id: '0oaFAKE0099' }} />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggles = canvas.getAllByRole('button', { name: 'Expand' });
+    expect(toggles).toHaveLength(2);
+    await userEvent.click(toggles[0]);
+    await userEvent.click(toggles[1]);
+
+    await waitFor(() =>
+      expect(
+        canvas.getByRole('button', { name: 'Copy application id for Salesforce (0oaFAKE0001)' }),
+      ).toBeInTheDocument(),
+    );
+    await expect(
+      canvas.getByRole('button', { name: 'Copy application id for Salesforce (0oaFAKE0099)' }),
+    ).toBeInTheDocument();
   },
 };
 

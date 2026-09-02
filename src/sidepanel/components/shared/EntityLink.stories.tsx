@@ -53,7 +53,7 @@ const meta = {
     },
     copyIdLabel: {
       description:
-        'Accessible name for that copy control. Defaults to “Copy <type> id for <name>”, since several can share a screen.',
+        'Accessible name for that copy control. Defaults to “Copy <type> id for <name> (<id>)”, since several can share a screen and the id is the one part guaranteed unique even when two entities share a name (I-009).',
     },
     className: { description: 'Extra classes merged after the chip classes.' },
     testId: { description: 'Optional test handle.' },
@@ -190,5 +190,21 @@ export const CopyIdWhenNotNavigable: Story = {
     <NavigationProvider handlers={{}}>
       <EntityLink type="policy" id="00pFAKEPOLICY001" name="Contractor MFA" copyId />
     </NavigationProvider>
+  ),
+};
+
+/**
+ * Two groups sharing a display name (legitimate in Okta — the same "one name can
+ * match groups from more than one source" case the module header calls out). Both
+ * the chip's `aria-label` and the copy control's derived default fold the id in,
+ * so all four controls stay distinguishable without either caller passing an
+ * override (I-009).
+ */
+export const DuplicateNamesStayDistinguishable: Story = {
+  render: () => (
+    <div className="flex flex-col items-start gap-2">
+      <EntityLink type="group" id="00gFAKEGROUP0001" name="Engineering" copyId />
+      <EntityLink type="group" id="00gFAKEGROUP0002" name="Engineering" copyId />
+    </div>
   ),
 };

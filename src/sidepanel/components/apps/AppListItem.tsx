@@ -141,13 +141,15 @@ const AppListItem: React.FC<AppListItemProps> = memo(
                       20-character app id lays out on one line and its
                       `truncate` never actually bites.
 
-                      The label names the app: several rows can be expanded at
-                      once, so a screenful of controls all called "Copy
-                      application id" would not say copy *which*.
+                      The label names the app and folds the id in (I-010):
+                      several rows can be expanded at once, so a screenful of
+                      controls all called "Copy application id" would not say
+                      copy *which* — and two apps can legitimately share a
+                      display label, so the name alone is not always enough.
                     */}
                     <CopyableId
                       value={app.id}
-                      label={`Copy application id for ${label}`}
+                      label={`Copy application id for ${label} (${app.id})`}
                       className="w-full"
                     />
                   </div>
@@ -221,6 +223,13 @@ const AppListItem: React.FC<AppListItemProps> = memo(
 
               <div className="flex items-center gap-1 shrink-0">
                 <IconButton
+                  // I-010 also names this control: unlike `PolicyCard`'s "Show
+                  // rules for <name>", this carries no app name at all, so two
+                  // rows are ambiguous by more than just a collision.
+                  // `appAssignmentsSharing.test.tsx` (outside this change's file
+                  // ownership) asserts this exact bare string, so widening it
+                  // is left as a documented residual alongside the disclosure
+                  // half of `PolicyCard`'s own I-010 fix.
                   label={expanded ? 'Collapse' : 'Expand'}
                   onClick={(e) => {
                     e.stopPropagation();

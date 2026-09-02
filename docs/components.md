@@ -43,17 +43,21 @@ info`) — never `error`.
 ## Catalog
 
 `shared/`: `Button`, `IconButton`, `StretchedButton`, `FilterPill`, `SortPill`,
-`CopyButton`, `CopyableId`, `OpenInOktaLink`, `Modal`, `Input`, `Checkbox`, `Select`,
+`CopyButton`, `CopyableId`, `CopyIconButton`, `OpenInOktaLink`, `Modal`, `Input`, `Checkbox`, `Select`,
 `Textarea`, `PageHeader`, `EntityIdentity`, `EntityLink`, `Badge`, `Breadcrumbs`, `Tabs`,
 `Tooltip`,
 `CollapsibleSection`, `DetailSection`, `ActionBar`, `AlertMessage`, `EmptyState`,
 `Eyebrow`, `StableWidth`, `LoadingSpinner`, `Skeleton`, `ListRow`, `ScrollableList`,
 `SearchDropdown`, `SelectionChips`.
 
-There are **two** copy primitives and they are not interchangeable. `CopyButton` is a
+There are **three** copy primitives and they are not interchangeable. `CopyButton` is a
 labelled `Button` for copying a _body_ of text (a list of emails, a CSV). `CopyableId` is
 a truncating `<code>` plus a ghost icon button, for a single identifier sitting in a line
-of metadata — never hand-roll that pair again.
+of metadata — never hand-roll that pair again. `CopyIconButton` is the ghost icon button
+on its own, with no `<code>` beside it, for a control that copies an id the surface is
+already displaying some other way (`EntityLink`'s `copyId`); `CopyableId` delegates to it,
+so the glyph swap and the ~1.5s `"Copied!"` accessible-name flip are decided in one place
+(D-015).
 
 `ListRow` is the **row chrome** primitive (ADR-0029): border, radius, hover,
 `density` (`compact` | `comfortable`), `state` (`default` | `selected` |
@@ -422,5 +426,10 @@ Two rules follow for any row-level fact:
 
 - **Unknown is not zero.** A count that has not been loaded yet renders as absent, not
   as `0` (e.g. `usedInRuleCount` before the rules payload is known).
-- **Keep the memo comparator in step.** Rows are `memo`ised with a custom comparator;
-  every newly rendered field must be added to it, or long lists render stale.
+- **Prefer a bare `memo(...)` over a hand-written comparator.** Rows (`RuleCard`,
+  `PolicyCard`, `GroupListItem`) are memoised with the default shallow compare, not a
+  custom field list — a hand-written comparator drifts the moment the row renders a
+  field it forgot to compare, which is a stale-UI bug, not a perf nit (`D-039`,
+  `D-045`). It works because each row's entity prop keeps stable per-id identity from
+  its list source; only add a custom comparator back with a measured reason, and keep
+  it enumerated against the render body if you do.
