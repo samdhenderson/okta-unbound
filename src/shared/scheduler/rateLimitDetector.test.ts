@@ -95,14 +95,70 @@ describe('RateLimitDetector', () => {
       expect(d.parseHeaders(headers('100', '', String(NOW_SECONDS + 60)), '/x')).toBeNull();
     });
 
-    it('yields NaN fields for malformed numeric headers but still stores them', () => {
+    // ADR-0022 note: this case used to be titled "yields NaN fields for
+    // malformed numeric headers but still stores them" and asserted
+    // `Number.isNaN` on all three fields — it pinned the *bug* D-086 names, not
+    // a contract. It is retargeted, not deleted: the same input (truthy,
+    // non-numeric headers that clear the presence guard and reach the numeric
+    // parse) is still exercised, and the assertions now name the safe outcome.
+    // What stays covered: malformed-but-present headers are distinguishable
+    // from absent ones and are handled explicitly. What changed: the
+    // observation is no longer recorded, so "unreadable" is the module's
+    // existing "unknown" — an absent entry — instead of a stored NaN that read
+    // as calm at every threshold comparison.
+    it('treats malformed numeric headers as unknown and records nothing', () => {
       const d = new RateLimitDetector();
-      // Non-numeric but truthy strings pass the presence guard; parseInt → NaN.
-      const info = d.parseHeaders(headers('abc', 'xyz', 'nope'), '/api/v1/malformed');
-      expect(info).not.toBeNull();
-      expect(Number.isNaN(info!.limit)).toBe(true);
-      expect(Number.isNaN(info!.remaining)).toBe(true);
-      expect(Number.isNaN(info!.reset)).toBe(true);
+      expect(d.parseHeaders(headers('abc', 'xyz', 'nope'), '/api/v1/malformed')).toBeNull();
+
+      // Unknown is the absent entry — the same shape as a bucket never seen.
+      expect(d.getForBucket('/api/v1/malformed')).toBeNull();
+      expect(d.getMostRestrictive()).toBeNull();
+      expect(d.getState().bucketLimits).toHaveLength(0);
+      // Unknown is not exhaustion either, so it can never stall the queue on a
+      // reset time nobody can compute.
+      expect(d.isLimitExceeded('/api/v1/malformed')).toBe(false);
+      expect(d.getRecommendedWaitTime()).toBe(0);
+    });
+
+    it('rejects the whole observation when a single field is unreadable', () => {
+      const d = new RateLimitDetector();
+      // A budget with no readable reset can never expire; a reset with no
+      // readable budget cannot be judged against a threshold.
+      expect(d.parseHeaders(headers('100', '5', 'nope'), '/api/v1/apps')).toBeNull();
+      expect(
+        d.parseHeaders(headers('abc', '5', String(NOW_SECONDS + 60)), '/api/v1/apps'),
+      ).toBeNull();
+      expect(
+        d.parseHeaders(headers('100', 'xyz', String(NOW_SECONDS + 60)), '/api/v1/apps'),
+      ).toBeNull();
+      expect(d.getState().bucketLimits).toHaveLength(0);
+    });
+
+    it('does not let an unreadable observation mask real pressure in the global backstop', () => {
+      const d = new RateLimitDetector();
+      // Order matters: the unreadable one lands first, so under the old code it
+      // seeded the recomputed global and — never expiring, never losing a
+      // NaN comparison — reported calm forever while /api/v1/apps sat at 5%.
+      d.parseHeaders(headers('abc', 'xyz', 'nope'), '/api/v1/malformed');
+      d.parseHeaders(headers('100', '5', String(NOW_SECONDS + 60)), '/api/v1/apps');
+
+      expect(d.getMostRestrictive()?.bucket).toBe('/api/v1/apps');
+      expect(d.isApproachingLimit(10)).toBe(true);
+    });
+
+    it('keeps the last good observation when a later response for the bucket is unreadable', () => {
+      const d = new RateLimitDetector();
+      d.parseHeaders(headers('100', '5', String(NOW_SECONDS + 60)), '/api/v1/apps?limit=200');
+      expect(
+        d.parseHeaders(
+          headers('100', 'xyz', String(NOW_SECONDS + 60)),
+          '/api/v1/apps/0oaFAKE1/groups',
+        ),
+      ).toBeNull();
+
+      // The newest *readable* answer still stands; garbage does not overwrite it.
+      expect(d.getForBucket('/api/v1/apps')?.remaining).toBe(5);
+      expect(d.isApproachingLimit(10, 0, '/api/v1/apps')).toBe(true);
     });
 
     it('tracks the most restrictive endpoint across multiple endpoints', () => {

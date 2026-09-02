@@ -9,7 +9,10 @@
  * - `X-Rate-Limit-Reset` — Unix timestamp (seconds) when the window resets
  *
  * Tracks limits **per Okta rate-limit bucket** plus a most-restrictive global
- * view, expiring entries once their reset time passes.
+ * view, expiring entries once their reset time passes. A header set that is
+ * absent or unreadable is recorded as nothing at all — see
+ * {@link RateLimitDetector.parseHeaders} for why "unknown" is an absent entry
+ * rather than a stored number.
  *
  * @see {@link https://developer.okta.com/docs/reference/rate-limits/ | Okta rate limits}
  * @see `ApiScheduler`
@@ -22,6 +25,23 @@ const log = createLogger('RateLimitDetector');
 
 /** Matches the first resource segment of an `/api/v1/{resource}` path. */
 const API_V1_RESOURCE = /^\/api\/v1\/([^/]+)/;
+
+/**
+ * Parse one `X-Rate-Limit-*` value, or `null` when it is not a finite number.
+ *
+ * `parseInt` answers `NaN` for anything it cannot read, and `NaN` poisons every
+ * comparison the scheduler makes: `NaN <= threshold` is `false`, so an
+ * unreadable budget used to read as *calm* and no cooldown was taken. Returning
+ * `null` forces the caller to decide explicitly rather than letting the bad
+ * value flow into arithmetic. (`D-086`)
+ *
+ * @param value - A raw header value that has already passed the presence guard.
+ * @returns The parsed integer, or `null` for "unknown".
+ */
+function parseCount(value: string): number | null {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 /**
  * The Okta rate-limit bucket an endpoint's quota belongs to.
@@ -60,7 +80,30 @@ export class RateLimitDetector {
   private globalLimit: RateLimitInfo | null = null;
 
   /**
-   * Parse rate limit headers from an Okta API response
+   * Parse rate limit headers from an Okta API response.
+   *
+   * **A header set that is absent, or that does not parse to finite numbers, is
+   * "unknown" — and unknown is represented by recording nothing at all.** There
+   * is exactly one way to say "I have no reading for this bucket" in this
+   * module, and it is the absence of an entry: `getForBucket` answers `null`,
+   * `isApproachingLimit`/`isLimitExceeded` decline to judge, and `ApiScheduler`
+   * treats the bucket as *unobserved*, gating it on the most-restrictive
+   * observation anywhere (`gateKeyFor` → `GLOBAL_GATE`). So an unreadable
+   * budget reads neither as spare capacity nor as a hard zero that would stall
+   * the queue on a reset time nobody can compute.
+   *
+   * The alternative — storing the `NaN`s — was the `D-086` bug: the entry could
+   * never expire (`now >= NaN` is `false`), it could win the most-restrictive
+   * comparison by default and mask a genuinely low bucket forever, and it
+   * overwrote the last good observation for its own bucket. Declining to record
+   * it leaves the previous, readable answer standing, which is the conservative
+   * direction.
+   *
+   * @param headers - Lower-cased response headers from the content script.
+   * @param endpoint - The Okta path the response came from; bucketed with
+   * {@link bucketOf} before storage.
+   * @returns The recorded observation, or `null` when the headers are missing or
+   * unreadable.
    */
   parseHeaders(headers: Record<string, string>, endpoint: string): RateLimitInfo | null {
     const limit = headers['x-rate-limit-limit'];
@@ -72,11 +115,30 @@ export class RateLimitDetector {
       return null;
     }
 
+    const parsed = {
+      limit: parseCount(limit),
+      remaining: parseCount(remaining),
+      reset: parseCount(reset),
+    };
+
+    if (parsed.limit === null || parsed.remaining === null || parsed.reset === null) {
+      // One unreadable field invalidates the whole observation: a budget without
+      // a reset can never expire, and a reset without a budget cannot be judged
+      // against a threshold. Field names only — never the header values.
+      log.warn('Unreadable rate limit headers; leaving the bucket unobserved:', {
+        endpoint: endpoint.split('?')[0],
+        fields: (Object.keys(parsed) as Array<keyof typeof parsed>).filter(
+          (field) => parsed[field] === null,
+        ),
+      });
+      return null;
+    }
+
     const bucket = bucketOf(endpoint);
     const info: RateLimitInfo = {
-      limit: parseInt(limit, 10),
-      remaining: parseInt(remaining, 10),
-      reset: parseInt(reset, 10),
+      limit: parsed.limit,
+      remaining: parsed.remaining,
+      reset: parsed.reset,
       endpoint,
       bucket,
       timestamp: Date.now(),
