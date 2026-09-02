@@ -122,47 +122,6 @@ block says they mean — same vocabulary, one definition, defined there.
   a comment and the residual is filed as `D-107`. Close this item only when the
   chip disambiguates _conditionally_, per `D-107`.
 
-### I-010 · The `Copy <type> id for <name>` label still collides on duplicate names
-
-- **Category:** ux
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/sidepanel/components/RuleCard.tsx:317`,
-  `src/sidepanel/components/policies/PolicyCard.tsx:101`,
-  `src/sidepanel/components/apps/AppListItem.tsx:148`,
-  `src/sidepanel/components/apps/AppListItem.tsx` (the expand/collapse
-  `IconButton`, labelled bare `Expand`/`Collapse`)
-- **Problem:** `I-004` gave three id rows a copy control named
-  `Copy <type> id for <name>`, and handled the empty-name case by falling back
-  to the id. It does **not** handle two entities sharing a non-empty display
-  name — two rules named the same, two app instances both labelled
-  "Salesforce" — which is legitimate in Okta and is the same defect `I-009`
-  already pins on `EntityLink`. With both rows expanded, the two copy controls
-  carry an identical accessible name with nothing to tell them apart. Raised
-  by `ui-reviewer` on PR #74 as advisory, alongside a second instance one
-  control over: `AppListItem`'s disclosure button is labelled just
-  `Expand`/`Collapse` with no app name at all, where `PolicyCard` next door
-  does it correctly (`Show rules for ${name}`).
-- **Done when:** Two rows of the same type with the same non-empty name but
-  different ids expose distinguishable accessible names on both their copy and
-  their disclosure controls, with a story covering the duplicate-name case.
-  Decide alongside `I-009` whether the answer is a shared naming helper or a
-  per-call-site convention — they are the same problem and should not get two
-  different fixes.
-- **Risk:** Low.
-- **Status:** done:#118
-- **Related:** `I-009` (same defect on `EntityLink`'s derived
-  `copyIdLabel` default), `I-004` (introduced these three call sites)
-
-- **Closed by #118.** The three copy controls (`RuleCard`, `PolicyCard`,
-  `AppListItem`) name the entity and its id. The disclosure half was finished
-  in the same PR under `D-103`: `AppListItem` and `GroupListItem` went from a
-  bare `Expand`/`Collapse` to naming their row. The residue is narrower than
-  this item and belongs to `D-107` — two entities that genuinely share a
-  display name still sound alike, on chips and on `PolicyCard`'s toggle alike,
-  and `D-107` now carries the agreed mechanism for disambiguating **only** the
-  rows that collide.
-
 ### I-011 · A truncated list-row name has no way to reveal itself
 
 - **Category:** ux
@@ -894,43 +853,6 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Status:** open
 - **Related:** ADR-0040, ADR-0062
 
-### I-035 · `ContextBar`'s "Unpin & switch" is a raw `<button>` on nobody's list
-
-- **Category:** architecture
-- **Priority:** P3
-- **Size:** S
-- **Files:** `src/sidepanel/components/ContextBar.tsx:207-213`,
-  `docs/components.md` (the §3 documented-exception list)
-- **Verified:** 2026-09-02 — spotted by the `I-034` writer while evaluating
-  `ContextBar` as a home for the ⌘K affordance, then confirmed directly: it is
-  the only raw `<button>` in the file, and it carries no `§3 exception`
-  comment.
-- **Problem:** `CLAUDE.md` bans hand-rolled `<button>`s outside the exceptions
-  `docs/components.md` §3 records, and each surviving raw control is supposed
-  to carry an inline `§3 exception` marker at its call site. The
-  "Unpin & switch" control in the live-context-changed hint is a raw
-  `<button type="button">` with `font-semibold underline hover:no-underline`,
-  and it has neither: it is absent from the exception list and unmarked in the
-  file.
-
-  It is not a rogue control so much as an unlisted member of a class the doc
-  already knows about. §3's "awaiting a new shared primitive" bullet describes
-  chromeless **text-links** exactly like this one and names
-  `GroupFilterPanel`, `AttributeFacet` and `ComparisonOverviewTab` as the
-  sites a future `TextLink` would discharge. `ContextBar` belongs in that
-  enumeration and is missing from it, which is the part that actually costs
-  something: the list is what a future `TextLink` change would be scoped
-  against, so a site absent from it is a site that migration would miss.
-
-- **Done when:** either `ContextBar` is added to §3's text-link enumeration
-  and its call site carries the inline `§3 exception` comment the convention
-  requires, or — if `TextLink` is built first — it is migrated with the other
-  three. Not both, and the choice is a scoping call about `TextLink`, not
-  about this file.
-- **Risk:** Low. Documentation and a comment, unless `TextLink` lands first.
-- **Status:** done:#118
-- **Related:** `I-034` (found it), `docs/components.md` §3
-
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk
@@ -941,6 +863,13 @@ uniqueness guard in `scripts/check-cited-paths.mjs` enforces this across both
 ledgers). See `SESSION.md` step 7 and `CLAUDE.md`'s "Nightly maintenance
 system" section for when an item moves here.
 
+A line that links a **PR** rather than a commit was archived while that PR was
+still in flight, so its squash-merge sha did not exist yet. Replace the PR link
+with the commit link once it lands; until then the PR is the reference. Nothing
+downstream reads the link, so a stale one is a documentation debt, not a build
+failure — but an id here is retired either way, so only archive an item whose
+PR you expect to land.
+
 - **I-001** — A reusable resolved-name badge with copy + open — done:#68 ([808ab30](https://github.com/samdhenderson/okta-unbound/commit/808ab30))
 - **I-002** — Resolve group ids inside rule-condition expression text — done:#94 ([ca07a02](https://github.com/samdhenderson/okta-unbound/commit/ca07a02))
 - **I-003** — Extend the id badge to RuleCard and push-mapping fallbacks — done:#95 ([3930f4b](https://github.com/samdhenderson/okta-unbound/commit/3930f4b))
@@ -948,6 +877,8 @@ system" section for when an item moves here.
 - **I-005** — Compare Users view has no scroll preservation — done:#68 ([808ab30](https://github.com/samdhenderson/okta-unbound/commit/808ab30))
 - **I-006** — Lead the Compare view's diff-filter pills with "All" — done:#75 ([9d71a26](https://github.com/samdhenderson/okta-unbound/commit/9d71a26))
 - **I-007** — Normalize verdict-badge placement in GroupMembershipRow — done:#75 ([9d71a26](https://github.com/samdhenderson/okta-unbound/commit/9d71a26))
+- **I-010** — The `Copy <type> id for <name>` label still collides on duplicate names — done:#118 ([PR #118](https://github.com/samdhenderson/okta-unbound/pull/118))
 - **I-013** — Create a feeding rule from the Group Detail action bar — done:#107 ([069ef48](https://github.com/samdhenderson/okta-unbound/commit/069ef48))
 - **I-030** — The Groups list strip has no `primary`, and reads as six equal buttons — done:#113 ([1d54e77](https://github.com/samdhenderson/okta-unbound/commit/1d54e77))
 - **I-034** — ⌘K is the only route to two sections, and nothing points at it — done:#117 ([4c28cd2](https://github.com/samdhenderson/okta-unbound/commit/4c28cd2))
+- **I-035** — `ContextBar`'s "Unpin & switch" is a raw `<button>` on nobody's list — done:#118 ([PR #118](https://github.com/samdhenderson/okta-unbound/pull/118))
