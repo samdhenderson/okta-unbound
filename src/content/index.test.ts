@@ -322,7 +322,11 @@ describe('makeApiRequest response shapes', () => {
     return response;
   }
 
-  it('200 JSON → success with data, lowercase headers and status', async () => {
+  // RETARGETED (D-087): this case asserted that `content-type` rode along with
+  // `x-rate-limit-remaining` in the forwarded bag. The bag is now an allow-list of
+  // the five keys with named consumers, so `content-type` is deliberately absent;
+  // the lowercase-casing contract it also pinned is unchanged and still asserted.
+  it('200 JSON → success with data, lowercase allow-listed headers and status', async () => {
     fetchMock.mockResolvedValue(
       res({ hello: 'world' }, { headers: { 'X-Rate-Limit-Remaining': '99' } }),
     );
@@ -332,10 +336,7 @@ describe('makeApiRequest response shapes', () => {
     expect(result).toEqual({
       success: true,
       data: { hello: 'world' },
-      headers: expect.objectContaining({
-        'content-type': 'application/json',
-        'x-rate-limit-remaining': '99',
-      }),
+      headers: { 'x-rate-limit-remaining': '99' },
       status: 200,
     });
     // The background rateLimitDetector indexes lowercase keys — casing is load-bearing.
@@ -354,7 +355,11 @@ describe('makeApiRequest response shapes', () => {
     expect(result).toEqual({
       success: true,
       data: null,
-      headers: expect.objectContaining({ 'content-type': 'text/html' }),
+      // RETARGETED (D-087): was `expect.objectContaining({ 'content-type': 'text/html' })`.
+      // `content-type` is read off the live `Response` inside `apiRequest` and has no
+      // consumer past the message boundary, so it is no longer forwarded; the behavior
+      // this case is actually about — a non-JSON body is never read — is untouched.
+      headers: {},
       status: 200,
     });
     expect(jsonSpy).not.toHaveBeenCalled();
@@ -860,9 +865,16 @@ describe('getAppInfo', () => {
     expect(fetchedEndpoints()).toEqual([]);
   });
 
-  it('falls back to the API name, then label, then "Unknown" (no zod validation here)', async () => {
+  // RETARGETED (D-062): this case's title used to read "(no zod validation here)"
+  // and its fixture omitted `id`, which is what let it assert that an unvalidated
+  // payload was read field-by-field. The handler now parses with
+  // `oktaAppListItemSchema` (ADR-0006), so the fixture is a realistic
+  // `GET /api/v1/apps/{id}` payload and the same name→label→"Unknown" ladder is
+  // still what is asserted. The behavior the old title conceded is now pinned by
+  // the two degrade cases below.
+  it('falls back to the API name, then label, then "Unknown" (payload zod-validated)', async () => {
     setPageUrl(`/admin/app/${APP_ID}`);
-    routeFetch([[`/api/v1/apps/${APP_ID}`, () => res({ label: 'Only Label' })]]);
+    routeFetch([[`/api/v1/apps/${APP_ID}`, () => res({ id: APP_ID, label: 'Only Label' })]]);
 
     await expect(send({ action: 'getAppInfo' }).response).resolves.toEqual({
       success: true,
@@ -873,13 +885,40 @@ describe('getAppInfo', () => {
     expect(fetchedEndpoints()).toEqual([`/api/v1/apps/${APP_ID}`]);
   });
 
-  it('API success with an empty payload → appName "Unknown"', async () => {
+  it('API success with a valid but nameless payload → appName "Unknown"', async () => {
     setPageUrl(`/admin/app/${APP_ID}`);
-    routeFetch([[`/api/v1/apps/${APP_ID}`, () => res({ unrelated: 1 })]]);
+    routeFetch([[`/api/v1/apps/${APP_ID}`, () => res({ id: APP_ID, unrelated: 1 })]]);
 
     await expect(send({ action: 'getAppInfo' }).response).resolves.toEqual({
       success: true,
       data: { appId: APP_ID, appName: 'Unknown', appLabel: undefined },
+    });
+  });
+
+  it('a payload that fails validation degrades to "Unknown" instead of being read raw (D-062)', async () => {
+    setPageUrl(`/admin/app/${APP_ID}`);
+    // No `id` — `oktaAppListItemSchema` requires it, so `parseOkta` throws and the
+    // handler degrades exactly as a failed request does. Before D-062 the handler
+    // read `.label` straight off the unvalidated payload and answered 'Only Label'.
+    routeFetch([[`/api/v1/apps/${APP_ID}`, () => res({ label: 'Only Label' })]]);
+
+    await expect(send({ action: 'getAppInfo' }).response).resolves.toEqual({
+      success: true,
+      data: { appId: APP_ID, appName: 'Unknown', appLabel: undefined },
+    });
+  });
+
+  it('degrades one unexpected identity field without losing the rest of the payload', async () => {
+    setPageUrl(`/admin/app/${APP_ID}`);
+    // `name` is `.catch(undefined)` in the schema, so a non-string does not sink the
+    // whole parse — the label still answers (ADR-0006: degrade, never crash).
+    routeFetch([
+      [`/api/v1/apps/${APP_ID}`, () => res({ id: APP_ID, name: 123, label: 'Real Label' })],
+    ]);
+
+    await expect(send({ action: 'getAppInfo' }).response).resolves.toEqual({
+      success: true,
+      data: { appId: APP_ID, appName: 'Real Label', appLabel: 'Real Label' },
     });
   });
 
@@ -906,7 +945,7 @@ describe('getAppInfo', () => {
   it('accepts any segment >= 18 chars even without the 0oa prefix', async () => {
     const loose = 'abcdefghijklmnopqrstuv';
     setPageUrl(`/admin/apps/${loose}`);
-    routeFetch([[`/api/v1/apps/${loose}`, () => res({ name: 'Loose' })]]);
+    routeFetch([[`/api/v1/apps/${loose}`, () => res({ id: loose, name: 'Loose' })]]);
 
     await expect(send({ action: 'getAppInfo' }).response).resolves.toMatchObject({
       data: { appId: loose, appName: 'Loose' },

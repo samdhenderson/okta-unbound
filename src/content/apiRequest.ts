@@ -26,6 +26,53 @@ const log = createLogger('Content');
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
 /**
+ * The only response headers that cross the message boundary to the background.
+ *
+ * An allow-list rather than the whole bag (D-087). The Fetch API already hides
+ * `set-cookie`, and no header value is logged anywhere, so forwarding everything
+ * leaked nothing today — but it put a bag of unfiltered response metadata one
+ * careless `log.debug` away from disclosure, on every response rather than some.
+ * Narrowing it to what is actually read means a future logger can only ever spill
+ * five counters and a pagination cursor.
+ *
+ * Every entry has a named consumer, and adding one means naming its consumer here:
+ * - `x-rate-limit-limit` / `-remaining` / `-reset` —
+ *   `shared/scheduler/rateLimitDetector.parseHeaders`, which indexes these exact
+ *   lowercase keys.
+ * - `link` — every paginated walk (`nextPageUrl` in the export engine, the group
+ *   rules walk, the user-groups walk).
+ * - `x-total-count` — `shared/snapshot/syncMeta.readTotalCount` and the app-users
+ *   count probe, which use it to avoid walking a collection at all.
+ *
+ * Lowercase is load-bearing: `Headers.get` is case-insensitive on the way in, and
+ * `RateLimitDetector` reads lowercase keys on the way out.
+ */
+const FORWARDED_RESPONSE_HEADERS = [
+  'x-rate-limit-limit',
+  'x-rate-limit-remaining',
+  'x-rate-limit-reset',
+  'link',
+  'x-total-count',
+] as const;
+
+/**
+ * Project a response's headers down to {@link FORWARDED_RESPONSE_HEADERS}.
+ *
+ * @param source - The live `Response.headers`.
+ * @returns A bag holding only the allow-listed keys that were present, lowercased.
+ * Absent headers are omitted rather than set to `''`, because `RateLimitDetector`
+ * and `readTotalCount` both treat an empty string differently from absence.
+ */
+function collectForwardedHeaders(source: Response['headers']): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const name of FORWARDED_RESPONSE_HEADERS) {
+    const value = source.get(name);
+    if (value !== null) headers[name] = value;
+  }
+  return headers;
+}
+
+/**
  * Build a failure response that never had an HTTP status to report — a rejected
  * boundary guard, or a `fetch` that threw.
  *
@@ -145,11 +192,8 @@ export async function handleMakeApiRequest(
       ok: response.ok,
     });
 
-    // Parse response headers
-    const headers: Record<string, string> = {};
-    response.headers.forEach((value, key) => {
-      headers[key] = value;
-    });
+    // Only the headers a consumer actually reads leave this script (D-087).
+    const headers = collectForwardedHeaders(response.headers);
 
     // Handle DELETE requests (empty response)
     if (normalizedMethod === 'DELETE' && response.ok) {

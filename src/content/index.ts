@@ -39,7 +39,7 @@
 
 import type { AppInfo, MessageRequest, MessageResponse, PolicyInfo } from '../shared/types';
 import { createLogger } from '../shared/utils/logger';
-import { oktaPolicyListItemSchema, parseOkta } from '../shared/schemas/okta';
+import { oktaAppListItemSchema, oktaPolicyListItemSchema, parseOkta } from '../shared/schemas/okta';
 import {
   extractAppIdFromUrl,
   extractAppNameFromPage,
@@ -175,7 +175,9 @@ if (!isDuplicateInjection) {
  *
  * The id comes from the URL and the name from the page heading; a single
  * `GET /api/v1/apps/{id}` read runs **only when the DOM came up empty**, in the
- * same shape as {@link handleGetGroupInfo}. This handler is on the `ContextBar`
+ * same shape as {@link handleGetGroupInfo}. That payload is zod-validated
+ * (`oktaAppListItemSchema`) before any field is read — a validation failure, like a
+ * failed request, degrades silently to the URL/DOM data (D-062, ADR-0006). This handler is on the `ContextBar`
  * masthead's feed, which re-detects on every navigation of the live Okta tab, so
  * an unconditional read cost one request per app page visited (D-059).
  *
@@ -216,8 +218,16 @@ async function handleGetAppInfo(): Promise<MessageResponse<AppInfo>> {
       try {
         const response = await handleMakeApiRequest(`/api/v1/apps/${appId}`, 'GET');
         if (response.success && response.data) {
-          appName = response.data.name || response.data.label || 'Unknown';
-          appLabel = response.data.label;
+          // ADR-0006: the payload is validated before any field is read, the same
+          // way handleGetPolicyInfo validates its own (D-062). `oktaAppListItemSchema`
+          // is the lenient app contract — only `id` is required and every identity
+          // field is `.catch(undefined)` — and it is reused rather than redeclared so
+          // this handler cannot drift from the schema the app walks already trust.
+          // A validation miss throws out to the `catch` below, which degrades to the
+          // URL/DOM data exactly as a failed request does; it never breaks detection.
+          const app = parseOkta(oktaAppListItemSchema, response.data, 'GET /api/v1/apps/{id}');
+          appName = app.name || app.label || 'Unknown';
+          appLabel = app.label;
           log.debug('Fetched app details from API', {
             hasName: Boolean(appName),
             hasLabel: Boolean(appLabel),
@@ -255,11 +265,23 @@ async function handleGetAppInfo(): Promise<MessageResponse<AppInfo>> {
 /**
  * Resolve the current page's authentication/access policy ID, name and status.
  *
- * Mirrors {@link handleGetAppInfo}: the id comes from the URL, the name is scraped
- * from the page heading (page wins), and a single `GET /api/v1/policies/{id}` read
- * fills in whatever the page did not supply. Unlike the app handler the API payload
- * is zod-validated (`oktaPolicyListItemSchema`) before any field is read — a
- * validation failure, like a failed request, degrades silently to the URL/DOM data.
+ * The id comes from the URL, the name is scraped from the page heading (page wins),
+ * and a single `GET /api/v1/policies/{id}` read fills in whatever the page did not
+ * supply. The payload is zod-validated (`oktaPolicyListItemSchema`) before any field
+ * is read — a validation failure, like a failed request, degrades silently to the
+ * URL/DOM data.
+ *
+ * **This handler does NOT mirror {@link handleGetAppInfo}'s request policy, and the
+ * difference is the point.** The app handler fetches only when the DOM comes up
+ * empty (D-059); this one fetches on every policy page, because it also wants
+ * `policyStatus`, which no selector can scrape. What that request buys is currently
+ * unread: enumerating `PolicyInfo.policyStatus`'s consumers across `src/` finds
+ * none — `App.tsx` reads `policyInfo.policyName` for the masthead and nothing else
+ * touches the field (D-070). So the unconditional read is **not** justified by a
+ * live consumer today; it is left in place here rather than removed because making
+ * it conditional is a behavior change that belongs to its own perf item, on the
+ * evidence D-059 required. Do not describe this handler as mirroring the app one
+ * until that item lands.
  *
  * Read-only and identity-only: nothing here scrapes policy settings or rules out of
  * the page markup.

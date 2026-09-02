@@ -14,6 +14,11 @@
  * headers must survive the `!response.ok` return, since the background
  * `RateLimitDetector` is the only consumer that can act on them.
  *
+ * And which headers cross at all (D-087): the bag is an allow-list of the five keys
+ * with named consumers, so the suite asserts an EXACT key set (what is absent is the
+ * point) and re-runs the two consumers — the rate-limit detector and the paginator —
+ * against a narrowed bag to prove the narrowing did not break them.
+ *
  * Network is stubbed at `globalThis.fetch` rather than via MSW, matching
  * `content/index.test.ts` (MSW is not used in this repo, and a rejecting fetch
  * is not observable through a handler).
@@ -22,6 +27,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { handleMakeApiRequest, isSameOriginPath } from './apiRequest';
 import { NO_HTTP_STATUS } from '../shared/scheduler/requestResult';
 import { RateLimitDetector } from '../shared/scheduler/rateLimitDetector';
+import { nextPageUrl } from '../shared/utils/oktaPagination';
+import { readTotalCount } from '../shared/snapshot/syncMeta';
 
 const fetchMock = vi.fn();
 
@@ -114,6 +121,76 @@ describe('handleMakeApiRequest failure statuses', () => {
     const result = await handleMakeApiRequest('/api/v1/apps/0oaFAKE1');
 
     expect(result).toMatchObject({ success: true, status: 200, data: { id: '0oaFAKE1' } });
+  });
+});
+
+describe('forwarded response headers (D-087)', () => {
+  /**
+   * RETARGETED from the pinning case this suite started as, whose assertion read
+   * `expect(result.headers).toHaveProperty('x-okta-request-id')` — it documented the
+   * whole-bag forward that D-087 exists to close. The behavior it pinned is now
+   * asserted in the opposite direction below.
+   */
+  it('forwards ONLY the keys a consumer reads, dropping the rest of the bag', async () => {
+    fetchMock.mockResolvedValue(
+      res({ ok: true }, 200, {
+        'X-Rate-Limit-Limit': '600',
+        'X-Rate-Limit-Remaining': '99',
+        'X-Rate-Limit-Reset': '1700000000',
+        'X-Total-Count': '42',
+        Link: '<https://example.okta.com/api/v1/apps?after=2>; rel="next"',
+        // None of the below has a consumer anywhere in `src/`.
+        'X-Okta-Request-Id': 'reqFAKE1',
+        'X-Okta-Version': '2026.01.0',
+        'Cache-Control': 'no-cache',
+        Vary: 'Accept-Encoding',
+      }),
+    );
+
+    const result = await handleMakeApiRequest('/api/v1/apps');
+
+    // An exact key set, not a superset: the point of the change is what is ABSENT.
+    expect(Object.keys(result.headers ?? {}).sort()).toEqual([
+      'link',
+      'x-rate-limit-limit',
+      'x-rate-limit-remaining',
+      'x-rate-limit-reset',
+      'x-total-count',
+    ]);
+    // `content-type` is read off the live `Response` inside this module and is
+    // deliberately not forwarded; nothing downstream branches on it.
+    expect(result.headers).not.toHaveProperty('content-type');
+  });
+
+  it('omits an absent allow-listed header rather than sending an empty string', async () => {
+    fetchMock.mockResolvedValue(res({ ok: true }, 200, { 'X-Rate-Limit-Remaining': '99' }));
+
+    const result = await handleMakeApiRequest('/api/v1/apps');
+
+    expect(result.headers).toEqual({ 'x-rate-limit-remaining': '99' });
+    expect(result.headers).not.toHaveProperty('x-total-count');
+  });
+
+  it('keeps the paginator working: the `link` header still resolves a next page', async () => {
+    fetchMock.mockResolvedValue(
+      res([{ id: '0oaFAKE1' }], 200, {
+        Link: '<https://example.okta.com/api/v1/apps?after=0oaFAKE1&limit=200>; rel="next"',
+      }),
+    );
+
+    const result = await handleMakeApiRequest('/api/v1/apps?limit=200');
+
+    expect(nextPageUrl('/api/v1/apps?limit=200', result.headers?.link, 1)).toBe(
+      '/api/v1/apps?after=0oaFAKE1&limit=200',
+    );
+  });
+
+  it('keeps the count probe working: `x-total-count` still reads', async () => {
+    fetchMock.mockResolvedValue(res([], 200, { 'X-Total-Count': '9814' }));
+
+    const result = await handleMakeApiRequest('/api/v1/apps/0oaFAKE1/users?limit=1');
+
+    expect(readTotalCount(result.headers)).toBe(9814);
   });
 });
 
