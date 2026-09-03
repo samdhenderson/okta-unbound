@@ -134,6 +134,14 @@
  * list down by a row *under the pointer that was ticking it*, which is the
  * specific defect this shape exists to avoid.
  *
+ * **It renders one size down.** Its buttons are `xs` (24px) against the action
+ * row's `sm` (36px). The tonal step says the two rows are different surfaces;
+ * the size step says which one is subordinate — without it a register holding
+ * `Select all (247)`, `Deselect all` and `Compare (3)` is simply the widest,
+ * loudest thing in the band, and the page's own verbs above it read as the
+ * afterthought. Both the visible row and its probe take the size from one
+ * constant, because a probe measuring a different button measures nothing.
+ *
  * **It overflows independently.** The register runs its own
  * {@link sidepanel/components/shared/useActionOverflow.useActionOverflow} pass
  * against its own width, so a wide selection verb pushes a *selection* verb into
@@ -150,7 +158,7 @@
  * does not reorder them.
  */
 import React, { useCallback, useId, useRef, useState } from 'react';
-import Button, { type ButtonVariant } from './Button';
+import Button, { type ButtonSize, type ButtonVariant } from './Button';
 import type { IconType } from '../shared/Icon';
 import { useActionOverflow } from './useActionOverflow';
 
@@ -303,6 +311,16 @@ const splitByPriority = (
 };
 
 /**
+ * The register renders one size below the action row (24px against 36px).
+ * Selection controls are furniture around the list — how many rows are ticked,
+ * how to stop ticking them — and at the row's own size they read as the loudest
+ * thing in the band, which is exactly backwards: the page's verbs sit above
+ * them. Declared once because the visible row and its measurement probe must
+ * agree; see {@link MeasureProbe}.
+ */
+const REGISTER_BUTTON_SIZE = 'xs' as const;
+
+/**
  * One action's button, wrapped so the wrapper can carry the measurement and
  * focus-recovery handles. `Button` takes an explicit prop list rather than
  * spreading, so `data-action-id` cannot go on it directly; an `inline-flex` span
@@ -318,7 +336,9 @@ const Action: React.FC<{
   /** Overridden to `secondary` in the tier: a filled primary inside a
       disclosure is a second focal point competing with the real one. */
   variant?: ButtonVariant;
-}> = ({ action, compact = false, measure, variant }) => (
+  /** `xs` in the selection register; `sm` — the strip's default — everywhere else. */
+  size?: ButtonSize;
+}> = ({ action, compact = false, measure, variant, size = 'sm' }) => (
   <span
     className="inline-flex"
     data-action-id={action.id}
@@ -327,7 +347,7 @@ const Action: React.FC<{
   >
     <Button
       variant={variant ?? action.variant ?? 'secondary'}
-      size="sm"
+      size={size}
       {...(compact || !action.icon ? {} : { icon: action.icon })}
       onClick={action.onClick}
       disabled={action.disabled ?? false}
@@ -356,7 +376,10 @@ const MeasureProbe: React.FC<{
   actions: readonly ActionDescriptor[];
   cluster: boolean;
   probeRef: React.RefObject<HTMLDivElement | null>;
-}> = ({ actions, cluster, probeRef }) => (
+  /** Must match the size the measured row actually renders at, or every width
+      the fit arithmetic reads is a width from a different button. */
+  size?: ButtonSize;
+}> = ({ actions, cluster, probeRef, size }) => (
   <div
     ref={probeRef}
     aria-hidden="true"
@@ -364,10 +387,16 @@ const MeasureProbe: React.FC<{
     className="pointer-events-none invisible absolute top-0 left-0 flex w-max items-center gap-2 whitespace-nowrap"
   >
     {actions.map((action) => (
-      <Action key={`f-${action.id}`} action={action} measure="full" />
+      <Action key={`f-${action.id}`} action={action} measure="full" {...(size ? { size } : {})} />
     ))}
     {actions.map((action) => (
-      <Action key={`c-${action.id}`} action={action} compact measure="compact" />
+      <Action
+        key={`c-${action.id}`}
+        action={action}
+        compact
+        measure="compact"
+        {...(size ? { size } : {})}
+      />
     ))}
     {cluster && (
       <span className="inline-flex items-center" data-measure="cluster">
@@ -600,7 +629,12 @@ const ActionBar: React.FC<ActionBarProps> = ({
             className="pointer-events-none absolute h-0 w-0"
           />
           {registerInBar.map((action) => (
-            <Action key={action.id} action={action} compact={registerFit.compact} />
+            <Action
+              key={action.id}
+              action={action}
+              compact={registerFit.compact}
+              size={REGISTER_BUTTON_SIZE}
+            />
           ))}
         </div>
       )}
@@ -637,7 +671,12 @@ const ActionBar: React.FC<ActionBarProps> = ({
           fit pass read its (empty) probe and settle instead of asking for a probe
           on every commit forever. */}
       {registerFit.measuring && (
-        <MeasureProbe actions={registerSplit.ordered} cluster={false} probeRef={registerProbeRef} />
+        <MeasureProbe
+          actions={registerSplit.ordered}
+          cluster={false}
+          probeRef={registerProbeRef}
+          size={REGISTER_BUTTON_SIZE}
+        />
       )}
     </div>
   );

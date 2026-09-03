@@ -3,7 +3,7 @@ import { fn } from 'storybook/test';
 import Button from './Button';
 
 /**
- * The primary text button primitive — five variants, three sizes, optional
+ * The primary text button primitive — five variants, four sizes, optional
  * icon/loading/badge. Prefer this over a hand-rolled `<button>`.
  */
 const meta = {
@@ -16,7 +16,7 @@ const meta = {
       description: {
         component:
           'The primary text button primitive — the default choice for any clickable CTA.\n\n' +
-          'Five variants (`primary | secondary | danger | ghost | success`) and three sizes (`sm | md | lg`), with an optional leading/trailing icon, loading spinner, trailing count badge, and full-width layout. Disabled and loading both block interaction. For icon-only affordances use `IconButton`; for filter toggles use `FilterPill`.',
+          'Five variants (`primary | secondary | danger | ghost | success`) and four sizes (`xs | sm | md | lg`), with an optional leading/trailing icon, loading spinner, trailing count badge, and full-width layout. Disabled and loading both block interaction. For icon-only affordances use `IconButton`; for filter toggles use `FilterPill`.',
       },
     },
   },
@@ -26,7 +26,10 @@ const meta = {
       description:
         'Visual treatment: `secondary` is the default; `danger`/`success` carry semantic colour; `ghost` is chromeless; `primary` is the page call to action.',
     },
-    size: { description: 'Size scale (`sm` ≈ 36px, `md` ≈ 40px, `lg` ≈ 56px). Defaults to `md`.' },
+    size: {
+      description:
+        'Size scale (`xs` ≈ 24px, `sm` ≈ 36px, `md` ≈ 40px, `lg` ≈ 56px). Defaults to `md`. `xs` is the recessed step — selection-register furniture, not a page verb.',
+    },
     icon: {
       description: 'Optional icon glyph rendered alongside the label (hidden while `loading`).',
     },
@@ -108,10 +111,17 @@ export const Pressed: Story = {
   parameters: { pseudo: { active: true } },
 };
 
-/** The three size steps side by side. */
+/**
+ * The four size steps side by side. `xs` (24px) is deliberately smaller than a
+ * button looks: it is for controls that are furniture around a list — the
+ * `ActionBar` selection register — and it should never carry a page's own verb.
+ */
 export const Sizes: Story = {
   render: (args) => (
     <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+      <Button {...args} size="xs">
+        Extra small
+      </Button>
       <Button {...args} size="sm">
         Small
       </Button>

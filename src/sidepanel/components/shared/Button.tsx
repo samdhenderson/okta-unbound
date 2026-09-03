@@ -2,7 +2,7 @@
  * @module sidepanel/components/shared/Button
  * @description The primary text button primitive — the default choice for any clickable CTA.
  *
- * Five variants and three sizes, with optional leading/trailing icon, loading
+ * Five variants and four sizes, with optional leading/trailing icon, loading
  * spinner, badge, and full-width layout. For icon-only affordances use
  * `IconButton`; for filter toggles use `FilterPill`.
  *
@@ -26,8 +26,17 @@ import Icon, { type IconType } from '../shared/Icon';
 
 /** Visual treatments: `secondary` is the default; `danger`/`success` carry semantic colour; `ghost` is chromeless. */
 export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'success';
-/** Height/padding scale — `sm` ≈ 36px, `md` ≈ 40px, `lg` ≈ 56px. */
-export type ButtonSize = 'sm' | 'md' | 'lg';
+/**
+ * Height/padding scale — `xs` ≈ 24px, `sm` ≈ 36px, `md` ≈ 40px, `lg` ≈ 56px.
+ *
+ * `xs` is the recessed tier: a control that is furniture around a list rather
+ * than a verb acting on the page — the selection register's `Select all (M)` and
+ * its neighbours (ADR-0051). It is deliberately the only size that reads as
+ * *smaller than a button*, so a register full of them cannot out-weigh the
+ * page's own verbs sitting on the row above. Do not reach for it to fit more
+ * chrome into a tight row; that is what the `ActionBar` overflow tier is for.
+ */
+export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
 
 interface ButtonProps {
   /** Button label content. */
@@ -106,6 +115,7 @@ const variantClasses: Record<ButtonVariant, string> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
+  xs: 'px-2 py-0.5 text-xs min-h-6', // 24px
   sm: 'px-3 py-1.5 text-xs min-h-9', // 36px
   md: 'px-4 py-2 text-sm min-h-10', // 40px
   lg: 'px-4 py-3 text-base min-h-14', // 56px
@@ -121,6 +131,13 @@ const sizeClasses: Record<ButtonSize, string> = {
  * </Button>
  * ```
  */
+/**
+ * The glyph size that rides with each button size: 12px inside the 24px `xs`
+ * chip, 16px inside `sm`, 20px above that.
+ */
+const iconSize = (size: ButtonSize): 'xs' | 'sm' | 'md' =>
+  size === 'xs' ? 'xs' : size === 'sm' ? 'sm' : 'md';
+
 const Button: React.FC<ButtonProps> = ({
   children,
   variant = 'secondary',
@@ -180,13 +197,9 @@ const Button: React.FC<ButtonProps> = ({
           />
         </svg>
       )}
-      {!loading && icon && iconPosition === 'left' && (
-        <Icon type={icon} size={size === 'sm' ? 'sm' : 'md'} />
-      )}
+      {!loading && icon && iconPosition === 'left' && <Icon type={icon} size={iconSize(size)} />}
       <span>{children}</span>
-      {!loading && icon && iconPosition === 'right' && (
-        <Icon type={icon} size={size === 'sm' ? 'sm' : 'md'} />
-      )}
+      {!loading && icon && iconPosition === 'right' && <Icon type={icon} size={iconSize(size)} />}
       {badge && (
         <span className="ml-1 px-2 py-0.5 rounded-full text-xs font-bold bg-danger text-white">
           {badge}

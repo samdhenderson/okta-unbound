@@ -29,8 +29,9 @@ const variantClasses: Record<FooVariant, string> = {/* … */};
 const sizeClasses: Record<FooSize, string> = { sm: '…', md: '…', lg: '…' };
 ```
 
-- Size scale is `sm | md | lg` by default. Two primitives extend it where call sites
-  needed steps the three-name scale could not express: `Icon` is
+- Size scale is `sm | md | lg` by default. Three primitives extend it where call sites
+  needed steps the three-name scale could not express: `Button` adds `xs` (24px, the
+  recessed step — `ActionBar`'s selection register, never a page verb), `Icon` is
   `xs | sm | md | lg | xl` (12/16/20/24/32px) and `LoadingSpinner` is
   `sm | md | lg | xl | 2xl` (16/20/24/32/48px) — deliberately **name-for-name aligned**
   over the sizes they share, so a spinner standing in for a glyph is requested by the
