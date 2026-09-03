@@ -13,7 +13,6 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PageHeader from './shared/PageHeader';
-import Button from './shared/Button';
 import Input from './shared/Input';
 import AlertMessage from './shared/AlertMessage';
 import PoliciesListPanel from './policies/PoliciesListPanel';
@@ -22,6 +21,7 @@ import { useOktaApi } from '../hooks/useOktaApi';
 import type { OperationResult } from '../hooks/useOktaApi/types';
 import { useOwedLoad } from '../hooks/useOwedLoad';
 import { usePoliciesData } from '../hooks/usePoliciesData';
+import { useRefreshSubject } from '../hooks/useRefreshSubject';
 import { filterPolicies } from './policies/policyFilters';
 import { getRelativeTime } from '../../shared/utils/dateFormat';
 
@@ -125,11 +125,15 @@ const AuthPoliciesTab: React.FC<AuthPoliciesTabProps> = ({
 
   // Stable handlers so the memoized `PoliciesListPanel` below is not re-rendered by
   // a fresh arrow on every keystroke in the search box.
-  const handleRefresh = useCallback(
-    () => void loadPolicies(hasPolicies),
-    [loadPolicies, hasPolicies],
-  );
   const handleLoad = useCallback(() => void loadPolicies(true), [loadPolicies]);
+
+  // The rung's answer to the app-level refresh control (ADR-0069 §2/§4),
+  // replacing the `PageHeader.actions` Button whose label used to swap between
+  // *Load Policies* and *Refresh* — a state readout for a distinction the reader
+  // never asked about. The chrome control means "again" in every state, and the
+  // empty state below keeps its own load prompt, which is where an initial load
+  // belongs. Gated on `isActive` like every other fetch here.
+  useRefreshSubject('the auth policies list', handleLoad, isActive);
 
   return (
     <div className="tab-content active" style={{ fontFamily: 'var(--font-primary)', padding: 0 }}>
@@ -143,17 +147,6 @@ const AuthPoliciesTab: React.FC<AuthPoliciesTabProps> = ({
                 variant: 'neutral',
               }
             : undefined
-        }
-        actions={
-          <Button
-            variant={hasPolicies ? 'secondary' : 'primary'}
-            icon="refresh"
-            onClick={handleRefresh}
-            disabled={isLoading}
-            loading={isLoading}
-          >
-            {hasPolicies ? 'Refresh' : 'Load Policies'}
-          </Button>
         }
       />
 

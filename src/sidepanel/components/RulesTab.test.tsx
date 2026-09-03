@@ -211,8 +211,23 @@ async function openFilters(): Promise<void> {
  * unambiguously. `getByTestId` still reaches the hidden cards, which is what the
  * search/filter assertions rely on.
  */
+/**
+ * Wait for the rung's own on-open fetch to land.
+ *
+ * RETARGET (ADR-0069 §6, ADR-0022). Every assertion below used to be preceded by
+ * a press of the empty state's *Load Rules* button, because the tab fetched
+ * nothing until asked. It now fetches when it is opened — one org-level call,
+ * served from `RulesCache` on a repeat — so the press is gone and the wait
+ * replaces it. Nothing that was asserted after the press stopped being asserted;
+ * only the way the list gets populated changed, and the two tests that pinned
+ * *how many* requests that costs still pin exactly one.
+ */
+async function rulesLoaded(): Promise<void> {
+  await waitFor(() => expect(screen.queryByText('No Rules Loaded')).not.toBeInTheDocument());
+}
+
 async function openRuleRung(ruleId: string): Promise<void> {
-  await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
+  await rulesLoaded();
   await waitFor(() => expect(screen.getByTestId(`rule-${ruleId}`)).toBeInTheDocument());
   await userEvent.click(screen.getByRole('button', { name: `open ${ruleId}` }));
   await screen.findByTestId('rule-action-bar');
@@ -246,14 +261,50 @@ beforeEach(() => {
 });
 
 describe('RulesTab characterization', () => {
-  it('shows the empty state until rules are loaded', () => {
-    renderTab();
+  /*
+    RETARGETED (ADR-0069 §6). This pinned that the rung showed an empty state
+    until someone pressed Load — the manual gate. The gate is gone: the tab
+    fetches on open. What the empty state is *for* survives and is what is pinned
+    now — a rung with no connected Okta tab has nothing to fetch, and must say so
+    with its own load prompt rather than being a blank panel. That prompt is also
+    the recovery path for a fetch that failed.
+  */
+  /*
+    ADR-0018 is the trap in ADR-0069 §6, and it is worth its own case. Tabs stay
+    mounted, so a fetch written as a plain mount effect fires for this tab while
+    the reader is on Groups, and then fires *nothing* on the actual switch. Both
+    halves are asserted: silence while hidden, and the fetch on arrival.
+  */
+  it('issues no request while the tab is hidden, and fetches on arrival', async () => {
+    const { rerender } = render(
+      <ProgressProvider>
+        <RulesTab targetTabId={1} isActive={false} />
+      </ProgressProvider>,
+    );
+
+    await waitFor(() => expect(loadTabState).toHaveBeenCalled());
+    expect(rulesFetchCalls()).toHaveLength(0);
+
+    rerender(
+      <ProgressProvider>
+        <RulesTab targetTabId={1} isActive />
+      </ProgressProvider>,
+    );
+
+    await rulesLoaded();
+    expect(rulesFetchCalls()).toHaveLength(1);
+  });
+
+  it('shows the empty state, with its own load prompt, when no Okta tab is connected', () => {
+    renderTab({ targetTabId: undefined });
     expect(screen.getByText('No Rules Loaded')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Load Rules' }).length).toBeGreaterThan(0);
+    expect(rulesFetchCalls()).toHaveLength(0);
   });
 
   it('loads rules via the content script and renders stats + cards', async () => {
     renderTab();
-    await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
+    await rulesLoaded();
 
     await waitFor(() => expect(screen.getByTestId('rule-r1')).toBeInTheDocument());
     // §8: the rules read now routes through the scheduler.
@@ -284,7 +335,7 @@ describe('RulesTab characterization', () => {
       timestamp: Date.now(),
     });
     renderTab();
-    await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
+    await rulesLoaded();
 
     await waitFor(() => expect(screen.getByText('Cached Rule')).toBeInTheDocument());
     // §8: a cache hit must not issue the scheduler rules read.
@@ -404,7 +455,7 @@ describe('RulesTab characterization', () => {
 
   it('filters the list by search query', async () => {
     renderTab();
-    await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
+    await rulesLoaded();
     await waitFor(() => expect(screen.getByTestId('rule-r1')).toBeInTheDocument());
 
     await userEvent.type(screen.getByPlaceholderText(/Search rules/i), 'Sales');
@@ -414,7 +465,7 @@ describe('RulesTab characterization', () => {
 
   it('filters the list to active rules only', async () => {
     renderTab();
-    await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
+    await rulesLoaded();
     await waitFor(() => expect(screen.getByTestId('rule-r2')).toBeInTheDocument());
 
     await openFilters();
@@ -433,7 +484,7 @@ describe('RulesTab characterization', () => {
       data: [...DEFAULT_RAW_RULES, rawRule({ id: 'r3', name: 'Broken Rule', status: 'INVALID' })],
     });
     renderTab();
-    await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
+    await rulesLoaded();
     await waitFor(() => expect(screen.getByTestId('rule-r3')).toBeInTheDocument());
 
     await openFilters();
@@ -449,8 +500,11 @@ describe('RulesTab characterization', () => {
     // §8: the rules read fails at the scheduler; the helper returns it verbatim.
     rulesFetchResponse = () => ({ success: false, error: 'Okta said no' });
     renderTab();
-    await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
+    // No `rulesLoaded()` wait: the on-open fetch is what fails here, so the
+    // empty state stays put and the error banner is the thing to wait for.
     await waitFor(() => expect(screen.getByText('Okta said no')).toBeInTheDocument());
+    // And the rung is not a dead end — its own load prompt is still offered.
+    expect(screen.getAllByRole('button', { name: 'Load Rules' }).length).toBeGreaterThan(0);
   });
 
   /*
@@ -470,7 +524,10 @@ describe('RulesTab characterization', () => {
     renderTab({ selectedRuleId: 'r2' });
 
     await waitFor(() => expect(screen.getByTestId('rule-action-bar')).toBeInTheDocument());
-    // The deep-link triggered exactly one cache-first rules read (no manual click).
+    // Exactly one cache-first rules read. It is now the rung's own on-open load
+    // rather than a deep-link-specific effect; the deep-link effect was removed
+    // because under the identical readiness condition it only ever fired a
+    // second, concurrent copy of this same request.
     expect(rulesFetchCalls()).toHaveLength(1);
     expect(screen.getByLabelText('Actions for Sales Rule')).toBeInTheDocument();
   });
@@ -511,7 +568,7 @@ describe('RulesTab characterization', () => {
   it('the duplicates panel "View" link opens the rule\'s rung', async () => {
     // The two default fixtures share a condition, so they cluster in the banner.
     renderTab();
-    await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
+    await rulesLoaded();
     await waitFor(() => expect(screen.getByTestId('rule-r1')).toBeInTheDocument());
     expect(screen.queryByTestId('rule-action-bar')).not.toBeInTheDocument();
 
@@ -571,7 +628,7 @@ describe('RulesTab current-group filter', () => {
     });
 
     renderTab({ currentGroupId: 'g1' });
-    await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
+    await rulesLoaded();
     await waitFor(() => expect(screen.getByTestId('rule-r1')).toBeInTheDocument());
 
     await openFilters();
@@ -600,7 +657,7 @@ describe('RulesTab current-group filter', () => {
     });
 
     renderTab({ currentGroupId: 'g1' });
-    await userEvent.click(screen.getAllByRole('button', { name: 'Load Rules' })[0]);
+    await rulesLoaded();
     await waitFor(() => expect(screen.getByTestId('rule-r2')).toBeInTheDocument());
 
     await openFilters();

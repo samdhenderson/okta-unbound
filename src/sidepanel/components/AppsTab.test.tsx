@@ -230,7 +230,13 @@ describe('AppsTab', () => {
 
     expect(await screen.findByText('No applications loaded')).toBeInTheDocument();
     expect(syncCalls()).toHaveLength(0);
-    expect(screen.getByRole('button', { name: /Refresh/ })).toBeDisabled();
+
+    // Retargeted from the header's Refresh button, which ADR-0069 §4 moved into
+    // the app-level control in the top chrome. The behaviour it pinned — no tab,
+    // no request — is unchanged and now belongs to the empty state's own load
+    // prompt, which is the only load affordance left on this rung.
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Load applications' }));
+    expect(syncCalls()).toHaveLength(0);
   });
 
   it('arrives at a deep-linked app with the list filtered to it, once', async () => {
