@@ -42,6 +42,18 @@ interface GroupsListPanelProps {
   filteredGroups: GroupSummary[];
   /** Ids of the currently selected groups. */
   selectedGroupIds: Set<string>;
+  /**
+   * How many groups are selected — the `· N selected` half of the line beneath
+   * the list. Omitted from that line entirely when zero.
+   *
+   * Passed as a number rather than read off {@link GroupsListPanelProps.selectedGroupIds}
+   * because the two are not the same question: the set is what each row checks
+   * itself against, and this is a statement about the rung. It is deliberately
+   * the **only** plain-prose statement of the count in the app — the strip's
+   * verbs carry it in their labels (*Compare (3)*), and the `PageHeader` badge no
+   * longer states it at all.
+   */
+  selectedCount: number;
   /** Toggles selection for a group id. */
   onToggleSelect: (groupId: string) => void;
   /** Okta origin passed to each row for deep-linking. */
@@ -91,6 +103,7 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
   activeFilterCount,
   filteredGroups,
   selectedGroupIds,
+  selectedCount,
   onToggleSelect,
   oktaOrigin,
   onLoadAllGroups,
@@ -216,15 +229,29 @@ const GroupsListPanel: React.FC<GroupsListPanelProps> = ({
         {hasMore && <div ref={sentinelRef} className="h-px" aria-hidden="true" />}
       </ScrollableList>
 
-      {hasMore && (
-        <div className="shrink-0 flex items-center justify-between pt-(--sp-rung) text-xs text-neutral-500">
+      {visibleGroups.length > 0 && (
+        /*
+          The rung's one line of prose about itself: what is on screen, out of
+          what the filter matched, and how much of it is ticked.
+
+          It is rendered whenever there are rows, not only when there are more to
+          load, for two reasons. The selection count has to be readable at any
+          list length — it used to be a `PageHeader` badge, which said it in a
+          place that describes what you are *browsing* rather than what you have
+          *picked* (ADR-0032) — and a line that appears the moment something is
+          selected would shift the rung under the pointer that selected it.
+        */
+        <div className="shrink-0 flex items-center justify-between gap-2 pt-(--sp-rung) text-xs text-neutral-500">
           <span>
             Showing {visibleGroups.length.toLocaleString()} of{' '}
             {filteredGroups.length.toLocaleString()}
+            {selectedCount > 0 && ` · ${selectedCount.toLocaleString()} selected`}
           </span>
-          <Button variant="secondary" size="sm" onClick={loadMore}>
-            Load more (+{Math.min(PAGE, filteredGroups.length - visibleCount)})
-          </Button>
+          {hasMore && (
+            <Button variant="secondary" size="sm" onClick={loadMore}>
+              Load more (+{Math.min(PAGE, filteredGroups.length - visibleCount)})
+            </Button>
+          )}
         </div>
       )}
     </>
