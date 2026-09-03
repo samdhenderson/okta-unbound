@@ -1,6 +1,7 @@
 # ADR-0070: A slot per bucket, and a bucket that stays after its work is done
 
-- Status: Proposed
+- Status: Accepted (2026-09-03, exactly as proposed — both numbers and the no-exemption
+  position unchanged)
 - Date: 2026-09-03
 - Extends: [ADR-0059](./0059-one-bucket-is-not-the-org.md), which made the _gates_
   per bucket but left the _slots_ global
@@ -77,9 +78,10 @@ than discovered halfway through a component.
 **The scheduler gains a per-bucket concurrency cap and a higher global ceiling,
 and it remembers a bucket for a bounded time after that bucket's work is done.**
 
-This ADR is **Proposed**. The implementing PR does not open until Sam accepts
-it, because it moves the rate-limit surface, which `CLAUDE.md` treats as a
-security invariant.
+This ADR was **Proposed** and is now **Accepted**, as written: the numbers in §2
+and the no-exemption position in §9 are the accepted ones. The implementing PR
+was gated on that acceptance because this moves the rate-limit surface, which
+`CLAUDE.md` treats as a security invariant.
 
 ### 1. `maxConcurrent` keeps its name and its meaning; the per-bucket cap is a new field
 
@@ -287,11 +289,50 @@ unobserved buckets already fall — last.
   quiet family's gate is judged on its own in-flight count and the `GLOBAL_GATE`
   path still uses the total.
 - **`maxConcurrentPerBucket >= maxConcurrent` is rejected** at construction.
+- **An `interactive` request waits at a saturated bucket** (§9). It overtakes the
+  queue and the soft gate; it does not overtake the cap. This is the assertion
+  that pins the accepted position, so a later change granting a reserved seat has
+  to delete a test on purpose rather than by accident.
 - **A settled bucket is still listed after its queue, plan and observation have
   all gone**, reporting `queued/active/planned = 0` and
   `limit/remaining/resetAt = null`; **it is dropped after `BUCKET_MEMORY_MS`**;
   and **the thirteenth bucket evicts the least-recently-active**, never one with
   live work or an armed gate.
+
+### 9. `interactive` does not exceed `maxConcurrentPerBucket`
+
+This was carried as an open question for the owner in the Proposed draft. It is
+answered, and the answer is the one the draft took: **no exemption.** An
+`interactive` request jumps the soft gate and the queue's priority order, and it
+respects the per-bucket cap exactly as every other request does — which is what
+`SchedulerConfig`'s documentation in `src/shared/scheduler/types.ts` already says
+about `maxConcurrent` today, now true of both ceilings.
+
+Both sides were real, and recording them is the point of keeping this section
+rather than deleting it.
+
+**For an exemption.** A user's click landing in a family that a background walk
+has saturated will still wait. That is a milder version of exactly the problem §2
+exists to fix, and a single reserved seat would close it.
+
+**Against.** The per-bucket cap is the one guarantee this ADR offers that no
+single Okta family is hit harder than it is today. An exemption puts a hole in
+that guarantee, and the hole is in the load-bearing sentence — "four is below
+today's five" stops being true for the one class of request that arrives when a
+user is already impatient and likely to press again.
+
+**Why the conservative side wins on procedure rather than on the merits.** The
+two arguments are close enough that the deciding consideration is asymmetry of
+regret. Relaxing this later needs only its own evidence, and it does not re-open
+the safety claim §2 makes — the claim would simply gain a stated exception,
+measured against a real org, with the History tab's request log as the
+instrument. Granting the exemption now and withdrawing it later means arguing the
+safety claim a second time, from a worse position, because by then something will
+depend on the reserved seat. Take the position that can be moved.
+
+So: nothing in the implementation special-cases `interactive` in the cap check of
+§3, and a test asserting that an `interactive` request at a saturated bucket
+waits is a test of this section, not an oversight to fix.
 
 ## Consequences
 
@@ -361,17 +402,3 @@ rejected: the thing being remembered is _activity_, and activity did not survive
 the suspension either. A row that says "active 30 seconds ago" after the worker
 was asleep for eight minutes is a lie the ten-minute window would otherwise let
 through.
-
-## Open question for the owner
-
-**Should `interactive` requests be allowed to exceed `maxConcurrentPerBucket`,
-up to the global ceiling?** The code does not settle this — today the question
-cannot arise, because there is only one cap and `types.ts` states that
-`interactive` respects it. There is a real case for a reserved seat: a user's
-click landing in a family that a background walk has saturated will still wait,
-which is a milder version of the problem §2 exists to fix. There is an equally
-real case against: a bucket's cap is the one guarantee this ADR offers that no
-family gets hit harder than today, and an exemption puts a hole in it. This ADR
-takes the conservative position — **no exemption** — because that is the one
-that can be relaxed later without re-arguing the safety claim. Flagging it
-rather than deciding it quietly.

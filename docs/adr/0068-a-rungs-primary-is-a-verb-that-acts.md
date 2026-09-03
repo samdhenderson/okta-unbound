@@ -44,8 +44,11 @@ panel's one filled button:
   rung to do. Both are the same gesture — leave, carrying a file.
 
 So the filled button on the Groups detail rung currently advertises _Export members_ while
-_Add_ — the verb that changes the group — sits beside it in plain `secondary`, and the
-groups list rung advertises _Export list_ over every verb that touches a group.
+_Add_ — the verb that changes the group — sits beside it in plain `secondary`. That one is
+straightforwardly wrong. The groups list rung is the harder case and the reason §2 is a
+ranking rather than a ban: there, _Export list_ is emphasised over verbs that touch a
+group, but every one of those verbs is scoped to the rows you have ticked, so none of them
+is a candidate for the rung's own fill either.
 
 **A correction to the record while we are here.** ADR-0061 §4 states that converting
 `GroupsListActionBar` was "filed as an `IMPROVEMENTS.md` item". It was not. There is no
@@ -58,7 +61,8 @@ quietly fixing: **an ADR asserting that an item was filed is not evidence that i
 ## Decision
 
 **`primary` names a verb that acts — one that opens a modal or performs the operation. It
-is chosen per rung, and it is never a refresh and never an export.**
+is chosen per rung, and it is never a refresh. Where a rung has no acting verb at all, an
+export may hold it instead; where a rung has one, an export never does.**
 
 ### 1. `primary` is a verb that acts
 
@@ -75,37 +79,85 @@ the verb is; the same holds here in the other direction. `Add` is the verb wheth
 the admin completes the dialog.
 
 A rung has **at most one** such verb, so ADR-0038's "at most one `primary` per strip" keeps
-holding by construction. A rung may legitimately have **none** — that is a real answer, not
-a gap to fill, and a strip of evenly-weighted `secondary` verbs is the correct rendering of
-a rung whose verbs are all peers.
+holding by construction. A rung may legitimately have **none** — that is a real answer and
+not a gap to fill. What happens on such a rung is §2's business: it may fall back to an
+export, and failing that a strip of evenly-weighted `secondary` verbs is the correct
+rendering of a rung whose verbs are all peers.
 
-### 2. A refresh is never `primary`, and an export is never in the row at all
+### 2. A refresh is never `primary`; an export may be, but only as a fallback
 
-Two exclusions, for two different reasons.
+The two exclusions were written as one flat rule, and they are not one rule. Only the
+first of them is absolute.
 
-**Refresh is excluded because it is no longer a rung verb.** ADR-0069 makes it one
-app-level control beside the Pin. There is nothing left on a strip for this clause to
-exclude — the clause exists so that the next rung to want a fetch button does not
-re-derive ADR-0061's argument from scratch and put it back.
+**Refresh is excluded absolutely.** ADR-0069 makes it one app-level control beside the
+Pin, so there is nothing left on a strip for this clause to exclude — the clause exists
+so that the next rung to want a fetch button does not re-derive ADR-0061's argument from
+scratch and put it back. A fetch never wears the panel's one filled button, on any rung,
+in any state, whatever else that rung does or does not have.
 
-**Export is excluded because it leaves.** An export descriptor does not produce a file
-in place; it forwards to the Export tab with the column picker and presets. That is
-navigation wearing a verb's clothes, and it is never the thing the rung is for. So,
-everywhere, without exception:
+**Export is ranked, not excluded.** An export descriptor does not produce a file in
+place; it forwards to the Export tab with the column picker and presets. That is
+navigation wearing a verb's clothes, and it is never what an admin came to the rung to
+do — which makes it a poor `primary`. But "poor" is a comparison between candidates, and
+a rung with no better candidate is not improved by having no filled button at all. So
+the preference is **ordered**:
 
-> **An export descriptor takes `priority: 'tier'`.**
+> 1. **An acting verb takes `primary`** — §1's two questions, both yes. Where the rung
+>    has one, it wins, and every export on that rung takes `priority: 'tier'`.
+> 2. **Otherwise an export may take `primary`** and stay in the row. One export — the
+>    one whose object is the whole rung. The fallback promotes a descriptor, not the
+>    class: any other export on that rung is selection- or section-scoped, and still
+>    takes `priority: 'tier'`.
+> 3. **Otherwise the rung has no `primary`**, which remains a legal answer and not a gap
+>    to fill.
 
-Behind **More**, in every strip, on every rung, list or detail. This is stronger than
-"not `primary`" on purpose. Export is frequent enough to be tempting and consequential
-enough to be worth a deliberate second press, and ADR-0051 §2 already established
-frequency as a bounded reason to move a verb down. This is that reason applied in the
-opposite direction — an export is not rare, it is simply never the point — and it needs
-to be a flat rule rather than a judgement call, because every strip author has so far
-judged it the other way.
+Rule 1 is the one that binds in practice, and it binds hard: on a rung that acts, an
+export sits behind **More**, and shipping it in the row there is a defect rather than a
+local decision. Rule 2 is a fallback, not a licence.
 
-The one export that is not a descriptor is unaffected: `Export list` acting on the
-**filter** rather than the selection keeps ADR-0051 §3's deliberate disabled state. It
-moves tier; it does not vanish.
+#### The test for "this rung has no acting verb"
+
+Rule 2 is worth having only if step 1 cannot be waved past, and step 1 is the obvious
+place to cheat — every strip author who has so far judged an export worth the row would
+happily declare their rung verbless to keep it there. So the claim is not a judgement
+call. It is an **enumeration**, and it is made in the diff, where a reviewer can check it
+against the code beside it.
+
+**The claim to make.** List every verb the rung offers in any state — every descriptor
+the wrapper can declare, across every branch of its conditional spreads, plus any
+page-scoped verb the rung renders outside the strip. Against each, name which of §1's two
+questions it fails. The rung has no acting verb only if every candidate fails at least
+one.
+
+Four ways that claim goes wrong, each checkable by reading the array:
+
+- **A verb scoped to a selection, a filter or a section is not a counter-example.** It
+  fails question 1, and that is the ordinary case rather than a technicality — `Merge`
+  acts, forcefully, and its object is the ticked rows.
+- **A read-only panel toggle is not an acting verb.** §1 counts _opening a modal_ as
+  acting because the modal commits a write at the end of it. A toggle that reveals an
+  inline panel commits nothing, ever; the panel is a place to read. It fails question 2
+  for the same reason a fetch does. (This is a correction to §3 as first written, which
+  promoted `Cross-search` on the strength of its object being the whole rung, without
+  putting question 2 to it.)
+- **A verb declared off the strip still counts.** The question is asked of the **rung**,
+  not of the descriptor array. If the rung offers a page-scoped acting verb anywhere on
+  screen, it has one — and ADR-0030 §2 already says that verb belongs in the `ActionBar`,
+  so the answer is to move it, not to promote an export past it.
+- **An unwired or permanently-`disabled` descriptor is not a verb at all**, so it cannot
+  make a rung acting. ADR-0039 already bans shipping one; it is named here so the ban
+  cannot be read in the other direction. A **transiently** disabled verb — one the
+  current filter or selection has emptied — is a verb, and stays one.
+
+The enumeration is recorded as a comment above the descriptor array, naming the
+candidates and how each fails, so the next reader re-checks it instead of re-deriving it.
+A rung that later grows an acting verb loses the fallback in the same change that adds
+it, and its export goes to the tier.
+
+The export that acts on the **filter** rather than the selection keeps ADR-0051 §3's
+deliberate disabled state either way: `disabled` when the filter matches nothing, present
+and explaining itself rather than vanishing. That state is orthogonal to which tier it
+sits in and to whether it holds the fill.
 
 ### 3. `GroupActionBar`'s **Add** is the reference shape
 
@@ -128,19 +180,43 @@ rules_ demonstrated the ADR-0030 §2 half of the rule and nothing else, because 
 no consequence to test. `Add` exercises both gates in one descriptor, which is what a
 reference example is for.
 
-The list-rung instance is weaker and is named as such. `GroupsListActionBar`'s
-**Cross-search** is the only verb on that rung whose object is the whole rung rather than
-a tick-count — it searches across groups for a user, which is the thing the rung exists
-to answer that a row cannot. It is the strip's `primary` under this rule. Two constraints
-come with it, and neither is optional:
+The list rung is the other case, and it is the one §2's fallback exists for.
+`GroupsListActionBar` **keeps `export-list` as its `primary`**, because that rung has no
+acting verb to prefer over it. The enumeration, which is the whole of the argument:
 
-- Its `primary` is **constant**. It does not appear when the panel opens and vanish when
-  it closes. ADR-0061 §2 still owns the open/closed state, in the label (`Cross-search (5)`
-  → `Hide cross-search`), and re-coupling emphasis to panel state would reinstate exactly
-  the colour-only state ADR-0061 removed.
-- It is still `panelAction`-shaped, so it keeps `priority: 'pinned'` while open for
-  ADR-0051 §1's surviving safety reason: the control that closes an open panel must never
-  overflow behind **More** while the panel sits open below it.
+| Candidate                                                   | Fails                                                          |
+| ----------------------------------------------------------- | -------------------------------------------------------------- |
+| `Deselect all` / `Select all (M)`                           | Q1 — selection controls, scoped to the tick-count.             |
+| `Compare (N)` / `Export (N)` / `Merge (N)`                  | Q1 — object is the ticked rows, not the rung.                  |
+| `Cross-search` / `Collections` / `Cleanup` / `Bulk actions` | Q2 — read-only panel toggles; they reveal, they do not commit. |
+| `Export list`                                               | Nothing — Q1 passes, Q2 is the export case.                    |
+
+Nothing on that rung acts on the whole rung, and nothing acting on the whole rung is
+rendered off the strip either. So rule 2 applies and `Export list` keeps the fill.
+
+**`Cross-search` was the wrong answer, and it is worth saying why rather than quietly
+dropping it.** It reads as a candidate because its object genuinely is the whole rung —
+it searches across groups for a user, which is the thing the rung exists to answer that a
+row cannot. That is question 1, and question 1 alone is the test this ADR was written to
+replace. Cross-search opens a read-only panel; it commits nothing, and it never will. It
+fails question 2 exactly as a fetch does.
+
+Two properties hold on that strip regardless of which descriptor wears the fill:
+
+- **The `primary` is constant.** It does not move with the selection size or with a
+  panel's open state. `export-list` is declared unconditionally and satisfies this by
+  construction; re-coupling emphasis to state would reinstate exactly the colour-only
+  state ADR-0061 removed. Its `disabled`-on-empty-filter state (ADR-0051 §3) is a
+  transient property of one verb, not a moving `primary`.
+- **A `panelAction` keeps `priority: 'pinned'` while open**, for ADR-0051 §1's surviving
+  safety reason: the control that closes an open panel must never overflow behind
+  **More** while the panel sits open below it. That was never a consequence of `variant`
+  and is unaffected by this section.
+
+`GroupActionBar` does **not** get the fallback. The Group detail rung has an acting verb,
+so rule 1 applies to it and `export-members` still takes `priority: 'tier'`. Two rungs,
+two different answers, from one ordered rule — which is the point of ordering it rather
+than carving out an exception.
 
 ### 4. ADR-0051 §2 survives untouched — position one is still a selection control
 
@@ -178,44 +254,65 @@ deprovisioned` is that case.
   still re-measures a label swap under a stable `id`.
 - **`ActionDescriptor` gains no vocabulary.** No badge slot, no `aria-pressed`, no JSX.
   This is a rule about which existing descriptor gets `variant: 'primary'`.
+- **A `primary` export is still an export.** §2's fallback changes the fill and the
+  `priority` that comes with it, and nothing else: the press still forwards to the Export
+  tab with its column picker and presets, and no strip gains a way to write a file in
+  place. Promotion is emphasis, never behaviour.
+- **ADR-0038's "at most one `primary` per strip" still holds by construction.** The
+  fallback only fires on a rung with no acting verb, so the two candidates can never both
+  be eligible; and where an export is the fallback, it is the rung's single unconditional
+  export descriptor, not one per selection state.
+- **Position is still not emphasis** (§4). A promoted export sits where it is declared,
+  which on the Groups list rung is after both selection controls and both panel toggles.
 
 ## Consequences
 
 - **`GroupActionBar`'s `primary` becomes `Add`.**
   `src/sidepanel/components/groups/detail/GroupActionBar.tsx` (L184–232) currently declares
   `export-members` first with `variant: 'primary'`; `add-member` is `priority: 'flex'`.
-  Under §1 and §2, `add-member` takes `variant: 'primary'` and `export-members` takes
-  `priority: 'tier'`, still forwarding to the Export tab with its column picker and
+  Under §1 and §2's rule 1, `add-member` takes `variant: 'primary'` and `export-members`
+  takes `priority: 'tier'`, still forwarding to the Export tab with its column picker and
   presets. The docblock comment above the array explains the current declaration order as
   overflow order and has to be rewritten with it.
-- **`GroupsListActionBar` loses `export-list` as `primary` and gains `Cross-search`.**
-  `src/sidepanel/components/groups/GroupsListActionBar.tsx` (L202–308). The `export-list`
-  descriptor keeps its filter-scoped disabled state (ADR-0051 §3) and moves to
-  `priority: 'tier'`; `export-selection` moves with it, under the same flat rule. The two
-  selection controls stay in positions one and two (§4). This is the conversion ADR-0061
-  §4 deferred, finally scoped — and it is not the conversion ADR-0061 predicted, which was
-  "removing its `primary` and leaving it with none".
-- **Every export descriptor in the app is now `tier`, and that is a flat rule.** Any strip
-  that ships an export in the row is a defect, not a local decision. It applies to strips
-  not named here as much as to the two that are.
+- **`GroupsListActionBar` keeps `export-list` as its `primary`, and gains the enumeration
+  that justifies it.** `src/sidepanel/components/groups/GroupsListActionBar.tsx`
+  (L202–308). The descriptor itself does not change — `variant: 'primary'`, its
+  filter-scoped disabled state (ADR-0051 §3), its position after the panel toggles. What
+  changes is the comment above it: today it claims to be "the rung's page-level verb, and
+  the reason this strip has a `primary` at all", which is the ADR-0061 test this ADR
+  retires. It is rewritten to §2's enumeration — the candidates and how each fails —
+  because that is the claim a reviewer has to be able to re-check. `export-selection` is
+  selection-scoped, is not the rung's `primary`, and moves to `priority: 'tier'` under
+  rule 1's ordinary treatment of a non-`primary` export.
+- **This is not the conversion ADR-0061 §4 predicted, and not the one an earlier draft of
+  this ADR proposed either.** ADR-0061 expected the strip to lose its `primary` and have
+  none; the first draft here expected it to gain `Cross-search`. Both were wrong for the
+  same reason — a panel toggle was never an acting verb, and a rung of selection-scoped
+  peers plus one whole-rung export is a real shape the flat rule had no answer for.
+- **Every export on a rung that acts is `tier`, and that half is still flat.** Any strip
+  with an acting verb that also ships an export in the row is a defect, not a local
+  decision, and it applies to strips not named here as much as to the two that are. Only
+  the verbless rung has a choice, and it has to show its working (§2).
 - **`docs/components.md` 319–345 must be rewritten to this rule and is not touched by this
-  ADR.** That passage currently says `primary` is spent on "a page-level verb, if there is
-  one — `RulesListActionBar`'s _Load rules_ / _Refresh_ is the reference", and that
+  ADR.** That passage says `primary` is spent on "a page-level verb, if there is one —
+  `RulesListActionBar`'s _Load rules_ / _Refresh_ is the reference", and that
   `GroupsListActionBar` "has only selection-scoped peers, so it has no `primary`". The
-  first reference is deleted by ADR-0069; the second describes a target state ADR-0061 §4
-  deferred and **the code never matched** — that strip has shipped `export-list` as
-  `primary` since it landed. A separate workstream owns that file; this ADR records the
-  requirement rather than performing it.
+  first reference is deleted by ADR-0069; the second is **false and always was** — that
+  strip has shipped `export-list` as `primary` since it landed, and under §2 it keeps it,
+  so the sentence is now wrong about both the code and the rule. A separate workstream
+  owns that file; this ADR records the requirement rather than performing it.
 - **ADR-0061 §4's claim that the `GroupsListActionBar` conversion was filed is false**, and
   the item still does not exist in either ledger. Filing it belongs to whoever owns the
   ledgers; recording that the accepted record is wrong belongs here, because ADR-0061 is
   immutable and a reader will otherwise go looking for an item that was never written.
-- **Two rungs still differ in whether they have a `primary`,** and that remains the
-  intended outcome. What changed is the reason: it is no longer "does this rung have a
-  page-level verb" but "does this rung have a verb that acts on the whole page" — a
-  narrower question that the Groups list rung now answers yes and the Rules rung, having
-  surrendered its only candidate to ADR-0069, may well answer no.
-- **The Rules rung's `primary` is left open.** Once `load` leaves the strip, its remaining
-  descriptors are three read-only panel toggles. Under §1 none of them clearly acts, so the
-  honest reading is that the rung has none — but that is a judgement about the Rules rung
-  that belongs with the change that empties its strip, not asserted here in advance.
+- **Two rungs still differ in what wears the fill,** and that remains the intended
+  outcome. What changed is the reason: it is no longer "does this rung have a page-level
+  verb" but "does this rung have a verb that **acts** on the whole page, and if not, does
+  it have an export" — which the Group detail rung answers with `Add`, the Groups list
+  rung with `Export list`, and the Rules rung, having surrendered its only candidate to
+  ADR-0069, with neither.
+- **The Rules rung ends with no `primary`, and this ADR can now say so.** Once `load`
+  leaves the strip its remaining descriptors are three read-only panel toggles — no acting
+  verb under §1, and no export descriptor for rule 2 to fall back to, so rule 3 is the
+  answer rather than a deferral. If that rung later gains an export it becomes a rule 2
+  rung, and the enumeration is written then.

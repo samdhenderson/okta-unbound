@@ -48,10 +48,12 @@ The strip becomes `GroupsListActionBar`, an ADR-0039 wrapper around the shared
 
 > **Superseded by [ADR-0068](./0068-a-rungs-primary-is-a-verb-that-acts.md).** The last
 > sentence above no longer holds. `primary` is a verb that **acts** — it opens a modal or
-> performs the operation — and is never a refresh and never an export. `GroupsListActionBar`
-> did have a `primary` all along (`Export list`, which ADR-0061 did not know about), so this
-> section stopped describing it the moment it shipped; the strip's `primary` becomes
-> **Cross-search** and every export descriptor moves to `priority: 'tier'`. What survives
+> performs the operation — and is never a refresh. `GroupsListActionBar` did have a
+> `primary` all along (`Export list`, which ADR-0061 did not know about), so this section
+> stopped describing it the moment it shipped; the strip **keeps** `Export list`, because
+> ADR-0068 §2 lets an export hold `primary` on a rung with no acting verb, and every one of
+> that rung's other verbs is scoped to the ticked rows or is a read-only panel toggle. On
+> any rung that _does_ act, an export moves to `priority: 'tier'`. What survives
 > from this section is the `pinned`-while-open property below — the control that closes an
 > open panel can never overflow behind **More** — which ADR-0061 already re-seated as an
 > explicit `priority` rather than a side effect of `variant`. **§2 below is untouched by
