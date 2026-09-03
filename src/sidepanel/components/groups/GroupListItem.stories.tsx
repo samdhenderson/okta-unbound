@@ -301,7 +301,18 @@ export const Hover: Story = {
   parameters: { pseudo: { hover: true } },
 };
 
-/** Long name and description, exercising truncation. */
+/**
+ * Long name and description, exercising truncation. The name's `title` carries
+ * the untruncated text, which is what makes it reachable on hover/focus once
+ * `truncate` clips it at the 360px floor (I-011).
+ */
 export const LongText: Story = {
   args: { group: longTextGroup },
+  parameters: { viewport: { value: 'sidepanelCompact' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const name = canvas.getByText(longTextGroup.name);
+    await expect(name).toBeInTheDocument();
+    await expect(name).toHaveAttribute('title', longTextGroup.name);
+  },
 };

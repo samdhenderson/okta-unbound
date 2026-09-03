@@ -370,14 +370,18 @@ export const Compact: Story = {
 /**
  * The worst case for the name line: a long group name, both badges, and the
  * narrow floor. The badges wrap under the name rather than squeezing it to a few
- * characters, and neither of them is dropped or clipped.
+ * characters, and neither of them is dropped or clipped. The name still carries
+ * `truncate` — its `title` is what makes the full text reachable on hover/focus
+ * once the single unbroken token clips (I-011).
  */
 export const LongGroupName: Story = {
   args: { membership: longName, isCurrentGroup: true },
   parameters: { viewport: { value: 'sidepanelCompact' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText(longName.group.profile.name)).toBeInTheDocument();
+    const name = canvas.getByText(longName.group.profile.name);
+    await expect(name).toBeInTheDocument();
+    await expect(name).toHaveAttribute('title', longName.group.profile.name);
     await expect(canvas.getByText('Rule · 2?')).toBeInTheDocument();
     await expect(canvas.getByText('On page')).toBeInTheDocument();
   },

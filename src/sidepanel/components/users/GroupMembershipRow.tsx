@@ -189,10 +189,19 @@ const GroupMembershipRow: React.FC<GroupMembershipRowProps> = ({
             name plus two `shrink-0` badges no longer fit one line, and wrapping
             the badges under a full-width name beats squeezing the name to a few
             characters. The `<h4>` keeps `truncate` so a single unbroken token
-            still clips instead of overflowing the card.
+            still clips instead of overflowing the card. `title` carries the
+            untruncated name for a hover/focus reveal — the name is already in
+            the accessibility tree via the visible text, so this is purely for
+            the visual reader; omitted rather than set to `""` when the name
+            is empty.
           */}
           <div className="flex min-w-0 flex-wrap items-center gap-(--sp-inline)">
-            <h4 className="truncate text-sm font-semibold text-neutral-900">{groupName}</h4>
+            <h4
+              className="truncate text-sm font-semibold text-neutral-900"
+              title={groupName || undefined}
+            >
+              {groupName}
+            </h4>
             <Badge variant={verdict.variant} title={verdict.title} className="shrink-0">
               {verdict.label}
             </Badge>
