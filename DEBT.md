@@ -1419,6 +1419,31 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
 - **Status:** open
 - **Related:** `ADR-0070`, `ADR-0059`
 
+### D-123 · `ActionBar.tsx` is 664 lines and renders its measurement probe twice
+
+- **Category:** maintainability
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/sidepanel/components/shared/ActionBar.tsx`
+- **Verified:** 2026-09-03 — 664 lines after the selection register landed, up
+  from 474.
+- **Problem:** The primitive was already past the ~300-line guidance before the
+  register was added and is now well past it. 352 of those lines are comments,
+  which is the file carrying its own reasoning because there is nowhere else to
+  put it — the fit arithmetic lives in `actionBarFit.ts`, but the two-row
+  measurement dance, the probe, and the register's ref-anchoring trick all live
+  inline. The probe was extracted to a `MeasureProbe` component when the second
+  row made it render twice; that is the seam a split would follow.
+- **Done when:** the measurement concern is a module of its own with its own
+  story, and `ActionBar.tsx` is back under the guidance, with no assertion in
+  `actionBarFit.test.ts` or `useActionOverflow.test.ts` edited to get there.
+- **Risk:** Medium. This primitive is the one every rung's verb strip renders
+  through, and its overflow behaviour has no CSS-bearing automated coverage —
+  the headless story runner loads no Tailwind, so a refactor's real effect is
+  only visible by eye. Land it behind a manual pass in `npm run storybook`.
+- **Status:** open
+- **Related:** `ADR-0051`, `ADR-0068`, `D-117`, `D-118`
+
 ## Archive
 
 Closed items, collapsed to one line each. The verbose Problem/Done-when/Risk
