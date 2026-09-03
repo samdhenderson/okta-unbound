@@ -2,10 +2,12 @@
 
 - Status: Accepted
 - Date: 2026-09-03
+- Amends: [ADR-0032](./0032-the-sticky-stack-and-a-header-that-owns-identity.md) §1 — its
+  "the two bars must not converge" rule is scoped to what each band **describes**, and a
+  control docked in the chrome band may name the browsed entity in its tooltip and
+  accessible name, but nowhere visible (§3)
 - Relates to: [ADR-0068](./0068-a-rungs-primary-is-a-verb-that-acts.md) (which excludes a
   refresh from `primary` because this ADR removes it from the strip),
-  [ADR-0032](./0032-the-sticky-stack-and-a-header-that-owns-identity.md) §1 (`ContextBar`
-  and `PageHeader` describe different subjects and must not converge),
   [ADR-0030](./0030-detail-page-layout-contract.md) §2 (`PageHeader.actions` is the slot
   verbs are moved _out_ of), [ADR-0018](./0018-tabs-stay-mounted.md) (tabs stay mounted, so
   every fetch is gated on `isActive`),
@@ -81,9 +83,11 @@ The control resolves its subject from the current view, not from configuration:
 - **On a detail rung** — that entity's cache keys, dropped, plus a re-run of the loads the
   rung performs on open.
 
-Its tooltip names that subject **by kind and position, never by identity**: _Refresh the
-groups list_, _Refresh this group_, _Refresh the app inventory_. That constraint is
-load-bearing rather than stylistic and §3 is why.
+Its tooltip — and its accessible name, which is the same string — **names that subject**:
+_Refresh the groups list_, _Refresh the app inventory_, _Refresh Payments Team_. A list
+rung's subject has no identity beyond its kind, so the tooltip states the kind; a detail
+rung's does, so the tooltip states it. Never _Refresh this group_. That is a UX decision
+with an ADR-0032 boundary attached to it, and §3 is both halves.
 
 There is no global "refresh everything". The subject is always exactly what is on screen,
 because a control that silently re-pulls nine tabs' worth of data from a single press is
@@ -95,7 +99,7 @@ Okta tab; it says nothing about whether the roster you are reading is current. T
 re-probe half of the press — the part `handleRefreshAll` does today — is the half that is
 skipped under a pin. The data half always runs.
 
-### 3. This does not converge `ContextBar` with `PageHeader`, and here is the line
+### 3. The tooltip names the entity, and that is the better UX
 
 ADR-0032 §1 is unambiguous: `ContextBar`'s subject is the live Okta tab, `PageHeader`'s is
 what you are browsing, and "the two showing the same name is a coincidence, not duplication
@@ -106,20 +110,44 @@ It has to be answered rather than waved past.
 **The answer: ADR-0032 §1 governs what each band _describes_, not what is docked in it.**
 Its table has three rows — Subject, Source, Changes when — and all three are about the
 readout. The failure it was written from was a group being **named three times on one
-screen**. Nothing here adds a fourth naming: the bar's readout is untouched, still the
+screen**, in three pieces of visible chrome. The bar's readout is untouched here: still the
 live tab's entity, still fed by `useOktaPageContext` or the pinned snapshot, still refusing
 to follow in-panel navigation.
 
-The line, stated so it can be enforced:
+**And the control's tooltip names its subject.** _Refresh Payments Team_, not _Refresh this
+group_.
 
-> The refresh control **never renders the name of the thing it refreshes.** Its tooltip is
-> deictic — "this group", "the groups list" — and it has no label, no badge and no count.
+An earlier draft of this ADR said the opposite — deictic tooltips only, on the reasoning
+that a name in the chrome band is a name in the chrome band. That reasoning defends
+ADR-0032's letter and loses on the thing ADR-0032 exists to protect, which is the reader.
+The defect is specific and it is worst in exactly the state this control is for:
 
-Say the tooltip were _Refresh Payments Team_ instead. That puts the browsed entity's
-identity into the chrome band, beside a readout naming a possibly different entity, and
-ADR-0032 §1 is violated in substance and not merely in shape. The deictic form carries the
-same information to the reader who needs it — they can see what is on screen — and carries
-no identity at all.
+> When the live Okta tab and the browsed entity are **different entities**, "Refresh this
+> group" does not say **which** group. The reader is looking at a band naming _Contractors_
+> and a page showing _Payments Team_, and the deictic form resolves to whichever of them
+> they guess it means. Pressing refresh is cheap but not free — it drops a key set and
+> re-runs a rung's loads against a metered API — and the one press a reader is least sure
+> about is the one they are most likely to be doing for a reason.
+
+The "they can see what is on screen" argument assumes the ambiguity is between the control
+and nothing. It is not. It is between two entities that are both on screen, six pixels
+apart, and only one of which the control acts on. Naming the subject is unambiguous
+precisely when the deixis is weakest, and it costs a screen-reader user the ambiguity too —
+an accessible name of "Refresh this group" is worse than useless when read out of visual
+context.
+
+The boundary that keeps this from re-opening ADR-0032's original defect, stated so it can
+be enforced:
+
+> The refresh control names its subject **only in its tooltip and its accessible name.**
+> It has **no visible label text, no badge and no count** in the band, and the name never
+> appears as rendered chrome.
+
+That line is the whole of it, and it is checkable in review by reading the JSX: a `title`
+and an `aria-label`, an icon child, and nothing else. ADR-0032's failure was three
+_visible_ namings competing for the top four lines of a 360px panel. A tooltip is disclosed
+on hover or focus, by one reader, about one control, and it adds nothing to the standing
+render. The count of names on screen is unchanged.
 
 **The alternative was considered and rejected.** Putting the control in `PageHeader`, whose
 subject genuinely is what you are browsing, is the obviously ADR-0032-shaped answer. It
@@ -129,11 +157,12 @@ It also puts refresh back inside the scroller, where a detail rung's collapsing 
 take it off screen at the moment a reader decides the data looks stale.
 
 **The residual is named, not papered over.** One property of the chrome band does now
-change: its refresh control's _behaviour_ tracks in-panel navigation, where everything else
-above the rail tracks the Okta tab. That is a real asymmetry. It is accepted because the
-band is app chrome that _contains_ a context readout rather than being one — the Pin
-already lives there and is not a description of anything either — and because §3's naming
-rule keeps the asymmetry out of everything the reader can see.
+change: its refresh control's _behaviour_, and now its accessible name, track in-panel
+navigation, where everything else above the rail tracks the Okta tab. That is a real
+asymmetry, and this section makes it slightly larger than the deictic version would have.
+It is accepted because the band is app chrome that _contains_ a context readout rather than
+being one — the Pin already lives there and is not a description of anything either — and
+because the naming boundary keeps the asymmetry out of the standing render.
 
 ### 4. Every existing rung-level refresh moves into it
 
