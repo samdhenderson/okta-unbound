@@ -342,7 +342,7 @@ block says they mean — same vocabulary, one definition, defined there.
   `bg-neutral-50` that computes to ~4.63:1 — over the 4.5:1 AA floor, but by a
   thin margin, with no lint gate watching it. Settle the register here, once,
   with a real contrast check rather than by eye. Raised by `ui-reviewer`.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **Related:** `I-003` (created all three), `I-001`, `I-015`, `I-016`, `D-015`
 
 ### I-018 · A ⌘K that works before you have clicked into the panel
@@ -500,6 +500,18 @@ block says they mean — same vocabulary, one definition, defined there.
   the role system and why, so the raw values stop reading as unfinished work.
 - **Risk:** Low — either outcome is additive or documentation-only.
 - **Status:** claimed:improve/2026-09-02-backlog-pass
+
+- **`RulesTab` is deliberately NOT converted (2026-09-02).** The ADR-0048
+  amendment makes its conversion conditional on `RulesListActionBar` remaining a
+  direct child of the rung. Checked, and it must: `RulesTab.tsx:607-612` already
+  says so — _"First in the rung, and a direct child of it. `sticky` only travels
+  inside its own parent's box, and the `.dock-sentinel` timeline hoists onto that
+  same parent — nest this in a wrapper and the strip scrolls away instead of
+  docking (ADR-0051 §5)."_ Its toolbar panels share that one container with the
+  sticky strip, so there is no separate wrapper to carry `--sp-toolbar`, and
+  creating one is precisely the nesting that breaks docking. The conditional
+  resolves to **no**, on structure rather than on doubt — do not reopen it as an
+  oversight.
 - **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
   `SESSION.md` step 3's filter could never offer it. Set to `open` because the
   filing is complete and its Problem was re-read and still holds; it was invisible,
@@ -551,7 +563,7 @@ block says they mean — same vocabulary, one definition, defined there.
 - **Risk:** Low — display string only, no API or cache behaviour. Note
   `useOrgFigures.test.tsx:130-131` asserts the current plural nouns and will
   need retargeting to the new contract.
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
   `SESSION.md` step 3's filter could never offer it. Set to `open` because the
   filing is complete and its Problem was re-read and still holds; it was invisible,
@@ -586,7 +598,7 @@ block says they mean — same vocabulary, one definition, defined there.
   is chosen is recorded next to `SHARED_INPUTS`, since the current list reads as
   complete and is not.
 - **Related:** ADR-0045 (capture thin, compose in React), D-064
-- **Status:** open
+- **Status:** claimed:improve/2026-09-02-backlog-pass
 - **`D-092` 2026-09-02:** this item shipped with no `Status:` line at all, so
   `SESSION.md` step 3's filter could never offer it. Set to `open` because the
   filing is complete and its Problem was re-read and still holds; it was invisible,

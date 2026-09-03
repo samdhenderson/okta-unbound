@@ -957,11 +957,31 @@ minHeight: '36px' }}`, an inline pixel style, and looks like it simply
   settled on and the cheap route. Both indicators use it, their stories still
   pass, and the axe-`incomplete` hypothesis above is either confirmed (and
   recorded, since it weakens a gate the repo trusts) or disproven.
-- **Risk:** Low to change. The finding it makes is that a green gate proved
-  less than it appeared to.
+- **Risk:** Low to change per site. The finding it makes is that a green gate
+  proved less than it appeared to.
+- **Scope is wider than the two files above — measured 2026-09-02.** The register
+  is not confined to the two indicators: `text-neutral-400` appears **58 times
+  across 42 files** and `text-neutral-500` (3.02:1 on neutral-50, also under the
+  floor) **168 times**. Not all are violations, and the item must not be worked
+  as though they are:
+  - **5** sit on `disabled:` variants (`Button`, `IconButton`). WCAG 1.4.3
+    explicitly exempts disabled controls — leave them.
+  - **13** are on icon/`svg` lines. Decorative graphics carrying `aria-hidden`
+    are out of scope; an icon that is the _only_ carrier of meaning is not.
+  - The remaining **~40** are candidates on real text, of which only the two
+    named above have actually been measured against their rendered background.
+    So the deliverable is an **audit with a rule**, not a find-and-replace: decide
+    what the muted register is allowed to be, at what size, on which backgrounds,
+    and record it in `docs/design-system.md` so the next muted string does not
+    re-derive it. A blanket `400`→`600` sweep would flatten a deliberate two-step
+    hierarchy (`500` for secondary, `400` for tertiary) into one tone, which is a
+    visual-design decision and not this item's to make alone.
+- **Worth pairing with the coming design-polish pass.** Retuning a colour
+  register is exactly that pass's kind of work, and doing it there gets the
+  hierarchy re-designed rather than merely made compliant.
 - **Status:** open
-- **Related:** `I-017` (chose the correct value and doubted itself), ADR-0010,
-  ADR-0014
+- **Related:** `I-017` (chose the correct value and doubted itself), `I-015`
+  (its raw id uses `text-neutral-500`, same register), ADR-0010, ADR-0014
 
 ### D-109 · `AppListItem`'s header is click-to-expand but not keyboard-operable
 
@@ -1018,6 +1038,115 @@ onClick={toggleExpanded}>`. A mouse user can expand an app by clicking
 - **Risk:** Low — story-only.
 - **Status:** open
 - **Related:** `I-021`
+
+### D-111 · A year-old timestamp reads "0 year ago" for five days of every year
+
+- **Category:** correctness
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/shared/ruleUtils.ts:218-228` (the relative-time formatter)
+- **Verified:** 2026-09-02 — reproduced by executing the branch arithmetic over
+  a day sweep; the boundary is exact.
+- **Problem:** The formatter buckets months as `floor(days / 30)` and years as
+  `floor(days / 365)`. Those two divisors do not meet. `diffMonths` reaches 12
+  at **day 360**, which fails the `diffMonths < 12` guard and falls through to
+  the year branch — where `floor(360 / 365)` is still `0`. So days 360 through
+  364 render **"0 year ago"**.
+
+  ```
+  359 days → 11 months ago
+  360 days → 0 year ago      ← wrong
+  364 days → 0 year ago      ← wrong
+  365 days → 1 year ago
+  ```
+
+  This surfaces wherever a rule or snapshot timestamp is shown, and "0 year ago"
+  reads as _no elapsed time_ — the opposite of the truth, on data that is nearly
+  a year stale. That inversion is why this is correctness and not polish.
+
+- **Diagnosis note, because the obvious reading is wrong.** The line also uses
+  `diffYears > 1 ? 's' : ''`, and it is tempting to call this a plural bug. It is
+  not: `> 1` merely renders "0 year" rather than "0 years", and both are wrong
+  because the **number** is wrong. Fixing the suffix would leave "0 years ago"
+  shipping. The same `> 1` predicate on the four branches above it (`min`,
+  `hour`, `day`, `month`) is **not independently reachable at zero** — each is
+  guarded by the branch before it (`diffMins < 1` returns `just now`), so they
+  are cosmetically inconsistent with `pluralSuffix` and nothing more.
+  `RuleCard.tsx:214`'s `> 1` is likewise guarded by `hasConflicts`.
+- **Done when:** no elapsed duration renders a leading `0`. Deriving both buckets
+  from one calendar-aware source is the honest fix; if the 30-day month is kept
+  for simplicity, the year branch must use the same divisor so the buckets abut.
+  A test sweeps the boundaries (359/360/364/365) rather than sampling one value —
+  sampling is what missed this.
+- **Risk:** Low. Display-only, one function, no API or cache behaviour.
+- **Status:** open
+- **Related:** `I-024` (the shared `pluralSuffix` these predicates should adopt
+  once the number is right), `D-112`
+
+### D-112 · Forty-odd inline plural ternaries outlive the shared helper
+
+- **Category:** cleanup
+- **Priority:** P3
+- **Size:** M
+- **Files:** `src/shared/utils/plural.ts` (the helper to adopt); the call sites
+  enumerated below
+- **Verified:** 2026-09-02 — enumerated by the `I-024` writer, which shipped the
+  helper and deliberately did not retrofit them.
+- **Problem:** `I-024` added `src/shared/utils/plural.ts` (`pluralSuffix`,
+  `pluralNoun`, `pluralize`, `NounForms` for irregulars) and converted its own
+  call sites only. Three private helpers and roughly forty inline
+  `=== 1 ? '' : 's'` ternaries remain, which is the exact condition — a recipe
+  written many times — that the helper exists to end. Left un-retrofitted on
+  purpose: it is a mechanical mass change, it would have collided with four
+  agents working in parallel, and it belongs in its own commit.
+
+  Private helpers: `groups/groupSourceSummary.ts:129`,
+  `groups/detail/GroupOverviewPane.tsx:79-80`, `shared/utils/dateFormat.ts:64-65`.
+
+  Inline ternaries span `AuthPoliciesTab` (the `Policy`/`Policies` irregular,
+  which is why `NounForms` exists), `RuleImpactModal`, `AuditLogViewer`,
+  `AuditLogUndoModal`, `RuleConsolidationModal`, `GroupMergeModal`,
+  `BulkOperationsPanel`, `CrossGroupSearch`, `GroupCleanupPanel`,
+  `GroupCollections`, `memberSourceBuckets`, `AttributeHealthCard`,
+  `ClauseChecklist`, `MemberSourceNotes`, `GroupActionBar`, `CompareGroupModal`,
+  `GroupMembersSection`, `GroupInsightsPane`, `MemberSourceMeter`,
+  `ProfileSaveModal`, `RulesListActionBar`, `RulesDuplicatesPanel`,
+  `MemberSourceFilterBar`, `ExportPreviewTable`, `AppListItem`,
+  `useRuleConsolidation`, `useGroupMerge`, `profileOperations`, `undoManager`.
+
+- **Done when:** no `? '' : 's'` / `? 's' : ''` ternary remains in `src/`, and the
+  three private helpers are deleted rather than merely unused. **Do not sweep
+  `ruleUtils.ts:218-228` or `RuleCard.tsx:214` as part of this** — those use a
+  `> 1` predicate and `D-111` owns them; converting them here would bury a
+  behaviour change inside a mechanical diff.
+- **Risk:** Low per site, but wide. Mechanical mass change, so exempt from the
+  plan gate (`CLAUDE.md`) — it still wants its own PR, because a diff this broad
+  hides anything non-mechanical mixed into it.
+- **Status:** open
+- **Related:** `I-024` (shipped the helper), `D-111`
+
+### D-113 · Home's totals caption still says "1 groups"
+
+- **Category:** ux
+- **Priority:** P3
+- **Size:** S
+- **Files:** `src/sidepanel/components/home/OrgSnapshotCard.tsx` (the `OrgBox`
+  caption), `src/sidepanel/components/home/orgFigures.ts` (`OrgBox`'s type)
+- **Verified:** 2026-09-02 — found by the `I-024` writer and left visible
+  rather than silently half-fixed; the `SingleItemOrg` story's docblock states it.
+- **Problem:** `I-024` fixed the _findings_ denominator, so a one-app org now
+  reads "of 1 application". The **totals caption** above it is a separate
+  string: `OrgBox.noun` is a bare plural rendered directly, so a single-group org
+  still reads **"1 groups"** on the panel's landing surface. Same defect, one
+  component over, outside `I-024`'s allowlist.
+- **Done when:** the totals caption pluralises on its own count, using
+  `pluralize` from `shared/utils/plural.ts` — `OrgBox` taking the same optional
+  `singular` that `NamedSource` now carries is the consistent shape. The
+  `SingleItemOrg` story asserts it, and its docblock note about the known
+  residue is removed because the residue is gone.
+- **Risk:** Low — display string, no API or cache behaviour.
+- **Status:** open
+- **Related:** `I-024` (fixed the sibling string and filed this one)
 
 ## Archive
 
