@@ -25,7 +25,7 @@
  *
  * So adding a surface never costs the other one a dead control.
  */
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useCallback, useId, useMemo, useState } from 'react';
 import type { OktaUser, MemberMfaResult, MfaScanStatus } from '../../../shared/types';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { mfaScanNeedsConfirm } from '../../hooks/useMemberMfaScan';
@@ -33,11 +33,11 @@ import Button from '../shared/Button';
 import FilterToggle from '../shared/FilterToggle';
 import Modal from '../shared/Modal';
 import MemberSearchBar from './MemberSearchBar';
-import MemberFilterPanel from './MemberFilterPanel';
+import MemberFilterDrawer from './MemberFilterDrawer';
+import ActiveFilterChips from './ActiveFilterChips';
 import CopyMembersModal from './CopyMembersModal';
 import BreakdownDetailsModal from './BreakdownDetailsModal';
 import MemberList from './MemberList';
-import MemberSourceFilterBar from './MemberSourceFilterBar';
 import { useMembershipProofs } from '../users/GroupMembershipsListProof';
 import { useMemberFilters } from '../../hooks/useMemberFilters';
 import type { MemberRuleAttribution } from '../../../shared/membership/memberRuleAttribution';
@@ -47,6 +47,7 @@ import type { MemberSourceBucket } from '../groups/memberSourceBuckets';
 import {
   type SortField,
   computeDimensionBreakdown,
+  discoverAttributeBreakdowns,
   filterMembers,
   sortMembers,
   getObservedFactorLabels,
@@ -156,6 +157,7 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
   onProveMemberSource,
   onOpenInsights,
 }) => {
+  const drawerId = useId();
   const [query, setQuery] = useState('');
   /*
     The filter set is the one piece of this component's state a neighbouring
@@ -165,7 +167,7 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
   const memberFilters = useMemberFilters();
   const { filters } = memberFilters;
   const [visibleCount, setVisibleCount] = useState(PAGE);
-  const [showFilters, setShowFilters] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [sortBy, setSortBy] = useState<SortField>('name');
   const [sortDesc, setSortDesc] = useState(false);
   const [detailKey, setDetailKey] = useState<string | null>(null);
@@ -175,6 +177,7 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
   const debouncedQuery = useDebouncedValue(query, 200);
 
   // Distributions are computed over the full member set (stable while faceting).
+  const attributes = useMemo(() => discoverAttributeBreakdowns(members), [members]);
   const statusRows = useMemo(() => computeDimensionBreakdown(members, 'status'), [members]);
   const factorLabels = useMemo(() => getObservedFactorLabels(mfaResults), [mfaResults]);
 
@@ -255,84 +258,58 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
   );
   const detailActiveValues = memberFilters.valuesFor(detailKey);
 
+  /* Which attributes currently contribute a filter — the drawer rows say so. */
+  const filteredDimensions = useMemo(
+    () => new Set(filters.map((filter) => filter.dimension)),
+    [filters],
+  );
+
   return (
     <div className="space-y-(--sp-rung)">
-      {/* Where these members came from — proportion at a glance, and a filter per
-          slice. Above the search bar because it is the question this roster
-          answers first: not "who is in here" but "why". */}
-      {memberSource && (
-        <div className="space-y-3">
-          <MemberSourceFilterBar
-            segments={memberSource.segments}
-            activeKeys={memberFilters.sourceKeys}
-            onToggle={memberFilters.toggleSource}
-            onClearAll={memberFilters.clearSource}
-            total={memberSource.index.byUserId.size}
+      {/*
+        The control line — one band, and the only one above the roster.
+
+        Row one is the two things a reader reaches for without thinking: the
+        search field, and the trigger for everything else. Row two is what is
+        currently filtering the list, stated in chips, because a filter you
+        cannot see is worse than a control you cannot reach. Row three is how
+        much of the roster survived it, beside the one verb that operates on
+        that surviving set.
+
+        Everything else — the membership-source strip and its notes, the
+        status/MFA/sort controls, the routes into each profile attribute — is in
+        the drawer below. Somebody who opened the Members tab came to see
+        members.
+      */}
+      <div className="space-y-(--sp-field)">
+        <div className="flex gap-(--sp-field)">
+          <div className="flex-1">
+            <MemberSearchBar value={query} onChange={setQuery} />
+          </div>
+          <FilterToggle
+            open={drawerOpen}
+            activeCount={memberFilters.activeCount}
+            onToggle={() => setDrawerOpen((prev) => !prev)}
+            controls={drawerId}
           />
-          {sourceDetail}
         </div>
-      )}
 
-      {/* Search + Filters toggle — two form controls side by side. */}
-      <div className="flex gap-(--sp-field)">
-        <div className="flex-1">
-          <MemberSearchBar value={query} onChange={setQuery} />
-        </div>
-        <FilterToggle
-          open={showFilters}
-          activeCount={memberFilters.activeCount}
-          onToggle={() => setShowFilters((prev) => !prev)}
-        />
-      </div>
-
-      {/* Expandable filter panel — also hosts the MFA scan trigger */}
-      {showFilters && (
-        <MemberFilterPanel
+        {/* Renders nothing at all when the set is empty. */}
+        <ActiveFilterChips
           filters={filters}
-          statusRows={statusRows}
-          mfaResults={mfaResults}
-          factorLabels={factorLabels}
-          memberCount={members.length}
-          scanStatus={scanStatus}
-          onRunScanClick={handleScanClick}
-          sortBy={sortBy}
-          sortDesc={sortDesc}
-          onToggleStatus={memberFilters.toggleStatus}
-          onClearStatus={memberFilters.clearStatus}
-          onToggleMfaValue={memberFilters.toggleMfaValue}
-          onSetFactorMode={memberFilters.setFactorMode}
-          onToggleSort={toggleSort}
-          onRemoveFilter={memberFilters.remove}
+          onRemove={memberFilters.remove}
           onClearAll={memberFilters.clearAll}
         />
-      )}
 
-      {/* Composition moved to the Insights tab: the attribute and factor
-          distributions are analysis, not a member control, and Insights is
-          where this group's analysis lives. A pointer stays here because the
-          reader who wanted it looked for it on this tab (ADR-0032: one home per
-          fact, and say where it went). Omitted when the caller cannot honour
-          it, rather than shipped as a link that goes nowhere (ADR-0039). */}
-      {onOpenInsights && (
-        <p className="text-xs text-neutral-500">
-          Attribute and MFA-factor distributions for this group live on{' '}
-          <Button variant="secondary" size="sm" onClick={onOpenInsights}>
-            Insights
-          </Button>
-        </p>
-      )}
-
-      {/* Member list */}
-      <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-semibold text-neutral-900">
             Members
             {/*
               Both parts from first paint — `250 of 250` rather than `250` that
-              becomes `47 of 250` the moment a filter applies. The heading sits in a
-              `justify-between` row, so the old form grew in place and pushed the
-              Copy button beside it (D-053f). `tabular-nums` keeps it still as the
-              digits themselves change.
+              becomes `47 of 250` the moment a filter applies. The heading sits in
+              a `justify-between` row, so the old form grew in place and pushed
+              the Copy button beside it (D-053f). `tabular-nums` keeps it still as
+              the digits themselves change.
             */}
             <span className="ml-2 text-xs font-normal tabular-nums text-neutral-500">
               {sorted.length.toLocaleString()} of {members.length.toLocaleString()}
@@ -349,19 +326,41 @@ const MemberExplorer: React.FC<MemberExplorerProps> = ({
             Copy members
           </Button>
         </div>
-        <MemberList
-          members={sorted}
-          loading={isReloading}
-          mfaResults={mfaResults}
-          mfaScanned={mfaScanned}
-          visibleCount={visibleCount}
-          onLoadMore={loadMore}
-          oktaOrigin={oktaOrigin}
-          onRemoveMember={onRemoveMember}
-          memberSourceIndex={memberSource?.index}
-          proofs={proofs}
-        />
       </div>
+
+      <MemberFilterDrawer
+        id={drawerId}
+        open={drawerOpen}
+        memberFilters={memberFilters}
+        memberSource={memberSource}
+        sourceDetail={sourceDetail}
+        statusRows={statusRows}
+        mfaResults={mfaResults}
+        factorLabels={factorLabels}
+        memberCount={members.length}
+        scanStatus={scanStatus}
+        onRunScanClick={handleScanClick}
+        sortBy={sortBy}
+        sortDesc={sortDesc}
+        onToggleSort={toggleSort}
+        attributes={attributes}
+        filteredDimensions={filteredDimensions}
+        onSelectAttribute={setDetailKey}
+        onOpenInsights={onOpenInsights}
+      />
+
+      <MemberList
+        members={sorted}
+        loading={isReloading}
+        mfaResults={mfaResults}
+        mfaScanned={mfaScanned}
+        visibleCount={visibleCount}
+        onLoadMore={loadMore}
+        oktaOrigin={oktaOrigin}
+        onRemoveMember={onRemoveMember}
+        memberSourceIndex={memberSource?.index}
+        proofs={proofs}
+      />
 
       {/* Full attribute distribution modal */}
       <BreakdownDetailsModal

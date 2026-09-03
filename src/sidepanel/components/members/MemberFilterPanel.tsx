@@ -7,17 +7,22 @@
  * modes, quick MFA counts, sort field/direction) via callbacks. Hosts the MFA
  * scan trigger inline — scanning lives here, next to the factor filters it
  * enables — and the factor controls stay hidden until scan results are supplied.
+ *
+ * ## The active-filter chips are not here
+ *
+ * They used to head this panel, which put the answer to "what is filtering this
+ * list?" *inside* the thing you have to open to find out. The chips now sit in
+ * the explorer's always-visible control line ({@link ActiveFilterChips}), and
+ * this panel keeps only the controls. A filter you cannot see is worse than a
+ * control you cannot reach.
  */
 import React from 'react';
 import type { MemberMfaResult, MfaScanStatus } from '../../../shared/types';
 import FilterPill from '../shared/FilterPill';
 import SortPill from '../shared/SortPill';
-import ActiveFilterChips from './ActiveFilterChips';
 import MfaScanButton from './MfaScanButton';
+import type { FactorMode } from '../../hooks/useMemberFilters';
 import { type BreakdownRow, type MemberFilter, type SortField } from './memberAnalytics';
-
-/** Per-factor filter intent: unset, require-present, or require-absent. */
-type FactorMode = 'off' | 'has' | 'missing';
 
 /** Props for {@link MemberFilterPanel}. */
 interface MemberFilterPanelProps {
@@ -49,10 +54,6 @@ interface MemberFilterPanelProps {
   onSetFactorMode: (label: string, mode: FactorMode) => void;
   /** Toggle the sort field (or flip direction if already selected). */
   onToggleSort: (field: SortField) => void;
-  /** Remove a single active filter. */
-  onRemoveFilter: (filter: MemberFilter) => void;
-  /** Clear every active filter. */
-  onClearAll: () => void;
 }
 
 /** Renders the status / MFA-factor / sort controls for the member explorer. */
@@ -71,8 +72,6 @@ const MemberFilterPanel: React.FC<MemberFilterPanelProps> = ({
   onToggleMfaValue,
   onSetFactorMode,
   onToggleSort,
-  onRemoveFilter,
-  onClearAll,
 }) => {
   const statusActive = new Set(filters.filter((f) => f.dimension === 'status').map((f) => f.value));
   const mfaActive = new Set(filters.filter((f) => f.dimension === 'mfa').map((f) => f.value));
@@ -86,10 +85,11 @@ const MemberFilterPanel: React.FC<MemberFilterPanelProps> = ({
   const realStatusRows = statusRows.filter((r) => r.count > 0);
 
   return (
-    <div className="p-(--sp-card) bg-white rounded-md border border-neutral-200 space-y-(--sp-rung) animate-rise-in">
-      {/* Active filter chips */}
-      <ActiveFilterChips filters={filters} onRemove={onRemoveFilter} onClearAll={onClearAll} />
-
+    /* No card chrome and no entrance of its own: this is a section *inside* the
+       explorer's filter drawer, which owns the box and the disclosure motion.
+       Nesting a second bordered, separately-animating card inside it was the
+       old always-visible panel's shape, not this one's. */
+    <div className="space-y-(--sp-rung)">
       {/* Status filter */}
       {realStatusRows.length > 0 && (
         <div>

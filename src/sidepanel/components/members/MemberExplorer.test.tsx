@@ -12,17 +12,14 @@
  * controls, and writing the source pills the same way keeps the cases honest
  * about the disclosure they sit behind.
  *
- * Not covered here on purpose:
- * - the attribute value facets, whose route to a value differs between the
- *   composition report and the drawer that replaces it — the AND/OR grammar
- *   across attribute dimensions is pinned in `useMemberFilters.test.ts`, where
- *   it is a property of the filter set rather than of one layout;
- * - anything positional (drawer height, chip wrapping): jsdom lays out nothing
- *   and the headless Storybook runner loads no Tailwind, so such an assertion
- *   would be vacuous (ADR-0023).
+ * Not covered here on purpose: anything positional (drawer height, chip
+ * wrapping, whether the collapsed drawer is visually zero-height). jsdom lays
+ * out nothing and the headless Storybook runner loads no Tailwind, so such an
+ * assertion would be vacuous (ADR-0023). What *is* asserted about the drawer is
+ * the part that is real in the DOM — the disclosure contract and `inert`.
  */
 import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import MemberExplorer, { type MemberSourceContext } from './MemberExplorer';
 import { toMemberSourceSegments } from '../groups/memberSourceBuckets';
@@ -314,5 +311,92 @@ describe('MemberExplorer filtering', () => {
     // Clearing the one that is wrong is enough — the other survives.
     await user.click(screen.getByRole('button', { name: 'Clear search' }));
     await waitFor(() => expect(shownOfTotal()).toBe('2 of 6'));
+  });
+});
+
+describe('the filter drawer', () => {
+  it('is a disclosure that names the region it opens, not a pressed toggle', async () => {
+    const user = userEvent.setup();
+    render(<MemberExplorer {...base} />);
+
+    const trigger = screen.getByRole('button', { name: 'Filters' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    // A region that opens, not a setting that is on — a reader is told one.
+    expect(trigger).not.toHaveAttribute('aria-pressed');
+
+    const regionId = trigger.getAttribute('aria-controls');
+    expect(regionId).toBeTruthy();
+    expect(document.getElementById(regionId as string)).toBeInTheDocument();
+
+    await user.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('holds its controls out of the tab order while it is closed', async () => {
+    const user = userEvent.setup();
+    render(<MemberExplorer {...base} />);
+
+    const trigger = screen.getByRole('button', { name: 'Filters' });
+    const region = document.getElementById(trigger.getAttribute('aria-controls') as string);
+
+    // Mounted (so the panel keeps its own state across an open/close) but inert.
+    expect(region).toHaveAttribute('inert');
+    await user.click(trigger);
+    expect(region).not.toHaveAttribute('inert');
+  });
+
+  it('routes an attribute to the shared value reveal, and a value to a filter', async () => {
+    const user = userEvent.setup();
+    render(<MemberExplorer {...base} />);
+
+    await openFilters(user);
+    await user.click(
+      screen.getByRole('button', { name: 'Department: choose a value to filter by' }),
+    );
+
+    // The reveal is the same modal the Insights tab opens — not a second picker.
+    const dialog = screen.getByRole('dialog', { name: 'Department' });
+    expect(within(dialog).getByText('Engineering')).toBeInTheDocument();
+    expect(within(dialog).getByText('Support')).toBeInTheDocument();
+
+    await user.click(within(dialog).getByText('Engineering'));
+
+    expect(screen.getByText('Department: Engineering')).toBeInTheDocument();
+    expect(shownOfTotal()).toBe('3 of 6');
+  });
+
+  it('lets the chip that appeared undo it, without reopening anything', async () => {
+    const user = userEvent.setup();
+    render(<MemberExplorer {...base} />);
+
+    await openFilters(user);
+    await user.click(
+      screen.getByRole('button', { name: 'Department: choose a value to filter by' }),
+    );
+    await user.click(within(screen.getByRole('dialog')).getByText('Engineering'));
+    expect(shownOfTotal()).toBe('3 of 6');
+
+    await user.click(screen.getByRole('button', { name: 'Remove Department: Engineering filter' }));
+
+    expect(shownOfTotal()).toBe('6 of 6');
+    expect(screen.queryByText('Department: Engineering')).not.toBeInTheDocument();
+  });
+
+  it('draws no pointer to Insights when the caller cannot open it', async () => {
+    const user = userEvent.setup();
+    render(<MemberExplorer {...base} />);
+
+    await openFilters(user);
+    expect(screen.queryByRole('button', { name: 'Open Insights' })).not.toBeInTheDocument();
+  });
+
+  it('opens Insights when the caller can', async () => {
+    const user = userEvent.setup();
+    const onOpenInsights = vi.fn();
+    render(<MemberExplorer {...base} onOpenInsights={onOpenInsights} />);
+
+    await openFilters(user);
+    await user.click(screen.getByRole('button', { name: 'Open Insights' }));
+    expect(onOpenInsights).toHaveBeenCalledTimes(1);
   });
 });
